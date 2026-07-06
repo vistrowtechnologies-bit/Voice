@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timezone
 
@@ -108,9 +109,28 @@ class RealEstateAgent(Agent):
             logger.info("switching reply language to %s", candidate)
 
 
+def _agent_id_from_job(ctx: JobContext) -> int | None:
+    """Inbound phone calls arrive in a room whose metadata (set by the SIP
+    dispatch rule in server/livekit_sip.py) names which dashboard agent should
+    handle the dialed number. Browser calls have no such metadata. Returns None
+    on anything unexpected, so we fall back to the default first-agent config.
+    """
+    try:
+        raw = ctx.job.room.metadata
+    except Exception:
+        return None
+    if not raw:
+        return None
+    try:
+        agent_id = json.loads(raw).get("agent_id")
+    except (ValueError, AttributeError):
+        return None
+    return int(agent_id) if agent_id is not None else None
+
+
 async def entrypoint(ctx: JobContext) -> None:
     logger.info("starting session in room %s", ctx.room.name)
-    config = db.get_agent_config()
+    config = db.get_agent_config(_agent_id_from_job(ctx))
     if config and config.get("status") == "paused":
         # Paused from the dashboard — don't take the call.
         logger.info("agent '%s' is paused; skipping room %s", config.get("name"), ctx.room.name)

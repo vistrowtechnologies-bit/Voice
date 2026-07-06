@@ -41,17 +41,23 @@ def init_db() -> None:
         conn.close()
 
 
-def get_agent_config() -> dict | None:
+def get_agent_config(agent_id: int | None = None) -> dict | None:
     """Dashboard-managed agent settings (server/calls_db.py owns the table).
 
-    Returns None when the table doesn't exist yet (dashboard API never ran)
-    or has no rows — callers fall back to the in-code defaults, so the agent
-    keeps working standalone.
+    With `agent_id`, loads that specific agent — used by inbound phone calls,
+    where the LiveKit dispatch rule for the dialed number names which agent
+    handles it. Without it, falls back to the first agent (the one that takes
+    all browser web calls). Returns None when the table doesn't exist yet
+    (dashboard API never ran) or the id isn't found, so callers fall back to
+    the in-code defaults and the agent keeps working standalone.
     """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        row = conn.execute("SELECT * FROM agents ORDER BY id LIMIT 1").fetchone()
+        if agent_id is not None:
+            row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
+        else:
+            row = conn.execute("SELECT * FROM agents ORDER BY id LIMIT 1").fetchone()
         return dict(row) if row else None
     except sqlite3.OperationalError:
         return None

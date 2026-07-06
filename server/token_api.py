@@ -1,6 +1,8 @@
+import logging
 import os
 
 import calls_db
+import livekit_sip
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +10,8 @@ from fastapi.responses import PlainTextResponse
 from livekit import api
 from livekit.api import ListParticipantsRequest, ListRoomsRequest
 from pydantic import BaseModel
+
+logger = logging.getLogger("telephony")
 
 load_dotenv()
 
@@ -324,24 +328,57 @@ def list_phone_numbers() -> list[dict]:
     return calls_db.list_phone_numbers()
 
 
+async def _sync_dispatch_rule(number_id: int) -> str | None:
+    """Best-effort: (re)create this number's LiveKit SIP dispatch rule.
+
+    Runs after every add/reassign so an inbound call to the number is always
+    routed to whichever agent the dashboard currently has it assigned to.
+    Returns an error message on failure — the number/agent change itself
+    still saves either way, since LiveKit Cloud being briefly unreachable
+    shouldn't block using the dashboard.
+    """
+    row = calls_db.get_phone_number(number_id)
+    if row is None:
+        return None
+    try:
+        await livekit_sip.upsert_dispatch_rule(row)
+        return None
+    except Exception as exc:
+        logger.exception("failed to sync LiveKit dispatch rule for number %s", row["number"])
+        return f"Number saved, but LiveKit call routing wasn't updated: {exc}"
+
+
 @app.post("/telephony/numbers")
-def add_phone_number(data: dict = Body(...)) -> dict:
+async def add_phone_number(data: dict = Body(...)) -> dict:
     number = (data.get("number") or "").strip()
     if not number:
         raise HTTPException(400, "A phone/virtual number is required")
-    calls_db.add_phone_number(number, data.get("label", ""), data.get("agentId"))
-    return {"ok": True}
+    number_id = calls_db.add_phone_number(number, data.get("label", ""), data.get("agentId"))
+    lk_sync_error = await _sync_dispatch_rule(number_id)
+    return {"ok": True, "lkSyncError": lk_sync_error}
 
 
 @app.patch("/telephony/numbers/{number_id}")
-def assign_phone_number(number_id: int, data: dict = Body(...)) -> dict:
+async def assign_phone_number(number_id: int, data: dict = Body(...)) -> dict:
     calls_db.assign_phone_number(number_id, data.get("agentId"))
-    return {"ok": True}
+    lk_sync_error = await _sync_dispatch_rule(number_id)
+    return {"ok": True, "lkSyncError": lk_sync_error}
 
 
 @app.delete("/telephony/numbers/{number_id}")
-def delete_phone_number(number_id: int) -> dict:
+async def delete_phone_number(number_id: int) -> dict:
+    row = calls_db.get_phone_number(number_id)
+    if row is not None and row.get("lkDispatchRuleId"):
+        try:
+            await livekit_sip.delete_dispatch_rule(row)
+        except Exception:
+            logger.exception("failed to delete LiveKit dispatch rule for number %s", row["number"])
     calls_db.delete_phone_number(number_id)
+    if calls_db.get_setting(livekit_sip.TRUNK_ID_SETTING):
+        try:
+            await livekit_sip.ensure_inbound_trunk()
+        except Exception:
+            logger.exception("failed to resync LiveKit trunk numbers after deleting %s", number_id)
     return {"ok": True}
 
 
@@ -352,6 +389,55 @@ def telephony_test_call(data: dict = Body(...)) -> dict:
     if not from_number or not to_number:
         raise HTTPException(400, "Both a from (virtual) number and a to number are required")
     return calls_db.place_test_call(from_number, to_number)
+
+
+@app.get("/telephony/sip-host")
+def telephony_sip_host() -> dict:
+    """The LiveKit SIP endpoint to register as the EnableX inbound webhook
+    target isn't this — but this exposes the SIP host we bridge calls to, so
+    the dashboard can show operators what's wired up."""
+    return {"sipHost": livekit_sip.sip_host()}
+
+
+@app.post("/telephony/enablex/inbound-event")
+async def enablex_inbound_event(event: dict = Body(...)) -> dict:
+    """Webhook EnableX calls for inbound-call lifecycle events.
+
+    Set this URL (…/telephony/enablex/inbound-event) as the webhook on your
+    EnableX inbound number in the portal. On an incoming call we accept the
+    leg and bridge it to LiveKit's SIP host for the dialed number, so the
+    same Riya agent that powers browser calls handles the phone call — the
+    LiveKit inbound trunk + per-number dispatch rule route it into a room
+    with the right agent auto-dispatched.
+
+    EnableX expects a 200 quickly; we respond immediately and only act on the
+    'incomingcall' state. (Encrypted webhook payloads aren't handled yet —
+    configure the portal webhook without encryption for now.)
+    """
+    state = event.get("state")
+    voice_id = event.get("voice_id")
+    dialed_number = event.get("to")
+    caller = event.get("from")
+    logger.info("EnableX inbound event: state=%s voice_id=%s to=%s from=%s", state, voice_id, dialed_number, caller)
+
+    if state != "incomingcall" or not voice_id or not dialed_number:
+        return {"ok": True}
+
+    number_row = calls_db.get_phone_number_by_number(dialed_number)
+    if number_row is None:
+        logger.warning("inbound call to unregistered number %s — hanging up", dialed_number)
+        return {"ok": False, "error": "number not registered"}
+
+    accept = calls_db.enablex_accept_call(voice_id)
+    if not accept.get("ok"):
+        logger.error("failed to accept EnableX call %s: %s", voice_id, accept.get("error"))
+        return accept
+
+    sip_uri = f"sip:{dialed_number}@{livekit_sip.sip_host()}"
+    bridge = calls_db.enablex_connect_to_sip(voice_id, dialed_number, sip_uri)
+    if not bridge.get("ok"):
+        logger.error("failed to bridge EnableX call %s to %s: %s", voice_id, sip_uri, bridge.get("error"))
+    return bridge
 
 
 # ------------------------------------------------------------- billing

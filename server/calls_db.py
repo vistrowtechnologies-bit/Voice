@@ -121,7 +121,9 @@ CREATE TABLE IF NOT EXISTS phone_numbers (
     provider TEXT DEFAULT 'enablex',
     agent_id INTEGER,
     status TEXT DEFAULT 'active',
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (datetime('now')),
+    lk_trunk_id TEXT,
+    lk_dispatch_rule_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -178,11 +180,22 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def _migrate_phone_numbers_columns(conn: sqlite3.Connection) -> None:
+    """Add columns introduced after phone_numbers already shipped — CREATE TABLE
+    IF NOT EXISTS above is a no-op on a table that already exists, so a
+    pre-existing calls.db needs these added explicitly."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(phone_numbers)").fetchall()}
+    for column in ("lk_trunk_id", "lk_dispatch_rule_id"):
+        if column not in existing:
+            conn.execute(f"ALTER TABLE phone_numbers ADD COLUMN {column} TEXT")
+
+
 def init_tables() -> None:
     conn = _connect()
     try:
         with conn:
             conn.executescript(_SCHEMA)
+            _migrate_phone_numbers_columns(conn)
             if conn.execute("SELECT COUNT(*) c FROM agents").fetchone()["c"] == 0:
                 conn.execute(
                     "INSERT INTO agents (name, description) VALUES (?, ?)",
@@ -889,26 +902,47 @@ def disconnect_enablex() -> None:
         conn.close()
 
 
+def _phone_number_dict(r: sqlite3.Row) -> dict:
+    return {
+        "id": r["id"],
+        "number": r["number"],
+        "label": r["label"],
+        "provider": r["provider"],
+        "agentId": r["agent_id"],
+        "status": r["status"],
+        "createdAt": r["created_at"],
+        "lkTrunkId": r["lk_trunk_id"],
+        "lkDispatchRuleId": r["lk_dispatch_rule_id"],
+    }
+
+
 def list_phone_numbers() -> list[dict]:
     conn = _connect()
     try:
-        return [
-            {
-                "id": r["id"],
-                "number": r["number"],
-                "label": r["label"],
-                "provider": r["provider"],
-                "agentId": r["agent_id"],
-                "status": r["status"],
-                "createdAt": r["created_at"],
-            }
-            for r in conn.execute("SELECT * FROM phone_numbers ORDER BY id DESC").fetchall()
-        ]
+        return [_phone_number_dict(r) for r in conn.execute("SELECT * FROM phone_numbers ORDER BY id DESC").fetchall()]
     finally:
         conn.close()
 
 
-def add_phone_number(number: str, label: str = "", agent_id: int | None = None) -> None:
+def get_phone_number(number_id: int) -> dict | None:
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM phone_numbers WHERE id = ?", (number_id,)).fetchone()
+        return _phone_number_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_phone_number_by_number(number: str) -> dict | None:
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM phone_numbers WHERE number = ?", (number,)).fetchone()
+        return _phone_number_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def add_phone_number(number: str, label: str = "", agent_id: int | None = None) -> int:
     conn = _connect()
     try:
         with conn:
@@ -918,6 +952,7 @@ def add_phone_number(number: str, label: str = "", agent_id: int | None = None) 
                 "ON CONFLICT(number) DO UPDATE SET label = excluded.label, agent_id = excluded.agent_id",
                 (number, label, agent_id),
             )
+        return conn.execute("SELECT id FROM phone_numbers WHERE number = ?", (number,)).fetchone()["id"]
     finally:
         conn.close()
 
@@ -931,6 +966,18 @@ def assign_phone_number(number_id: int, agent_id: int | None) -> None:
         conn.close()
 
 
+def set_phone_number_lk_ids(number_id: int, trunk_id: str | None, dispatch_rule_id: str | None) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE phone_numbers SET lk_trunk_id = ?, lk_dispatch_rule_id = ? WHERE id = ?",
+                (trunk_id, dispatch_rule_id, number_id),
+            )
+    finally:
+        conn.close()
+
+
 def delete_phone_number(number_id: int) -> None:
     conn = _connect()
     try:
@@ -940,29 +987,80 @@ def delete_phone_number(number_id: int) -> None:
         conn.close()
 
 
-def place_test_call(from_number: str, to_number: str) -> dict:
-    """Place a real outbound call through the EnableX Voice API.
+def get_setting(key: str) -> str | None:
+    conn = _connect()
+    try:
+        return _get_setting(conn, key)
+    finally:
+        conn.close()
 
-    Genuinely hits EnableX with the stored credentials and surfaces whatever
-    it returns — so a wrong key or unprovisioned number shows a real error
-    rather than a fake success. Uses urllib to avoid a new dependency.
+
+def set_setting(key: str, value: str) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
+    finally:
+        conn.close()
+
+
+def enablex_credentials() -> tuple[str | None, str | None]:
+    conn = _connect()
+    try:
+        return _get_setting(conn, "enablex_app_id"), _get_setting(conn, "enablex_app_key")
+    finally:
+        conn.close()
+
+
+def _enablex_request(path: str, method: str, body: dict | None) -> dict:
+    """Call the EnableX Voice REST API with the stored HTTP Basic credentials.
+
+    `path` is relative to ENABLEX_API_BASE (e.g. "/calls", "/call/<id>/accept").
+    Returns {"ok": bool, ...} — never raises, so callers on the live-call path
+    can degrade gracefully. Uses urllib to avoid adding a dependency.
     """
     import base64
     import json as _json
     import urllib.error
     import urllib.request
 
-    conn = _connect()
-    try:
-        app_id = _get_setting(conn, "enablex_app_id")
-        app_key = _get_setting(conn, "enablex_app_key")
-    finally:
-        conn.close()
+    app_id, app_key = enablex_credentials()
     if not app_id or not app_key:
         return {"ok": False, "error": "EnableX is not connected. Add your App ID and App Key first."}
 
     auth = base64.b64encode(f"{app_id}:{app_key}".encode()).decode()
-    body = _json.dumps(
+    data = _json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(
+        f"{ENABLEX_API_BASE}{path}",
+        data=data,
+        method=method,
+        headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as resp:
+            payload = _json.loads(resp.read().decode() or "{}")
+            return {"ok": True, "response": payload}
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace")[:400]
+        return {"ok": False, "error": f"EnableX returned {exc.code}: {detail}"}
+    except Exception as exc:  # network/DNS/timeout
+        return {"ok": False, "error": f"Could not reach EnableX: {exc}"}
+
+
+def place_test_call(from_number: str, to_number: str) -> dict:
+    """Place a real outbound call through the EnableX Voice API.
+
+    Genuinely hits EnableX with the stored credentials and surfaces whatever
+    it returns — so a wrong key or unprovisioned number shows a real error
+    rather than a fake success.
+    """
+    return _enablex_request(
+        "/calls",
+        "POST",
         {
             "name": "Arthale Voice test call",
             "owner_ref": "arthale-dashboard-test",
@@ -976,20 +1074,24 @@ def place_test_call(from_number: str, to_number: str) -> dict:
                     "language": "en-US",
                 }
             },
-        }
-    ).encode()
-    request = urllib.request.Request(
-        f"{ENABLEX_API_BASE}/calls",
-        data=body,
-        method="POST",
-        headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
+        },
     )
-    try:
-        with urllib.request.urlopen(request, timeout=15) as resp:
-            payload = _json.loads(resp.read().decode() or "{}")
-            return {"ok": True, "response": payload}
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode(errors="replace")[:400]
-        return {"ok": False, "error": f"EnableX returned {exc.code}: {detail}"}
-    except Exception as exc:  # network/DNS/timeout
-        return {"ok": False, "error": f"Could not reach EnableX: {exc}"}
+
+
+def enablex_accept_call(voice_id: str) -> dict:
+    """Answer a ringing inbound EnableX call leg (PUT /call/<id>/accept)."""
+    return _enablex_request(f"/call/{voice_id}/accept", "PUT", None)
+
+
+def enablex_connect_to_sip(voice_id: str, from_number: str, sip_uri: str) -> dict:
+    """Bridge an accepted EnableX call leg out to a SIP URI (PUT /call/<id>/connect).
+
+    EnableX's `connect` action accepts a phone number or a SIP URI as `to`,
+    so pointing it at LiveKit's per-project SIP host hands the audio to the
+    LiveKit agent while EnableX bridges the two legs.
+    """
+    return _enablex_request(
+        f"/call/{voice_id}/connect",
+        "PUT",
+        {"from": from_number, "to": sip_uri},
+    )
