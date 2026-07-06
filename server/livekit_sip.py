@@ -21,6 +21,7 @@ from livekit.protocol.sip import (
     CreateSIPDispatchRuleRequest,
     CreateSIPInboundTrunkRequest,
     DeleteSIPDispatchRuleRequest,
+    DeleteSIPTrunkRequest,
     SIPDispatchRule,
     SIPDispatchRuleIndividual,
     SIPInboundTrunkInfo,
@@ -47,20 +48,47 @@ def sip_host() -> str:
     return host.replace(".livekit.cloud", ".sip.livekit.cloud")
 
 
-async def ensure_inbound_trunk() -> str:
-    """Create the shared inbound trunk once, or resync its numbers list to
-    match every number currently in phone_numbers. Returns the trunk id."""
+TRUNK_NAME = "EnableX inbound"
+
+
+async def ensure_inbound_trunk() -> str | None:
+    """Create/resync the shared inbound trunk to hold exactly the numbers
+    currently in phone_numbers. Returns the trunk id, or None when there are
+    no numbers left.
+
+    LiveKit rejects a trunk that has none of numbers / auth / allowed_addresses
+    set (an open trunk is a security hole), so when the last number is removed
+    we tear the trunk down entirely rather than trying to empty it — it's
+    recreated when the next number is added. Uses the full replace API (not a
+    field update) so the numbers list is set to exactly the current set;
+    a partial "update numbers" call treats an empty list as "no change".
+
+    NOTE: the trunk is scoped by numbers only, so it accepts INVITEs for those
+    numbers from any source IP. For production, also set allowed_addresses to
+    EnableX's SIP egress IPs (or auth credentials) to lock down the source.
+    """
     numbers = [n["number"] for n in calls_db.list_phone_numbers()]
     trunk_id = calls_db.get_setting(TRUNK_ID_SETTING)
 
     async with api.LiveKitAPI() as lkapi:
+        if not numbers:
+            if trunk_id:
+                try:
+                    await lkapi.sip.delete_trunk(DeleteSIPTrunkRequest(sip_trunk_id=trunk_id))
+                except Exception:
+                    pass
+                calls_db.set_setting(TRUNK_ID_SETTING, "")
+            return None
+
         if trunk_id:
-            await lkapi.sip.update_inbound_trunk_fields(trunk_id, numbers=numbers)
+            await lkapi.sip.update_inbound_trunk(
+                trunk_id, SIPInboundTrunkInfo(name=TRUNK_NAME, numbers=numbers)
+            )
             return trunk_id
 
         trunk = await lkapi.sip.create_inbound_trunk(
             CreateSIPInboundTrunkRequest(
-                trunk=SIPInboundTrunkInfo(name="EnableX inbound", numbers=numbers)
+                trunk=SIPInboundTrunkInfo(name=TRUNK_NAME, numbers=numbers)
             )
         )
         calls_db.set_setting(TRUNK_ID_SETTING, trunk.sip_trunk_id)
@@ -72,6 +100,10 @@ async def upsert_dispatch_rule(number_row: dict) -> None:
     its currently-assigned agent. Safe to call whenever a number is added or
     its agent assignment changes."""
     trunk_id = await ensure_inbound_trunk()
+    if trunk_id is None:
+        # No numbers registered — nothing to route to. Shouldn't happen since
+        # this runs right after a number is saved, but guard anyway.
+        return
     number = number_row["number"]
     agent_id = number_row.get("agentId")
 

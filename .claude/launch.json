@@ -15,13 +15,13 @@
     },
     {
       "name": "token-api",
-      "runtimeExecutable": "server/.venv/Scripts/python.exe",
+      "runtimeExecutable": "server/.venv/bin/python",
       "runtimeArgs": ["-m", "uvicorn", "token_api:app", "--port", "8000", "--app-dir", "server"],
       "port": 8000
     },
     {
       "name": "agent",
-      "runtimeExecutable": "agent/.venv/Scripts/python.exe",
+      "runtimeExecutable": "agent/.venv/bin/python",
       "runtimeArgs": ["agent/main.py", "dev"],
       "port": 8081
     }
