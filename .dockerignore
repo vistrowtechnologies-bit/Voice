@@ -1,0 +1,12 @@
+# Keep the build context small — the backend image only needs server/.
+.git
+**/.venv
+**/node_modules
+**/__pycache__
+*.pyc
+*.db
+.env
+web-demo
+design
+infra
+agent
