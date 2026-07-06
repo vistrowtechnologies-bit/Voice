@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Arthale Voice - Internal Leads Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "on-error-container": "#ffdad6",
+                  "on-tertiary": "#640036",
+                  "on-surface-variant": "#cfc2d6",
+                  "secondary-fixed": "#a2eeff",
+                  "surface-container": "#201b3b",
+                  "surface-container-highest": "#363052",
+                  "on-primary": "#490080",
+                  "inverse-primary": "#842bd2",
+                  "tertiary": "#ffb0cb",
+                  "secondary": "#5de6ff",
+                  "surface": "#140e2e",
+                  "inverse-surface": "#e6deff",
+                  "surface-container-high": "#2b2546",
+                  "outline-variant": "#4d4354",
+                  "primary-fixed": "#f0dbff",
+                  "secondary-container": "#00cbe6",
+                  "on-error": "#690005",
+                  "surface-variant": "#363052",
+                  "error": "#ffb4ab",
+                  "primary-container": "#b76dff",
+                  "surface-container-low": "#1c1737",
+                  "outline": "#988d9f",
+                  "on-surface": "#e6deff",
+                  "surface-dim": "#140e2e",
+                  "tertiary-container": "#ff479c",
+                  "on-secondary": "#00363e",
+                  "primary": "#ddb7ff",
+                  "error-container": "#93000a",
+                  "on-primary-container": "#400071",
+                  "surface-bright": "#3a3556",
+                  "background": "#0a0a12",
+                  "on-background": "#e6deff",
+                  "inverse-on-surface": "#312c4d",
+                  "custom-surface": "#17121F",
+                  "custom-border": "#2A2438",
+                  "custom-label": "#9089B0",
+                  "custom-white": "#F5F3FF"
+          },
+          "spacing": {
+                  "container_max": "1200px",
+                  "base": "8px",
+                  "xl": "24px",
+                  "gutter": "24px",
+                  "huge": "48px",
+                  "xs": "4px",
+                  "lg": "16px",
+                  "sm": "8px",
+                  "xxl": "32px",
+                  "md": "12px"
+          },
+          "fontFamily": {
+                  "body-lg": ["Manrope"],
+                  "display": ["Manrope"],
+                  "title-md": ["Manrope"],
+                  "headline-lg": ["Manrope"],
+                  "label-xs": ["Manrope"],
+                  "body-sm": ["Manrope"]
+          },
+          "fontSize": {
+                  "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                  "display": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                  "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                  "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                  "label-xs": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                  "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      background-color: #0A0A12;
+      color: #e6deff;
+      font-family: 'Manrope', sans-serif;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0A0A12; }
+    ::-webkit-scrollbar-thumb { background: #2A2438; border-radius: 10px; }
+    .status-pill { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; display: inline-flex; align-items: center; white-space: nowrap; }
+    .tab-active { color: #F5F3FF; }
+    .tab-active::after { content: ""; position: absolute; bottom: -1px; left: 0; width: 100%; height: 2px; background: #A855F7; }
+    @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .pulse-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
+  </style>
+</head>
+<body class="overflow-hidden">
+<aside class="fixed left-0 top-0 h-full w-[240px] bg-[#17121F] border-r border-[#2A2438] flex flex-col z-40">
+<div class="p-lg flex flex-col gap-xs">
+<div class="flex items-center gap-sm mb-huge">
+<div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-[20px]">auto_awesome</span>
+</div>
+<h1 class="font-headline-lg text-title-md text-primary tracking-tight">Arthale Voice</h1>
+</div>
+<nav class="space-y-sm">
+<a class="flex items-center justify-between gap-md px-lg py-sm bg-[#201b3b] border-l-[3px] border-[#A855F7] text-[#ddb7ff] transition-all duration-200 group" href="#">
+<span class="flex items-center gap-md"><span class="material-symbols-outlined text-[20px]">person_search</span><span class="font-title-md text-body-lg">Leads</span></span>
+<span class="text-[11px] text-[#9089B0] bg-[#0A0A12] px-xs py-[1px] rounded">1,284</span>
+</a>
+<a class="flex items-center justify-between gap-md px-lg py-sm text-on-surface-variant hover:bg-surface-container-low transition-all duration-200 rounded-lg group" href="#">
+<span class="flex items-center gap-md"><span class="material-symbols-outlined text-[20px]">call</span><span class="font-title-md text-body-lg">Calls</span></span>
+<span class="text-[11px] text-[#9089B0] bg-[#0A0A12] px-xs py-[1px] rounded">42</span>
+</a>
+<a class="flex items-center gap-md px-lg py-sm text-on-surface-variant hover:bg-surface-container-low transition-all duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px]">domain</span>
+<span class="font-title-md text-body-lg">Properties</span>
+</a>
+<a class="flex items-center gap-md px-lg py-sm text-on-surface-variant hover:bg-surface-container-low transition-all duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="font-title-md text-body-lg">Settings</span>
+</a>
+</nav>
+</div>
+<div class="mt-auto p-lg border-t border-[#2A2438] space-y-sm">
+<a class="flex items-center gap-md px-lg py-sm text-on-surface-variant hover:bg-surface-container-low transition-all duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]">help</span>
+<span class="font-title-md text-body-lg">Support</span>
+</a>
+<a class="flex items-center gap-md px-lg py-sm text-error/80 hover:bg-error-container transition-all duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]">logout</span>
+<span class="font-title-md text-body-lg">Logout</span>
+</a>
+</div>
+</aside>
+<main class="ml-[240px] h-screen flex flex-col overflow-y-auto">
+<header class="flex items-center justify-between w-full h-20 px-xl sticky top-0 bg-background/80 backdrop-blur-xl border-b border-[#2A2438] z-30">
+<div class="flex items-center gap-lg flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full bg-[#17121F] border border-[#2A2438] rounded-xl py-sm pl-huge pr-md text-body-sm focus:border-primary focus:ring-0 transition-colors" placeholder="Search leads by name or number..." type="text"/>
+</div>
+<div class="flex gap-sm">
+<select class="bg-[#17121F] border border-[#2A2438] rounded-lg py-sm px-md text-body-sm text-on-surface appearance-none pr-huge cursor-pointer hover:border-primary transition-colors">
+<option>All Status</option>
+<option>New</option>
+<option>Qualified</option>
+</select>
+<select class="bg-[#17121F] border border-[#2A2438] rounded-lg py-sm px-md text-body-sm text-on-surface appearance-none pr-huge cursor-pointer hover:border-primary transition-colors">
+<option>All Time</option>
+<option>Today</option>
+<option>Last 7 Days</option>
+</select>
+</div>
+</div>
+<div class="flex items-center gap-lg">
+<button class="flex items-center gap-sm px-xl py-sm border border-[#2A2438] text-[#F5F3FF] font-bold rounded-lg hover:border-primary transition-all">
+<span class="material-symbols-outlined text-[20px]">download</span>
+          Export
+        </button>
+<button class="flex items-center gap-sm px-xl py-sm bg-primary text-on-primary font-bold rounded-lg hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[20px]">add</span>
+          New Lead
+        </button>
+<div class="flex items-center gap-md">
+<button class="relative w-10 h-10 rounded-full border border-[#2A2438] flex items-center justify-center hover:bg-[#17121F]">
+<span class="material-symbols-outlined text-on-surface-variant">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#FF3D9A]"></span>
+</button>
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-[#F5F3FF] text-[13px] font-bold">RS</div>
+</div>
+</div>
+</header>
+<section class="p-xl space-y-xl">
+
+<!-- Pipeline status tabs -->
+<div class="flex items-center gap-xl border-b border-[#2A2438] overflow-x-auto">
+<button class="relative pb-md text-body-sm font-bold tab-active whitespace-nowrap">All <span class="ml-xs text-[11px] text-[#9089B0]">1,284</span></button>
+<button class="relative pb-md text-body-sm text-[#9089B0] hover:text-[#F5F3FF] transition-colors whitespace-nowrap">New <span class="ml-xs text-[11px]">312</span></button>
+<button class="relative pb-md text-body-sm text-[#9089B0] hover:text-[#F5F3FF] transition-colors whitespace-nowrap">Qualified <span class="ml-xs text-[11px]">487</span></button>
+<button class="relative pb-md text-body-sm text-[#9089B0] hover:text-[#F5F3FF] transition-colors whitespace-nowrap">Site Visit Booked <span class="ml-xs text-[11px]">198</span></button>
+<button class="relative pb-md text-body-sm text-[#9089B0] hover:text-[#F5F3FF] transition-colors whitespace-nowrap">Follow-up <span class="ml-xs text-[11px]">201</span></button>
+<button class="relative pb-md text-body-sm text-[#9089B0] hover:text-[#F5F3FF] transition-colors whitespace-nowrap">Cold <span class="ml-xs text-[11px]">86</span></button>
+</div>
+
+<!-- Metrics Row -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-xl">
+<div class="bg-[#17121F] p-xl rounded-xl border border-[#2A2438] flex flex-col gap-xs group hover:border-primary/50 transition-colors">
+<span class="text-[#9089B0] text-[12px] font-bold uppercase tracking-widest">Total Leads</span>
+<span class="text-[#F5F3FF] text-[24px] font-bold">1,284</span>
+<div class="mt-sm flex items-center gap-xs text-secondary text-label-xs">
+<span class="material-symbols-outlined text-[14px]">trending_up</span>
+            +12.5% vs last month
+          </div>
+</div>
+<div class="bg-[#17121F] p-xl rounded-xl border border-[#2A2438] flex flex-col gap-xs group hover:border-primary/50 transition-colors">
+<span class="text-[#9089B0] text-[12px] font-bold uppercase tracking-widest">Active Calls</span>
+<span class="text-[#F5F3FF] text-[24px] font-bold">3</span>
+<div class="mt-sm flex items-center gap-xs text-[#22D3EE] text-label-xs">
+<span class="w-2 h-2 rounded-full bg-[#22D3EE] pulse-dot"></span>
+            live right now
+          </div>
+</div>
+<div class="bg-[#17121F] p-xl rounded-xl border border-[#2A2438] flex flex-col gap-xs group hover:border-primary/50 transition-colors">
+<span class="text-[#9089B0] text-[12px] font-bold uppercase tracking-widest">Qualified Ratio</span>
+<span class="text-[#F5F3FF] text-[24px] font-bold">68.2%</span>
+<div class="mt-sm flex items-center gap-xs text-secondary text-label-xs">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+            High intent conversion
+          </div>
+</div>
+<div class="bg-[#17121F] p-xl rounded-xl border border-[#2A2438] flex flex-col gap-xs group hover:border-primary/50 transition-colors">
+<span class="text-[#9089B0] text-[12px] font-bold uppercase tracking-widest">Avg Call Duration</span>
+<span class="text-[#F5F3FF] text-[24px] font-bold">3m 42s</span>
+<div class="mt-sm flex items-center gap-xs text-[#FBBF24] text-label-xs">
+<span class="material-symbols-outlined text-[14px]">timer</span>
+            within target range
+          </div>
+</div>
+</div>
+
+<!-- Analytics row -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-xl">
+<div class="lg:col-span-2 bg-[#17121F] p-xl rounded-xl border border-[#2A2438]">
+<div class="flex items-center justify-between mb-lg">
+<h2 class="font-title-md text-[#F5F3FF] text-base">Leads &amp; qualified calls — last 14 days</h2>
+<div class="flex gap-md text-[11px] text-[#9089B0]">
+<span class="flex items-center gap-xs"><span class="w-2 h-2 rounded-full bg-[#A855F7]"></span>Leads</span>
+<span class="flex items-center gap-xs"><span class="w-2 h-2 rounded-full bg-[#22D3EE]"></span>Qualified</span>
+</div>
+</div>
+<canvas height="90" id="leadsTrendChart"></canvas>
+</div>
+<div class="bg-[#17121F] p-xl rounded-xl border border-[#2A2438] flex flex-col">
+<h2 class="font-title-md text-[#F5F3FF] text-base mb-lg">Pipeline distribution</h2>
+<div class="flex-1 flex items-center justify-center py-sm">
+<canvas height="150" id="statusDonutChart" width="150"></canvas>
+</div>
+<div class="grid grid-cols-2 gap-sm mt-md text-[11px] text-[#9089B0]">
+<span class="flex items-center gap-xs"><span class="w-2 h-2 rounded-full bg-[#6B647F]"></span>New 24%</span>
+<span class="flex items-center gap-xs"><span class="w-2 h-2 rounded-full bg-[#22D3EE]"></span>Qualified 38%</span>
+<span class="flex items-center gap-xs"><span class="w-2 h-2 rounded-full bg-[#A855F7]"></span>Site visit 15%</span>
+<span class="flex items-center gap-xs"><span class="w-2 h-2 rounded-full bg-[#FBBF24]"></span>Follow-up 16%</span>
+</div>
+</div>
+</div>
+
+<!-- Live calls + Activity feed -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-xl">
+<div class="lg:col-span-2 bg-[#17121F] rounded-xl border border-[#2A2438] overflow-hidden">
+<div class="px-xl py-lg flex justify-between items-center border-b border-[#2A2438]">
+<h2 class="font-title-md text-on-surface flex items-center gap-sm">Live calls <span class="w-2 h-2 rounded-full bg-[#22D3EE] pulse-dot"></span></h2>
+<span class="text-[11px] text-[#9089B0]">3 in progress</span>
+</div>
+<div class="divide-y divide-[#2A2438]">
+<div class="px-xl py-md flex items-center gap-md">
+<div class="w-9 h-9 rounded-full bg-[#22D3EE]/20 text-[#22D3EE] flex items-center justify-center font-bold text-[11px] shrink-0">NP</div>
+<div class="flex-1 min-w-0">
+<p class="text-body-sm font-semibold text-[#F5F3FF] truncate">Neha Pillai</p>
+<p class="text-[11px] text-[#9089B0] truncate">Bandra, Mumbai · Hinglish</p>
+</div>
+<span class="status-pill bg-[#22D3EE]/20 text-[#22D3EE] border border-[#22D3EE]/30">Listening</span>
+<span class="text-[11px] text-[#9089B0] w-12 text-right">02:14</span>
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-[#9089B0] hover:text-[#F5F3FF] transition-colors shrink-0">
+<span class="material-symbols-outlined text-[16px]">headphones</span>
+</button>
+</div>
+<div class="px-xl py-md flex items-center gap-md">
+<div class="w-9 h-9 rounded-full bg-[#A855F7]/20 text-[#A855F7] flex items-center justify-center font-bold text-[11px] shrink-0">VJ</div>
+<div class="flex-1 min-w-0">
+<p class="text-body-sm font-semibold text-[#F5F3FF] truncate">Vikram Joshi</p>
+<p class="text-[11px] text-[#9089B0] truncate">Whitefield, Bangalore · English</p>
+</div>
+<span class="status-pill bg-[#A855F7]/20 text-[#A855F7] border border-[#A855F7]/30">Thinking</span>
+<span class="text-[11px] text-[#9089B0] w-12 text-right">00:47</span>
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-[#9089B0] hover:text-[#F5F3FF] transition-colors shrink-0">
+<span class="material-symbols-outlined text-[16px]">headphones</span>
+</button>
+</div>
+<div class="px-xl py-md flex items-center gap-md">
+<div class="w-9 h-9 rounded-full bg-[#FF3D9A]/20 text-[#FF3D9A] flex items-center justify-center font-bold text-[11px] shrink-0">SR</div>
+<div class="flex-1 min-w-0">
+<p class="text-body-sm font-semibold text-[#F5F3FF] truncate">Sneha Reddy</p>
+<p class="text-[11px] text-[#9089B0] truncate">Gachibowli, Hyderabad · Telugu-English</p>
+</div>
+<span class="status-pill bg-[#FF3D9A]/20 text-[#FF3D9A] border border-[#FF3D9A]/30">Speaking</span>
+<span class="text-[11px] text-[#9089B0] w-12 text-right">04:02</span>
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-[#9089B0] hover:text-[#F5F3FF] transition-colors shrink-0">
+<span class="material-symbols-outlined text-[16px]">headphones</span>
+</button>
+</div>
+</div>
+</div>
+<div class="bg-[#17121F] rounded-xl border border-[#2A2438] overflow-hidden flex flex-col">
+<div class="px-xl py-lg border-b border-[#2A2438]"><h2 class="font-title-md text-on-surface">Recent activity</h2></div>
+<div class="divide-y divide-[#2A2438] flex-1">
+<div class="px-xl py-md flex gap-md">
+<span class="material-symbols-outlined text-[18px] text-[#22D3EE] shrink-0">check_circle</span>
+<div class="min-w-0"><p class="text-body-sm text-[#F5F3FF]">Riya qualified Ananya Sharma</p><p class="text-[11px] text-[#9089B0]">2 min ago</p></div>
+</div>
+<div class="px-xl py-md flex gap-md">
+<span class="material-symbols-outlined text-[18px] text-[#A855F7] shrink-0">event_available</span>
+<div class="min-w-0"><p class="text-body-sm text-[#F5F3FF]">Site visit booked with Rahul Varma</p><p class="text-[11px] text-[#9089B0]">18 min ago</p></div>
+</div>
+<div class="px-xl py-md flex gap-md">
+<span class="material-symbols-outlined text-[18px] text-[#9089B0] shrink-0">call_missed</span>
+<div class="min-w-0"><p class="text-body-sm text-[#F5F3FF]">Missed call · Priya Nair</p><p class="text-[11px] text-[#9089B0]">40 min ago</p></div>
+</div>
+<div class="px-xl py-md flex gap-md">
+<span class="material-symbols-outlined text-[18px] text-[#FBBF24] shrink-0">sync</span>
+<div class="min-w-0"><p class="text-body-sm text-[#F5F3FF]">Synced 12 leads to ArthaleLeads CRM</p><p class="text-[11px] text-[#9089B0]">1 hr ago</p></div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Data Table Section -->
+<div class="bg-[#17121F] rounded-xl border border-[#2A2438] overflow-hidden">
+<div class="px-xl py-lg flex justify-between items-center border-b border-[#2A2438]">
+<h2 class="font-title-md text-on-surface">Recent Leads</h2>
+<div class="flex gap-sm">
+<button class="px-md py-xs text-label-xs font-bold text-on-surface-variant hover:text-primary transition-colors">VIEW ALL</button>
+<span class="material-symbols-outlined text-on-surface-variant">more_vert</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="text-custom-label text-[12px] font-bold uppercase tracking-widest bg-surface-container-low/30">
+<th class="pl-xl py-lg w-10"><input class="rounded border-[#2A2438] bg-[#0A0A12]" type="checkbox"/></th>
+<th class="px-xl py-lg">Name</th>
+<th class="px-xl py-lg">Phone</th>
+<th class="px-xl py-lg">Budget</th>
+<th class="px-xl py-lg">Location</th>
+<th class="px-xl py-lg">Timeline</th>
+<th class="px-xl py-lg">Status</th>
+<th class="px-xl py-lg">Call Date</th>
+<th class="px-xl py-lg text-center">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-[#2A2438]">
+<tr class="hover:bg-surface-container-low/20 transition-colors group">
+<td class="pl-xl py-lg"><input class="rounded border-[#2A2438] bg-[#0A0A12]" type="checkbox"/></td>
+<td class="px-xl py-lg">
+<div class="flex items-center gap-md">
+<div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-label-xs">RV</div>
+<span class="text-body-sm font-semibold text-on-surface">Rahul Varma</span>
+</div>
+</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">+91 98765 43210</td>
+<td class="px-xl py-lg text-body-sm text-on-surface">₹2.5 - 3.0 Cr</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">Gurgaon, Sec-54</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">Immediate</td>
+<td class="px-xl py-lg">
+<span class="status-pill bg-[#A855F7]/20 text-[#A855F7] border border-[#A855F7]/30">Site Visit Booked</span>
+</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">24 Oct, 11:30 AM</td>
+<td class="px-xl py-lg">
+<div class="flex justify-center gap-sm opacity-60 group-hover:opacity-100 transition-opacity">
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-secondary hover:bg-secondary hover:text-on-secondary transition-colors"><span class="material-symbols-outlined text-[18px]">visibility</span></button>
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-[#22D3EE] hover:bg-[#22D3EE] hover:text-[#0A0A12] transition-colors"><span class="material-symbols-outlined text-[18px]">call</span></button>
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-primary hover:bg-primary hover:text-on-primary transition-colors"><span class="material-symbols-outlined text-[18px]">edit</span></button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/20 transition-colors group">
+<td class="pl-xl py-lg"><input class="rounded border-[#2A2438] bg-[#0A0A12]" type="checkbox"/></td>
+<td class="px-xl py-lg">
+<div class="flex items-center gap-md">
+<div class="w-8 h-8 rounded-full bg-secondary/20 text-secondary flex items-center justify-center font-bold text-label-xs">AS</div>
+<span class="text-body-sm font-semibold text-on-surface">Ananya Sharma</span>
+</div>
+</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">+91 90000 11223</td>
+<td class="px-xl py-lg text-body-sm text-on-surface">₹1.8 - 2.2 Cr</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">Bangalore, HSR</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">3 Months</td>
+<td class="px-xl py-lg">
+<span class="status-pill bg-[#22D3EE]/20 text-[#22D3EE] border border-[#22D3EE]/30">Qualified</span>
+</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">23 Oct, 04:15 PM</td>
+<td class="px-xl py-lg">
+<div class="flex justify-center gap-sm opacity-60 group-hover:opacity-100 transition-opacity">
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-secondary hover:bg-secondary hover:text-on-secondary transition-colors"><span class="material-symbols-outlined text-[18px]">visibility</span></button>
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-[#22D3EE] hover:bg-[#22D3EE] hover:text-[#0A0A12] transition-colors"><span class="material-symbols-outlined text-[18px]">call</span></button>
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-primary hover:bg-primary hover:text-on-primary transition-colors"><span class="material-symbols-outlined text-[18px]">edit</span></button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/20 transition-colors group">
+<td class="pl-xl py-lg"><input class="rounded border-[#2A2438] bg-[#0A0A12]" type="checkbox"/></td>
+<td class="px-xl py-lg">
+<div class="flex items-center gap-md">
+<div class="w-8 h-8 rounded-full bg-on-surface-variant/20 text-on-surface-variant flex items-center justify-center font-bold text-label-xs">PK</div>
+<span class="text-body-sm font-semibold text-on-surface">Pritam Kumar</span>
+</div>
+</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">+91 91234 56789</td>
+<td class="px-xl py-lg text-body-sm text-on-surface">₹5.0 Cr+</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">Mumbai, Worli</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">Immediate</td>
+<td class="px-xl py-lg">
+<span class="status-pill bg-[#6B647F]/20 text-[#cfc2d6] border border-[#6B647F]/30">New</span>
+</td>
+<td class="px-xl py-lg text-body-sm text-on-surface-variant">23 Oct, 01:20 PM</td>
+<td class="px-xl py-lg">
+<div class="flex justify-center gap-sm opacity-60 group-hover:opacity-100 transition-opacity">
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-secondary hover:bg-secondary hover:text-on-secondary transition-colors"><span class="material-symbols-outlined text-[18px]">visibility</span></button>
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-[#22D3EE] hover:bg-[#22D3EE] hover:text-[#0A0A12] transition-colors"><span class="material-symbols-outlined text-[18px]">call</span></button>
+<button class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-primary hover:bg-primary hover:text-on-primary transition-colors"><span class="material-symbols-outlined text-[18px]">edit</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-xl py-lg border-t border-[#2A2438] flex items-center justify-between">
+<span class="text-label-xs text-on-surface-variant">Showing 1 to 3 of 1,284 entries</span>
+<div class="flex gap-xs">
+<button class="w-8 h-8 rounded border border-[#2A2438] flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low"><span class="material-symbols-outlined">chevron_left</span></button>
+<button class="w-8 h-8 rounded bg-primary text-on-primary font-bold text-label-xs">1</button>
+<button class="w-8 h-8 rounded border border-[#2A2438] flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low font-bold text-label-xs">2</button>
+<button class="w-8 h-8 rounded border border-[#2A2438] flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low font-bold text-label-xs">3</button>
+<button class="w-8 h-8 rounded border border-[#2A2438] flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low"><span class="material-symbols-outlined">chevron_right</span></button>
+</div>
+</div>
+</div>
+</section>
+<footer class="h-huge"></footer>
+</main>
+<script>
+    const trendCtx = document.getElementById('leadsTrendChart');
+    new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        labels: ['1','2','3','4','5','6','7','8','9','10','11','12','13','14'],
+        datasets: [
+          { data: [62,70,58,80,75,90,85,96,88,102,97,110,104,118], borderColor: '#A855F7', backgroundColor: 'rgba(168,85,247,0.08)', fill: true, tension: 0.35, pointRadius: 0, borderWidth: 2 },
+          { data: [40,44,39,52,50,60,58,66,61,70,68,76,72,80], borderColor: '#22D3EE', backgroundColor: 'rgba(34,211,238,0.08)', fill: true, tension: 0.35, pointRadius: 0, borderWidth: 2 }
+        ]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { display: false },
+          y: { grid: { color: '#2A2438' }, ticks: { color: '#9089B0', font: { size: 11 } } }
+        }
+      }
+    });
+    const donutCtx = document.getElementById('statusDonutChart');
+    new Chart(donutCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['New','Qualified','Site visit','Follow-up'],
+        datasets: [{ data: [24,38,15,16], backgroundColor: ['#6B647F','#22D3EE','#A855F7','#FBBF24'], borderColor: '#17121F', borderWidth: 3 }]
+      },
+      options: { plugins: { legend: { display: false } }, cutout: '70%' }
+    });
+  </script>
+</body></html>

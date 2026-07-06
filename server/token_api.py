@@ -1,0 +1,362 @@
+import os
+
+import calls_db
+from dotenv import load_dotenv
+from fastapi import Body, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
+from livekit import api
+from livekit.api import ListParticipantsRequest, ListRoomsRequest
+from pydantic import BaseModel
+
+load_dotenv()
+
+app = FastAPI()
+calls_db.init_tables()
+
+# Browser demo runs on a different origin during local dev; tighten this once
+# the web-demo is deployed behind a known domain.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["*"],
+)
+
+
+class TokenRequest(BaseModel):
+    identity: str
+    room: str = "voice-agent-demo"
+
+
+@app.post("/token")
+def create_token(req: TokenRequest) -> dict:
+    api_key = os.environ.get("LIVEKIT_API_KEY")
+    api_secret = os.environ.get("LIVEKIT_API_SECRET")
+    livekit_url = os.environ.get("LIVEKIT_URL")
+    if not api_key or not api_secret or not livekit_url:
+        raise HTTPException(500, "LiveKit credentials are not configured on the server")
+
+    token = (
+        api.AccessToken(api_key, api_secret)
+        .with_identity(req.identity)
+        .with_name(req.identity)
+        .with_grants(api.VideoGrants(room_join=True, room=req.room))
+        .to_jwt()
+    )
+    return {"token": token, "url": livekit_url}
+
+
+@app.get("/active-calls")
+async def list_active_calls() -> list[dict]:
+    """List rooms currently live on the LiveKit server, one entry per visitor.
+
+    Reflects real in-progress sessions (not mock data) by asking the LiveKit
+    server directly, then pulling the agent's `lk.agent.state` attribute to
+    report whether it's listening, thinking, or speaking.
+    """
+    lkapi = api.LiveKitAPI()
+    try:
+        rooms = await lkapi.room.list_rooms(ListRoomsRequest())
+        calls = []
+        for room in rooms.rooms:
+            if room.num_participants < 2:
+                continue  # only the agent has joined so far, no visitor yet
+            participants = await lkapi.room.list_participants(
+                ListParticipantsRequest(room=room.name)
+            )
+            agent_p = next(
+                (p for p in participants.participants if "lk.agent.state" in p.attributes),
+                None,
+            )
+            visitor_p = next(
+                (p for p in participants.participants if p is not agent_p),
+                None,
+            )
+            if agent_p is None or visitor_p is None:
+                continue
+            calls.append(
+                {
+                    "room": room.name,
+                    "visitor_identity": visitor_p.identity,
+                    "state": agent_p.attributes.get("lk.agent.state", "unknown"),
+                    "joined_at_ms": visitor_p.joined_at_ms,
+                }
+            )
+        return calls
+    except Exception:
+        # LiveKit server isn't reachable (e.g. infra/docker-compose.yml isn't
+        # running yet) — degrade to "no live calls" instead of a 500.
+        return []
+    finally:
+        await lkapi.aclose()
+
+
+# ------------------------------------------------------ calls & leads
+
+
+@app.get("/calls")
+def list_calls(limit: int = 200, search: str = "", status: str = "", days: int = 0) -> list[dict]:
+    """Real call history from agent/calls.db — one row per completed call."""
+    return calls_db.list_calls(limit=limit, search=search, status=status, days=days)
+
+
+@app.get("/calls/export.csv", response_class=PlainTextResponse)
+def export_calls_csv() -> PlainTextResponse:
+    return PlainTextResponse(
+        calls_db.calls_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=calls.csv"},
+    )
+
+
+@app.get("/calls/{call_id}")
+def get_call(call_id: int) -> dict:
+    call = calls_db.get_call(call_id)
+    if call is None:
+        raise HTTPException(404, "Call not found")
+    return call
+
+
+# Leads are the same rows viewed CRM-style; kept as aliases so both mental
+# models (call log vs. lead list) work against one source of truth.
+@app.get("/leads")
+def list_leads(limit: int = 200) -> list[dict]:
+    return calls_db.list_calls(limit=limit)
+
+
+@app.get("/leads/{lead_id}")
+def get_lead(lead_id: int) -> dict:
+    return get_call(lead_id)
+
+
+# ---------------------------------------------------------- dashboard
+
+
+@app.get("/dashboard/summary")
+def dashboard_summary() -> dict:
+    return calls_db.summary()
+
+
+@app.get("/dashboard/usage-trends")
+def dashboard_usage_trends(days: int = 14) -> dict:
+    return calls_db.usage_trends(days=days)
+
+
+@app.get("/dashboard/analytics")
+def dashboard_analytics() -> dict:
+    return calls_db.analytics()
+
+
+# -------------------------------------------------------------- agents
+
+
+@app.get("/agents")
+def list_agents() -> list[dict]:
+    return calls_db.list_agents()
+
+
+@app.post("/agents")
+def create_agent(data: dict = Body(...)) -> dict:
+    return calls_db.create_agent(data)
+
+
+@app.patch("/agents/{agent_id}")
+def update_agent(agent_id: int, data: dict = Body(...)) -> dict:
+    agent = calls_db.update_agent(agent_id, data)
+    if agent is None:
+        raise HTTPException(404, "Agent not found")
+    return agent
+
+
+@app.delete("/agents/{agent_id}")
+def delete_agent(agent_id: int) -> dict:
+    calls_db.delete_agent(agent_id)
+    return {"ok": True}
+
+
+# ------------------------------------------------------------ contacts
+
+
+@app.get("/contacts")
+def list_contacts() -> list[dict]:
+    return calls_db.list_contacts()
+
+
+@app.post("/contacts")
+def create_contact(data: dict = Body(...)) -> dict:
+    calls_db.create_contact(data)
+    return {"ok": True}
+
+
+@app.delete("/contacts/{contact_id}")
+def delete_contact(contact_id: int) -> dict:
+    calls_db.delete_contact(contact_id)
+    return {"ok": True}
+
+
+@app.delete("/contacts")
+def delete_all_contacts() -> dict:
+    calls_db.delete_all_contacts()
+    return {"ok": True}
+
+
+@app.get("/contacts/export.csv", response_class=PlainTextResponse)
+def export_contacts_csv() -> PlainTextResponse:
+    return PlainTextResponse(
+        calls_db.contacts_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=contacts.csv"},
+    )
+
+
+@app.post("/contacts/import")
+def import_contacts(data: dict = Body(...)) -> dict:
+    count = calls_db.import_contacts_csv(data.get("csv", ""))
+    return {"imported": count}
+
+
+# ------------------------------------------------------ knowledge base
+
+
+@app.get("/knowledge-bases")
+def list_knowledge_bases() -> list[dict]:
+    return calls_db.list_knowledge_bases()
+
+
+@app.post("/knowledge-bases")
+def create_knowledge_base(data: dict = Body(...)) -> dict:
+    calls_db.create_knowledge_base(data.get("name", "Untitled"))
+    return {"ok": True}
+
+
+@app.delete("/knowledge-bases/{kb_id}")
+def delete_knowledge_base(kb_id: int) -> dict:
+    calls_db.delete_knowledge_base(kb_id)
+    return {"ok": True}
+
+
+@app.post("/knowledge-bases/{kb_id}/sources")
+def add_knowledge_source(kb_id: int, data: dict = Body(...)) -> dict:
+    calls_db.add_knowledge_source(
+        kb_id, data.get("name", "Untitled"), data.get("content", ""), data.get("type", "text")
+    )
+    return {"ok": True}
+
+
+@app.delete("/knowledge-sources/{source_id}")
+def delete_knowledge_source(source_id: int) -> dict:
+    calls_db.delete_knowledge_source(source_id)
+    return {"ok": True}
+
+
+# ----------------------------------------------------------- campaigns
+
+
+@app.get("/inbound-routes")
+def list_inbound_routes() -> list[dict]:
+    return calls_db.list_inbound_routes()
+
+
+@app.post("/inbound-routes")
+def create_inbound_route(data: dict = Body(...)) -> dict:
+    calls_db.create_inbound_route(data)
+    return {"ok": True}
+
+
+@app.get("/campaigns")
+def list_campaigns() -> list[dict]:
+    return calls_db.list_campaigns()
+
+
+@app.post("/campaigns")
+def create_campaign(data: dict = Body(...)) -> dict:
+    calls_db.create_campaign(data)
+    return {"ok": True}
+
+
+@app.patch("/campaigns/{campaign_id}")
+def update_campaign(campaign_id: int, data: dict = Body(...)) -> dict:
+    calls_db.update_campaign_status(campaign_id, data.get("status", "paused"))
+    return {"ok": True}
+
+
+# -------------------------------------------------------- integrations
+
+
+@app.get("/integrations")
+def list_integrations() -> list[dict]:
+    return calls_db.list_integrations()
+
+
+@app.patch("/integrations/{key}")
+def update_integration(key: str, data: dict = Body(...)) -> dict:
+    calls_db.update_integration(key, data.get("status", "not_connected"), data.get("config", {}))
+    return {"ok": True}
+
+
+# ----------------------------------------------------- telephony (EnableX)
+
+
+@app.get("/telephony/status")
+def telephony_status() -> dict:
+    return calls_db.telephony_status()
+
+
+@app.post("/telephony/connect")
+def telephony_connect(data: dict = Body(...)) -> dict:
+    app_id = (data.get("appId") or "").strip()
+    app_key = (data.get("appKey") or "").strip()
+    if not app_id or not app_key:
+        raise HTTPException(400, "Both App ID and App Key are required")
+    calls_db.connect_enablex(app_id, app_key)
+    return calls_db.telephony_status()
+
+
+@app.post("/telephony/disconnect")
+def telephony_disconnect() -> dict:
+    calls_db.disconnect_enablex()
+    return {"ok": True}
+
+
+@app.get("/telephony/numbers")
+def list_phone_numbers() -> list[dict]:
+    return calls_db.list_phone_numbers()
+
+
+@app.post("/telephony/numbers")
+def add_phone_number(data: dict = Body(...)) -> dict:
+    number = (data.get("number") or "").strip()
+    if not number:
+        raise HTTPException(400, "A phone/virtual number is required")
+    calls_db.add_phone_number(number, data.get("label", ""), data.get("agentId"))
+    return {"ok": True}
+
+
+@app.patch("/telephony/numbers/{number_id}")
+def assign_phone_number(number_id: int, data: dict = Body(...)) -> dict:
+    calls_db.assign_phone_number(number_id, data.get("agentId"))
+    return {"ok": True}
+
+
+@app.delete("/telephony/numbers/{number_id}")
+def delete_phone_number(number_id: int) -> dict:
+    calls_db.delete_phone_number(number_id)
+    return {"ok": True}
+
+
+@app.post("/telephony/test-call")
+def telephony_test_call(data: dict = Body(...)) -> dict:
+    from_number = (data.get("from") or "").strip()
+    to_number = (data.get("to") or "").strip()
+    if not from_number or not to_number:
+        raise HTTPException(400, "Both a from (virtual) number and a to number are required")
+    return calls_db.place_test_call(from_number, to_number)
+
+
+# ------------------------------------------------------------- billing
+
+
+@app.get("/billing/summary")
+def billing() -> dict:
+    return calls_db.billing_summary()

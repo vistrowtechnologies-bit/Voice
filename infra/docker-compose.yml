@@ -1,0 +1,20 @@
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --dev --bind 0.0.0.0 --keys "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+    ports:
+      - "7880:7880" # HTTP/WebSocket (signaling)
+      - "7881:7881" # RTC TCP fallback
+      - "50000-50100:50000-50100/udp" # RTC media (narrowed range for local dev)
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  redis-data:

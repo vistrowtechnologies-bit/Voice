@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", sans-serif;
+
+  --color-bg: #0a0a12;
+  --color-surface: #17121f;
+  --color-surface-high: #201b3b;
+  --color-border: #2a2438;
+  --color-primary: #a855f7;
+  --color-primary-dark: #9333ea;
+  --color-cyan: #22d3ee;
+  --color-magenta: #ff3d9a;
+  --color-amber: #fbbf24;
+  --color-muted: #6b647f;
+  --color-text: #f5f3ff;
+  --color-text-muted: #9089b0;
+  --color-destructive: #ef4444;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+  font-size: 20px;
+  line-height: 1;
+  white-space: nowrap;
+  word-wrap: normal;
+  display: inline-block;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 10px;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
