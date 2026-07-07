@@ -1060,12 +1060,16 @@ def _enablex_request(path: str, method: str, body: dict | None) -> dict:
 
 
 def place_test_call(from_number: str, to_number: str) -> dict:
-    """Place a real outbound call through the EnableX Voice API.
-
-    Genuinely hits EnableX with the stored credentials and surfaces whatever
-    it returns — so a wrong key or unprovisioned number shows a real error
-    rather than a fake success.
+    """Place a real outbound call through the EnableX Voice API, bridged
+    straight to the LiveKit agent assigned to `from_number` — same bridge
+    used for real inbound calls (see enablex_inbound_event in token_api.py),
+    just triggered by an outbound leg instead of a webhook. This is what lets
+    an operator actually talk to the agent (and hear it use the knowledge
+    base) before running a campaign, instead of hearing a canned message.
     """
+    import livekit_sip  # local import: livekit_sip imports this module at load time
+
+    sip_uri = f"sip:{from_number}@{livekit_sip.sip_host()}"
     return _enablex_request(
         "/call",
         "POST",
@@ -1075,11 +1079,9 @@ def place_test_call(from_number: str, to_number: str) -> dict:
             "from": from_number,
             "to": to_number,
             "action_on_connect": {
-                "play": {
-                    "text": "This is a test call from your Arthale Voice dashboard. Your EnableX "
-                    "connection is working.",
-                    "voice": "female",
-                    "language": "en-US",
+                "connect": {
+                    "from": from_number,
+                    "to": sip_uri,
                 }
             },
         },
