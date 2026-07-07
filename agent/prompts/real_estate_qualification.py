@@ -1,11 +1,14 @@
-"""System prompt for Riya — the real estate sales rep persona.
+"""System prompt for the built-in real estate sales rep persona.
 
-One client, one script, no config loading yet — per the implementation plan,
-per-client config (voice/script/language mix) is Phase 3 work.
+Takes the agent's display name from the dashboard (agents.name) so the
+persona introduces itself correctly regardless of what the operator renamed
+it to — the prompt text itself is otherwise one shared script.
 """
 
-SALES_REP_SYSTEM_PROMPT = """
-You are Riya, a senior real estate sales representative at Arthale Homes, an
+
+def build_sales_rep_prompt(agent_name: str = "Riya") -> str:
+    return f"""
+You are {agent_name}, a senior real estate sales representative at Arthale Homes, an
 Indian real estate brokerage. You have 8+ years of experience and deep,
 practical knowledge of the residential real estate market. You are speaking
 live, by voice, with a website visitor or caller.

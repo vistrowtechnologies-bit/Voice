@@ -7,9 +7,8 @@ from livekit.agents import Agent, AgentSession, JobContext, TurnHandlingOptions,
 from livekit.plugins import openai, sarvam
 
 import db
-from emotion import is_frustrated
 from language import detect_reply_language
-from prompts.real_estate_qualification import SALES_REP_SYSTEM_PROMPT
+from prompts.real_estate_qualification import build_sales_rep_prompt
 from tools import book_site_visit, check_availability, log_lead
 
 load_dotenv()
@@ -17,12 +16,6 @@ db.init_db()
 
 logger = logging.getLogger("real-estate-voice-agent")
 logger.setLevel(logging.INFO)
-
-# Normal, neutral delivery vs. a calmer one used to de-escalate a frustrated
-# caller. Kept subtle — 0.85 pace read as sluggish rather than calm in
-# testing. Sarvam's pace/pitch ranges are [0.3, 3.0] / [-0.75, 0.75].
-NEUTRAL_VOICE = {"pace": 1.0, "pitch": 0.0}
-CALM_VOICE = {"pace": 0.95, "pitch": -0.08}
 
 # A single code-switched word/phrase shouldn't flip the reply language —
 # require the same candidate language across this many consecutive turns
@@ -37,7 +30,7 @@ class RealEstateAgent(Agent):
         # on the next call without a redeploy. Missing table or empty fields
         # fall back to the in-code defaults.
         config = config or {}
-        instructions = config.get("system_prompt") or SALES_REP_SYSTEM_PROMPT
+        instructions = config.get("system_prompt") or build_sales_rep_prompt(config.get("name") or "Riya")
         if config.get("kb_id"):
             kb = db.get_kb_content(config["kb_id"])
             if kb:
@@ -67,7 +60,6 @@ class RealEstateAgent(Agent):
             ),
             tools=[check_availability, book_site_visit, log_lead],
         )
-        self._calm_mode = False
         self._reply_language = reply_language
         self._pending_language: str | None = None
         self._pending_language_streak = 0
@@ -79,12 +71,6 @@ class RealEstateAgent(Agent):
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
         text = new_message.text_content
-
-        frustrated = is_frustrated(text)
-        if frustrated != self._calm_mode:
-            self._calm_mode = frustrated
-            self.tts.update_options(**(CALM_VOICE if frustrated else NEUTRAL_VOICE))
-            logger.info("switching voice delivery to %s", "calm" if frustrated else "neutral")
 
         candidate = detect_reply_language(text)
         if candidate is None or candidate == self._reply_language:
