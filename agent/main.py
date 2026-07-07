@@ -95,28 +95,47 @@ class RealEstateAgent(Agent):
             logger.info("switching reply language to %s", candidate)
 
 
-def _agent_id_from_job(ctx: JobContext) -> int | None:
-    """Inbound phone calls arrive in a room whose metadata (set by the SIP
-    dispatch rule in server/livekit_sip.py) names which dashboard agent should
-    handle the dialed number. Browser calls have no such metadata. Returns None
-    on anything unexpected, so we fall back to the default first-agent config.
+def _call_context_from_job(ctx: JobContext) -> dict:
+    """Room metadata names which dashboard agent should handle this call, and
+    (for phone/widget calls) which number or site it came in on:
+
+    - Phone: {"agent_id", "phone_number"} — stamped by the SIP dispatch rule
+      in server/livekit_sip.py.
+    - Website widget: {"agent_id", "site_id"} — stamped by /widget/token in
+      server/token_api.py.
+    - Dashboard "Browser test": {"agent_id"} only — from /token.
+    - Public demo call page: no metadata at all.
+
+    Returns {"agent_id": int|None, "call_type": "phone"|"widget"|"browser",
+    "site_id": int|None}, defaulting to the "browser" catch-all on anything
+    unexpected so the call still gets handled by the default agent.
     """
+    default = {"agent_id": None, "call_type": "browser", "site_id": None}
     try:
         raw = ctx.job.room.metadata
     except Exception:
-        return None
+        return default
     if not raw:
-        return None
+        return default
     try:
-        agent_id = json.loads(raw).get("agent_id")
-    except (ValueError, AttributeError):
-        return None
-    return int(agent_id) if agent_id is not None else None
+        meta = json.loads(raw)
+    except ValueError:
+        return default
+
+    agent_id = meta.get("agent_id")
+    site_id = meta.get("site_id")
+    call_type = "phone" if meta.get("phone_number") else "widget" if site_id is not None else "browser"
+    return {
+        "agent_id": int(agent_id) if agent_id is not None else None,
+        "call_type": call_type,
+        "site_id": int(site_id) if site_id is not None else None,
+    }
 
 
 async def entrypoint(ctx: JobContext) -> None:
     logger.info("starting session in room %s", ctx.room.name)
-    config = db.get_agent_config(_agent_id_from_job(ctx))
+    call_context = _call_context_from_job(ctx)
+    config = db.get_agent_config(call_context["agent_id"])
     if config and config.get("status") == "paused":
         # Paused from the dashboard — don't take the call.
         logger.info("agent '%s' is paused; skipping room %s", config.get("name"), ctx.room.name)
@@ -168,6 +187,8 @@ async def entrypoint(ctx: JobContext) -> None:
                     "duration_seconds": (ended_at - started_at).total_seconds(),
                     "reply_language": agent._reply_language,
                     "transcript": transcript,
+                    "call_type": call_context["call_type"],
+                    "site_id": call_context["site_id"],
                     **lead_data,
                 }
             )

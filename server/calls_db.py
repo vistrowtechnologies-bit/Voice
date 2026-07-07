@@ -41,7 +41,19 @@ CREATE TABLE IF NOT EXISTS calls (
     lead_location TEXT,
     lead_timeline TEXT,
     site_visit_json TEXT,
-    transcript_json TEXT NOT NULL
+    transcript_json TEXT NOT NULL,
+    call_type TEXT DEFAULT 'browser',
+    site_id INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS sites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    site_key TEXT NOT NULL UNIQUE,
+    allowed_domain TEXT DEFAULT '',
+    agent_id INTEGER,
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS agents (
@@ -198,12 +210,23 @@ def _migrate_phone_numbers_columns(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE phone_numbers ADD COLUMN {column} TEXT")
 
 
+def _migrate_calls_columns(conn: sqlite3.Connection) -> None:
+    """Add call_type/site_id to a calls table that predates the website-widget
+    feature — same reasoning as _migrate_phone_numbers_columns above."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(calls)").fetchall()}
+    if "call_type" not in existing:
+        conn.execute("ALTER TABLE calls ADD COLUMN call_type TEXT DEFAULT 'browser'")
+    if "site_id" not in existing:
+        conn.execute("ALTER TABLE calls ADD COLUMN site_id INTEGER")
+
+
 def init_tables() -> None:
     conn = _connect()
     try:
         with conn:
             conn.executescript(_SCHEMA)
             _migrate_phone_numbers_columns(conn)
+            _migrate_calls_columns(conn)
             if conn.execute("SELECT COUNT(*) c FROM agents").fetchone()["c"] == 0:
                 conn.execute(
                     "INSERT INTO agents (name, description) VALUES (?, ?)",
@@ -220,6 +243,22 @@ def init_tables() -> None:
                 )
             conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('credits_total', '300')"
+            )
+            # Phone minutes burn more credits than browser/widget minutes —
+            # they carry an EnableX telephony cost the others don't. Tune
+            # these once real EnableX per-minute costs are confirmed.
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_rate_browser', '1')"
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_rate_phone', '1.5')"
+            )
+            # Website-widget calls cost the same to run as browser calls (no
+            # telephony leg) — same rate by default, but its own setting so a
+            # widget sold to an external client can be priced independently
+            # of your own internal browser test/demo calls later.
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_rate_widget', '1')"
             )
     finally:
         conn.close()
@@ -261,9 +300,13 @@ def _initials(name: str) -> str:
     return ("".join(p[0] for p in name.split()[:2])).upper() or "?"
 
 
+_CHANNEL_LABELS = {"phone": "Phone", "widget": "Website Widget", "browser": "Web"}
+
+
 def _call_dict(row: sqlite3.Row, include_transcript: bool = True) -> dict:
     transcript = json.loads(row["transcript_json"]) if row["transcript_json"] else []
     name = row["lead_name"] or row["visitor_identity"] or "Unknown caller"
+    call_type = row["call_type"] or "browser"
     out = {
         "id": str(row["id"]),
         "name": name,
@@ -275,7 +318,9 @@ def _call_dict(row: sqlite3.Row, include_transcript: bool = True) -> dict:
         "status": _lead_status(row),
         "callStatus": _status(row, transcript),
         "sentiment": _sentiment(transcript),
-        "channel": "Web",
+        "channel": _CHANNEL_LABELS.get(call_type, "Web"),
+        "callType": call_type,
+        "siteId": row["site_id"],
         "agent": "Riya",
         "callDate": row["started_at"],
         "durationSeconds": row["duration_seconds"],
@@ -842,7 +887,139 @@ def update_integration(key: str, status: str, config: dict) -> None:
         conn.close()
 
 
+# -------------------------------------------------------- widget sites
+
+
+def _new_site_key() -> str:
+    import secrets
+
+    # "av_live_" prefix makes a pasted key self-identifying in support
+    # threads/screenshots, same idea as Stripe/OpenAI-style prefixed keys.
+    return "av_live_" + secrets.token_urlsafe(24)
+
+
+def _site_dict(r: sqlite3.Row) -> dict:
+    return {
+        "id": r["id"],
+        "name": r["name"],
+        "siteKey": r["site_key"],
+        "allowedDomain": r["allowed_domain"],
+        "agentId": r["agent_id"],
+        "status": r["status"],
+        "createdAt": r["created_at"],
+    }
+
+
+def list_sites() -> list[dict]:
+    conn = _connect()
+    try:
+        return [_site_dict(r) for r in conn.execute("SELECT * FROM sites ORDER BY id DESC").fetchall()]
+    finally:
+        conn.close()
+
+
+def get_site(site_id: int) -> dict | None:
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM sites WHERE id = ?", (site_id,)).fetchone()
+        return _site_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_site_by_key(site_key: str) -> dict | None:
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM sites WHERE site_key = ?", (site_key,)).fetchone()
+        return _site_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def create_site(name: str, agent_id: int | None, allowed_domain: str = "") -> dict:
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                "INSERT INTO sites (name, site_key, allowed_domain, agent_id) VALUES (?, ?, ?, ?)",
+                (name, _new_site_key(), allowed_domain, agent_id),
+            )
+        row = conn.execute("SELECT * FROM sites WHERE id = ?", (cur.lastrowid,)).fetchone()
+        return _site_dict(row)
+    finally:
+        conn.close()
+
+
+def update_site(site_id: int, data: dict) -> dict | None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE sites SET name = ?, allowed_domain = ?, agent_id = ?, status = ? WHERE id = ?",
+                (
+                    data.get("name"),
+                    data.get("allowedDomain", ""),
+                    data.get("agentId"),
+                    data.get("status", "active"),
+                    site_id,
+                ),
+            )
+        row = conn.execute("SELECT * FROM sites WHERE id = ?", (site_id,)).fetchone()
+        return _site_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def delete_site(site_id: int) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("DELETE FROM sites WHERE id = ?", (site_id,))
+    finally:
+        conn.close()
+
+
+def regenerate_site_key(site_id: int) -> dict | None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("UPDATE sites SET site_key = ? WHERE id = ?", (_new_site_key(), site_id))
+        row = conn.execute("SELECT * FROM sites WHERE id = ?", (site_id,)).fetchone()
+        return _site_dict(row) if row else None
+    finally:
+        conn.close()
+
+
 # --------------------------------------------------------------- billing
+
+
+_CREDIT_RATE_SETTINGS = {
+    "browser": "credit_rate_browser",
+    "widget": "credit_rate_widget",
+    "phone": "credit_rate_phone",
+}
+
+
+def credit_rates() -> dict:
+    """Per-minute credit-burn multiplier for each call type, e.g.
+    {"browser": 1.0, "widget": 1.0, "phone": 1.5} — phone calls burn more
+    since they carry an EnableX telephony cost the others don't."""
+    conn = _connect()
+    try:
+        rates = {}
+        for call_type, setting_key in _CREDIT_RATE_SETTINGS.items():
+            row = conn.execute("SELECT value FROM settings WHERE key = ?", (setting_key,)).fetchone()
+            rates[call_type] = float(row["value"]) if row else 1.0
+        return rates
+    finally:
+        conn.close()
+
+
+def set_credit_rate(call_type: str, rate: float) -> None:
+    setting_key = _CREDIT_RATE_SETTINGS.get(call_type)
+    if setting_key is None:
+        raise ValueError(f"unknown call type: {call_type}")
+    set_setting(setting_key, str(rate))
 
 
 def billing_summary() -> dict:
@@ -850,15 +1027,28 @@ def billing_summary() -> dict:
     try:
         total_row = conn.execute("SELECT value FROM settings WHERE key = 'credits_total'").fetchone()
         credits_total = int(total_row["value"]) if total_row else 300
-        minutes = conn.execute(
-            "SELECT COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls"
-        ).fetchone()["m"]
-        used = round(minutes, 1)
+        rates = credit_rates()
+
+        by_type: dict[str, float] = {}
+        used = 0.0
+        for row in conn.execute(
+            "SELECT COALESCE(call_type, 'browser') call_type, "
+            "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls GROUP BY call_type"
+        ).fetchall():
+            call_type = row["call_type"] if row["call_type"] in rates else "browser"
+            minutes = row["m"]
+            credits = minutes * rates.get(call_type, 1.0)
+            by_type[call_type] = round(by_type.get(call_type, 0.0) + minutes, 1)
+            used += credits
+        used = round(used, 1)
+
         return {
             "creditsTotal": credits_total,
             "creditsUsed": used,
             "creditsRemaining": max(0, round(credits_total - used, 1)),
-            "minutesUsed": used,
+            "minutesUsed": round(sum(by_type.values()), 1),
+            "minutesByType": by_type,
+            "creditRates": rates,
         }
     finally:
         conn.close()

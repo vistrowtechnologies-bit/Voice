@@ -78,6 +78,44 @@ export function Billing() {
           </div>
         </div>
 
+        {billing && (
+          <div className="rounded-xl border border-border bg-surface">
+            <div className="border-b border-border px-5 py-4">
+              <h3 className="text-sm font-semibold">Usage by call type</h3>
+              <p className="mt-0.5 text-xs text-text-muted">
+                Phone calls burn more credits/min than browser or widget calls — they carry a telephony cost the
+                others don't.
+              </p>
+            </div>
+            <div className="divide-y divide-border">
+              {(
+                [
+                  ['browser', 'Dashboard browser calls', 'call'],
+                  ['widget', 'Website widget calls', 'public'],
+                  ['phone', 'Real phone calls', 'call'],
+                ] as const
+              ).map(([type, label, icon]) => {
+                const minutes = billing.minutesByType[type] ?? 0
+                const rate = billing.creditRates[type] ?? 1
+                return (
+                  <div key={type} className="flex items-center justify-between px-5 py-3 text-sm">
+                    <div className="flex items-center gap-2.5">
+                      <Icon name={icon} className="text-[16px] text-text-muted" />
+                      <span>{label}</span>
+                      <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-text-muted">
+                        {rate} credit/min
+                      </span>
+                    </div>
+                    <span className="text-text-muted">
+                      {minutes} min · {Math.round(minutes * rate * 10) / 10} credits
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         <div>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold">Available plans</h2>

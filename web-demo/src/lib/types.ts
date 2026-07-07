@@ -168,6 +168,8 @@ export interface BillingSummary {
   creditsUsed: number
   creditsRemaining: number
   minutesUsed: number
+  minutesByType: Partial<Record<'browser' | 'widget' | 'phone', number>>
+  creditRates: Partial<Record<'browser' | 'widget' | 'phone', number>>
 }
 
 export interface TelephonyStatus {
