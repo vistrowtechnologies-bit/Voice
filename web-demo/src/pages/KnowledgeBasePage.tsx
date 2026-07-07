@@ -8,6 +8,7 @@ import {
   deleteKnowledgeSource,
   fetchKnowledgeBases,
 } from '../lib/api'
+import { extractTextFromFile } from '../lib/fileExtract'
 import type { KnowledgeBase } from '../lib/types'
 
 export function KnowledgeBasePage() {
@@ -16,6 +17,8 @@ export function KnowledgeBasePage() {
   const [addingTo, setAddingTo] = useState<number | null>(null)
   const [sourceName, setSourceName] = useState('')
   const [sourceText, setSourceText] = useState('')
+  const [extracting, setExtracting] = useState(false)
+  const [fileError, setFileError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const reload = () => fetchKnowledgeBases().then(setKbs).catch(() => setKbs([]))
@@ -36,14 +39,23 @@ export function KnowledgeBasePage() {
     await addKnowledgeSource(addingTo, sourceName.trim() || 'Untitled source', sourceText)
     setSourceName('')
     setSourceText('')
+    setFileError(null)
     setAddingTo(null)
     reload()
   }
 
   const handleFile = async (file: File) => {
-    const text = await file.text()
-    setSourceText(text)
-    if (!sourceName) setSourceName(file.name)
+    setFileError(null)
+    setExtracting(true)
+    try {
+      const text = await extractTextFromFile(file)
+      setSourceText(text)
+      if (!sourceName) setSourceName(file.name.replace(/\.[^.]+$/, ''))
+    } catch (err) {
+      setFileError(err instanceof Error ? err.message : 'Could not read that file.')
+    } finally {
+      setExtracting(false)
+    }
   }
 
   return (
@@ -53,9 +65,10 @@ export function KnowledgeBasePage() {
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="rounded-lg border border-border bg-surface px-4 py-3 text-xs text-text-muted">
           <Icon name="info" className="mr-1.5 align-[-3px] text-[15px] text-cyan" />
-          Sources attached here (project brochures, price sheets, FAQs) are injected into the agent's
-          context, so it answers project-specific questions with real facts instead of declining.
-          Attach a knowledge base to an agent from the Agents page.
+          Sources attached here (brochures, price sheets, service catalogs, FAQs — .txt, .pdf, .docx,
+          or pasted text) are injected into the agent's context, so it answers your business's
+          questions with real facts instead of declining. Attach a knowledge base to an agent from the
+          Agents page.
         </div>
 
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-4">
@@ -137,29 +150,49 @@ export function KnowledgeBasePage() {
                   <textarea
                     value={sourceText}
                     onChange={(e) => setSourceText(e.target.value)}
-                    placeholder="Paste the content here, or upload a .txt file…"
+                    placeholder="Paste the content here, or upload a file…"
                     className="h-28 resize-none rounded-lg border border-border bg-surface-high p-2 text-xs outline-none focus:border-primary"
                   />
+                  {fileError && (
+                    <p className="flex items-center gap-1.5 text-xs text-destructive">
+                      <Icon name="error" className="text-[15px]" />
+                      {fileError}
+                    </p>
+                  )}
                   <input
                     ref={fileRef}
                     type="file"
-                    accept=".txt,.md,.csv"
+                    accept=".txt,.md,.csv,.pdf,.docx"
                     className="hidden"
-                    onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleFile(e.target.files[0])
+                      e.target.value = ''
+                    }}
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={() => fileRef.current?.click()}
-                      className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold hover:border-primary"
+                      disabled={extracting}
+                      className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold hover:border-primary disabled:opacity-40"
                     >
-                      <Icon name="upload_file" className="text-[15px]" />
-                      Upload .txt
+                      <Icon name={extracting ? 'progress_activity' : 'upload_file'} className="text-[15px]" />
+                      {extracting ? 'Reading file…' : 'Upload .txt / .pdf / .docx'}
                     </button>
                     <div className="flex-1" />
-                    <button onClick={() => setAddingTo(null)} className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold">
+                    <button
+                      onClick={() => {
+                        setAddingTo(null)
+                        setFileError(null)
+                      }}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold"
+                    >
                       Cancel
                     </button>
-                    <button onClick={handleAddSource} className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-bg">
+                    <button
+                      onClick={handleAddSource}
+                      disabled={!sourceText.trim()}
+                      className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-bg disabled:opacity-40"
+                    >
                       Add source
                     </button>
                   </div>
