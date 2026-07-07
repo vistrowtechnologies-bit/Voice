@@ -452,6 +452,27 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     return bridge
 
 
+@app.post("/telephony/enablex/outbound-test-event")
+def enablex_outbound_test_event(event: dict = Body(...)) -> dict:
+    """Webhook for the dashboard's "Call test" outbound calls (see
+    calls_db.place_test_call). Once EnableX reports the callee answered, we
+    bridge the leg to the LiveKit agent the same way real inbound calls are
+    bridged, instead of just playing a canned line and hanging up."""
+    state = event.get("state")
+    voice_id = event.get("voice_id")
+    logger.info("EnableX outbound-test event: state=%s voice_id=%s", state, voice_id)
+
+    if state != "connected" or not voice_id:
+        return {"ok": True}
+
+    bridge = calls_db.enablex_test_call_connected(voice_id)
+    if bridge is None:
+        return {"ok": True}
+    if not bridge.get("ok"):
+        logger.error("failed to bridge outbound test call %s: %s", voice_id, bridge.get("error"))
+    return bridge
+
+
 # ------------------------------------------------------------- billing
 
 

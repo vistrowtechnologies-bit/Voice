@@ -130,8 +130,8 @@ export function ActiveCallUI({
   })
 
   return (
-    <div className="flex min-h-screen flex-col bg-bg text-text">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
+    <div className="flex h-screen flex-col overflow-hidden bg-bg text-text">
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2 text-sm text-text-muted">
           <span className="h-2 w-2 rounded-full bg-primary" />
           {agentLabel}
@@ -140,9 +140,11 @@ export function ActiveCallUI({
       </div>
 
       {agentParticipant ? (
-        <AgentOrb agentParticipant={agentParticipant} />
+        <div className="shrink-0">
+          <AgentOrb agentParticipant={agentParticipant} />
+        </div>
       ) : (
-        <div className="flex flex-col items-center gap-3 py-10">
+        <div className="flex shrink-0 flex-col items-center gap-3 py-10">
           <div
             className={`flex h-56 w-56 items-center justify-center rounded-full border-4 transition-colors ${WAITING_STYLE.ring}`}
           >
@@ -155,7 +157,7 @@ export function ActiveCallUI({
       )}
 
       {showTranscript && (
-        <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4 sm:px-6">
+        <div className="mx-auto flex w-full max-w-2xl min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4 sm:px-6">
           {transcriptEntries.length === 0 && (
             <p className="text-center text-sm text-text-muted">
               Your conversation will appear here as you talk.
@@ -177,7 +179,7 @@ export function ActiveCallUI({
         </div>
       )}
 
-      <div className="flex items-center justify-center gap-6 border-t border-border bg-surface px-4 py-4 sm:px-6">
+      <div className="flex shrink-0 items-center justify-center gap-6 border-t border-border bg-surface px-4 py-4 sm:px-6">
         <button
           aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
           onClick={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}

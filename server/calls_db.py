@@ -1059,18 +1059,44 @@ def _enablex_request(path: str, method: str, body: dict | None) -> dict:
         return {"ok": False, "error": f"Could not reach EnableX: {exc}"}
 
 
-def place_test_call(from_number: str, to_number: str) -> dict:
-    """Place a real outbound call through the EnableX Voice API, bridged
-    straight to the LiveKit agent assigned to `from_number` — same bridge
-    used for real inbound calls (see enablex_inbound_event in token_api.py),
-    just triggered by an outbound leg instead of a webhook. This is what lets
-    an operator actually talk to the agent (and hear it use the knowledge
-    base) before running a campaign, instead of hearing a canned message.
-    """
-    import livekit_sip  # local import: livekit_sip imports this module at load time
+def public_base_url() -> str | None:
+    """Publicly reachable base URL of this backend, used for EnableX webhook
+    URLs. Railway sets RAILWAY_PUBLIC_DOMAIN automatically on a service with
+    a generated domain; PUBLIC_BASE_URL is an escape hatch for anything else
+    (a custom domain, local ngrok testing, etc.)."""
+    override = os.environ.get("PUBLIC_BASE_URL")
+    if override:
+        return override.rstrip("/")
+    domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+    return f"https://{domain}" if domain else None
 
-    sip_uri = f"sip:{from_number}@{livekit_sip.sip_host()}"
-    return _enablex_request(
+
+# voice_id -> from_number for outbound test calls awaiting their "connected"
+# webhook so we know which agent's SIP number to bridge to. EnableX's generic
+# webhook from/to fields aren't reliably documented for the outbound
+# direction, so we track this ourselves rather than trust them.
+_TEST_CALL_FROM_BY_VOICE_ID: dict[str, str] = {}
+
+
+def place_test_call(from_number: str, to_number: str) -> dict:
+    """Place a real outbound call through the EnableX Voice API. Once the
+    destination answers (the "connected" webhook event), the outbound-test
+    webhook bridges the leg to the LiveKit agent assigned to `from_number` —
+    EnableX's action_on_connect only documents a "play" mode, not a bridge/
+    connect mode, so the actual bridge has to go through their runtime
+    connectVoice API (enablex_connect_to_sip), same as real inbound calls.
+    This is what lets an operator actually talk to the agent (and hear it use
+    the knowledge base) before running a campaign, instead of a canned line.
+    """
+    base_url = public_base_url()
+    if not base_url:
+        return {
+            "ok": False,
+            "error": "Set PUBLIC_BASE_URL (or deploy with a Railway public domain) so EnableX can "
+            "notify this server when the test call connects.",
+        }
+
+    result = _enablex_request(
         "/call",
         "POST",
         {
@@ -1079,13 +1105,34 @@ def place_test_call(from_number: str, to_number: str) -> dict:
             "from": from_number,
             "to": to_number,
             "action_on_connect": {
-                "connect": {
-                    "from": from_number,
-                    "to": sip_uri,
+                "play": {
+                    "text": "Connecting you now.",
+                    "voice": "female",
+                    "language": "en-US",
                 }
             },
+            "event_url": f"{base_url}/telephony/enablex/outbound-test-event",
         },
     )
+    voice_id = (result.get("response") or {}).get("voice_id") if result.get("ok") else None
+    if voice_id:
+        _TEST_CALL_FROM_BY_VOICE_ID[voice_id] = from_number
+    return result
+
+
+def enablex_test_call_connected(voice_id: str) -> dict | None:
+    """Called from the outbound-test webhook once EnableX reports the callee
+    answered ("connected"). Bridges the leg to the LiveKit SIP host for the
+    agent assigned to whichever number placed this test call. Returns None
+    if this voice_id isn't a tracked test call (e.g. a duplicate webhook
+    delivery after we've already bridged it once)."""
+    import livekit_sip  # local import: livekit_sip imports this module at load time
+
+    from_number = _TEST_CALL_FROM_BY_VOICE_ID.pop(voice_id, None)
+    if not from_number:
+        return None
+    sip_uri = f"sip:{from_number}@{livekit_sip.sip_host()}"
+    return enablex_connect_to_sip(voice_id, from_number, sip_uri)
 
 
 def enablex_accept_call(voice_id: str) -> dict:
