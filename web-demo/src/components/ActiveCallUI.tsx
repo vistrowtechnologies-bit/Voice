@@ -22,12 +22,12 @@ interface ActiveCallUIProps {
   agentLabel?: string
 }
 
-const STATE_STYLES: Record<string, { label: string; glow: string }> = {
-  listening: { label: 'Listening…', glow: '#22D3EE' },
-  thinking: { label: 'Thinking…', glow: '#A855F7' },
-  speaking: { label: 'Agent is speaking…', glow: '#FF3D9A' },
+const STATE_STYLES: Record<string, { label: string }> = {
+  listening: { label: 'Listening…' },
+  thinking: { label: 'Thinking…' },
+  speaking: { label: 'Agent is speaking…' },
 }
-const WAITING_STYLE = { label: 'Waiting for agent to join…', glow: '#9089B0' }
+const WAITING_STYLE = { label: 'Waiting for agent to join…' }
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -36,18 +36,16 @@ function formatDuration(ms: number): string {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
 }
 
-// Looping abstract orb animation used as the agent's visual — its glow and
-// scale react in real time to the agent's mic track volume, and its color
-// shifts with lk.agent.state, so it reads as "alive" rather than a static clip.
-function OrbVideo({ glow, volume, dimmed }: { glow: string; volume: number; dimmed?: boolean }) {
+// Looping abstract orb animation used as the agent's visual — its scale
+// reacts in real time to the agent's mic track volume, so it reads as
+// "alive" rather than a static clip.
+function OrbVideo({ volume, dimmed }: { volume: number; dimmed?: boolean }) {
   const scale = 1 + Math.min(volume, 1) * 0.14
-  const glowSpread = 28 + Math.min(volume, 1) * 56
   return (
     <div
-      className="relative h-56 w-56 overflow-hidden rounded-full transition-[transform,box-shadow] duration-150 ease-out sm:h-72 sm:w-72"
+      className="relative h-56 w-56 overflow-hidden rounded-full transition-transform duration-150 ease-out sm:h-72 sm:w-72"
       style={{
         transform: `scale(${scale})`,
-        boxShadow: `0 0 ${glowSpread}px ${glow}66, 0 0 ${glowSpread * 2}px ${glow}22`,
         opacity: dimmed ? 0.45 : 1,
       }}
     >
@@ -77,7 +75,7 @@ function AgentOrb({ agentParticipant }: { agentParticipant: RemoteParticipant })
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <OrbVideo glow={stateStyle.glow} volume={volume} />
+      <OrbVideo volume={volume} />
       <p className="text-sm text-text-muted">{stateStyle.label}</p>
     </div>
   )
@@ -163,7 +161,7 @@ export function ActiveCallUI({
             <AgentOrb agentParticipant={agentParticipant} />
           ) : (
             <div className="flex flex-col items-center gap-4">
-              <OrbVideo glow={WAITING_STYLE.glow} volume={0} dimmed />
+              <OrbVideo volume={0} dimmed />
               <p className="text-sm text-text-muted">
                 {connectionState === ConnectionState.Connected ? WAITING_STYLE.label : 'Connecting…'}
               </p>
