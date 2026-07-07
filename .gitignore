@@ -6,4 +6,5 @@ node_modules/
 venv/
 *.db
 web-demo/dist/
+widget/dist/
 .DS_Store
