@@ -1,22 +1,33 @@
-# Railway service: Arthale Voice backend — FastAPI token API + telephony/SIP.
-# The agent worker (agent/) and web-demo frontend are deployed separately, so
-# this image builds only the backend. Railway auto-uses this Dockerfile (see
-# railway.json) instead of Nixpacks, which can't pick a target in this monorepo.
+# Railway service: Arthale Voice backend + agent worker, one container.
+#
+# Both processes run together (see start.sh) so they share calls.db on this
+# container's filesystem — the backend's dashboard reads/writes it (agents,
+# contacts, integrations, phone numbers) and the agent worker reads agent
+# config from it and writes completed-call rows to it. Splitting them into
+# separate Railway services would give each its own filesystem and silently
+# break that sharing (agent worker blind to dashboard config; dashboard never
+# sees new calls) — see agent/db.py and server/calls_db.py.
+#
+# The web-demo frontend deploys separately (Vercel); see web-demo/vercel.json
+# for how it reaches this service.
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install backend deps first for layer caching.
+# Install both requirement sets — verified conflict-free together.
 COPY server/requirements.txt ./server/requirements.txt
-RUN pip install --no-cache-dir -r server/requirements.txt
+COPY agent/requirements.txt ./agent/requirements.txt
+RUN pip install --no-cache-dir -r server/requirements.txt -r agent/requirements.txt
 
 COPY server/ ./server/
+COPY agent/ ./agent/
+COPY start.sh ./start.sh
+RUN chmod +x ./start.sh
 
-# calls_db.py writes its SQLite file to ../agent/calls.db relative to server/,
-# so the agent dir must exist for sqlite to create it. NOTE: this is ephemeral
-# on Railway — the DB resets on each deploy. Move to Railway Postgres or a
-# persistent volume for durable call history / phone-number ↔ LiveKit mapping.
-RUN mkdir -p ./agent
+# calls.db lives at agent/calls.db by default (ephemeral — wiped on every
+# redeploy). Set CALLS_DB_PATH to a path under a mounted Railway volume (e.g.
+# /data/calls.db, with a volume mounted at /data) for durable call history.
 
-# Railway injects $PORT at runtime.
-CMD ["sh", "-c", "uvicorn token_api:app --host 0.0.0.0 --port ${PORT:-8000} --app-dir server"]
+# Railway injects $PORT at runtime; the agent worker reads LIVEKIT_URL/
+# LIVEKIT_API_KEY/LIVEKIT_API_SECRET plus SARVAM_API_KEY/OPENAI_API_KEY.
+CMD ["./start.sh"]

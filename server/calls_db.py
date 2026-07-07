@@ -13,10 +13,18 @@ stdlib, so an independent module pointed at the same file is enough.
 import csv
 import io
 import json
+import os
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "agent" / "calls.db"
+# CALLS_DB_PATH overrides this for deployments where the backend and agent
+# worker run in one container but calls.db should live on a mounted volume
+# (e.g. Railway) rather than next to the source code. Must match agent/db.py.
+DB_PATH = (
+    Path(os.environ["CALLS_DB_PATH"])
+    if os.environ.get("CALLS_DB_PATH")
+    else Path(__file__).resolve().parent.parent / "agent" / "calls.db"
+)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (

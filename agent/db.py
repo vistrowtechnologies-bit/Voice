@@ -7,10 +7,14 @@ stay the same either way.
 """
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent / "calls.db"
+# CALLS_DB_PATH overrides this for deployments where the agent worker and
+# backend run in one container but calls.db should live on a mounted volume
+# (e.g. Railway) rather than next to the source code.
+DB_PATH = Path(os.environ["CALLS_DB_PATH"]) if os.environ.get("CALLS_DB_PATH") else Path(__file__).resolve().parent / "calls.db"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
