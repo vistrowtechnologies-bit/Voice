@@ -4,6 +4,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://voice-production-2950.up.railway.app/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
