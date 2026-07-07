@@ -16,12 +16,14 @@ import json
 import os
 
 from livekit import api
+from livekit.api.twirp_client import TwirpError
 from livekit.protocol.room import RoomConfiguration
 from livekit.protocol.sip import (
     CreateSIPDispatchRuleRequest,
     CreateSIPInboundTrunkRequest,
     DeleteSIPDispatchRuleRequest,
     DeleteSIPTrunkRequest,
+    ListSIPInboundTrunkRequest,
     SIPDispatchRule,
     SIPDispatchRuleIndividual,
     SIPInboundTrunkInfo,
@@ -86,13 +88,34 @@ async def ensure_inbound_trunk() -> str | None:
             )
             return trunk_id
 
-        trunk = await lkapi.sip.create_inbound_trunk(
-            CreateSIPInboundTrunkRequest(
-                trunk=SIPInboundTrunkInfo(name=TRUNK_NAME, numbers=numbers)
+        try:
+            trunk = await lkapi.sip.create_inbound_trunk(
+                CreateSIPInboundTrunkRequest(
+                    trunk=SIPInboundTrunkInfo(name=TRUNK_NAME, numbers=numbers)
+                )
             )
-        )
-        calls_db.set_setting(TRUNK_ID_SETTING, trunk.sip_trunk_id)
-        return trunk.sip_trunk_id
+            calls_db.set_setting(TRUNK_ID_SETTING, trunk.sip_trunk_id)
+            return trunk.sip_trunk_id
+        except TwirpError as exc:
+            if exc.code != "invalid_argument" or "Conflicting" not in exc.message:
+                raise
+            # calls.db is ephemeral on Railway (wiped on every redeploy), so
+            # TRUNK_ID_SETTING can go missing even though a trunk we created
+            # earlier still exists on LiveKit and still owns these numbers —
+            # LiveKit then refuses to create a second one for the same
+            # number(s). Recover by finding and adopting that existing trunk
+            # instead of failing the whole add/assign/delete flow.
+            existing = await lkapi.sip.list_inbound_trunk(
+                ListSIPInboundTrunkRequest(numbers=numbers)
+            )
+            if not existing.items:
+                raise
+            trunk_id = existing.items[0].sip_trunk_id
+            await lkapi.sip.update_inbound_trunk(
+                trunk_id, SIPInboundTrunkInfo(name=TRUNK_NAME, numbers=numbers)
+            )
+            calls_db.set_setting(TRUNK_ID_SETTING, trunk_id)
+            return trunk_id
 
 
 async def upsert_dispatch_rule(number_row: dict) -> None:
