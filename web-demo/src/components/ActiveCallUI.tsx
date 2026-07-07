@@ -43,7 +43,7 @@ function OrbVideo({ volume, dimmed }: { volume: number; dimmed?: boolean }) {
   const scale = 1 + Math.min(volume, 1) * 0.14
   return (
     <div
-      className="relative h-56 w-56 overflow-hidden rounded-full transition-transform duration-150 ease-out sm:h-72 sm:w-72"
+      className="relative h-72 w-72 overflow-hidden rounded-full transition-transform duration-150 ease-out sm:h-[26rem] sm:w-[26rem]"
       style={{
         transform: `scale(${scale})`,
         opacity: dimmed ? 0.45 : 1,
