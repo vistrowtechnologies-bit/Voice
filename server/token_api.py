@@ -1,16 +1,20 @@
 import json
 import logging
 import os
+from pathlib import Path
 
 import calls_db
 import livekit_sip
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from livekit import api
 from livekit.api import CreateRoomRequest, ListParticipantsRequest, ListRoomsRequest
 from pydantic import BaseModel
+
+WIDGET_JS_PATH = Path(__file__).resolve().parent / "static" / "widget.js"
+WORDPRESS_PLUGIN_ZIP_PATH = Path(__file__).resolve().parent / "static" / "arthale-voice-widget.zip"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("telephony")
@@ -485,6 +489,29 @@ def billing() -> dict:
 
 
 # ---------------------------------------------------------- website widget
+
+
+@app.get("/widget.js")
+def widget_js() -> FileResponse:
+    """Serves the embeddable widget bundle (built from ../widget) from this
+    same backend, so a customer only ever has to configure one URL — this
+    one — for both the <script src> and data-api-base. Rebuild with
+    `npm run build` in widget/ and copy dist/widget.js here after editing
+    widget/src/widget.ts; there's no automated build step wiring the two
+    together yet."""
+    return FileResponse(WIDGET_JS_PATH, media_type="application/javascript")
+
+
+@app.get("/widget/wordpress-plugin.zip")
+def widget_wordpress_plugin() -> FileResponse:
+    """Downloadable, install-ready WordPress plugin (wordpress-plugin/ in the
+    repo) — just a settings page for the site key + this backend's URL,
+    which then echoes the widget.js script tag in wp_footer()."""
+    return FileResponse(
+        WORDPRESS_PLUGIN_ZIP_PATH,
+        media_type="application/zip",
+        filename="arthale-voice-widget.zip",
+    )
 
 
 @app.get("/widget/sites")
