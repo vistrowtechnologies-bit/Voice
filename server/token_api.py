@@ -12,6 +12,7 @@ from livekit import api
 from livekit.api import CreateRoomRequest, ListParticipantsRequest, ListRoomsRequest
 from pydantic import BaseModel
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("telephony")
 
 load_dotenv()
@@ -430,7 +431,7 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     voice_id = event.get("voice_id")
     dialed_number = event.get("to")
     caller = event.get("from")
-    logger.info("EnableX inbound event: state=%s voice_id=%s to=%s from=%s", state, voice_id, dialed_number, caller)
+    logger.info("EnableX inbound event: state=%s voice_id=%s to=%s from=%s raw=%s", state, voice_id, dialed_number, caller, event)
 
     if state != "incomingcall" or not voice_id or not dialed_number:
         return {"ok": True}
@@ -460,14 +461,16 @@ def enablex_outbound_test_event(event: dict = Body(...)) -> dict:
     bridged, instead of just playing a canned line and hanging up."""
     state = event.get("state")
     voice_id = event.get("voice_id")
-    logger.info("EnableX outbound-test event: state=%s voice_id=%s", state, voice_id)
+    logger.info("EnableX outbound-test event: state=%s voice_id=%s raw=%s", state, voice_id, event)
 
     if state != "connected" or not voice_id:
         return {"ok": True}
 
     bridge = calls_db.enablex_test_call_connected(voice_id)
     if bridge is None:
+        logger.warning("outbound-test 'connected' event for untracked voice_id=%s", voice_id)
         return {"ok": True}
+    logger.info("bridged outbound test call %s -> %s", voice_id, bridge)
     if not bridge.get("ok"):
         logger.error("failed to bridge outbound test call %s: %s", voice_id, bridge.get("error"))
     return bridge
