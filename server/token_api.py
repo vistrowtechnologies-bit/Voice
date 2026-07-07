@@ -482,3 +482,109 @@ def enablex_outbound_test_event(event: dict = Body(...)) -> dict:
 @app.get("/billing/summary")
 def billing() -> dict:
     return calls_db.billing_summary()
+
+
+# ---------------------------------------------------------- website widget
+
+
+@app.get("/widget/sites")
+def list_sites() -> list[dict]:
+    return calls_db.list_sites()
+
+
+@app.post("/widget/sites")
+def create_site(data: dict = Body(...)) -> dict:
+    name = (data.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "A site name is required")
+    return calls_db.create_site(name, data.get("agentId"), data.get("allowedDomain", ""))
+
+
+@app.patch("/widget/sites/{site_id}")
+def update_site(site_id: int, data: dict = Body(...)) -> dict:
+    site = calls_db.update_site(site_id, data)
+    if site is None:
+        raise HTTPException(404, "Site not found")
+    return site
+
+
+@app.post("/widget/sites/{site_id}/regenerate-key")
+def regenerate_site_key(site_id: int) -> dict:
+    site = calls_db.regenerate_site_key(site_id)
+    if site is None:
+        raise HTTPException(404, "Site not found")
+    return site
+
+
+@app.delete("/widget/sites/{site_id}")
+def delete_site(site_id: int) -> dict:
+    calls_db.delete_site(site_id)
+    return {"ok": True}
+
+
+# Very small in-memory guard against a leaked/scraped site key being hammered
+# from a script — resets on restart and isn't shared across instances, so
+# it's a first line of defense, not a real distributed rate limiter.
+_WIDGET_TOKEN_WINDOW_SECONDS = 60
+_WIDGET_TOKEN_MAX_PER_WINDOW = 30
+_widget_token_calls: dict[str, list[float]] = {}
+
+
+def _widget_rate_limited(site_key: str) -> bool:
+    import time
+
+    now = time.monotonic()
+    calls = [t for t in _widget_token_calls.get(site_key, []) if now - t < _WIDGET_TOKEN_WINDOW_SECONDS]
+    calls.append(now)
+    _widget_token_calls[site_key] = calls
+    return len(calls) > _WIDGET_TOKEN_MAX_PER_WINDOW
+
+
+class WidgetTokenRequest(BaseModel):
+    siteKey: str
+    identity: str
+
+
+@app.post("/widget/token")
+async def create_widget_token(req: WidgetTokenRequest) -> dict:
+    """Public, unauthenticated endpoint the embeddable widget.js calls from
+    an arbitrary third-party website — auth is the site key itself, not a
+    dashboard session. Issues a LiveKit token for a fresh room pre-tagged
+    with {"agent_id", "site_id"} so agent/main.py's _call_context_from_job
+    loads the right agent and logs the call as a 'widget' call against this
+    site, same mechanism phone numbers and dashboard browser tests already
+    use for their own metadata shape.
+    """
+    site = calls_db.get_site_by_key(req.siteKey)
+    if site is None:
+        raise HTTPException(404, "Unknown site key")
+    if site["status"] == "paused":
+        raise HTTPException(403, "This site's widget is currently paused")
+    if _widget_rate_limited(req.siteKey):
+        raise HTTPException(429, "Too many calls from this site right now — try again shortly")
+
+    api_key = os.environ.get("LIVEKIT_API_KEY")
+    api_secret = os.environ.get("LIVEKIT_API_SECRET")
+    livekit_url = os.environ.get("LIVEKIT_URL")
+    if not api_key or not api_secret or not livekit_url:
+        raise HTTPException(500, "LiveKit credentials are not configured on the server")
+
+    import secrets
+
+    room = f"widget-{site['id']}-{secrets.token_hex(8)}"
+    async with api.LiveKitAPI() as lkapi:
+        await lkapi.room.create_room(
+            CreateRoomRequest(
+                name=room,
+                metadata=json.dumps({"agent_id": site["agentId"], "site_id": site["id"]}),
+            )
+        )
+
+    token = (
+        api.AccessToken(api_key, api_secret)
+        .with_identity(req.identity)
+        .with_name(req.identity)
+        .with_grants(api.VideoGrants(room_join=True, room=room))
+        .to_jwt()
+    )
+    return {"token": token, "url": livekit_url, "room": room}
