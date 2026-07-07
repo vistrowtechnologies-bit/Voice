@@ -30,4 +30,6 @@ RUN chmod +x ./start.sh
 
 # Railway injects $PORT at runtime; the agent worker reads LIVEKIT_URL/
 # LIVEKIT_API_KEY/LIVEKIT_API_SECRET plus SARVAM_API_KEY/OPENAI_API_KEY.
-CMD ["./start.sh"]
+# Invoke via bash explicitly (not relying on the shebang) since start.sh uses
+# `wait -n`, a bash builtin not supported by /bin/sh (dash) on this image.
+CMD ["bash", "./start.sh"]
