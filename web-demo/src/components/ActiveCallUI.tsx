@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
 import {
-  BarVisualizer,
   useConnectionState,
   useDataChannel,
   useLocalParticipant,
   useParticipantAttribute,
   useRemoteParticipants,
   useRoomContext,
+  useTrackVolume,
   useTracks,
   useTranscriptions,
 } from '@livekit/components-react'
@@ -23,18 +22,45 @@ interface ActiveCallUIProps {
   agentLabel?: string
 }
 
-const STATE_STYLES: Record<string, { ring: string; label: string; fg: string }> = {
-  listening: { ring: 'border-cyan', label: 'Listening…', fg: '#22D3EE' },
-  thinking: { ring: 'border-primary border-dashed', label: 'Thinking…', fg: '#A855F7' },
-  speaking: { ring: 'border-magenta', label: 'Agent is speaking…', fg: '#FF3D9A' },
+const STATE_STYLES: Record<string, { label: string; glow: string }> = {
+  listening: { label: 'Listening…', glow: '#22D3EE' },
+  thinking: { label: 'Thinking…', glow: '#A855F7' },
+  speaking: { label: 'Agent is speaking…', glow: '#FF3D9A' },
 }
-const WAITING_STYLE = { ring: 'border-border', label: 'Waiting for agent to join…', fg: '#9089B0' }
+const WAITING_STYLE = { label: 'Waiting for agent to join…', glow: '#9089B0' }
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
+
+// Looping abstract orb animation used as the agent's visual — its glow and
+// scale react in real time to the agent's mic track volume, and its color
+// shifts with lk.agent.state, so it reads as "alive" rather than a static clip.
+function OrbVideo({ glow, volume, dimmed }: { glow: string; volume: number; dimmed?: boolean }) {
+  const scale = 1 + Math.min(volume, 1) * 0.14
+  const glowSpread = 28 + Math.min(volume, 1) * 56
+  return (
+    <div
+      className="relative h-56 w-56 overflow-hidden rounded-full transition-[transform,box-shadow] duration-150 ease-out sm:h-72 sm:w-72"
+      style={{
+        transform: `scale(${scale})`,
+        boxShadow: `0 0 ${glowSpread}px ${glow}66, 0 0 ${glowSpread * 2}px ${glow}22`,
+        opacity: dimmed ? 0.45 : 1,
+      }}
+    >
+      <video
+        src="/agent-orb.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="h-full w-full object-cover"
+      />
+    </div>
+  )
 }
 
 // useParticipantAttribute throws if it's ever called with no participant
@@ -46,20 +72,12 @@ function AgentOrb({ agentParticipant }: { agentParticipant: RemoteParticipant })
   const agentTracks = useTracks([Track.Source.Microphone]).filter(
     (t) => t.participant.identity === agentParticipant.identity,
   )
+  const volume = useTrackVolume(agentTracks[0])
   const stateStyle = STATE_STYLES[agentState] ?? WAITING_STYLE
 
   return (
-    <div className="flex flex-col items-center gap-3 py-10">
-      <div
-        className={`flex h-56 w-56 items-center justify-center rounded-full border-4 transition-colors ${stateStyle.ring}`}
-        style={{ '--lk-fg': stateStyle.fg } as CSSProperties}
-      >
-        {agentTracks[0] ? (
-          <BarVisualizer state={agentState} track={agentTracks[0]} barCount={7} className="h-20 w-32" />
-        ) : (
-          <Icon name="mic" className="text-primary text-[40px]" />
-        )}
-      </div>
+    <div className="flex flex-col items-center gap-4">
+      <OrbVideo glow={stateStyle.glow} volume={volume} />
       <p className="text-sm text-text-muted">{stateStyle.label}</p>
     </div>
   )
@@ -139,45 +157,43 @@ export function ActiveCallUI({
         <span className="font-mono text-sm text-text-muted">{formatDuration(elapsedMs)}</span>
       </div>
 
-      {agentParticipant ? (
-        <div className="shrink-0">
-          <AgentOrb agentParticipant={agentParticipant} />
-        </div>
-      ) : (
-        <div className="flex shrink-0 flex-col items-center gap-3 py-10">
-          <div
-            className={`flex h-56 w-56 items-center justify-center rounded-full border-4 transition-colors ${WAITING_STYLE.ring}`}
-          >
-            <Icon name="mic" className="text-primary text-[40px]" />
-          </div>
-          <p className="text-sm text-text-muted">
-            {connectionState === ConnectionState.Connected ? WAITING_STYLE.label : 'Connecting…'}
-          </p>
-        </div>
-      )}
-
-      {showTranscript && (
-        <div className="mx-auto flex w-full max-w-2xl min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4 sm:px-6">
-          {transcriptEntries.length === 0 && (
-            <p className="text-center text-sm text-text-muted">
-              Your conversation will appear here as you talk.
-            </p>
-          )}
-          {transcriptEntries.map((entry) => (
-            <div
-              key={entry.id}
-              className={`max-w-[75%] rounded-xl px-4 py-2 text-sm ${
-                entry.isLocal
-                  ? 'self-end bg-primary text-bg'
-                  : 'self-start border border-border bg-surface text-text'
-              }`}
-            >
-              {entry.text}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row">
+        <div className="flex shrink-0 items-center justify-center border-b border-border py-6 sm:w-[42%] sm:border-b-0 sm:border-r sm:py-0">
+          {agentParticipant ? (
+            <AgentOrb agentParticipant={agentParticipant} />
+          ) : (
+            <div className="flex flex-col items-center gap-4">
+              <OrbVideo glow={WAITING_STYLE.glow} volume={0} dimmed />
+              <p className="text-sm text-text-muted">
+                {connectionState === ConnectionState.Connected ? WAITING_STYLE.label : 'Connecting…'}
+              </p>
             </div>
-          ))}
-          <div ref={transcriptEndRef} />
+          )}
         </div>
-      )}
+
+        {showTranscript && (
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 sm:px-6">
+            {transcriptEntries.length === 0 && (
+              <p className="text-center text-sm text-text-muted">
+                Your conversation will appear here as you talk.
+              </p>
+            )}
+            {transcriptEntries.map((entry) => (
+              <div
+                key={entry.id}
+                className={`max-w-[85%] rounded-xl px-4 py-2 text-sm ${
+                  entry.isLocal
+                    ? 'self-end bg-primary text-bg'
+                    : 'self-start border border-border bg-surface text-text'
+                }`}
+              >
+                {entry.text}
+              </div>
+            ))}
+            <div ref={transcriptEndRef} />
+          </div>
+        )}
+      </div>
 
       <div className="flex shrink-0 items-center justify-center gap-6 border-t border-border bg-surface px-4 py-4 sm:px-6">
         <button
