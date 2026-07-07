@@ -12,6 +12,7 @@ import {
   fetchTelephonyStatus,
   placeTestCall,
 } from '../lib/api'
+import { isE164 } from '../lib/phone'
 import type { AgentConfig, PhoneNumber, TelephonyStatus } from '../lib/types'
 
 const PROVIDERS = [
@@ -266,11 +267,7 @@ function NumberRow({
   const runTest = async () => {
     const to = testTo.trim()
     if (!to) return
-    // EnableX needs full E.164 (country code + number, e.g. +919812345678) —
-    // a bare local number gets far enough to hit their infra but then fails
-    // with a confusing raw 502 instead of a clean validation error, so catch
-    // it here first.
-    if (!/^\+[1-9]\d{7,14}$/.test(to)) {
+    if (!isE164(to)) {
       setResult('✕ Enter the number in full international format, starting with + and the country code (e.g. +919812345678).')
       return
     }

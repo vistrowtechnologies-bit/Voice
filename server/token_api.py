@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 
@@ -8,7 +9,7 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from livekit import api
-from livekit.api import ListParticipantsRequest, ListRoomsRequest
+from livekit.api import CreateRoomRequest, ListParticipantsRequest, ListRoomsRequest
 from pydantic import BaseModel
 
 logger = logging.getLogger("telephony")
@@ -31,15 +32,26 @@ app.add_middleware(
 class TokenRequest(BaseModel):
     identity: str
     room: str = "voice-agent-demo"
+    agentId: int | None = None
 
 
 @app.post("/token")
-def create_token(req: TokenRequest) -> dict:
+async def create_token(req: TokenRequest) -> dict:
     api_key = os.environ.get("LIVEKIT_API_KEY")
     api_secret = os.environ.get("LIVEKIT_API_SECRET")
     livekit_url = os.environ.get("LIVEKIT_URL")
     if not api_key or not api_secret or not livekit_url:
         raise HTTPException(500, "LiveKit credentials are not configured on the server")
+
+    if req.agentId is not None:
+        # Dashboard "test in browser" flow: pre-create the room carrying the
+        # same {"agent_id"} metadata the SIP dispatch rules stamp on phone
+        # calls, so agent/main.py's _agent_id_from_job loads this specific
+        # agent's config instead of falling back to the first live one.
+        async with api.LiveKitAPI() as lkapi:
+            await lkapi.room.create_room(
+                CreateRoomRequest(name=req.room, metadata=json.dumps({"agent_id": req.agentId}))
+            )
 
     token = (
         api.AccessToken(api_key, api_secret)

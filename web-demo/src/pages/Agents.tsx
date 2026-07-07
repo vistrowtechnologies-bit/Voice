@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { BrowserTestModal, DialTestModal } from '../components/AgentTestCall'
 import {
   createAgent,
   deleteAgent,
   fetchAgents,
   fetchKnowledgeBases,
+  fetchPhoneNumbers,
   formatDateTime,
   updateAgent,
 } from '../lib/api'
-import type { AgentConfig, KnowledgeBase } from '../lib/types'
+import type { AgentConfig, KnowledgeBase, PhoneNumber } from '../lib/types'
 
 // bulbul:v3 speaker roster (Sarvam docs) — the voice the dashboard picks is
 // exactly what agent/main.py passes to sarvam.TTS on the next call.
@@ -32,7 +34,10 @@ const LANGUAGES = [
 export function Agents() {
   const [agents, setAgents] = useState<AgentConfig[]>([])
   const [kbs, setKbs] = useState<KnowledgeBase[]>([])
+  const [numbers, setNumbers] = useState<PhoneNumber[]>([])
   const [editing, setEditing] = useState<AgentConfig | null>(null)
+  const [dialTestAgent, setDialTestAgent] = useState<AgentConfig | null>(null)
+  const [browserTestAgent, setBrowserTestAgent] = useState<AgentConfig | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const reload = () => fetchAgents().then(setAgents).catch(() => setAgents([]))
@@ -40,6 +45,7 @@ export function Agents() {
   useEffect(() => {
     reload()
     fetchKnowledgeBases().then(setKbs).catch(() => setKbs([]))
+    fetchPhoneNumbers().then(setNumbers).catch(() => setNumbers([]))
   }, [])
 
   useEffect(() => {
@@ -144,13 +150,22 @@ export function Agents() {
                   <Icon name="edit" className="text-[16px]" />
                   Edit
                 </button>
-                <Link
-                  to="/call"
+                <button
+                  onClick={() => setDialTestAgent(agent)}
                   className="flex items-center justify-center rounded-lg border border-cyan/40 px-3 text-cyan hover:bg-cyan/10"
-                  aria-label="Test call"
+                  aria-label={`Call test — ${agent.name}`}
+                  title="Place a real phone call to test this agent"
                 >
                   <Icon name="call" className="text-[16px]" />
-                </Link>
+                </button>
+                <button
+                  onClick={() => setBrowserTestAgent(agent)}
+                  className="flex items-center justify-center rounded-lg border border-primary/40 px-3 text-primary hover:bg-primary/10"
+                  aria-label={`Browser test — ${agent.name}`}
+                  title="Test this agent in-browser with your mic"
+                >
+                  <Icon name="mic" className="text-[16px]" />
+                </button>
               </div>
             </div>
           ))}
@@ -166,6 +181,18 @@ export function Agents() {
               reload()
             }}
           />
+        )}
+
+        {dialTestAgent && (
+          <DialTestModal
+            agent={dialTestAgent}
+            fromNumber={numbers.find((n) => n.agentId === dialTestAgent.id)?.number ?? null}
+            onClose={() => setDialTestAgent(null)}
+          />
+        )}
+
+        {browserTestAgent && (
+          <BrowserTestModal agent={browserTestAgent} onClose={() => setBrowserTestAgent(null)} />
         )}
       </section>
     </DashboardLayout>

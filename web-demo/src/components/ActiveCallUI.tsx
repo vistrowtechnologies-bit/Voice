@@ -20,14 +20,15 @@ import type { LeadSummary, TranscriptEntry } from '../lib/types'
 interface ActiveCallUIProps {
   onLeadUpdate: (partial: Partial<LeadSummary>) => void
   onTranscriptUpdate: (entries: TranscriptEntry[]) => void
+  agentLabel?: string
 }
 
 const STATE_STYLES: Record<string, { ring: string; label: string; fg: string }> = {
   listening: { ring: 'border-cyan', label: 'Listening…', fg: '#22D3EE' },
   thinking: { ring: 'border-primary border-dashed', label: 'Thinking…', fg: '#A855F7' },
-  speaking: { ring: 'border-magenta', label: 'Riya is speaking…', fg: '#FF3D9A' },
+  speaking: { ring: 'border-magenta', label: 'Agent is speaking…', fg: '#FF3D9A' },
 }
-const WAITING_STYLE = { ring: 'border-border', label: 'Waiting for Riya to join…', fg: '#9089B0' }
+const WAITING_STYLE = { ring: 'border-border', label: 'Waiting for agent to join…', fg: '#9089B0' }
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -64,7 +65,11 @@ function AgentOrb({ agentParticipant }: { agentParticipant: RemoteParticipant })
   )
 }
 
-export function ActiveCallUI({ onLeadUpdate, onTranscriptUpdate }: ActiveCallUIProps) {
+export function ActiveCallUI({
+  onLeadUpdate,
+  onTranscriptUpdate,
+  agentLabel = 'Riya · AI Leasing Agent',
+}: ActiveCallUIProps) {
   const room = useRoomContext()
   const connectionState = useConnectionState()
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant()
@@ -129,7 +134,7 @@ export function ActiveCallUI({ onLeadUpdate, onTranscriptUpdate }: ActiveCallUIP
       <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2 text-sm text-text-muted">
           <span className="h-2 w-2 rounded-full bg-primary" />
-          Riya · AI Leasing Agent
+          {agentLabel}
         </div>
         <span className="font-mono text-sm text-text-muted">{formatDuration(elapsedMs)}</span>
       </div>
