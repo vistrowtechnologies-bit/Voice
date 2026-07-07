@@ -14,9 +14,48 @@ import {
 } from '../lib/api'
 import type { AgentConfig, KnowledgeBase, PhoneNumber } from '../lib/types'
 
-// bulbul:v3 speaker roster (Sarvam docs) — the voice the dashboard picks is
-// exactly what agent/main.py passes to sarvam.TTS on the next call.
-const VOICES = ['pooja', 'anushka', 'manisha', 'vidya', 'arya', 'abhilash', 'karun', 'hitesh']
+// Full bulbul:v3 speaker roster (Sarvam docs — the previous list here was
+// actually bulbul:v2 names, most of which aren't valid v3 speakers). The
+// voice picked here is exactly what agent/main.py passes to sarvam.TTS.
+const VOICES = [
+  'shubh',
+  'aditya',
+  'ritu',
+  'priya',
+  'neha',
+  'rahul',
+  'pooja',
+  'rohan',
+  'simran',
+  'kavya',
+  'amit',
+  'dev',
+  'ishita',
+  'shreya',
+  'ratan',
+  'varun',
+  'manan',
+  'sumit',
+  'roopa',
+  'kabir',
+  'aayan',
+  'ashutosh',
+  'advait',
+  'anand',
+  'tanya',
+  'tarun',
+  'sunny',
+  'mani',
+  'gokul',
+  'vijay',
+  'shruti',
+  'suhani',
+  'mohit',
+  'kavitha',
+  'rehan',
+  'soham',
+  'rupali',
+]
 const MODELS = ['gpt-4.1', 'gpt-4o-mini', 'gpt-4o']
 const LANGUAGES = [
   ['hi-IN', 'Hindi'],
