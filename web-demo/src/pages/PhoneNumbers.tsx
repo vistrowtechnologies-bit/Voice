@@ -264,11 +264,20 @@ function NumberRow({
   const [showTest, setShowTest] = useState(false)
 
   const runTest = async () => {
-    if (!testTo.trim()) return
+    const to = testTo.trim()
+    if (!to) return
+    // EnableX needs full E.164 (country code + number, e.g. +919812345678) —
+    // a bare local number gets far enough to hit their infra but then fails
+    // with a confusing raw 502 instead of a clean validation error, so catch
+    // it here first.
+    if (!/^\+[1-9]\d{7,14}$/.test(to)) {
+      setResult('✕ Enter the number in full international format, starting with + and the country code (e.g. +919812345678).')
+      return
+    }
     setTesting(true)
     setResult(null)
     try {
-      const res = await placeTestCall(number.number, testTo.trim())
+      const res = await placeTestCall(number.number, to)
       setResult(res.ok ? '✓ EnableX accepted the call — the destination should ring shortly.' : `✕ ${res.error}`)
     } catch {
       setResult('✕ Request failed — is the backend running?')
