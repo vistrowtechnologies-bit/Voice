@@ -68,7 +68,8 @@ export function KnowledgeBasePage() {
           />
           <button
             onClick={handleCreate}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90"
+            disabled={!newName.trim()}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40"
           >
             <Icon name="add" className="text-[18px]" />
             Create Knowledge Base
