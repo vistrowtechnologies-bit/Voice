@@ -1027,7 +1027,7 @@ def enablex_credentials() -> tuple[str | None, str | None]:
 def _enablex_request(path: str, method: str, body: dict | None) -> dict:
     """Call the EnableX Voice REST API with the stored HTTP Basic credentials.
 
-    `path` is relative to ENABLEX_API_BASE (e.g. "/calls", "/call/<id>/accept").
+    `path` is relative to ENABLEX_API_BASE (e.g. "/call", "/call/<id>/accept").
     Returns {"ok": bool, ...} — never raises, so callers on the live-call path
     can degrade gracefully. Uses urllib to avoid adding a dependency.
     """
@@ -1067,7 +1067,7 @@ def place_test_call(from_number: str, to_number: str) -> dict:
     rather than a fake success.
     """
     return _enablex_request(
-        "/calls",
+        "/call",
         "POST",
         {
             "name": "Arthale Voice test call",
