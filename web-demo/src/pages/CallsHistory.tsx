@@ -5,7 +5,13 @@ import { Icon } from '../components/Icon'
 import { callsExportUrl, fetchActiveCalls, fetchCalls, formatDateTime, formatDuration } from '../lib/api'
 import type { ActiveCallInfo, CallRecord, Sentiment } from '../lib/types'
 
-const CHANNELS = ['All', 'Web', 'Inbound', 'Outbound']
+// Must match the exact channel labels calls_db.py's _CHANNEL_LABELS produces
+// ("Web" for dashboard browser calls/demo, "Website Widget" for embedded
+// widget calls, "Phone" for real EnableX calls) — these tabs used to say
+// "Inbound"/"Outbound", which never matched any real call.channel value and
+// silently showed zero results forever, and had no tab for widget calls at
+// all (only visible under "All").
+const CHANNELS = ['All', 'Web', 'Website Widget', 'Phone']
 
 const SENTIMENT_STYLES: Record<Sentiment, string> = {
   positive: 'bg-cyan/20 text-cyan border-cyan/30',
@@ -101,6 +107,7 @@ export function CallsHistory() {
                   <th className="py-3 pl-5 pr-3">Caller</th>
                   <th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3">Channel</th>
+                  <th className="px-3 py-3">Website</th>
                   <th className="px-3 py-3">Duration</th>
                   <th className="px-3 py-3">Sentiment</th>
                   <th className="px-3 py-3">Agent</th>
@@ -110,10 +117,12 @@ export function CallsHistory() {
               <tbody className="divide-y divide-border">
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-text-muted">
-                      {channel === 'Web' || channel === 'All'
-                        ? 'No calls found. Every call the agent takes is logged here automatically.'
-                        : `No ${channel.toLowerCase()} calls yet — ${channel.toLowerCase()} calling needs a connected phone number (see Phone Numbers).`}
+                    <td colSpan={8} className="px-5 py-10 text-center text-sm text-text-muted">
+                      {channel === 'Phone'
+                        ? 'No phone calls yet — phone calling needs a connected number (see Phone Numbers).'
+                        : channel === 'Website Widget'
+                          ? 'No widget calls yet — embed the call button on a client site (see Website Widget).'
+                          : 'No calls found. Every call the agent takes is logged here automatically.'}
                     </td>
                   </tr>
                 )}
@@ -142,6 +151,7 @@ export function CallsHistory() {
                       </span>
                     </td>
                     <td className="px-3 py-3 text-sm text-text-muted">{call.channel}</td>
+                    <td className="px-3 py-3 text-sm text-text-muted">{call.website || '—'}</td>
                     <td className="px-3 py-3 text-sm">{formatDuration(call.durationSeconds)}</td>
                     <td className="px-3 py-3">
                       <span className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${SENTIMENT_STYLES[call.sentiment]}`}>

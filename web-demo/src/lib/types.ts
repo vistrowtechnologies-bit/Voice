@@ -42,6 +42,7 @@ export interface CallRecord {
   callStatus: CallStatus
   sentiment: Sentiment
   channel: string
+  website: string
   agent: string
   callDate: string
   durationSeconds: number | null

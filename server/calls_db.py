@@ -316,10 +316,15 @@ def _initials(name: str) -> str:
 _CHANNEL_LABELS = {"phone": "Phone", "widget": "Website Widget", "browser": "Web"}
 
 
-def _call_dict(row: sqlite3.Row, include_transcript: bool = True) -> dict:
+def _call_dict(
+    row: sqlite3.Row, include_transcript: bool = True, sites_by_id: dict[int, dict] | None = None
+) -> dict:
     transcript = json.loads(row["transcript_json"]) if row["transcript_json"] else []
     name = row["lead_name"] or row["visitor_identity"] or "Unknown caller"
     call_type = row["call_type"] or "browser"
+    site_id = row["site_id"]
+    site = sites_by_id.get(site_id) if sites_by_id and site_id else None
+    website = (site.get("allowedDomain") or site.get("name")) if site else ""
     out = {
         "id": str(row["id"]),
         "name": name,
@@ -333,7 +338,8 @@ def _call_dict(row: sqlite3.Row, include_transcript: bool = True) -> dict:
         "sentiment": _sentiment(transcript),
         "channel": _CHANNEL_LABELS.get(call_type, "Web"),
         "callType": call_type,
-        "siteId": row["site_id"],
+        "siteId": site_id,
+        "website": website,
         "agent": "Riya",
         "callDate": row["started_at"],
         "durationSeconds": row["duration_seconds"],
@@ -354,6 +360,7 @@ def _call_dict(row: sqlite3.Row, include_transcript: bool = True) -> dict:
 def list_calls(limit: int = 200, search: str = "", status: str = "", days: int = 0) -> list[dict]:
     if not DB_PATH.exists():
         return []
+    sites_by_id = {s["id"]: s for s in list_sites()}
     conn = _connect()
     try:
         query = "SELECT * FROM calls"
@@ -364,7 +371,7 @@ def list_calls(limit: int = 200, search: str = "", status: str = "", days: int =
         query += " ORDER BY started_at DESC LIMIT ?"
         params.append(limit)
         rows = conn.execute(query, params).fetchall()
-        calls = [_call_dict(r, include_transcript=False) for r in rows]
+        calls = [_call_dict(r, include_transcript=False, sites_by_id=sites_by_id) for r in rows]
         if search:
             s = search.lower()
             calls = [c for c in calls if s in c["name"].lower() or s in c["phone"]]
@@ -381,7 +388,10 @@ def get_call(call_id: int) -> dict | None:
     conn = _connect()
     try:
         row = conn.execute("SELECT * FROM calls WHERE id = ?", (call_id,)).fetchone()
-        return _call_dict(row) if row else None
+        if not row:
+            return None
+        sites_by_id = {s["id"]: s for s in list_sites()}
+        return _call_dict(row, sites_by_id=sites_by_id)
     finally:
         conn.close()
 
@@ -390,11 +400,11 @@ def calls_csv() -> str:
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(
-        ["id", "caller", "phone", "status", "channel", "duration_seconds", "sentiment", "agent", "language", "time"]
+        ["id", "caller", "phone", "status", "channel", "website", "duration_seconds", "sentiment", "agent", "language", "time"]
     )
     for c in list_calls(limit=10000):
         writer.writerow(
-            [c["id"], c["name"], c["phone"], c["callStatus"], c["channel"],
+            [c["id"], c["name"], c["phone"], c["callStatus"], c["channel"], c["website"],
              c["durationSeconds"], c["sentiment"], c["agent"], c["replyLanguage"], c["callDate"]]
         )
     return buf.getvalue()

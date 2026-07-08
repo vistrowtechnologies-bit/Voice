@@ -75,6 +75,7 @@ export function LeadDetail() {
               <Row label="Outcome" value={call.callStatus} />
               <Row label="Sentiment" value={call.sentiment} />
               <Row label="Channel" value={call.channel} />
+              {call.website && <Row label="Website" value={call.website} />}
               <Row label="Agent" value={call.agent} />
               <Row label="Duration" value={formatDuration(call.durationSeconds)} />
               <Row label="Language" value={call.replyLanguage ? (LANGUAGE_NAMES[call.replyLanguage] ?? call.replyLanguage) : '—'} />
