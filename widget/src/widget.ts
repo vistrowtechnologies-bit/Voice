@@ -249,7 +249,20 @@ function init(): void {
     button.style.display = 'flex'
   }
 
+  // Shows the error in the call panel and leaves it open for a few seconds
+  // instead of resetting immediately — closing right away (the old
+  // behavior) meant a failure looked exactly like "the widget opens and
+  // shuts down instantly, never says anything," with zero chance to read
+  // why. The visitor can still close it early via the X.
+  function failCall(message: string): void {
+    setStatus(message)
+    window.setTimeout(resetToIdle, 4000)
+  }
+
+  let intentionalEnd = false
+
   function endCall(): void {
+    intentionalEnd = true
     room?.disconnect()
     resetToIdle()
   }
@@ -292,6 +305,7 @@ function init(): void {
   }
 
   async function startCall(name: string, phone: string): Promise<void> {
+    intentionalEnd = false
     formEl.style.display = 'none'
     callEl.style.display = 'block'
     setStatus('Connecting…')
@@ -300,8 +314,7 @@ function init(): void {
       await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch (err) {
       console.error('[Arthale Voice widget] microphone permission error:', err)
-      setStatus('Microphone access was blocked — allow it in your browser and try again.')
-      resetToIdle()
+      failCall('Microphone access was blocked — allow it in your browser and try again.')
       return
     }
 
@@ -319,8 +332,7 @@ function init(): void {
       ;({ token, url } = (await res.json()) as { token: string; url: string })
     } catch (err) {
       console.error('[Arthale Voice widget] token request failed:', err)
-      setStatus('Could not reach the call server — please try again shortly.')
-      resetToIdle()
+      failCall('Could not reach the call server — please try again shortly.')
       return
     }
 
@@ -333,7 +345,14 @@ function init(): void {
         }
       })
       room.on(RoomEvent.ParticipantConnected, () => setStatus('Agent joined — say hello!'))
-      room.on(RoomEvent.Disconnected, () => resetToIdle())
+      room.on(RoomEvent.Disconnected, () => {
+        if (intentionalEnd) {
+          resetToIdle()
+        } else {
+          console.warn('[Arthale Voice widget] room disconnected unexpectedly')
+          failCall('The call ended unexpectedly — please try again.')
+        }
+      })
 
       await room.connect(url, token)
       await room.localParticipant.setMicrophoneEnabled(true)
@@ -341,8 +360,7 @@ function init(): void {
       startCountdown()
     } catch (err) {
       console.error('[Arthale Voice widget] LiveKit connect failed:', err)
-      setStatus('Could not connect the call — please try again.')
-      resetToIdle()
+      failCall('Could not connect the call — please try again.')
     }
   }
 

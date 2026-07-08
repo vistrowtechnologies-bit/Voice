@@ -197,6 +197,7 @@ function SiteRow({
   const [copied, setCopied] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [labelDraft, setLabelDraft] = useState(site.widgetLabel)
+  const [installMode, setInstallMode] = useState<'wordpress' | 'manual'>('wordpress')
   useEffect(() => setLabelDraft(site.widgetLabel), [site.widgetLabel])
 
   const snippet = backendUrl ? snippetFor(site, backendUrl) : null
@@ -290,23 +291,60 @@ function SiteRow({
         />
       </div>
 
-      {snippet && (
-        <div className="rounded-lg border border-border bg-surface-high/40 p-3">
-          <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-text-muted">
-              Paste before &lt;/body&gt; on the client's site
-            </span>
-            <button
-              onClick={copySnippet}
-              className="flex items-center gap-1 text-[11px] font-bold text-cyan hover:opacity-80"
-            >
-              <Icon name={copied ? 'check' : 'content_copy'} className="text-[14px]" />
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-          <code className="block overflow-x-auto whitespace-pre text-[11px] text-text">{snippet}</code>
+      <div className="rounded-lg border border-border bg-surface-high/40 p-3">
+        <div className="mb-2 flex gap-1 rounded-lg bg-surface p-1 text-xs">
+          <button
+            onClick={() => setInstallMode('wordpress')}
+            className={`flex-1 rounded-md py-1.5 font-bold ${
+              installMode === 'wordpress' ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
+            }`}
+          >
+            WordPress
+          </button>
+          <button
+            onClick={() => setInstallMode('manual')}
+            className={`flex-1 rounded-md py-1.5 font-bold ${
+              installMode === 'manual' ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
+            }`}
+          >
+            Any other website
+          </button>
         </div>
-      )}
+
+        {installMode === 'wordpress' ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-text-muted">
+              Install the plugin, paste the site key above into its settings page, and save. It adds the
+              widget to the site automatically — nothing to paste into your code.
+            </p>
+            <a
+              href={wordpressPluginUrl}
+              className="flex w-fit items-center gap-1.5 rounded-lg border border-cyan/40 px-3 py-1.5 text-xs font-bold text-cyan hover:bg-cyan/10"
+            >
+              <Icon name="download" className="text-[14px]" />
+              Download plugin
+            </a>
+          </div>
+        ) : (
+          snippet && (
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-text-muted">
+                  Paste before &lt;/body&gt; on the client's site
+                </span>
+                <button
+                  onClick={copySnippet}
+                  className="flex items-center gap-1 text-[11px] font-bold text-cyan hover:opacity-80"
+                >
+                  <Icon name={copied ? 'check' : 'content_copy'} className="text-[14px]" />
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <code className="block overflow-x-auto whitespace-pre text-[11px] text-text">{snippet}</code>
+            </div>
+          )
+        )}
+      </div>
     </div>
   )
 }
