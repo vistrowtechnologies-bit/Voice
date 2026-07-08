@@ -60,6 +60,9 @@ const CSS = `
 .av-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #2a2440; }
 .av-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .av-dot { width: 8px; height: 8px; border-radius: 9999px; background: #a855f7; }
+.av-header-right { display: flex; align-items: center; gap: 10px; }
+.av-timer { display: none; font-size: 12px; font-variant-numeric: tabular-nums; color: #b8b2cf; }
+.av-timer.av-timer-warn { color: #f87171; font-weight: 700; }
 .av-close { background: none; border: none; color: #9089b0; cursor: pointer; padding: 4px; display: flex; }
 
 .av-form { padding: 18px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
@@ -85,14 +88,17 @@ function widgetHtml(label: string): string {
   return `
     <div class="av-root">
       <div id="av-greeting" class="av-greeting">
-        <span>👋 Talk to our AI assistant — instant answers, no waiting.</span>
+        <span id="av-greeting-text">👋 Talk to our AI assistant — instant answers, no waiting.</span>
         <button id="av-greeting-close" aria-label="Dismiss">${CLOSE_ICON}</button>
       </div>
 
       <div id="av-panel" class="av-panel">
         <div class="av-header">
           <div class="av-title"><span class="av-dot"></span>${label}</div>
-          <button id="av-close" class="av-close">${CLOSE_ICON}</button>
+          <div class="av-header-right">
+            <span id="av-timer" class="av-timer">5:00</span>
+            <button id="av-close" class="av-close">${CLOSE_ICON}</button>
+          </div>
         </div>
 
         <div id="av-form" class="av-form">
@@ -156,13 +162,22 @@ function init(): void {
   const callEl = shadow.getElementById('av-call') as HTMLDivElement
   const statusEl = shadow.getElementById('av-status') as HTMLParagraphElement
   const orbEl = shadow.getElementById('av-orb-video')?.parentElement as HTMLDivElement
+  const timerEl = shadow.getElementById('av-timer') as HTMLSpanElement
   const muteBtn = shadow.getElementById('av-mute') as HTMLButtonElement
   const endBtn = shadow.getElementById('av-end') as HTMLButtonElement
   const audioEl = shadow.getElementById('av-audio') as HTMLAudioElement
+  const greetingText = shadow.getElementById('av-greeting-text') as HTMLSpanElement
 
   let room: Room | null = null
   let micEnabled = true
   let stopVolumeReactivity: (() => void) | null = null
+  let countdownInterval: number | null = null
+
+  // Hard cap on call length — every minute of every call costs real STT/LLM/
+  // TTS spend, so an unattended or forgotten tab shouldn't run indefinitely.
+  // Shown as a live countdown (not a silent cutoff) so it never feels like
+  // the call just randomly dropped.
+  const MAX_CALL_SECONDS = 5 * 60
 
   // A quiet greeting bubble after a few seconds does more to earn a click
   // than a button alone — dismissible, and only shown once per page load.
@@ -175,8 +190,43 @@ function init(): void {
     greeting.style.display = 'none'
   }
 
+  function showNotice(text: string): void {
+    greetingText.textContent = text
+    greeting.style.display = 'flex'
+  }
+
   function setStatus(text: string): void {
     statusEl.textContent = text
+  }
+
+  function formatCountdown(totalSeconds: number): string {
+    const m = Math.floor(totalSeconds / 60)
+    const s = totalSeconds % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
+  function startCountdown(): void {
+    let remaining = MAX_CALL_SECONDS
+    timerEl.textContent = formatCountdown(remaining)
+    timerEl.classList.remove('av-timer-warn')
+    timerEl.style.display = 'inline'
+    countdownInterval = window.setInterval(() => {
+      remaining -= 1
+      timerEl.textContent = formatCountdown(Math.max(0, remaining))
+      if (remaining <= 30) timerEl.classList.add('av-timer-warn')
+      if (remaining <= 0) {
+        showNotice('⏱️ 5-minute call limit reached — feel free to start a new call anytime.')
+        endCall()
+      }
+    }, 1000)
+  }
+
+  function stopCountdown(): void {
+    if (countdownInterval !== null) {
+      window.clearInterval(countdownInterval)
+      countdownInterval = null
+    }
+    timerEl.style.display = 'none'
   }
 
   function showForm(): void {
@@ -191,6 +241,7 @@ function init(): void {
   function resetToIdle(): void {
     stopVolumeReactivity?.()
     stopVolumeReactivity = null
+    stopCountdown()
     room = null
     micEnabled = true
     muteBtn.innerHTML = MIC_ICON
@@ -287,6 +338,7 @@ function init(): void {
       await room.connect(url, token)
       await room.localParticipant.setMicrophoneEnabled(true)
       setStatus('Waiting for the agent to join…')
+      startCountdown()
     } catch (err) {
       console.error('[Arthale Voice widget] LiveKit connect failed:', err)
       setStatus('Could not connect the call — please try again.')
