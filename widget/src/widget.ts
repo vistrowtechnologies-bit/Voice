@@ -121,19 +121,36 @@ function init(): void {
     button.style.display = 'none'
     panel.style.display = 'flex'
     setStatus('Connecting…')
+
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch (err) {
+      console.error('[Arthale Voice widget] microphone permission error:', err)
+      setStatus('Microphone access was blocked — allow it in your browser and try again.')
+      resetToIdle()
+      return
+    }
 
+    let token: string, url: string
+    try {
       const res = await fetch(`${apiBase}/widget/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ siteKey, identity: randomId('visitor') }),
       })
       if (!res.ok) {
-        throw new Error(`token request failed with status ${res.status}`)
+        const body = await res.text().catch(() => '')
+        throw new Error(`${res.status} ${res.statusText}: ${body}`)
       }
-      const { token, url } = (await res.json()) as { token: string; url: string }
+      ;({ token, url } = (await res.json()) as { token: string; url: string })
+    } catch (err) {
+      console.error('[Arthale Voice widget] token request failed:', err)
+      setStatus('Could not reach the call server — please try again shortly.')
+      resetToIdle()
+      return
+    }
 
+    try {
       room = new Room()
       room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
         if (track.kind === Track.Kind.Audio) track.attach(audioEl)
@@ -145,8 +162,9 @@ function init(): void {
       await room.localParticipant.setMicrophoneEnabled(true)
       setStatus('Waiting for the agent to join…')
     } catch (err) {
-      console.error('[Arthale Voice widget]', err)
-      setStatus('Could not start the call — check microphone permissions and try again.')
+      console.error('[Arthale Voice widget] LiveKit connect failed:', err)
+      setStatus('Could not connect the call — please try again.')
+      resetToIdle()
     }
   }
 

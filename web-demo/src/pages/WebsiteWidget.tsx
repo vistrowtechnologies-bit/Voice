@@ -166,7 +166,7 @@ export function WebsiteWidget() {
             <div>
               <p className="font-semibold">WordPress plugin</p>
               <p className="text-xs text-text-muted">
-                Install it, paste a site key + the backend URL above into its settings page — no coding needed.
+                Install it and paste in the site key above — that's the only thing it needs, no coding required.
               </p>
             </div>
             <a

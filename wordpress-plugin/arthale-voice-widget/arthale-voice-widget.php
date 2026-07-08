@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Arthale Voice Widget
- * Description: Embeds the Arthale Voice AI call widget on your site. Paste the site key and backend URL shown on the Website Widget page in your Arthale Voice dashboard (Integrations).
- * Version: 1.0.0
+ * Description: Embeds the Arthale Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Arthale Voice dashboard (Integrations) — that's the only thing you need to set.
+ * Version: 1.1.0
  * Author: Arthale Voice
  */
 
@@ -12,10 +12,17 @@ if (!defined('ABSPATH')) {
 
 define('ARTHALE_VOICE_OPTION', 'arthale_voice_widget_settings');
 
+// Every install of this plugin talks to the same Arthale Voice backend, so
+// there's nothing for the site owner to look up or copy here — only the
+// site key (which identifies THEIR site) is install-specific. Kept as a
+// constant rather than a settings field so non-technical users only ever
+// have to paste one value.
+define('ARTHALE_VOICE_DEFAULT_BACKEND_URL', 'https://voice-production-2950.up.railway.app');
+
 function arthale_voice_default_settings() {
     return array(
         'site_key' => '',
-        'backend_url' => '',
+        'backend_url' => ARTHALE_VOICE_DEFAULT_BACKEND_URL,
         'position' => 'bottom-right',
         'label' => 'Talk to us',
     );
@@ -61,8 +68,9 @@ function arthale_voice_render_settings_page() {
     <div class="wrap">
         <h1>Arthale Voice Widget</h1>
         <p>
-            Paste the site key and backend URL from your Arthale Voice dashboard
-            (<strong>Integrations &rarr; Website Widget</strong>) to show the AI call button on this site.
+            Paste the site key from your Arthale Voice dashboard
+            (<strong>Integrations &rarr; Website Widget</strong>) — that's the only thing you need to set up the
+            AI call button on this site.
         </p>
         <form method="post" action="options.php">
             <?php settings_fields('arthale_voice_widget_group'); ?>
@@ -74,16 +82,6 @@ function arthale_voice_render_settings_page() {
                             name="<?php echo esc_attr(ARTHALE_VOICE_OPTION); ?>[site_key]"
                             value="<?php echo esc_attr($settings['site_key']); ?>"
                             class="regular-text" placeholder="av_live_..." />
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="arthale_backend_url">Backend URL</label></th>
-                    <td>
-                        <input type="url" id="arthale_backend_url"
-                            name="<?php echo esc_attr(ARTHALE_VOICE_OPTION); ?>[backend_url]"
-                            value="<?php echo esc_attr($settings['backend_url']); ?>"
-                            class="regular-text" placeholder="https://your-backend.up.railway.app" />
-                        <p class="description">Also shown on the Website Widget page, right next to the site key.</p>
                     </td>
                 </tr>
                 <tr>
@@ -107,8 +105,8 @@ function arthale_voice_render_settings_page() {
             </table>
             <?php submit_button('Save Settings'); ?>
         </form>
-        <?php if (empty($settings['site_key']) || empty($settings['backend_url'])) : ?>
-            <p><em>The widget won't appear on your site until both fields above are filled in.</em></p>
+        <?php if (empty($settings['site_key'])) : ?>
+            <p><em>The widget won't appear on your site until the site key above is filled in.</em></p>
         <?php endif; ?>
     </div>
     <?php
@@ -116,7 +114,7 @@ function arthale_voice_render_settings_page() {
 
 add_action('wp_footer', function () {
     $settings = arthale_voice_get_settings();
-    if (empty($settings['site_key']) || empty($settings['backend_url'])) {
+    if (empty($settings['site_key'])) {
         return; // not configured yet — nothing to render
     }
     printf(
