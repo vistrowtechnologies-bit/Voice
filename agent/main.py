@@ -42,11 +42,16 @@ class RealEstateAgent(Agent):
             # built-in prompt's own goal list says "if not already known
             # from the call context") and guarantees log_call() below has a
             # name/phone to save even if the agent's log_lead tool never
-            # fires during a short or abandoned call.
+            # fires during a short or abandoned call. Explicitly demanding
+            # the name in the opening line, not just "you know it" — the
+            # model won't reliably use it unprompted otherwise.
+            first_name = visitor_name.strip().split()[0]
             instructions += (
                 f"\n\n# Caller context\nThe caller already gave their name ({visitor_name}) and phone "
-                f"number ({visitor_phone}) before this call started — you already know them, don't ask "
-                "again unless you need to confirm one of them."
+                f"number ({visitor_phone}) before this call started. Greet them by name — start your very "
+                f'first sentence of the call with their first name (e.g. "Hi {first_name}, ..."). You '
+                "already know their name and number, so don't ask for either again unless you need to "
+                "confirm one of them."
             )
         if config.get("kb_id"):
             kb = db.get_kb_content(config["kb_id"])
