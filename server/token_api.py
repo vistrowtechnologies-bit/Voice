@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import calls_db
+import kb_extract
 import livekit_sip
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, HTTPException
@@ -270,6 +271,64 @@ def add_knowledge_source(kb_id: int, data: dict = Body(...)) -> dict:
 def delete_knowledge_source(source_id: int) -> dict:
     calls_db.delete_knowledge_source(source_id)
     return {"ok": True}
+
+
+@app.patch("/knowledge-bases/{kb_id}")
+def update_knowledge_base(kb_id: int, data: dict = Body(...)) -> dict:
+    if "strict" in data:
+        calls_db.set_kb_strict(kb_id, bool(data["strict"]))
+    return {"ok": True}
+
+
+@app.post("/knowledge-bases/{kb_id}/qa")
+def add_kb_qa(kb_id: int, data: dict = Body(...)) -> dict:
+    question = (data.get("question") or "").strip()
+    answer = (data.get("answer") or "").strip()
+    if not question or not answer:
+        raise HTTPException(400, "Both question and answer are required")
+    qa_id = calls_db.add_kb_qa(kb_id, question, answer)
+    return {"ok": True, "id": qa_id}
+
+
+@app.post("/knowledge-bases/{kb_id}/qa/bulk")
+def add_kb_qa_bulk(kb_id: int, data: dict = Body(...)) -> dict:
+    """Accept step of auto-extract: saves the reviewed draft pairs in one go."""
+    pairs = data.get("pairs") or []
+    if not isinstance(pairs, list):
+        raise HTTPException(400, "pairs must be a list")
+    added = calls_db.add_kb_qa_bulk(kb_id, pairs)
+    return {"ok": True, "added": added}
+
+
+@app.patch("/kb-qa/{qa_id}")
+def update_kb_qa(qa_id: int, data: dict = Body(...)) -> dict:
+    question = (data.get("question") or "").strip()
+    answer = (data.get("answer") or "").strip()
+    if not question or not answer:
+        raise HTTPException(400, "Both question and answer are required")
+    calls_db.update_kb_qa(qa_id, question, answer)
+    return {"ok": True}
+
+
+@app.delete("/kb-qa/{qa_id}")
+def delete_kb_qa(qa_id: int) -> dict:
+    calls_db.delete_kb_qa(qa_id)
+    return {"ok": True}
+
+
+@app.post("/knowledge-sources/{source_id}/extract-qa")
+def extract_qa_from_source(source_id: int) -> dict:
+    """LLM-drafts Q&A pairs from one uploaded source. Returns drafts only —
+    nothing is saved until the operator reviews and POSTs them to /qa/bulk,
+    so a misread price never reaches a live agent unreviewed."""
+    source = calls_db.get_knowledge_source_content(source_id)
+    if source is None:
+        raise HTTPException(404, "Source not found")
+    try:
+        pairs = kb_extract.extract_qa_pairs(source["name"], source["content"])
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return {"ok": True, "pairs": pairs}
 
 
 # ----------------------------------------------------------- campaigns

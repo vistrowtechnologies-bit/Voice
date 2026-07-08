@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS calls (
     site_visit_json TEXT,
     transcript_json TEXT NOT NULL,
     call_type TEXT DEFAULT 'browser',
-    site_id INTEGER
+    site_id INTEGER,
+    agent_id INTEGER
 );
 """
 
@@ -47,6 +48,8 @@ def _migrate_calls_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE calls ADD COLUMN call_type TEXT DEFAULT 'browser'")
     if "site_id" not in existing:
         conn.execute("ALTER TABLE calls ADD COLUMN site_id INTEGER")
+    if "agent_id" not in existing:
+        conn.execute("ALTER TABLE calls ADD COLUMN agent_id INTEGER")
 
 
 def init_db() -> None:
@@ -84,7 +87,11 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
 
 
 def get_kb_content(kb_id: int, max_chars: int = 8000) -> str:
-    """Concatenated knowledge-base sources to append to the system prompt.
+    """Knowledge-base text to append to the system prompt.
+
+    Curated Q&A pairs (kb_qa, the operator-reviewed FAQ) come first so they
+    always survive the char cap — they're the facts the operator explicitly
+    signed off on — followed by raw sources with whatever budget remains.
 
     Prompt-stuffing rather than embeddings — right-sized while KBs are a few
     brochures/price sheets; swap for retrieval once sources outgrow this cap.
@@ -92,14 +99,40 @@ def get_kb_content(kb_id: int, max_chars: int = 8000) -> str:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
+        parts: list[str] = []
+        try:
+            qa_rows = conn.execute(
+                "SELECT question, answer FROM kb_qa WHERE kb_id = ? ORDER BY position, id",
+                (kb_id,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            # kb_qa table doesn't exist yet (dashboard API predates KB 2.0).
+            qa_rows = []
+        if qa_rows:
+            faq = "\n\n".join(f"Q: {r['question']}\nA: {r['answer']}" for r in qa_rows)
+            parts.append("## Approved answers (quote these when the question matches)\n" + faq)
         rows = conn.execute(
             "SELECT name, content FROM knowledge_sources WHERE kb_id = ? ORDER BY id",
             (kb_id,),
         ).fetchall()
-        parts = [f"## {r['name']}\n{r['content']}" for r in rows]
+        parts.extend(f"## {r['name']}\n{r['content']}" for r in rows)
         return "\n\n".join(parts)[:max_chars]
     except sqlite3.OperationalError:
         return ""
+    finally:
+        conn.close()
+
+
+def is_kb_strict(kb_id: int) -> bool:
+    """Whether the operator turned strict mode on for this KB (default yes)."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT strict FROM knowledge_bases WHERE id = ?", (kb_id,)).fetchone()
+        return bool(row["strict"]) if row is not None else True
+    except sqlite3.OperationalError:
+        # strict column predates KB 2.0 — treat as strict, the safe default.
+        return True
     finally:
         conn.close()
 
@@ -140,8 +173,8 @@ def save_call(record: dict) -> None:
                     room_name, visitor_identity, started_at, ended_at,
                     duration_seconds, reply_language, lead_name, lead_phone,
                     lead_budget, lead_location, lead_timeline, site_visit_json,
-                    transcript_json, call_type, site_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    transcript_json, call_type, site_id, agent_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record["room_name"],
@@ -159,6 +192,7 @@ def save_call(record: dict) -> None:
                     json.dumps(record["transcript"], ensure_ascii=False),
                     record.get("call_type") or "browser",
                     record.get("site_id"),
+                    record.get("agent_id"),
                 ),
             )
     finally:

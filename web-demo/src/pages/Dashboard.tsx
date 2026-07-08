@@ -101,21 +101,23 @@ export function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <MetricCard label="Total Minutes" value={String(summary?.totalMinutes ?? 0)} icon="timer" hint="across all calls" />
-              <MetricCard label="Active Agents" value={String(summary?.activeAgents ?? 0)} icon="smart_toy" hint="live and taking calls" />
+              <MetricCard label="Total Minutes" value={String(summary?.totalMinutes ?? 0)} icon="timer" hint="across all calls" tone="cyan" />
+              <MetricCard label="Active Agents" value={String(summary?.activeAgents ?? 0)} icon="smart_toy" hint="live and taking calls" tone="primary" />
               <MetricCard
                 label="Live Calls"
                 value={String(activeCalls.length)}
                 hint={activeCalls.length > 0 ? 'in progress right now' : 'none right now'}
                 pulse={activeCalls.length > 0}
+                tone="magenta"
               />
-              <MetricCard label="Qualified Leads" value={String(summary?.qualifiedCalls ?? 0)} icon="check_circle" hint="name + intent captured" />
-              <MetricCard label="Success Rate" value={`${successPct}%`} icon="trending_up" hint="calls that qualified" />
+              <MetricCard label="Qualified Leads" value={String(summary?.qualifiedCalls ?? 0)} icon="check_circle" hint="name + intent captured" tone="success" />
+              <MetricCard label="Success Rate" value={`${successPct}%`} icon="trending_up" hint="calls that qualified" tone="amber" />
               <MetricCard
                 label="Conversion"
                 value={`${summary ? Math.round(summary.conversionRatio * 100) : 0}%`}
                 icon="event_available"
                 hint="calls → site visits"
+                tone="primary"
               />
             </div>
 
@@ -242,6 +244,54 @@ export function Dashboard() {
 
         {tab === 'analytics' && (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border border-border bg-surface p-5">
+              <h3 className="mb-4 text-sm font-semibold">Calls by channel</h3>
+              <div className="h-[200px]">
+                {analytics && analytics.byChannel && analytics.byChannel.length > 0 ? (
+                  <Bar
+                    data={{
+                      labels: analytics.byChannel.map((c) => c.channel),
+                      datasets: [
+                        { label: 'Calls', data: analytics.byChannel.map((c) => c.calls), backgroundColor: '#A855F7', borderRadius: 4 },
+                        { label: 'Qualified', data: analytics.byChannel.map((c) => c.qualified), backgroundColor: '#22D3EE', borderRadius: 4 },
+                      ],
+                    }}
+                    options={{
+                      maintainAspectRatio: false,
+                      plugins: { legend: { display: true, labels: { color: '#9089B0', boxWidth: 10, font: { size: 11 } } } },
+                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
+                    }}
+                  />
+                ) : (
+                  <EmptyChart text="Channel split appears after the first calls — Web, Website Widget, and Phone." />
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-surface p-5">
+              <h3 className="mb-4 text-sm font-semibold">Calls by agent</h3>
+              <div className="h-[200px]">
+                {analytics && analytics.byAgent && analytics.byAgent.length > 0 ? (
+                  <Bar
+                    data={{
+                      labels: analytics.byAgent.map((a) => a.agent),
+                      datasets: [
+                        { label: 'Calls', data: analytics.byAgent.map((a) => a.calls), backgroundColor: '#FF3D9A', borderRadius: 4 },
+                        { label: 'Qualified', data: analytics.byAgent.map((a) => a.qualified), backgroundColor: '#22D3EE', borderRadius: 4 },
+                      ],
+                    }}
+                    options={{
+                      maintainAspectRatio: false,
+                      plugins: { legend: { display: true, labels: { color: '#9089B0', boxWidth: 10, font: { size: 11 } } } },
+                      scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
+                    }}
+                  />
+                ) : (
+                  <EmptyChart text="Per-agent stats appear after the first calls." />
+                )}
+              </div>
+            </div>
+
             <div className="rounded-xl border border-border bg-surface p-5">
               <h3 className="mb-4 text-sm font-semibold">Calls by language</h3>
               <div className="h-[200px]">
@@ -394,27 +444,46 @@ function EmptyChart({ text }: { text: string }) {
   )
 }
 
+const TONE_STYLES: Record<string, { chip: string; hint: string; border: string }> = {
+  primary: { chip: 'bg-primary/15 text-primary', hint: 'text-primary', border: 'hover:border-primary/50' },
+  cyan: { chip: 'bg-cyan/15 text-cyan', hint: 'text-cyan', border: 'hover:border-cyan/50' },
+  magenta: { chip: 'bg-magenta/15 text-magenta', hint: 'text-magenta', border: 'hover:border-magenta/50' },
+  amber: { chip: 'bg-amber/15 text-amber', hint: 'text-amber', border: 'hover:border-amber/50' },
+  success: { chip: 'bg-success/15 text-success', hint: 'text-success', border: 'hover:border-success/50' },
+}
+
 function MetricCard({
   label,
   value,
   hint,
   icon,
   pulse,
+  tone = 'cyan',
 }: {
   label: string
   value: string
   hint: string
   icon?: string
   pulse?: boolean
+  tone?: keyof typeof TONE_STYLES
 }) {
+  const t = TONE_STYLES[tone]
   return (
-    <div className="rounded-xl border border-border bg-surface p-5">
-      <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{label}</p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
-      <div className="mt-2 flex items-center gap-1 text-xs text-cyan">
-        {pulse ? <span className="pulse-dot h-2 w-2 rounded-full bg-cyan" /> : icon && <Icon name={icon} className="text-[14px]" />}
-        {hint}
+    <div className={`group rounded-xl border border-border bg-surface p-5 transition-all duration-200 ${t.border} hover:-translate-y-0.5`}>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{label}</p>
+          <p className="mt-1 text-2xl font-bold">{value}</p>
+        </div>
+        <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${t.chip}`}>
+          {pulse ? (
+            <span className="pulse-dot h-2.5 w-2.5 rounded-full bg-current" />
+          ) : (
+            icon && <Icon name={icon} className="text-[18px]" />
+          )}
+        </div>
       </div>
+      <p className={`mt-2 text-xs ${t.hint}`}>{hint}</p>
     </div>
   )
 }

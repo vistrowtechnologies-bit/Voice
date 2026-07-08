@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS calls (
     site_visit_json TEXT,
     transcript_json TEXT NOT NULL,
     call_type TEXT DEFAULT 'browser',
-    site_id INTEGER
+    site_id INTEGER,
+    agent_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS sites (
@@ -87,6 +88,7 @@ CREATE TABLE IF NOT EXISTS contacts (
 CREATE TABLE IF NOT EXISTS knowledge_bases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
+    strict INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -96,6 +98,19 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
     name TEXT NOT NULL,
     type TEXT DEFAULT 'text',
     content TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Structured question/answer pairs the operator curates (and can auto-extract
+-- from an uploaded brochure). Emitted to the agent as an authoritative FAQ the
+-- strict-mode prompt tells it to quote verbatim instead of improvising —
+-- position keeps the operator's manual ordering stable in the editor.
+CREATE TABLE IF NOT EXISTS kb_qa (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kb_id INTEGER NOT NULL,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    position INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -220,6 +235,11 @@ def _migrate_calls_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE calls ADD COLUMN call_type TEXT DEFAULT 'browser'")
     if "site_id" not in existing:
         conn.execute("ALTER TABLE calls ADD COLUMN site_id INTEGER")
+    if "agent_id" not in existing:
+        # Which dashboard agent handled the call — before this, the calls UI
+        # hardcoded "Riya" for every row, which went wrong the moment a
+        # second agent existed.
+        conn.execute("ALTER TABLE calls ADD COLUMN agent_id INTEGER")
 
 
 def _migrate_sites_columns(conn: sqlite3.Connection) -> None:
@@ -232,6 +252,16 @@ def _migrate_sites_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE sites ADD COLUMN widget_label TEXT DEFAULT 'Talk to us'")
 
 
+def _migrate_knowledge_bases_columns(conn: sqlite3.Connection) -> None:
+    """Add the strict flag to a knowledge_bases table that predates KB 2.0 —
+    same reasoning as _migrate_phone_numbers_columns above. Defaults to strict
+    ON: the whole point of curating a KB is that the agent quotes it instead
+    of improvising prices."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(knowledge_bases)").fetchall()}
+    if "strict" not in existing:
+        conn.execute("ALTER TABLE knowledge_bases ADD COLUMN strict INTEGER DEFAULT 1")
+
+
 def init_tables() -> None:
     conn = _connect()
     try:
@@ -240,6 +270,7 @@ def init_tables() -> None:
             _migrate_phone_numbers_columns(conn)
             _migrate_calls_columns(conn)
             _migrate_sites_columns(conn)
+            _migrate_knowledge_bases_columns(conn)
             if conn.execute("SELECT COUNT(*) c FROM agents").fetchone()["c"] == 0:
                 conn.execute(
                     "INSERT INTO agents (name, description) VALUES (?, ?)",
@@ -316,8 +347,19 @@ def _initials(name: str) -> str:
 _CHANNEL_LABELS = {"phone": "Phone", "widget": "Website Widget", "browser": "Web"}
 
 
+def _agent_names_by_id() -> dict[int, str]:
+    conn = _connect()
+    try:
+        return {r["id"]: r["name"] for r in conn.execute("SELECT id, name FROM agents").fetchall()}
+    finally:
+        conn.close()
+
+
 def _call_dict(
-    row: sqlite3.Row, include_transcript: bool = True, sites_by_id: dict[int, dict] | None = None
+    row: sqlite3.Row,
+    include_transcript: bool = True,
+    sites_by_id: dict[int, dict] | None = None,
+    agent_names: dict[int, str] | None = None,
 ) -> dict:
     transcript = json.loads(row["transcript_json"]) if row["transcript_json"] else []
     name = row["lead_name"] or row["visitor_identity"] or "Unknown caller"
@@ -325,6 +367,10 @@ def _call_dict(
     site_id = row["site_id"]
     site = sites_by_id.get(site_id) if sites_by_id and site_id else None
     website = (site.get("allowedDomain") or site.get("name")) if site else ""
+    # Rows from before the agent_id column (or with a since-deleted agent)
+    # fall back to the first agent's name — historically the only one.
+    agent_names = agent_names or {}
+    agent_name = agent_names.get(row["agent_id"]) or next(iter(agent_names.values()), "Agent")
     out = {
         "id": str(row["id"]),
         "name": name,
@@ -340,7 +386,8 @@ def _call_dict(
         "callType": call_type,
         "siteId": site_id,
         "website": website,
-        "agent": "Riya",
+        "agent": agent_name,
+        "agentId": row["agent_id"],
         "callDate": row["started_at"],
         "durationSeconds": row["duration_seconds"],
         "replyLanguage": row["reply_language"],
@@ -361,6 +408,7 @@ def list_calls(limit: int = 200, search: str = "", status: str = "", days: int =
     if not DB_PATH.exists():
         return []
     sites_by_id = {s["id"]: s for s in list_sites()}
+    agent_names = _agent_names_by_id()
     conn = _connect()
     try:
         query = "SELECT * FROM calls"
@@ -371,7 +419,10 @@ def list_calls(limit: int = 200, search: str = "", status: str = "", days: int =
         query += " ORDER BY started_at DESC LIMIT ?"
         params.append(limit)
         rows = conn.execute(query, params).fetchall()
-        calls = [_call_dict(r, include_transcript=False, sites_by_id=sites_by_id) for r in rows]
+        calls = [
+            _call_dict(r, include_transcript=False, sites_by_id=sites_by_id, agent_names=agent_names)
+            for r in rows
+        ]
         if search:
             s = search.lower()
             calls = [c for c in calls if s in c["name"].lower() or s in c["phone"]]
@@ -391,7 +442,7 @@ def get_call(call_id: int) -> dict | None:
         if not row:
             return None
         sites_by_id = {s["id"]: s for s in list_sites()}
-        return _call_dict(row, sites_by_id=sites_by_id)
+        return _call_dict(row, sites_by_id=sites_by_id, agent_names=_agent_names_by_id())
     finally:
         conn.close()
 
@@ -504,12 +555,56 @@ def analytics() -> dict:
             sentiment[_sentiment(transcript)] += 1
             if len(transcript) >= 4:
                 engaged += 1
+        # Calls + qualification split by channel (Web / Website Widget /
+        # Phone) and by handling agent — the "which channel and which agent
+        # actually convert" view the dashboard's analytics tab charts.
+        by_channel = [
+            {
+                "channel": _CHANNEL_LABELS.get(r["t"], "Web"),
+                "calls": r["c"],
+                "qualified": r["q"] or 0,
+                "minutes": round(r["s"] / 60, 1),
+            }
+            for r in conn.execute(
+                """
+                SELECT COALESCE(call_type, 'browser') t, COUNT(*) c,
+                       SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) q,
+                       COALESCE(SUM(duration_seconds), 0) s
+                FROM calls GROUP BY t ORDER BY c DESC
+                """
+            ).fetchall()
+        ]
+        agent_names = _agent_names_by_id()
+        fallback_agent = next(iter(agent_names.values()), "Agent")
+        # Merge by display name, not agent_id: legacy rows (agent_id NULL,
+        # from before the column existed) resolve to the first agent's name
+        # and should count as that agent, not as a second phantom bar.
+        by_agent_map: dict[str, dict] = {}
+        for r in conn.execute(
+            """
+            SELECT agent_id, COUNT(*) c,
+                   SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) q,
+                   COALESCE(SUM(duration_seconds), 0) s
+            FROM calls GROUP BY agent_id
+            """
+        ).fetchall():
+            label = agent_names.get(r["agent_id"]) or fallback_agent
+            entry = by_agent_map.setdefault(label, {"agent": label, "calls": 0, "qualified": 0, "seconds": 0.0})
+            entry["calls"] += r["c"]
+            entry["qualified"] += r["q"] or 0
+            entry["seconds"] += r["s"]
+        by_agent = [
+            {"agent": e["agent"], "calls": e["calls"], "qualified": e["qualified"], "minutes": round(e["seconds"] / 60, 1)}
+            for e in sorted(by_agent_map.values(), key=lambda e: -e["calls"])
+        ]
         s = summary()
         return {
             "languages": languages,
             "peakHours": hours,
             "durationTrend": duration_trend,
             "sentiment": sentiment,
+            "byChannel": by_channel,
+            "byAgent": by_agent,
             "funnel": {
                 "answered": s["totalCalls"],
                 "engaged": engaged,
@@ -742,15 +837,21 @@ def list_knowledge_bases() -> list[dict]:
                 "SELECT id, name, type, length(content) size, created_at FROM knowledge_sources WHERE kb_id = ? ORDER BY id",
                 (kb["id"],),
             ).fetchall()
+            qa = conn.execute(
+                "SELECT id, question, answer FROM kb_qa WHERE kb_id = ? ORDER BY position, id",
+                (kb["id"],),
+            ).fetchall()
             kbs.append(
                 {
                     "id": kb["id"],
                     "name": kb["name"],
+                    "strict": bool(kb["strict"]),
                     "createdAt": kb["created_at"],
                     "sources": [
                         {"id": s["id"], "name": s["name"], "type": s["type"], "sizeChars": s["size"], "createdAt": s["created_at"]}
                         for s in sources
                     ],
+                    "qa": [{"id": q["id"], "question": q["question"], "answer": q["answer"]} for q in qa],
                 }
             )
         return kbs
@@ -772,8 +873,18 @@ def delete_knowledge_base(kb_id: int) -> None:
     try:
         with conn:
             conn.execute("DELETE FROM knowledge_sources WHERE kb_id = ?", (kb_id,))
+            conn.execute("DELETE FROM kb_qa WHERE kb_id = ?", (kb_id,))
             conn.execute("DELETE FROM knowledge_bases WHERE id = ?", (kb_id,))
             conn.execute("UPDATE agents SET kb_id = NULL WHERE kb_id = ?", (kb_id,))
+    finally:
+        conn.close()
+
+
+def set_kb_strict(kb_id: int, strict: bool) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("UPDATE knowledge_bases SET strict = ? WHERE id = ?", (1 if strict else 0, kb_id))
     finally:
         conn.close()
 
@@ -795,6 +906,85 @@ def delete_knowledge_source(source_id: int) -> None:
     try:
         with conn:
             conn.execute("DELETE FROM knowledge_sources WHERE id = ?", (source_id,))
+    finally:
+        conn.close()
+
+
+def get_knowledge_source_content(source_id: int) -> dict | None:
+    """Full text of one source — the auto-extract endpoint feeds this to the
+    LLM; the listing endpoint deliberately returns only length(content)."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id, kb_id, name, content FROM knowledge_sources WHERE id = ?", (source_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+# Q&A pairs — the curated FAQ layer of a knowledge base (KB 2.0).
+
+
+def add_kb_qa(kb_id: int, question: str, answer: str) -> int:
+    conn = _connect()
+    try:
+        with conn:
+            pos = conn.execute(
+                "SELECT COALESCE(MAX(position), 0) + 1 p FROM kb_qa WHERE kb_id = ?", (kb_id,)
+            ).fetchone()["p"]
+            cur = conn.execute(
+                "INSERT INTO kb_qa (kb_id, question, answer, position) VALUES (?, ?, ?, ?)",
+                (kb_id, question, answer, pos),
+            )
+            return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def add_kb_qa_bulk(kb_id: int, pairs: list[dict]) -> int:
+    """Insert several Q&A pairs at once (the accept step of auto-extract).
+    Returns how many were added; blank questions/answers are skipped rather
+    than stored as empty FAQ rows the agent would then recite."""
+    conn = _connect()
+    added = 0
+    try:
+        with conn:
+            pos = conn.execute(
+                "SELECT COALESCE(MAX(position), 0) p FROM kb_qa WHERE kb_id = ?", (kb_id,)
+            ).fetchone()["p"]
+            for pair in pairs:
+                question = (pair.get("question") or "").strip()
+                answer = (pair.get("answer") or "").strip()
+                if not question or not answer:
+                    continue
+                pos += 1
+                conn.execute(
+                    "INSERT INTO kb_qa (kb_id, question, answer, position) VALUES (?, ?, ?, ?)",
+                    (kb_id, question, answer, pos),
+                )
+                added += 1
+    finally:
+        conn.close()
+    return added
+
+
+def update_kb_qa(qa_id: int, question: str, answer: str) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE kb_qa SET question = ?, answer = ? WHERE id = ?", (question, answer, qa_id)
+            )
+    finally:
+        conn.close()
+
+
+def delete_kb_qa(qa_id: int) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("DELETE FROM kb_qa WHERE id = ?", (qa_id,))
     finally:
         conn.close()
 

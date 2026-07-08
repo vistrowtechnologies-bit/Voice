@@ -56,9 +56,34 @@ class RealEstateAgent(Agent):
         if config.get("kb_id"):
             kb = db.get_kb_content(config["kb_id"])
             if kb:
-                instructions += (
-                    "\n\n# Knowledge base — verified project facts you may rely on\n" + kb
-                )
+                if db.is_kb_strict(config["kb_id"]):
+                    # Strict mode: the KB (especially its operator-approved
+                    # Q&A pairs) is the only permitted source for concrete
+                    # facts — prices, sizes, dates, distances, legal status.
+                    # This is what stops the model improvising a plausible
+                    # but wrong number on a live sales call.
+                    instructions += (
+                        "\n\n# Knowledge base — THE authoritative facts for this call\n"
+                        "The knowledge base below is your ONLY source for concrete facts about "
+                        "this business and its projects: prices, sizes, distances, dates, legal "
+                        "status, amenities, payment plans, contact details. Follow it strictly:\n"
+                        "- When a caller's question matches an approved answer below, give that "
+                        "answer (naturally rephrased for speech and translated into the caller's "
+                        "language, but with every number, price, and name kept exactly as written).\n"
+                        "- Never state a concrete fact about this business that is not in the "
+                        "knowledge base — no guessing, no rounding, no 'approximately' around a "
+                        "number that isn't there, even if you believe you know the answer.\n"
+                        "- If the knowledge base doesn't cover something, say you'll have the team "
+                        "confirm it, offer to note the question down, and move the conversation "
+                        "forward — that is always better than an invented answer.\n"
+                        "- Your general real-estate expertise is still fine for generic concepts "
+                        "(what RERA is, how home loans work); strictness applies to THIS "
+                        "business's specific facts.\n\n" + kb
+                    )
+                else:
+                    instructions += (
+                        "\n\n# Knowledge base — verified project facts you may rely on\n" + kb
+                    )
         reply_language = config.get("language") or "hi-IN"
         super().__init__(
             instructions=instructions,
@@ -230,6 +255,10 @@ async def entrypoint(ctx: JobContext) -> None:
                     "transcript": transcript,
                     "call_type": call_context["call_type"],
                     "site_id": call_context["site_id"],
+                    # Which dashboard agent took the call — explicit from room
+                    # metadata when routed, otherwise whichever agent config
+                    # actually loaded (the default/first one).
+                    "agent_id": call_context["agent_id"] or (config or {}).get("id"),
                     **lead_data,
                 }
             )

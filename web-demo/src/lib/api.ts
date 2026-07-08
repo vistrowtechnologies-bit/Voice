@@ -11,6 +11,7 @@ import type {
   Integration,
   KnowledgeBase,
   PhoneNumber,
+  QaDraft,
   Site,
   TelephonyStatus,
   UsageTrends,
@@ -90,6 +91,17 @@ export const deleteKnowledgeBase = (id: number) => send('DELETE', `/knowledge-ba
 export const addKnowledgeSource = (kbId: number, name: string, content: string, type = 'text') =>
   send('POST', `/knowledge-bases/${kbId}/sources`, { name, content, type })
 export const deleteKnowledgeSource = (id: number) => send('DELETE', `/knowledge-sources/${id}`)
+export const setKnowledgeBaseStrict = (id: number, strict: boolean) =>
+  send('PATCH', `/knowledge-bases/${id}`, { strict })
+export const addKbQa = (kbId: number, question: string, answer: string) =>
+  send('POST', `/knowledge-bases/${kbId}/qa`, { question, answer })
+export const addKbQaBulk = (kbId: number, pairs: QaDraft[]) =>
+  send<{ ok: boolean; added: number }>('POST', `/knowledge-bases/${kbId}/qa/bulk`, { pairs })
+export const updateKbQa = (qaId: number, question: string, answer: string) =>
+  send('PATCH', `/kb-qa/${qaId}`, { question, answer })
+export const deleteKbQa = (qaId: number) => send('DELETE', `/kb-qa/${qaId}`)
+export const extractQaFromSource = (sourceId: number) =>
+  send<{ ok: boolean; pairs: QaDraft[] }>('POST', `/knowledge-sources/${sourceId}/extract-qa`)
 
 // ------------------------------------------------------------- campaigns
 

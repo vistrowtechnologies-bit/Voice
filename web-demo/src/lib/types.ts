@@ -78,11 +78,27 @@ export interface UsageTrends {
   minutes: number[]
 }
 
+export interface ChannelStats {
+  channel: string
+  calls: number
+  qualified: number
+  minutes: number
+}
+
+export interface AgentStats {
+  agent: string
+  calls: number
+  qualified: number
+  minutes: number
+}
+
 export interface Analytics {
   languages: { language: string; count: number }[]
   peakHours: { hour: number; count: number }[]
   durationTrend: { day: string; avgSeconds: number }[]
   sentiment: Record<Sentiment, number>
+  byChannel: ChannelStats[]
+  byAgent: AgentStats[]
   funnel: { answered: number; engaged: number; qualified: number; visitBooked: number }
 }
 
@@ -120,11 +136,25 @@ export interface KnowledgeSource {
   createdAt: string
 }
 
+export interface KbQaPair {
+  id: number
+  question: string
+  answer: string
+}
+
+// A draft pair from auto-extract — not saved yet, no id.
+export interface QaDraft {
+  question: string
+  answer: string
+}
+
 export interface KnowledgeBase {
   id: number
   name: string
+  strict: boolean
   createdAt: string
   sources: KnowledgeSource[]
+  qa: KbQaPair[]
 }
 
 export interface InboundRoute {
