@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 WIDGET_JS_PATH = Path(__file__).resolve().parent / "static" / "widget.js"
 WORDPRESS_PLUGIN_ZIP_PATH = Path(__file__).resolve().parent / "static" / "arthale-voice-widget.zip"
+AGENT_ORB_VIDEO_PATH = Path(__file__).resolve().parent / "static" / "agent-orb.mp4"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("telephony")
@@ -510,7 +511,7 @@ def widget_js() -> FileResponse:
     `npm run build` in widget/ and copy dist/widget.js here after editing
     widget/src/widget.ts; there's no automated build step wiring the two
     together yet."""
-    return FileResponse(WIDGET_JS_PATH, media_type="application/javascript")
+    return FileResponse(WIDGET_JS_PATH, media_type="application/javascript; charset=utf-8")
 
 
 @app.get("/widget/wordpress-plugin.zip")
@@ -523,6 +524,15 @@ def widget_wordpress_plugin() -> FileResponse:
         media_type="application/zip",
         filename="arthale-voice-widget.zip",
     )
+
+
+@app.get("/agent-orb.mp4")
+def widget_agent_orb() -> FileResponse:
+    """Same looping orb video used on the dashboard's browser-call screen —
+    served from here too so the embeddable widget (a separate, dependency-
+    free bundle) can show the identical agent visual without needing its own
+    copy of the asset shipped in the widget.js bundle itself."""
+    return FileResponse(AGENT_ORB_VIDEO_PATH, media_type="video/mp4")
 
 
 @app.get("/widget/sites")
@@ -584,9 +594,33 @@ def _widget_rate_limited(site_key: str) -> bool:
     return len(calls) > _WIDGET_TOKEN_MAX_PER_WINDOW
 
 
+def _looks_like_real_phone(phone: str) -> bool:
+    """Rejects obviously-fake test input (9999999999, 7778889999,
+    1234567890, ...) in addition to basic E.164 shape — client-side already
+    checks this, but the client is untrusted, so the server enforces it too.
+    Not real carrier validation, just filters the "typed garbage to get past
+    a required field" pattern.
+    """
+    import re
+
+    if not re.match(r"^\+[1-9]\d{7,14}$", phone.strip()):
+        return False
+    digits = re.sub(r"\D", "", phone)
+    local = digits[-10:] if len(digits) >= 10 else digits
+    if len(set(local)) <= 3:
+        return False
+    ascending = "01234567890123456789"
+    descending = "98765432109876543210"
+    if local in ascending or local in descending:
+        return False
+    return True
+
+
 class WidgetTokenRequest(BaseModel):
     siteKey: str
     identity: str
+    name: str
+    phone: str
 
 
 @app.post("/widget/token")
@@ -594,11 +628,19 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
     """Public, unauthenticated endpoint the embeddable widget.js calls from
     an arbitrary third-party website — auth is the site key itself, not a
     dashboard session. Issues a LiveKit token for a fresh room pre-tagged
-    with {"agent_id", "site_id"} so agent/main.py's _call_context_from_job
-    loads the right agent and logs the call as a 'widget' call against this
-    site, same mechanism phone numbers and dashboard browser tests already
-    use for their own metadata shape.
+    with {"agent_id", "site_id", "visitor_name", "visitor_phone"} so
+    agent/main.py's _call_context_from_job loads the right agent, seeds the
+    lead with the details the visitor already typed in before the call even
+    starts, and logs the call as a 'widget' call against this site — same
+    mechanism phone numbers and dashboard browser tests already use for
+    their own metadata shape.
     """
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(400, "Name is required")
+    if not _looks_like_real_phone(req.phone):
+        raise HTTPException(400, "Enter a valid phone number in international format, e.g. +919812345678")
+
     site = calls_db.get_site_by_key(req.siteKey)
     if site is None:
         raise HTTPException(404, "Unknown site key")
@@ -620,7 +662,14 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
         await lkapi.room.create_room(
             CreateRoomRequest(
                 name=room,
-                metadata=json.dumps({"agent_id": site["agentId"], "site_id": site["id"]}),
+                metadata=json.dumps(
+                    {
+                        "agent_id": site["agentId"],
+                        "site_id": site["id"],
+                        "visitor_name": name,
+                        "visitor_phone": req.phone.strip(),
+                    }
+                ),
             )
         )
 

@@ -15,8 +15,21 @@ function randomId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-const PHONE_ICON =
-  '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.6.1.4 0 .8-.2 1L6.6 10.8z"/></svg>'
+// Same "typed garbage to get past a required field" check the backend
+// enforces too (server/token_api.py's _looks_like_real_phone) — checked
+// here first purely for instant feedback; the server is the real gate.
+function isValidPhone(phone: string): boolean {
+  const trimmed = phone.trim()
+  if (!/^\+[1-9]\d{7,14}$/.test(trimmed)) return false
+  const digits = trimmed.replace(/\D/g, '')
+  const local = digits.length >= 10 ? digits.slice(-10) : digits
+  if (new Set(local.split('')).size <= 3) return false
+  const ascending = '01234567890123456789'
+  const descending = '98765432109876543210'
+  if (ascending.includes(local) || descending.includes(local)) return false
+  return true
+}
+
 const MIC_ICON =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg>'
 const MIC_OFF_ICON =
@@ -29,15 +42,38 @@ const CLOSE_ICON =
 const CSS = `
 :host { all: initial; }
 .av-root { position: fixed; ${position === 'bottom-left' ? 'left: 20px;' : 'right: 20px;'} bottom: 20px; z-index: 2147483000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-.av-button { width: 60px; height: 60px; border-radius: 9999px; background: #a855f7; color: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 8px 24px rgba(168,85,247,.45); transition: transform .15s ease, box-shadow .15s ease; }
-.av-button:hover { transform: scale(1.06); box-shadow: 0 10px 28px rgba(168,85,247,.6); }
-.av-panel { display: none; flex-direction: column; width: 280px; border-radius: 16px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.5); position: absolute; bottom: 74px; ${position === 'bottom-left' ? 'left: 0;' : 'right: 0;'} }
+
+@keyframes av-pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(168,85,247,.55); }
+  70% { box-shadow: 0 0 0 16px rgba(168,85,247,0); }
+  100% { box-shadow: 0 0 0 0 rgba(168,85,247,0); }
+}
+.av-button { width: 68px; height: 68px; border-radius: 9999px; background: #000; border: none; padding: 0; overflow: hidden; cursor: pointer; animation: av-pulse-ring 2.6s ease-out infinite; transition: transform .15s ease; }
+.av-button:hover { transform: scale(1.06); }
+.av-button video { width: 100%; height: 100%; object-fit: cover; }
+
+.av-greeting { position: absolute; bottom: 8px; ${position === 'bottom-left' ? 'left: 78px;' : 'right: 78px;'} display: flex; align-items: center; gap: 8px; max-width: 220px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; }
+.av-greeting button { background: none; border: none; color: #7d7594; cursor: pointer; padding: 2px; display: flex; flex-shrink: 0; }
+@keyframes av-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+.av-panel { display: none; flex-direction: column; width: 300px; border-radius: 16px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.5); position: absolute; bottom: 78px; ${position === 'bottom-left' ? 'left: 0;' : 'right: 0;'} }
 .av-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #2a2440; }
 .av-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .av-dot { width: 8px; height: 8px; border-radius: 9999px; background: #a855f7; }
 .av-close { background: none; border: none; color: #9089b0; cursor: pointer; padding: 4px; display: flex; }
+
+.av-form { padding: 18px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+.av-form p { margin: 0 0 2px; font-size: 12.5px; color: #b8b2cf; }
+.av-form label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #9089b0; }
+.av-form input { background: #201b3b; border: 1px solid #2a2440; border-radius: 10px; color: #f5f3ff; padding: 9px 11px; font-size: 13.5px; outline: none; font-family: inherit; }
+.av-form input:focus { border-color: #a855f7; }
+.av-error { font-size: 12px; color: #f87171; min-height: 15px; }
+.av-submit { margin-top: 4px; background: linear-gradient(135deg,#a855f7,#7c3aed); border: none; border-radius: 10px; color: white; font-weight: 700; font-size: 13.5px; padding: 10px; cursor: pointer; }
+.av-submit:disabled { opacity: .5; cursor: default; }
+
 .av-body { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.av-orb { width: 64px; height: 64px; border-radius: 9999px; border: 3px solid #a855f7; display: flex; align-items: center; justify-content: center; color: #a855f7; }
+.av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; }
+.av-orb video { width: 100%; height: 100%; object-fit: cover; }
 .av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 32px; }
 .av-controls { display: flex; align-items: center; gap: 14px; padding: 0 16px 16px; }
 .av-ctrl-btn { width: 40px; height: 40px; border-radius: 9999px; border: 1px solid #2a2440; background: #201b3b; color: #b8b2cf; display: flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -45,25 +81,48 @@ const CSS = `
 audio { display: none; }
 `
 
-function panelHtml(label: string): string {
+function widgetHtml(label: string): string {
   return `
     <div class="av-root">
+      <div id="av-greeting" class="av-greeting">
+        <span>👋 Talk to our AI assistant — instant answers, no waiting.</span>
+        <button id="av-greeting-close" aria-label="Dismiss">${CLOSE_ICON}</button>
+      </div>
+
       <div id="av-panel" class="av-panel">
         <div class="av-header">
           <div class="av-title"><span class="av-dot"></span>${label}</div>
           <button id="av-close" class="av-close">${CLOSE_ICON}</button>
         </div>
-        <div class="av-body">
-          <div class="av-orb">${MIC_ICON}</div>
-          <p id="av-status" class="av-status">Connecting…</p>
+
+        <div id="av-form" class="av-form">
+          <p>Tell us who's calling so the assistant can greet you properly.</p>
+          <label for="av-name">Name</label>
+          <input id="av-name" type="text" autocomplete="name" placeholder="Your name" />
+          <label for="av-phone">Phone number</label>
+          <input id="av-phone" type="tel" autocomplete="tel" placeholder="+919812345678" />
+          <p id="av-form-error" class="av-error"></p>
+          <button id="av-submit" class="av-submit">Start the call</button>
         </div>
-        <div class="av-controls">
-          <button id="av-mute" class="av-ctrl-btn">${MIC_ICON}</button>
-          <button id="av-end" class="av-end-btn">${END_ICON}</button>
+
+        <div id="av-call" style="display:none;">
+          <div class="av-body">
+            <div class="av-orb">
+              <video id="av-orb-video" src="${apiBase}/agent-orb.mp4" autoplay loop muted playsinline></video>
+            </div>
+            <p id="av-status" class="av-status">Connecting…</p>
+          </div>
+          <div class="av-controls">
+            <button id="av-mute" class="av-ctrl-btn">${MIC_ICON}</button>
+            <button id="av-end" class="av-end-btn">${END_ICON}</button>
+          </div>
+          <audio id="av-audio" autoplay></audio>
         </div>
-        <audio id="av-audio" autoplay></audio>
       </div>
-      <button id="av-button" class="av-button" aria-label="${label}">${PHONE_ICON}</button>
+
+      <button id="av-button" class="av-button" aria-label="${label}">
+        <video src="${apiBase}/agent-orb.mp4" autoplay loop muted playsinline></video>
+      </button>
     </div>
   `
 }
@@ -80,24 +139,58 @@ function init(): void {
   host.id = 'arthale-voice-widget-host'
   document.body.appendChild(host)
   const shadow = host.attachShadow({ mode: 'open' })
-  shadow.innerHTML = `<style>${CSS}</style>${panelHtml(label)}`
+  shadow.innerHTML = `<style>${CSS}</style>${widgetHtml(label)}`
 
   const button = shadow.getElementById('av-button') as HTMLButtonElement
+  const greeting = shadow.getElementById('av-greeting') as HTMLDivElement
+  const greetingClose = shadow.getElementById('av-greeting-close') as HTMLButtonElement
   const panel = shadow.getElementById('av-panel') as HTMLDivElement
-  const statusEl = shadow.getElementById('av-status') as HTMLParagraphElement
   const closeBtn = shadow.getElementById('av-close') as HTMLButtonElement
+
+  const formEl = shadow.getElementById('av-form') as HTMLDivElement
+  const nameInput = shadow.getElementById('av-name') as HTMLInputElement
+  const phoneInput = shadow.getElementById('av-phone') as HTMLInputElement
+  const formError = shadow.getElementById('av-form-error') as HTMLParagraphElement
+  const submitBtn = shadow.getElementById('av-submit') as HTMLButtonElement
+
+  const callEl = shadow.getElementById('av-call') as HTMLDivElement
+  const statusEl = shadow.getElementById('av-status') as HTMLParagraphElement
+  const orbEl = shadow.getElementById('av-orb-video')?.parentElement as HTMLDivElement
   const muteBtn = shadow.getElementById('av-mute') as HTMLButtonElement
   const endBtn = shadow.getElementById('av-end') as HTMLButtonElement
   const audioEl = shadow.getElementById('av-audio') as HTMLAudioElement
 
   let room: Room | null = null
   let micEnabled = true
+  let stopVolumeReactivity: (() => void) | null = null
+
+  // A quiet greeting bubble after a few seconds does more to earn a click
+  // than a button alone — dismissible, and only shown once per page load.
+  const greetingTimer = window.setTimeout(() => {
+    greeting.style.display = 'flex'
+  }, 4000)
+
+  function hideGreeting(): void {
+    window.clearTimeout(greetingTimer)
+    greeting.style.display = 'none'
+  }
 
   function setStatus(text: string): void {
     statusEl.textContent = text
   }
 
+  function showForm(): void {
+    hideGreeting()
+    formError.textContent = ''
+    formEl.style.display = 'flex'
+    callEl.style.display = 'none'
+    panel.style.display = 'flex'
+    button.style.display = 'none'
+  }
+
   function resetToIdle(): void {
+    stopVolumeReactivity?.()
+    stopVolumeReactivity = null
     room = null
     micEnabled = true
     muteBtn.innerHTML = MIC_ICON
@@ -117,9 +210,39 @@ function init(): void {
     muteBtn.innerHTML = micEnabled ? MIC_ICON : MIC_OFF_ICON
   }
 
-  async function startCall(): Promise<void> {
-    button.style.display = 'none'
-    panel.style.display = 'flex'
+  // Makes the orb visibly react to the agent's voice instead of just
+  // looping — a lightweight Web Audio analyser on the subscribed track,
+  // since this vanilla bundle has no LiveKit React hooks to lean on.
+  function attachVolumeReactivity(track: RemoteTrack): () => void {
+    try {
+      const stream = new MediaStream([track.mediaStreamTrack])
+      const audioCtx = new AudioContext()
+      const source = audioCtx.createMediaStreamSource(stream)
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+      const data = new Uint8Array(analyser.frequencyBinCount)
+      let raf = 0
+      const tick = () => {
+        analyser.getByteFrequencyData(data)
+        const avg = data.reduce((a, b) => a + b, 0) / data.length / 255
+        orbEl.style.transform = `scale(${1 + Math.min(avg, 1) * 0.16})`
+        raf = requestAnimationFrame(tick)
+      }
+      tick()
+      return () => {
+        cancelAnimationFrame(raf)
+        void audioCtx.close()
+      }
+    } catch (err) {
+      console.warn('[Arthale Voice widget] volume reactivity unavailable:', err)
+      return () => {}
+    }
+  }
+
+  async function startCall(name: string, phone: string): Promise<void> {
+    formEl.style.display = 'none'
+    callEl.style.display = 'block'
     setStatus('Connecting…')
 
     try {
@@ -136,7 +259,7 @@ function init(): void {
       const res = await fetch(`${apiBase}/widget/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteKey, identity: randomId('visitor') }),
+        body: JSON.stringify({ siteKey, identity: randomId('visitor'), name, phone }),
       })
       if (!res.ok) {
         const body = await res.text().catch(() => '')
@@ -153,7 +276,10 @@ function init(): void {
     try {
       room = new Room()
       room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
-        if (track.kind === Track.Kind.Audio) track.attach(audioEl)
+        if (track.kind === Track.Kind.Audio) {
+          track.attach(audioEl)
+          stopVolumeReactivity = attachVolumeReactivity(track)
+        }
       })
       room.on(RoomEvent.ParticipantConnected, () => setStatus('Agent joined — say hello!'))
       room.on(RoomEvent.Disconnected, () => resetToIdle())
@@ -168,8 +294,34 @@ function init(): void {
     }
   }
 
-  button.addEventListener('click', () => void startCall())
-  closeBtn.addEventListener('click', endCall)
+  function submitForm(): void {
+    const name = nameInput.value.trim()
+    const phone = phoneInput.value.trim()
+    if (!name) {
+      formError.textContent = 'Please enter your name.'
+      return
+    }
+    if (!isValidPhone(phone)) {
+      formError.textContent = 'Enter a valid phone number in international format, e.g. +919812345678.'
+      return
+    }
+    formError.textContent = ''
+    void startCall(name, phone)
+  }
+
+  button.addEventListener('click', showForm)
+  greeting.addEventListener('click', showForm)
+  greetingClose.addEventListener('click', (e) => {
+    e.stopPropagation()
+    hideGreeting()
+  })
+  closeBtn.addEventListener('click', () => {
+    room ? endCall() : resetToIdle()
+  })
+  submitBtn.addEventListener('click', submitForm)
+  phoneInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitForm()
+  })
   endBtn.addEventListener('click', endCall)
   muteBtn.addEventListener('click', toggleMute)
 }
