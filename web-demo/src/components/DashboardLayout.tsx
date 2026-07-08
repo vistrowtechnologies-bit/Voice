@@ -2,7 +2,23 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { fetchBilling } from '../lib/api'
+import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { Icon } from './Icon'
+
+function ThemeSwitcher() {
+  const theme = useTheme()
+  const next = theme === 'dark' ? 'light' : 'dark'
+  return (
+    <button
+      onClick={() => applyTheme(next)}
+      aria-label={`Switch to ${next} mode`}
+      title={`Switch to ${next} mode`}
+      className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-primary"
+    >
+      <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[17px]" />
+    </button>
+  )
+}
 
 const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: string }[] }[] = [
   {
@@ -121,6 +137,7 @@ export function PageHeader({
           {credits} credits
         </span>
       )}
+      <ThemeSwitcher />
       {children}
       <Link
         to="/dashboard/agents?new=1"
@@ -135,6 +152,14 @@ export function PageHeader({
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  // Theme is a dashboard-only preference — apply the stored choice on mount
+  // and revert to the designed dark look on unmount so the public
+  // landing/call pages are never affected by it.
+  useEffect(() => {
+    applyTheme(getStoredTheme(), false)
+    return () => document.documentElement.removeAttribute('data-theme')
+  }, [])
 
   return (
     <div className="min-h-screen bg-bg text-text">

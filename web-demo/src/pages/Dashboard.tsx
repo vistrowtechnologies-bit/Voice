@@ -12,6 +12,7 @@ import {
   fetchUsageTrends,
   formatDuration,
 } from '../lib/api'
+import { useTheme } from '../lib/theme'
 import type { ActiveCallInfo, Analytics, DashboardSummary, UsageTrends } from '../lib/types'
 
 const AGENT_STATE_STYLES: Record<string, string> = {
@@ -26,8 +27,19 @@ const RANGE_OPTIONS = [
   { label: 'Month', days: 30 },
 ]
 
-const GRID = { color: '#2A2438' }
-const TICKS = { color: '#9089B0', font: { size: 11 } }
+// Chart grid/tick/segment-border colors come from the live CSS tokens so
+// they follow the light/dark switch — read at render, recomputed whenever
+// useTheme() re-renders the Dashboard on a toggle.
+function chartTokens() {
+  const s = getComputedStyle(document.documentElement)
+  const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback
+  return {
+    grid: v('--color-border', '#2A2438'),
+    tick: v('--color-text-muted', '#9089B0'),
+    surface: v('--color-surface', '#17121F'),
+    muted: v('--color-muted', '#6B647F'),
+  }
+}
 
 function greeting(): string {
   const h = new Date().getHours()
@@ -43,6 +55,13 @@ export function Dashboard() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
   const [rangeDays, setRangeDays] = useState(14)
+
+  // Re-render (and recompute chart colors) when the header toggles the theme.
+  const theme = useTheme()
+  const t = chartTokens()
+  void theme
+  const GRID = { color: t.grid }
+  const TICKS = { color: t.tick, font: { size: 11 } }
 
   useEffect(() => {
     fetchDashboardSummary().then(setSummary).catch(() => setSummary(null))
@@ -177,8 +196,8 @@ export function Dashboard() {
                                   summary.qualifiedCalls - summary.siteVisits,
                                   summary.totalCalls - summary.qualifiedCalls,
                                 ],
-                                backgroundColor: ['#A855F7', '#22D3EE', '#6B647F'],
-                                borderColor: '#17121F',
+                                backgroundColor: ['#A855F7', '#22D3EE', t.muted],
+                                borderColor: t.surface,
                                 borderWidth: 3,
                               },
                             ],
@@ -258,7 +277,7 @@ export function Dashboard() {
                     }}
                     options={{
                       maintainAspectRatio: false,
-                      plugins: { legend: { display: true, labels: { color: '#9089B0', boxWidth: 10, font: { size: 11 } } } },
+                      plugins: { legend: { display: true, labels: { color: t.tick, boxWidth: 10, font: { size: 11 } } } },
                       scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
                     }}
                   />
@@ -282,7 +301,7 @@ export function Dashboard() {
                     }}
                     options={{
                       maintainAspectRatio: false,
-                      plugins: { legend: { display: true, labels: { color: '#9089B0', boxWidth: 10, font: { size: 11 } } } },
+                      plugins: { legend: { display: true, labels: { color: t.tick, boxWidth: 10, font: { size: 11 } } } },
                       scales: { x: { grid: { display: false }, ticks: TICKS }, y: { grid: GRID, ticks: { ...TICKS, precision: 0 } } },
                     }}
                   />
@@ -367,8 +386,8 @@ export function Dashboard() {
                         datasets: [
                           {
                             data: [analytics.sentiment.positive, analytics.sentiment.neutral, analytics.sentiment.negative],
-                            backgroundColor: ['#22D3EE', '#6B647F', '#F43F5E'],
-                            borderColor: '#17121F',
+                            backgroundColor: ['#22D3EE', t.muted, '#F43F5E'],
+                            borderColor: t.surface,
                             borderWidth: 3,
                           },
                         ],

@@ -19,6 +19,28 @@
   --color-destructive: #ef4444;
 }
 
+/* Light mode: flip the design tokens and every bg-surface / text-cyan /
+   border-border utility across the dashboard re-themes automatically.
+   Accent hues are darkened so text keeps AA contrast on white — the dark
+   theme's neons (#22d3ee cyan, #fbbf24 amber) are unreadable on a light
+   ground. Toggled by the switcher in the dashboard header. */
+:root[data-theme="light"] {
+  --color-bg: #f4f2f9;
+  --color-surface: #ffffff;
+  --color-surface-high: #ece8f6;
+  --color-border: #ddd7ec;
+  --color-primary: #9333ea;
+  --color-primary-dark: #7e22ce;
+  --color-cyan: #0e7490;
+  --color-magenta: #db2777;
+  --color-amber: #b45309;
+  --color-success: #047857;
+  --color-muted: #7a7391;
+  --color-text: #1a1523;
+  --color-text-muted: #5d5776;
+  --color-destructive: #dc2626;
+}
+
 body {
   margin: 0;
   background-color: var(--color-bg);
