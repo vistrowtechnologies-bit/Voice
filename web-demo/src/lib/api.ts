@@ -11,6 +11,7 @@ import type {
   Integration,
   KnowledgeBase,
   PhoneNumber,
+  Site,
   TelephonyStatus,
   UsageTrends,
 } from './types'
@@ -124,6 +125,22 @@ export const placeTestCall = (from: string, to: string) =>
 // --------------------------------------------------------------- billing
 
 export const fetchBilling = () => get<BillingSummary>('/billing/summary')
+
+// ---------------------------------------------------------- website widget
+
+export const fetchSites = () => get<Site[]>('/widget/sites')
+export const createSite = (
+  name: string,
+  agentId: number | null,
+  allowedDomain: string,
+  widgetPosition: Site['widgetPosition'] = 'bottom-right',
+  widgetLabel: string = 'Talk to us',
+) => send<Site>('POST', '/widget/sites', { name, agentId, allowedDomain, widgetPosition, widgetLabel })
+export const updateSite = (id: number, data: Partial<Site>) => send<Site>('PATCH', `/widget/sites/${id}`, data)
+export const deleteSite = (id: number) => send('DELETE', `/widget/sites/${id}`)
+export const regenerateSiteKey = (id: number) => send<Site>('POST', `/widget/sites/${id}/regenerate-key`)
+export const wordpressPluginUrl = '/api/widget/wordpress-plugin.zip'
+export const fetchWidgetBackendUrl = () => get<{ backendUrl: string | null }>('/widget/backend-url')
 
 // --------------------------------------------------------------- helpers
 

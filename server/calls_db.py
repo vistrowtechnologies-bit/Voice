@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS sites (
     allowed_domain TEXT DEFAULT '',
     agent_id INTEGER,
     status TEXT DEFAULT 'active',
+    widget_position TEXT DEFAULT 'bottom-right',
+    widget_label TEXT DEFAULT 'Talk to us',
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -220,6 +222,16 @@ def _migrate_calls_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE calls ADD COLUMN site_id INTEGER")
 
 
+def _migrate_sites_columns(conn: sqlite3.Connection) -> None:
+    """Add widget appearance columns to a sites table that predates
+    per-site widget customization (corner + button label)."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(sites)").fetchall()}
+    if "widget_position" not in existing:
+        conn.execute("ALTER TABLE sites ADD COLUMN widget_position TEXT DEFAULT 'bottom-right'")
+    if "widget_label" not in existing:
+        conn.execute("ALTER TABLE sites ADD COLUMN widget_label TEXT DEFAULT 'Talk to us'")
+
+
 def init_tables() -> None:
     conn = _connect()
     try:
@@ -227,6 +239,7 @@ def init_tables() -> None:
             conn.executescript(_SCHEMA)
             _migrate_phone_numbers_columns(conn)
             _migrate_calls_columns(conn)
+            _migrate_sites_columns(conn)
             if conn.execute("SELECT COUNT(*) c FROM agents").fetchone()["c"] == 0:
                 conn.execute(
                     "INSERT INTO agents (name, description) VALUES (?, ?)",
@@ -906,6 +919,8 @@ def _site_dict(r: sqlite3.Row) -> dict:
         "allowedDomain": r["allowed_domain"],
         "agentId": r["agent_id"],
         "status": r["status"],
+        "widgetPosition": r["widget_position"] or "bottom-right",
+        "widgetLabel": r["widget_label"] or "Talk to us",
         "createdAt": r["created_at"],
     }
 
@@ -936,13 +951,22 @@ def get_site_by_key(site_key: str) -> dict | None:
         conn.close()
 
 
-def create_site(name: str, agent_id: int | None, allowed_domain: str = "") -> dict:
+def create_site(
+    name: str,
+    agent_id: int | None,
+    allowed_domain: str = "",
+    widget_position: str = "bottom-right",
+    widget_label: str = "Talk to us",
+) -> dict:
+    if widget_position not in ("bottom-right", "bottom-left"):
+        widget_position = "bottom-right"
     conn = _connect()
     try:
         with conn:
             cur = conn.execute(
-                "INSERT INTO sites (name, site_key, allowed_domain, agent_id) VALUES (?, ?, ?, ?)",
-                (name, _new_site_key(), allowed_domain, agent_id),
+                "INSERT INTO sites (name, site_key, allowed_domain, agent_id, widget_position, widget_label) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (name, _new_site_key(), allowed_domain, agent_id, widget_position, widget_label or "Talk to us"),
             )
         row = conn.execute("SELECT * FROM sites WHERE id = ?", (cur.lastrowid,)).fetchone()
         return _site_dict(row)
@@ -951,16 +975,22 @@ def create_site(name: str, agent_id: int | None, allowed_domain: str = "") -> di
 
 
 def update_site(site_id: int, data: dict) -> dict | None:
+    widget_position = data.get("widgetPosition", "bottom-right")
+    if widget_position not in ("bottom-right", "bottom-left"):
+        widget_position = "bottom-right"
     conn = _connect()
     try:
         with conn:
             conn.execute(
-                "UPDATE sites SET name = ?, allowed_domain = ?, agent_id = ?, status = ? WHERE id = ?",
+                "UPDATE sites SET name = ?, allowed_domain = ?, agent_id = ?, status = ?, "
+                "widget_position = ?, widget_label = ? WHERE id = ?",
                 (
                     data.get("name"),
                     data.get("allowedDomain", ""),
                     data.get("agentId"),
                     data.get("status", "active"),
+                    widget_position,
+                    data.get("widgetLabel") or "Talk to us",
                     site_id,
                 ),
             )

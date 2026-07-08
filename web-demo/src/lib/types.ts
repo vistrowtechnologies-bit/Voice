@@ -187,3 +187,15 @@ export interface PhoneNumber {
   status: string
   createdAt: string
 }
+
+export interface Site {
+  id: number
+  name: string
+  siteKey: string
+  allowedDomain: string
+  agentId: number | null
+  status: string
+  widgetPosition: 'bottom-right' | 'bottom-left'
+  widgetLabel: string
+  createdAt: string
+}

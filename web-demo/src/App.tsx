@@ -13,6 +13,7 @@ import { Integrations } from './pages/Integrations'
 import { PhoneNumbers } from './pages/PhoneNumbers'
 import { Billing } from './pages/Billing'
 import { LeadDetail } from './pages/LeadDetail'
+import { WebsiteWidget } from './pages/WebsiteWidget'
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
       <Route path="/dashboard/contacts" element={<Contacts />} />
       <Route path="/dashboard/integrations" element={<Integrations />} />
       <Route path="/dashboard/numbers" element={<PhoneNumbers />} />
+      <Route path="/dashboard/website-widget" element={<WebsiteWidget />} />
       <Route path="/dashboard/billing" element={<Billing />} />
       {/* Old bookmark path — same detail page as /dashboard/calls/:id */}
       <Route path="/dashboard/leads/:id" element={<LeadDetail />} />

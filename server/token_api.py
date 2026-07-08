@@ -491,6 +491,17 @@ def billing() -> dict:
 # ---------------------------------------------------------- website widget
 
 
+@app.get("/widget/backend-url")
+def widget_backend_url() -> dict:
+    """This backend's own publicly reachable URL — the dashboard needs the
+    real Railway URL (not the Vercel /api rewrite prefix web-demo itself
+    uses) to generate an embed snippet a third-party site can call directly.
+    Same helper calls_db.public_base_url() already uses for the EnableX
+    webhook URL. Returns null if neither RAILWAY_PUBLIC_DOMAIN nor
+    PUBLIC_BASE_URL is set (e.g. local dev)."""
+    return {"backendUrl": calls_db.public_base_url()}
+
+
 @app.get("/widget.js")
 def widget_js() -> FileResponse:
     """Serves the embeddable widget bundle (built from ../widget) from this
@@ -524,7 +535,13 @@ def create_site(data: dict = Body(...)) -> dict:
     name = (data.get("name") or "").strip()
     if not name:
         raise HTTPException(400, "A site name is required")
-    return calls_db.create_site(name, data.get("agentId"), data.get("allowedDomain", ""))
+    return calls_db.create_site(
+        name,
+        data.get("agentId"),
+        data.get("allowedDomain", ""),
+        data.get("widgetPosition", "bottom-right"),
+        data.get("widgetLabel", "Talk to us"),
+    )
 
 
 @app.patch("/widget/sites/{site_id}")
