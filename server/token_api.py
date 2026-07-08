@@ -635,43 +635,55 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
     mechanism phone numbers and dashboard browser tests already use for
     their own metadata shape.
     """
+    masked_key = req.siteKey[:12] + "…" if len(req.siteKey) > 12 else req.siteKey
     name = req.name.strip()
     if not name:
+        logger.warning("widget token rejected: empty name (site_key=%s)", masked_key)
         raise HTTPException(400, "Name is required")
     if not _looks_like_real_phone(req.phone):
+        logger.warning("widget token rejected: invalid phone %r (site_key=%s)", req.phone, masked_key)
         raise HTTPException(400, "Enter a valid phone number in international format, e.g. +919812345678")
 
     site = calls_db.get_site_by_key(req.siteKey)
     if site is None:
+        logger.warning("widget token rejected: unknown site_key=%s", masked_key)
         raise HTTPException(404, "Unknown site key")
     if site["status"] == "paused":
+        logger.warning("widget token rejected: site %s is paused", site["name"])
         raise HTTPException(403, "This site's widget is currently paused")
     if _widget_rate_limited(req.siteKey):
+        logger.warning("widget token rejected: rate limited (site=%s)", site["name"])
         raise HTTPException(429, "Too many calls from this site right now — try again shortly")
 
     api_key = os.environ.get("LIVEKIT_API_KEY")
     api_secret = os.environ.get("LIVEKIT_API_SECRET")
     livekit_url = os.environ.get("LIVEKIT_URL")
     if not api_key or not api_secret or not livekit_url:
+        logger.error("widget token failed: LiveKit credentials not configured on the server")
         raise HTTPException(500, "LiveKit credentials are not configured on the server")
 
     import secrets
 
     room = f"widget-{site['id']}-{secrets.token_hex(8)}"
-    async with api.LiveKitAPI() as lkapi:
-        await lkapi.room.create_room(
-            CreateRoomRequest(
-                name=room,
-                metadata=json.dumps(
-                    {
-                        "agent_id": site["agentId"],
-                        "site_id": site["id"],
-                        "visitor_name": name,
-                        "visitor_phone": req.phone.strip(),
-                    }
-                ),
+    try:
+        async with api.LiveKitAPI() as lkapi:
+            await lkapi.room.create_room(
+                CreateRoomRequest(
+                    name=room,
+                    metadata=json.dumps(
+                        {
+                            "agent_id": site["agentId"],
+                            "site_id": site["id"],
+                            "visitor_name": name,
+                            "visitor_phone": req.phone.strip(),
+                        }
+                    ),
+                )
             )
-        )
+        logger.info("widget token issued: site=%s agent_id=%s room=%s", site["name"], site["agentId"], room)
+    except Exception:
+        logger.exception("widget token failed: could not create LiveKit room for site=%s", site["name"])
+        raise HTTPException(502, "Could not start the call right now — please try again shortly")
 
     token = (
         api.AccessToken(api_key, api_secret)
