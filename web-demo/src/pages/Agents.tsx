@@ -56,7 +56,9 @@ const VOICES = [
   'soham',
   'rupali',
 ]
-const MODELS = ['gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gemini-2.5-flash', 'gemini-2.0-flash']
+// gemini-2.0-flash was shut down by Google on 2026-06-01 — removed rather
+// than left as a dead, call-breaking option in this dropdown.
+const MODELS = ['gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gemini-2.5-flash', 'gemini-3.1-flash-lite']
 // Presets for Sarvam bulbul:v3's own pace/temperature/pitch — controls how
 // the voice is actually delivered (speed + prosodic variation), separate
 // from the LLM's wording. Must mirror agent/main.py's TONE_PRESETS exactly.
