@@ -301,7 +301,7 @@ async def list_active_calls(user: dict = Depends(current_user)) -> list[dict]:
 def list_calls(
     limit: int = 200, search: str = "", status: str = "", days: int = 0, user: dict = Depends(current_user)
 ) -> list[dict]:
-    """Real call history from agent/calls.db — one row per completed call."""
+    """Real call history from the calls table — one row per completed call."""
     return calls_db.list_calls(user["account_id"], limit=limit, search=search, status=status, days=days)
 
 

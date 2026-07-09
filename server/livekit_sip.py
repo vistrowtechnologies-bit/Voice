@@ -99,12 +99,12 @@ async def ensure_inbound_trunk() -> str | None:
         except TwirpError as exc:
             if exc.code != "invalid_argument" or "Conflicting" not in exc.message:
                 raise
-            # calls.db is ephemeral on Railway (wiped on every redeploy), so
-            # TRUNK_ID_SETTING can go missing even though a trunk we created
-            # earlier still exists on LiveKit and still owns these numbers —
-            # LiveKit then refuses to create a second one for the same
-            # number(s). Recover by finding and adopting that existing trunk
-            # instead of failing the whole add/assign/delete flow.
+            # TRUNK_ID_SETTING can go missing (e.g. restored from an older
+            # backup, or set on a different environment) even though a trunk
+            # we created earlier still exists on LiveKit and still owns these
+            # numbers — LiveKit then refuses to create a second one for the
+            # same number(s). Recover by finding and adopting that existing
+            # trunk instead of failing the whole add/assign/delete flow.
             existing = await lkapi.sip.list_inbound_trunk(
                 ListSIPInboundTrunkRequest(numbers=numbers)
             )

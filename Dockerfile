@@ -1,12 +1,10 @@
-# Railway service: Arthale Voice backend + agent worker, one container.
+# Railway service: Vistrow Voice backend + agent worker, one container.
 #
-# Both processes run together (see start.sh) so they share calls.db on this
-# container's filesystem — the backend's dashboard reads/writes it (agents,
+# Both processes run together (see start.sh), sharing one Postgres database
+# via DATABASE_URL — the backend's dashboard reads/writes it (agents,
 # contacts, integrations, phone numbers) and the agent worker reads agent
-# config from it and writes completed-call rows to it. Splitting them into
-# separate Railway services would give each its own filesystem and silently
-# break that sharing (agent worker blind to dashboard config; dashboard never
-# sees new calls) — see agent/db.py and server/calls_db.py.
+# config from it and writes completed-call rows to it. See dbconn.py,
+# agent/db.py and server/calls_db.py.
 #
 # The web-demo frontend deploys separately (Vercel); see web-demo/vercel.json
 # for how it reaches this service.
@@ -24,9 +22,8 @@ COPY agent/ ./agent/
 COPY start.sh ./start.sh
 RUN chmod +x ./start.sh
 
-# calls.db lives at agent/calls.db by default (ephemeral — wiped on every
-# redeploy). Set CALLS_DB_PATH to a path under a mounted Railway volume (e.g.
-# /data/calls.db, with a volume mounted at /data) for durable call history.
+# Requires DATABASE_URL (Postgres) set as a service variable — durable
+# across redeploys, unlike the old SQLite file on the container filesystem.
 
 # Railway injects $PORT at runtime; the agent worker reads LIVEKIT_URL/
 # LIVEKIT_API_KEY/LIVEKIT_API_SECRET plus SARVAM_API_KEY/OPENAI_API_KEY.
