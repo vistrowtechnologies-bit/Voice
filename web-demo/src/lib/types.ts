@@ -112,6 +112,7 @@ export interface AgentConfig {
   status: 'live' | 'paused'
   systemPrompt: string
   kbId: number | null
+  tone: 'professional' | 'balanced' | 'casual'
   createdAt: string
   updatedAt: string
 }

@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS agents (
     status TEXT DEFAULT 'live',
     system_prompt TEXT DEFAULT '',
     kb_id INTEGER,
+    tone TEXT DEFAULT 'balanced',
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -310,6 +311,8 @@ def _migrate_agents_columns(conn: sqlite3.Connection) -> None:
     existing = {row["name"] for row in conn.execute("PRAGMA table_info(agents)").fetchall()}
     if "account_id" not in existing:
         conn.execute("ALTER TABLE agents ADD COLUMN account_id INTEGER")
+    if "tone" not in existing:
+        conn.execute("ALTER TABLE agents ADD COLUMN tone TEXT DEFAULT 'balanced'")
 
 
 def _migrate_inbound_routes_columns(conn: sqlite3.Connection) -> None:
@@ -924,7 +927,7 @@ def analytics(account_id: int) -> dict:
 
 # ---------------------------------------------------------------- agents
 
-_AGENT_FIELDS = ("name", "description", "model", "voice", "language", "status", "system_prompt", "kb_id")
+_AGENT_FIELDS = ("name", "description", "model", "voice", "language", "status", "system_prompt", "kb_id", "tone")
 
 
 def _agent_dict(row: sqlite3.Row) -> dict:
@@ -938,6 +941,7 @@ def _agent_dict(row: sqlite3.Row) -> dict:
         "status": row["status"],
         "systemPrompt": row["system_prompt"],
         "kbId": row["kb_id"],
+        "tone": row["tone"] or "balanced",
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }

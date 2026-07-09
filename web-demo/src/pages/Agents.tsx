@@ -57,6 +57,26 @@ const VOICES = [
   'rupali',
 ]
 const MODELS = ['gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gemini-2.5-flash', 'gemini-2.0-flash']
+// Presets for Sarvam bulbul:v3's own pace/temperature/pitch — controls how
+// the voice is actually delivered (speed + prosodic variation), separate
+// from the LLM's wording. Must mirror agent/main.py's TONE_PRESETS exactly.
+const TONES = [
+  {
+    value: 'professional',
+    label: 'Professional',
+    description: 'Measured and steady — slower pace, low variation. Good for formal or informational agents.',
+  },
+  {
+    value: 'balanced',
+    label: 'Balanced',
+    description: "Sarvam's natural conversational default. A good starting point for most agents.",
+  },
+  {
+    value: 'casual',
+    label: 'Casual',
+    description: 'Faster and more expressive — livelier pitch/pace variation. Fixes a flat or robotic-sounding voice.',
+  },
+] as const
 const LANGUAGES = [
   ['hi-IN', 'Hindi'],
   ['en-IN', 'English'],
@@ -269,7 +289,9 @@ function AgentEditor({
     language: agent.language,
     systemPrompt: agent.systemPrompt,
     kbId: agent.kbId,
+    tone: agent.tone || 'balanced',
   })
+  const [tab, setTab] = useState<'config' | 'tone'>('config')
   const [saving, setSaving] = useState(false)
 
   const save = async () => {
@@ -291,6 +313,52 @@ function AgentEditor({
         </button>
       </div>
 
+      <div className="mb-4 flex gap-1 rounded-lg bg-surface-high p-1">
+        <button
+          onClick={() => setTab('config')}
+          className={`flex-1 rounded-md py-1.5 text-xs font-bold transition-colors ${
+            tab === 'config' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'
+          }`}
+        >
+          Configuration
+        </button>
+        <button
+          onClick={() => setTab('tone')}
+          className={`flex-1 rounded-md py-1.5 text-xs font-bold transition-colors ${
+            tab === 'tone' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'
+          }`}
+        >
+          Tone
+        </button>
+      </div>
+
+      {tab === 'tone' ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-text-muted">
+            Controls how the voice is actually delivered — speaking pace and prosodic variation. If the voice
+            sounds slow or robotic, try <span className="font-semibold text-text">Casual</span>.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {TONES.map((t) => (
+              <button
+                key={t.value}
+                onClick={() => setForm({ ...form, tone: t.value })}
+                className={`flex flex-col gap-1.5 rounded-lg border p-3 text-left transition-colors ${
+                  form.tone === t.value
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border bg-surface-high/40 hover:border-primary/60'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold">{t.label}</span>
+                  {form.tone === t.value && <Icon name="check_circle" className="text-[16px] text-primary" />}
+                </div>
+                <p className="text-[11px] leading-relaxed text-text-muted">{t.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="flex flex-col gap-3">
           <Field label="Name">
@@ -370,6 +438,7 @@ function AgentEditor({
           />
         </Field>
       </div>
+      )}
 
       <div className="mt-4 flex justify-end gap-2">
         <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary">

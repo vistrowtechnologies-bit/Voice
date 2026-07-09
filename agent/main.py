@@ -24,6 +24,24 @@ logger.setLevel(logging.INFO)
 LANGUAGE_SWITCH_CONFIRMATION_TURNS = 3
 
 
+# Sarvam bulbul:v3's own `pace`/`temperature`/`pitch` govern how the voice is
+# actually delivered (speaking speed and prosodic variation) — separate from
+# and complementary to the LLM's temperature, which only affects word choice.
+# A flat/robotic-sounding voice is a TTS delivery problem, not a wording one,
+# so tone presets live here rather than as an LLM sampling-temperature knob.
+TONE_PRESETS: dict[str, dict[str, float]] = {
+    # Measured and steady — a bit slower and low-variation, for formal/
+    # informational agents (banking, legal, official notices).
+    "professional": {"pace": 0.95, "temperature": 0.4, "pitch": 0.0},
+    # Sarvam bulbul:v3's own defaults — natural conversational delivery.
+    "balanced": {"pace": 1.0, "temperature": 0.6, "pitch": 0.0},
+    # Faster and more expressive/varied prosody — addresses "slow and
+    # robotic" by injecting more natural pitch/pace variation per line.
+    "casual": {"pace": 1.08, "temperature": 0.85, "pitch": 0.05},
+}
+DEFAULT_TONE = "balanced"
+
+
 def _build_llm(model: str):
     """Picks the LLM plugin by model-name prefix, so an operator can switch
     an agent between OpenAI and Gemini from the dashboard's model dropdown
@@ -145,6 +163,7 @@ class RealEstateAgent(Agent):
                 target_language_code=reply_language,
                 model="bulbul:v3",
                 speaker=config.get("voice") or "pooja",
+                **TONE_PRESETS.get(config.get("tone") or DEFAULT_TONE, TONE_PRESETS[DEFAULT_TONE]),
             ),
             tools=[check_availability, book_site_visit, log_lead],
         )
