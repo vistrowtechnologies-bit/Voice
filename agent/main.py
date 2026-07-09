@@ -1,10 +1,11 @@
 import json
 import logging
+import os
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from livekit.agents import Agent, AgentSession, JobContext, TurnHandlingOptions, WorkerOptions, cli, llm
-from livekit.plugins import openai, sarvam
+from livekit.plugins import google, openai, sarvam
 
 import db
 from language import detect_reply_language
@@ -21,6 +22,18 @@ logger.setLevel(logging.INFO)
 # require the same candidate language across this many consecutive turns
 # (roughly "a couple of sentences") before actually switching.
 LANGUAGE_SWITCH_CONFIRMATION_TURNS = 3
+
+
+def _build_llm(model: str):
+    """Picks the LLM plugin by model-name prefix, so an operator can switch
+    an agent between OpenAI and Gemini from the dashboard's model dropdown
+    without any other config change. GEMINI_API_KEY is the name Google AI
+    Studio labels its key with; fall back to GOOGLE_API_KEY (the google-genai
+    SDK's own default env var) since either may already be set."""
+    if model.startswith("gemini"):
+        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        return google.LLM(model=model, api_key=api_key)
+    return openai.LLM(model=model)
 
 
 class RealEstateAgent(Agent):
@@ -99,7 +112,7 @@ class RealEstateAgent(Agent):
                 mode="transcribe",
                 flush_signal=True,
             ),
-            llm=openai.LLM(model=config.get("model") or "gpt-4.1"),
+            llm=_build_llm(config.get("model") or "gpt-4.1"),
             tts=sarvam.TTS(
                 target_language_code=reply_language,
                 model="bulbul:v3",

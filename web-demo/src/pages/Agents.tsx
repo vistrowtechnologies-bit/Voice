@@ -56,7 +56,7 @@ const VOICES = [
   'soham',
   'rupali',
 ]
-const MODELS = ['gpt-4.1', 'gpt-4o-mini', 'gpt-4o']
+const MODELS = ['gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gemini-2.5-flash', 'gemini-2.0-flash']
 const LANGUAGES = [
   ['hi-IN', 'Hindi'],
   ['en-IN', 'English'],
