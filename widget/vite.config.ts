@@ -10,7 +10,7 @@ export default defineConfig({
     cssCodeSplit: false,
     lib: {
       entry: resolve(__dirname, 'src/widget.ts'),
-      name: 'ArthaleVoiceWidget',
+      name: 'VistrowVoiceWidget',
       formats: ['iife'],
       fileName: () => 'widget.js',
     },

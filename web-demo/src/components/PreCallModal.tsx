@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { Icon } from './Icon'
+import { BRAND } from '../lib/brand'
 
 type Phase = 'permission' | 'denied' | 'connecting'
 
@@ -37,7 +38,7 @@ export function PreCallModal({ phase, errorMessage, onStart }: PreCallModalProps
           </div>
           <h1 className="text-xl font-semibold">Ready to talk to our AI agent?</h1>
           <p className="text-sm text-text-muted">
-            We&apos;ll ask your mic permission, then connect you to Riya, our AI leasing
+            We&apos;ll ask your mic permission, then connect you to {BRAND.defaultAgentName}, our AI
             assistant. Calls are not recorded without your consent.
           </p>
 
@@ -61,7 +62,7 @@ export function PreCallModal({ phase, errorMessage, onStart }: PreCallModalProps
           {phase === 'connecting' ? (
             <div className="flex items-center gap-3 py-2 text-sm text-cyan">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan border-t-transparent" />
-              Connecting to Riya…
+              Connecting to {BRAND.defaultAgentName}…
             </div>
           ) : (
             <button

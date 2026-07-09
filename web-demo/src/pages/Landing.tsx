@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
+import { BRAND } from '../lib/brand'
 
 const TRUST_BADGES = ['10,000+ leads qualified', '22+ Indian languages', '<1s response time']
 
@@ -17,7 +18,7 @@ export function Landing() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Icon name="auto_awesome" className="text-bg text-[18px]" />
           </div>
-          <span className="text-lg font-semibold tracking-tight">Arthale Homes</span>
+          <span className="text-lg font-semibold tracking-tight">{BRAND.name}</span>
         </div>
         <nav className="hidden items-center gap-8 text-sm text-text-muted md:flex">
           <a href="#" className="hover:text-text transition-colors">Properties</a>

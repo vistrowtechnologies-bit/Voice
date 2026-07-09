@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { fetchBilling } from '../lib/api'
+import { BRAND } from '../lib/brand'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { Icon } from './Icon'
 
@@ -62,7 +63,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <Icon name="auto_awesome" className="text-bg text-[18px]" />
         </div>
         <div>
-          <span className="block text-base font-semibold leading-tight tracking-tight">Arthale Voice</span>
+          <span className="block text-base font-semibold leading-tight tracking-tight">{BRAND.name}</span>
           <span className="block text-[10px] uppercase tracking-widest text-text-muted">Enterprise</span>
         </div>
       </div>
@@ -100,7 +101,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           AH
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">Arthale Homes</p>
+          <p className="truncate text-sm font-semibold">{BRAND.defaultWorkspace}</p>
           <p className="text-[11px] text-text-muted">Admin</p>
         </div>
       </div>
@@ -192,7 +193,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
             <Icon name="auto_awesome" className="text-bg text-[16px]" />
           </div>
-          <span className="font-semibold tracking-tight">Arthale Voice</span>
+          <span className="font-semibold tracking-tight">{BRAND.name}</span>
         </div>
         <main>{children}</main>
       </div>

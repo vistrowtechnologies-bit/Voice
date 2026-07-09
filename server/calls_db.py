@@ -177,7 +177,7 @@ ENABLEX_API_BASE = "https://api.enablex.io/voice/v1"
 _SEED_INTEGRATIONS = [
     (
         "webhook",
-        "ArthaleLeads webhook",
+        "CRM webhook",
         "CRM",
         "POST every qualified lead and booked site visit to your CRM endpoint in real time.",
     ),
@@ -237,7 +237,7 @@ def _migrate_calls_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE calls ADD COLUMN site_id INTEGER")
     if "agent_id" not in existing:
         # Which dashboard agent handled the call — before this, the calls UI
-        # hardcoded "Riya" for every row, which went wrong the moment a
+        # hardcoded a single agent name for every row, which went wrong the moment a
         # second agent existed.
         conn.execute("ALTER TABLE calls ADD COLUMN agent_id INTEGER")
 
@@ -275,9 +275,9 @@ def init_tables() -> None:
                 conn.execute(
                     "INSERT INTO agents (name, description) VALUES (?, ?)",
                     (
-                        "Riya",
-                        "Senior real estate sales rep for Arthale Homes — qualifies "
-                        "leads and books site visits in 11 Indian languages.",
+                        "Maya",
+                        "Default sales agent — qualifies leads and books "
+                        "appointments in 11 Indian languages.",
                     ),
                 )
             for key, name, category, description in _SEED_INTEGRATIONS:
@@ -1520,8 +1520,8 @@ def place_test_call(from_number: str, to_number: str) -> dict:
         "/call",
         "POST",
         {
-            "name": "Arthale Voice test call",
-            "owner_ref": "arthale-dashboard-test",
+            "name": "Vistrow Voice test call",
+            "owner_ref": "vistrow-dashboard-test",
             "from": from_number,
             "to": to_number,
             "action_on_connect": {

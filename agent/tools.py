@@ -49,7 +49,7 @@ async def check_availability(context: RunContext, property_id: str, preferred_da
         preferred_date: The date the lead wants to visit, in YYYY-MM-DD format.
     """
     logger.info("checking availability for %s on %s", property_id, preferred_date)
-    # TODO(phase 3): replace with a real inventory/CRM lookup against ArthaleLeads.
+    # TODO(phase 3): replace with a real inventory/CRM lookup.
     return f"Slots available on {preferred_date} at 11:00 AM and 4:00 PM for property {property_id}."
 
 

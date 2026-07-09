@@ -14,6 +14,7 @@ import type { AgentState } from '@livekit/components-react'
 import { ConnectionState, Track } from 'livekit-client'
 import type { RemoteParticipant } from 'livekit-client'
 import { Icon } from './Icon'
+import { BRAND } from '../lib/brand'
 import type { LeadSummary, TranscriptEntry } from '../lib/types'
 
 interface ActiveCallUIProps {
@@ -84,7 +85,7 @@ function AgentOrb({ agentParticipant }: { agentParticipant: RemoteParticipant })
 export function ActiveCallUI({
   onLeadUpdate,
   onTranscriptUpdate,
-  agentLabel = 'Riya · AI Leasing Agent',
+  agentLabel = `${BRAND.defaultAgentName} · ${BRAND.name} Assistant`,
 }: ActiveCallUIProps) {
   const room = useRoomContext()
   const connectionState = useConnectionState()

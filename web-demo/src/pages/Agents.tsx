@@ -361,7 +361,7 @@ function AgentEditor({
           </div>
         </div>
 
-        <Field label="System prompt (blank = built-in Riya real-estate prompt)">
+        <Field label="System prompt (blank = built-in default sales-agent prompt)">
           <textarea
             value={form.systemPrompt}
             onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}

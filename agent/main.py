@@ -35,7 +35,7 @@ class RealEstateAgent(Agent):
         # on the next call without a redeploy. Missing table or empty fields
         # fall back to the in-code defaults.
         config = config or {}
-        instructions = config.get("system_prompt") or build_sales_rep_prompt(config.get("name") or "Riya")
+        instructions = config.get("system_prompt") or build_sales_rep_prompt(config.get("name") or "Maya")
         if visitor_name and visitor_phone:
             # Website-widget calls collect these in a pre-call form, so the
             # agent already has them — this both stops it re-asking (the

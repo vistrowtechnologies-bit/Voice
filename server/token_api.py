@@ -15,7 +15,7 @@ from livekit.api import CreateRoomRequest, ListParticipantsRequest, ListRoomsReq
 from pydantic import BaseModel
 
 WIDGET_JS_PATH = Path(__file__).resolve().parent / "static" / "widget.js"
-WORDPRESS_PLUGIN_ZIP_PATH = Path(__file__).resolve().parent / "static" / "arthale-voice-widget.zip"
+WORDPRESS_PLUGIN_ZIP_PATH = Path(__file__).resolve().parent / "static" / "vistrow-voice-widget.zip"
 AGENT_ORB_VIDEO_PATH = Path(__file__).resolve().parent / "static" / "agent-orb.mp4"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -483,7 +483,7 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     Set this URL (…/telephony/enablex/inbound-event) as the webhook on your
     EnableX inbound number in the portal. On an incoming call we accept the
     leg and bridge it to LiveKit's SIP host for the dialed number, so the
-    same Riya agent that powers browser calls handles the phone call — the
+    same agent that powers browser calls handles the phone call — the
     LiveKit inbound trunk + per-number dispatch rule route it into a room
     with the right agent auto-dispatched.
 
@@ -581,7 +581,7 @@ def widget_wordpress_plugin() -> FileResponse:
     return FileResponse(
         WORDPRESS_PLUGIN_ZIP_PATH,
         media_type="application/zip",
-        filename="arthale-voice-widget.zip",
+        filename="vistrow-voice-widget.zip",
     )
 
 

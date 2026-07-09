@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Icon } from '../components/Icon'
+import { BRAND } from '../lib/brand'
 import type { LeadSummary, TranscriptEntry } from '../lib/types'
 
 interface SummaryLocationState {
@@ -28,8 +29,8 @@ const MATCHED_PROPERTIES = [
 function calendarUrl(visit: { date: string; time: string }): string {
   const parsed = new Date(`${visit.date} ${visit.time}`)
   const base = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
-  const text = encodeURIComponent('Site visit with Arthale Homes')
-  const details = encodeURIComponent('Property site visit booked with Riya, your Arthale Homes agent.')
+  const text = encodeURIComponent(`Site visit booked via ${BRAND.name}`)
+  const details = encodeURIComponent(`Booked with ${BRAND.defaultAgentName}, your ${BRAND.name} agent.`)
   if (isNaN(parsed.getTime())) {
     return `${base}&text=${text}&details=${details}`
   }
@@ -52,7 +53,7 @@ export function Summary() {
       <div className="mx-auto max-w-lg">
         <div className="mb-6 flex items-center gap-2">
           <Icon name="check_circle" className="text-cyan text-[22px]" />
-          <h1 className="text-xl font-semibold">Thanks for chatting with Riya!</h1>
+          <h1 className="text-xl font-semibold">Thanks for chatting with {BRAND.defaultAgentName}!</h1>
         </div>
 
         <div className="rounded-xl border border-border bg-surface p-5">
@@ -71,7 +72,7 @@ export function Summary() {
           ) : (
             <p className="text-sm text-text-muted">
               We didn&apos;t catch enough detail on this call to build a summary yet — but
-              Riya is always happy to chat again.
+              {' '}{BRAND.defaultAgentName} is always happy to chat again.
             </p>
           )}
         </div>
@@ -124,7 +125,7 @@ export function Summary() {
             to="/call"
             className="rounded-full border border-border px-5 py-2 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
           >
-            Talk to Riya Again
+            Talk to {BRAND.defaultAgentName} Again
           </Link>
           {transcript.length > 0 && (
             <button

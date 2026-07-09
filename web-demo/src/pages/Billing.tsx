@@ -2,31 +2,9 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { fetchBilling } from '../lib/api'
+import { BRAND } from '../lib/brand'
+import { PLANS } from '../lib/plans'
 import type { BillingSummary } from '../lib/types'
-
-const PLANS = [
-  {
-    name: 'Starter',
-    price: '₹2,999',
-    credits: '300 credits/mo',
-    tag: null,
-    features: ['1 AI agent', '~5 concurrent calls', 'Web calling widget', 'Call history & analytics'],
-  },
-  {
-    name: 'Growth',
-    price: '₹5,999',
-    credits: '1,000 credits/mo',
-    tag: 'Recommended',
-    features: ['5 AI agents', '~15 concurrent calls', 'Inbound + outbound campaigns', 'CRM webhook integration', 'Priority support'],
-  },
-  {
-    name: 'Scale',
-    price: '₹12,999',
-    credits: '2,500 credits/mo',
-    tag: 'Most Popular',
-    features: ['20 AI agents', '~30 concurrent calls', 'Full API access', 'Knowledge base (RAG)', 'Dedicated success manager'],
-  },
-]
 
 export function Billing() {
   const [billing, setBilling] = useState<BillingSummary | null>(null)
@@ -164,10 +142,10 @@ export function Billing() {
                   </button>
                 ) : (
                   <a
-                    href={`mailto:sales@arthalehomes.com?subject=${encodeURIComponent(
+                    href={`mailto:sales@vistrow.ai?subject=${encodeURIComponent(
                       `Upgrade to ${plan.name} plan`,
                     )}&body=${encodeURIComponent(
-                      `Hi, we'd like to upgrade our Arthale Voice subscription to the ${plan.name} plan (${plan.price}/month).`,
+                      `Hi, we'd like to upgrade our ${BRAND.name} subscription to the ${plan.name} plan (${plan.price}/month).`,
                     )}`}
                     className="mt-auto rounded-lg bg-primary py-2 text-center text-sm font-bold text-bg hover:opacity-90"
                   >

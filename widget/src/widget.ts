@@ -136,13 +136,13 @@ function widgetHtml(label: string): string {
 function init(): void {
   if (!siteKey || !apiBase) {
     console.error(
-      '[Arthale Voice widget] missing data-site-key or data-api-base on the <script> tag — widget not started.',
+      '[Vistrow Voice widget] missing data-site-key or data-api-base on the <script> tag — widget not started.',
     )
     return
   }
 
   const host = document.createElement('div')
-  host.id = 'arthale-voice-widget-host'
+  host.id = 'vistrow-voice-widget-host'
   document.body.appendChild(host)
   const shadow = host.attachShadow({ mode: 'open' })
   shadow.innerHTML = `<style>${CSS}</style>${widgetHtml(label)}`
@@ -299,7 +299,7 @@ function init(): void {
         void audioCtx.close()
       }
     } catch (err) {
-      console.warn('[Arthale Voice widget] volume reactivity unavailable:', err)
+      console.warn('[Vistrow Voice widget] volume reactivity unavailable:', err)
       return () => {}
     }
   }
@@ -313,7 +313,7 @@ function init(): void {
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch (err) {
-      console.error('[Arthale Voice widget] microphone permission error:', err)
+      console.error('[Vistrow Voice widget] microphone permission error:', err)
       failCall('Microphone access was blocked — allow it in your browser and try again.')
       return
     }
@@ -331,7 +331,7 @@ function init(): void {
       }
       ;({ token, url } = (await res.json()) as { token: string; url: string })
     } catch (err) {
-      console.error('[Arthale Voice widget] token request failed:', err)
+      console.error('[Vistrow Voice widget] token request failed:', err)
       failCall('Could not reach the call server — please try again shortly.')
       return
     }
@@ -349,7 +349,7 @@ function init(): void {
         if (intentionalEnd) {
           resetToIdle()
         } else {
-          console.warn('[Arthale Voice widget] room disconnected unexpectedly')
+          console.warn('[Vistrow Voice widget] room disconnected unexpectedly')
           failCall('The call ended unexpectedly — please try again.')
         }
       })
@@ -359,7 +359,7 @@ function init(): void {
       setStatus('Waiting for the agent to join…')
       startCountdown()
     } catch (err) {
-      console.error('[Arthale Voice widget] LiveKit connect failed:', err)
+      console.error('[Vistrow Voice widget] LiveKit connect failed:', err)
       failCall('Could not connect the call — please try again.')
     }
   }
