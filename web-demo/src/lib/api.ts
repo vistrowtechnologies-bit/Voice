@@ -103,6 +103,18 @@ export const deleteKnowledgeBase = (id: number) => send('DELETE', `/knowledge-ba
 export const addKnowledgeSource = (kbId: number, name: string, content: string, type = 'text') =>
   send('POST', `/knowledge-bases/${kbId}/sources`, { name, content, type })
 export const deleteKnowledgeSource = (id: number) => send('DELETE', `/knowledge-sources/${id}`)
+export const scanKnowledgeSourceUrl = (kbId: number, url: string) =>
+  send<{ baseUrl: string; pages: { url: string; title: string }[] }>(
+    'POST',
+    `/knowledge-bases/${kbId}/sources/scan-url`,
+    { url },
+  )
+export const importKnowledgeSourceUrls = (kbId: number, urls: string[]) =>
+  send<{ added: number; failed: { url: string; error: string }[] }>(
+    'POST',
+    `/knowledge-bases/${kbId}/sources/import-urls`,
+    { urls },
+  )
 export const setKnowledgeBaseStrict = (id: number, strict: boolean) =>
   send('PATCH', `/knowledge-bases/${id}`, { strict })
 export const addKbQa = (kbId: number, question: string, answer: string) =>

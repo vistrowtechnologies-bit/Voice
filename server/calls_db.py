@@ -1223,6 +1223,17 @@ def set_kb_strict(kb_id: int, strict: bool, account_id: int) -> None:
         conn.close()
 
 
+def kb_exists(kb_id: int, account_id: int) -> bool:
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM knowledge_bases WHERE id = ? AND account_id = ?", (kb_id, account_id)
+        ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
 def add_knowledge_source(kb_id: int, name: str, content: str, account_id: int, source_type: str = "text") -> None:
     conn = _connect()
     try:

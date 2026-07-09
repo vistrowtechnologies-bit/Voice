@@ -5,6 +5,7 @@ from pathlib import Path
 
 import auth
 import calls_db
+import kb_crawl
 import kb_extract
 import livekit_sip
 from dotenv import load_dotenv
@@ -413,6 +414,56 @@ def add_knowledge_source(kb_id: int, data: dict = Body(...), user: dict = Depend
 def delete_knowledge_source(source_id: int, user: dict = Depends(current_user)) -> dict:
     calls_db.delete_knowledge_source(source_id, user["account_id"])
     return {"ok": True}
+
+
+# Hard cap on how many pages one import-urls call fetches — each fetch is a
+# synchronous ~1-10s network call on the request thread, so an unbounded list
+# could tie up a worker for minutes and blow past any upstream proxy timeout.
+MAX_IMPORT_URLS = 20
+
+
+class ScanUrlRequest(BaseModel):
+    url: str
+
+
+class ImportUrlsRequest(BaseModel):
+    urls: list[str]
+
+
+@app.post("/knowledge-bases/{kb_id}/sources/scan-url")
+def scan_kb_url(kb_id: int, req: ScanUrlRequest, user: dict = Depends(current_user)) -> dict:
+    """Fetch one page and return the same-domain links found on it, so the
+    operator can bulk-select which pages to import as sources."""
+    if not calls_db.kb_exists(kb_id, user["account_id"]):
+        raise HTTPException(404, "Knowledge base not found")
+    try:
+        return kb_crawl.scan(req.url)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
+@app.post("/knowledge-bases/{kb_id}/sources/import-urls")
+def import_kb_urls(kb_id: int, req: ImportUrlsRequest, user: dict = Depends(current_user)) -> dict:
+    """Fetch each selected URL's visible text and save it as a source."""
+    if not calls_db.kb_exists(kb_id, user["account_id"]):
+        raise HTTPException(404, "Knowledge base not found")
+    urls = req.urls[:MAX_IMPORT_URLS]
+    added = 0
+    failed = []
+    for url in urls:
+        try:
+            title, text = kb_crawl.fetch_page_text(url)
+        except (ValueError, RuntimeError) as exc:
+            failed.append({"url": url, "error": str(exc)})
+            continue
+        if not text.strip():
+            failed.append({"url": url, "error": "No readable text found on that page"})
+            continue
+        calls_db.add_knowledge_source(kb_id, title, text, user["account_id"], "url")
+        added += 1
+    return {"added": added, "failed": failed}
 
 
 @app.patch("/knowledge-bases/{kb_id}")

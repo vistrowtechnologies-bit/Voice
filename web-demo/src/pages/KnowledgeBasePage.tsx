@@ -11,6 +11,8 @@ import {
   deleteKnowledgeSource,
   extractQaFromSource,
   fetchKnowledgeBases,
+  importKnowledgeSourceUrls,
+  scanKnowledgeSourceUrl,
   setKnowledgeBaseStrict,
   updateKbQa,
 } from '../lib/api'
@@ -79,11 +81,24 @@ export function KnowledgeBasePage() {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([])
   const [newName, setNewName] = useState('')
   const [addingTo, setAddingTo] = useState<number | null>(null)
+  const [sourceMode, setSourceMode] = useState<'text' | 'url'>('text')
   const [sourceName, setSourceName] = useState('')
   const [sourceText, setSourceText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Website URL scan-and-import: scan finds same-domain pages linked from
+  // one URL, the operator picks which to pull in, import fetches each one.
+  const [scanUrl, setScanUrl] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
+  const [scanResult, setScanResult] = useState<{ url: string; title: string }[] | null>(null)
+  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set())
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ added: number; failed: { url: string; error: string }[] } | null>(
+    null,
+  )
 
   // Auto-extract review state: drafts stay client-side until the operator
   // accepts them — a misread price must never reach a live agent unreviewed.
@@ -112,14 +127,65 @@ export function KnowledgeBasePage() {
     reload()
   }
 
-  const handleAddSource = async () => {
-    if (addingTo === null || !sourceText.trim()) return
-    await addKnowledgeSource(addingTo, sourceName.trim() || 'Untitled source', sourceText)
+  const closeAddSource = () => {
+    setAddingTo(null)
+    setSourceMode('text')
     setSourceName('')
     setSourceText('')
     setFileError(null)
-    setAddingTo(null)
+    setScanUrl('')
+    setScanError(null)
+    setScanResult(null)
+    setSelectedUrls(new Set())
+    setImportResult(null)
+  }
+
+  const handleAddSource = async () => {
+    if (addingTo === null || !sourceText.trim()) return
+    await addKnowledgeSource(addingTo, sourceName.trim() || 'Untitled source', sourceText)
     reload()
+    closeAddSource()
+  }
+
+  const handleScanUrl = async () => {
+    if (addingTo === null || !scanUrl.trim()) return
+    setScanError(null)
+    setScanResult(null)
+    setImportResult(null)
+    setScanning(true)
+    try {
+      const { pages } = await scanKnowledgeSourceUrl(addingTo, scanUrl.trim())
+      setScanResult(pages)
+      setSelectedUrls(new Set(pages.map((p) => p.url)))
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'Could not scan that URL.')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  const toggleSelectedUrl = (url: string) => {
+    setSelectedUrls((prev) => {
+      const next = new Set(prev)
+      if (next.has(url)) next.delete(url)
+      else next.add(url)
+      return next
+    })
+  }
+
+  const handleImportUrls = async () => {
+    if (addingTo === null || selectedUrls.size === 0) return
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const result = await importKnowledgeSourceUrls(addingTo, Array.from(selectedUrls))
+      setImportResult(result)
+      reload()
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'Import failed — try again.')
+    } finally {
+      setImporting(false)
+    }
   }
 
   const handleFile = async (file: File) => {
@@ -284,8 +350,16 @@ export function KnowledgeBasePage() {
                       key={s.id}
                       className="flex items-center gap-3 rounded-lg border border-border bg-surface-high/40 px-3 py-2.5"
                     >
-                      <Icon name="description" className="text-[17px] text-text-muted" />
+                      <Icon
+                        name={s.type === 'url' ? 'language' : 'description'}
+                        className="text-[17px] text-text-muted"
+                      />
                       <span className="min-w-0 flex-1 truncate text-sm">{s.name}</span>
+                      {s.type === 'url' && (
+                        <span className="hidden rounded-full border border-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-text-muted sm:block">
+                          URL
+                        </span>
+                      )}
                       <span className="hidden text-[11px] text-text-muted sm:block">
                         {(s.sizeChars / 1000).toFixed(1)}k chars
                       </span>
@@ -411,69 +485,183 @@ export function KnowledgeBasePage() {
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-dashed border-border py-2 text-xs font-bold text-text-muted transition-colors hover:border-cyan hover:text-cyan"
                     >
                       <Icon name="upload_file" className="text-[16px]" />
-                      Add source file
+                      Add source
                     </button>
                   </div>
                 )}
 
                 {/* Add-source form */}
                 {addingTo === kb.id && (
-                  <div className="flex flex-col gap-2 rounded-lg border border-cyan/40 p-3">
-                    <input
-                      value={sourceName}
-                      onChange={(e) => setSourceName(e.target.value)}
-                      placeholder="Source name (e.g. Price sheet — Tower A)"
-                      className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
-                    />
-                    <textarea
-                      value={sourceText}
-                      onChange={(e) => setSourceText(e.target.value)}
-                      placeholder="Paste the content here, or upload a file…"
-                      className="h-28 resize-none rounded-lg border border-border bg-surface-high p-2 text-xs outline-none focus:border-primary"
-                    />
-                    {fileError && (
-                      <p className="flex items-center gap-1.5 text-xs text-destructive">
-                        <Icon name="error" className="text-[15px]" />
-                        {fileError}
-                      </p>
-                    )}
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept=".txt,.md,.csv,.pdf,.docx"
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) handleFile(e.target.files[0])
-                        e.target.value = ''
-                      }}
-                    />
-                    <div className="flex gap-2">
+                  <div className="flex flex-col gap-3 rounded-lg border border-cyan/40 p-3">
+                    <div className="flex gap-1 rounded-lg bg-surface-high p-1">
                       <button
-                        onClick={() => fileRef.current?.click()}
-                        disabled={extracting}
-                        className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold transition-colors hover:border-primary disabled:opacity-40"
+                        onClick={() => setSourceMode('text')}
+                        className={`flex-1 rounded-md py-1.5 text-xs font-bold transition-colors ${
+                          sourceMode === 'text' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'
+                        }`}
                       >
-                        <Icon name={extracting ? 'progress_activity' : 'upload_file'} className="text-[15px]" />
-                        {extracting ? 'Reading file…' : 'Upload .txt / .pdf / .docx'}
-                      </button>
-                      <div className="flex-1" />
-                      <button
-                        onClick={() => {
-                          setAddingTo(null)
-                          setFileError(null)
-                        }}
-                        className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold transition-colors hover:border-primary"
-                      >
-                        Cancel
+                        Text / File
                       </button>
                       <button
-                        onClick={handleAddSource}
-                        disabled={!sourceText.trim()}
-                        className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-bg transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40"
+                        onClick={() => setSourceMode('url')}
+                        className={`flex-1 rounded-md py-1.5 text-xs font-bold transition-colors ${
+                          sourceMode === 'url' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'
+                        }`}
                       >
-                        Add source
+                        Website URL
                       </button>
                     </div>
+
+                    {sourceMode === 'text' ? (
+                      <>
+                        <input
+                          value={sourceName}
+                          onChange={(e) => setSourceName(e.target.value)}
+                          placeholder="Source name (e.g. Price sheet — Tower A)"
+                          className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
+                        />
+                        <textarea
+                          value={sourceText}
+                          onChange={(e) => setSourceText(e.target.value)}
+                          placeholder="Paste the content here, or upload a file…"
+                          className="h-28 resize-none rounded-lg border border-border bg-surface-high p-2 text-xs outline-none focus:border-primary"
+                        />
+                        {fileError && (
+                          <p className="flex items-center gap-1.5 text-xs text-destructive">
+                            <Icon name="error" className="text-[15px]" />
+                            {fileError}
+                          </p>
+                        )}
+                        <input
+                          ref={fileRef}
+                          type="file"
+                          accept=".txt,.md,.csv,.pdf,.docx"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files?.[0]) handleFile(e.target.files[0])
+                            e.target.value = ''
+                          }}
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => fileRef.current?.click()}
+                            disabled={extracting}
+                            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold transition-colors hover:border-primary disabled:opacity-40"
+                          >
+                            <Icon name={extracting ? 'progress_activity' : 'upload_file'} className="text-[15px]" />
+                            {extracting ? 'Reading file…' : 'Upload .txt / .pdf / .docx'}
+                          </button>
+                          <div className="flex-1" />
+                          <button
+                            onClick={closeAddSource}
+                            className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold transition-colors hover:border-primary"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleAddSource}
+                            disabled={!sourceText.trim()}
+                            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-bg transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40"
+                          >
+                            Add source
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex gap-2">
+                          <input
+                            value={scanUrl}
+                            onChange={(e) => setScanUrl(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleScanUrl()}
+                            placeholder="https://example.com"
+                            className="flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
+                          />
+                          <button
+                            onClick={handleScanUrl}
+                            disabled={scanning || !scanUrl.trim()}
+                            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-bold transition-colors hover:border-cyan disabled:opacity-40"
+                          >
+                            <Icon name={scanning ? 'progress_activity' : 'travel_explore'} className="text-[15px]" />
+                            {scanning ? 'Scanning…' : 'Scan'}
+                          </button>
+                        </div>
+                        {scanError && (
+                          <p className="flex items-center gap-1.5 text-xs text-destructive">
+                            <Icon name="error" className="text-[15px]" />
+                            {scanError}
+                          </p>
+                        )}
+                        {scanResult && (
+                          <>
+                            <div className="flex items-center justify-between text-[11px] text-text-muted">
+                              <span>
+                                {scanResult.length} page{scanResult.length === 1 ? '' : 's'} found ·{' '}
+                                {selectedUrls.size} selected
+                              </span>
+                              <div className="flex gap-3">
+                                <button
+                                  onClick={() => setSelectedUrls(new Set(scanResult.map((p) => p.url)))}
+                                  className="font-bold text-cyan hover:underline"
+                                >
+                                  Select all
+                                </button>
+                                <button onClick={() => setSelectedUrls(new Set())} className="font-bold hover:underline">
+                                  Clear
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-lg border border-border bg-surface-high/40 p-2">
+                              {scanResult.map((p) => (
+                                <label
+                                  key={p.url}
+                                  className="flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-surface-high"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedUrls.has(p.url)}
+                                    onChange={() => toggleSelectedUrl(p.url)}
+                                    className="mt-0.5 accent-primary"
+                                  />
+                                  <span className="min-w-0 flex-1 truncate text-text-muted">{p.url}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                        {importResult && (
+                          <p
+                            className={`flex items-center gap-1.5 text-xs ${
+                              importResult.failed.length > 0 ? 'text-amber' : 'text-success'
+                            }`}
+                          >
+                            <Icon name="check_circle" className="text-[15px]" />
+                            Imported {importResult.added} page{importResult.added === 1 ? '' : 's'}
+                            {importResult.failed.length > 0 && ` · ${importResult.failed.length} failed`}
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <div className="flex-1" />
+                          <button
+                            onClick={closeAddSource}
+                            className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold transition-colors hover:border-primary"
+                          >
+                            {importResult ? 'Done' : 'Cancel'}
+                          </button>
+                          {scanResult && (
+                            <button
+                              onClick={handleImportUrls}
+                              disabled={importing || selectedUrls.size === 0}
+                              className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-bg transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40"
+                            >
+                              {importing
+                                ? 'Importing…'
+                                : `Import ${selectedUrls.size} page${selectedUrls.size === 1 ? '' : 's'}`}
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
