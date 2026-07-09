@@ -4,8 +4,8 @@ import os
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from livekit.agents import Agent, AgentSession, JobContext, RoomInputOptions, TurnHandlingOptions, WorkerOptions, cli, llm
-from livekit.plugins import google, noise_cancellation, openai, sarvam
+from livekit.agents import Agent, AgentSession, JobContext, TurnHandlingOptions, WorkerOptions, cli, llm
+from livekit.plugins import google, openai, sarvam
 
 import db
 from language import LANGUAGE_NAMES, detect_reply_language
@@ -332,22 +332,7 @@ async def entrypoint(ctx: JobContext) -> None:
             logger.exception("failed to save call log for room %s", ctx.room.name)
 
     ctx.add_shutdown_callback(log_call)
-    # Background Voice Cancellation — LiveKit Cloud's Krisp-based model that
-    # specifically suppresses OTHER PEOPLE talking in the background (not
-    # just steady noise), which is what a crowded room actually produces:
-    # nearby conversations that would otherwise get transcribed as if the
-    # caller said them. BVCTelephony is tuned for narrowband phone audio;
-    # BVC for the wider-band browser/widget mic.
-    noise_cancellation_opts = (
-        noise_cancellation.BVCTelephony()
-        if call_context["call_type"] == "phone"
-        else noise_cancellation.BVC()
-    )
-    await session.start(
-        agent=agent,
-        room=ctx.room,
-        room_input_options=RoomInputOptions(noise_cancellation=noise_cancellation_opts),
-    )
+    await session.start(agent=agent, room=ctx.room)
 
 
 if __name__ == "__main__":
