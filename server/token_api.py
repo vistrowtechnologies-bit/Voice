@@ -3,13 +3,14 @@ import logging
 import os
 from pathlib import Path
 
+import auth
 import calls_db
 import kb_extract
 import livekit_sip
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from livekit import api
 from livekit.api import CreateRoomRequest, ListParticipantsRequest, ListRoomsRequest
 from pydantic import BaseModel
@@ -25,6 +26,48 @@ load_dotenv()
 
 app = FastAPI()
 calls_db.init_tables()
+
+# Cookie is Secure in production (HTTPS) and not in local http dev — set
+# AUTH_COOKIE_SECURE=1 on the deployment. In prod the browser hits the app's
+# own origin and Vercel rewrites /api to the backend, so the session cookie
+# is same-site either way (no cross-origin cookie needed).
+_COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "").lower() in ("1", "true", "yes")
+
+# Routes reachable without a session. Everything else (the dashboard/admin
+# API) requires a valid session cookie, enforced by the middleware below.
+_PUBLIC_PATHS = {
+    "/token",                          # LiveKit token for the public demo + browser test
+    "/widget.js",                      # embedded widget script
+    "/widget/token",                   # widget call token (runs on customers' sites)
+    "/widget/wordpress-plugin.zip",    # plugin download
+    "/agent-orb.mp4",                  # widget avatar video
+    "/telephony/enablex/inbound-event",  # EnableX inbound webhook (their server calls it)
+}
+_PUBLIC_PREFIXES = ("/auth/",)         # signup/login/logout/me handle their own logic
+
+
+@app.middleware("http")
+async def require_session(request: Request, call_next):
+    """Gate the dashboard API behind a valid session cookie. Public demo,
+    widget, webhook, and auth routes are allowlisted; CORS preflight passes."""
+    path = request.url.path
+    if request.method == "OPTIONS" or path in _PUBLIC_PATHS or path.startswith(_PUBLIC_PREFIXES):
+        return await call_next(request)
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if session is None:
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+    # Stash for downstream handlers/dependencies (Phase 3 scopes queries by it).
+    request.state.user_id = session["uid"]
+    request.state.account_id = session["aid"]
+    return await call_next(request)
+
+
+def current_user(request: Request) -> dict:
+    """FastAPI dependency: the logged-in user's {uid, aid}. The middleware has
+    already rejected unauthenticated requests, so state is always populated on
+    guarded routes."""
+    return {"user_id": request.state.user_id, "account_id": request.state.account_id}
+
 
 # Browser demo runs on a different origin during local dev; tighten this once
 # the web-demo is deployed behind a known domain.
@@ -68,6 +111,91 @@ async def create_token(req: TokenRequest) -> dict:
         .to_jwt()
     )
     return {"token": token, "url": livekit_url}
+
+
+# --------------------------------------------------------------------- auth
+
+
+class SignupRequest(BaseModel):
+    name: str
+    company: str
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+def _set_session_cookie(response: Response, user_id: int, account_id: int) -> None:
+    response.set_cookie(
+        auth.COOKIE_NAME,
+        auth.make_session_token(user_id, account_id),
+        max_age=auth.SESSION_TTL_SECONDS,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _me_payload(user_id: int) -> dict:
+    user = calls_db.get_user_by_id(user_id)
+    if user is None:
+        raise HTTPException(401, "Session user no longer exists")
+    return {
+        "id": user["id"],
+        "name": user["name"],
+        "email": user["email"],
+        "role": user["role"],
+        "accountId": user["account_id"],
+        "accountName": user["account_name"],
+        "plan": user["account_plan"],
+    }
+
+
+@app.post("/auth/signup")
+def auth_signup(req: SignupRequest, response: Response) -> dict:
+    email = req.email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(400, "Enter a valid email address")
+    if len(req.password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    if not req.name.strip() or not req.company.strip():
+        raise HTTPException(400, "Name and company are required")
+    if calls_db.email_exists(email):
+        raise HTTPException(409, "An account with this email already exists")
+    created = calls_db.create_account_with_owner(
+        req.company.strip(), req.name.strip(), email, auth.hash_password(req.password)
+    )
+    _set_session_cookie(response, created["user_id"], created["account_id"])
+    logger.info("new signup: account #%s (%s)", created["account_id"], email)
+    return {"ok": True, "user": _me_payload(created["user_id"])}
+
+
+@app.post("/auth/login")
+def auth_login(req: LoginRequest, response: Response) -> dict:
+    user = calls_db.get_user_by_email(req.email.strip().lower())
+    if user is None or not auth.verify_password(req.password, user["password_hash"]):
+        # Same message either way — don't reveal which emails are registered.
+        raise HTTPException(401, "Incorrect email or password")
+    _set_session_cookie(response, user["id"], user["account_id"])
+    return {"ok": True, "user": _me_payload(user["id"])}
+
+
+@app.post("/auth/logout")
+def auth_logout(response: Response) -> dict:
+    response.delete_cookie(auth.COOKIE_NAME, path="/")
+    return {"ok": True}
+
+
+@app.get("/auth/me")
+def auth_me(request: Request) -> dict:
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if session is None:
+        raise HTTPException(401, "Not authenticated")
+    return {"user": _me_payload(session["uid"])}
 
 
 @app.get("/active-calls")

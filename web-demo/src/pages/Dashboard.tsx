@@ -12,7 +12,7 @@ import {
   fetchUsageTrends,
   formatDuration,
 } from '../lib/api'
-import { BRAND } from '../lib/brand'
+import { useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
 import type { ActiveCallInfo, Analytics, DashboardSummary, UsageTrends } from '../lib/types'
 
@@ -57,6 +57,7 @@ export function Dashboard() {
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
   const [rangeDays, setRangeDays] = useState(14)
 
+  const { user } = useAuth()
   // Re-render (and recompute chart colors) when the header toggles the theme.
   const theme = useTheme()
   const t = chartTokens()
@@ -113,7 +114,7 @@ export function Dashboard() {
         {tab === 'overview' && (
           <>
             <div>
-              <h2 className="text-xl font-bold">{greeting()}, {BRAND.defaultWorkspace}</h2>
+              <h2 className="text-xl font-bold">{greeting()}, {user?.accountName ?? 'there'}</h2>
               <p className="mt-1 text-sm text-text-muted">
                 Your agents handled <span className="font-semibold text-text">{summary?.totalCalls ?? 0} calls</span>{' '}
                 with <span className="font-semibold text-cyan">{successPct}% qualified</span>

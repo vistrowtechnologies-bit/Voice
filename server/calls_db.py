@@ -59,6 +59,23 @@ CREATE TABLE IF NOT EXISTS sites (
     created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    plan TEXT DEFAULT 'starter',
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT DEFAULT 'owner',
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS agents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -304,6 +321,89 @@ def init_tables() -> None:
             conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_rate_widget', '1')"
             )
+    finally:
+        conn.close()
+
+
+# --------------------------------------------------------- accounts & users
+#
+# An account is a tenant (one customer company); a user is a person who logs
+# in and belongs to exactly one account. The FIRST signup creates account #1
+# and becomes owner of the existing (pre-multi-tenant) data once Phase 3
+# back-fills account_id — that's why nothing is auto-seeded here.
+
+
+def email_exists(email: str) -> bool:
+    conn = _connect()
+    try:
+        return conn.execute("SELECT 1 FROM users WHERE email = ?", (email.lower(),)).fetchone() is not None
+    finally:
+        conn.close()
+
+
+def create_account_with_owner(company_name: str, user_name: str, email: str, password_hash: str) -> dict:
+    """Creates the tenant + its first (owner) user in one transaction.
+    Returns {'account_id', 'user_id'}. Caller must have checked email_exists."""
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute("INSERT INTO accounts (name) VALUES (?)", (company_name,))
+            account_id = cur.lastrowid
+            cur = conn.execute(
+                "INSERT INTO users (account_id, email, name, password_hash, role) VALUES (?, ?, ?, ?, 'owner')",
+                (account_id, email.lower(), user_name, password_hash),
+            )
+            return {"account_id": account_id, "user_id": cur.lastrowid}
+    finally:
+        conn.close()
+
+
+def get_user_by_email(email: str) -> dict | None:
+    """Includes password_hash — for the login path only."""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM users WHERE email = ?", (email.lower(),)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    """The safe shape for /auth/me — joins the account and omits the hash."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT u.id, u.email, u.name, u.role, u.account_id,
+                   a.name AS account_name, a.plan AS account_plan
+            FROM users u JOIN accounts a ON a.id = u.account_id
+            WHERE u.id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def update_user_profile(user_id: int, name: str | None = None, password_hash: str | None = None) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            if name is not None:
+                conn.execute("UPDATE users SET name = ? WHERE id = ?", (name, user_id))
+            if password_hash is not None:
+                conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
+    finally:
+        conn.close()
+
+
+def update_account(account_id: int, name: str | None = None) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            if name is not None:
+                conn.execute("UPDATE accounts SET name = ? WHERE id = ?", (name, account_id))
     finally:
         conn.close()
 

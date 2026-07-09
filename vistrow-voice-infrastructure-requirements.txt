@@ -1,0 +1,205 @@
+========================================================================
+VISTROW VOICE — INFRASTRUCTURE REQUIREMENTS
+Target: ~1000 tenant accounts, 99% uptime, no server-down issues
+========================================================================
+
+
+------------------------------------------------------------------------
+0. THE REFRAME: 1000 ACCOUNTS IS *NOT* WHAT SIZES YOUR SERVERS
+------------------------------------------------------------------------
+
+The single most important thing to understand:
+
+  1000 tenant accounts sitting in a database is TRIVIAL load. It's a
+  few GB of data and mostly idle rows.
+
+  What actually consumes servers is CONCURRENT LIVE VOICE CALLS, because
+  each active call runs a streaming STT + LLM + TTS pipeline.
+
+So the real design number is:
+  "Of your 1000 tenants, how many are on a call at the SAME peak moment?"
+
+  SCENARIO                          PEAK CONCURRENT CALLS
+  --------------------------------  ---------------------
+  Conservative (SMBs, inbound)      ~50-100
+  Busy (some outbound campaigns)    ~150-250   <- plan headroom here
+  All 1000 calling at once          1000+  (won't happen; don't pay for it)
+
+Everything below is sized for a DESIGN TARGET OF ~150 CONCURRENT CALLS
+(comfortably covers 1000 typical tenants). It all scales LINEARLY by
+concurrent calls, not by account count.
+
+
+------------------------------------------------------------------------
+1. DATABASE — THE ONE THING THAT MUST CHANGE FIRST   [CRITICAL]
+------------------------------------------------------------------------
+
+Today: SQLite (a single file). This CANNOT back a sellable multi-tenant
+product at 99% uptime, for three hard reasons:
+  - Single-writer lock (concurrent call-logging + dashboards contend)
+  - No replication / no failover
+  - Single point of failure (one file, one machine)
+
+REQUIRED CHANGE:
+  - Move to MANAGED POSTGRES (Neon, Supabase, Railway Postgres, or AWS RDS)
+  - Automated backups + a standby replica for failover
+  - Size: 2-4 vCPU / 8-16 GB RAM, ~20-50 GB storage
+    (1000 tenants' data is small; the instance is sized for CONNECTIONS
+     and WRITE CONCURRENCY, not data volume)
+  - Add PgBouncer connection pooling (many app + worker processes ->
+    one managed pool)
+
+IMPACT ON BUILD PLAN: the auth/tenancy phases should target Postgres
+FROM THE START, not SQLite. Cleaner to do now than to migrate later.
+
+
+------------------------------------------------------------------------
+2. BACKEND API (FastAPI) — CHEAP, EASY TO SCALE
+------------------------------------------------------------------------
+
+Stateless -> scales horizontally. Dashboard traffic is LOW QPS
+(humans clicking, not machines).
+
+REQUIRED:
+  - Run >= 2 instances behind a load balancer
+    (2 is for AVAILABILITY, not load - never run just one)
+  - Each: 1-2 vCPU / 2 GB RAM
+  - Autoscale on CPU
+
+
+------------------------------------------------------------------------
+3. AGENT WORKERS — WHERE THE COMPUTE MONEY ACTUALLY GOES   [MAIN COST]
+------------------------------------------------------------------------
+
+Each concurrent call ~= one agent job. Because STT/LLM/TTS are offloaded
+to cloud APIs (no local GPU), the worker is mostly I/O orchestration +
+audio piping -> relatively light.
+
+SIZING RULE OF THUMB:
+  - ~10 concurrent calls per vCPU (conservative)
+  - ~200 MB RAM per concurrent call (conservative)
+
+  => Per 100 concurrent calls  ~= 8-12 vCPU + ~20 GB RAM
+  => For 150 concurrent calls  ~= ~16 vCPU + ~32 GB RAM
+
+REQUIRED:
+  - Run as a FLEET of >= 3-4 worker instances (e.g. 4 x 4 vCPU / 8 GB)
+    so any one can die without dropping capacity
+  - Autoscale the instance count with LiveKit's job load
+
+
+------------------------------------------------------------------------
+4. LIVEKIT — USE LIVEKIT CLOUD, DO NOT SELF-HOST THE SFU
+------------------------------------------------------------------------
+
+Running your own SFU cluster at 99% is a full-time infra job.
+LiveKit Cloud handles room scaling, SIP, and its own uptime SLA.
+
+REQUIRED:
+  - LiveKit Cloud plan sized to ~150 concurrent calls
+    = ~300 participants (agent + caller each) + SIP channels
+
+
+------------------------------------------------------------------------
+5. REDIS — SMALL, ADD IT NOW
+------------------------------------------------------------------------
+
+For: sessions, rate-limiting, and the outbound-campaign queue (so
+campaigns don't hammer the API inline).
+
+REQUIRED:
+  - 1 small managed instance (0.5-1 GB)
+
+
+------------------------------------------------------------------------
+6. THE HIDDEN CEILING: EXTERNAL API QUOTAS   [REAL "SERVER DOWN" RISK]
+------------------------------------------------------------------------
+
+This is what actually causes outages - NOT your CPU. At 150 concurrent
+calls you WILL hit provider rate limits unless you raise them IN ADVANCE.
+
+  OpenAI (gpt-4.1):
+    - Has tokens-per-minute (TPM) limits
+    - 150 concurrent streaming calls can push 200k-400k+ TPM
+    - Need TIER 3-4, and ideally a fallback model
+    - Throttles SILENTLY if not raised
+
+  Sarvam (STT + TTS):
+    - Confirm your plan allows 150+ CONCURRENT streams (STT and TTS)
+    - This is a concurrency license, not just per-minute cost
+
+  EnableX (telephony):
+    - Phone concurrency is LICENSED PER CHANNEL/PORT
+    - Peak simultaneous phone calls = channels you must buy
+    - NOTE: still blocked on the SIP whitelist for outbound
+
+IMPORTANT: Your real uptime is BOUNDED by these dependencies multiplied
+together:
+    effective uptime <= LiveKit x OpenAI x Sarvam x EnableX x your infra
+Build retries / fallbacks wherever possible.
+
+
+------------------------------------------------------------------------
+7. THE 3 SINGLE POINTS OF FAILURE TO KILL FOR 99%
+------------------------------------------------------------------------
+
+99% uptime = 7.2 HOURS of allowed downtime per month (lenient;
+99.9% would be 43 minutes). Very reachable IF you remove these three
+SPOFs - which is exactly what today's setup still has:
+
+  [X] SQLite file            -> [OK] managed Postgres with failover
+  [X] single backend instance -> [OK] >= 2 behind a load balancer
+  [X] single agent worker     -> [OK] >= 3-instance fleet
+
+PLUS:
+  - Health checks + auto-restart
+  - Rolling (zero-downtime) deploys
+  - Uptime monitor with alerting (so you KNOW within minutes)
+  - On-call coverage for the 7.2h/month budget
+
+
+------------------------------------------------------------------------
+8. COST SHAPE (FOR BUDGETING)
+------------------------------------------------------------------------
+
+Two very different buckets:
+
+  FIXED INFRA (compute + Postgres + Redis + LiveKit base):
+    ~ $300-700 / month at this scale. Modest.
+
+  VARIABLE PER-MINUTE (Sarvam + OpenAI + LiveKit minutes + EnableX):
+    DWARFS the fixed cost and scales with actual call minutes -
+    but it's already baked into your credit pricing, so it's
+    revenue-linked, not overhead.
+
+
+------------------------------------------------------------------------
+9. MINIMUM VIABLE PRODUCTION SETUP (RECOMMENDED)
+------------------------------------------------------------------------
+
+To go live safely for up to ~1000 tenants / ~150 peak concurrent calls
+at 99% uptime:
+
+  Postgres      : managed, 2-4 vCPU / 8-16 GB, backups + replica
+  Backend       : 2 x (1-2 vCPU / 2 GB), load-balanced, autoscaling
+  Agent fleet   : 3-4 x (4 vCPU / 8 GB), autoscaling on job load
+  Redis         : 1 x small managed
+  LiveKit Cloud : tier for ~300 concurrent participants + SIP
+  Provider limits raised:
+                  - OpenAI Tier 3+
+                  - Sarvam 150+ concurrency
+                  - EnableX channels provisioned
+  Ops           : uptime monitor + alerting, rolling deploys, on-call
+
+
+------------------------------------------------------------------------
+10. ONE-LINE SUMMARY
+------------------------------------------------------------------------
+
+Size for CONCURRENT CALLS, not account count. Kill the 3 SPOFs
+(SQLite, single API instance, single worker), move to managed Postgres,
+run everything with >= 2 instances, use LiveKit Cloud, and raise your
+OpenAI / Sarvam / EnableX limits BEFORE launch - then 99% is very
+reachable and fixed infra stays around $300-700/month.
+
+========================================================================

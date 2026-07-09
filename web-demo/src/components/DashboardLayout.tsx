@@ -2,9 +2,15 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { fetchBilling } from '../lib/api'
+import { useNavigate } from 'react-router-dom'
 import { BRAND } from '../lib/brand'
+import { useAuth } from '../lib/auth'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { Icon } from './Icon'
+
+function initials(name: string): string {
+  return (name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('') || '?').toUpperCase()
+}
 
 function ThemeSwitcher() {
   const theme = useTheme()
@@ -56,6 +62,13 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
 ]
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const workspace = user?.accountName || BRAND.defaultWorkspace
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login', { replace: true })
+  }
   return (
     <>
       <div className="mb-6 flex items-center gap-2 px-2">
@@ -97,13 +110,21 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
       <div className="flex items-center gap-2 border-t border-border pt-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
-          AH
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
+          {initials(workspace)}
         </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{BRAND.defaultWorkspace}</p>
-          <p className="text-[11px] text-text-muted">Admin</p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">{workspace}</p>
+          <p className="truncate text-[11px] text-text-muted">{user?.name || 'Admin'}</p>
         </div>
+        <button
+          onClick={handleLogout}
+          aria-label="Sign out"
+          title="Sign out"
+          className="text-text-muted transition-colors hover:text-destructive"
+        >
+          <Icon name="logout" className="text-[18px]" />
+        </button>
       </div>
     </>
   )
