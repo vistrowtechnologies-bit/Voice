@@ -133,6 +133,10 @@ class RealEstateAgent(Agent):
         else:
             self._pending_language = candidate
             self._pending_language_streak = 1
+        logger.info(
+            "language candidate %s (streak %s/%s) from turn: %r",
+            candidate, self._pending_language_streak, LANGUAGE_SWITCH_CONFIRMATION_TURNS, text,
+        )
 
         if self._pending_language_streak >= LANGUAGE_SWITCH_CONFIRMATION_TURNS:
             self._reply_language = candidate
