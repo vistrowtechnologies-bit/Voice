@@ -24,6 +24,12 @@
       "runtimeExecutable": "agent/.venv/bin/python",
       "runtimeArgs": ["agent/main.py", "dev"],
       "port": 8081
+    },
+    {
+      "name": "widget-test",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8935", "--directory", "widget"],
+      "port": 8935
     }
   ]
 }

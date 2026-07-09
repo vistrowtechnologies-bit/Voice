@@ -1,5 +1,5 @@
 import { Room, RoomEvent, Track } from 'livekit-client'
-import type { RemoteTrack } from 'livekit-client'
+import type { RemoteParticipant, RemoteTrack } from 'livekit-client'
 
 // Must run synchronously at the top of the script — document.currentScript
 // only reflects the executing <script> tag during that tag's own
@@ -48,11 +48,23 @@ const CSS = `
   70% { box-shadow: 0 0 0 16px rgba(168,85,247,0); }
   100% { box-shadow: 0 0 0 0 rgba(168,85,247,0); }
 }
-.av-button { width: 68px; height: 68px; border-radius: 9999px; background: #000; border: none; padding: 0; overflow: hidden; cursor: pointer; animation: av-pulse-ring 2.6s ease-out infinite; transition: transform .15s ease; }
+/* A one-off, larger attention "pop" on first paint — draws the eye once
+   without being an annoying infinite bounce. The pulse ring keeps a subtle
+   ongoing presence after it settles. */
+@keyframes av-attention-pop {
+  0% { transform: scale(1); }
+  20% { transform: scale(1.18); }
+  40% { transform: scale(0.94); }
+  60% { transform: scale(1.08); }
+  80% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+.av-button { width: 68px; height: 68px; border-radius: 9999px; background: #000; border: none; padding: 0; overflow: hidden; cursor: pointer; animation: av-pulse-ring 2.6s ease-out infinite, av-attention-pop 1.1s ease-in-out 1; transition: transform .15s ease; }
 .av-button:hover { transform: scale(1.06); }
 .av-button video { width: 100%; height: 100%; object-fit: cover; }
 
-.av-greeting { position: absolute; bottom: 8px; ${position === 'bottom-left' ? 'left: 78px;' : 'right: 78px;'} display: flex; align-items: center; gap: 8px; max-width: 220px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; }
+.av-greeting { position: absolute; bottom: 8px; ${position === 'bottom-left' ? 'left: 78px;' : 'right: 78px;'} display: flex; align-items: center; gap: 8px; width: max-content; max-width: 220px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
+.av-greeting span { flex: 1 1 auto; min-width: 0; }
 .av-greeting button { background: none; border: none; color: #7d7594; cursor: pointer; padding: 2px; display: flex; flex-shrink: 0; }
 @keyframes av-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -197,6 +209,19 @@ function init(): void {
 
   function setStatus(text: string): void {
     statusEl.textContent = text
+  }
+
+  // Same lk.agent.state values/labels the dashboard's browser-test-call UI
+  // uses (web-demo/src/components/ActiveCallUI.tsx) — the agent worker
+  // stamps this participant attribute as it moves through the turn.
+  const STATE_LABELS: Record<string, string> = {
+    listening: 'Listening…',
+    thinking: 'Thinking…',
+    speaking: 'Agent is speaking…',
+  }
+
+  function applyAgentState(state: string | undefined): void {
+    if (state && STATE_LABELS[state]) setStatus(STATE_LABELS[state])
   }
 
   function formatCountdown(totalSeconds: number): string {
@@ -344,7 +369,13 @@ function init(): void {
           stopVolumeReactivity = attachVolumeReactivity(track)
         }
       })
-      room.on(RoomEvent.ParticipantConnected, () => setStatus('Agent joined — say hello!'))
+      room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
+        setStatus('Agent joined — say hello!')
+        applyAgentState(participant.attributes?.['lk.agent.state'])
+      })
+      room.on(RoomEvent.ParticipantAttributesChanged, (changed: Record<string, string>) => {
+        if ('lk.agent.state' in changed) applyAgentState(changed['lk.agent.state'])
+      })
       room.on(RoomEvent.Disconnected, () => {
         if (intentionalEnd) {
           resetToIdle()

@@ -1,16 +1,18 @@
+import asyncio
 import json
 import logging
 import os
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
+from livekit import api
 from livekit.agents import Agent, AgentSession, JobContext, TurnHandlingOptions, WorkerOptions, cli, llm
 from livekit.plugins import google, openai, sarvam
 
 import db
 from language import LANGUAGE_NAMES, detect_reply_language
 from prompts.real_estate_qualification import build_sales_rep_prompt
-from tools import book_site_visit, check_availability, log_lead
+from tools import book_site_visit, check_availability, end_call, log_lead
 
 load_dotenv()
 db.init_db()
@@ -134,7 +136,24 @@ class RealEstateAgent(Agent):
             "wait until every field is known. If the caller wants to see a property "
             "in person, use check_availability to find open slots, then book_site_visit "
             "to confirm one. These tool calls are silent to the caller — never mention "
-            "or narrate that you're saving, logging, or recording anything."
+            "or narrate that you're saving, logging, or recording anything.\n\n"
+            "Call the end_call tool once the caller clearly signals the conversation is "
+            "over — they thank you with nothing further to ask, say goodbye, or otherwise "
+            "indicate they're done. Don't call it for a mere pause or a one-word \"okay\" "
+            "— only on a clear end-of-call signal.\n\n"
+            "# Speak numbers and units naturally (do this regardless of the persona/rules above)\n"
+            "Everything you write is converted directly to speech by a TTS engine that reads bare "
+            "digits and abbreviations LITERALLY, one character at a time — it cannot expand them "
+            "the way a human would. So:\n"
+            "- Write every number out in words appropriate to the reply language (e.g. \"eighteen "
+            "seventeen\", not \"1817\"), including in ranges — never leave a range like \"1817-3000\" "
+            "as bare digits with a hyphen; say it naturally, e.g. \"eighteen seventeen to three "
+            "thousand\".\n"
+            "- Expand every abbreviation and unit into full words: \"sq.ft\" → \"square feet\", "
+            "\"km\" → \"kilometers\", \"%\" → \"percent\". Never let an abbreviation reach TTS as "
+            "literal text.\n"
+            "- This only changes HOW a number/unit is written for speech, never the underlying value "
+            "— the figure itself must stay exactly what the knowledge base or caller said."
         )
         reply_language = config.get("language") or "hi-IN"
         language_name = LANGUAGE_NAMES.get(reply_language, "Hindi")
@@ -165,7 +184,7 @@ class RealEstateAgent(Agent):
                 speaker=config.get("voice") or "pooja",
                 **TONE_PRESETS.get(config.get("tone") or DEFAULT_TONE, TONE_PRESETS[DEFAULT_TONE]),
             ),
-            tools=[check_availability, book_site_visit, log_lead],
+            tools=[check_availability, book_site_visit, log_lead, end_call],
         )
         self._reply_language = reply_language
         self._pending_language: str | None = None
@@ -253,6 +272,19 @@ def _call_context_from_job(ctx: JobContext) -> dict:
     }
 
 
+async def _hang_up(room_name: str) -> None:
+    """Ends the call for both sides once the agent's goodbye has finished
+    playing. room.disconnect() would only drop the agent's own participant,
+    leaving the caller alone in a now-agent-less room — deleting the room
+    via the LiveKit API actually disconnects everyone, which is what a
+    caller expects "the call ended" to mean."""
+    try:
+        async with api.LiveKitAPI() as lkapi:
+            await lkapi.room.delete_room(api.DeleteRoomRequest(room=room_name))
+    except Exception:
+        logger.warning("failed to end call gracefully for room %s", room_name, exc_info=True)
+
+
 async def entrypoint(ctx: JobContext) -> None:
     logger.info("starting session in room %s", ctx.room.name)
     call_context = _call_context_from_job(ctx)
@@ -273,13 +305,42 @@ async def entrypoint(ctx: JobContext) -> None:
     if call_context["visitor_phone"]:
         lead_data["phone"] = call_context["visitor_phone"]
     agent = RealEstateAgent(config, call_context["visitor_name"], call_context["visitor_phone"])
+    userdata = {"room": ctx.room, "lead_data": lead_data, "ending_call": False}
     session = AgentSession(
-        userdata={"room": ctx.room, "lead_data": lead_data},
+        userdata=userdata,
         # A single stray word (noise, STT hallucination, or TTS bleeding
         # back into the mic) shouldn't be enough to interrupt the agent
         # mid-sentence — require a couple of real words first.
         turn_handling=TurnHandlingOptions(interruption={"min_words": 2}),
+        # Silence check-in: if the caller goes quiet for this long, the
+        # session marks user_state "away" (see _on_user_state_changed
+        # below) rather than just sitting mute — a caller who lost audio,
+        # got distracted, or whose connection stalled would otherwise never
+        # know the agent is still there.
+        user_away_timeout=6.5,
     )
+
+    def _on_user_state_changed(ev) -> None:
+        if ev.new_state == "away":
+            session.generate_reply(
+                instructions=(
+                    "The caller has gone quiet for a few seconds. Check in warmly and briefly — "
+                    "one short question like asking if they're still there — and nothing else."
+                )
+            )
+
+    def _on_agent_state_changed(ev) -> None:
+        # end_call (tools.py) sets userdata["ending_call"] and returns
+        # instructions for a goodbye line; this waits for that goodbye to
+        # actually finish playing (agent state drops out of "speaking")
+        # before tearing the room down, so the farewell is never cut off
+        # mid-sentence.
+        if userdata.get("ending_call") and ev.old_state == "speaking" and ev.new_state != "speaking":
+            userdata["ending_call"] = False
+            asyncio.create_task(_hang_up(ctx.room.name))
+
+    session.on("user_state_changed", _on_user_state_changed)
+    session.on("agent_state_changed", _on_agent_state_changed)
 
     # Captured via event, not a point-in-time read — by the time the job
     # drains and the shutdown callback runs, the visitor has already left the

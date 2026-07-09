@@ -137,3 +137,20 @@ async def log_lead(
     await _publish_event(context, event)
     await _post_webhook(event)
     return "Lead details recorded."
+
+
+@function_tool
+async def end_call(context: RunContext) -> str:
+    """Call this once the caller has clearly indicated the conversation is
+    over — they thank you with nothing further to ask, say goodbye, or
+    otherwise signal they're done. Do NOT call this for a mere pause, a
+    one-word "okay", or mid-conversation small talk — only on a clear
+    end-of-call signal. main.py watches for the agent's speech to finish
+    after this tool returns, then actually ends the call for both sides.
+    """
+    if context.userdata is not None:
+        context.userdata["ending_call"] = True
+    return (
+        "The caller is done. Give one short, warm goodbye line right now (thank them, wish them well) "
+        "and then stop — do not ask any further questions or add anything after the goodbye."
+    )
