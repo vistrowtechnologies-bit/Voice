@@ -69,8 +69,8 @@ async def ensure_inbound_trunk() -> str | None:
     numbers from any source IP. For production, also set allowed_addresses to
     EnableX's SIP egress IPs (or auth credentials) to lock down the source.
     """
-    numbers = [n["number"] for n in calls_db.list_phone_numbers()]
-    trunk_id = calls_db.get_setting(TRUNK_ID_SETTING)
+    numbers = [n["number"] for n in calls_db.list_all_phone_numbers()]
+    trunk_id = calls_db.get_setting(TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
 
     async with api.LiveKitAPI() as lkapi:
         if not numbers:
@@ -79,7 +79,7 @@ async def ensure_inbound_trunk() -> str | None:
                     await lkapi.sip.delete_trunk(DeleteSIPTrunkRequest(sip_trunk_id=trunk_id))
                 except Exception:
                     pass
-                calls_db.set_setting(TRUNK_ID_SETTING, "")
+                calls_db.set_setting(TRUNK_ID_SETTING, "", calls_db.PLATFORM_ACCOUNT_ID)
             return None
 
         if trunk_id:
@@ -94,7 +94,7 @@ async def ensure_inbound_trunk() -> str | None:
                     trunk=SIPInboundTrunkInfo(name=TRUNK_NAME, numbers=numbers)
                 )
             )
-            calls_db.set_setting(TRUNK_ID_SETTING, trunk.sip_trunk_id)
+            calls_db.set_setting(TRUNK_ID_SETTING, trunk.sip_trunk_id, calls_db.PLATFORM_ACCOUNT_ID)
             return trunk.sip_trunk_id
         except TwirpError as exc:
             if exc.code != "invalid_argument" or "Conflicting" not in exc.message:
@@ -114,7 +114,7 @@ async def ensure_inbound_trunk() -> str | None:
             await lkapi.sip.update_inbound_trunk(
                 trunk_id, SIPInboundTrunkInfo(name=TRUNK_NAME, numbers=numbers)
             )
-            calls_db.set_setting(TRUNK_ID_SETTING, trunk_id)
+            calls_db.set_setting(TRUNK_ID_SETTING, trunk_id, calls_db.PLATFORM_ACCOUNT_ID)
             return trunk_id
 
 

@@ -34,15 +34,16 @@ CREATE TABLE IF NOT EXISTS calls (
     transcript_json TEXT NOT NULL,
     call_type TEXT DEFAULT 'browser',
     site_id INTEGER,
-    agent_id INTEGER
+    agent_id INTEGER,
+    account_id INTEGER
 );
 """
 
 
 def _migrate_calls_columns(conn: sqlite3.Connection) -> None:
-    """Add call_type/site_id to a calls table that predates the
-    website-widget feature — CREATE TABLE IF NOT EXISTS above is a no-op on a
-    table that already exists. Mirrors server/calls_db.py's copy of this."""
+    """Add call_type/site_id/account_id to a calls table that predates those
+    features — CREATE TABLE IF NOT EXISTS above is a no-op on a table that
+    already exists. Mirrors server/calls_db.py's copy of this."""
     existing = {row[1] for row in conn.execute("PRAGMA table_info(calls)").fetchall()}
     if "call_type" not in existing:
         conn.execute("ALTER TABLE calls ADD COLUMN call_type TEXT DEFAULT 'browser'")
@@ -50,6 +51,8 @@ def _migrate_calls_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE calls ADD COLUMN site_id INTEGER")
     if "agent_id" not in existing:
         conn.execute("ALTER TABLE calls ADD COLUMN agent_id INTEGER")
+    if "account_id" not in existing:
+        conn.execute("ALTER TABLE calls ADD COLUMN account_id INTEGER")
 
 
 def init_db() -> None:
@@ -159,8 +162,9 @@ def save_call(record: dict) -> None:
 
     room_name, visitor_identity, started_at, ended_at, duration_seconds,
     reply_language, transcript (list of {role, text}), call_type
-    ('phone'/'widget'/'browser'), site_id (for 'widget' calls), and
-    optionally name/phone/budget/location/timeline/site_visit (dict with
+    ('phone'/'widget'/'browser'), site_id (for 'widget' calls), agent_id,
+    account_id (which tenant this call belongs to), and optionally
+    name/phone/budget/location/timeline/site_visit (dict with
     property_id/date/time) — matching the keys tools.py's log_lead and
     book_site_visit write into the shared lead_data dict.
     """
@@ -173,8 +177,8 @@ def save_call(record: dict) -> None:
                     room_name, visitor_identity, started_at, ended_at,
                     duration_seconds, reply_language, lead_name, lead_phone,
                     lead_budget, lead_location, lead_timeline, site_visit_json,
-                    transcript_json, call_type, site_id, agent_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    transcript_json, call_type, site_id, agent_id, account_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record["room_name"],
@@ -193,6 +197,7 @@ def save_call(record: dict) -> None:
                     record.get("call_type") or "browser",
                     record.get("site_id"),
                     record.get("agent_id"),
+                    record.get("account_id"),
                 ),
             )
     finally:

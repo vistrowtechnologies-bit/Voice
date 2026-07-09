@@ -199,12 +199,18 @@ def auth_me(request: Request) -> dict:
 
 
 @app.get("/active-calls")
-async def list_active_calls() -> list[dict]:
-    """List rooms currently live on the LiveKit server, one entry per visitor.
+async def list_active_calls(user: dict = Depends(current_user)) -> list[dict]:
+    """List rooms currently live on the LiveKit server, one entry per visitor,
+    scoped to the caller's tenant.
 
     Reflects real in-progress sessions (not mock data) by asking the LiveKit
     server directly, then pulling the agent's `lk.agent.state` attribute to
-    report whether it's listening, thinking, or speaking.
+    report whether it's listening, thinking, or speaking. LiveKit has no
+    concept of tenants, so each room's metadata (stamped at creation with
+    {"agent_id": ...}) is used to look up which account's agent is handling
+    it — rooms whose agent doesn't belong to the caller's account are
+    dropped, and rooms with no agent_id (predate per-tenant metadata) are
+    dropped too rather than risk showing another tenant's live call.
     """
     lkapi = api.LiveKitAPI()
     try:
@@ -213,6 +219,12 @@ async def list_active_calls() -> list[dict]:
         for room in rooms.rooms:
             if room.num_participants < 2:
                 continue  # only the agent has joined so far, no visitor yet
+            try:
+                agent_id = json.loads(room.metadata or "{}").get("agent_id")
+            except ValueError:
+                agent_id = None
+            if agent_id is None or calls_db.agent_account_id(agent_id) != user["account_id"]:
+                continue
             participants = await lkapi.room.list_participants(
                 ListParticipantsRequest(room=room.name)
             )
@@ -247,23 +259,25 @@ async def list_active_calls() -> list[dict]:
 
 
 @app.get("/calls")
-def list_calls(limit: int = 200, search: str = "", status: str = "", days: int = 0) -> list[dict]:
+def list_calls(
+    limit: int = 200, search: str = "", status: str = "", days: int = 0, user: dict = Depends(current_user)
+) -> list[dict]:
     """Real call history from agent/calls.db — one row per completed call."""
-    return calls_db.list_calls(limit=limit, search=search, status=status, days=days)
+    return calls_db.list_calls(user["account_id"], limit=limit, search=search, status=status, days=days)
 
 
 @app.get("/calls/export.csv", response_class=PlainTextResponse)
-def export_calls_csv() -> PlainTextResponse:
+def export_calls_csv(user: dict = Depends(current_user)) -> PlainTextResponse:
     return PlainTextResponse(
-        calls_db.calls_csv(),
+        calls_db.calls_csv(user["account_id"]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=calls.csv"},
     )
 
 
 @app.get("/calls/{call_id}")
-def get_call(call_id: int) -> dict:
-    call = calls_db.get_call(call_id)
+def get_call(call_id: int, user: dict = Depends(current_user)) -> dict:
+    call = calls_db.get_call(call_id, user["account_id"])
     if call is None:
         raise HTTPException(404, "Call not found")
     return call
@@ -272,57 +286,57 @@ def get_call(call_id: int) -> dict:
 # Leads are the same rows viewed CRM-style; kept as aliases so both mental
 # models (call log vs. lead list) work against one source of truth.
 @app.get("/leads")
-def list_leads(limit: int = 200) -> list[dict]:
-    return calls_db.list_calls(limit=limit)
+def list_leads(limit: int = 200, user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_calls(user["account_id"], limit=limit)
 
 
 @app.get("/leads/{lead_id}")
-def get_lead(lead_id: int) -> dict:
-    return get_call(lead_id)
+def get_lead(lead_id: int, user: dict = Depends(current_user)) -> dict:
+    return get_call(lead_id, user)
 
 
 # ---------------------------------------------------------- dashboard
 
 
 @app.get("/dashboard/summary")
-def dashboard_summary() -> dict:
-    return calls_db.summary()
+def dashboard_summary(user: dict = Depends(current_user)) -> dict:
+    return calls_db.summary(user["account_id"])
 
 
 @app.get("/dashboard/usage-trends")
-def dashboard_usage_trends(days: int = 14) -> dict:
-    return calls_db.usage_trends(days=days)
+def dashboard_usage_trends(days: int = 14, user: dict = Depends(current_user)) -> dict:
+    return calls_db.usage_trends(user["account_id"], days=days)
 
 
 @app.get("/dashboard/analytics")
-def dashboard_analytics() -> dict:
-    return calls_db.analytics()
+def dashboard_analytics(user: dict = Depends(current_user)) -> dict:
+    return calls_db.analytics(user["account_id"])
 
 
 # -------------------------------------------------------------- agents
 
 
 @app.get("/agents")
-def list_agents() -> list[dict]:
-    return calls_db.list_agents()
+def list_agents(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_agents(user["account_id"])
 
 
 @app.post("/agents")
-def create_agent(data: dict = Body(...)) -> dict:
-    return calls_db.create_agent(data)
+def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    return calls_db.create_agent(data, user["account_id"])
 
 
 @app.patch("/agents/{agent_id}")
-def update_agent(agent_id: int, data: dict = Body(...)) -> dict:
-    agent = calls_db.update_agent(agent_id, data)
+def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    agent = calls_db.update_agent(agent_id, data, user["account_id"])
     if agent is None:
         raise HTTPException(404, "Agent not found")
     return agent
 
 
 @app.delete("/agents/{agent_id}")
-def delete_agent(agent_id: int) -> dict:
-    calls_db.delete_agent(agent_id)
+def delete_agent(agent_id: int, user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_agent(agent_id, user["account_id"])
     return {"ok": True}
 
 
@@ -330,40 +344,40 @@ def delete_agent(agent_id: int) -> dict:
 
 
 @app.get("/contacts")
-def list_contacts() -> list[dict]:
-    return calls_db.list_contacts()
+def list_contacts(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_contacts(user["account_id"])
 
 
 @app.post("/contacts")
-def create_contact(data: dict = Body(...)) -> dict:
-    calls_db.create_contact(data)
+def create_contact(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    calls_db.create_contact(data, user["account_id"])
     return {"ok": True}
 
 
 @app.delete("/contacts/{contact_id}")
-def delete_contact(contact_id: int) -> dict:
-    calls_db.delete_contact(contact_id)
+def delete_contact(contact_id: int, user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_contact(contact_id, user["account_id"])
     return {"ok": True}
 
 
 @app.delete("/contacts")
-def delete_all_contacts() -> dict:
-    calls_db.delete_all_contacts()
+def delete_all_contacts(user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_all_contacts(user["account_id"])
     return {"ok": True}
 
 
 @app.get("/contacts/export.csv", response_class=PlainTextResponse)
-def export_contacts_csv() -> PlainTextResponse:
+def export_contacts_csv(user: dict = Depends(current_user)) -> PlainTextResponse:
     return PlainTextResponse(
-        calls_db.contacts_csv(),
+        calls_db.contacts_csv(user["account_id"]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=contacts.csv"},
     )
 
 
 @app.post("/contacts/import")
-def import_contacts(data: dict = Body(...)) -> dict:
-    count = calls_db.import_contacts_csv(data.get("csv", ""))
+def import_contacts(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    count = calls_db.import_contacts_csv(data.get("csv", ""), user["account_id"])
     return {"imported": count}
 
 
@@ -371,85 +385,87 @@ def import_contacts(data: dict = Body(...)) -> dict:
 
 
 @app.get("/knowledge-bases")
-def list_knowledge_bases() -> list[dict]:
-    return calls_db.list_knowledge_bases()
+def list_knowledge_bases(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_knowledge_bases(user["account_id"])
 
 
 @app.post("/knowledge-bases")
-def create_knowledge_base(data: dict = Body(...)) -> dict:
-    calls_db.create_knowledge_base(data.get("name", "Untitled"))
+def create_knowledge_base(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    calls_db.create_knowledge_base(data.get("name", "Untitled"), user["account_id"])
     return {"ok": True}
 
 
 @app.delete("/knowledge-bases/{kb_id}")
-def delete_knowledge_base(kb_id: int) -> dict:
-    calls_db.delete_knowledge_base(kb_id)
+def delete_knowledge_base(kb_id: int, user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_knowledge_base(kb_id, user["account_id"])
     return {"ok": True}
 
 
 @app.post("/knowledge-bases/{kb_id}/sources")
-def add_knowledge_source(kb_id: int, data: dict = Body(...)) -> dict:
+def add_knowledge_source(kb_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     calls_db.add_knowledge_source(
-        kb_id, data.get("name", "Untitled"), data.get("content", ""), data.get("type", "text")
+        kb_id, data.get("name", "Untitled"), data.get("content", ""), user["account_id"], data.get("type", "text")
     )
     return {"ok": True}
 
 
 @app.delete("/knowledge-sources/{source_id}")
-def delete_knowledge_source(source_id: int) -> dict:
-    calls_db.delete_knowledge_source(source_id)
+def delete_knowledge_source(source_id: int, user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_knowledge_source(source_id, user["account_id"])
     return {"ok": True}
 
 
 @app.patch("/knowledge-bases/{kb_id}")
-def update_knowledge_base(kb_id: int, data: dict = Body(...)) -> dict:
+def update_knowledge_base(kb_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     if "strict" in data:
-        calls_db.set_kb_strict(kb_id, bool(data["strict"]))
+        calls_db.set_kb_strict(kb_id, bool(data["strict"]), user["account_id"])
     return {"ok": True}
 
 
 @app.post("/knowledge-bases/{kb_id}/qa")
-def add_kb_qa(kb_id: int, data: dict = Body(...)) -> dict:
+def add_kb_qa(kb_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     question = (data.get("question") or "").strip()
     answer = (data.get("answer") or "").strip()
     if not question or not answer:
         raise HTTPException(400, "Both question and answer are required")
-    qa_id = calls_db.add_kb_qa(kb_id, question, answer)
+    qa_id = calls_db.add_kb_qa(kb_id, question, answer, user["account_id"])
+    if qa_id is None:
+        raise HTTPException(404, "Knowledge base not found")
     return {"ok": True, "id": qa_id}
 
 
 @app.post("/knowledge-bases/{kb_id}/qa/bulk")
-def add_kb_qa_bulk(kb_id: int, data: dict = Body(...)) -> dict:
+def add_kb_qa_bulk(kb_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     """Accept step of auto-extract: saves the reviewed draft pairs in one go."""
     pairs = data.get("pairs") or []
     if not isinstance(pairs, list):
         raise HTTPException(400, "pairs must be a list")
-    added = calls_db.add_kb_qa_bulk(kb_id, pairs)
+    added = calls_db.add_kb_qa_bulk(kb_id, pairs, user["account_id"])
     return {"ok": True, "added": added}
 
 
 @app.patch("/kb-qa/{qa_id}")
-def update_kb_qa(qa_id: int, data: dict = Body(...)) -> dict:
+def update_kb_qa(qa_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     question = (data.get("question") or "").strip()
     answer = (data.get("answer") or "").strip()
     if not question or not answer:
         raise HTTPException(400, "Both question and answer are required")
-    calls_db.update_kb_qa(qa_id, question, answer)
+    calls_db.update_kb_qa(qa_id, question, answer, user["account_id"])
     return {"ok": True}
 
 
 @app.delete("/kb-qa/{qa_id}")
-def delete_kb_qa(qa_id: int) -> dict:
-    calls_db.delete_kb_qa(qa_id)
+def delete_kb_qa(qa_id: int, user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_kb_qa(qa_id, user["account_id"])
     return {"ok": True}
 
 
 @app.post("/knowledge-sources/{source_id}/extract-qa")
-def extract_qa_from_source(source_id: int) -> dict:
+def extract_qa_from_source(source_id: int, user: dict = Depends(current_user)) -> dict:
     """LLM-drafts Q&A pairs from one uploaded source. Returns drafts only —
     nothing is saved until the operator reviews and POSTs them to /qa/bulk,
     so a misread price never reaches a live agent unreviewed."""
-    source = calls_db.get_knowledge_source_content(source_id)
+    source = calls_db.get_knowledge_source_content(source_id, user["account_id"])
     if source is None:
         raise HTTPException(404, "Source not found")
     try:
@@ -463,30 +479,30 @@ def extract_qa_from_source(source_id: int) -> dict:
 
 
 @app.get("/inbound-routes")
-def list_inbound_routes() -> list[dict]:
-    return calls_db.list_inbound_routes()
+def list_inbound_routes(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_inbound_routes(user["account_id"])
 
 
 @app.post("/inbound-routes")
-def create_inbound_route(data: dict = Body(...)) -> dict:
-    calls_db.create_inbound_route(data)
+def create_inbound_route(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    calls_db.create_inbound_route(data, user["account_id"])
     return {"ok": True}
 
 
 @app.get("/campaigns")
-def list_campaigns() -> list[dict]:
-    return calls_db.list_campaigns()
+def list_campaigns(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_campaigns(user["account_id"])
 
 
 @app.post("/campaigns")
-def create_campaign(data: dict = Body(...)) -> dict:
-    calls_db.create_campaign(data)
+def create_campaign(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    calls_db.create_campaign(data, user["account_id"])
     return {"ok": True}
 
 
 @app.patch("/campaigns/{campaign_id}")
-def update_campaign(campaign_id: int, data: dict = Body(...)) -> dict:
-    calls_db.update_campaign_status(campaign_id, data.get("status", "paused"))
+def update_campaign(campaign_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    calls_db.update_campaign_status(campaign_id, data.get("status", "paused"), user["account_id"])
     return {"ok": True}
 
 
@@ -494,13 +510,13 @@ def update_campaign(campaign_id: int, data: dict = Body(...)) -> dict:
 
 
 @app.get("/integrations")
-def list_integrations() -> list[dict]:
-    return calls_db.list_integrations()
+def list_integrations(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_integrations(user["account_id"])
 
 
 @app.patch("/integrations/{key}")
-def update_integration(key: str, data: dict = Body(...)) -> dict:
-    calls_db.update_integration(key, data.get("status", "not_connected"), data.get("config", {}))
+def update_integration(key: str, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    calls_db.update_integration(key, data.get("status", "not_connected"), data.get("config", {}), user["account_id"])
     return {"ok": True}
 
 
@@ -508,32 +524,32 @@ def update_integration(key: str, data: dict = Body(...)) -> dict:
 
 
 @app.get("/telephony/status")
-def telephony_status() -> dict:
-    return calls_db.telephony_status()
+def telephony_status(user: dict = Depends(current_user)) -> dict:
+    return calls_db.telephony_status(user["account_id"])
 
 
 @app.post("/telephony/connect")
-def telephony_connect(data: dict = Body(...)) -> dict:
+def telephony_connect(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     app_id = (data.get("appId") or "").strip()
     app_key = (data.get("appKey") or "").strip()
     if not app_id or not app_key:
         raise HTTPException(400, "Both App ID and App Key are required")
-    calls_db.connect_enablex(app_id, app_key)
-    return calls_db.telephony_status()
+    calls_db.connect_enablex(app_id, app_key, user["account_id"])
+    return calls_db.telephony_status(user["account_id"])
 
 
 @app.post("/telephony/disconnect")
-def telephony_disconnect() -> dict:
-    calls_db.disconnect_enablex()
+def telephony_disconnect(user: dict = Depends(current_user)) -> dict:
+    calls_db.disconnect_enablex(user["account_id"])
     return {"ok": True}
 
 
 @app.get("/telephony/numbers")
-def list_phone_numbers() -> list[dict]:
-    return calls_db.list_phone_numbers()
+def list_phone_numbers(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_phone_numbers(user["account_id"])
 
 
-async def _sync_dispatch_rule(number_id: int) -> str | None:
+async def _sync_dispatch_rule(number_id: int, account_id: int) -> str | None:
     """Best-effort: (re)create this number's LiveKit SIP dispatch rule.
 
     Runs after every add/reassign so an inbound call to the number is always
@@ -542,7 +558,7 @@ async def _sync_dispatch_rule(number_id: int) -> str | None:
     still saves either way, since LiveKit Cloud being briefly unreachable
     shouldn't block using the dashboard.
     """
-    row = calls_db.get_phone_number(number_id)
+    row = calls_db.get_phone_number(number_id, account_id)
     if row is None:
         return None
     try:
@@ -554,32 +570,32 @@ async def _sync_dispatch_rule(number_id: int) -> str | None:
 
 
 @app.post("/telephony/numbers")
-async def add_phone_number(data: dict = Body(...)) -> dict:
+async def add_phone_number(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     number = (data.get("number") or "").strip()
     if not number:
         raise HTTPException(400, "A phone/virtual number is required")
-    number_id = calls_db.add_phone_number(number, data.get("label", ""), data.get("agentId"))
-    lk_sync_error = await _sync_dispatch_rule(number_id)
+    number_id = calls_db.add_phone_number(number, user["account_id"], data.get("label", ""), data.get("agentId"))
+    lk_sync_error = await _sync_dispatch_rule(number_id, user["account_id"])
     return {"ok": True, "lkSyncError": lk_sync_error}
 
 
 @app.patch("/telephony/numbers/{number_id}")
-async def assign_phone_number(number_id: int, data: dict = Body(...)) -> dict:
-    calls_db.assign_phone_number(number_id, data.get("agentId"))
-    lk_sync_error = await _sync_dispatch_rule(number_id)
+async def assign_phone_number(number_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    calls_db.assign_phone_number(number_id, data.get("agentId"), user["account_id"])
+    lk_sync_error = await _sync_dispatch_rule(number_id, user["account_id"])
     return {"ok": True, "lkSyncError": lk_sync_error}
 
 
 @app.delete("/telephony/numbers/{number_id}")
-async def delete_phone_number(number_id: int) -> dict:
-    row = calls_db.get_phone_number(number_id)
+async def delete_phone_number(number_id: int, user: dict = Depends(current_user)) -> dict:
+    row = calls_db.get_phone_number(number_id, user["account_id"])
     if row is not None and row.get("lkDispatchRuleId"):
         try:
             await livekit_sip.delete_dispatch_rule(row)
         except Exception:
             logger.exception("failed to delete LiveKit dispatch rule for number %s", row["number"])
-    calls_db.delete_phone_number(number_id)
-    if calls_db.get_setting(livekit_sip.TRUNK_ID_SETTING):
+    calls_db.delete_phone_number(number_id, user["account_id"])
+    if calls_db.get_setting(livekit_sip.TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID):
         try:
             await livekit_sip.ensure_inbound_trunk()
         except Exception:
@@ -588,12 +604,12 @@ async def delete_phone_number(number_id: int) -> dict:
 
 
 @app.post("/telephony/test-call")
-def telephony_test_call(data: dict = Body(...)) -> dict:
+def telephony_test_call(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     from_number = (data.get("from") or "").strip()
     to_number = (data.get("to") or "").strip()
     if not from_number or not to_number:
         raise HTTPException(400, "Both a from (virtual) number and a to number are required")
-    return calls_db.place_test_call(from_number, to_number)
+    return calls_db.place_test_call(from_number, to_number, user["account_id"])
 
 
 @app.get("/telephony/sip-host")
@@ -632,14 +648,15 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     if number_row is None:
         logger.warning("inbound call to unregistered number %s — hanging up", dialed_number)
         return {"ok": False, "error": "number not registered"}
+    account_id = number_row["accountId"]
 
-    accept = calls_db.enablex_accept_call(voice_id)
+    accept = calls_db.enablex_accept_call(voice_id, account_id)
     if not accept.get("ok"):
         logger.error("failed to accept EnableX call %s: %s", voice_id, accept.get("error"))
         return accept
 
     sip_uri = f"sip:{dialed_number}@{livekit_sip.sip_host()}"
-    bridge = calls_db.enablex_connect_to_sip(voice_id, dialed_number, sip_uri)
+    bridge = calls_db.enablex_connect_to_sip(voice_id, dialed_number, sip_uri, account_id)
     if not bridge.get("ok"):
         logger.error("failed to bridge EnableX call %s to %s: %s", voice_id, sip_uri, bridge.get("error"))
     return bridge
@@ -672,8 +689,8 @@ def enablex_outbound_test_event(event: dict = Body(...)) -> dict:
 
 
 @app.get("/billing/summary")
-def billing() -> dict:
-    return calls_db.billing_summary()
+def billing(user: dict = Depends(current_user)) -> dict:
+    return calls_db.billing_summary(user["account_id"])
 
 
 # ---------------------------------------------------------- website widget
@@ -723,18 +740,19 @@ def widget_agent_orb() -> FileResponse:
 
 
 @app.get("/widget/sites")
-def list_sites() -> list[dict]:
-    return calls_db.list_sites()
+def list_sites(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_sites(user["account_id"])
 
 
 @app.post("/widget/sites")
-def create_site(data: dict = Body(...)) -> dict:
+def create_site(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     name = (data.get("name") or "").strip()
     if not name:
         raise HTTPException(400, "A site name is required")
     return calls_db.create_site(
         name,
         data.get("agentId"),
+        user["account_id"],
         data.get("allowedDomain", ""),
         data.get("widgetPosition", "bottom-right"),
         data.get("widgetLabel", "Talk to us"),
@@ -742,24 +760,24 @@ def create_site(data: dict = Body(...)) -> dict:
 
 
 @app.patch("/widget/sites/{site_id}")
-def update_site(site_id: int, data: dict = Body(...)) -> dict:
-    site = calls_db.update_site(site_id, data)
+def update_site(site_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    site = calls_db.update_site(site_id, data, user["account_id"])
     if site is None:
         raise HTTPException(404, "Site not found")
     return site
 
 
 @app.post("/widget/sites/{site_id}/regenerate-key")
-def regenerate_site_key(site_id: int) -> dict:
-    site = calls_db.regenerate_site_key(site_id)
+def regenerate_site_key(site_id: int, user: dict = Depends(current_user)) -> dict:
+    site = calls_db.regenerate_site_key(site_id, user["account_id"])
     if site is None:
         raise HTTPException(404, "Site not found")
     return site
 
 
 @app.delete("/widget/sites/{site_id}")
-def delete_site(site_id: int) -> dict:
-    calls_db.delete_site(site_id)
+def delete_site(site_id: int, user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_site(site_id, user["account_id"])
     return {"ok": True}
 
 

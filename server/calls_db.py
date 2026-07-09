@@ -29,6 +29,7 @@ DB_PATH = (
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     room_name TEXT NOT NULL,
     visitor_identity TEXT,
     started_at TEXT NOT NULL,
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS calls (
 
 CREATE TABLE IF NOT EXISTS sites (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     name TEXT NOT NULL,
     site_key TEXT NOT NULL UNIQUE,
     allowed_domain TEXT DEFAULT '',
@@ -78,6 +80,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS agents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
     model TEXT DEFAULT 'gpt-4.1',
@@ -92,18 +95,21 @@ CREATE TABLE IF NOT EXISTS agents (
 
 CREATE TABLE IF NOT EXISTS contacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     name TEXT NOT NULL,
-    phone TEXT UNIQUE,
+    phone TEXT,
     email TEXT DEFAULT '',
     status TEXT DEFAULT 'new',
     tags TEXT DEFAULT '',
     source TEXT DEFAULT 'manual',
     last_called_at TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(account_id, phone)
 );
 
 CREATE TABLE IF NOT EXISTS knowledge_bases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     name TEXT NOT NULL,
     strict INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
@@ -122,6 +128,8 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
 -- from an uploaded brochure). Emitted to the agent as an authoritative FAQ the
 -- strict-mode prompt tells it to quote verbatim instead of improvising —
 -- position keeps the operator's manual ordering stable in the editor.
+-- Scoped to a tenant via kb_id -> knowledge_bases.account_id (not duplicated
+-- here) — every query that touches a source/qa row joins through that.
 CREATE TABLE IF NOT EXISTS kb_qa (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kb_id INTEGER NOT NULL,
@@ -133,6 +141,7 @@ CREATE TABLE IF NOT EXISTS kb_qa (
 
 CREATE TABLE IF NOT EXISTS inbound_routes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     phone_number TEXT,
     agent_id INTEGER,
     timezone TEXT DEFAULT 'Asia/Kolkata',
@@ -148,6 +157,7 @@ CREATE TABLE IF NOT EXISTS inbound_routes (
 
 CREATE TABLE IF NOT EXISTS campaigns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     name TEXT NOT NULL,
     agent_id INTEGER,
     contact_tag TEXT DEFAULT '',
@@ -158,18 +168,23 @@ CREATE TABLE IF NOT EXISTS campaigns (
     created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Per-account copy of each well-known integration (CRM webhook, Cal.com,
+-- Sheets) — composite key so two tenants' webhook URLs/config never collide.
 CREATE TABLE IF NOT EXISTS integrations (
-    key TEXT PRIMARY KEY,
+    account_id INTEGER NOT NULL,
+    key TEXT NOT NULL,
     name TEXT NOT NULL,
     category TEXT NOT NULL,
     description TEXT DEFAULT '',
     status TEXT DEFAULT 'not_connected',
     config_json TEXT DEFAULT '{}',
-    last_sync TEXT
+    last_sync TEXT,
+    PRIMARY KEY (account_id, key)
 );
 
 CREATE TABLE IF NOT EXISTS phone_numbers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     number TEXT NOT NULL UNIQUE,
     label TEXT DEFAULT '',
     provider TEXT DEFAULT 'enablex',
@@ -180,9 +195,13 @@ CREATE TABLE IF NOT EXISTS phone_numbers (
     lk_dispatch_rule_id TEXT
 );
 
+-- Per-account settings (billing rates, EnableX credentials, credit totals) —
+-- composite key so tenant A's telephony credentials never leak to tenant B.
 CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT
+    account_id INTEGER NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT,
+    PRIMARY KEY (account_id, key)
 );
 """
 
@@ -242,6 +261,8 @@ def _migrate_phone_numbers_columns(conn: sqlite3.Connection) -> None:
     for column in ("lk_trunk_id", "lk_dispatch_rule_id"):
         if column not in existing:
             conn.execute(f"ALTER TABLE phone_numbers ADD COLUMN {column} TEXT")
+    if "account_id" not in existing:
+        conn.execute("ALTER TABLE phone_numbers ADD COLUMN account_id INTEGER")
 
 
 def _migrate_calls_columns(conn: sqlite3.Connection) -> None:
@@ -257,6 +278,8 @@ def _migrate_calls_columns(conn: sqlite3.Connection) -> None:
         # hardcoded a single agent name for every row, which went wrong the moment a
         # second agent existed.
         conn.execute("ALTER TABLE calls ADD COLUMN agent_id INTEGER")
+    if "account_id" not in existing:
+        conn.execute("ALTER TABLE calls ADD COLUMN account_id INTEGER")
 
 
 def _migrate_sites_columns(conn: sqlite3.Connection) -> None:
@@ -267,6 +290,8 @@ def _migrate_sites_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE sites ADD COLUMN widget_position TEXT DEFAULT 'bottom-right'")
     if "widget_label" not in existing:
         conn.execute("ALTER TABLE sites ADD COLUMN widget_label TEXT DEFAULT 'Talk to us'")
+    if "account_id" not in existing:
+        conn.execute("ALTER TABLE sites ADD COLUMN account_id INTEGER")
 
 
 def _migrate_knowledge_bases_columns(conn: sqlite3.Connection) -> None:
@@ -277,6 +302,154 @@ def _migrate_knowledge_bases_columns(conn: sqlite3.Connection) -> None:
     existing = {row["name"] for row in conn.execute("PRAGMA table_info(knowledge_bases)").fetchall()}
     if "strict" not in existing:
         conn.execute("ALTER TABLE knowledge_bases ADD COLUMN strict INTEGER DEFAULT 1")
+    if "account_id" not in existing:
+        conn.execute("ALTER TABLE knowledge_bases ADD COLUMN account_id INTEGER")
+
+
+def _migrate_agents_columns(conn: sqlite3.Connection) -> None:
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(agents)").fetchall()}
+    if "account_id" not in existing:
+        conn.execute("ALTER TABLE agents ADD COLUMN account_id INTEGER")
+
+
+def _migrate_inbound_routes_columns(conn: sqlite3.Connection) -> None:
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(inbound_routes)").fetchall()}
+    if "account_id" not in existing:
+        conn.execute("ALTER TABLE inbound_routes ADD COLUMN account_id INTEGER")
+
+
+def _migrate_campaigns_columns(conn: sqlite3.Connection) -> None:
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(campaigns)").fetchall()}
+    if "account_id" not in existing:
+        conn.execute("ALTER TABLE campaigns ADD COLUMN account_id INTEGER")
+
+
+def _migrate_contacts_table(conn: sqlite3.Connection) -> None:
+    """contacts.phone was globally UNIQUE pre-multi-tenant — two different
+    tenants' calls from the same phone number would otherwise collide and
+    let one tenant's caller name leak into another's contact row. SQLite
+    can't ALTER a UNIQUE constraint in place, so recreate the table with
+    UNIQUE(account_id, phone) and copy the existing rows across (they all
+    predate accounts, so they're unambiguous)."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(contacts)").fetchall()}
+    if "account_id" in existing:
+        return
+    conn.execute("ALTER TABLE contacts RENAME TO contacts_old")
+    conn.execute(
+        """
+        CREATE TABLE contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id INTEGER,
+            name TEXT NOT NULL,
+            phone TEXT,
+            email TEXT DEFAULT '',
+            status TEXT DEFAULT 'new',
+            tags TEXT DEFAULT '',
+            source TEXT DEFAULT 'manual',
+            last_called_at TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(account_id, phone)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO contacts (id, name, phone, email, status, tags, source, last_called_at, created_at)
+        SELECT id, name, phone, email, status, tags, source, last_called_at, created_at FROM contacts_old
+        """
+    )
+    conn.execute("DROP TABLE contacts_old")
+
+
+def _migrate_settings_table(conn: sqlite3.Connection) -> None:
+    """settings was a single global key-value store — EnableX credentials and
+    billing rates are genuinely per-tenant, so recreate with a composite
+    (account_id, key) primary key. Legacy rows (no account concept yet) are
+    assigned to account_id=1, matching the "existing data becomes the first
+    account's data" rule applied everywhere else in this migration."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(settings)").fetchall()}
+    if "account_id" in existing:
+        return
+    conn.execute("ALTER TABLE settings RENAME TO settings_old")
+    conn.execute(
+        "CREATE TABLE settings (account_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT, PRIMARY KEY (account_id, key))"
+    )
+    conn.execute("INSERT INTO settings (account_id, key, value) SELECT 1, key, value FROM settings_old")
+    conn.execute("DROP TABLE settings_old")
+
+
+def _migrate_integrations_table(conn: sqlite3.Connection) -> None:
+    """Same reasoning as _migrate_settings_table — a connected CRM webhook
+    URL is tenant-specific and must not be shared across accounts."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(integrations)").fetchall()}
+    if "account_id" in existing:
+        return
+    conn.execute("ALTER TABLE integrations RENAME TO integrations_old")
+    conn.execute(
+        """
+        CREATE TABLE integrations (
+            account_id INTEGER NOT NULL,
+            key TEXT NOT NULL,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            status TEXT DEFAULT 'not_connected',
+            config_json TEXT DEFAULT '{}',
+            last_sync TEXT,
+            PRIMARY KEY (account_id, key)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO integrations (account_id, key, name, category, description, status, config_json, last_sync)
+        SELECT 1, key, name, category, description, status, config_json, last_sync FROM integrations_old
+        """
+    )
+    conn.execute("DROP TABLE integrations_old")
+
+
+# Tables with a plain nullable account_id column (added by the migrations
+# above) whose pre-multi-tenant rows need adopting by the first real account.
+_BACKFILL_TABLES = ("agents", "sites", "inbound_routes", "campaigns", "phone_numbers", "calls", "knowledge_bases", "contacts")
+
+
+def _backfill_legacy_account_id(conn: sqlite3.Connection, account_id: int) -> None:
+    """Every row left with account_id IS NULL predates multi-tenancy —
+    hand them to `account_id` (the first account ever created), so existing
+    data becomes that account's data rather than every tenant's data."""
+    for table in _BACKFILL_TABLES:
+        conn.execute(f"UPDATE {table} SET account_id = ? WHERE account_id IS NULL", (account_id,))
+
+
+def provision_account_defaults(conn: sqlite3.Connection, account_id: int) -> None:
+    """Starter state for a brand-new (non-legacy) account: one default agent
+    to test with, its own copy of the well-known integrations, and its own
+    billing settings — mirrors what init_tables used to seed globally."""
+    conn.execute(
+        "INSERT INTO agents (account_id, name, description) VALUES (?, ?, ?)",
+        (
+            account_id,
+            "Maya",
+            "Default sales agent — qualifies leads and books appointments in 11 Indian languages.",
+        ),
+    )
+    for key, name, category, description in _SEED_INTEGRATIONS:
+        conn.execute(
+            "INSERT OR IGNORE INTO integrations (account_id, key, name, category, description) VALUES (?, ?, ?, ?, ?)",
+            (account_id, key, name, category, description),
+        )
+    for key, value in (
+        ("credits_total", "300"),
+        # Phone minutes burn more credits than browser/widget minutes — they
+        # carry an EnableX telephony cost the others don't.
+        ("credit_rate_browser", "1"),
+        ("credit_rate_phone", "1.5"),
+        ("credit_rate_widget", "1"),
+    ):
+        conn.execute(
+            "INSERT OR IGNORE INTO settings (account_id, key, value) VALUES (?, ?, ?)", (account_id, key, value)
+        )
 
 
 def init_tables() -> None:
@@ -288,39 +461,19 @@ def init_tables() -> None:
             _migrate_calls_columns(conn)
             _migrate_sites_columns(conn)
             _migrate_knowledge_bases_columns(conn)
-            if conn.execute("SELECT COUNT(*) c FROM agents").fetchone()["c"] == 0:
-                conn.execute(
-                    "INSERT INTO agents (name, description) VALUES (?, ?)",
-                    (
-                        "Maya",
-                        "Default sales agent — qualifies leads and books "
-                        "appointments in 11 Indian languages.",
-                    ),
-                )
-            for key, name, category, description in _SEED_INTEGRATIONS:
-                conn.execute(
-                    "INSERT OR IGNORE INTO integrations (key, name, category, description) VALUES (?, ?, ?, ?)",
-                    (key, name, category, description),
-                )
-            conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('credits_total', '300')"
-            )
-            # Phone minutes burn more credits than browser/widget minutes —
-            # they carry an EnableX telephony cost the others don't. Tune
-            # these once real EnableX per-minute costs are confirmed.
-            conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_rate_browser', '1')"
-            )
-            conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_rate_phone', '1.5')"
-            )
-            # Website-widget calls cost the same to run as browser calls (no
-            # telephony leg) — same rate by default, but its own setting so a
-            # widget sold to an external client can be priced independently
-            # of your own internal browser test/demo calls later.
-            conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('credit_rate_widget', '1')"
-            )
+            _migrate_agents_columns(conn)
+            _migrate_inbound_routes_columns(conn)
+            _migrate_campaigns_columns(conn)
+            _migrate_contacts_table(conn)
+            _migrate_settings_table(conn)
+            _migrate_integrations_table(conn)
+            # If the first account already exists (a prior boot completed a
+            # signup), any row still missing account_id predates that signup
+            # — hand it over now rather than waiting for create_account_with_
+            # owner to run again. No-op on a fresh install with zero accounts.
+            first_account = conn.execute("SELECT MIN(id) AS id FROM accounts").fetchone()["id"]
+            if first_account is not None:
+                _backfill_legacy_account_id(conn, first_account)
     finally:
         conn.close()
 
@@ -343,7 +496,13 @@ def email_exists(email: str) -> bool:
 
 def create_account_with_owner(company_name: str, user_name: str, email: str, password_hash: str) -> dict:
     """Creates the tenant + its first (owner) user in one transaction.
-    Returns {'account_id', 'user_id'}. Caller must have checked email_exists."""
+    Returns {'account_id', 'user_id'}. Caller must have checked email_exists.
+
+    The very first account ever created (id == 1) adopts any pre-existing,
+    pre-multi-tenant data instead of starting from zero — that's the "your
+    current account becomes the first real customer" rule. Every account
+    after that starts empty except for one default agent to test with.
+    """
     conn = _connect()
     try:
         with conn:
@@ -353,7 +512,36 @@ def create_account_with_owner(company_name: str, user_name: str, email: str, pas
                 "INSERT INTO users (account_id, email, name, password_hash, role) VALUES (?, ?, ?, ?, 'owner')",
                 (account_id, email.lower(), user_name, password_hash),
             )
-            return {"account_id": account_id, "user_id": cur.lastrowid}
+            user_id = cur.lastrowid
+            if account_id == 1:
+                _backfill_legacy_account_id(conn, account_id)
+                # Legacy installs already have settings/integrations rows
+                # under account_id=1 from _migrate_settings_table /
+                # _migrate_integrations_table — only top up whichever keys a
+                # from-scratch (never-migrated) install wouldn't have yet.
+                for key, value in (
+                    ("credits_total", "300"),
+                    ("credit_rate_browser", "1"),
+                    ("credit_rate_phone", "1.5"),
+                    ("credit_rate_widget", "1"),
+                ):
+                    conn.execute(
+                        "INSERT OR IGNORE INTO settings (account_id, key, value) VALUES (?, ?, ?)",
+                        (account_id, key, value),
+                    )
+                for skey, sname, scategory, sdescription in _SEED_INTEGRATIONS:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO integrations (account_id, key, name, category, description) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (account_id, skey, sname, scategory, sdescription),
+                    )
+                if conn.execute(
+                    "SELECT COUNT(*) c FROM agents WHERE account_id = ?", (account_id,)
+                ).fetchone()["c"] == 0:
+                    provision_account_defaults(conn, account_id)
+            else:
+                provision_account_defaults(conn, account_id)
+            return {"account_id": account_id, "user_id": user_id}
     finally:
         conn.close()
 
@@ -447,10 +635,13 @@ def _initials(name: str) -> str:
 _CHANNEL_LABELS = {"phone": "Phone", "widget": "Website Widget", "browser": "Web"}
 
 
-def _agent_names_by_id() -> dict[int, str]:
+def _agent_names_by_id(account_id: int) -> dict[int, str]:
     conn = _connect()
     try:
-        return {r["id"]: r["name"] for r in conn.execute("SELECT id, name FROM agents").fetchall()}
+        return {
+            r["id"]: r["name"]
+            for r in conn.execute("SELECT id, name FROM agents WHERE account_id = ?", (account_id,)).fetchall()
+        }
     finally:
         conn.close()
 
@@ -504,17 +695,17 @@ def _call_dict(
     return out
 
 
-def list_calls(limit: int = 200, search: str = "", status: str = "", days: int = 0) -> list[dict]:
+def list_calls(account_id: int, limit: int = 200, search: str = "", status: str = "", days: int = 0) -> list[dict]:
     if not DB_PATH.exists():
         return []
-    sites_by_id = {s["id"]: s for s in list_sites()}
-    agent_names = _agent_names_by_id()
+    sites_by_id = {s["id"]: s for s in list_sites(account_id)}
+    agent_names = _agent_names_by_id(account_id)
     conn = _connect()
     try:
-        query = "SELECT * FROM calls"
-        params: list = []
+        query = "SELECT * FROM calls WHERE account_id = ?"
+        params: list = [account_id]
         if days:
-            query += " WHERE date(started_at) >= date('now', ?)"
+            query += " AND date(started_at) >= date('now', ?)"
             params.append(f"-{days - 1} days")
         query += " ORDER BY started_at DESC LIMIT ?"
         params.append(limit)
@@ -533,27 +724,27 @@ def list_calls(limit: int = 200, search: str = "", status: str = "", days: int =
         conn.close()
 
 
-def get_call(call_id: int) -> dict | None:
+def get_call(call_id: int, account_id: int) -> dict | None:
     if not DB_PATH.exists():
         return None
     conn = _connect()
     try:
-        row = conn.execute("SELECT * FROM calls WHERE id = ?", (call_id,)).fetchone()
+        row = conn.execute("SELECT * FROM calls WHERE id = ? AND account_id = ?", (call_id, account_id)).fetchone()
         if not row:
             return None
-        sites_by_id = {s["id"]: s for s in list_sites()}
-        return _call_dict(row, sites_by_id=sites_by_id, agent_names=_agent_names_by_id())
+        sites_by_id = {s["id"]: s for s in list_sites(account_id)}
+        return _call_dict(row, sites_by_id=sites_by_id, agent_names=_agent_names_by_id(account_id))
     finally:
         conn.close()
 
 
-def calls_csv() -> str:
+def calls_csv(account_id: int) -> str:
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(
         ["id", "caller", "phone", "status", "channel", "website", "duration_seconds", "sentiment", "agent", "language", "time"]
     )
-    for c in list_calls(limit=10000):
+    for c in list_calls(account_id, limit=10000):
         writer.writerow(
             [c["id"], c["name"], c["phone"], c["callStatus"], c["channel"], c["website"],
              c["durationSeconds"], c["sentiment"], c["agent"], c["replyLanguage"], c["callDate"]]
@@ -564,7 +755,7 @@ def calls_csv() -> str:
 # ------------------------------------------------------------- dashboard
 
 
-def summary() -> dict:
+def summary(account_id: int) -> dict:
     conn = _connect()
     try:
         row = conn.execute(
@@ -574,11 +765,12 @@ def summary() -> dict:
                    SUM(CASE WHEN site_visit_json IS NOT NULL THEN 1 ELSE 0 END) AS visits,
                    COALESCE(SUM(duration_seconds), 0) AS total_seconds,
                    COALESCE(AVG(duration_seconds), 0) AS avg_seconds
-            FROM calls
-            """
+            FROM calls WHERE account_id = ?
+            """,
+            (account_id,),
         ).fetchone()
         agents_live = conn.execute(
-            "SELECT COUNT(*) c FROM agents WHERE status = 'live'"
+            "SELECT COUNT(*) c FROM agents WHERE status = 'live' AND account_id = ?", (account_id,)
         ).fetchone()["c"]
         total = row["total"] or 0
         qualified = row["qualified"] or 0
@@ -597,7 +789,7 @@ def summary() -> dict:
         conn.close()
 
 
-def usage_trends(days: int = 14) -> dict:
+def usage_trends(account_id: int, days: int = 14) -> dict:
     conn = _connect()
     try:
         rows = conn.execute(
@@ -607,10 +799,10 @@ def usage_trends(days: int = 14) -> dict:
                    SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) AS qualified,
                    COALESCE(SUM(duration_seconds), 0) / 60.0 AS minutes
             FROM calls
-            WHERE date(started_at) >= date('now', ?)
+            WHERE account_id = ? AND date(started_at) >= date('now', ?)
             GROUP BY day ORDER BY day
             """,
-            (f"-{days - 1} days",),
+            (account_id, f"-{days - 1} days"),
         ).fetchall()
         return {
             "labels": [r["day"] for r in rows],
@@ -622,19 +814,21 @@ def usage_trends(days: int = 14) -> dict:
         conn.close()
 
 
-def analytics() -> dict:
+def analytics(account_id: int) -> dict:
     conn = _connect()
     try:
         languages = [
             {"language": r["reply_language"] or "unknown", "count": r["c"]}
             for r in conn.execute(
-                "SELECT reply_language, COUNT(*) c FROM calls GROUP BY reply_language ORDER BY c DESC"
+                "SELECT reply_language, COUNT(*) c FROM calls WHERE account_id = ? GROUP BY reply_language ORDER BY c DESC",
+                (account_id,),
             ).fetchall()
         ]
         hours = [
             {"hour": int(r["h"]), "count": r["c"]}
             for r in conn.execute(
-                "SELECT strftime('%H', started_at) h, COUNT(*) c FROM calls GROUP BY h ORDER BY h"
+                "SELECT strftime('%H', started_at) h, COUNT(*) c FROM calls WHERE account_id = ? GROUP BY h ORDER BY h",
+                (account_id,),
             ).fetchall()
         ]
         duration_trend = [
@@ -642,12 +836,13 @@ def analytics() -> dict:
             for r in conn.execute(
                 """
                 SELECT date(started_at) day, AVG(duration_seconds) avg_s FROM calls
-                WHERE date(started_at) >= date('now', '-13 days')
+                WHERE account_id = ? AND date(started_at) >= date('now', '-13 days')
                 GROUP BY day ORDER BY day
-                """
+                """,
+                (account_id,),
             ).fetchall()
         ]
-        rows = conn.execute("SELECT * FROM calls").fetchall()
+        rows = conn.execute("SELECT * FROM calls WHERE account_id = ?", (account_id,)).fetchall()
         sentiment = {"positive": 0, "neutral": 0, "negative": 0}
         engaged = 0
         for row in rows:
@@ -670,11 +865,12 @@ def analytics() -> dict:
                 SELECT COALESCE(call_type, 'browser') t, COUNT(*) c,
                        SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) q,
                        COALESCE(SUM(duration_seconds), 0) s
-                FROM calls GROUP BY t ORDER BY c DESC
-                """
+                FROM calls WHERE account_id = ? GROUP BY t ORDER BY c DESC
+                """,
+                (account_id,),
             ).fetchall()
         ]
-        agent_names = _agent_names_by_id()
+        agent_names = _agent_names_by_id(account_id)
         fallback_agent = next(iter(agent_names.values()), "Agent")
         # Merge by display name, not agent_id: legacy rows (agent_id NULL,
         # from before the column existed) resolve to the first agent's name
@@ -685,8 +881,9 @@ def analytics() -> dict:
             SELECT agent_id, COUNT(*) c,
                    SUM(CASE WHEN lead_name IS NOT NULL THEN 1 ELSE 0 END) q,
                    COALESCE(SUM(duration_seconds), 0) s
-            FROM calls GROUP BY agent_id
-            """
+            FROM calls WHERE account_id = ? GROUP BY agent_id
+            """,
+            (account_id,),
         ).fetchall():
             label = agent_names.get(r["agent_id"]) or fallback_agent
             entry = by_agent_map.setdefault(label, {"agent": label, "calls": 0, "qualified": 0, "seconds": 0.0})
@@ -697,7 +894,7 @@ def analytics() -> dict:
             {"agent": e["agent"], "calls": e["calls"], "qualified": e["qualified"], "minutes": round(e["seconds"] / 60, 1)}
             for e in sorted(by_agent_map.values(), key=lambda e: -e["calls"])
         ]
-        s = summary()
+        s = summary(account_id)
         return {
             "languages": languages,
             "peakHours": hours,
@@ -737,21 +934,37 @@ def _agent_dict(row: sqlite3.Row) -> dict:
     }
 
 
-def list_agents() -> list[dict]:
+def agent_account_id(agent_id: int) -> int | None:
+    """Which account owns this agent — used to attribute a live LiveKit room
+    (tagged with just an agent_id) back to a tenant for /active-calls."""
     conn = _connect()
     try:
-        return [_agent_dict(r) for r in conn.execute("SELECT * FROM agents ORDER BY id").fetchall()]
+        row = conn.execute("SELECT account_id FROM agents WHERE id = ?", (agent_id,)).fetchone()
+        return row["account_id"] if row else None
     finally:
         conn.close()
 
 
-def create_agent(data: dict) -> dict:
+def list_agents(account_id: int) -> list[dict]:
+    conn = _connect()
+    try:
+        return [
+            _agent_dict(r)
+            for r in conn.execute("SELECT * FROM agents WHERE account_id = ? ORDER BY id", (account_id,)).fetchall()
+        ]
+    finally:
+        conn.close()
+
+
+def create_agent(data: dict, account_id: int) -> dict:
     conn = _connect()
     try:
         with conn:
             cur = conn.execute(
-                "INSERT INTO agents (name, description, model, voice, language, system_prompt) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO agents (account_id, name, description, model, voice, language, system_prompt) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
+                    account_id,
                     data.get("name", "Unnamed agent"),
                     data.get("description", ""),
                     data.get("model", "gpt-4.1"),
@@ -766,34 +979,44 @@ def create_agent(data: dict) -> dict:
         conn.close()
 
 
-def update_agent(agent_id: int, data: dict) -> dict | None:
+def update_agent(agent_id: int, data: dict, account_id: int) -> dict | None:
     mapping = {"systemPrompt": "system_prompt", "kbId": "kb_id"}
-    sets, params = [], []
-    for key, value in data.items():
-        column = mapping.get(key, key)
-        if column in _AGENT_FIELDS:
-            sets.append(f"{column} = ?")
-            params.append(value)
-    if not sets:
-        return None
     conn = _connect()
     try:
+        sets, params = [], []
+        for key, value in data.items():
+            column = mapping.get(key, key)
+            if column not in _AGENT_FIELDS:
+                continue
+            if column == "kb_id" and value is not None:
+                # Refuse to point this agent at a knowledge base the caller's
+                # account doesn't own — otherwise a crafted kbId would let one
+                # tenant's agent read another tenant's KB content at call time.
+                owned = conn.execute(
+                    "SELECT 1 FROM knowledge_bases WHERE id = ? AND account_id = ?", (value, account_id)
+                ).fetchone()
+                if not owned:
+                    continue
+            sets.append(f"{column} = ?")
+            params.append(value)
+        if not sets:
+            return None
         with conn:
             conn.execute(
-                f"UPDATE agents SET {', '.join(sets)}, updated_at = datetime('now') WHERE id = ?",
-                (*params, agent_id),
+                f"UPDATE agents SET {', '.join(sets)}, updated_at = datetime('now') WHERE id = ? AND account_id = ?",
+                (*params, agent_id, account_id),
             )
-        row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
+        row = conn.execute("SELECT * FROM agents WHERE id = ? AND account_id = ?", (agent_id, account_id)).fetchone()
         return _agent_dict(row) if row else None
     finally:
         conn.close()
 
 
-def delete_agent(agent_id: int) -> None:
+def delete_agent(agent_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("DELETE FROM agents WHERE id = ?", (agent_id,))
+            conn.execute("DELETE FROM agents WHERE id = ? AND account_id = ?", (agent_id, account_id))
     finally:
         conn.close()
 
@@ -801,28 +1024,30 @@ def delete_agent(agent_id: int) -> None:
 # -------------------------------------------------------------- contacts
 
 
-def _sync_contacts_from_calls(conn: sqlite3.Connection) -> None:
+def _sync_contacts_from_calls(conn: sqlite3.Connection, account_id: int) -> None:
     """Upsert a contact for every call that captured a phone number."""
     rows = conn.execute(
         """
         SELECT lead_name, lead_phone, MAX(started_at) last_call,
                MAX(CASE WHEN site_visit_json IS NOT NULL THEN 1 ELSE 0 END) visited
-        FROM calls WHERE lead_phone IS NOT NULL AND lead_phone != ''
+        FROM calls WHERE account_id = ? AND lead_phone IS NOT NULL AND lead_phone != ''
         GROUP BY lead_phone
-        """
+        """,
+        (account_id,),
     ).fetchall()
     with conn:
         for row in rows:
             conn.execute(
                 """
-                INSERT INTO contacts (name, phone, status, source, last_called_at)
-                VALUES (?, ?, ?, 'call', ?)
-                ON CONFLICT(phone) DO UPDATE SET
+                INSERT INTO contacts (account_id, name, phone, status, source, last_called_at)
+                VALUES (?, ?, ?, ?, 'call', ?)
+                ON CONFLICT(account_id, phone) DO UPDATE SET
                     name = excluded.name,
                     status = excluded.status,
                     last_called_at = excluded.last_called_at
                 """,
                 (
+                    account_id,
                     row["lead_name"] or "Unknown",
                     row["lead_phone"],
                     "site_visit" if row["visited"] else "qualified",
@@ -831,10 +1056,10 @@ def _sync_contacts_from_calls(conn: sqlite3.Connection) -> None:
             )
 
 
-def list_contacts() -> list[dict]:
+def list_contacts(account_id: int) -> list[dict]:
     conn = _connect()
     try:
-        _sync_contacts_from_calls(conn)
+        _sync_contacts_from_calls(conn, account_id)
         return [
             {
                 "id": r["id"],
@@ -847,25 +1072,28 @@ def list_contacts() -> list[dict]:
                 "lastCalledAt": r["last_called_at"],
                 "createdAt": r["created_at"],
             }
-            for r in conn.execute("SELECT * FROM contacts ORDER BY created_at DESC").fetchall()
+            for r in conn.execute(
+                "SELECT * FROM contacts WHERE account_id = ? ORDER BY created_at DESC", (account_id,)
+            ).fetchall()
         ]
     finally:
         conn.close()
 
 
-def create_contact(data: dict) -> None:
+def create_contact(data: dict, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
             conn.execute(
                 """
-                INSERT INTO contacts (name, phone, email, status, tags, source)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(phone) DO UPDATE SET
+                INSERT INTO contacts (account_id, name, phone, email, status, tags, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(account_id, phone) DO UPDATE SET
                     name = excluded.name, email = excluded.email,
                     status = excluded.status, tags = excluded.tags
                 """,
                 (
+                    account_id,
                     data.get("name", "Unknown"),
                     data.get("phone") or None,
                     data.get("email", ""),
@@ -878,34 +1106,34 @@ def create_contact(data: dict) -> None:
         conn.close()
 
 
-def delete_contact(contact_id: int) -> None:
+def delete_contact(contact_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
+            conn.execute("DELETE FROM contacts WHERE id = ? AND account_id = ?", (contact_id, account_id))
     finally:
         conn.close()
 
 
-def delete_all_contacts() -> None:
+def delete_all_contacts(account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("DELETE FROM contacts")
+            conn.execute("DELETE FROM contacts WHERE account_id = ?", (account_id,))
     finally:
         conn.close()
 
 
-def contacts_csv() -> str:
+def contacts_csv(account_id: int) -> str:
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(["name", "phone", "email", "status", "tags", "source", "last_called_at"])
-    for c in list_contacts():
+    for c in list_contacts(account_id):
         writer.writerow([c["name"], c["phone"], c["email"], c["status"], ";".join(c["tags"]), c["source"], c["lastCalledAt"]])
     return buf.getvalue()
 
 
-def import_contacts_csv(text: str) -> int:
+def import_contacts_csv(text: str, account_id: int) -> int:
     reader = csv.DictReader(io.StringIO(text))
     count = 0
     for row in reader:
@@ -919,7 +1147,8 @@ def import_contacts_csv(text: str) -> int:
                 "email": normalized.get("email", ""),
                 "tags": normalized.get("tags", ""),
                 "source": "import",
-            }
+            },
+            account_id,
         )
         count += 1
     return count
@@ -928,11 +1157,13 @@ def import_contacts_csv(text: str) -> int:
 # ------------------------------------------------------- knowledge base
 
 
-def list_knowledge_bases() -> list[dict]:
+def list_knowledge_bases(account_id: int) -> list[dict]:
     conn = _connect()
     try:
         kbs = []
-        for kb in conn.execute("SELECT * FROM knowledge_bases ORDER BY id").fetchall():
+        for kb in conn.execute(
+            "SELECT * FROM knowledge_bases WHERE account_id = ? ORDER BY id", (account_id,)
+        ).fetchall():
             sources = conn.execute(
                 "SELECT id, name, type, length(content) size, created_at FROM knowledge_sources WHERE kb_id = ? ORDER BY id",
                 (kb["id"],),
@@ -959,77 +1190,93 @@ def list_knowledge_bases() -> list[dict]:
         conn.close()
 
 
-def create_knowledge_base(name: str) -> None:
+def create_knowledge_base(name: str, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("INSERT INTO knowledge_bases (name) VALUES (?)", (name,))
+            conn.execute("INSERT INTO knowledge_bases (account_id, name) VALUES (?, ?)", (account_id, name))
     finally:
         conn.close()
 
 
-def delete_knowledge_base(kb_id: int) -> None:
+def delete_knowledge_base(kb_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
             conn.execute("DELETE FROM knowledge_sources WHERE kb_id = ?", (kb_id,))
             conn.execute("DELETE FROM kb_qa WHERE kb_id = ?", (kb_id,))
-            conn.execute("DELETE FROM knowledge_bases WHERE id = ?", (kb_id,))
-            conn.execute("UPDATE agents SET kb_id = NULL WHERE kb_id = ?", (kb_id,))
+            conn.execute("DELETE FROM knowledge_bases WHERE id = ? AND account_id = ?", (kb_id, account_id))
+            conn.execute("UPDATE agents SET kb_id = NULL WHERE kb_id = ? AND account_id = ?", (kb_id, account_id))
     finally:
         conn.close()
 
 
-def set_kb_strict(kb_id: int, strict: bool) -> None:
-    conn = _connect()
-    try:
-        with conn:
-            conn.execute("UPDATE knowledge_bases SET strict = ? WHERE id = ?", (1 if strict else 0, kb_id))
-    finally:
-        conn.close()
-
-
-def add_knowledge_source(kb_id: int, name: str, content: str, source_type: str = "text") -> None:
+def set_kb_strict(kb_id: int, strict: bool, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
             conn.execute(
-                "INSERT INTO knowledge_sources (kb_id, name, type, content) VALUES (?, ?, ?, ?)",
-                (kb_id, name, source_type, content),
+                "UPDATE knowledge_bases SET strict = ? WHERE id = ? AND account_id = ?",
+                (1 if strict else 0, kb_id, account_id),
             )
     finally:
         conn.close()
 
 
-def delete_knowledge_source(source_id: int) -> None:
+def add_knowledge_source(kb_id: int, name: str, content: str, account_id: int, source_type: str = "text") -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("DELETE FROM knowledge_sources WHERE id = ?", (source_id,))
+            conn.execute(
+                "INSERT INTO knowledge_sources (kb_id, name, type, content) "
+                "SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM knowledge_bases WHERE id = ? AND account_id = ?)",
+                (kb_id, name, source_type, content, kb_id, account_id),
+            )
     finally:
         conn.close()
 
 
-def get_knowledge_source_content(source_id: int) -> dict | None:
+def delete_knowledge_source(source_id: int, account_id: int) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "DELETE FROM knowledge_sources WHERE id = ? "
+                "AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
+                (source_id, account_id),
+            )
+    finally:
+        conn.close()
+
+
+def get_knowledge_source_content(source_id: int, account_id: int) -> dict | None:
     """Full text of one source — the auto-extract endpoint feeds this to the
-    LLM; the listing endpoint deliberately returns only length(content)."""
+    LLM; the listing endpoint deliberately returns only length(content))."""
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT id, kb_id, name, content FROM knowledge_sources WHERE id = ?", (source_id,)
+            "SELECT s.id, s.kb_id, s.name, s.content FROM knowledge_sources s "
+            "JOIN knowledge_bases kb ON kb.id = s.kb_id "
+            "WHERE s.id = ? AND kb.account_id = ?",
+            (source_id, account_id),
         ).fetchone()
         return dict(row) if row else None
     finally:
         conn.close()
 
 
-# Q&A pairs — the curated FAQ layer of a knowledge base (KB 2.0).
+# Q&A pairs — the curated FAQ layer of a knowledge base (KB 2.0). Scoped via
+# a same-account kb_id, same pattern as sources above.
 
 
-def add_kb_qa(kb_id: int, question: str, answer: str) -> int:
+def add_kb_qa(kb_id: int, question: str, answer: str, account_id: int) -> int | None:
     conn = _connect()
     try:
         with conn:
+            if not conn.execute(
+                "SELECT 1 FROM knowledge_bases WHERE id = ? AND account_id = ?", (kb_id, account_id)
+            ).fetchone():
+                return None
             pos = conn.execute(
                 "SELECT COALESCE(MAX(position), 0) + 1 p FROM kb_qa WHERE kb_id = ?", (kb_id,)
             ).fetchone()["p"]
@@ -1042,7 +1289,7 @@ def add_kb_qa(kb_id: int, question: str, answer: str) -> int:
         conn.close()
 
 
-def add_kb_qa_bulk(kb_id: int, pairs: list[dict]) -> int:
+def add_kb_qa_bulk(kb_id: int, pairs: list[dict], account_id: int) -> int:
     """Insert several Q&A pairs at once (the accept step of auto-extract).
     Returns how many were added; blank questions/answers are skipped rather
     than stored as empty FAQ rows the agent would then recite."""
@@ -1050,6 +1297,10 @@ def add_kb_qa_bulk(kb_id: int, pairs: list[dict]) -> int:
     added = 0
     try:
         with conn:
+            if not conn.execute(
+                "SELECT 1 FROM knowledge_bases WHERE id = ? AND account_id = ?", (kb_id, account_id)
+            ).fetchone():
+                return 0
             pos = conn.execute(
                 "SELECT COALESCE(MAX(position), 0) p FROM kb_qa WHERE kb_id = ?", (kb_id,)
             ).fetchone()["p"]
@@ -1069,22 +1320,27 @@ def add_kb_qa_bulk(kb_id: int, pairs: list[dict]) -> int:
     return added
 
 
-def update_kb_qa(qa_id: int, question: str, answer: str) -> None:
+def update_kb_qa(qa_id: int, question: str, answer: str, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
             conn.execute(
-                "UPDATE kb_qa SET question = ?, answer = ? WHERE id = ?", (question, answer, qa_id)
+                "UPDATE kb_qa SET question = ?, answer = ? "
+                "WHERE id = ? AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
+                (question, answer, qa_id, account_id),
             )
     finally:
         conn.close()
 
 
-def delete_kb_qa(qa_id: int) -> None:
+def delete_kb_qa(qa_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("DELETE FROM kb_qa WHERE id = ?", (qa_id,))
+            conn.execute(
+                "DELETE FROM kb_qa WHERE id = ? AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
+                (qa_id, account_id),
+            )
     finally:
         conn.close()
 
@@ -1092,26 +1348,32 @@ def delete_kb_qa(qa_id: int) -> None:
 # ------------------------------------------------------------ campaigns
 
 
-def list_inbound_routes() -> list[dict]:
+def list_inbound_routes(account_id: int) -> list[dict]:
     conn = _connect()
     try:
-        return [dict(r) for r in conn.execute("SELECT * FROM inbound_routes ORDER BY id DESC").fetchall()]
+        return [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM inbound_routes WHERE account_id = ? ORDER BY id DESC", (account_id,)
+            ).fetchall()
+        ]
     finally:
         conn.close()
 
 
-def create_inbound_route(data: dict) -> None:
+def create_inbound_route(data: dict, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
             conn.execute(
                 """
                 INSERT INTO inbound_routes
-                    (phone_number, agent_id, timezone, max_concurrent, start_date, end_date,
+                    (account_id, phone_number, agent_id, timezone, max_concurrent, start_date, end_date,
                      window_start, window_end, active_days)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    account_id,
                     data.get("phoneNumber"),
                     data.get("agentId"),
                     data.get("timezone", "Asia/Kolkata"),
@@ -1127,24 +1389,30 @@ def create_inbound_route(data: dict) -> None:
         conn.close()
 
 
-def list_campaigns() -> list[dict]:
+def list_campaigns(account_id: int) -> list[dict]:
     conn = _connect()
     try:
-        return [dict(r) for r in conn.execute("SELECT * FROM campaigns ORDER BY id DESC").fetchall()]
+        return [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM campaigns WHERE account_id = ? ORDER BY id DESC", (account_id,)
+            ).fetchall()
+        ]
     finally:
         conn.close()
 
 
-def create_campaign(data: dict) -> None:
+def create_campaign(data: dict, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
             conn.execute(
                 """
-                INSERT INTO campaigns (name, agent_id, contact_tag, scheduled_date, window_start, window_end)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO campaigns (account_id, name, agent_id, contact_tag, scheduled_date, window_start, window_end)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    account_id,
                     data.get("name", "Untitled campaign"),
                     data.get("agentId"),
                     data.get("contactTag", ""),
@@ -1157,11 +1425,13 @@ def create_campaign(data: dict) -> None:
         conn.close()
 
 
-def update_campaign_status(campaign_id: int, status: str) -> None:
+def update_campaign_status(campaign_id: int, status: str, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("UPDATE campaigns SET status = ? WHERE id = ?", (status, campaign_id))
+            conn.execute(
+                "UPDATE campaigns SET status = ? WHERE id = ? AND account_id = ?", (status, campaign_id, account_id)
+            )
     finally:
         conn.close()
 
@@ -1169,7 +1439,7 @@ def update_campaign_status(campaign_id: int, status: str) -> None:
 # ---------------------------------------------------------- integrations
 
 
-def list_integrations() -> list[dict]:
+def list_integrations(account_id: int) -> list[dict]:
     conn = _connect()
     try:
         return [
@@ -1182,19 +1452,19 @@ def list_integrations() -> list[dict]:
                 "config": json.loads(r["config_json"] or "{}"),
                 "lastSync": r["last_sync"],
             }
-            for r in conn.execute("SELECT * FROM integrations").fetchall()
+            for r in conn.execute("SELECT * FROM integrations WHERE account_id = ?", (account_id,)).fetchall()
         ]
     finally:
         conn.close()
 
 
-def update_integration(key: str, status: str, config: dict) -> None:
+def update_integration(key: str, status: str, config: dict, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
             conn.execute(
-                "UPDATE integrations SET status = ?, config_json = ? WHERE key = ?",
-                (status, json.dumps(config), key),
+                "UPDATE integrations SET status = ?, config_json = ? WHERE key = ? AND account_id = ?",
+                (status, json.dumps(config), key, account_id),
             )
     finally:
         conn.close()
@@ -1225,24 +1495,30 @@ def _site_dict(r: sqlite3.Row) -> dict:
     }
 
 
-def list_sites() -> list[dict]:
+def list_sites(account_id: int) -> list[dict]:
     conn = _connect()
     try:
-        return [_site_dict(r) for r in conn.execute("SELECT * FROM sites ORDER BY id DESC").fetchall()]
+        return [
+            _site_dict(r)
+            for r in conn.execute("SELECT * FROM sites WHERE account_id = ? ORDER BY id DESC", (account_id,)).fetchall()
+        ]
     finally:
         conn.close()
 
 
-def get_site(site_id: int) -> dict | None:
+def get_site(site_id: int, account_id: int) -> dict | None:
     conn = _connect()
     try:
-        row = conn.execute("SELECT * FROM sites WHERE id = ?", (site_id,)).fetchone()
+        row = conn.execute("SELECT * FROM sites WHERE id = ? AND account_id = ?", (site_id, account_id)).fetchone()
         return _site_dict(row) if row else None
     finally:
         conn.close()
 
 
 def get_site_by_key(site_key: str) -> dict | None:
+    """Unscoped by design — called from the public, unauthenticated
+    /widget/token endpoint where the secret site_key IS the auth, embedded
+    on a third-party website with no dashboard session available."""
     conn = _connect()
     try:
         row = conn.execute("SELECT * FROM sites WHERE site_key = ?", (site_key,)).fetchone()
@@ -1254,6 +1530,7 @@ def get_site_by_key(site_key: str) -> dict | None:
 def create_site(
     name: str,
     agent_id: int | None,
+    account_id: int,
     allowed_domain: str = "",
     widget_position: str = "bottom-right",
     widget_label: str = "Talk to us",
@@ -1264,9 +1541,9 @@ def create_site(
     try:
         with conn:
             cur = conn.execute(
-                "INSERT INTO sites (name, site_key, allowed_domain, agent_id, widget_position, widget_label) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (name, _new_site_key(), allowed_domain, agent_id, widget_position, widget_label or "Talk to us"),
+                "INSERT INTO sites (account_id, name, site_key, allowed_domain, agent_id, widget_position, widget_label) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (account_id, name, _new_site_key(), allowed_domain, agent_id, widget_position, widget_label or "Talk to us"),
             )
         row = conn.execute("SELECT * FROM sites WHERE id = ?", (cur.lastrowid,)).fetchone()
         return _site_dict(row)
@@ -1274,7 +1551,7 @@ def create_site(
         conn.close()
 
 
-def update_site(site_id: int, data: dict) -> dict | None:
+def update_site(site_id: int, data: dict, account_id: int) -> dict | None:
     widget_position = data.get("widgetPosition", "bottom-right")
     if widget_position not in ("bottom-right", "bottom-left"):
         widget_position = "bottom-right"
@@ -1283,7 +1560,7 @@ def update_site(site_id: int, data: dict) -> dict | None:
         with conn:
             conn.execute(
                 "UPDATE sites SET name = ?, allowed_domain = ?, agent_id = ?, status = ?, "
-                "widget_position = ?, widget_label = ? WHERE id = ?",
+                "widget_position = ?, widget_label = ? WHERE id = ? AND account_id = ?",
                 (
                     data.get("name"),
                     data.get("allowedDomain", ""),
@@ -1292,29 +1569,32 @@ def update_site(site_id: int, data: dict) -> dict | None:
                     widget_position,
                     data.get("widgetLabel") or "Talk to us",
                     site_id,
+                    account_id,
                 ),
             )
-        row = conn.execute("SELECT * FROM sites WHERE id = ?", (site_id,)).fetchone()
+        row = conn.execute("SELECT * FROM sites WHERE id = ? AND account_id = ?", (site_id, account_id)).fetchone()
         return _site_dict(row) if row else None
     finally:
         conn.close()
 
 
-def delete_site(site_id: int) -> None:
+def delete_site(site_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("DELETE FROM sites WHERE id = ?", (site_id,))
+            conn.execute("DELETE FROM sites WHERE id = ? AND account_id = ?", (site_id, account_id))
     finally:
         conn.close()
 
 
-def regenerate_site_key(site_id: int) -> dict | None:
+def regenerate_site_key(site_id: int, account_id: int) -> dict | None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("UPDATE sites SET site_key = ? WHERE id = ?", (_new_site_key(), site_id))
-        row = conn.execute("SELECT * FROM sites WHERE id = ?", (site_id,)).fetchone()
+            conn.execute(
+                "UPDATE sites SET site_key = ? WHERE id = ? AND account_id = ?", (_new_site_key(), site_id, account_id)
+            )
+        row = conn.execute("SELECT * FROM sites WHERE id = ? AND account_id = ?", (site_id, account_id)).fetchone()
         return _site_dict(row) if row else None
     finally:
         conn.close()
@@ -1330,7 +1610,7 @@ _CREDIT_RATE_SETTINGS = {
 }
 
 
-def credit_rates() -> dict:
+def credit_rates(account_id: int) -> dict:
     """Per-minute credit-burn multiplier for each call type, e.g.
     {"browser": 1.0, "widget": 1.0, "phone": 1.5} — phone calls burn more
     since they carry an EnableX telephony cost the others don't."""
@@ -1338,32 +1618,37 @@ def credit_rates() -> dict:
     try:
         rates = {}
         for call_type, setting_key in _CREDIT_RATE_SETTINGS.items():
-            row = conn.execute("SELECT value FROM settings WHERE key = ?", (setting_key,)).fetchone()
+            row = conn.execute(
+                "SELECT value FROM settings WHERE account_id = ? AND key = ?", (account_id, setting_key)
+            ).fetchone()
             rates[call_type] = float(row["value"]) if row else 1.0
         return rates
     finally:
         conn.close()
 
 
-def set_credit_rate(call_type: str, rate: float) -> None:
+def set_credit_rate(call_type: str, rate: float, account_id: int) -> None:
     setting_key = _CREDIT_RATE_SETTINGS.get(call_type)
     if setting_key is None:
         raise ValueError(f"unknown call type: {call_type}")
-    set_setting(setting_key, str(rate))
+    set_setting(setting_key, str(rate), account_id)
 
 
-def billing_summary() -> dict:
+def billing_summary(account_id: int) -> dict:
     conn = _connect()
     try:
-        total_row = conn.execute("SELECT value FROM settings WHERE key = 'credits_total'").fetchone()
+        total_row = conn.execute(
+            "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total'", (account_id,)
+        ).fetchone()
         credits_total = int(total_row["value"]) if total_row else 300
-        rates = credit_rates()
+        rates = credit_rates(account_id)
 
         by_type: dict[str, float] = {}
         used = 0.0
         for row in conn.execute(
             "SELECT COALESCE(call_type, 'browser') call_type, "
-            "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls GROUP BY call_type"
+            "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls WHERE account_id = ? GROUP BY call_type",
+            (account_id,),
         ).fetchall():
             call_type = row["call_type"] if row["call_type"] in rates else "browser"
             minutes = row["m"]
@@ -1386,19 +1671,27 @@ def billing_summary() -> dict:
 
 # --------------------------------------------------------- telephony (EnableX)
 
+# Sentinel account_id for platform-level settings that are NOT tenant-specific
+# — the shared LiveKit inbound SIP trunk id (livekit_sip.TRUNK_ID_SETTING) is
+# one resource pooling every tenant's phone numbers, not per-account state.
+# Real accounts start at id=1 (SQLite AUTOINCREMENT), so 0 never collides.
+PLATFORM_ACCOUNT_ID = 0
 
-def _get_setting(conn: sqlite3.Connection, key: str) -> str | None:
-    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+
+def _get_setting(conn: sqlite3.Connection, account_id: int, key: str) -> str | None:
+    row = conn.execute(
+        "SELECT value FROM settings WHERE account_id = ? AND key = ?", (account_id, key)
+    ).fetchone()
     return row["value"] if row else None
 
 
-def telephony_status() -> dict:
+def telephony_status(account_id: int) -> dict:
     """Connection state for the UI. Never returns the App Key — only whether
     one is set and a masked hint of the App ID."""
     conn = _connect()
     try:
-        app_id = _get_setting(conn, "enablex_app_id")
-        connected = bool(app_id and _get_setting(conn, "enablex_app_key"))
+        app_id = _get_setting(conn, account_id, "enablex_app_id")
+        connected = bool(app_id and _get_setting(conn, account_id, "enablex_app_key"))
         masked = ""
         if app_id:
             masked = app_id[:4] + "…" + app_id[-4:] if len(app_id) > 8 else "set"
@@ -1407,25 +1700,28 @@ def telephony_status() -> dict:
         conn.close()
 
 
-def connect_enablex(app_id: str, app_key: str) -> None:
+def connect_enablex(app_id: str, app_key: str, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
             for key, value in (("enablex_app_id", app_id), ("enablex_app_key", app_key)):
                 conn.execute(
-                    "INSERT INTO settings (key, value) VALUES (?, ?) "
-                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                    (key, value),
+                    "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
+                    "ON CONFLICT(account_id, key) DO UPDATE SET value = excluded.value",
+                    (account_id, key, value),
                 )
     finally:
         conn.close()
 
 
-def disconnect_enablex() -> None:
+def disconnect_enablex(account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("DELETE FROM settings WHERE key IN ('enablex_app_id', 'enablex_app_key')")
+            conn.execute(
+                "DELETE FROM settings WHERE account_id = ? AND key IN ('enablex_app_id', 'enablex_app_key')",
+                (account_id,),
+            )
     finally:
         conn.close()
 
@@ -1433,6 +1729,7 @@ def disconnect_enablex() -> None:
 def _phone_number_dict(r: sqlite3.Row) -> dict:
     return {
         "id": r["id"],
+        "accountId": r["account_id"],
         "number": r["number"],
         "label": r["label"],
         "provider": r["provider"],
@@ -1444,7 +1741,25 @@ def _phone_number_dict(r: sqlite3.Row) -> dict:
     }
 
 
-def list_phone_numbers() -> list[dict]:
+def list_phone_numbers(account_id: int) -> list[dict]:
+    """Dashboard-scoped listing — one tenant's own numbers page."""
+    conn = _connect()
+    try:
+        return [
+            _phone_number_dict(r)
+            for r in conn.execute(
+                "SELECT * FROM phone_numbers WHERE account_id = ? ORDER BY id DESC", (account_id,)
+            ).fetchall()
+        ]
+    finally:
+        conn.close()
+
+
+def list_all_phone_numbers() -> list[dict]:
+    """Unscoped — every tenant's numbers. Only for livekit_sip.py's shared SIP
+    trunk management: one LiveKit inbound trunk pools ALL tenants' numbers and
+    routes each to its own per-number dispatch rule, so building that trunk's
+    numbers list is a platform-level concern, not a tenant-scoped read."""
     conn = _connect()
     try:
         return [_phone_number_dict(r) for r in conn.execute("SELECT * FROM phone_numbers ORDER BY id DESC").fetchall()]
@@ -1452,16 +1767,21 @@ def list_phone_numbers() -> list[dict]:
         conn.close()
 
 
-def get_phone_number(number_id: int) -> dict | None:
+def get_phone_number(number_id: int, account_id: int) -> dict | None:
     conn = _connect()
     try:
-        row = conn.execute("SELECT * FROM phone_numbers WHERE id = ?", (number_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM phone_numbers WHERE id = ? AND account_id = ?", (number_id, account_id)
+        ).fetchone()
         return _phone_number_dict(row) if row else None
     finally:
         conn.close()
 
 
 def get_phone_number_by_number(number: str) -> dict | None:
+    """Unscoped by design — called from the public EnableX inbound webhook,
+    which has no dashboard session. The dialed number itself identifies which
+    tenant (via the returned row's account_id) and which agent to route to."""
     conn = _connect()
     try:
         row = conn.execute("SELECT * FROM phone_numbers WHERE number = ?", (number,)).fetchone()
@@ -1470,31 +1790,38 @@ def get_phone_number_by_number(number: str) -> dict | None:
         conn.close()
 
 
-def add_phone_number(number: str, label: str = "", agent_id: int | None = None) -> int:
+def add_phone_number(number: str, account_id: int, label: str = "", agent_id: int | None = None) -> int:
     conn = _connect()
     try:
         with conn:
             conn.execute(
-                "INSERT INTO phone_numbers (number, label, provider, agent_id) "
-                "VALUES (?, ?, 'enablex', ?) "
+                "INSERT INTO phone_numbers (number, account_id, label, provider, agent_id) "
+                "VALUES (?, ?, ?, 'enablex', ?) "
                 "ON CONFLICT(number) DO UPDATE SET label = excluded.label, agent_id = excluded.agent_id",
-                (number, label, agent_id),
+                (number, account_id, label, agent_id),
             )
         return conn.execute("SELECT id FROM phone_numbers WHERE number = ?", (number,)).fetchone()["id"]
     finally:
         conn.close()
 
 
-def assign_phone_number(number_id: int, agent_id: int | None) -> None:
+def assign_phone_number(number_id: int, agent_id: int | None, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("UPDATE phone_numbers SET agent_id = ? WHERE id = ?", (agent_id, number_id))
+            conn.execute(
+                "UPDATE phone_numbers SET agent_id = ? WHERE id = ? AND account_id = ?",
+                (agent_id, number_id, account_id),
+            )
     finally:
         conn.close()
 
 
 def set_phone_number_lk_ids(number_id: int, trunk_id: str | None, dispatch_rule_id: str | None) -> None:
+    """Internal bookkeeping called right after the LiveKit trunk/dispatch rule
+    for this number is created — the caller already resolved and validated
+    number_id (e.g. via a scoped get_phone_number), so this step itself
+    doesn't need an account_id filter."""
     conn = _connect()
     try:
         with conn:
@@ -1506,45 +1833,45 @@ def set_phone_number_lk_ids(number_id: int, trunk_id: str | None, dispatch_rule_
         conn.close()
 
 
-def delete_phone_number(number_id: int) -> None:
+def delete_phone_number(number_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("DELETE FROM phone_numbers WHERE id = ?", (number_id,))
+            conn.execute("DELETE FROM phone_numbers WHERE id = ? AND account_id = ?", (number_id, account_id))
     finally:
         conn.close()
 
 
-def get_setting(key: str) -> str | None:
+def get_setting(key: str, account_id: int) -> str | None:
     conn = _connect()
     try:
-        return _get_setting(conn, key)
+        return _get_setting(conn, account_id, key)
     finally:
         conn.close()
 
 
-def set_setting(key: str, value: str) -> None:
+def set_setting(key: str, value: str, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
             conn.execute(
-                "INSERT INTO settings (key, value) VALUES (?, ?) "
-                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                (key, value),
+                "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
+                "ON CONFLICT(account_id, key) DO UPDATE SET value = excluded.value",
+                (account_id, key, value),
             )
     finally:
         conn.close()
 
 
-def enablex_credentials() -> tuple[str | None, str | None]:
+def enablex_credentials(account_id: int) -> tuple[str | None, str | None]:
     conn = _connect()
     try:
-        return _get_setting(conn, "enablex_app_id"), _get_setting(conn, "enablex_app_key")
+        return _get_setting(conn, account_id, "enablex_app_id"), _get_setting(conn, account_id, "enablex_app_key")
     finally:
         conn.close()
 
 
-def _enablex_request(path: str, method: str, body: dict | None) -> dict:
+def _enablex_request(path: str, method: str, body: dict | None, account_id: int) -> dict:
     """Call the EnableX Voice REST API with the stored HTTP Basic credentials.
 
     `path` is relative to ENABLEX_API_BASE (e.g. "/call", "/call/<id>/accept").
@@ -1556,7 +1883,7 @@ def _enablex_request(path: str, method: str, body: dict | None) -> dict:
     import urllib.error
     import urllib.request
 
-    app_id, app_key = enablex_credentials()
+    app_id, app_key = enablex_credentials(account_id)
     if not app_id or not app_key:
         return {"ok": False, "error": "EnableX is not connected. Add your App ID and App Key first."}
 
@@ -1591,14 +1918,15 @@ def public_base_url() -> str | None:
     return f"https://{domain}" if domain else None
 
 
-# voice_id -> from_number for outbound test calls awaiting their "connected"
-# webhook so we know which agent's SIP number to bridge to. EnableX's generic
+# voice_id -> (from_number, account_id) for outbound test calls awaiting
+# their "connected" webhook, so we know both which agent's SIP number to
+# bridge to and whose EnableX credentials to bridge with. EnableX's generic
 # webhook from/to fields aren't reliably documented for the outbound
 # direction, so we track this ourselves rather than trust them.
-_TEST_CALL_FROM_BY_VOICE_ID: dict[str, str] = {}
+_TEST_CALL_FROM_BY_VOICE_ID: dict[str, tuple[str, int]] = {}
 
 
-def place_test_call(from_number: str, to_number: str) -> dict:
+def place_test_call(from_number: str, to_number: str, account_id: int) -> dict:
     """Place a real outbound call through the EnableX Voice API. Once the
     destination answers (the "connected" webhook event), the outbound-test
     webhook bridges the leg to the LiveKit agent assigned to `from_number` —
@@ -1633,10 +1961,11 @@ def place_test_call(from_number: str, to_number: str) -> dict:
             },
             "event_url": f"{base_url}/telephony/enablex/outbound-test-event",
         },
+        account_id,
     )
     voice_id = (result.get("response") or {}).get("voice_id") if result.get("ok") else None
     if voice_id:
-        _TEST_CALL_FROM_BY_VOICE_ID[voice_id] = from_number
+        _TEST_CALL_FROM_BY_VOICE_ID[voice_id] = (from_number, account_id)
     return result
 
 
@@ -1648,19 +1977,20 @@ def enablex_test_call_connected(voice_id: str) -> dict | None:
     delivery after we've already bridged it once)."""
     import livekit_sip  # local import: livekit_sip imports this module at load time
 
-    from_number = _TEST_CALL_FROM_BY_VOICE_ID.pop(voice_id, None)
-    if not from_number:
+    tracked = _TEST_CALL_FROM_BY_VOICE_ID.pop(voice_id, None)
+    if not tracked:
         return None
+    from_number, account_id = tracked
     sip_uri = f"sip:{from_number}@{livekit_sip.sip_host()}"
-    return enablex_connect_to_sip(voice_id, from_number, sip_uri)
+    return enablex_connect_to_sip(voice_id, from_number, sip_uri, account_id)
 
 
-def enablex_accept_call(voice_id: str) -> dict:
+def enablex_accept_call(voice_id: str, account_id: int) -> dict:
     """Answer a ringing inbound EnableX call leg (PUT /call/<id>/accept)."""
-    return _enablex_request(f"/call/{voice_id}/accept", "PUT", None)
+    return _enablex_request(f"/call/{voice_id}/accept", "PUT", None, account_id)
 
 
-def enablex_connect_to_sip(voice_id: str, from_number: str, sip_uri: str) -> dict:
+def enablex_connect_to_sip(voice_id: str, from_number: str, sip_uri: str, account_id: int) -> dict:
     """Bridge an accepted EnableX call leg out to a SIP URI (PUT /call/<id>/connect).
 
     EnableX's `connect` action accepts a phone number or a SIP URI as `to`,
@@ -1671,4 +2001,5 @@ def enablex_connect_to_sip(voice_id: str, from_number: str, sip_uri: str) -> dic
         f"/call/{voice_id}/connect",
         "PUT",
         {"from": from_number, "to": sip_uri},
+        account_id,
     )

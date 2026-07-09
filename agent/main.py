@@ -259,6 +259,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     # metadata when routed, otherwise whichever agent config
                     # actually loaded (the default/first one).
                     "agent_id": call_context["agent_id"] or (config or {}).get("id"),
+                    "account_id": (config or {}).get("account_id"),
                     **lead_data,
                 }
             )
