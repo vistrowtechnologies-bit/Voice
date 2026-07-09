@@ -574,6 +574,15 @@ def get_user_by_id(user_id: int) -> dict | None:
         conn.close()
 
 
+def get_password_hash(user_id: int) -> str | None:
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+        return row["password_hash"] if row else None
+    finally:
+        conn.close()
+
+
 def update_user_profile(user_id: int, name: str | None = None, password_hash: str | None = None) -> None:
     conn = _connect()
     try:

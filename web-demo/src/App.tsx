@@ -19,6 +19,7 @@ import { PhoneNumbers } from './pages/PhoneNumbers'
 import { Billing } from './pages/Billing'
 import { LeadDetail } from './pages/LeadDetail'
 import { WebsiteWidget } from './pages/WebsiteWidget'
+import { Settings } from './pages/Settings'
 
 // Wrap every dashboard route in the auth gate — one helper keeps App.tsx
 // readable instead of nesting <RequireAuth> around each element.
@@ -48,6 +49,7 @@ function App() {
         <Route path="/dashboard/numbers" element={guard(<PhoneNumbers />)} />
         <Route path="/dashboard/website-widget" element={guard(<WebsiteWidget />)} />
         <Route path="/dashboard/billing" element={guard(<Billing />)} />
+        <Route path="/dashboard/settings" element={guard(<Settings />)} />
         {/* Old bookmark path — same detail page as /dashboard/calls/:id */}
         <Route path="/dashboard/leads/:id" element={guard(<LeadDetail />)} />
       </Routes>

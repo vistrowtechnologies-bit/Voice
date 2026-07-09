@@ -17,6 +17,7 @@ export interface AuthState {
   signup: (data: { name: string; company: string; email: string; password: string }) => Promise<void>
   logout: () => Promise<void>
   refresh: () => Promise<void>
+  setUser: (user: AuthUser) => void
 }
 
 export const AuthContext = createContext<AuthState | null>(null)
@@ -29,9 +30,9 @@ export function useAuth(): AuthState {
 
 // --- API calls (credentials:'include' carries the session cookie) ---
 
-async function authFetch<T>(path: string, body?: unknown): Promise<T> {
+async function authFetch<T>(path: string, body?: unknown, method?: string): Promise<T> {
   const res = await fetch(`/api${path}`, {
-    method: body ? 'POST' : 'GET',
+    method: method || (body ? 'POST' : 'GET'),
     credentials: 'include',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -50,3 +51,6 @@ export const apiLogin = (email: string, password: string) =>
 export const apiSignup = (data: { name: string; company: string; email: string; password: string }) =>
   authFetch<{ user: AuthUser }>('/auth/signup', data)
 export const apiLogout = () => authFetch<{ ok: boolean }>('/auth/logout', {})
+export const apiUpdateProfile = (data: { name?: string; currentPassword?: string; newPassword?: string }) =>
+  authFetch<{ user: AuthUser }>('/profile', data, 'PATCH')
+export const apiUpdateAccount = (name: string) => authFetch<{ user: AuthUser }>('/account', { name }, 'PATCH')

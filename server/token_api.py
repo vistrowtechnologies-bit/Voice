@@ -199,6 +199,44 @@ def auth_me(request: Request) -> dict:
     return {"user": _me_payload(session["uid"])}
 
 
+class UpdateProfileRequest(BaseModel):
+    name: str | None = None
+    currentPassword: str | None = None
+    newPassword: str | None = None
+
+
+@app.patch("/profile")
+def update_profile(req: UpdateProfileRequest, user: dict = Depends(current_user)) -> dict:
+    name = req.name.strip() if req.name is not None else None
+    if name is not None and not name:
+        raise HTTPException(400, "Name can't be empty")
+
+    password_hash = None
+    if req.newPassword is not None:
+        if len(req.newPassword) < 8:
+            raise HTTPException(400, "New password must be at least 8 characters")
+        stored_hash = calls_db.get_password_hash(user["user_id"])
+        if stored_hash is None or not req.currentPassword or not auth.verify_password(req.currentPassword, stored_hash):
+            raise HTTPException(401, "Current password is incorrect")
+        password_hash = auth.hash_password(req.newPassword)
+
+    calls_db.update_user_profile(user["user_id"], name=name, password_hash=password_hash)
+    return {"user": _me_payload(user["user_id"])}
+
+
+class UpdateAccountRequest(BaseModel):
+    name: str
+
+
+@app.patch("/account")
+def update_account(req: UpdateAccountRequest, user: dict = Depends(current_user)) -> dict:
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(400, "Company name can't be empty")
+    calls_db.update_account(user["account_id"], name=name)
+    return {"user": _me_payload(user["user_id"])}
+
+
 @app.get("/active-calls")
 async def list_active_calls(user: dict = Depends(current_user)) -> list[dict]:
     """List rooms currently live on the LiveKit server, one entry per visitor,
