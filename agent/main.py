@@ -8,7 +8,7 @@ from livekit.agents import Agent, AgentSession, JobContext, TurnHandlingOptions,
 from livekit.plugins import google, openai, sarvam
 
 import db
-from language import detect_reply_language
+from language import LANGUAGE_NAMES, detect_reply_language
 from prompts.real_estate_qualification import build_sales_rep_prompt
 from tools import book_site_visit, check_availability, log_lead
 
@@ -97,7 +97,35 @@ class RealEstateAgent(Agent):
                     instructions += (
                         "\n\n# Knowledge base — verified project facts you may rely on\n" + kb
                     )
+        # Lead capture and default-language instructions are appended here,
+        # unconditionally, rather than living only inside build_sales_rep_prompt
+        # — an operator-written custom system_prompt (config["system_prompt"])
+        # REPLACES that built-in prompt entirely, and previously took its lead
+        # -capture and language instructions down with it: a custom-prompted
+        # agent would never call log_lead/book_site_visit (tools are bound
+        # either way, but the LLM was never told to use them) and would open
+        # every call in whatever language it defaulted to, ignoring the
+        # dashboard's configured language, since reply_language below only
+        # ever fed the TTS pronunciation hint, never the LLM's own text.
+        instructions += (
+            "\n\n# Lead capture (do this regardless of the persona/rules above)\n"
+            "As the conversation naturally reveals the caller's budget, preferred "
+            "location(s), timeline, or interest in visiting in person, call the "
+            "log_lead tool to record whatever you've learned so far — call it again "
+            "with the fuller picture if more comes up later in the same call, don't "
+            "wait until every field is known. If the caller wants to see a property "
+            "in person, use check_availability to find open slots, then book_site_visit "
+            "to confirm one. These tool calls are silent to the caller — never mention "
+            "or narrate that you're saving, logging, or recording anything."
+        )
         reply_language = config.get("language") or "hi-IN"
+        language_name = LANGUAGE_NAMES.get(reply_language, "Hindi")
+        instructions += (
+            f"\n\n# Default language\nOpen the call and speak first in {language_name} "
+            "(native script, not romanized) — there's no caller input yet to mirror, so "
+            f"{language_name} is the default until the caller's own language is clear. "
+            "Once they speak, follow the multilingual rules above and match them."
+        )
         super().__init__(
             instructions=instructions,
             stt=sarvam.STT(

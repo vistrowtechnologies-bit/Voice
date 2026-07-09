@@ -1,5 +1,22 @@
 import re
 
+# Display name for each language code the dashboard's agent editor offers —
+# used to tell the LLM which language to open a call in (see main.py); the
+# reply-language codes above are TTS pronunciation hints only and never
+# reach the LLM on their own.
+LANGUAGE_NAMES: dict[str, str] = {
+    "hi-IN": "Hindi",
+    "en-IN": "English",
+    "mr-IN": "Marathi",
+    "ta-IN": "Tamil",
+    "te-IN": "Telugu",
+    "kn-IN": "Kannada",
+    "ml-IN": "Malayalam",
+    "gu-IN": "Gujarati",
+    "bn-IN": "Bengali",
+    "pa-IN": "Punjabi",
+}
+
 # Unicode script ranges for the Indic languages Sarvam's bulbul:v3 TTS
 # supports. Devanagari covers both Hindi and Marathi — script alone can't
 # tell them apart, so it defaults to Hindi for that range.
