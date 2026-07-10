@@ -27,9 +27,15 @@ const VOICES = ['shubh', 'priya']
 // _build_tts tells these apart from a Sarvam speaker name; only takes
 // effect once GOOGLE_APPLICATION_CREDENTIALS_JSON is configured on the
 // agent service — selecting one before that just falls back to Sarvam
-// "shubh" silently. Kept to Hindi/English-India, the two locales Google's
-// Indian-language voice catalog covers best.
+// "shubh" silently.
 const GOOGLE_VOICES = [
+  // Gemini's multilingual voice personas — not locked to one locale, this
+  // same voice speaks whatever language the conversation is actually in
+  // (matches _build_tts's _GOOGLE_MULTILINGUAL_VOICES set exactly).
+  { value: 'google:charon', label: 'Google Multilingual — Male' },
+  { value: 'google:kore', label: 'Google Multilingual — Female' },
+  // Locale-specific voices, kept for Hindi/English-India where an operator
+  // wants that exact regional accent rather than the multilingual voice.
   { value: 'google:en-IN-Neural2-D', label: 'Google — English (India), Female' },
   { value: 'google:en-IN-Neural2-B', label: 'Google — English (India), Male' },
   { value: 'google:hi-IN-Neural2-A', label: 'Google — Hindi, Female' },

@@ -111,6 +111,24 @@ def _build_stt():
 
 
 _GOOGLE_VOICE_PREFIX = "google:"
+# Google's own streaming TTS path (livekit-plugins-google 1.6.4) has a real
+# concurrency bug: on cancellation it can call aclose() on its internal
+# request generator while that generator is still being iterated by the
+# in-flight gRPC call, raising "RuntimeError: aclose(): asynchronous
+# generator is already running" and killing the call (seen in production
+# logs the moment Sarvam ran out of credits and TTS fell over to Google).
+# use_streaming=False routes through the plugin's non-streaming
+# synthesize_speech call instead, which doesn't share that code path —
+# slightly higher per-utterance latency, but it doesn't crash.
+_GOOGLE_TTS_KWARGS = {"use_streaming": False}
+# Gemini's prebuilt multilingual voice personas — unlike a locale-tagged
+# voice name (e.g. "hi-IN-Neural2-A", good for exactly one language), these
+# generate natural speech in whatever language the input text is actually
+# in, so one voice can carry a call across Hindi, English, and every other
+# language this platform supports without swapping voices. Keyed by the
+# bare persona name (no locale prefix) — see
+# https://docs.cloud.google.com/text-to-speech/docs/gemini-tts#voice_options
+_GOOGLE_MULTILINGUAL_VOICES = {"charon", "kore"}
 
 
 def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
@@ -121,20 +139,32 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
     Sarvam is already failing and *a* voice beats a dropped call.
 
     A dashboard-selected voice can also explicitly name a Google voice
-    (e.g. "google:hi-IN-Neural2-A", stored verbatim as the agent's `voice`
-    field) so an operator can try Google's TTS on purpose, not just as an
-    outage fallback. In that case Google becomes the primary — the voice
-    name's own language prefix (its first two hyphen-separated segments)
-    is used for the `language=` param rather than reply_language, since a
-    Google voice is locked to one specific locale and passing a mismatched
-    language would desync from the selected voice."""
+    (stored verbatim as the agent's `voice` field, prefixed "google:") so
+    an operator can try Google's TTS on purpose, not just as an outage
+    fallback. Two forms are recognized:
+    - "google:<persona>" (e.g. "google:charon") — one of Gemini's
+      multilingual voice personas, primary model, speaks whatever language
+      the text is in.
+    - "google:<locale>-<model>-<voice>" (e.g. "google:hi-IN-Neural2-A") — a
+      locale-specific voice; the voice name's own language prefix (its
+      first two hyphen-separated segments) is used for `language=` rather
+      than reply_language, since these are locked to one specific locale."""
     if speaker.startswith(_GOOGLE_VOICE_PREFIX) and _GOOGLE_CREDENTIALS is not None:
         voice_name = speaker[len(_GOOGLE_VOICE_PREFIX) :]
+        if voice_name.lower() in _GOOGLE_MULTILINGUAL_VOICES:
+            return google.TTS(
+                language=reply_language,
+                voice_name=voice_name.capitalize(),
+                model_name="gemini-2.5-flash-tts",
+                credentials_info=_GOOGLE_CREDENTIALS,
+                **_GOOGLE_TTS_KWARGS,
+            )
         voice_language = "-".join(voice_name.split("-")[:2])
         return google.TTS(
             language=voice_language,
             voice_name=voice_name,
             credentials_info=_GOOGLE_CREDENTIALS,
+            **_GOOGLE_TTS_KWARGS,
         )
     sarvam_tts = sarvam.TTS(
         target_language_code=reply_language,
@@ -147,7 +177,9 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
     )
     if _GOOGLE_CREDENTIALS is None:
         return sarvam_tts
-    google_tts = google.TTS(language=reply_language, credentials_info=_GOOGLE_CREDENTIALS)
+    google_tts = google.TTS(
+        language=reply_language, credentials_info=_GOOGLE_CREDENTIALS, **_GOOGLE_TTS_KWARGS
+    )
     return TtsFallbackAdapter([sarvam_tts, google_tts])
 
 
