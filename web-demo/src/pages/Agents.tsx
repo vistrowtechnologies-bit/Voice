@@ -21,6 +21,16 @@ import type { AgentConfig, KnowledgeBase, PhoneNumber } from '../lib/types'
 // sarvam.TTS; an agent already saved with a different (now-hidden) speaker
 // keeps working, it just won't be selectable again from this dropdown.
 const VOICES = ['shubh', 'priya']
+// bulbul:v3 is ~94% of Sarvam spend by character count. These two bulbul:v2
+// speakers — cheaper per Sarvam's pricing — are offered so an operator can
+// compare quality against v3 before switching a live agent over. Matches
+// agent/main.py's _SARVAM_V2_SPEAKERS exactly; the raw speaker name (no
+// prefix) is what's stored as the agent's `voice` field, same as VOICES —
+// _build_tts picks the right Sarvam model per speaker automatically.
+const SARVAM_V2_VOICES = [
+  { value: 'abhilash', label: 'Abhilash (v2)' },
+  { value: 'anushka', label: 'Anushka (v2)' },
+] as const
 // Google Cloud TTS voices, offered alongside Sarvam so an operator can try
 // Google's voice quality directly rather than only hitting it as an
 // automatic outage fallback. The "google:" prefix is how agent/main.py's
@@ -41,7 +51,10 @@ const GOOGLE_VOICES = [
   { value: 'google:hi-IN-Neural2-A', label: 'Google — Hindi, Female' },
   { value: 'google:hi-IN-Neural2-B', label: 'Google — Hindi, Male' },
 ] as const
-const voiceLabel = (voice: string) => GOOGLE_VOICES.find((v) => v.value === voice)?.label ?? voice
+const voiceLabel = (voice: string) =>
+  GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
+  SARVAM_V2_VOICES.find((v) => v.value === voice)?.label ??
+  voice
 // gemini-2.0-flash was shut down by Google on 2026-06-01 — removed rather
 // than left as a dead, call-breaking option in this dropdown.
 const MODELS = ['gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gemini-2.5-flash', 'gemini-3.1-flash-lite']
@@ -395,6 +408,13 @@ function AgentEditor({
                   {VOICES.map((v) => (
                     <option key={v} value={v} className="capitalize">
                       {v}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Sarvam bulbul:v2 (cheaper, compare quality)">
+                  {SARVAM_V2_VOICES.map((v) => (
+                    <option key={v.value} value={v.value}>
+                      {v.label}
                     </option>
                   ))}
                 </optgroup>

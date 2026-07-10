@@ -119,6 +119,14 @@ def _build_stt():
     return SttFallbackAdapter([sarvam_stt, google_stt])
 
 
+# bulbul:v3 is ~94% of Sarvam spend by character count (v3's per-character
+# rate is higher than v2's). These two bulbul:v2 speakers — one male, one
+# female — are offered in the dashboard voice picker labeled "(v2)" to let
+# an operator compare quality against a cheaper model before switching.
+# v2 and v3 have entirely separate, non-overlapping speaker rosters, so
+# picking the right TTS model per speaker (below) is required, not optional.
+_SARVAM_V2_SPEAKERS = {"abhilash", "anushka"}
+
 _GOOGLE_VOICE_PREFIX = "google:"
 # Google's own streaming TTS path (livekit-plugins-google 1.6.4) has a real
 # concurrency bug: on cancellation it can call aclose() on its internal
@@ -175,13 +183,18 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
             credentials_info=_GOOGLE_CREDENTIALS,
             **_GOOGLE_TTS_KWARGS,
         )
+    # A Google voice selected with no credentials configured falls back to
+    # the default Sarvam speaker rather than passing the raw "google:..."
+    # string through as an invalid Sarvam speaker name.
+    sarvam_speaker = speaker if not speaker.startswith(_GOOGLE_VOICE_PREFIX) else "shubh"
     sarvam_tts = sarvam.TTS(
         target_language_code=reply_language,
-        model="bulbul:v3",
-        # A Google voice selected with no credentials configured falls back
-        # to the default Sarvam speaker rather than passing the raw
-        # "google:..." string through as an invalid Sarvam speaker name.
-        speaker=speaker if not speaker.startswith(_GOOGLE_VOICE_PREFIX) else "shubh",
+        # bulbul:v2 speakers (added to compare quality/cost against v3,
+        # which is ~94% of Sarvam spend per usage — see
+        # _SARVAM_V2_SPEAKERS) only work with the v2 model; every other
+        # speaker uses the current default, v3.
+        model="bulbul:v2" if sarvam_speaker in _SARVAM_V2_SPEAKERS else "bulbul:v3",
+        speaker=sarvam_speaker,
         **tone,
     )
     if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
