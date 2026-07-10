@@ -21,6 +21,21 @@ import type { AgentConfig, KnowledgeBase, PhoneNumber } from '../lib/types'
 // sarvam.TTS; an agent already saved with a different (now-hidden) speaker
 // keeps working, it just won't be selectable again from this dropdown.
 const VOICES = ['shubh', 'priya']
+// Google Cloud TTS voices, offered alongside Sarvam so an operator can try
+// Google's voice quality directly rather than only hitting it as an
+// automatic outage fallback. The "google:" prefix is how agent/main.py's
+// _build_tts tells these apart from a Sarvam speaker name; only takes
+// effect once GOOGLE_APPLICATION_CREDENTIALS_JSON is configured on the
+// agent service — selecting one before that just falls back to Sarvam
+// "shubh" silently. Kept to Hindi/English-India, the two locales Google's
+// Indian-language voice catalog covers best.
+const GOOGLE_VOICES = [
+  { value: 'google:en-IN-Neural2-D', label: 'Google — English (India), Female' },
+  { value: 'google:en-IN-Neural2-B', label: 'Google — English (India), Male' },
+  { value: 'google:hi-IN-Neural2-A', label: 'Google — Hindi, Female' },
+  { value: 'google:hi-IN-Neural2-B', label: 'Google — Hindi, Male' },
+] as const
+const voiceLabel = (voice: string) => GOOGLE_VOICES.find((v) => v.value === voice)?.label ?? voice
 // gemini-2.0-flash was shut down by Google on 2026-06-01 — removed rather
 // than left as a dead, call-breaking option in this dropdown.
 const MODELS = ['gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gemini-2.5-flash', 'gemini-3.1-flash-lite']
@@ -156,7 +171,7 @@ export function Agents() {
 
               <dl className="mb-4 flex flex-col gap-1.5 rounded-lg border border-border bg-surface-high/40 p-3 text-xs">
                 <InfoRow icon="memory" label="Model" value={agent.model} />
-                <InfoRow icon="record_voice_over" label="Voice" value={agent.voice} />
+                <InfoRow icon="record_voice_over" label="Voice" value={voiceLabel(agent.voice)} />
                 <InfoRow icon="language" label="Language" value={agent.language} />
                 <InfoRow icon="menu_book" label="Knowledge" value={kbs.find((k) => k.id === agent.kbId)?.name ?? 'none'} />
                 <InfoRow icon="update" label="Updated" value={formatDateTime(agent.updatedAt)} />
@@ -364,15 +379,26 @@ function AgentEditor({
                 ))}
               </select>
             </Field>
-            <Field label="Voice (Sarvam bulbul:v3)">
+            <Field label="Voice">
               <select
                 value={form.voice}
                 onChange={(e) => setForm({ ...form, voice: e.target.value })}
-                className="w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm capitalize"
+                className="w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm"
               >
-                {VOICES.map((v) => (
-                  <option key={v}>{v}</option>
-                ))}
+                <optgroup label="Sarvam bulbul:v3" className="capitalize">
+                  {VOICES.map((v) => (
+                    <option key={v} value={v} className="capitalize">
+                      {v}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Google Cloud TTS">
+                  {GOOGLE_VOICES.map((v) => (
+                    <option key={v.value} value={v.value}>
+                      {v.label}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </Field>
             <Field label="Default language">

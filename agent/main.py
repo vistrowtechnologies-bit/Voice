@@ -110,16 +110,39 @@ def _build_stt():
     return SttFallbackAdapter([sarvam_stt, google_stt])
 
 
+_GOOGLE_VOICE_PREFIX = "google:"
+
+
 def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
     """Same fallback pattern as _build_stt, for TTS. Google's voice catalog
-    doesn't map to Sarvam speaker names (shubh/priya) — the fallback just
-    uses Google's own default voice for the reply language rather than
-    trying to match timbre, since it only ever fires when Sarvam is already
-    failing and *a* voice beats a dropped call."""
+    doesn't map to Sarvam speaker names (shubh/priya) — the automatic
+    fallback just uses Google's own default voice for the reply language
+    rather than trying to match timbre, since it only ever fires when
+    Sarvam is already failing and *a* voice beats a dropped call.
+
+    A dashboard-selected voice can also explicitly name a Google voice
+    (e.g. "google:hi-IN-Neural2-A", stored verbatim as the agent's `voice`
+    field) so an operator can try Google's TTS on purpose, not just as an
+    outage fallback. In that case Google becomes the primary — the voice
+    name's own language prefix (its first two hyphen-separated segments)
+    is used for the `language=` param rather than reply_language, since a
+    Google voice is locked to one specific locale and passing a mismatched
+    language would desync from the selected voice."""
+    if speaker.startswith(_GOOGLE_VOICE_PREFIX) and _GOOGLE_CREDENTIALS is not None:
+        voice_name = speaker[len(_GOOGLE_VOICE_PREFIX) :]
+        voice_language = "-".join(voice_name.split("-")[:2])
+        return google.TTS(
+            language=voice_language,
+            voice_name=voice_name,
+            credentials_info=_GOOGLE_CREDENTIALS,
+        )
     sarvam_tts = sarvam.TTS(
         target_language_code=reply_language,
         model="bulbul:v3",
-        speaker=speaker,
+        # A Google voice selected with no credentials configured falls back
+        # to the default Sarvam speaker rather than passing the raw
+        # "google:..." string through as an invalid Sarvam speaker name.
+        speaker=speaker if not speaker.startswith(_GOOGLE_VOICE_PREFIX) else "shubh",
         **tone,
     )
     if _GOOGLE_CREDENTIALS is None:
