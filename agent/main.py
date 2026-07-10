@@ -13,8 +13,8 @@ from livekit.plugins import google, openai, sarvam
 
 import db
 from language import LANGUAGE_NAMES, detect_reply_language
+from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.platform_assistant import build_platform_assistant_prompt
-from prompts.real_estate_qualification import build_sales_rep_prompt
 from tools import book_site_visit, capture_platform_lead, check_availability, end_call, log_lead
 
 load_dotenv()
@@ -201,7 +201,7 @@ class RealEstateAgent(Agent):
         elif config.get("is_platform_demo"):
             instructions = build_platform_assistant_prompt(agent_name)
         else:
-            instructions = build_sales_rep_prompt(agent_name)
+            instructions = build_generic_assistant_prompt(agent_name)
         if visitor_name and visitor_phone:
             # Website-widget calls collect these in a pre-call form, so the
             # agent already has them — this both stops it re-asking (the
@@ -251,7 +251,7 @@ class RealEstateAgent(Agent):
                         "\n\n# Knowledge base — verified project facts you may rely on\n" + kb
                     )
         # Lead capture and default-language instructions are appended here,
-        # unconditionally, rather than living only inside build_sales_rep_prompt
+        # unconditionally, rather than living only inside build_generic_assistant_prompt
         # — an operator-written custom system_prompt (config["system_prompt"])
         # REPLACES that built-in prompt entirely, and previously took its lead
         # -capture and language instructions down with it: a custom-prompted
@@ -265,13 +265,15 @@ class RealEstateAgent(Agent):
             "Use whichever of these tools actually matches what this call is about — "
             "your persona/system prompt above tells you which one applies, and you "
             "only ever need one of the two:\n"
-            "- Real-estate / per-tenant sales calls: as the conversation naturally "
-            "reveals the caller's budget, preferred location(s), timeline, or interest "
-            "in visiting in person, call log_lead to record whatever you've learned so "
-            "far — call it again with the fuller picture if more comes up later in the "
-            "same call, don't wait until every field is known. If the caller wants to "
-            "see a property in person, use check_availability to find open slots, then "
-            "book_site_visit to confirm one.\n"
+            "- Any per-tenant business call (this is the default): as the conversation "
+            "naturally reveals the caller's name and a way to reach them, plus whatever "
+            "context is actually relevant (budget/pricing, location, timing/urgency — "
+            "use \"not applicable\" for any of these that don't fit this business), call "
+            "log_lead to record what you've learned so far — call it again with the "
+            "fuller picture if more comes up later in the same call, don't wait until "
+            "every field is known. If this is specifically a real-estate business and "
+            "the caller wants to see a property in person, use check_availability to "
+            "find open slots, then book_site_visit to confirm one.\n"
             "- Vistrow Voice platform-assistant calls (explaining Vistrow Voice itself "
             "to a prospective customer): once you have the caller's name plus at least "
             "one more of company/contact/use case/team size, call "

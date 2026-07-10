@@ -438,11 +438,11 @@ function AgentEditor({
         </div>
 
         <div className="flex flex-col gap-3">
-          <Field label="System prompt (blank = built-in default sales-agent prompt)">
+          <Field label="System prompt (blank = built-in generic assistant prompt)">
             <textarea
               value={form.systemPrompt}
               onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
-              placeholder="Leave empty to use the built-in real-estate qualification prompt, or write a custom persona here…"
+              placeholder="Leave empty to use the built-in generic business assistant prompt, or write a custom persona here…"
               className="h-full min-h-[180px] w-full resize-none rounded-lg border border-border bg-surface-high p-3 text-xs leading-relaxed outline-none focus:border-primary"
             />
           </Field>

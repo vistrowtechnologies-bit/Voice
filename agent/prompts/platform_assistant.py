@@ -1,10 +1,11 @@
 """System prompt for the platform-assistant persona — the agent that answers
 the "try it live" demo on the Vistrow Voice marketing site itself. Unlike
-build_sales_rep_prompt (agent/prompts/real_estate_qualification.py), which
-plays a per-tenant business's own sales rep, this persona explains Vistrow
-Voice the product to a prospective customer and captures them as a sales
-lead — used by the seeded "platform assistant" agent, wired to the public
-/demo and /call routes via agents.is_platform_demo (see server/calls_db.py).
+build_generic_assistant_prompt (agent/prompts/generic_assistant.py), which
+plays a per-tenant business's own generic phone assistant, this persona
+explains Vistrow Voice the product to a prospective customer and captures
+them as a sales lead — used by the seeded "platform assistant" agent, wired
+to the public /demo and /call routes via agents.is_platform_demo (see
+server/calls_db.py).
 """
 
 
