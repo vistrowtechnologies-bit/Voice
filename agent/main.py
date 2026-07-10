@@ -11,6 +11,7 @@ from livekit.plugins import google, openai, sarvam
 
 import db
 from language import LANGUAGE_NAMES, detect_reply_language
+from prompts.platform_assistant import build_platform_assistant_prompt
 from prompts.real_estate_qualification import build_sales_rep_prompt
 from tools import book_site_visit, capture_platform_lead, check_availability, end_call, log_lead
 
@@ -68,7 +69,13 @@ class RealEstateAgent(Agent):
         # on the next call without a redeploy. Missing table or empty fields
         # fall back to the in-code defaults.
         config = config or {}
-        instructions = config.get("system_prompt") or build_sales_rep_prompt(config.get("name") or "Artha")
+        agent_name = config.get("name") or "Artha"
+        if config.get("system_prompt"):
+            instructions = config["system_prompt"]
+        elif config.get("is_platform_demo"):
+            instructions = build_platform_assistant_prompt(agent_name)
+        else:
+            instructions = build_sales_rep_prompt(agent_name)
         if visitor_name and visitor_phone:
             # Website-widget calls collect these in a pre-call form, so the
             # agent already has them — this both stops it re-asking (the
