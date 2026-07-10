@@ -15,48 +15,12 @@ import {
 } from '../lib/api'
 import type { AgentConfig, KnowledgeBase, PhoneNumber } from '../lib/types'
 
-// Full bulbul:v3 speaker roster (Sarvam docs — the previous list here was
-// actually bulbul:v2 names, most of which aren't valid v3 speakers). The
-// voice picked here is exactly what agent/main.py passes to sarvam.TTS.
-const VOICES = [
-  'shubh',
-  'aditya',
-  'ritu',
-  'priya',
-  'neha',
-  'rahul',
-  'pooja',
-  'rohan',
-  'simran',
-  'kavya',
-  'amit',
-  'dev',
-  'ishita',
-  'shreya',
-  'ratan',
-  'varun',
-  'manan',
-  'sumit',
-  'roopa',
-  'kabir',
-  'aayan',
-  'ashutosh',
-  'advait',
-  'anand',
-  'tanya',
-  'tarun',
-  'sunny',
-  'mani',
-  'gokul',
-  'vijay',
-  'shruti',
-  'suhani',
-  'mohit',
-  'kavitha',
-  'rehan',
-  'soham',
-  'rupali',
-]
+// Curated down to one male (shubh) and one female (priya) voice — the full
+// bulbul:v3 roster was overwhelming with no real differentiation for most
+// operators. The voice picked here is exactly what agent/main.py passes to
+// sarvam.TTS; an agent already saved with a different (now-hidden) speaker
+// keeps working, it just won't be selectable again from this dropdown.
+const VOICES = ['shubh', 'priya']
 // gemini-2.0-flash was shut down by Google on 2026-06-01 — removed rather
 // than left as a dead, call-breaking option in this dropdown.
 const MODELS = ['gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gemini-2.5-flash', 'gemini-3.1-flash-lite']

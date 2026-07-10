@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from livekit import api
 from livekit.agents import Agent, AgentSession, JobContext, TurnHandlingOptions, WorkerOptions, cli, llm
+from livekit.agents.stt import FallbackAdapter as SttFallbackAdapter
+from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
 from livekit.plugins import google, openai, sarvam
 
 import db
@@ -55,6 +57,75 @@ def _build_llm(model: str):
         api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         return google.LLM(model=model, api_key=api_key)
     return openai.LLM(model=model)
+
+
+def _google_credentials_info() -> dict | None:
+    """Google Cloud Speech-to-Text/Text-to-Speech need a service-account
+    credential (a different Google auth surface than GEMINI_API_KEY, which
+    only covers the Gemini LLM) — not configured by default. Reads the
+    account's full JSON key from an env var (Railway-friendly: no file to
+    mount) rather than a credentials_file path. Returns None — and every
+    caller below falls back to Sarvam-only — if it's absent or malformed,
+    so this feature is opt-in and never breaks a deployment that hasn't set
+    it up."""
+    raw = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except ValueError:
+        logger.warning("GOOGLE_APPLICATION_CREDENTIALS_JSON is not valid JSON — Google STT/TTS fallback disabled")
+        return None
+
+
+_GOOGLE_CREDENTIALS = _google_credentials_info()
+
+
+def _build_stt():
+    """Sarvam saaras:v3 is the primary — Indian-language quality/latency it
+    was actually chosen for. If GOOGLE_APPLICATION_CREDENTIALS_JSON is set,
+    wraps it in a FallbackAdapter so a Sarvam outage or exhausted credit
+    balance (observed in production as "Insufficient credits", which
+    AgentSession treats as unrecoverable and closes the whole call) retries
+    against Google Cloud STT instead of killing the session."""
+    sarvam_stt = sarvam.STT(
+        # "unknown" is a first-class value on saaras:v3 covering 20+ Indian
+        # languages (Hindi, Marathi, Malayalam, Gujarati, Tamil, Telugu,
+        # Kannada, Bengali, Punjabi, Odia, English, and more) — needed since
+        # we support more than just Hindi/English. "codemix" mode is
+        # Hindi-English-specific; plain "transcribe" is Sarvam's
+        # general-purpose multi-language mode.
+        language="unknown",
+        model="saaras:v3",
+        mode="transcribe",
+        flush_signal=True,
+    )
+    if _GOOGLE_CREDENTIALS is None:
+        return sarvam_stt
+    google_stt = google.STT(
+        languages=["hi-IN", "en-IN"],
+        detect_language=True,
+        credentials_info=_GOOGLE_CREDENTIALS,
+    )
+    return SttFallbackAdapter([sarvam_stt, google_stt])
+
+
+def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
+    """Same fallback pattern as _build_stt, for TTS. Google's voice catalog
+    doesn't map to Sarvam speaker names (shubh/priya) — the fallback just
+    uses Google's own default voice for the reply language rather than
+    trying to match timbre, since it only ever fires when Sarvam is already
+    failing and *a* voice beats a dropped call."""
+    sarvam_tts = sarvam.TTS(
+        target_language_code=reply_language,
+        model="bulbul:v3",
+        speaker=speaker,
+        **tone,
+    )
+    if _GOOGLE_CREDENTIALS is None:
+        return sarvam_tts
+    google_tts = google.TTS(language=reply_language, credentials_info=_GOOGLE_CREDENTIALS)
+    return TtsFallbackAdapter([sarvam_tts, google_tts])
 
 
 class RealEstateAgent(Agent):
@@ -181,24 +252,12 @@ class RealEstateAgent(Agent):
         )
         super().__init__(
             instructions=instructions,
-            stt=sarvam.STT(
-                # "unknown" is a first-class value on saaras:v3 covering 20+
-                # Indian languages (Hindi, Marathi, Malayalam, Gujarati, Tamil,
-                # Telugu, Kannada, Bengali, Punjabi, Odia, English, and more) —
-                # needed since we support more than just Hindi/English.
-                # "codemix" mode is Hindi-English-specific; plain "transcribe"
-                # is Sarvam's general-purpose multi-language mode.
-                language="unknown",
-                model="saaras:v3",
-                mode="transcribe",
-                flush_signal=True,
-            ),
+            stt=_build_stt(),
             llm=_build_llm(config.get("model") or "gpt-4.1"),
-            tts=sarvam.TTS(
-                target_language_code=reply_language,
-                model="bulbul:v3",
-                speaker=config.get("voice") or "pooja",
-                **TONE_PRESETS.get(config.get("tone") or DEFAULT_TONE, TONE_PRESETS[DEFAULT_TONE]),
+            tts=_build_tts(
+                reply_language,
+                config.get("voice") or "shubh",
+                TONE_PRESETS.get(config.get("tone") or DEFAULT_TONE, TONE_PRESETS[DEFAULT_TONE]),
             ),
             tools=[check_availability, book_site_visit, log_lead, capture_platform_lead, end_call],
         )
