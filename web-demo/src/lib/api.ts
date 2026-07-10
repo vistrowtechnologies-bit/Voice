@@ -103,6 +103,10 @@ export const deleteKnowledgeBase = (id: number) => send('DELETE', `/knowledge-ba
 export const addKnowledgeSource = (kbId: number, name: string, content: string, type = 'text') =>
   send('POST', `/knowledge-bases/${kbId}/sources`, { name, content, type })
 export const deleteKnowledgeSource = (id: number) => send('DELETE', `/knowledge-sources/${id}`)
+export const fetchKnowledgeSource = (id: number) =>
+  get<{ id: number; kbId: number; name: string; content: string }>(`/knowledge-sources/${id}`)
+export const updateKnowledgeSource = (id: number, data: { name?: string; content?: string }) =>
+  send<{ id: number; kbId: number; name: string; content: string }>('PATCH', `/knowledge-sources/${id}`, data)
 export const scanKnowledgeSourceUrl = (kbId: number, url: string) =>
   send<{ baseUrl: string; pages: { url: string; title: string }[] }>(
     'POST',

@@ -457,6 +457,24 @@ def add_knowledge_source(kb_id: int, data: dict = Body(...), user: dict = Depend
     return {"ok": True}
 
 
+@app.get("/knowledge-sources/{source_id}")
+def get_knowledge_source(source_id: int, user: dict = Depends(current_user)) -> dict:
+    source = calls_db.get_knowledge_source_content(source_id, user["account_id"])
+    if source is None:
+        raise HTTPException(404, "Source not found")
+    return source
+
+
+@app.patch("/knowledge-sources/{source_id}")
+def update_knowledge_source(source_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    source = calls_db.update_knowledge_source(
+        source_id, user["account_id"], name=data.get("name"), content=data.get("content")
+    )
+    if source is None:
+        raise HTTPException(404, "Source not found")
+    return source
+
+
 @app.delete("/knowledge-sources/{source_id}")
 def delete_knowledge_source(source_id: int, user: dict = Depends(current_user)) -> dict:
     calls_db.delete_knowledge_source(source_id, user["account_id"])

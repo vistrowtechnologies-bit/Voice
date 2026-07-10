@@ -1175,6 +1175,31 @@ def add_knowledge_source(kb_id: int, name: str, content: str, account_id: int, s
         conn.close()
 
 
+def update_knowledge_source(
+    source_id: int, account_id: int, name: str | None = None, content: str | None = None
+) -> dict | None:
+    conn = _connect()
+    try:
+        sets, params = [], []
+        if name is not None:
+            sets.append("name = ?")
+            params.append(name)
+        if content is not None:
+            sets.append("content = ?")
+            params.append(content)
+        if not sets:
+            return get_knowledge_source_content(source_id, account_id)
+        with conn:
+            conn.execute(
+                f"UPDATE knowledge_sources SET {', '.join(sets)} WHERE id = ? "
+                "AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
+                (*params, source_id, account_id),
+            )
+        return get_knowledge_source_content(source_id, account_id)
+    finally:
+        conn.close()
+
+
 def delete_knowledge_source(source_id: int, account_id: int) -> None:
     conn = _connect()
     try:

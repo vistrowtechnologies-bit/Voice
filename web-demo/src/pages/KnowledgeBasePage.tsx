@@ -11,10 +11,12 @@ import {
   deleteKnowledgeSource,
   extractQaFromSource,
   fetchKnowledgeBases,
+  fetchKnowledgeSource,
   importKnowledgeSourceUrls,
   scanKnowledgeSourceUrl,
   setKnowledgeBaseStrict,
   updateKbQa,
+  updateKnowledgeSource,
 } from '../lib/api'
 import { extractTextFromFile } from '../lib/fileExtract'
 import type { KbQaPair, KnowledgeBase, QaDraft } from '../lib/types'
@@ -113,6 +115,14 @@ export function KnowledgeBasePage() {
   const [addingQaTo, setAddingQaTo] = useState<number | null>(null)
   const [newQ, setNewQ] = useState('')
   const [newA, setNewA] = useState('')
+
+  // Inline source editing — a source's full text isn't in the list
+  // response (only its length), so opening the editor fetches it first.
+  const [editingSource, setEditingSource] = useState<number | null>(null)
+  const [editSourceName, setEditSourceName] = useState('')
+  const [editSourceContent, setEditSourceContent] = useState('')
+  const [loadingSource, setLoadingSource] = useState(false)
+  const [savingSource, setSavingSource] = useState(false)
 
   const reload = () => fetchKnowledgeBases().then(setKbs).catch(() => setKbs([]))
 
@@ -246,6 +256,39 @@ export function KnowledgeBasePage() {
     reload()
   }
 
+  const startEditSource = async (sourceId: number, name: string) => {
+    setEditingSource(sourceId)
+    setLoadingSource(true)
+    try {
+      const full = await fetchKnowledgeSource(sourceId)
+      setEditSourceName(full.name)
+      setEditSourceContent(full.content)
+    } catch {
+      setEditSourceName(name)
+      setEditSourceContent('')
+    } finally {
+      setLoadingSource(false)
+    }
+  }
+
+  const cancelEditSource = () => {
+    setEditingSource(null)
+    setEditSourceName('')
+    setEditSourceContent('')
+  }
+
+  const saveEditSource = async () => {
+    if (editingSource === null || !editSourceName.trim()) return
+    setSavingSource(true)
+    try {
+      await updateKnowledgeSource(editingSource, { name: editSourceName.trim(), content: editSourceContent })
+      setEditingSource(null)
+      reload()
+    } finally {
+      setSavingSource(false)
+    }
+  }
+
   const saveNewQa = async () => {
     if (addingQaTo === null || !newQ.trim() || !newA.trim()) return
     await addKbQa(addingQaTo, newQ.trim(), newA.trim())
@@ -345,41 +388,91 @@ export function KnowledgeBasePage() {
 
                 {/* Sources with auto-extract */}
                 <div className="flex flex-col gap-2">
-                  {kb.sources.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center gap-3 rounded-lg border border-border bg-surface-high/40 px-3 py-2.5"
-                    >
-                      <Icon
-                        name={s.type === 'url' ? 'language' : 'description'}
-                        className="text-[17px] text-text-muted"
-                      />
-                      <span className="min-w-0 flex-1 truncate text-sm">{s.name}</span>
-                      {s.type === 'url' && (
-                        <span className="hidden rounded-full border border-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-text-muted sm:block">
-                          URL
+                  {kb.sources.map((s) =>
+                    editingSource === s.id ? (
+                      <div key={s.id} className="flex flex-col gap-2 rounded-lg border border-primary/50 bg-surface-high/40 p-3">
+                        <input
+                          value={editSourceName}
+                          onChange={(e) => setEditSourceName(e.target.value)}
+                          placeholder="Source name"
+                          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+                        />
+                        <textarea
+                          value={editSourceContent}
+                          onChange={(e) => setEditSourceContent(e.target.value)}
+                          disabled={loadingSource}
+                          rows={8}
+                          placeholder={loadingSource ? 'Loading…' : 'Source text'}
+                          className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-xs leading-relaxed outline-none focus:border-primary disabled:opacity-50"
+                        />
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-text-muted">{(editSourceContent.length / 1000).toFixed(1)}k chars</span>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={cancelEditSource}
+                              className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold transition-colors hover:border-primary"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={saveEditSource}
+                              disabled={savingSource || loadingSource || !editSourceName.trim()}
+                              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+                            >
+                              {savingSource ? 'Saving…' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        key={s.id}
+                        className="flex items-center gap-3 rounded-lg border border-border bg-surface-high/40 px-3 py-2.5"
+                      >
+                        <Icon
+                          name={s.type === 'url' ? 'language' : 'description'}
+                          className="text-[17px] text-text-muted"
+                        />
+                        <button
+                          onClick={() => startEditSource(s.id, s.name)}
+                          className="min-w-0 flex-1 truncate text-left text-sm hover:underline"
+                          title="Open and edit this source"
+                        >
+                          {s.name}
+                        </button>
+                        {s.type === 'url' && (
+                          <span className="hidden rounded-full border border-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-text-muted sm:block">
+                            URL
+                          </span>
+                        )}
+                        <span className="hidden text-[11px] text-text-muted sm:block">
+                          {(s.sizeChars / 1000).toFixed(1)}k chars
                         </span>
-                      )}
-                      <span className="hidden text-[11px] text-text-muted sm:block">
-                        {(s.sizeChars / 1000).toFixed(1)}k chars
-                      </span>
-                      <button
-                        onClick={() => handleExtract(kb.id, s.id, s.name)}
-                        disabled={extractingSource !== null}
-                        className="flex items-center gap-1.5 rounded-lg bg-primary/90 px-3 py-1.5 text-xs font-bold text-bg transition-all hover:bg-primary active:scale-[0.97] disabled:opacity-50"
-                      >
-                        <span className="text-[13px]">✦</span>
-                        {extractingSource === s.id ? 'Extracting…' : 'Auto-extract Q&A'}
-                      </button>
-                      <button
-                        onClick={() => deleteKnowledgeSource(s.id).then(reload)}
-                        aria-label={`Remove ${s.name}`}
-                        className="text-text-muted transition-colors hover:text-destructive"
-                      >
-                        <Icon name="close" className="text-[16px]" />
-                      </button>
-                    </div>
-                  ))}
+                        <button
+                          onClick={() => startEditSource(s.id, s.name)}
+                          aria-label={`Edit ${s.name}`}
+                          className="text-text-muted transition-colors hover:text-text"
+                        >
+                          <Icon name="edit" className="text-[16px]" />
+                        </button>
+                        <button
+                          onClick={() => handleExtract(kb.id, s.id, s.name)}
+                          disabled={extractingSource !== null}
+                          className="flex items-center gap-1.5 rounded-lg bg-primary/90 px-3 py-1.5 text-xs font-bold text-bg transition-all hover:bg-primary active:scale-[0.97] disabled:opacity-50"
+                        >
+                          <span className="text-[13px]">✦</span>
+                          {extractingSource === s.id ? 'Extracting…' : 'Auto-extract Q&A'}
+                        </button>
+                        <button
+                          onClick={() => deleteKnowledgeSource(s.id).then(reload)}
+                          aria-label={`Remove ${s.name}`}
+                          className="text-text-muted transition-colors hover:text-destructive"
+                        >
+                          <Icon name="close" className="text-[16px]" />
+                        </button>
+                      </div>
+                    ),
+                  )}
                 </div>
                 {extractError && review === null && (
                   <p className="flex items-center gap-1.5 text-xs text-destructive">
