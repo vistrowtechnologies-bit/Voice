@@ -307,7 +307,9 @@ def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
             (account_id, key, name, category, description),
         )
     for key, value in (
-        ("credits_total", "300"),
+        # Free trial allowance for a brand-new signup — deliberately small;
+        # an operator upgrades the account's plan for more.
+        ("credits_total", "10"),
         # Phone minutes burn more credits than browser/widget minutes — they
         # carry an EnableX telephony cost the others don't.
         ("credit_rate_browser", "1"),
