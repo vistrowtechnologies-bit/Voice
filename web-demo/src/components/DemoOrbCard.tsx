@@ -77,7 +77,7 @@ export function DemoOrbCard() {
   const isCallLive = phase === 'active'
 
   return (
-    <div className="relative w-full max-w-[420px]">
+    <div className="relative w-full max-w-[420px] lg:ml-auto">
       <div className="pointer-events-none absolute -inset-10 rounded-full bg-primary/20 blur-[100px]" />
       <div className="relative flex w-full flex-col items-center rounded-[28px] border border-border bg-surface/80 p-8 text-center backdrop-blur-xl sm:p-10">
         <div className="absolute right-5 top-5 flex items-center gap-1.5 rounded-full border border-border bg-surface-high px-3 py-1">

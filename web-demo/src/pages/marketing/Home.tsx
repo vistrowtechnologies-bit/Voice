@@ -61,7 +61,7 @@ export function Home() {
           </div>
         </div>
 
-        <div className="lg:justify-self-end">
+        <div>
           <DemoOrbCard />
         </div>
       </section>
