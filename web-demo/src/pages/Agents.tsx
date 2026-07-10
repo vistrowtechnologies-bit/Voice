@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { BrowserTestModal, DialTestModal } from '../components/AgentTestCall'
+import { useAuth } from '../lib/auth'
 import {
   createAgent,
   deleteAgent,
@@ -93,6 +94,7 @@ const LANGUAGES = [
 ] as const
 
 export function Agents() {
+  const { user } = useAuth()
   const [agents, setAgents] = useState<AgentConfig[]>([])
   const [kbs, setKbs] = useState<KnowledgeBase[]>([])
   const [numbers, setNumbers] = useState<PhoneNumber[]>([])
@@ -236,6 +238,7 @@ export function Agents() {
           <AgentEditor
             agent={editing}
             kbs={kbs}
+            isPlatformOwner={user?.isPlatformOwner ?? false}
             onClose={() => setEditing(null)}
             onSaved={() => {
               setEditing(null)
@@ -275,11 +278,13 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 function AgentEditor({
   agent,
   kbs,
+  isPlatformOwner,
   onClose,
   onSaved,
 }: {
   agent: AgentConfig
   kbs: KnowledgeBase[]
+  isPlatformOwner: boolean
   onClose: () => void
   onSaved: () => void
 }) {
@@ -441,19 +446,21 @@ function AgentEditor({
               className="h-full min-h-[180px] w-full resize-none rounded-lg border border-border bg-surface-high p-3 text-xs leading-relaxed outline-none focus:border-primary"
             />
           </Field>
-          <label className="flex items-start gap-2 rounded-lg border border-border bg-surface-high/40 p-3">
-            <input
-              type="checkbox"
-              checked={form.isPlatformDemo}
-              onChange={(e) => setForm({ ...form, isPlatformDemo: e.target.checked })}
-              className="mt-0.5"
-            />
-            <span className="text-xs leading-relaxed text-text-muted">
-              <span className="font-bold text-text">Use as public website demo agent.</span> Powers the
-              "talk to Artha live" demo on the Vistrow Voice marketing site. Only one agent
-              platform-wide can hold this — enabling it here turns it off on any other agent.
-            </span>
-          </label>
+          {isPlatformOwner && (
+            <label className="flex items-start gap-2 rounded-lg border border-border bg-surface-high/40 p-3">
+              <input
+                type="checkbox"
+                checked={form.isPlatformDemo}
+                onChange={(e) => setForm({ ...form, isPlatformDemo: e.target.checked })}
+                className="mt-0.5"
+              />
+              <span className="text-xs leading-relaxed text-text-muted">
+                <span className="font-bold text-text">Use as public website demo agent.</span> Powers the
+                "talk to Artha live" demo on the Vistrow Voice marketing site. Only one agent
+                platform-wide can hold this — enabling it here turns it off on any other agent.
+              </span>
+            </label>
+          )}
         </div>
       </div>
       )}

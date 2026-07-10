@@ -8,6 +8,7 @@ export interface AuthUser {
   accountId: number
   accountName: string
   plan: string
+  isPlatformOwner: boolean
 }
 
 export interface AuthState {

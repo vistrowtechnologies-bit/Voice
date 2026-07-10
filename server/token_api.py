@@ -153,6 +153,7 @@ def _me_payload(user_id: int) -> dict:
         "accountId": user["account_id"],
         "accountName": user["account_name"],
         "plan": user["account_plan"],
+        "isPlatformOwner": bool(user["is_platform_owner"]),
     }
 
 
@@ -367,6 +368,14 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
 
 @app.patch("/agents/{agent_id}")
 def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    if ("isPlatformDemo" in data or "is_platform_demo" in data) and not calls_db.is_platform_owner(
+        user["account_id"]
+    ):
+        # Only the platform operator's own account may redirect the public
+        # marketing site's live demo to one of its agents — silently drop
+        # the field rather than error, so an unrelated edit (name, voice)
+        # bundled in the same request still saves.
+        data = {k: v for k, v in data.items() if k not in ("isPlatformDemo", "is_platform_demo")}
     agent = calls_db.update_agent(agent_id, data, user["account_id"])
     if agent is None:
         raise HTTPException(404, "Agent not found")

@@ -249,7 +249,7 @@ function InlineCallBody({
         {formatDuration(elapsedMs)}
       </div>
 
-      <div className="mt-6 flex items-center gap-4 border-t border-border pt-5">
+      <div className="mt-6 flex w-full items-center justify-center gap-4 border-t border-border pt-5">
         <button
           aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
           onClick={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
