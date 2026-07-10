@@ -14,12 +14,21 @@ the connection on exit (unlike sqlite3's, which only commits/rolls back and
 leaves it open for further use) — Conn.__exit__ below deliberately does NOT
 delegate to psycopg's own context manager, to preserve the sqlite3 behavior
 every call site in calls_db.py/agent/db.py already relies on.
+
+connect()/close() are backed by a pool, not a raw connection per call —
+every live-call DB touch (agent config lookup, saved call row) used to open
+a brand new TCP+TLS connection to Postgres and tear it down immediately,
+which caps real concurrency far below Postgres's own max_connections (each
+open costs a full handshake, and connections pile up under concurrent
+calls). Pooling reuses a small set of warm connections instead.
 """
 
 import os
+import threading
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 
 def _database_url() -> str:
@@ -30,6 +39,34 @@ def _database_url() -> str:
             "once the product moved to Postgres for multi-tenant durability)."
         )
     return url
+
+
+_pool: ConnectionPool | None = None
+_pool_lock = threading.Lock()
+
+
+def _get_pool() -> ConnectionPool:
+    # Lazy — DATABASE_URL isn't read (and no connections opened) until the
+    # first real query, matching the old connect()-per-call behavior rather
+    # than making pool construction a hard dependency at worker startup.
+    # Guarded by a lock since concurrent calls can each hit this on their
+    # first DB touch before the pool exists yet.
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                # Smaller than server/dbconn.py's pool — this process' own
+                # concurrency is already bounded by how many live calls one
+                # worker can host, and the server's own pool holds
+                # connections against the same Postgres instance too.
+                _pool = ConnectionPool(
+                    _database_url(),
+                    min_size=1,
+                    max_size=5,
+                    kwargs={"row_factory": dict_row},
+                    open=True,
+                )
+    return _pool
 
 
 class Cursor:
@@ -81,8 +118,14 @@ class Conn:
         return False
 
     def close(self) -> None:
-        self._raw.close()
+        # Every call site treats this as "I'm done with this connection",
+        # the way sqlite3's implicit per-request connection worked — under
+        # pooling that means returning it to the pool, not tearing down the
+        # socket. putconn() rolls back any still-open transaction first (a
+        # plain SELECT that never called commit()/rollback() would otherwise
+        # hand the next borrower an idle-in-transaction connection).
+        _get_pool().putconn(self._raw)
 
 
 def connect() -> Conn:
-    return Conn(psycopg.connect(_database_url(), row_factory=dict_row))
+    return Conn(_get_pool().getconn())
