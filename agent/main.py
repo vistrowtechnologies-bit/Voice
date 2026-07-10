@@ -79,6 +79,15 @@ def _google_credentials_info() -> dict | None:
 
 
 _GOOGLE_CREDENTIALS = _google_credentials_info()
+# Google Cloud's billing account is currently blocked ("Your project has
+# been denied access" on Speech-to-Text/Text-to-Speech AND the Gemini LLM),
+# so the Google STT/TTS path — however well it works once that's fixed — is
+# actively making calls worse right now (crashes, dead air) rather than
+# providing a safety net. This flag is the single switch to flip back to
+# True once Google Cloud billing is resolved; until then _build_stt/
+# _build_tts below always return Sarvam only, ignoring _GOOGLE_CREDENTIALS
+# even if it's configured.
+_GOOGLE_VOICE_ENABLED = False
 
 
 def _build_stt():
@@ -100,7 +109,7 @@ def _build_stt():
         mode="transcribe",
         flush_signal=True,
     )
-    if _GOOGLE_CREDENTIALS is None:
+    if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
         return sarvam_stt
     google_stt = google.STT(
         languages=["hi-IN", "en-IN"],
@@ -149,7 +158,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
       locale-specific voice; the voice name's own language prefix (its
       first two hyphen-separated segments) is used for `language=` rather
       than reply_language, since these are locked to one specific locale."""
-    if speaker.startswith(_GOOGLE_VOICE_PREFIX) and _GOOGLE_CREDENTIALS is not None:
+    if speaker.startswith(_GOOGLE_VOICE_PREFIX) and _GOOGLE_CREDENTIALS is not None and _GOOGLE_VOICE_ENABLED:
         voice_name = speaker[len(_GOOGLE_VOICE_PREFIX) :]
         if voice_name.lower() in _GOOGLE_MULTILINGUAL_VOICES:
             return google.TTS(
@@ -175,7 +184,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
         speaker=speaker if not speaker.startswith(_GOOGLE_VOICE_PREFIX) else "shubh",
         **tone,
     )
-    if _GOOGLE_CREDENTIALS is None:
+    if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
         return sarvam_tts
     google_tts = google.TTS(
         language=reply_language, credentials_info=_GOOGLE_CREDENTIALS, **_GOOGLE_TTS_KWARGS
