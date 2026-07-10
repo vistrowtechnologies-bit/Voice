@@ -119,6 +119,7 @@ export interface AgentConfig {
   systemPrompt: string
   kbId: number | null
   tone: 'professional' | 'balanced' | 'casual'
+  isPlatformDemo: boolean
   createdAt: string
   updatedAt: string
 }

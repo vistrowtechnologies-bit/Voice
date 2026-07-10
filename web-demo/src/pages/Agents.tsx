@@ -292,6 +292,7 @@ function AgentEditor({
     systemPrompt: agent.systemPrompt,
     kbId: agent.kbId,
     tone: agent.tone || 'balanced',
+    isPlatformDemo: agent.isPlatformDemo,
   })
   const [tab, setTab] = useState<'config' | 'tone'>('config')
   const [saving, setSaving] = useState(false)
@@ -431,14 +432,29 @@ function AgentEditor({
           </div>
         </div>
 
-        <Field label="System prompt (blank = built-in default sales-agent prompt)">
-          <textarea
-            value={form.systemPrompt}
-            onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
-            placeholder="Leave empty to use the built-in real-estate qualification prompt, or write a custom persona here…"
-            className="h-full min-h-[220px] w-full resize-none rounded-lg border border-border bg-surface-high p-3 text-xs leading-relaxed outline-none focus:border-primary"
-          />
-        </Field>
+        <div className="flex flex-col gap-3">
+          <Field label="System prompt (blank = built-in default sales-agent prompt)">
+            <textarea
+              value={form.systemPrompt}
+              onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
+              placeholder="Leave empty to use the built-in real-estate qualification prompt, or write a custom persona here…"
+              className="h-full min-h-[180px] w-full resize-none rounded-lg border border-border bg-surface-high p-3 text-xs leading-relaxed outline-none focus:border-primary"
+            />
+          </Field>
+          <label className="flex items-start gap-2 rounded-lg border border-border bg-surface-high/40 p-3">
+            <input
+              type="checkbox"
+              checked={form.isPlatformDemo}
+              onChange={(e) => setForm({ ...form, isPlatformDemo: e.target.checked })}
+              className="mt-0.5"
+            />
+            <span className="text-xs leading-relaxed text-text-muted">
+              <span className="font-bold text-text">Use as public website demo agent.</span> Powers the
+              "talk to Artha live" demo on the Vistrow Voice marketing site. Only one agent
+              platform-wide can hold this — enabling it here turns it off on any other agent.
+            </span>
+          </label>
+        </div>
       </div>
       )}
 
