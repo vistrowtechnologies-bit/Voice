@@ -4,7 +4,6 @@ import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useLocalParticipant
 import { ConnectionState, Track } from 'livekit-client'
 import type { RemoteParticipant } from 'livekit-client'
 import { Icon } from './Icon'
-import { CONTACT_PHONE } from '../lib/marketingContent'
 import { DEMO_CALL_CAP, getRemainingDemoCalls, hasDemoCallsRemaining, recordDemoCall } from '../lib/demoCallCap'
 import { fetchLiveKitToken, randomId } from '../lib/livekit'
 
@@ -151,13 +150,6 @@ export function DemoOrbCard() {
                 <p className="mt-1 text-xs text-text">&lt;300ms · emotion-aware</p>
               </div>
             </div>
-
-            <p className="mt-5 text-xs text-text-muted">
-              No mic? Dial{' '}
-              <a href={`tel:${CONTACT_PHONE.replace(/\s/g, '')}`} className="text-primary hover:underline">
-                {CONTACT_PHONE}
-              </a>
-            </p>
           </>
         )}
       </div>
