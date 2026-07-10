@@ -121,9 +121,13 @@ class Conn:
         # Every call site treats this as "I'm done with this connection",
         # the way sqlite3's implicit per-request connection worked — under
         # pooling that means returning it to the pool, not tearing down the
-        # socket. putconn() rolls back any still-open transaction first (a
-        # plain SELECT that never called commit()/rollback() would otherwise
-        # hand the next borrower an idle-in-transaction connection).
+        # socket. A plain SELECT never calls commit()/rollback(), leaving
+        # the connection idle-in-transaction; roll it back here so the
+        # pool's own dirty-connection handling — which logs a WARNING every
+        # time it has to do this — never finds anything to clean up. Without
+        # this, that warning fires on nearly every read-only request.
+        if self._raw.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
+            self._raw.rollback()
         _get_pool().putconn(self._raw)
 
 
