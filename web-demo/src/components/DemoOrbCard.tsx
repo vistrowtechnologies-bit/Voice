@@ -223,7 +223,6 @@ function InlineCallBody({
 
   useDataChannelLeadUpdates(onLeadUpdate)
 
-  const lastLine = transcriptEntries[transcriptEntries.length - 1]
   const waitingLabel = connectionState === ConnectionState.Connected ? 'Waiting for agent to join…' : 'Connecting…'
 
   return (
@@ -243,7 +242,6 @@ function InlineCallBody({
       <h3 className="font-display text-2xl font-semibold">
         {agentParticipant ? <AgentStatusLabel agentParticipant={agentParticipant} /> : waitingLabel}
       </h3>
-      <p className="mt-1 min-h-[1.25rem] max-w-xs truncate text-sm text-text-muted">{lastLine?.text ?? ''}</p>
 
       <div className="mt-5 rounded-xl border border-border bg-bg px-4 py-2 font-mono text-sm text-cyan">
         {formatDuration(elapsedMs)}
