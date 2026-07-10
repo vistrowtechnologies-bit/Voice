@@ -413,4 +413,15 @@ async def entrypoint(ctx: JobContext) -> None:
 
 
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+    # num_idle_processes defaults to 4 in production mode — four prewarmed
+    # subprocesses, each with the full plugin stack (google/openai/sarvam)
+    # loaded, sitting in memory before a single call happens. On a memory-
+    # constrained Railway container that idle footprint alone can leave too
+    # little headroom for an actual call's audio buffers/STT/TTS
+    # connections, and the OS OOM-killer SIGKILLs the job subprocess
+    # (observed in production logs as "process exited with non-zero exit
+    # code -9" ~20-30s into a call) — livekit-agents then transparently
+    # respawns a fresh subprocess for the same job, which is why the agent
+    # appears to restart the conversation from scratch. 1 keeps one warm
+    # process (still fast pickup for the next call) without the 4x footprint.
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, num_idle_processes=1))
