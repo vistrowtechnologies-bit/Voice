@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Vistrow Voice | The Platform</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        :root {
+            --orb-gradient: radial-gradient(circle, rgba(168, 85, 247, 0.4) 0%, rgba(124, 58, 237, 0.1) 50%, transparent 70%);
+        }
+        body {
+            background-color: #0B0912;
+            color: #e6e0ee;
+            overflow-x: hidden;
+        }
+        .glass-card {
+            background: rgba(23, 18, 31, 0.8);
+            border: 1px solid #2A2440;
+            backdrop-filter: blur(12px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card:hover {
+            border-color: #A855F7;
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.15);
+            transform: translateY(-4px);
+        }
+        .neon-gradient-text {
+            background: linear-gradient(135deg, #ddb7ff 0%, #5de6ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .voice-orb-glow {
+            filter: blur(60px);
+            background: radial-gradient(circle, #A855F7 0%, #7C3AED 100%);
+            opacity: 0.15;
+            pointer-events: none;
+        }
+        .animate-ping-slow {
+            animation: ping 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+        .architecture-line {
+            background: linear-gradient(90deg, transparent, #5de6ff, transparent);
+            height: 2px;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        .architecture-line::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 50%; height: 100%;
+            background: linear-gradient(90deg, transparent, #ffffff, transparent);
+            animation: flow 2s infinite linear;
+        }
+        @keyframes flow {
+            0% { left: -100%; }
+            100% { left: 200%; }
+        }
+        .pill-button-primary {
+            background: linear-gradient(135deg, #842bd2 0%, #490080 100%);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .pill-button-primary:active { transform: scale(0.95); }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-error": "#690005",
+                      "surface-tint": "#ddb7ff",
+                      "tertiary-container": "#ff479c",
+                      "surface-container": "#211e28",
+                      "primary-fixed-dim": "#ddb7ff",
+                      "inverse-primary": "#842bd2",
+                      "surface-container-highest": "#36333e",
+                      "inverse-on-surface": "#322f39",
+                      "on-primary": "#490080",
+                      "primary-container": "#b76dff",
+                      "primary-fixed": "#f0dbff",
+                      "surface-variant": "#36333e",
+                      "secondary": "#5de6ff",
+                      "on-tertiary": "#640036",
+                      "surface-container-lowest": "#0f0d16",
+                      "tertiary-fixed-dim": "#ffb0cb",
+                      "on-secondary-fixed-variant": "#004e5a",
+                      "surface-dim": "#14121b",
+                      "on-background": "#e6e0ee",
+                      "background": "#14121b",
+                      "on-primary-fixed": "#2c0051",
+                      "outline-variant": "#4d4354",
+                      "on-tertiary-fixed-variant": "#8d004f",
+                      "on-surface-variant": "#cfc2d6",
+                      "on-tertiary-container": "#58002f",
+                      "on-secondary-container": "#00515d",
+                      "secondary-fixed": "#a2eeff",
+                      "secondary-container": "#00cbe6",
+                      "primary": "#ddb7ff",
+                      "error-container": "#93000a",
+                      "surface-container-high": "#2b2833",
+                      "secondary-fixed-dim": "#2fd9f4",
+                      "surface-container-low": "#1d1a24",
+                      "surface": "#14121b",
+                      "on-error-container": "#ffdad6",
+                      "surface-bright": "#3b3842",
+                      "on-secondary": "#00363e",
+                      "on-primary-fixed-variant": "#6900b3",
+                      "on-surface": "#e6e0ee",
+                      "on-secondary-fixed": "#001f25",
+                      "outline": "#988d9f",
+                      "inverse-surface": "#e6e0ee",
+                      "on-primary-container": "#400071",
+                      "tertiary": "#ffb0cb",
+                      "on-tertiary-fixed": "#3e001f",
+                      "error": "#ffb4ab",
+                      "tertiary-fixed": "#ffd9e3"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-desktop": "64px",
+                      "unit": "8px",
+                      "gutter": "24px",
+                      "margin-mobile": "20px",
+                      "container-max": "1280px",
+                      "section-gap": "120px"
+              },
+              "fontFamily": {
+                      "h2": ["Space Grotesk"],
+                      "body-lg": ["Inter"],
+                      "h1-mobile": ["Space Grotesk"],
+                      "h1": ["Space Grotesk"],
+                      "h3": ["Space Grotesk"],
+                      "body-md": ["Inter"],
+                      "label-caps": ["Inter"],
+                      "mono-metric": ["Space Grotesk"]
+              },
+              "fontSize": {
+                      "h2": ["48px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                      "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                      "h1-mobile": ["40px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                      "h1": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "h3": ["32px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                      "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.1em", "fontWeight": "600"}],
+                      "mono-metric": ["24px", {"lineHeight": "1.0", "fontWeight": "500"}]
+              }
+            },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background">
+<!-- Top Navigation -->
+<nav class="bg-background/80 backdrop-blur-md sticky top-0 z-50 border-b border-outline-variant">
+<div class="flex justify-between items-center px-margin-desktop py-4 w-full max-w-container-max mx-auto">
+<div class="font-h3 text-h3 font-bold text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">graphic_eq</span>
+                Vistrow Voice
+            </div>
+<div class="hidden md:flex gap-8 items-center">
+<a class="font-body-md text-primary font-bold transition-colors duration-200" href="#">Product</a>
+<a class="font-body-md text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Solutions</a>
+<a class="font-body-md text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Resources</a>
+<a class="font-body-md text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Company</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="font-body-md text-on-surface-variant hover:text-primary transition-colors">Sign in</button>
+<button class="bg-primary text-on-primary font-bold px-6 py-2 rounded-full scale-95 active:scale-90 transition-transform">Book a demo</button>
+</div>
+</div>
+</nav>
+<main>
+<!-- Hero Section -->
+<section class="relative pt-24 pb-16 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto text-center overflow-hidden">
+<div class="absolute voice-orb-glow w-[500px] h-[500px] top-[-100px] left-1/2 -translate-x-1/2 rounded-full"></div>
+<span class="font-label-caps text-label-caps text-secondary mb-4 block tracking-[0.2em] uppercase">THE PLATFORM</span>
+<h1 class="font-h1 text-h1-mobile md:text-h1 mb-6 max-w-4xl mx-auto leading-tight">
+                One platform for every <span class="neon-gradient-text">voice conversation.</span>
+</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto mb-12">
+                Scale your customer interactions with ultra-low latency AI agents that sound human, empathize like experts, and integrate across your entire stack.
+            </p>
+<div class="flex flex-col md:flex-row gap-4 justify-center items-center">
+<button class="pill-button-primary text-on-primary px-8 py-4 rounded-full font-bold text-lg flex items-center gap-2 group">
+                    Deploy your first agent
+                    <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+<div class="flex items-center gap-2 text-on-surface-variant px-4">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span class="font-body-md">Sub-200ms latency</span>
+</div>
+</div>
+</section>
+<!-- Bento Grid Section -->
+<section class="py-section-gap px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Large Card 1 -->
+<div class="md:col-span-8 glass-card p-10 rounded-3xl relative overflow-hidden group">
+<div class="relative z-10">
+<div class="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-primary">psychology</span>
+</div>
+<h3 class="font-h3 text-h3 mb-3">Adaptive Intelligence</h3>
+<p class="font-body-md text-on-surface-variant max-w-md mb-8">Agents that understand nuance, sarcasm, and regional accents. Context-aware conversations that feel natural.</p>
+<a class="text-secondary font-bold flex items-center gap-2 group-hover:gap-4 transition-all" href="#">
+                            Learn more <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+<!-- Decorative Element -->
+<div class="absolute right-0 bottom-0 w-1/2 h-full opacity-20 pointer-events-none">
+
+</div>
+</div>
+<!-- Small Card 1 -->
+<div class="md:col-span-4 glass-card p-8 rounded-3xl group">
+<div class="w-10 h-10 rounded-lg bg-secondary/20 flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-secondary">shield</span>
+</div>
+<h3 class="font-h3 text-h3 text-2xl mb-2">Enterprise Security</h3>
+<p class="font-body-md text-on-surface-variant mb-6">SOC2 Type II, HIPAA, and GDPR compliant by design.</p>
+<a class="text-secondary font-bold flex items-center gap-2 group-hover:gap-4 transition-all" href="#">
+                        Learn more <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+<!-- Small Card 2 -->
+<div class="md:col-span-4 glass-card p-8 rounded-3xl group">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container/20 flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-tertiary">translate</span>
+</div>
+<h3 class="font-h3 text-h3 text-2xl mb-2">Global Fluency</h3>
+<p class="font-body-md text-on-surface-variant mb-6">Real-time translation in 45+ languages and 120+ local dialects.</p>
+<a class="text-secondary font-bold flex items-center gap-2 group-hover:gap-4 transition-all" href="#">
+                        Learn more <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+<!-- Large Card 2 -->
+<div class="md:col-span-8 glass-card p-10 rounded-3xl relative overflow-hidden group">
+<div class="relative z-10">
+<div class="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-secondary">analytics</span>
+</div>
+<h3 class="font-h3 text-h3 mb-3">Deep Sentiment Analytics</h3>
+<p class="font-body-md text-on-surface-variant max-w-md mb-8">Go beyond transcripts. Understand user frustration, satisfaction, and intent with millisecond precision.</p>
+<a class="text-secondary font-bold flex items-center gap-2 group-hover:gap-4 transition-all" href="#">
+                            Learn more <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+<div class="absolute right-[-10%] top-[-10%] w-64 h-64 bg-secondary/10 rounded-full blur-3xl"></div>
+</div>
+<!-- Medium Card 1 -->
+<div class="md:col-span-6 glass-card p-10 rounded-3xl group">
+<div class="w-12 h-12 rounded-xl bg-primary-container/20 flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-primary-fixed-dim">api</span>
+</div>
+<h3 class="font-h3 text-h3 mb-3">Full Developer Suite</h3>
+<p class="font-body-md text-on-surface-variant mb-8">Robust APIs, SDKs for React Native, Flutter, and iOS/Android. Documentation designed for builders.</p>
+<a class="text-secondary font-bold flex items-center gap-2 group-hover:gap-4 transition-all" href="#">
+                        Learn more <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+<!-- Medium Card 2 -->
+<div class="md:col-span-6 glass-card p-10 rounded-3xl group">
+<div class="w-12 h-12 rounded-xl bg-surface-variant flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-on-surface">hub</span>
+</div>
+<h3 class="font-h3 text-h3 mb-3">Omnichannel Core</h3>
+<p class="font-body-md text-on-surface-variant mb-8">Seamlessly hand off from PSTN calls to WhatsApp, Web, or In-App voice sessions without losing context.</p>
+<a class="text-secondary font-bold flex items-center gap-2 group-hover:gap-4 transition-all" href="#">
+                        Learn more <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+</div>
+</section>
+<!-- Architecture Diagram -->
+<section class="py-section-gap bg-surface-container-lowest border-y border-outline-variant overflow-hidden">
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop text-center mb-16">
+<span class="font-label-caps text-label-caps text-primary mb-4 block tracking-[0.2em] uppercase">SYSTEM FLOW</span>
+<h2 class="font-h2 text-h2 mb-4">Integrated Architecture</h2>
+<p class="font-body-md text-on-surface-variant max-w-xl mx-auto">Vistrow sits at the nexus of your communications and business intelligence.</p>
+</div>
+<div class="max-w-4xl mx-auto px-margin-mobile relative">
+<!-- Mobile Vertical / Desktop Horizontal Flow -->
+<div class="flex flex-col md:flex-row items-center justify-between gap-12 md:gap-4">
+<!-- Source: Number -->
+<div class="flex flex-col items-center gap-4 z-10 w-full md:w-auto">
+<div class="w-24 h-24 rounded-3xl glass-card flex items-center justify-center relative">
+<span class="material-symbols-outlined text-4xl text-secondary">phone_iphone</span>
+<div class="absolute -top-2 -right-2 w-6 h-6 bg-secondary rounded-full flex items-center justify-center shadow-lg">
+<div class="w-2 h-2 bg-white rounded-full animate-ping-slow"></div>
+</div>
+</div>
+<div class="text-center">
+<p class="font-h3 text-xl font-bold">Number</p>
+<p class="font-body-md text-xs text-on-surface-variant uppercase tracking-widest mt-1">Ingestion</p>
+</div>
+</div>
+<!-- Line -->
+<div class="hidden md:block flex-1 architecture-line"></div>
+<div class="md:hidden w-1 h-12 bg-gradient-to-b from-secondary to-primary"></div>
+<!-- Processing: Agent -->
+<div class="flex flex-col items-center gap-4 z-10 w-full md:w-auto">
+<div class="w-32 h-32 rounded-full glass-card flex items-center justify-center border-2 border-primary/50 relative">
+<div class="absolute inset-0 rounded-full">
+
+</div>
+<span class="material-symbols-outlined text-5xl text-primary z-10">smart_toy</span>
+</div>
+<div class="text-center">
+<p class="font-h3 text-xl font-bold">AI Agent</p>
+<p class="font-body-md text-xs text-on-surface-variant uppercase tracking-widest mt-1">Orchestration</p>
+</div>
+</div>
+<!-- Line -->
+<div class="hidden md:block flex-1 architecture-line"></div>
+<div class="md:hidden w-1 h-12 bg-gradient-to-b from-primary to-tertiary"></div>
+<!-- Output: CRM/Webhook -->
+<div class="flex flex-col items-center gap-4 z-10 w-full md:w-auto">
+<div class="w-24 h-24 rounded-3xl glass-card flex items-center justify-center">
+<span class="material-symbols-outlined text-4xl text-tertiary">hub</span>
+</div>
+<div class="text-center">
+<p class="font-h3 text-xl font-bold">CRM/Webhook</p>
+<p class="font-body-md text-xs text-on-surface-variant uppercase tracking-widest mt-1">Fulfillment</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Stats Band -->
+<section class="py-24 max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-gutter text-center">
+<div class="p-6">
+<p class="font-mono-metric text-h1-mobile md:text-h2 text-secondary mb-2">99.9%</p>
+<p class="font-label-caps text-on-surface-variant uppercase tracking-widest">Uptime SLA</p>
+</div>
+<div class="p-6">
+<p class="font-mono-metric text-h1-mobile md:text-h2 text-primary mb-2">12M+</p>
+<p class="font-label-caps text-on-surface-variant uppercase tracking-widest">Calls Handled</p>
+</div>
+<div class="p-6">
+<p class="font-mono-metric text-h1-mobile md:text-h2 text-tertiary mb-2">180ms</p>
+<p class="font-label-caps text-on-surface-variant uppercase tracking-widest">Avg. Latency</p>
+</div>
+<div class="p-6">
+<p class="font-mono-metric text-h1-mobile md:text-h2 text-secondary mb-2">45+</p>
+<p class="font-label-caps text-on-surface-variant uppercase tracking-widest">Languages</p>
+</div>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="mb-section-gap max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
+<div class="glass-card rounded-[40px] p-12 md:p-20 text-center relative overflow-hidden">
+<div class="absolute inset-0 opacity-10">
+
+</div>
+<div class="relative z-10">
+<h2 class="font-h2 text-h2 mb-6">Ready to talk to the future?</h2>
+<p class="font-body-lg text-on-surface-variant max-w-xl mx-auto mb-10">Join 500+ enterprises building the next generation of voice experiences with Vistrow.</p>
+<div class="flex flex-col md:flex-row gap-6 justify-center">
+<button class="pill-button-primary text-on-primary px-10 py-5 rounded-full font-bold text-xl shadow-xl shadow-primary/20">Start Building Free</button>
+<button class="bg-surface-container-highest border border-outline text-on-surface px-10 py-5 rounded-full font-bold text-xl hover:bg-outline-variant transition-colors">Talk to Sales</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter px-margin-desktop py-section-gap max-w-container-max mx-auto">
+<div class="flex flex-col gap-6">
+<div class="font-h3 text-h3 font-bold text-on-surface">Vistrow Voice</div>
+<p class="font-body-md text-on-surface-variant opacity-80">Building the neural layer for global voice communication.</p>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-secondary cursor-pointer hover:opacity-100 opacity-60">public</span>
+<span class="material-symbols-outlined text-secondary cursor-pointer hover:opacity-100 opacity-60">alternate_email</span>
+<span class="material-symbols-outlined text-secondary cursor-pointer hover:opacity-100 opacity-60">share</span>
+</div>
+</div>
+<div>
+<h4 class="font-bold text-lg mb-6">Product</h4>
+<ul class="flex flex-col gap-4 font-body-md text-on-surface-variant">
+<li class="hover:text-secondary cursor-pointer transition-colors">Platform Overview</li>
+<li class="hover:text-secondary cursor-pointer transition-colors">Voice Engine</li>
+<li class="hover:text-secondary cursor-pointer transition-colors">Security</li>
+<li class="hover:text-secondary cursor-pointer transition-colors">API Pricing</li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold text-lg mb-6">Solutions</h4>
+<ul class="flex flex-col gap-4 font-body-md text-on-surface-variant">
+<li class="hover:text-secondary cursor-pointer transition-colors">Customer Support</li>
+<li class="hover:text-secondary cursor-pointer transition-colors">Sales Outreach</li>
+<li class="hover:text-secondary cursor-pointer transition-colors">Healthcare</li>
+<li class="hover:text-secondary cursor-pointer transition-colors">Fintech</li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold text-lg mb-6">Legal</h4>
+<ul class="flex flex-col gap-4 font-body-md text-on-surface-variant">
+<li class="hover:text-secondary cursor-pointer transition-colors">Privacy Policy</li>
+<li class="hover:text-secondary cursor-pointer transition-colors">Terms of Service</li>
+<li class="hover:text-secondary cursor-pointer transition-colors">Cookie Policy</li>
+<li class="hover:text-secondary cursor-pointer transition-colors">SLA</li>
+</ul>
+</div>
+</div>
+<div class="border-t border-outline-variant max-w-container-max mx-auto py-8 px-margin-desktop text-center md:text-left flex flex-col md:flex-row justify-between items-center text-on-surface-variant font-body-md opacity-60">
+<span>© 2024 Vistrow Voice. All rights reserved.</span>
+<div class="flex gap-6 mt-4 md:mt-0">
+<a href="#">Status: All Systems Operational</a>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interaction: Mouse move effect on glass cards
+        document.querySelectorAll('.glass-card').forEach(card => {
+            card.addEventListener('mousemove', e => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+    </script>
+</body></html>

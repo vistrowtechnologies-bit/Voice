@@ -277,7 +277,7 @@ def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
         "INSERT INTO agents (account_id, name, description) VALUES (?, ?, ?)",
         (
             account_id,
-            "Maya",
+            "Artha",
             "Default sales agent — qualifies leads and books appointments in 11 Indian languages.",
         ),
     )

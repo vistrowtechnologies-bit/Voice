@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Book a Demo | Vistrow Voice</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        :root {
+            --violet-gradient: linear-gradient(135deg, #b76dff 0%, #842bd2 100%);
+            --glass-bg: rgba(23, 18, 31, 0.7);
+            --glass-border: rgba(42, 36, 64, 0.8);
+        }
+
+        body {
+            background-color: #0B0912;
+            color: #e6e0ee;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+
+        .font-h1 { font-family: 'Space Grotesk', sans-serif; }
+        .font-h2 { font-family: 'Space Grotesk', sans-serif; }
+        .font-h3 { font-family: 'Space Grotesk', sans-serif; }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            border-color: #ddb7ff;
+            box-shadow: 0 0 20px rgba(221, 183, 255, 0.1);
+        }
+
+        .violet-gradient-btn {
+            background: var(--violet-gradient);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .violet-gradient-btn:active {
+            transform: scale(0.95);
+        }
+
+        .voice-orb-glow {
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.4) 0%, rgba(124, 58, 237, 0) 70%);
+            filter: blur(40px);
+        }
+
+        .ping-animate {
+            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+
+        @keyframes ping {
+            75%, 100% {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+        }
+
+        .shimmer {
+            background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0) 100%);
+            background-size: 200% 100%;
+            animation: shimmer 3s infinite linear;
+        }
+
+        @keyframes shimmer {
+            from { background-position: -200% 0; }
+            to { background-position: 200% 0; }
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-error": "#690005",
+                      "surface-tint": "#ddb7ff",
+                      "tertiary-container": "#ff479c",
+                      "surface-container": "#211e28",
+                      "primary-fixed-dim": "#ddb7ff",
+                      "inverse-primary": "#842bd2",
+                      "surface-container-highest": "#36333e",
+                      "inverse-on-surface": "#322f39",
+                      "on-primary": "#490080",
+                      "primary-container": "#b76dff",
+                      "primary-fixed": "#f0dbff",
+                      "surface-variant": "#36333e",
+                      "secondary": "#5de6ff",
+                      "on-tertiary": "#640036",
+                      "surface-container-lowest": "#0f0d16",
+                      "tertiary-fixed-dim": "#ffb0cb",
+                      "on-secondary-fixed-variant": "#004e5a",
+                      "surface-dim": "#14121b",
+                      "on-background": "#e6e0ee",
+                      "background": "#14121b",
+                      "on-primary-fixed": "#2c0051",
+                      "outline-variant": "#4d4354",
+                      "on-tertiary-fixed-variant": "#8d004f",
+                      "on-surface-variant": "#cfc2d6",
+                      "on-tertiary-container": "#58002f",
+                      "on-secondary-container": "#00515d",
+                      "secondary-fixed": "#a2eeff",
+                      "secondary-container": "#00cbe6",
+                      "primary": "#ddb7ff",
+                      "error-container": "#93000a",
+                      "surface-container-high": "#2b2833",
+                      "secondary-fixed-dim": "#2fd9f4",
+                      "surface-container-low": "#1d1a24",
+                      "surface": "#14121b",
+                      "on-error-container": "#ffdad6",
+                      "surface-bright": "#3b3842",
+                      "on-secondary": "#00363e",
+                      "on-primary-fixed-variant": "#6900b3",
+                      "on-surface": "#e6e0ee",
+                      "on-secondary-fixed": "#001f25",
+                      "outline": "#988d9f",
+                      "inverse-surface": "#e6e0ee",
+                      "on-primary-container": "#400071",
+                      "tertiary": "#ffb0cb",
+                      "on-tertiary-fixed": "#3e001f",
+                      "error": "#ffb4ab",
+                      "tertiary-fixed": "#ffd9e3"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-desktop": "64px",
+                      "unit": "8px",
+                      "gutter": "24px",
+                      "margin-mobile": "20px",
+                      "container-max": "1280px",
+                      "section-gap": "120px"
+              },
+              "fontFamily": {
+                      "h2": ["Space Grotesk"],
+                      "body-lg": ["Inter"],
+                      "h1-mobile": ["Space Grotesk"],
+                      "h1": ["Space Grotesk"],
+                      "h3": ["Space Grotesk"],
+                      "body-md": ["Inter"],
+                      "label-caps": ["Inter"],
+                      "mono-metric": ["Space Grotesk"]
+              },
+              "fontSize": {
+                      "h2": ["48px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                      "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                      "h1-mobile": ["40px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                      "h1": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "h3": ["32px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                      "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.1em", "fontWeight": "600"}],
+                      "mono-metric": ["24px", {"lineHeight": "1.0", "fontWeight": "500"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background">
+<!-- TopAppBar Navigation Shell -->
+<header class="bg-background/80 backdrop-blur-md border-b border-outline-variant docked full-width top-0 sticky z-50">
+<div class="flex justify-between items-center px-margin-desktop py-4 w-full max-w-container-max mx-auto">
+<div class="font-h3 text-h3 font-bold text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-4xl" style="font-variation-settings: 'FILL' 1;">voice_selection</span>
+                Vistrow Voice
+            </div>
+<nav class="hidden md:flex items-center gap-8 font-body-md text-body-md">
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Product</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Solutions</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Resources</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Company</a>
+</nav>
+<div class="flex items-center gap-6">
+<a class="hidden sm:block text-on-surface-variant font-bold hover:text-primary transition-colors" href="#">Sign in</a>
+<button class="bg-primary text-on-primary px-6 py-2 rounded-full font-bold scale-95 active:scale-90 transition-transform">Book a demo</button>
+</div>
+</div>
+</header>
+<main class="relative min-h-screen">
+<!-- Atmospheric Background Shaders -->
+
+<section class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-12 md:py-24 relative z-10">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter items-start">
+<!-- LEFT CONTENT: Value Proposition -->
+<div class="flex flex-col gap-12">
+<div class="space-y-6">
+<span class="inline-flex items-center px-3 py-1 rounded-full bg-secondary-container/20 text-secondary border border-secondary-container/30 text-label-caps font-label-caps">
+<span class="w-2 h-2 rounded-full bg-secondary mr-2 ping-animate"></span>
+                            LIVE DEMO AVAILABLE
+                        </span>
+<h1 class="font-h1 text-h1-mobile md:text-h1 tracking-tight">
+                            See Vistrow Voice on a <span class="text-primary italic">live call</span>.
+                        </h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-xl">
+                            Experience the future of Indian customer engagement. Our voice agents handle nuances in dialect, sentiment, and intent with zero latency.
+                        </p>
+</div>
+<!-- Benefits List -->
+<ul class="space-y-6">
+<li class="flex items-start gap-4">
+<div class="p-2 rounded-lg glass-card text-primary">
+<span class="material-symbols-outlined">bolt</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Sub-second Latency</h4>
+<p class="text-sm text-on-surface-variant">Real-time processing for natural, fluid conversations without awkward pauses.</p>
+</div>
+</li>
+<li class="flex items-start gap-4">
+<div class="p-2 rounded-lg glass-card text-secondary">
+<span class="material-symbols-outlined">translate</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Hinglish &amp; Regional Fluency</h4>
+<p class="text-sm text-on-surface-variant">Native support for 12+ Indian languages and code-switching environments.</p>
+</div>
+</li>
+<li class="flex items-start gap-4">
+<div class="p-2 rounded-lg glass-card text-tertiary">
+<span class="material-symbols-outlined">shield_lock</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface">Enterprise-Grade Security</h4>
+<p class="text-sm text-on-surface-variant">On-premise deployment options and strict data residency compliance.</p>
+</div>
+</li>
+</ul>
+<!-- Live Demo Call Card (Visual Anchor) -->
+<div class="glass-card rounded-2xl p-8 relative overflow-hidden">
+<div class="absolute -right-20 -bottom-20 w-64 h-64 voice-orb-glow"></div>
+<div class="flex items-center justify-between relative z-10">
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-full glass-card flex items-center justify-center border-2 border-primary/40 p-1">
+<div class="w-full h-full rounded-full bg-gradient-to-tr from-primary to-secondary relative flex items-center justify-center">
+<span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">graphic_eq</span>
+</div>
+</div>
+<div>
+<p class="text-label-caps font-label-caps text-on-surface-variant mb-1">CALLING VISTROW AI...</p>
+<h3 class="font-h3 text-xl font-bold">Try Interactive Call</h3>
+</div>
+</div>
+<button class="w-12 h-12 rounded-full border border-primary/50 flex items-center justify-center text-primary hover:bg-primary/10 transition-all">
+<span class="material-symbols-outlined">call</span>
+</button>
+</div>
+</div>
+</div>
+<!-- RIGHT CONTENT: Booking Form -->
+<div class="lg:sticky lg:top-32">
+<div class="glass-card rounded-3xl p-8 md:p-10 shadow-2xl">
+<h2 class="font-h2 text-h3 md:text-h2 mb-8">Schedule your demo</h2>
+<form class="space-y-6" onsubmit="event.preventDefault();">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<div class="space-y-2">
+<label class="text-label-caps font-label-caps text-on-surface-variant">NAME</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-3 focus:outline-none focus:border-secondary transition-all" placeholder="John Doe" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="text-label-caps font-label-caps text-on-surface-variant">WORK EMAIL</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-3 focus:outline-none focus:border-secondary transition-all" placeholder="john@company.com" type="email"/>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<div class="space-y-2">
+<label class="text-label-caps font-label-caps text-on-surface-variant">COMPANY</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-3 focus:outline-none focus:border-secondary transition-all" placeholder="Acme Corp" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="text-label-caps font-label-caps text-on-surface-variant">TEAM SIZE</label>
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-3 focus:outline-none focus:border-secondary transition-all appearance-none">
+<option>1-50</option>
+<option>51-200</option>
+<option>201-500</option>
+<option>500+</option>
+</select>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-label-caps font-label-caps text-on-surface-variant">PRIMARY USE CASE</label>
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-3 focus:outline-none focus:border-secondary transition-all appearance-none">
+<option>Customer Support Automation</option>
+<option>Outbound Sales &amp; Lead Gen</option>
+<option>Payment Reminders</option>
+<option>Voice Identification/Security</option>
+<option>Other</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="text-label-caps font-label-caps text-on-surface-variant">MESSAGE (OPTIONAL)</label>
+<textarea class="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-3 focus:outline-none focus:border-secondary transition-all" placeholder="Tell us about your specific goals..." rows="3"></textarea>
+</div>
+<button class="w-full violet-gradient-btn text-white py-4 rounded-full font-bold text-lg shadow-lg hover:shadow-primary/20 transition-all flex items-center justify-center gap-3" type="submit">
+                                Book my demo
+                                <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+<p class="text-center text-xs text-on-surface-variant">
+                                By submitting this form, you agree to our <a class="underline" href="#">Privacy Policy</a>.
+                            </p>
+</form>
+</div>
+<!-- Trust Indicators -->
+<div class="mt-8 flex items-center justify-center gap-8 opacity-50 grayscale hover:grayscale-0 transition-all">
+<img class="h-6" data-alt="A clean, minimalist monochrome logo of a prominent global logistics firm with sharp typography, styled in a subtle light-gray on a dark background to match a high-tech dark mode UI." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC82Pq-JnBGwCYFG_6riPVlb2VC_-difQCYhySV0SUe4oNejeVPV1MerYtnlXPfVs2biQjc56nxw_AEXU8N2dFz9cxrITtnqf-kw1217I-2BTzXGhCp5m7OKUJX0uwMJqU4bgmCcdEth0Q04EoBwqIXCex4OdZxKGdaAzs0wsi1T2zfEUdURJk98BLuWIMhptOOZSQE75RYPKOqEqgCquOkyLRW0Vx21q3Nkkk5gGKyarELOm3WuIlR"/>
+<img class="h-6" data-alt="A sleek, modern vector logo of a leading financial technology company, featuring abstract geometric forms in a minimalist flat style, rendered in light silver to complement a premium dark theme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVdx1rcfvhiYAe7vFFI_aj4zFGq3WZem_UumHYjaub2hNWV3VSVSv0VkLk5_mCcUN8bm6oge8pdhp1f9wonRsZ0Yyv3Gg-3wB_rPyCERteosvLyRQgyCXxyZrvjJtOt1o104Hw87sGq-QDgLvtNZbV2ufKGf3gP3NCdF4M5UkRU2t3YE-di5EKT1JMvJD1d5lWJqE6_wqS9_vW-SkZK6MAGRYmps59zuug_96XvG2Pxm_4HG6KpaGE"/>
+<img class="h-6" data-alt="A stylized logo of a major e-commerce platform with elegant serif typography, presented in a clean white outline format that sits naturally against a deep violet-black background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDe5Ex-MNzyThrDv4kh_zr-OONl1Vi4pwrShB--dS0JvqXZWBfw_2V-Z57pQ6pVr3xFTC2VF52YG3XxSjBhRCzYvEmo_1E8CFZCgqkgfu4HjK1n5ZWjUOvrrkkpnpk7yQ_tJPG1p73QCjrJdAjh9s4pvzrn53nQGYRLjq54aTHovEuDr0tQQ0EIWezlgntYWbzijXl0zRagsVkpCyyMYpEyrkBnS-5QFmkeFHRFJSEw7nLfMZeN0uqr"/>
+</div>
+</div>
+</div>
+</section>
+<!-- Footer Contact Level -->
+<section class="bg-surface-container-lowest border-t border-outline-variant py-16">
+<div class="max-w-container-max mx-auto px-margin-desktop">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter text-center md:text-left">
+<div class="p-6 flex flex-col items-center md:items-start gap-4">
+<div class="text-primary">
+<span class="material-symbols-outlined text-4xl">call</span>
+</div>
+<div>
+<p class="text-label-caps font-label-caps text-on-surface-variant">OFFICE LINE</p>
+<p class="font-mono-metric text-xl">+91 (80) 4567 8900</p>
+</div>
+</div>
+<div class="p-6 flex flex-col items-center md:items-start gap-4">
+<div class="text-secondary">
+<span class="material-symbols-outlined text-4xl">mail</span>
+</div>
+<div>
+<p class="text-label-caps font-label-caps text-on-surface-variant">EMAIL SALES</p>
+<p class="font-mono-metric text-xl">hello@vistrow.ai</p>
+</div>
+</div>
+<div class="p-6 flex flex-col items-center md:items-start gap-4">
+<div class="text-tertiary">
+<span class="material-symbols-outlined text-4xl">location_on</span>
+</div>
+<div>
+<p class="text-label-caps font-label-caps text-on-surface-variant">VISIT US</p>
+<p class="font-mono-metric text-xl">HSR Layout, Bengaluru</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Global Footer -->
+<footer class="bg-surface-container-lowest py-section-gap">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter px-margin-desktop max-w-container-max mx-auto">
+<div class="space-y-6">
+<div class="font-h3 text-h3 font-bold text-on-surface">Vistrow Voice</div>
+<p class="text-on-surface-variant font-body-md">Empowering the next generation of customer experiences through voice AI.</p>
+</div>
+<div class="space-y-4">
+<h4 class="font-bold text-on-surface">Product</h4>
+<ul class="space-y-2 text-on-surface-variant">
+<li><a class="hover:text-secondary transition-colors" href="#">API Reference</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Voice Models</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Latency Stats</a></li>
+</ul>
+</div>
+<div class="space-y-4">
+<h4 class="font-bold text-on-surface">Solutions</h4>
+<ul class="space-y-2 text-on-surface-variant">
+<li><a class="hover:text-secondary transition-colors" href="#">Enterprise</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Startups</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Healthcare</a></li>
+</ul>
+</div>
+<div class="space-y-4">
+<h4 class="font-bold text-on-surface">Legal</h4>
+<ul class="space-y-2 text-on-surface-variant">
+<li><a class="hover:text-secondary transition-colors" href="#">Privacy</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Terms</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Security</a></li>
+</ul>
+</div>
+</div>
+<div class="max-w-container-max mx-auto px-margin-desktop mt-16 pt-8 border-t border-outline-variant text-on-surface-variant text-sm flex justify-between items-center">
+<p>© 2024 Vistrow Voice. All rights reserved.</p>
+<div class="flex gap-6">
+<a class="hover:text-primary" href="#"><span class="material-symbols-outlined">public</span></a>
+<a class="hover:text-primary" href="#"><span class="material-symbols-outlined">share</span></a>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interaction for form inputs
+        const inputs = document.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            input.addEventListener('focus', () => {
+                input.parentElement.classList.add('scale-[1.02]');
+            });
+            input.addEventListener('blur', () => {
+                input.parentElement.classList.remove('scale-[1.02]');
+            });
+        });
+
+        // Simple floating animation for the voice orb
+        const orb = document.querySelector('.voice-orb-glow');
+        let floatY = 0;
+        let direction = 1;
+        function animateOrb() {
+            floatY += 0.05 * direction;
+            if (floatY > 10 || floatY < -10) direction *= -1;
+            if (orb) {
+                orb.style.transform = `translate(${floatY}px, ${floatY * -0.5}px)`;
+            }
+            requestAnimationFrame(animateOrb);
+        }
+        animateOrb();
+    </script>
+</body></html>

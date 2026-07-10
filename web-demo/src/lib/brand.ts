@@ -13,7 +13,7 @@ export const BRAND = {
   /** One-line positioning used on the marketing site + demo. */
   tagline: 'AI voice agents that answer, qualify, and book — in your customers’ language.',
   /** Default persona name for a freshly-seeded agent (tenants rename it). */
-  defaultAgentName: 'Maya',
+  defaultAgentName: 'Artha',
   /** Fallback workspace label before a tenant sets their company name. */
   defaultWorkspace: 'Your Workspace',
 } as const

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pricing | Vistrow Voice</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            background-color: #0B0912;
+            color: #e6e0ee;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .font-h1 { font-family: 'Space Grotesk', sans-serif; }
+        .font-h2 { font-family: 'Space Grotesk', sans-serif; }
+        .font-h3 { font-family: 'Space Grotesk', sans-serif; }
+        
+        .glass-card {
+            background: rgba(23, 18, 31, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid #2A2440;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .glass-card:hover {
+            border-color: #A855F7;
+            transform: translateY(-4px);
+            box-shadow: 0 10px 40px -10px rgba(168, 85, 247, 0.2);
+        }
+
+        .gradient-border {
+            position: relative;
+            background: #17121F;
+            border-radius: 1rem;
+        }
+        
+        .gradient-border::before {
+            content: "";
+            position: absolute;
+            inset: -1.5px;
+            border-radius: 1rem;
+            padding: 1.5px;
+            background: linear-gradient(135deg, #A855F7, #7C3AED, #5de6ff);
+            -webkit-mask: 
+                linear-gradient(#fff 0 0) content-box, 
+                linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        .neon-glow {
+            box-shadow: 0 0 20px rgba(93, 230, 255, 0.15);
+        }
+
+        .violet-gradient-bg {
+            background: linear-gradient(135deg, #A855F7 0%, #7C3AED 100%);
+        }
+
+        .voice-orb-bg {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, rgba(11, 9, 18, 0) 70%);
+            filter: blur(40px);
+            z-index: -1;
+        }
+
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .accordion-item.active .accordion-content {
+            max-height: 200px;
+        }
+        .accordion-item.active .icon-rotate {
+            transform: rotate(180deg);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-error": "#690005",
+                      "surface-tint": "#ddb7ff",
+                      "tertiary-container": "#ff479c",
+                      "surface-container": "#211e28",
+                      "primary-fixed-dim": "#ddb7ff",
+                      "inverse-primary": "#842bd2",
+                      "surface-container-highest": "#36333e",
+                      "inverse-on-surface": "#322f39",
+                      "on-primary": "#490080",
+                      "primary-container": "#b76dff",
+                      "primary-fixed": "#f0dbff",
+                      "surface-variant": "#36333e",
+                      "secondary": "#5de6ff",
+                      "on-tertiary": "#640036",
+                      "surface-container-lowest": "#0f0d16",
+                      "tertiary-fixed-dim": "#ffb0cb",
+                      "on-secondary-fixed-variant": "#004e5a",
+                      "surface-dim": "#14121b",
+                      "on-background": "#e6e0ee",
+                      "background": "#14121b",
+                      "on-primary-fixed": "#2c0051",
+                      "outline-variant": "#4d4354",
+                      "on-tertiary-fixed-variant": "#8d004f",
+                      "on-surface-variant": "#cfc2d6",
+                      "on-tertiary-container": "#58002f",
+                      "on-secondary-container": "#00515d",
+                      "secondary-fixed": "#a2eeff",
+                      "secondary-container": "#00cbe6",
+                      "primary": "#ddb7ff",
+                      "error-container": "#93000a",
+                      "surface-container-high": "#2b2833",
+                      "secondary-fixed-dim": "#2fd9f4",
+                      "surface-container-low": "#1d1a24",
+                      "surface": "#14121b",
+                      "on-error-container": "#ffdad6",
+                      "surface-bright": "#3b3842",
+                      "on-secondary": "#00363e",
+                      "on-primary-fixed-variant": "#6900b3",
+                      "on-surface": "#e6e0ee",
+                      "on-secondary-fixed": "#001f25",
+                      "outline": "#988d9f",
+                      "inverse-surface": "#e6e0ee",
+                      "on-primary-container": "#400071",
+                      "tertiary": "#ffb0cb",
+                      "on-tertiary-fixed": "#3e001f",
+                      "error": "#ffb4ab",
+                      "tertiary-fixed": "#ffd9e3"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-desktop": "64px",
+                      "unit": "8px",
+                      "gutter": "24px",
+                      "margin-mobile": "20px",
+                      "container-max": "1280px",
+                      "section-gap": "120px"
+              },
+              "fontFamily": {
+                      "h2": ["Space Grotesk"],
+                      "body-lg": ["Inter"],
+                      "h1-mobile": ["Space Grotesk"],
+                      "h1": ["Space Grotesk"],
+                      "h3": ["Space Grotesk"],
+                      "body-md": ["Inter"],
+                      "label-caps": ["Inter"],
+                      "mono-metric": ["Space Grotesk"]
+              },
+              "fontSize": {
+                      "h2": ["48px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                      "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                      "h1-mobile": ["40px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                      "h1": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "h3": ["32px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                      "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.1em", "fontWeight": "600"}],
+                      "mono-metric": ["24px", {"lineHeight": "1.0", "fontWeight": "500"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background selection:bg-primary/30">
+<!-- Header / TopAppBar -->
+<header class="bg-background/80 backdrop-blur-md border-b border-outline-variant docked full-width top-0 sticky z-50">
+<div class="flex justify-between items-center px-margin-desktop py-4 w-full max-w-container-max mx-auto">
+<div class="font-h3 text-h3 font-bold text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-4xl" style="font-variation-settings: 'FILL' 1;">graphic_eq</span>
+                Vistrow Voice
+            </div>
+<nav class="hidden md:flex gap-8 items-center font-body-md text-body-md">
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Product</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Solutions</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Resources</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Company</a>
+</nav>
+<div class="flex items-center gap-6">
+<button class="text-on-surface-variant hover:text-primary font-medium hidden sm:block">Sign in</button>
+<button class="bg-primary text-on-primary-container px-6 py-2.5 rounded-full font-bold scale-95 active:scale-90 transition-transform shadow-lg shadow-primary/20">Book a demo</button>
+</div>
+</div>
+</header>
+<main class="relative">
+<!-- Atmospheric Glows -->
+<div class="voice-orb-bg top-0 -left-20"></div>
+<div class="voice-orb-bg top-[20%] -right-20" style="background: radial-gradient(circle, rgba(93, 230, 255, 0.1) 0%, rgba(11, 9, 18, 0) 70%);"></div>
+<!-- Hero Section -->
+<section class="px-margin-mobile md:px-margin-desktop pt-24 pb-12 max-w-container-max mx-auto text-center">
+<span class="text-secondary font-label-caps tracking-widest bg-secondary/10 px-4 py-1.5 rounded-full border border-secondary/20 mb-6 inline-block">PRICING PLANS</span>
+<h1 class="font-h1 text-h1-mobile md:text-h1 mb-6">Scale your voice intelligence</h1>
+<p class="text-on-surface-variant font-body-lg text-body-lg max-w-2xl mx-auto mb-10">
+                Transparent pricing for every stage of growth. Deploy autonomous agents that handle calls, support, and sales with human-like precision.
+            </p>
+<!-- Toggle -->
+<div class="flex items-center justify-center gap-4 mb-16">
+<span class="text-on-surface font-medium transition-opacity" id="monthly-label">Monthly</span>
+<button class="relative w-14 h-7 bg-surface-container-highest rounded-full p-1 transition-colors group" id="billing-toggle">
+<div class="w-5 h-5 bg-primary rounded-full transition-transform translate-x-0" id="toggle-circle"></div>
+</button>
+<span class="text-on-surface-variant font-medium transition-opacity" id="annual-label">Annual <span class="text-secondary text-sm ml-1">(Save 20%)</span></span>
+</div>
+</section>
+<!-- Pricing Grid -->
+<section class="px-margin-mobile md:px-margin-desktop pb-section-gap max-w-container-max mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter items-stretch">
+<!-- Starter Tier -->
+<div class="glass-card rounded-2xl p-8 flex flex-col">
+<div class="mb-8">
+<h3 class="font-h3 text-h3 mb-2">Starter</h3>
+<p class="text-on-surface-variant text-sm h-10">Perfect for exploring autonomous voice agents.</p>
+</div>
+<div class="mb-8">
+<div class="flex items-baseline gap-1">
+<span class="text-h2 font-h2">₹2,999</span>
+<span class="text-on-surface-variant">/mo</span>
+</div>
+<div class="text-secondary text-sm font-medium mt-2 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">info</span>
+<button class="hover:underline cursor-help">What is a credit?</button>
+</div>
+</div>
+<ul class="space-y-4 mb-10 flex-grow">
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            300 Monthly Credits
+                        </li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            1 Voice Agent
+                        </li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            5 Concurrent Calls
+                        </li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            Website Widget
+                        </li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            Basic Analytics
+                        </li>
+</ul>
+<button class="w-full border border-primary/40 text-primary hover:bg-primary hover:text-on-primary py-4 rounded-full font-bold transition-all">Get Started</button>
+</div>
+<!-- Growth Tier (Recommended) -->
+<div class="gradient-border p-8 flex flex-col transform md:-translate-y-4 shadow-2xl shadow-primary/10">
+<div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-primary to-secondary text-background text-[10px] font-bold px-4 py-1 rounded-full uppercase tracking-tighter">Recommended</div>
+<div class="mb-8">
+<h3 class="font-h3 text-h3 mb-2">Growth</h3>
+<p class="text-on-surface-variant text-sm h-10">Optimized for scaling businesses with higher volume.</p>
+</div>
+<div class="mb-8">
+<div class="flex items-baseline gap-1">
+<span class="text-h2 font-h2">₹5,999</span>
+<span class="text-on-surface-variant">/mo</span>
+</div>
+<p class="text-on-surface-variant text-sm mt-2 italic">Priority support included</p>
+</div>
+<ul class="space-y-4 mb-10 flex-grow">
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            1,000 Monthly Credits
+                        </li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            5 Voice Agents
+                        </li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            15 Concurrent Calls
+                        </li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            Automated Campaigns
+                        </li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            Webhooks &amp; Integrations
+                        </li>
+</ul>
+<button class="w-full violet-gradient-bg text-white py-4 rounded-full font-bold shadow-lg shadow-primary/25 hover:scale-[1.02] transition-transform">Go Growth</button>
+</div>
+<!-- Scale Tier -->
+<div class="glass-card rounded-2xl p-8 flex flex-col">
+<div class="absolute -top-4 right-8 bg-surface-container-highest text-primary text-[10px] font-bold px-3 py-1 rounded-full border border-primary/20">Most Popular</div>
+<div class="mb-8">
+<h3 class="font-h3 text-h3 mb-2">Scale</h3>
+<p class="text-on-surface-variant text-sm h-10">Advanced features for high-performance enterprises.</p>
+</div>
+<div class="mb-8">
+<div class="flex items-baseline gap-1">
+<span class="text-h2 font-h2">₹12,999</span>
+<span class="text-on-surface-variant">/mo</span>
+</div>
+<p class="text-on-surface-variant text-sm mt-2">Dedicated Success Manager</p>
+</div>
+<ul class="space-y-4 mb-10 flex-grow">
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            2,500 Monthly Credits
+                        </li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            20 Voice Agents
+                        </li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            30 Concurrent Calls
+                        </li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            API Access &amp; SDKs
+                        </li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            Knowledge Base (RAG)
+                        </li>
+</ul>
+<button class="w-full border border-outline-variant hover:border-primary text-on-surface-variant hover:text-primary py-4 rounded-full font-bold transition-all">Go Scale</button>
+</div>
+</div>
+</section>
+<!-- Talk to Sales Band -->
+<section class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop mb-section-gap">
+<div class="bg-surface-container-low border border-outline-variant rounded-3xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 overflow-hidden relative">
+<div class="absolute -right-20 -top-20 w-64 h-64 bg-primary/10 blur-[80px] rounded-full"></div>
+<div class="relative z-10 max-w-xl">
+<h2 class="font-h2 text-h3 md:text-h2 mb-4">Need a custom solution?</h2>
+<p class="text-on-surface-variant text-body-lg">For enterprises with massive volume, custom compliance, or on-premise requirements, our team is ready to build a bespoke plan.</p>
+</div>
+<div class="relative z-10 flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+<button class="bg-on-surface text-background px-10 py-4 rounded-full font-bold hover:bg-secondary hover:text-on-secondary transition-colors whitespace-nowrap">Talk to sales</button>
+<button class="text-on-surface-variant hover:text-primary px-8 py-4 flex items-center justify-center gap-2">View enterprise docs <span class="material-symbols-outlined">arrow_forward</span></button>
+</div>
+</div>
+</section>
+<!-- FAQ Section -->
+<section class="max-w-3xl mx-auto px-margin-mobile md:px-margin-desktop pb-section-gap">
+<h2 class="font-h2 text-h2 text-center mb-12">Frequently Asked Questions</h2>
+<div class="space-y-4">
+<!-- FAQ Item 1 -->
+<div class="accordion-item glass-card rounded-2xl border-outline-variant hover:border-primary/50 transition-colors">
+<button class="w-full text-left p-6 flex justify-between items-center" onclick="toggleAccordion(this)">
+<span class="font-bold text-lg">What exactly is a "credit"?</span>
+<span class="material-symbols-outlined icon-rotate transition-transform duration-300">expand_more</span>
+</button>
+<div class="accordion-content">
+<div class="px-6 pb-6 text-on-surface-variant leading-relaxed">
+                            A credit represents roughly 1 minute of active voice conversation. This includes the processing time for AI speech recognition, cognitive processing, and high-fidelity text-to-speech output. Unused credits rollover for up to 3 months on Growth and Scale plans.
+                        </div>
+</div>
+</div>
+<!-- FAQ Item 2 -->
+<div class="accordion-item glass-card rounded-2xl border-outline-variant hover:border-primary/50 transition-colors">
+<button class="w-full text-left p-6 flex justify-between items-center" onclick="toggleAccordion(this)">
+<span class="font-bold text-lg">Can I upgrade or downgrade anytime?</span>
+<span class="material-symbols-outlined icon-rotate transition-transform duration-300">expand_more</span>
+</button>
+<div class="accordion-content">
+<div class="px-6 pb-6 text-on-surface-variant leading-relaxed">
+                            Yes, you can change your plan at any point in your billing cycle. Upgrades are prorated immediately, while downgrades take effect at the start of your next billing period.
+                        </div>
+</div>
+</div>
+<!-- FAQ Item 3 -->
+<div class="accordion-item glass-card rounded-2xl border-outline-variant hover:border-primary/50 transition-colors">
+<button class="w-full text-left p-6 flex justify-between items-center" onclick="toggleAccordion(this)">
+<span class="font-bold text-lg">Do you support Indian languages?</span>
+<span class="material-symbols-outlined icon-rotate transition-transform duration-300">expand_more</span>
+</button>
+<div class="accordion-content">
+<div class="px-6 pb-6 text-on-surface-variant leading-relaxed">
+                            Absolutely. Our agents are natively trained in Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, and various regional accents to ensure your customers feel at home.
+                        </div>
+</div>
+</div>
+<!-- FAQ Item 4 -->
+<div class="accordion-item glass-card rounded-2xl border-outline-variant hover:border-primary/50 transition-colors">
+<button class="w-full text-left p-6 flex justify-between items-center" onclick="toggleAccordion(this)">
+<span class="font-bold text-lg">How secure is my customer data?</span>
+<span class="material-symbols-outlined icon-rotate transition-transform duration-300">expand_more</span>
+</button>
+<div class="accordion-content">
+<div class="px-6 pb-6 text-on-surface-variant leading-relaxed">
+                            Security is our priority. We are SOC2 Type II compliant and offer end-to-end encryption. On Scale and Enterprise plans, we offer PII redaction and local data residency in India.
+                        </div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest border-t border-outline-variant">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter px-margin-desktop py-section-gap max-w-container-max mx-auto">
+<div class="space-y-6">
+<div class="font-h3 text-h3 font-bold text-on-surface">Vistrow Voice</div>
+<p class="text-on-surface-variant font-body-md">The next generation of conversational AI, built for the vibrant future of India.</p>
+<div class="flex gap-4">
+<a class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface-variant hover:text-primary hover:scale-110 transition-all" href="#"><span class="material-symbols-outlined">language</span></a>
+<a class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface-variant hover:text-primary hover:scale-110 transition-all" href="#"><span class="material-symbols-outlined">alternate_email</span></a>
+</div>
+</div>
+<div>
+<h4 class="font-bold mb-6">Product</h4>
+<ul class="space-y-4 text-on-surface-variant">
+<li><a class="hover:text-primary transition-colors" href="#">Voice Agents</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Analytics</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Integrations</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Pricing</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold mb-6">Company</h4>
+<ul class="space-y-4 text-on-surface-variant">
+<li><a class="hover:text-primary transition-colors" href="#">About Us</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Careers</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Blog</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Contact</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold mb-6">Legal</h4>
+<ul class="space-y-4 text-on-surface-variant">
+<li><a class="hover:text-primary transition-colors" href="#">Privacy Policy</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Terms of Service</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Cookie Policy</a></li>
+</ul>
+</div>
+</div>
+<div class="max-w-container-max mx-auto px-margin-desktop py-8 border-t border-outline-variant/30 flex flex-col md:flex-row justify-between items-center gap-4 text-on-surface-variant text-sm">
+<p>© 2024 Vistrow Voice. All rights reserved.</p>
+<p>Made with ❤️ in Bengaluru</p>
+</div>
+</footer>
+<script>
+        // Toggle Functionality
+        const toggleBtn = document.getElementById('billing-toggle');
+        const toggleCircle = document.getElementById('toggle-circle');
+        const monthlyLabel = document.getElementById('monthly-label');
+        const annualLabel = document.getElementById('annual-label');
+        let isAnnual = false;
+
+        toggleBtn.addEventListener('click', () => {
+            isAnnual = !isAnnual;
+            toggleCircle.style.transform = isAnnual ? 'translateX(1.75rem)' : 'translateX(0)';
+            toggleBtn.classList.toggle('bg-primary/20', isAnnual);
+            
+            monthlyLabel.classList.toggle('text-on-surface', !isAnnual);
+            monthlyLabel.classList.toggle('text-on-surface-variant', isAnnual);
+            annualLabel.classList.toggle('text-on-surface', isAnnual);
+            annualLabel.classList.toggle('text-on-surface-variant', !isAnnual);
+
+            // In a real app, update pricing numbers here
+        });
+
+        // Accordion Functionality
+        function toggleAccordion(element) {
+            const item = element.parentElement;
+            const isActive = item.classList.contains('active');
+            
+            // Close all items
+            document.querySelectorAll('.accordion-item').forEach(i => {
+                i.classList.remove('active');
+            });
+
+            // If it wasn't active, open it
+            if (!isActive) {
+                item.classList.add('active');
+            }
+        }
+    </script>
+</body></html>

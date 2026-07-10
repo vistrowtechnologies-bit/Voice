@@ -2,7 +2,15 @@ import { Route, Routes } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { AuthProvider } from './components/AuthProvider'
 import { RequireAuth } from './components/RequireAuth'
-import { Landing } from './pages/Landing'
+import { Home } from './pages/marketing/Home'
+import { ProductOverview } from './pages/marketing/ProductOverview'
+import { ProductDetail } from './pages/marketing/ProductDetail'
+import { SolutionsOverview } from './pages/marketing/SolutionsOverview'
+import { SolutionDetail } from './pages/marketing/SolutionDetail'
+import { Pricing } from './pages/marketing/Pricing'
+import { About } from './pages/marketing/About'
+import { Contact } from './pages/marketing/Contact'
+import { ComingSoon } from './pages/marketing/ComingSoon'
 import { CallFlow } from './pages/CallFlow'
 import { Summary } from './pages/Summary'
 import { Login } from './pages/Login'
@@ -29,8 +37,24 @@ function App() {
   return (
     <AuthProvider>
       <Routes>
-        {/* Public */}
-        <Route path="/" element={<Landing />} />
+        {/* Public — marketing site */}
+        <Route path="/" element={<Home />} />
+        <Route path="/product" element={<ProductOverview />} />
+        <Route path="/product/:slug" element={<ProductDetail />} />
+        <Route path="/solutions" element={<SolutionsOverview />} />
+        <Route path="/solutions/:slug" element={<SolutionDetail />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/resources/blog" element={<ComingSoon title="Blog — coming soon" />} />
+        <Route path="/resources/docs" element={<ComingSoon title="Docs — coming soon" />} />
+        <Route path="/resources/case-studies" element={<ComingSoon title="Case studies — coming soon" />} />
+        <Route path="/privacy" element={<ComingSoon title="Privacy Policy" />} />
+        <Route path="/terms" element={<ComingSoon title="Terms of Service" />} />
+
+        {/* /demo is the public live-demo call; /call is the same flow (kept for
+            existing links/embeds). Both reuse CallFlow. */}
+        <Route path="/demo" element={<CallFlow />} />
         <Route path="/call" element={<CallFlow />} />
         <Route path="/summary" element={<Summary />} />
         <Route path="/login" element={<Login />} />

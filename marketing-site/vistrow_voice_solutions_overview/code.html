@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Solutions Overview | Vistrow Voice</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            background-color: #0B0912;
+            color: #e6e0ee;
+            overflow-x: hidden;
+        }
+
+        .glass-card {
+            background: #17121F;
+            border: 1px solid #2A2440;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            border-color: #A855F7;
+            background: #201B3B;
+            box-shadow: 0 0 30px rgba(168, 85, 247, 0.15);
+            transform: translateY(-4px);
+        }
+
+        .neon-gradient-text {
+            background: linear-gradient(135deg, #ddb7ff 0%, #5de6ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .voice-orb-glow {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(124, 58, 237, 0.15) 0%, rgba(11, 9, 18, 0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .pulse-ring {
+            animation: pulse-ring 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.1; }
+            50% { transform: scale(1.05); opacity: 0.2; }
+            100% { transform: scale(0.95); opacity: 0.1; }
+        }
+
+        .pill-button {
+            border-radius: 9999px;
+            transition: all 0.2s ease;
+        }
+
+        .primary-gradient {
+            background: linear-gradient(135deg, #842bd2 0%, #a855f7 100%);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#690005",
+                        "surface-tint": "#ddb7ff",
+                        "tertiary-container": "#ff479c",
+                        "surface-container": "#211e28",
+                        "primary-fixed-dim": "#ddb7ff",
+                        "inverse-primary": "#842bd2",
+                        "surface-container-highest": "#36333e",
+                        "inverse-on-surface": "#322f39",
+                        "on-primary": "#490080",
+                        "primary-container": "#b76dff",
+                        "primary-fixed": "#f0dbff",
+                        "surface-variant": "#36333e",
+                        "secondary": "#5de6ff",
+                        "on-tertiary": "#640036",
+                        "surface-container-lowest": "#0f0d16",
+                        "tertiary-fixed-dim": "#ffb0cb",
+                        "on-secondary-fixed-variant": "#004e5a",
+                        "surface-dim": "#14121b",
+                        "on-background": "#e6e0ee",
+                        "background": "#14121b",
+                        "on-primary-fixed": "#2c0051",
+                        "outline-variant": "#4d4354",
+                        "on-tertiary-fixed-variant": "#8d004f",
+                        "on-surface-variant": "#cfc2d6",
+                        "on-tertiary-container": "#58002f",
+                        "on-secondary-container": "#00515d",
+                        "secondary-fixed": "#a2eeff",
+                        "secondary-container": "#00cbe6",
+                        "primary": "#ddb7ff",
+                        "error-container": "#93000a",
+                        "surface-container-high": "#2b2833",
+                        "secondary-fixed-dim": "#2fd9f4",
+                        "surface-container-low": "#1d1a24",
+                        "surface": "#14121b",
+                        "on-error-container": "#ffdad6",
+                        "surface-bright": "#3b3842",
+                        "on-secondary": "#00363e",
+                        "on-primary-fixed-variant": "#6900b3",
+                        "on-surface": "#e6e0ee",
+                        "on-secondary-fixed": "#001f25",
+                        "outline": "#988d9f",
+                        "inverse-surface": "#e6e0ee",
+                        "on-primary-container": "#400071",
+                        "tertiary": "#ffb0cb",
+                        "on-tertiary-fixed": "#3e001f",
+                        "error": "#ffb4ab",
+                        "tertiary-fixed": "#ffd9e3"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-desktop": "64px",
+                        "unit": "8px",
+                        "gutter": "24px",
+                        "margin-mobile": "20px",
+                        "container-max": "1280px",
+                        "section-gap": "120px"
+                    },
+                    "fontFamily": {
+                        "h2": ["Space Grotesk"],
+                        "body-lg": ["Inter"],
+                        "h1-mobile": ["Space Grotesk"],
+                        "h1": ["Space Grotesk"],
+                        "h3": ["Space Grotesk"],
+                        "body-md": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "mono-metric": ["Space Grotesk"]
+                    },
+                    "fontSize": {
+                        "h2": ["48px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "h1-mobile": ["40px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                        "h1": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "h3": ["32px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.1em", "fontWeight": "600"}],
+                        "mono-metric": ["24px", {"lineHeight": "1.0", "fontWeight": "500"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="font-body-md text-on-surface">
+<!-- Top Navigation Anchor -->
+<header class="bg-background/80 backdrop-blur-md sticky top-0 z-50 border-b border-outline-variant w-full">
+<div class="flex justify-between items-center px-margin-mobile md:px-margin-desktop py-4 w-full max-w-container-max mx-auto">
+<div class="font-h3 text-h3 font-bold text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">voice_selection</span>
+                Vistrow Voice
+            </div>
+<nav class="hidden md:flex items-center gap-8 font-body-md">
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Product</a>
+<a class="text-primary font-bold transition-colors duration-200" href="#">Solutions</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Resources</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Company</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="hidden lg:flex items-center text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">call</span>
+</button>
+<button class="text-body-md font-medium text-on-surface-variant hover:text-on-surface transition-colors">Sign in</button>
+<button class="pill-button primary-gradient text-white px-6 py-2.5 text-body-md font-bold scale-95 active:scale-90 transition-transform">
+                    Book a demo
+                </button>
+</div>
+</div>
+</header>
+<main class="relative">
+<!-- Atmospheric Ambient Elements -->
+<div class="voice-orb-glow top-[10%] left-[5%] opacity-40"></div>
+<div class="voice-orb-glow top-[60%] right-[0%] opacity-30"></div>
+<!-- Hero Section -->
+<section class="px-margin-mobile md:px-margin-desktop pt-24 pb-16 max-w-container-max mx-auto">
+<div class="max-w-3xl">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 mb-6">
+<span class="flex h-2 w-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="text-label-caps text-secondary uppercase tracking-widest">Industry Solutions</span>
+</div>
+<h1 class="font-h1 text-h1-mobile md:text-h1 mb-6 leading-tight">
+                    Voice AI for your <span class="neon-gradient-text">industry.</span>
+</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+                    Deploy hyper-realistic voice agents tailored to the unique linguistic nuances and business logic of your specific sector. Experience zero-latency intelligence.
+                </p>
+</div>
+</section>
+<!-- Solutions Grid (Bento Style) -->
+<section class="px-margin-mobile md:px-margin-desktop pb-section-gap max-w-container-max mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-6 lg:grid-cols-12 gap-gutter">
+<!-- Real Estate (Large) -->
+<div class="md:col-span-6 lg:col-span-8 glass-card rounded-xl p-8 relative overflow-hidden group">
+<div class="absolute -right-12 -top-12 w-64 h-64 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors"></div>
+<div class="relative z-10 flex flex-col h-full justify-between">
+<div>
+<div class="w-14 h-14 rounded-full bg-surface-container-high flex items-center justify-center mb-8 border border-outline-variant">
+<span class="material-symbols-outlined text-primary text-3xl">real_estate_agent</span>
+</div>
+<h3 class="font-h3 text-h3 mb-4">Real Estate</h3>
+<p class="font-body-md text-on-surface-variant text-lg max-w-md">
+                                Automate property inquiries, schedule viewings, and pre-qualify leads with voice agents that sound exactly like your best agents.
+                            </p>
+<div class="mt-6 flex flex-wrap gap-3">
+<span class="px-3 py-1 rounded-full bg-surface-container text-xs font-label-caps text-outline uppercase tracking-wider border border-outline-variant">Lead Qual</span>
+<span class="px-3 py-1 rounded-full bg-surface-container text-xs font-label-caps text-outline uppercase tracking-wider border border-outline-variant">24/7 Booking</span>
+</div>
+</div>
+<div class="mt-12">
+<a class="inline-flex items-center gap-2 text-primary font-bold hover:gap-4 transition-all" href="#">
+                                Explore <span class="material-symbols-outlined">arrow_forward</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Healthcare (Portrait) -->
+<div class="md:col-span-6 lg:col-span-4 glass-card rounded-xl p-8 flex flex-col justify-between group">
+<div>
+<div class="w-14 h-14 rounded-full bg-surface-container-high flex items-center justify-center mb-8 border border-outline-variant">
+<span class="material-symbols-outlined text-secondary text-3xl">health_metrics</span>
+</div>
+<h3 class="font-h3 text-h3 mb-4">Healthcare</h3>
+<p class="font-body-md text-on-surface-variant">
+                            Empathetic patient follow-ups, medication reminders, and HIPAA-compliant appointment triage.
+                        </p>
+</div>
+<div class="mt-8">
+<a class="inline-flex items-center gap-2 text-secondary font-bold hover:gap-4 transition-all" href="#">
+                            Explore <span class="material-symbols-outlined">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- E-commerce (Small) -->
+<div class="md:col-span-6 lg:col-span-4 glass-card rounded-xl p-8 flex flex-col justify-between group">
+<div>
+<div class="w-14 h-14 rounded-full bg-surface-container-high flex items-center justify-center mb-8 border border-outline-variant">
+<span class="material-symbols-outlined text-tertiary text-3xl">shopping_cart</span>
+</div>
+<h3 class="font-h3 text-h3 mb-4">E-commerce</h3>
+<p class="font-body-md text-on-surface-variant">
+                            Dynamic order tracking and personalized post-purchase support that drives retention.
+                        </p>
+</div>
+<div class="mt-8">
+<a class="inline-flex items-center gap-2 text-tertiary font-bold hover:gap-4 transition-all" href="#">
+                            Explore <span class="material-symbols-outlined">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Finance (Large Wide) -->
+<div class="md:col-span-6 lg:col-span-4 glass-card rounded-xl p-8 flex flex-col justify-between group border-l-4 border-l-primary">
+<div>
+<div class="w-14 h-14 rounded-full bg-surface-container-high flex items-center justify-center mb-8 border border-outline-variant">
+<span class="material-symbols-outlined text-primary text-3xl">account_balance</span>
+</div>
+<h3 class="font-h3 text-h3 mb-4">Finance</h3>
+<p class="font-body-md text-on-surface-variant">
+                            Secure identity verification and fraud alerts with sophisticated conversational banking.
+                        </p>
+</div>
+<div class="mt-8">
+<a class="inline-flex items-center gap-2 text-primary font-bold hover:gap-4 transition-all" href="#">
+                            Explore <span class="material-symbols-outlined">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Customer Support (Featured) -->
+<div class="md:col-span-6 lg:col-span-4 glass-card rounded-xl p-8 relative overflow-hidden group">
+<div class="absolute inset-0 opacity-10 pointer-events-none">
+
+</div>
+<div class="relative z-10 flex flex-col h-full justify-between">
+<div>
+<div class="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center mb-8 border border-primary/40">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">support_agent</span>
+</div>
+<h3 class="font-h3 text-h3 mb-4">Support</h3>
+<p class="font-body-md text-on-surface-variant">
+                                Drastically reduce wait times with Tier-1 AI agents that solve complex issues instantly.
+                            </p>
+</div>
+<div class="mt-8">
+<a class="inline-flex items-center gap-2 text-primary font-bold hover:gap-4 transition-all" href="#">
+                                Explore <span class="material-symbols-outlined">arrow_forward</span>
+</a>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="px-margin-mobile md:px-margin-desktop py-24 bg-surface-container-lowest relative overflow-hidden">
+<div class="max-w-container-max mx-auto text-center relative z-10">
+<h2 class="font-h2 text-h2 mb-6">Ready to transform your communication?</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto mb-10">
+                    Join hundreds of forward-thinking enterprises scaling their voice operations with Vistrow.
+                </p>
+<div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+<button class="pill-button primary-gradient text-white px-8 py-4 text-lg font-bold w-full sm:w-auto hover:shadow-lg hover:shadow-primary/25 transition-all">
+                        Get Started Now
+                    </button>
+<button class="pill-button bg-transparent border-2 border-outline-variant hover:border-secondary hover:text-secondary text-white px-8 py-4 text-lg font-bold w-full sm:w-auto transition-all">
+                        Talk to Sales
+                    </button>
+</div>
+</div>
+<!-- Voice Orb Decorative Component -->
+<div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] opacity-10 pointer-events-none">
+<div class="absolute inset-0 rounded-full border border-primary/20 pulse-ring"></div>
+<div class="absolute inset-8 rounded-full border border-secondary/20 pulse-ring" style="animation-delay: 1s;"></div>
+<div class="absolute inset-16 rounded-full border border-tertiary/20 pulse-ring" style="animation-delay: 2s;"></div>
+</div>
+</section>
+</main>
+<!-- Footer Anchor -->
+<footer class="bg-surface-container-lowest border-t border-outline-variant">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter px-margin-mobile md:px-margin-desktop py-section-gap max-w-container-max mx-auto">
+<div class="col-span-1 md:col-span-1">
+<div class="font-h3 text-h3 font-bold text-on-surface mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">voice_selection</span>
+                    Vistrow Voice
+                </div>
+<p class="text-on-surface-variant text-body-md mb-6">
+                    Engineering the future of human-AI vocal interaction. Built for enterprise, designed for humans.
+                </p>
+</div>
+<div>
+<h4 class="font-bold text-primary mb-6">Product</h4>
+<ul class="space-y-4">
+<li><a class="text-on-surface-variant hover:text-secondary transition-colors opacity-80 hover:opacity-100" href="#">Voice Synthesis</a></li>
+<li><a class="text-on-surface-variant hover:text-secondary transition-colors opacity-80 hover:opacity-100" href="#">Conversational Engine</a></li>
+<li><a class="text-on-surface-variant hover:text-secondary transition-colors opacity-80 hover:opacity-100" href="#">Developer API</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold text-primary mb-6">Company</h4>
+<ul class="space-y-4">
+<li><a class="text-on-surface-variant hover:text-secondary transition-colors opacity-80 hover:opacity-100" href="#">About Us</a></li>
+<li><a class="text-on-surface-variant hover:text-secondary transition-colors opacity-80 hover:opacity-100" href="#">Careers</a></li>
+<li><a class="text-on-surface-variant hover:text-secondary transition-colors opacity-80 hover:opacity-100" href="#">Contact</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold text-primary mb-6">Legal</h4>
+<ul class="space-y-4">
+<li><a class="text-on-surface-variant hover:text-secondary transition-colors opacity-80 hover:opacity-100" href="#">Privacy Policy</a></li>
+<li><a class="text-on-surface-variant hover:text-secondary transition-colors opacity-80 hover:opacity-100" href="#">Terms of Service</a></li>
+<li><a class="text-on-surface-variant hover:text-secondary transition-colors opacity-80 hover:opacity-100" href="#">Security</a></li>
+</ul>
+</div>
+</div>
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-8 border-t border-outline-variant flex flex-col md:flex-row justify-between items-center gap-4">
+<span class="text-on-surface-variant text-sm">© 2024 Vistrow Voice. All rights reserved.</span>
+<div class="flex gap-6">
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#"><span class="material-symbols-outlined">public</span></a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#"><span class="material-symbols-outlined">groups</span></a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#"><span class="material-symbols-outlined">mail</span></a>
+</div>
+</div>
+</footer>
+<script>
+        // Optional micro-interaction: Subtle parallax on cards
+        document.addEventListener('mousemove', (e) => {
+            const cards = document.querySelectorAll('.glass-card');
+            const x = e.clientX / window.innerWidth;
+            const y = e.clientY / window.innerHeight;
+            
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                const cardX = (rect.left + rect.width / 2) / window.innerWidth;
+                const cardY = (rect.top + rect.height / 2) / window.innerHeight;
+                
+                const moveX = (x - cardX) * 10;
+                const moveY = (y - cardY) * 10;
+                
+                // Only apply subtle effect if hovering nearby
+                const distance = Math.sqrt(Math.pow(x - cardX, 2) + Math.pow(y - cardY, 2));
+                if (distance < 0.3) {
+                    card.style.transform = `translate(${moveX}px, ${moveY}px)`;
+                } else {
+                    card.style.transform = `translate(0px, 0px)`;
+                }
+            });
+        });
+    </script>
+</body></html>

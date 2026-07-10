@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>About Us | Vistrow Voice</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        :root {
+            --glass-bg: rgba(23, 18, 31, 0.7);
+            --glass-border: rgba(42, 36, 64, 0.8);
+        }
+        body {
+            background-color: #0B0912;
+            color: #e6e0ee;
+            overflow-x: hidden;
+        }
+        .voice-orb-glow {
+            filter: blur(80px);
+            background: radial-gradient(circle, #A855F7 0%, rgba(124, 58, 237, 0) 70%);
+        }
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            transition: all 0.3s ease;
+        }
+        .glass-card:hover {
+            border-color: #ddb7ff;
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.15);
+        }
+        .neon-text-glow {
+            text-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #ddb7ff 0%, #5de6ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .btn-primary-gradient {
+            background: linear-gradient(135deg, #842bd2 0%, #b76dff 100%);
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "on-error": "#690005",
+                "surface-tint": "#ddb7ff",
+                "tertiary-container": "#ff479c",
+                "surface-container": "#211e28",
+                "primary-fixed-dim": "#ddb7ff",
+                "inverse-primary": "#842bd2",
+                "surface-container-highest": "#36333e",
+                "inverse-on-surface": "#322f39",
+                "on-primary": "#490080",
+                "primary-container": "#b76dff",
+                "primary-fixed": "#f0dbff",
+                "surface-variant": "#36333e",
+                "secondary": "#5de6ff",
+                "on-tertiary": "#640036",
+                "surface-container-lowest": "#0f0d16",
+                "tertiary-fixed-dim": "#ffb0cb",
+                "on-secondary-fixed-variant": "#004e5a",
+                "surface-dim": "#14121b",
+                "on-background": "#e6e0ee",
+                "background": "#14121b",
+                "on-primary-fixed": "#2c0051",
+                "outline-variant": "#4d4354",
+                "on-tertiary-fixed-variant": "#8d004f",
+                "on-surface-variant": "#cfc2d6",
+                "on-tertiary-container": "#58002f",
+                "on-secondary-container": "#00515d",
+                "secondary-fixed": "#a2eeff",
+                "secondary-container": "#00cbe6",
+                "primary": "#ddb7ff",
+                "error-container": "#93000a",
+                "surface-container-high": "#2b2833",
+                "secondary-fixed-dim": "#2fd9f4",
+                "surface-container-low": "#1d1a24",
+                "surface": "#14121b",
+                "on-error-container": "#ffdad6",
+                "surface-bright": "#3b3842",
+                "on-secondary": "#00363e",
+                "on-primary-fixed-variant": "#6900b3",
+                "on-surface": "#e6e0ee",
+                "on-secondary-fixed": "#001f25",
+                "outline": "#988d9f",
+                "inverse-surface": "#e6e0ee",
+                "on-primary-container": "#400071",
+                "tertiary": "#ffb0cb",
+                "on-tertiary-fixed": "#3e001f",
+                "error": "#ffb4ab",
+                "tertiary-fixed": "#ffd9e3"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+            },
+            "spacing": {
+                "margin-desktop": "64px",
+                "unit": "8px",
+                "gutter": "24px",
+                "margin-mobile": "20px",
+                "container-max": "1280px",
+                "section-gap": "120px"
+            },
+            "fontFamily": {
+                "h2": ["Space Grotesk"],
+                "body-lg": ["Inter"],
+                "h1-mobile": ["Space Grotesk"],
+                "h1": ["Space Grotesk"],
+                "h3": ["Space Grotesk"],
+                "body-md": ["Inter"],
+                "label-caps": ["Inter"],
+                "mono-metric": ["Space Grotesk"]
+            },
+            "fontSize": {
+                "h2": ["48px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                "h1-mobile": ["40px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                "h1": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                "h3": ["32px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.1em", "fontWeight": "600"}],
+                "mono-metric": ["24px", {"lineHeight": "1.0", "fontWeight": "500"}]
+            }
+          },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md selection:bg-primary/30">
+<!-- Navigation -->
+<nav class="bg-background/80 backdrop-blur-md border-b border-outline-variant docked full-width top-0 sticky z-50">
+<div class="flex justify-between items-center px-margin-desktop py-4 w-full max-w-container-max mx-auto">
+<div class="font-h3 text-h3 font-bold text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">graphic_eq</span>
+                Vistrow Voice
+            </div>
+<div class="hidden md:flex gap-8 items-center">
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Product</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Solutions</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors duration-200" href="#">Resources</a>
+<a class="font-body-md text-body-md text-primary font-bold transition-colors duration-200" href="#">Company</a>
+</div>
+<div class="flex items-center gap-6">
+<button class="text-on-surface-variant hover:text-primary transition-colors font-medium">Sign in</button>
+<button class="btn-primary-gradient px-6 py-2.5 rounded-full text-white font-bold scale-95 active:scale-90 transition-transform shadow-lg shadow-primary/20">Book a demo</button>
+</div>
+</div>
+</nav>
+<main>
+<!-- Hero Section -->
+<section class="relative pt-32 pb-20 px-margin-mobile md:px-margin-desktop overflow-hidden">
+<div class="voice-orb-glow absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] opacity-40 -z-10"></div>
+<div class="max-w-container-max mx-auto text-center">
+<span class="font-label-caps text-label-caps tracking-[0.2em] text-primary mb-6 block uppercase">COMPANY</span>
+<h1 class="font-h1 text-h1-mobile md:text-h1 mb-8 max-w-4xl mx-auto">
+                    Voice AI, built <span class="gradient-text">for Bharat.</span>
+</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto mb-12">
+                    Vistrow Voice is bridging the communication gap with enterprise-grade conversational AI that understands the nuances of Indian languages and cultures.
+                </p>
+<div class="relative w-full h-[400px] md:h-[500px] rounded-3xl overflow-hidden glass-card">
+<img class="w-full h-full object-cover opacity-60" data-alt="A cinematic, wide-angle shot of a high-tech office in Bangalore at night. The space is filled with glowing violet and cyan holographic displays representing voice waveforms. Minimalist architecture with glass walls reflects the vibrant neon energy of the AI-driven environment. The mood is sophisticated, professional, and forward-looking, perfectly capturing the fusion of Indian enterprise and cutting-edge technology." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCr1u0lNdnooU39u7EXJgv3cN-kn2O7hyiOEc7IhEpj0Ui3SdQGWvOINWnSIkED2ufz1glxukjqc0BO730aQtkPfWh8k08d3ULniFfSUl_cuYKq4ZqtgW3qCyYDX17tAbsVMCO0HfA5NUzEIr0JlY3oCt4dzR559tYxMYu_QIjaE6lYRRDvDY0XVoMbWV8BLEek1AOUxd2EZEvknjSSmkylTlEIyK4GJNCP2vIvOEbOO755888G59B6"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
+<div class="absolute bottom-8 left-8 right-8 flex flex-col md:flex-row justify-between items-end">
+<div class="text-left">
+<h3 class="font-h3 text-h3 mb-2">Our Mission</h3>
+<p class="text-on-surface-variant max-w-lg">To empower 1.4 billion people with seamless, voice-driven digital interactions that feel human, local, and intuitive.</p>
+</div>
+<div class="hidden md:block">
+
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Our Story / Bento Section -->
+<section class="py-section-gap px-margin-mobile md:px-margin-desktop bg-surface-container-lowest">
+<div class="max-w-container-max mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Text Column -->
+<div class="md:col-span-5 flex flex-col justify-center">
+<h2 class="font-h2 text-h2 mb-6">The story behind the sound.</h2>
+<div class="space-y-6 text-on-surface-variant">
+<p class="font-body-lg text-body-lg">Founded in 2021 by a team of linguistic experts and deep-learning engineers, Vistrow started with a simple observation: most global AI models failed to capture the complexity of Indian dialects.</p>
+<p class="font-body-lg text-body-lg">We spent years building proprietary datasets and training models specifically for the Indian linguistic landscape, from Hinglish code-switching to regional phonetic variations.</p>
+<p class="font-body-lg text-body-lg">Today, we help the world's largest brands talk to India.</p>
+</div>
+</div>
+<!-- Bento Visuals -->
+<div class="md:col-span-7 grid grid-cols-2 gap-4">
+<div class="glass-card rounded-2xl h-80 relative overflow-hidden group">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A macro photograph of sound waves visualized as glowing violet particles in a dark, structured space. The lighting is high-contrast neon with deep shadows, emphasizing the technical precision and fluidity of voice data. The aesthetic is clean and futuristic, aligning with a high-performance SaaS brand identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNPbCFzMgaAunHk9AqJHWAz-AcOnE-isjnlIsZvoPp_4-61L0D7R8Tt23u9ZW61TyCQJiOD61lqPSCmqbUXnQAF4YbgypuQ5NtrojFypeAKH6Xu0jedxL_vpqMCK2ssL3XTTPGre0kLJQ2xJ06H6KSP9ZTmT5o9F9vpFk_GRkLZzhwYKKoroyuerHSivy_iPtoXWMW998KjXLCtWaJlNhI7fxj-g_vOoa5iAx_8a9kOBhGjRwNbqGq"/>
+<div class="absolute inset-0 bg-primary/10 mix-blend-overlay"></div>
+</div>
+<div class="glass-card rounded-2xl h-80 flex flex-col items-center justify-center p-8 text-center bg-surface-container">
+<span class="material-symbols-outlined text-secondary text-5xl mb-4">language</span>
+<h4 class="font-h3 text-h3 mb-2">22+</h4>
+<p class="text-on-surface-variant">Official Indian languages supported natively.</p>
+</div>
+<div class="glass-card rounded-2xl h-64 col-span-2 relative overflow-hidden">
+<div class="absolute inset-0 flex items-center justify-center px-8">
+<div class="w-full max-w-md">
+<div class="flex justify-between mb-2">
+<span class="font-label-caps">Accuracy Rate</span>
+<span class="font-mono-metric text-primary">99.2%</span>
+</div>
+<div class="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[99.2%] shadow-[0_0_10px_#ddb7ff]"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- By the Numbers -->
+<section class="py-20 border-y border-outline-variant relative overflow-hidden">
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop relative z-10">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-gutter text-center">
+<div>
+<p class="font-mono-metric text-5xl md:text-6xl text-primary mb-2">500M+</p>
+<p class="font-label-caps text-on-surface-variant">Minutes Processed</p>
+</div>
+<div>
+<p class="font-mono-metric text-5xl md:text-6xl text-secondary mb-2">150+</p>
+<p class="font-label-caps text-on-surface-variant">Enterprise Clients</p>
+</div>
+<div>
+<p class="font-mono-metric text-5xl md:text-6xl text-primary mb-2">12ms</p>
+<p class="font-label-caps text-on-surface-variant">Avg. Latency</p>
+</div>
+<div>
+<p class="font-mono-metric text-5xl md:text-6xl text-secondary mb-2">400k</p>
+<p class="font-label-caps text-on-surface-variant">Daily Active Agents</p>
+</div>
+</div>
+</div>
+<div class="absolute top-0 right-0 w-full h-full opacity-5 pointer-events-none">
+
+</div>
+</section>
+<!-- Values Section -->
+<section class="py-section-gap px-margin-mobile md:px-margin-desktop">
+<div class="max-w-container-max mx-auto">
+<div class="mb-16 text-center">
+<h2 class="font-h2 text-h2 mb-4">Values that define us.</h2>
+<p class="text-on-surface-variant">Our culture is built on the intersection of empathy and engineering.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<!-- Value Card 1 -->
+<div class="glass-card p-8 rounded-3xl">
+<div class="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-primary">diversity_3</span>
+</div>
+<h4 class="font-h3 text-h3 mb-4">Radical Inclusion</h4>
+<p class="text-on-surface-variant">We believe technology should speak everyone's language, regardless of their dialect or accent.</p>
+</div>
+<!-- Value Card 2 -->
+<div class="glass-card p-8 rounded-3xl">
+<div class="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-secondary">shield</span>
+</div>
+<h4 class="font-h3 text-h3 mb-4">Trust First</h4>
+<p class="text-on-surface-variant">Voice data is sacred. We prioritize privacy and security at every layer of our stack.</p>
+</div>
+<!-- Value Card 3 -->
+<div class="glass-card p-8 rounded-3xl">
+<div class="w-12 h-12 rounded-xl bg-tertiary-container/20 flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-tertiary">bolt</span>
+</div>
+<h4 class="font-h3 text-h3 mb-4">Relentless Speed</h4>
+<p class="text-on-surface-variant">In a fast-moving market, we build for performance, ensuring instant responses for every user.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Team Grid Placeholder -->
+<section class="py-section-gap px-margin-mobile md:px-margin-desktop bg-surface-container-low">
+<div class="max-w-container-max mx-auto">
+<div class="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
+<div>
+<h2 class="font-h2 text-h2 mb-4">The minds at Vistrow.</h2>
+<p class="text-on-surface-variant max-w-xl">A global collective of engineers, designers, and linguists dedicated to solving the hardest problems in voice.</p>
+</div>
+<button class="flex items-center gap-2 text-primary hover:gap-4 transition-all duration-300 font-bold group">
+                        Meet the leadership <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-gutter">
+<!-- Team Member -->
+<div class="group">
+<div class="aspect-square rounded-2xl overflow-hidden mb-4 glass-card">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 group-hover:scale-105" data-alt="A professional headshot of a female AI engineer in a modern workspace. She is wearing a smart-casual blazer. The lighting is soft and directional with a subtle violet rim light that matches the brand's aesthetic. The background is a blurred high-tech lab with glowing hardware indicators. High-end portrait photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-hpbiV949rCOkz8ChPMVb_ZzfDNG4Nk-4MH8BEOkp_tkorVev7VQW8UzpLTVNf0ueiaorBRiR5pw-yS72_-r-tqCahq-Lz49rURtjIkQP9deiVz2VqstxeO4jGcVpDG8ZClM6w_eeL7zs37wBZOtnUcNsDbLbDFPWfXsu7egAjbhWe6iiD_gVw4aybbxgq1nptSuB3uFqATNkitI1IKavpnG2idhBMkA0VqSx2SsTBgMAI3J-b_ug"/>
+</div>
+<h5 class="font-h3 text-xl mb-1">Dr. Ananya Sharma</h5>
+<p class="text-on-surface-variant font-label-caps">CTO &amp; Founder</p>
+</div>
+<!-- Team Member -->
+<div class="group">
+<div class="aspect-square rounded-2xl overflow-hidden mb-4 glass-card">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 group-hover:scale-105" data-alt="A professional headshot of a male linguistic researcher in a contemporary office setting. He has a friendly, intellectual appearance and is wearing a dark charcoal shirt. The image features cinematic lighting with a slight cyan accent on the background reflections. The focus is sharp on the subject, conveying expertise and innovation." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDaKmZK6GZbf-KBkjCr_XgzJjD4E7d-F55OlvoZx7N3ouGPagu8KsvBSFvhdTyuu3sUZq09y3sPuFtJ9xe4ond-jZV6-6zVSQs132r4VQmCbywnt9lGmMxaSoimtoAz6vyl2_V6ggumabx8Hz-7rqDrOvT0fY0MrnhZC3NEPfb1Rvbzf7jND5PsnBAUhgiqbPmm6rVgl4ROePk29LbOpprvhqGOAMus4_BpZiYEg7Mf-iJPOvgYM8UP"/>
+</div>
+<h5 class="font-h3 text-xl mb-1">Vikram Iyer</h5>
+<p class="text-on-surface-variant font-label-caps">Head of Linguistics</p>
+</div>
+<!-- Team Member -->
+<div class="group">
+<div class="aspect-square rounded-2xl overflow-hidden mb-4 glass-card">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 group-hover:scale-105" data-alt="A professional headshot of a female product designer with a creative, modern look. She is in a bright studio environment with architectural lines. The lighting is crisp, using the brand's dark mode palette for shadows and a vibrant violet glow for highlights. She radiates confidence and technological fluency." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXscAPNV75dD4XcrouESSNZhVLiL_CF1Qv_5qygxV58WkVuD0O1RhOb8beY4icE24fb7vRFkzim87rpaagjBSu0DcZbKG6mTm06DsthjN7I5-bCgHm_K1p1WoD4c7rfcvuTfj42Zm4O9zEAsFpNAeUOvaTgpd48QSJsgoZpz-ZRI9O-UbEsrAWQTiU4e_gf54icGx4FShgGtl2yc_KEaXKHYBdhmuhOUdh1yfu-5avGNdolwaQ3rsj"/>
+</div>
+<h5 class="font-h3 text-xl mb-1">Sana Kothari</h5>
+<p class="text-on-surface-variant font-label-caps">Design Director</p>
+</div>
+<!-- Team Member -->
+<div class="group">
+<div class="aspect-square rounded-2xl overflow-hidden mb-4 glass-card">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 group-hover:scale-105" data-alt="A professional headshot of a male operations leader in a sleek, executive environment. He has a focused and determined expression. The portrait utilizes premium lighting techniques with deep blacks and sharp highlights, mirroring the Dark Neon brand theme of Vistrow Voice." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-Xo2iT-WIrGfjdb7pOhpv3fXGisfopbHpB9J7ynV_-2_cQlZwvKyi0xxWWIzvVkvKPtXy2cpi8ojphy4RYPArDNJXH4q2OB_N2rkmv7w5ivzv49JGHJlNhjv2MTz4-yEsk8L-vrahqApsp9FIeiKAyRQG4-sx3Oy9L2BJdBOPIKQiZ7oSjcfvXOnWcJyk2R5eUs-97yXAnbWIgNWqAyl5KRkO4ucxpV44A099qAG1YWOeIA8ng9BN"/>
+</div>
+<h5 class="font-h3 text-xl mb-1">Rohan Mehta</h5>
+<p class="text-on-surface-variant font-label-caps">COO</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Hiring / Contact CTA -->
+<section class="py-section-gap px-margin-mobile md:px-margin-desktop relative">
+<div class="voice-orb-glow absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] opacity-20 -z-10"></div>
+<div class="max-w-4xl mx-auto glass-card rounded-[48px] p-12 md:p-20 text-center border-primary/20">
+<h2 class="font-h1 text-h1-mobile md:text-h2 mb-6">Build the future of voice with us.</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-12 max-w-2xl mx-auto">
+                    We're looking for outliers, dreamers, and builders who want to define how India communicates. Join our mission or talk to our team about a partnership.
+                </p>
+<div class="flex flex-col md:flex-row gap-6 justify-center">
+<button class="btn-primary-gradient px-10 py-4 rounded-full text-white font-bold text-lg hover:shadow-[0_0_30px_rgba(168,85,247,0.4)] transition-all flex items-center justify-center gap-2">
+                        View Open Roles <span class="material-symbols-outlined">work</span>
+</button>
+<button class="border-2 border-outline-variant hover:border-secondary hover:text-secondary px-10 py-4 rounded-full font-bold text-lg transition-all flex items-center justify-center gap-2 group">
+                        Contact Support <span class="material-symbols-outlined group-hover:rotate-12 transition-transform">alternate_email</span>
+</button>
+</div>
+<div class="mt-16 flex justify-center items-center gap-8 opacity-60 grayscale hover:grayscale-0 transition-all">
+<span class="font-label-caps">Backed by</span>
+<div class="flex gap-6 items-center">
+<span class="font-h3 text-xl font-bold tracking-tighter">NEXUS</span>
+<span class="font-h3 text-xl font-bold tracking-tighter">SEQUOIA</span>
+<span class="font-h3 text-xl font-bold tracking-tighter">LIGHTSPEED</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest border-t border-outline-variant">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter px-margin-desktop py-section-gap max-w-container-max mx-auto">
+<div class="space-y-6">
+<div class="font-h3 text-h3 font-bold text-on-surface">Vistrow Voice</div>
+<p class="text-on-surface-variant max-w-xs">Pioneering multilingual AI for the next billion users.</p>
+<div class="flex gap-4">
+<a class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center hover:bg-primary/20 transition-colors" href="#">
+<span class="material-symbols-outlined text-on-surface-variant">share</span>
+</a>
+<a class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center hover:bg-primary/20 transition-colors" href="#">
+<span class="material-symbols-outlined text-on-surface-variant">chat_bubble</span>
+</a>
+</div>
+</div>
+<div>
+<h5 class="font-bold mb-6 text-on-surface">Product</h5>
+<ul class="space-y-4 text-on-surface-variant">
+<li><a class="hover:text-secondary transition-colors" href="#">Voice Synthesis</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Language Models</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Developer API</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Enterprise</a></li>
+</ul>
+</div>
+<div>
+<h5 class="font-bold mb-6 text-on-surface">Company</h5>
+<ul class="space-y-4 text-on-surface-variant">
+<li><a class="text-secondary font-bold" href="#">About Us</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Careers</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Blog</a></li>
+<li><a class="hover:text-secondary transition-colors" href="#">Press</a></li>
+</ul>
+</div>
+<div>
+<h5 class="font-bold mb-6 text-on-surface">Stay Connected</h5>
+<p class="text-on-surface-variant mb-4">Get the latest on AI breakthroughs.</p>
+<div class="flex">
+<input class="bg-surface-container rounded-l-lg border-none focus:ring-1 focus:ring-primary w-full text-body-md py-3 px-4" placeholder="Email address" type="email"/>
+<button class="bg-primary text-on-primary-container px-4 rounded-r-lg font-bold">
+<span class="material-symbols-outlined">send</span>
+</button>
+</div>
+</div>
+</div>
+<div class="max-w-container-max mx-auto px-margin-desktop py-8 border-t border-outline-variant/30 flex flex-col md:flex-row justify-between items-center gap-4 text-on-surface-variant text-sm">
+<p>© 2024 Vistrow Voice. All rights reserved.</p>
+<div class="flex gap-8">
+<a class="hover:text-primary" href="#">Privacy Policy</a>
+<a class="hover:text-primary" href="#">Terms of Service</a>
+<a class="hover:text-primary" href="#">Cookie Settings</a>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interaction: Parallax effect for the hero orb
+        document.addEventListener('mousemove', (e) => {
+            const orbs = document.querySelectorAll('.voice-orb-glow');
+            const x = e.clientX / window.innerWidth;
+            const y = e.clientY / window.innerHeight;
+            
+            orbs.forEach(orb => {
+                orb.style.transform = `translate(${-50 + (x * 10)}%, ${-50 + (y * 10)}%)`;
+            });
+        });
+
+        // Hover effects for team cards
+        const teamCards = document.querySelectorAll('.group');
+        teamCards.forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                const img = card.querySelector('img');
+                if(img) img.style.filter = 'grayscale(0%)';
+            });
+            card.addEventListener('mouseleave', () => {
+                const img = card.querySelector('img');
+                if(img) img.style.filter = 'grayscale(100%)';
+            });
+        });
+    </script>
+</body></html>

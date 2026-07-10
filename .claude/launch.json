@@ -30,6 +30,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8935", "--directory", "widget"],
       "port": 8935
+    },
+    {
+      "name": "marketing-site",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8936", "--directory", "marketing-site"],
+      "port": 8936
     }
   ]
 }

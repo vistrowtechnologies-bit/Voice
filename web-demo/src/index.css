@@ -2,6 +2,7 @@
 
 @theme {
   --font-sans: "Manrope", sans-serif;
+  --font-display: "Space Grotesk", "Manrope", sans-serif;
 
   --color-bg: #0a0a12;
   --color-surface: #17121f;
