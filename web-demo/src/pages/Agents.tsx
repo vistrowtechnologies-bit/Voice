@@ -301,12 +301,16 @@ function AgentEditor({
   })
   const [tab, setTab] = useState<'config' | 'tone'>('config')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const save = async () => {
     setSaving(true)
+    setSaveError(null)
     try {
       await updateAgent(agent.id, form)
       onSaved()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not save changes. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -465,7 +469,8 @@ function AgentEditor({
       </div>
       )}
 
-      <div className="mt-4 flex justify-end gap-2">
+      <div className="mt-4 flex items-center justify-end gap-3">
+        {saveError && <p className="text-xs font-semibold text-destructive">{saveError}</p>}
         <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary">
           Cancel
         </button>

@@ -912,6 +912,13 @@ def update_agent(agent_id: int, data: dict, account_id: int) -> dict | None:
                 ).fetchone()
                 if not owned:
                     continue
+            if column == "is_platform_demo":
+                # Postgres has no boolean->integer cast, and this column is
+                # INTEGER — a raw Python bool from the JSON body (isPlatformDemo:
+                # true/false) fails the UPDATE outright rather than coercing,
+                # which the frontend's save() has no error handling for (looks
+                # like it saved, silently didn't). Same pattern as set_kb_strict.
+                value = 1 if value else 0
             sets.append(f"{column} = ?")
             params.append(value)
         if not sets:
