@@ -12,7 +12,7 @@ from livekit.plugins import google, openai, sarvam
 import db
 from language import LANGUAGE_NAMES, detect_reply_language
 from prompts.real_estate_qualification import build_sales_rep_prompt
-from tools import book_site_visit, check_availability, end_call, log_lead
+from tools import book_site_visit, capture_platform_lead, check_availability, end_call, log_lead
 
 load_dotenv()
 db.init_db()
@@ -129,14 +129,23 @@ class RealEstateAgent(Agent):
         # ever fed the TTS pronunciation hint, never the LLM's own text.
         instructions += (
             "\n\n# Lead capture (do this regardless of the persona/rules above)\n"
-            "As the conversation naturally reveals the caller's budget, preferred "
-            "location(s), timeline, or interest in visiting in person, call the "
-            "log_lead tool to record whatever you've learned so far — call it again "
-            "with the fuller picture if more comes up later in the same call, don't "
-            "wait until every field is known. If the caller wants to see a property "
-            "in person, use check_availability to find open slots, then book_site_visit "
-            "to confirm one. These tool calls are silent to the caller — never mention "
-            "or narrate that you're saving, logging, or recording anything.\n\n"
+            "Use whichever of these tools actually matches what this call is about — "
+            "your persona/system prompt above tells you which one applies, and you "
+            "only ever need one of the two:\n"
+            "- Real-estate / per-tenant sales calls: as the conversation naturally "
+            "reveals the caller's budget, preferred location(s), timeline, or interest "
+            "in visiting in person, call log_lead to record whatever you've learned so "
+            "far — call it again with the fuller picture if more comes up later in the "
+            "same call, don't wait until every field is known. If the caller wants to "
+            "see a property in person, use check_availability to find open slots, then "
+            "book_site_visit to confirm one.\n"
+            "- Vistrow Voice platform-assistant calls (explaining Vistrow Voice itself "
+            "to a prospective customer): once you have the caller's name plus at least "
+            "one more of company/contact/use case/team size, call "
+            "capture_platform_lead — call it again if more comes up later in the same "
+            "call.\n"
+            "These tool calls are silent to the caller — never mention or narrate that "
+            "you're saving, logging, or recording anything.\n\n"
             "Call the end_call tool once the caller clearly signals the conversation is "
             "over — they thank you with nothing further to ask, say goodbye, or otherwise "
             "indicate they're done. Don't call it for a mere pause or a one-word \"okay\" "
@@ -184,7 +193,7 @@ class RealEstateAgent(Agent):
                 speaker=config.get("voice") or "pooja",
                 **TONE_PRESETS.get(config.get("tone") or DEFAULT_TONE, TONE_PRESETS[DEFAULT_TONE]),
             ),
-            tools=[check_availability, book_site_visit, log_lead, end_call],
+            tools=[check_availability, book_site_visit, log_lead, capture_platform_lead, end_call],
         )
         self._reply_language = reply_language
         self._pending_language: str | None = None

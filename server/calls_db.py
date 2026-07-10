@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS calls (
     lead_budget TEXT,
     lead_location TEXT,
     lead_timeline TEXT,
+    lead_company TEXT,
+    lead_use_case TEXT,
+    lead_team_size TEXT,
     site_visit_json TEXT,
     transcript_json TEXT NOT NULL,
     call_type TEXT DEFAULT 'browser',
@@ -93,6 +96,10 @@ CREATE TABLE IF NOT EXISTS agents (
     system_prompt TEXT DEFAULT '',
     kb_id INTEGER,
     tone TEXT DEFAULT 'balanced',
+    -- At most one agent platform-wide is flagged true — the public marketing
+    -- site's /demo and /call routes have no per-tenant identity to route by,
+    -- so this names which agent answers them (see agent/db.py get_agent_config).
+    is_platform_demo INTEGER DEFAULT 0,
     created_at TEXT DEFAULT {_NOW},
     updated_at TEXT DEFAULT {_NOW}
 );
@@ -307,6 +314,16 @@ def init_tables() -> None:
     try:
         with conn:
             conn.execute(_SCHEMA)
+            # CREATE TABLE IF NOT EXISTS above is a no-op on a table that
+            # already exists in production — new columns added after go-live
+            # need an explicit migration to actually land on the live table.
+            for column, coltype in (
+                ("lead_company", "TEXT"),
+                ("lead_use_case", "TEXT"),
+                ("lead_team_size", "TEXT"),
+            ):
+                conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
+            conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
             # If the first account already exists (a prior boot completed a
             # signup), any row still missing account_id predates that signup
             # — hand it over now rather than waiting for create_account_with_
@@ -521,6 +538,9 @@ def _call_dict(
         "budget": row["lead_budget"] or "",
         "location": row["lead_location"] or "",
         "timeline": row["lead_timeline"] or "",
+        "company": row["lead_company"] or "",
+        "useCase": row["lead_use_case"] or "",
+        "teamSize": row["lead_team_size"] or "",
         "status": _lead_status(row),
         "callStatus": _status(row, transcript),
         "sentiment": _sentiment(transcript),
@@ -763,7 +783,10 @@ def analytics(account_id: int) -> dict:
 
 # ---------------------------------------------------------------- agents
 
-_AGENT_FIELDS = ("name", "description", "model", "voice", "language", "status", "system_prompt", "kb_id", "tone")
+_AGENT_FIELDS = (
+    "name", "description", "model", "voice", "language", "status",
+    "system_prompt", "kb_id", "tone", "is_platform_demo",
+)
 
 
 def _agent_dict(row: dict) -> dict:
@@ -778,6 +801,7 @@ def _agent_dict(row: dict) -> dict:
         "systemPrompt": row["system_prompt"],
         "kbId": row["kb_id"],
         "tone": row["tone"] or "balanced",
+        "isPlatformDemo": bool(row["is_platform_demo"]),
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
@@ -851,6 +875,10 @@ def update_agent(agent_id: int, data: dict, account_id: int) -> dict | None:
         if not sets:
             return None
         with conn:
+            if data.get("is_platform_demo") or data.get("isPlatformDemo"):
+                # At most one agent platform-wide answers the public marketing
+                # demo — clear any previous holder before this one claims it.
+                conn.execute("UPDATE agents SET is_platform_demo = 0 WHERE id != ?", (agent_id,))
             conn.execute(
                 f"UPDATE agents SET {', '.join(sets)}, updated_at = {_NOW} WHERE id = ? AND account_id = ?",
                 (*params, agent_id, account_id),

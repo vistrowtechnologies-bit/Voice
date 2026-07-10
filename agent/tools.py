@@ -140,6 +140,46 @@ async def log_lead(
 
 
 @function_tool
+async def capture_platform_lead(
+    context: RunContext,
+    name: str,
+    company: str,
+    contact: str,
+    use_case: str,
+    team_size: str,
+) -> str:
+    """Log a business lead captured while explaining Vistrow Voice itself
+    (the platform-assistant persona, not a per-tenant sales call).
+
+    Args:
+        name: Lead's name.
+        company: The lead's company/business name.
+        contact: Phone number or email the lead gave to be reached at.
+        use_case: What they want to use Vistrow Voice for, e.g. "inbound lead
+            qualification for a real-estate brokerage".
+        team_size: Rough team/company size the lead mentioned, e.g. "11-50".
+    """
+    logger.info(
+        "platform lead captured: name=%s company=%s contact=%s use_case=%s team_size=%s",
+        name, company, contact, use_case, team_size,
+    )
+    lead_data = (context.userdata or {}).get("lead_data")
+    if lead_data is not None:
+        lead_data.update(name=name, phone=contact, company=company, use_case=use_case, team_size=team_size)
+    event = {
+        "type": "platform_lead_update",
+        "name": name,
+        "company": company,
+        "contact": contact,
+        "use_case": use_case,
+        "team_size": team_size,
+    }
+    await _publish_event(context, event)
+    await _post_webhook(event)
+    return "Lead details recorded."
+
+
+@function_tool
 async def end_call(context: RunContext) -> str:
     """Call this once the caller has clearly indicated the conversation is
     over — they thank you with nothing further to ask, say goodbye, or

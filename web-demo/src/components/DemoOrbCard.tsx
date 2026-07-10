@@ -1,10 +1,14 @@
 import { Link } from 'react-router-dom'
 import { CONTACT_PHONE } from '../lib/marketingContent'
+import { DEMO_CALL_CAP, getRemainingDemoCalls } from '../lib/demoCallCap'
 
 // The recurring "LIVE DEMO" card — a glowing voice orb (the real agent-orb.mp4,
 // the same asset the call widget uses) that links to the full browser-call
 // experience at /demo. Reused on the homepage hero and every solution page.
 export function DemoOrbCard() {
+  const remaining = getRemainingDemoCalls()
+  const exhausted = remaining <= 0
+
   return (
     <div className="relative">
       <div className="pointer-events-none absolute -inset-10 rounded-full bg-primary/20 blur-[100px]" />
@@ -17,7 +21,7 @@ export function DemoOrbCard() {
           <span className="text-[10px] font-bold uppercase tracking-wider text-cyan">Live demo</span>
         </div>
 
-        <Link to="/demo" className="group relative my-6 flex h-48 w-48 items-center justify-center">
+        <Link to={exhausted ? '/contact' : '/demo'} className="group relative my-6 flex h-48 w-48 items-center justify-center">
           <span className="absolute inset-0 rounded-full border border-primary/20" />
           <span className="absolute inset-5 rounded-full border border-primary/10" />
           <span className="relative h-32 w-32 overflow-hidden rounded-full shadow-[0_0_60px_-5px_rgba(168,85,247,0.6)] transition-transform group-hover:scale-105">
@@ -32,11 +36,13 @@ export function DemoOrbCard() {
           </span>
         </Link>
 
-        <h3 className="font-display text-2xl font-semibold">Tap to talk</h3>
-        <p className="mt-1 text-sm text-text-muted">Try Artha, no signup required</p>
+        <h3 className="font-display text-2xl font-semibold">{exhausted ? 'Book a live walkthrough' : 'Tap to talk'}</h3>
+        <p className="mt-1 text-sm text-text-muted">
+          {exhausted ? 'You’ve used all your free demo calls' : 'Try Artha, no signup required'}
+        </p>
 
         <div className="mt-5 rounded-xl border border-border bg-bg px-4 py-2 text-sm">
-          <span className="font-bold text-cyan">5/5</span>{' '}
+          <span className="font-bold text-cyan">{remaining}/{DEMO_CALL_CAP}</span>{' '}
           <span className="text-text-muted">free calls left</span>
         </div>
 

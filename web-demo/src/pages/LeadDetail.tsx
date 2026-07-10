@@ -86,9 +86,19 @@ export function LeadDetail() {
           <div className="rounded-xl border border-border bg-surface p-4">
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Extracted lead</h2>
             <dl className="flex flex-col gap-2 text-sm">
-              <Row label="Budget" value={call.budget || '—'} />
-              <Row label="Location" value={call.location || '—'} />
-              <Row label="Timeline" value={call.timeline || '—'} />
+              {call.company || call.useCase || call.teamSize ? (
+                <>
+                  <Row label="Company" value={call.company || '—'} />
+                  <Row label="Use case" value={call.useCase || '—'} />
+                  <Row label="Team size" value={call.teamSize || '—'} />
+                </>
+              ) : (
+                <>
+                  <Row label="Budget" value={call.budget || '—'} />
+                  <Row label="Location" value={call.location || '—'} />
+                  <Row label="Timeline" value={call.timeline || '—'} />
+                </>
+              )}
             </dl>
             {call.siteVisit && (
               <div className="mt-3 flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">

@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS calls (
     lead_budget TEXT,
     lead_location TEXT,
     lead_timeline TEXT,
+    lead_company TEXT,
+    lead_use_case TEXT,
+    lead_team_size TEXT,
     site_visit_json TEXT,
     transcript_json TEXT NOT NULL,
     call_type TEXT DEFAULT 'browser',
@@ -47,6 +50,12 @@ def init_db() -> None:
     try:
         with conn:
             conn.execute(_SCHEMA)
+            # Whichever of server/agent boots first creates the base table via
+            # CREATE TABLE IF NOT EXISTS above (a no-op if it already exists) —
+            # columns added after go-live still need an explicit migration to
+            # land, regardless of boot order.
+            for column in ("lead_company", "lead_use_case", "lead_team_size"):
+                conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} TEXT")
     finally:
         conn.close()
 
@@ -56,17 +65,22 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
 
     With `agent_id`, loads that specific agent — used by inbound phone calls,
     where the LiveKit dispatch rule for the dialed number names which agent
-    handles it. Without it, falls back to the first agent (the one that takes
-    all browser web calls). Returns None when the table doesn't exist yet
-    (dashboard API never ran) or the id isn't found, so callers fall back to
-    the in-code defaults and the agent keeps working standalone.
+    handles it. Without it (an unrouted browser call, notably the public
+    marketing site's /demo and /call), prefers whichever agent is flagged
+    is_platform_demo — see server/calls_db.py update_agent — falling back to
+    the first agent by id if none is flagged yet. Returns None when the
+    table doesn't exist yet (dashboard API never ran) or the id isn't found,
+    so callers fall back to the in-code defaults and the agent keeps working
+    standalone.
     """
     conn = dbconn.connect()
     try:
         if agent_id is not None:
             row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
         else:
-            row = conn.execute("SELECT * FROM agents ORDER BY id LIMIT 1").fetchone()
+            row = conn.execute(
+                "SELECT * FROM agents ORDER BY is_platform_demo DESC, id LIMIT 1"
+            ).fetchone()
         return dict(row) if row else None
     except psycopg.Error:
         return None
@@ -148,7 +162,9 @@ def save_call(record: dict) -> None:
     account_id (which tenant this call belongs to), and optionally
     name/phone/budget/location/timeline/site_visit (dict with
     property_id/date/time) — matching the keys tools.py's log_lead and
-    book_site_visit write into the shared lead_data dict.
+    book_site_visit write into the shared lead_data dict — or
+    company/use_case/team_size, matching capture_platform_lead's keys for
+    the platform-assistant persona.
     """
     conn = dbconn.connect()
     try:
@@ -158,9 +174,10 @@ def save_call(record: dict) -> None:
                 INSERT INTO calls (
                     room_name, visitor_identity, started_at, ended_at,
                     duration_seconds, reply_language, lead_name, lead_phone,
-                    lead_budget, lead_location, lead_timeline, site_visit_json,
+                    lead_budget, lead_location, lead_timeline, lead_company,
+                    lead_use_case, lead_team_size, site_visit_json,
                     transcript_json, call_type, site_id, agent_id, account_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record["room_name"],
@@ -174,6 +191,9 @@ def save_call(record: dict) -> None:
                     record.get("budget"),
                     record.get("location"),
                     record.get("timeline"),
+                    record.get("company"),
+                    record.get("use_case"),
+                    record.get("team_size"),
                     json.dumps(record["site_visit"]) if record.get("site_visit") else None,
                     json.dumps(record["transcript"], ensure_ascii=False),
                     record.get("call_type") or "browser",

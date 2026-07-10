@@ -1,8 +1,8 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from './Icon'
 import { BRAND } from '../lib/brand'
 
-type Phase = 'permission' | 'denied' | 'connecting'
+type Phase = 'permission' | 'denied' | 'connecting' | 'capped'
 
 interface PreCallModalProps {
   phase: Phase
@@ -59,19 +59,35 @@ export function PreCallModal({ phase, errorMessage, onStart }: PreCallModalProps
             </div>
           )}
 
-          {phase === 'connecting' ? (
+          {phase === 'capped' && (
+            <div className="w-full rounded-lg border-l-[3px] border-primary bg-surface-high px-4 py-3 text-left text-sm text-text">
+              You&apos;ve used all your free demo calls on this browser. Book a live walkthrough with
+              our team instead.
+            </div>
+          )}
+
+          {phase === 'connecting' && (
             <div className="flex items-center gap-3 py-2 text-sm text-cyan">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan border-t-transparent" />
               Connecting to {BRAND.defaultAgentName}…
             </div>
-          ) : (
+          )}
+
+          {phase === 'capped' ? (
+            <Link
+              to="/contact"
+              className="mt-2 w-full rounded-full bg-primary py-3 text-center text-sm font-bold text-bg transition-opacity hover:opacity-90"
+            >
+              Book a demo
+            </Link>
+          ) : phase !== 'connecting' ? (
             <button
               onClick={onStart}
               className="mt-2 w-full rounded-full bg-primary py-3 text-sm font-bold text-bg transition-opacity hover:opacity-90"
             >
               {phase === 'denied' ? 'Try Again' : 'Start the Call'}
             </button>
-          )}
+          ) : null}
 
           <button
             onClick={() => navigate('/')}

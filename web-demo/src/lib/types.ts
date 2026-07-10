@@ -10,6 +10,9 @@ export interface LeadSummary {
   budget?: string
   location?: string
   timeline?: string
+  company?: string
+  useCase?: string
+  teamSize?: string
   siteVisit?: SiteVisit
 }
 
@@ -38,6 +41,9 @@ export interface CallRecord {
   budget: string
   location: string
   timeline: string
+  company: string
+  useCase: string
+  teamSize: string
   status: LeadStatus
   callStatus: CallStatus
   sentiment: Sentiment

@@ -12,15 +12,12 @@ interface SummaryLocationState {
 const ROWS: Array<{ key: keyof LeadSummary; label: string }> = [
   { key: 'name', label: 'Name' },
   { key: 'phone', label: 'Phone' },
+  { key: 'company', label: 'Company' },
+  { key: 'useCase', label: 'Use case' },
+  { key: 'teamSize', label: 'Team size' },
   { key: 'budget', label: 'Budget' },
   { key: 'location', label: 'Location' },
   { key: 'timeline', label: 'Timeline' },
-]
-
-const MATCHED_PROPERTIES = [
-  { title: '3BHK, Sector 54', location: 'Gurgaon', price: '₹2.8 Cr' },
-  { title: '3BHK, Sector 50', location: 'Gurgaon', price: '₹2.6 Cr' },
-  { title: '4BHK, Golf Course Rd', location: 'Gurgaon', price: '₹3.1 Cr' },
 ]
 
 // Build a Google Calendar "add event" link for a booked site visit. Parses
@@ -97,32 +94,20 @@ export function Summary() {
             </div>
           ) : (
             <div className="flex items-center justify-between gap-4">
-              <p className="text-sm text-text-muted">Want to see a property in person?</p>
+              <p className="text-sm text-text-muted">Want to talk to our team?</p>
               <Link
-                to="/call"
+                to="/contact"
                 className="rounded-full bg-primary px-4 py-2 text-xs font-bold text-bg"
               >
-                Book a Site Visit
+                Book a demo
               </Link>
             </div>
           )}
         </div>
 
-        <h2 className="mb-3 mt-8 text-sm font-semibold text-text-muted">Matched properties</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {MATCHED_PROPERTIES.map((property) => (
-            <div key={property.title} className="rounded-lg border border-border bg-surface p-3">
-              <div className="mb-2 h-16 rounded bg-surface-high" />
-              <p className="text-sm font-medium">{property.title}</p>
-              <p className="text-xs text-text-muted">{property.location}</p>
-              <p className="mt-1 text-sm font-semibold">{property.price}</p>
-            </div>
-          ))}
-        </div>
-
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
           <Link
-            to="/call"
+            to="/demo"
             className="rounded-full border border-border px-5 py-2 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
           >
             Talk to {BRAND.defaultAgentName} Again

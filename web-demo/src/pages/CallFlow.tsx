@@ -4,12 +4,13 @@ import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react'
 import { PreCallModal } from '../components/PreCallModal'
 import { ActiveCallUI } from '../components/ActiveCallUI'
 import { fetchLiveKitToken, randomId } from '../lib/livekit'
+import { hasDemoCallsRemaining, recordDemoCall } from '../lib/demoCallCap'
 import type { LeadSummary, TranscriptEntry } from '../lib/types'
 
-type Phase = 'permission' | 'denied' | 'connecting' | 'active'
+type Phase = 'permission' | 'denied' | 'connecting' | 'active' | 'capped'
 
 export function CallFlow() {
-  const [phase, setPhase] = useState<Phase>('permission')
+  const [phase, setPhase] = useState<Phase>(hasDemoCallsRemaining() ? 'permission' : 'capped')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
@@ -19,6 +20,10 @@ export function CallFlow() {
   const transcriptRef = useRef<TranscriptEntry[]>([])
 
   const handleStart = useCallback(async () => {
+    if (!hasDemoCallsRemaining()) {
+      setPhase('capped')
+      return
+    }
     setPhase('connecting')
     setErrorMessage(null)
     try {
@@ -26,6 +31,7 @@ export function CallFlow() {
       const identity = randomId('visitor')
       const room = randomId('voice-agent-demo')
       const { token: newToken, url } = await fetchLiveKitToken(identity, room)
+      recordDemoCall()
       setToken(newToken)
       setServerUrl(url)
       setPhase('active')
