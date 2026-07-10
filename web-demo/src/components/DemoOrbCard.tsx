@@ -1,22 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useDataChannel, useLocalParticipant, useParticipantAttribute, useRemoteParticipants, useRoomContext, useTrackVolume, useTracks, useTranscriptions } from '@livekit/components-react'
-import type { AgentState } from '@livekit/components-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useLocalParticipant, useRemoteParticipants, useRoomContext, useTrackVolume, useTracks } from '@livekit/components-react'
 import { ConnectionState, Track } from 'livekit-client'
 import type { RemoteParticipant } from 'livekit-client'
 import { Icon } from './Icon'
 import { CONTACT_PHONE } from '../lib/marketingContent'
 import { DEMO_CALL_CAP, getRemainingDemoCalls, hasDemoCallsRemaining, recordDemoCall } from '../lib/demoCallCap'
 import { fetchLiveKitToken, randomId } from '../lib/livekit'
-import type { LeadSummary, TranscriptEntry } from '../lib/types'
 
 type Phase = 'idle' | 'connecting' | 'active' | 'denied' | 'capped'
-
-const STATE_LABELS: Record<string, string> = {
-  listening: 'Listening…',
-  thinking: 'Thinking…',
-  speaking: 'Agent is speaking…',
-}
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -35,11 +27,8 @@ export function DemoOrbCard() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
-  const navigate = useNavigate()
 
   const remaining = getRemainingDemoCalls()
-  const leadSummaryRef = useRef<LeadSummary>({})
-  const transcriptRef = useRef<TranscriptEntry[]>([])
 
   const handleStart = useCallback(async () => {
     if (!hasDemoCallsRemaining()) {
@@ -67,11 +56,13 @@ export function DemoOrbCard() {
     }
   }, [])
 
+  // Ending the call just returns the card to its idle "Tap to talk" state,
+  // right here — no separate summary page or route to send the visitor to.
   const handleDisconnected = useCallback(() => {
-    navigate('/summary', {
-      state: { leadSummary: leadSummaryRef.current, transcript: transcriptRef.current },
-    })
-  }, [navigate])
+    setToken(null)
+    setServerUrl(null)
+    setPhase(hasDemoCallsRemaining() ? 'idle' : 'capped')
+  }, [])
 
   const exhausted = phase === 'capped'
   const isCallLive = phase === 'active'
@@ -91,14 +82,7 @@ export function DemoOrbCard() {
         {isCallLive && token && serverUrl ? (
           <LiveKitRoom serverUrl={serverUrl} token={token} connect audio onDisconnected={handleDisconnected}>
             <RoomAudioRenderer />
-            <InlineCallBody
-              onLeadUpdate={(partial) => {
-                leadSummaryRef.current = { ...leadSummaryRef.current, ...partial }
-              }}
-              onTranscriptUpdate={(entries) => {
-                transcriptRef.current = entries
-              }}
-            />
+            <InlineCallBody />
           </LiveKitRoom>
         ) : (
           <>
@@ -182,15 +166,10 @@ export function DemoOrbCard() {
 }
 
 // Rendered inside <LiveKitRoom> once connected — same card, same footprint,
-// swapped from the idle "Tap to talk" content to live call state: status,
-// a running timer, and mute/end-call controls.
-function InlineCallBody({
-  onLeadUpdate,
-  onTranscriptUpdate,
-}: {
-  onLeadUpdate: (partial: Partial<LeadSummary>) => void
-  onTranscriptUpdate: (entries: TranscriptEntry[]) => void
-}) {
+// swapped from the idle "Tap to talk" content to live call state: a running
+// timer and mute/end-call controls. No "Listening…/Thinking…/Speaking…"
+// status text — it read as distracting chatter rather than useful signal.
+function InlineCallBody() {
   const room = useRoomContext()
   const connectionState = useConnectionState()
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant()
@@ -199,31 +178,11 @@ function InlineCallBody({
   const [startedAt] = useState(() => Date.now())
   const [elapsedMs, setElapsedMs] = useState(0)
 
-  const transcriptions = useTranscriptions()
-  const transcriptEntries: TranscriptEntry[] = useMemo(
-    () =>
-      transcriptions.map((t) => ({
-        id: t.streamInfo.id,
-        identity: t.participantInfo.identity,
-        text: t.text,
-        isLocal: t.participantInfo.identity === localParticipant.identity,
-      })),
-    [transcriptions, localParticipant.identity],
-  )
-
-  useEffect(() => {
-    onTranscriptUpdate(transcriptEntries)
-  }, [transcriptEntries, onTranscriptUpdate])
-
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected) return
     const interval = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000)
     return () => clearInterval(interval)
   }, [connectionState, startedAt])
-
-  useDataChannelLeadUpdates(onLeadUpdate)
-
-  const waitingLabel = connectionState === ConnectionState.Connected ? 'Waiting for agent to join…' : 'Connecting…'
 
   return (
     <>
@@ -238,10 +197,6 @@ function InlineCallBody({
           </span>
         )}
       </div>
-
-      <h3 className="font-display text-2xl font-semibold">
-        {agentParticipant ? <AgentStatusLabel agentParticipant={agentParticipant} /> : waitingLabel}
-      </h3>
 
       <div className="mt-5 rounded-xl border border-border bg-bg px-4 py-2 font-mono text-sm text-cyan">
         {formatDuration(elapsedMs)}
@@ -286,39 +241,3 @@ function AgentVisual({ agentParticipant }: { agentParticipant: RemoteParticipant
   )
 }
 
-function AgentStatusLabel({ agentParticipant }: { agentParticipant: RemoteParticipant }) {
-  const agentStateRaw = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
-  const agentState = (agentStateRaw || 'initializing') as AgentState
-  return <>{STATE_LABELS[agentState] ?? 'On the line…'}</>
-}
-
-function useDataChannelLeadUpdates(onLeadUpdate: (partial: Partial<LeadSummary>) => void) {
-  useDataChannel('lead-events', (msg) => {
-    try {
-      const text = new TextDecoder().decode(msg.payload)
-      const data = JSON.parse(text) as Record<string, unknown>
-      if (data.type === 'lead_update' || data.type === 'platform_lead_update') {
-        onLeadUpdate({
-          name: data.name as string,
-          phone: (data.phone as string) ?? (data.contact as string),
-          budget: data.budget as string,
-          location: data.location as string,
-          timeline: data.timeline as string,
-          company: data.company as string,
-          useCase: data.use_case as string,
-          teamSize: data.team_size as string,
-        })
-      } else if (data.type === 'site_visit_booked') {
-        onLeadUpdate({
-          siteVisit: {
-            propertyId: data.property_id as string,
-            date: data.date as string,
-            time: data.time as string,
-          },
-        })
-      }
-    } catch {
-      // ignore malformed payloads
-    }
-  })
-}
