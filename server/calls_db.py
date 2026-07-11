@@ -1026,7 +1026,7 @@ def create_agent(data: dict, account_id: int) -> dict:
                     data.get("name", "Unnamed agent"),
                     data.get("description", ""),
                     data.get("model", "gpt-4.1"),
-                    data.get("voice", "pooja"),
+                    data.get("voice", "shubh"),
                     data.get("language", "hi-IN"),
                     data.get("systemPrompt", ""),
                 ),

@@ -407,6 +407,18 @@ function AgentEditor({
           </Field>
           <Field label="Voice">
             <select value={form.voice} onChange={(e) => set('voice', e.target.value)} className={inputCls}>
+              {/* A voice saved before the roster was curated down (or set directly
+                  via API) won't match any option below — without this, the browser
+                  silently shows the first option as "selected" while the real stored
+                  value is untouched, so hitting Save re-persists the OLD voice even
+                  though the dropdown visibly displayed a different one. */}
+              {![...VOICES, ...SARVAM_V2_VOICES.map((v) => v.value), ...GOOGLE_VOICES.map((v) => v.value)].includes(
+                form.voice,
+              ) && (
+                <option value={form.voice}>
+                  {voiceLabel(form.voice)} (current — not in curated list)
+                </option>
+              )}
               <optgroup label="Sarvam bulbul:v3" className="capitalize">
                 {VOICES.map((v) => (
                   <option key={v} value={v} className="capitalize">
