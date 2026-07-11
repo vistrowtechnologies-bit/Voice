@@ -194,3 +194,138 @@ async def end_call(context: RunContext) -> str:
         "The caller is done. Give one short, warm goodbye line right now (thank them, wish them well) "
         "and then stop — do not ask any further questions or add anything after the goodbye."
     )
+
+
+def _find_sip_participant(room) -> str | None:
+    """Identity of the phone caller in the room, or None on a web call.
+
+    A phone caller joins via LiveKit SIP — kind == PARTICIPANT_KIND_SIP, and
+    by our dispatch convention their identity is prefixed "sip_". A browser
+    visitor has neither, so transfer is a no-op for web calls."""
+    if room is None:
+        return None
+    for participant in room.remote_participants.values():
+        kind = str(getattr(participant, "kind", "")).upper()
+        identity = participant.identity or ""
+        if "SIP" in kind or identity.startswith("sip_"):
+            return identity
+    return None
+
+
+@function_tool
+async def transfer_call(context: RunContext) -> str:
+    """Transfer the caller to a human team member. Call this ONLY when the
+    caller explicitly asks to speak to a human/agent/manager, or when their
+    request genuinely can't be handled by you and a handoff is the right next
+    step. Do not offer or perform a transfer unprompted for routine questions.
+    """
+    userdata = context.userdata or {}
+    dest = (userdata.get("transfer_phone") or "").strip()
+    room = userdata.get("room")
+    if not dest:
+        return (
+            "Transfer isn't set up for this line. Apologize briefly, offer to take a message or have "
+            "the team call them back, and continue helping as best you can."
+        )
+    sip_identity = _find_sip_participant(room)
+    if sip_identity is None:
+        return (
+            "This is a web call, which can't be transferred to a phone. Offer to have the team call "
+            "them back at a number they give you, and capture it."
+        )
+    transfer_to = dest if dest.startswith(("tel:", "sip:")) else f"tel:{dest}"
+    try:
+        from livekit import api
+
+        lkapi = api.LiveKitAPI()
+        try:
+            await lkapi.sip.transfer_sip_participant(
+                api.TransferSIPParticipantRequest(
+                    participant_identity=sip_identity,
+                    room_name=room.name,
+                    transfer_to=transfer_to,
+                    play_dialtone=True,
+                )
+            )
+        finally:
+            await lkapi.aclose()
+        logger.info("transferred caller %s to %s", sip_identity, transfer_to)
+        return (
+            "Tell the caller you're connecting them to a team member now, one short line, then stop — "
+            "the transfer is already happening."
+        )
+    except Exception:
+        logger.warning("SIP transfer failed", exc_info=True)
+        return (
+            "The transfer couldn't go through. Apologize briefly, offer to take their number for a "
+            "callback, and carry on helping them yourself."
+        )
+
+
+# JSON-schema type strings an operator can pick for a custom-function param,
+# mapped to their JSON Schema equivalent (which is what the LLM API expects).
+_CUSTOM_PARAM_TYPES = {"string": "string", "number": "number", "boolean": "boolean"}
+
+
+def build_custom_function_tools(custom_functions: list[dict]) -> list:
+    """Turn an agent's operator-defined custom_functions JSON into live LLM
+    tools. Each definition looks like:
+
+        {"name", "description", "url", "method", "headers": {...},
+         "parameters": [{"name", "type", "description", "required"}]}
+
+    When the LLM calls one, we POST/GET its `url` with the collected arguments
+    and hand the response text back to the model. Malformed entries are
+    skipped rather than crashing agent startup.
+    """
+    tools = []
+    for spec in custom_functions or []:
+        name = (spec.get("name") or "").strip()
+        url = (spec.get("url") or "").strip()
+        if not name or not url:
+            continue
+        params = spec.get("parameters") or []
+        properties: dict[str, dict] = {}
+        required: list[str] = []
+        for param in params:
+            pname = (param.get("name") or "").strip()
+            if not pname:
+                continue
+            ptype = _CUSTOM_PARAM_TYPES.get((param.get("type") or "string").lower(), "string")
+            properties[pname] = {"type": ptype, "description": param.get("description") or ""}
+            if param.get("required"):
+                required.append(pname)
+        method = (spec.get("method") or "POST").upper()
+        headers = spec.get("headers") if isinstance(spec.get("headers"), dict) else {}
+        raw_schema = {
+            "name": name,
+            "description": spec.get("description") or f"Call the {name} function.",
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": required,
+            },
+        }
+
+        def _make(url=url, method=method, headers=headers, fname=name):
+            async def _call(raw_arguments: dict) -> str:
+                try:
+                    timeout = aiohttp.ClientTimeout(total=10)
+                    async with aiohttp.ClientSession(timeout=timeout) as http:
+                        if method == "GET":
+                            resp = await http.get(url, params=raw_arguments, headers=headers)
+                        else:
+                            resp = await http.request(method, url, json=raw_arguments, headers=headers)
+                        text = await resp.text()
+                    logger.info("custom function %s -> %s", fname, resp.status)
+                    # Cap what we feed back to the LLM so a huge response can't
+                    # blow up the context window.
+                    return text[:2000] if text else f"{fname} completed (status {resp.status})."
+                except Exception:
+                    logger.warning("custom function %s failed", fname, exc_info=True)
+                    return f"The {fname} action could not be completed right now."
+
+            return _call
+
+        tools.append(function_tool(_make(), raw_schema=raw_schema))
+    return tools

@@ -108,6 +108,28 @@ export interface Analytics {
   funnel: { answered: number; engaged: number; qualified: number; visitBooked: number }
 }
 
+export interface CustomFunctionParam {
+  name: string
+  type: 'string' | 'number' | 'boolean'
+  description: string
+  required: boolean
+}
+
+export interface CustomFunction {
+  name: string
+  description: string
+  url: string
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  headers: Record<string, string>
+  parameters: CustomFunctionParam[]
+}
+
+export interface PostCallField {
+  key: string
+  type: 'string' | 'number' | 'boolean'
+  description: string
+}
+
 export interface AgentConfig {
   id: number
   name: string
@@ -120,6 +142,24 @@ export interface AgentConfig {
   kbId: number | null
   tone: 'professional' | 'balanced' | 'casual'
   isPlatformDemo: boolean
+  // Conversation start
+  firstSpeaker: 'agent' | 'user'
+  welcomeMessage: string
+  // Speech / turn-taking
+  interruptionSensitivity: number
+  silenceReminderMs: number
+  silenceReminderMax: number
+  endCallOnSilenceMs: number
+  // Call limits
+  maxCallDurationS: number
+  // Functions
+  enabledFunctions: string
+  transferPhone: string
+  customFunctions: CustomFunction[]
+  // Post-call + integrations
+  postCallFields: PostCallField[]
+  webhookUrl: string
+  memoryEnabled: boolean
   createdAt: string
   updatedAt: string
 }

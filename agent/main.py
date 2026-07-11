@@ -15,7 +15,15 @@ import db
 from language import LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.platform_assistant import build_platform_assistant_prompt
-from tools import book_site_visit, capture_platform_lead, check_availability, end_call, log_lead
+from tools import (
+    book_site_visit,
+    build_custom_function_tools,
+    capture_platform_lead,
+    check_availability,
+    end_call,
+    log_lead,
+    transfer_call,
+)
 
 load_dotenv()
 db.init_db()
@@ -205,6 +213,40 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
     return TtsFallbackAdapter([sarvam_tts, google_tts])
 
 
+def _parse_json_config(raw, default):
+    """agent/db.py returns config as a raw row dict, so JSON columns
+    (custom_functions, post_call_fields) arrive as strings — parse defensively."""
+    if isinstance(raw, (list, dict)):
+        return raw
+    if not raw:
+        return default
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return default
+
+
+def _build_tools(config: dict) -> list:
+    """The agent's live tool set. Core lead-capture + KB tools are always on
+    (they're how the call does its job); enabled_functions only gates the
+    optional built-ins (end_call, transfer_call). Custom webhook tools and a
+    transfer tool (only if a transfer number is set) are appended."""
+    tools = [check_availability, book_site_visit, log_lead, capture_platform_lead]
+    enabled_raw = (config.get("enabled_functions") or "").strip()
+    enabled = {e.strip() for e in enabled_raw.split(",") if e.strip()} if enabled_raw else None
+
+    def _on(name: str) -> bool:
+        # No explicit list configured → every optional tool defaults on.
+        return True if enabled is None else name in enabled
+
+    if _on("end_call"):
+        tools.append(end_call)
+    if (config.get("transfer_phone") or "").strip() and _on("transfer_call"):
+        tools.append(transfer_call)
+    tools.extend(build_custom_function_tools(_parse_json_config(config.get("custom_functions"), [])))
+    return tools
+
+
 class RealEstateAgent(Agent):
     def __init__(
         self,
@@ -321,6 +363,22 @@ class RealEstateAgent(Agent):
             "- This only changes HOW a number/unit is written for speech, never the underlying value "
             "— the figure itself must stay exactly what the knowledge base or caller said."
         )
+        # Returning-caller memory: if this agent has memory on and we know the
+        # caller's phone (widget pre-call form, or an inbound caller id), pull
+        # the rolling summary of past calls and let the agent open with real
+        # continuity instead of treating them as a stranger.
+        self._memory_enabled = bool(config.get("memory_enabled"))
+        self._caller_phone = (visitor_phone or "").strip()
+        if self._memory_enabled and self._caller_phone and config.get("id"):
+            prior = db.get_caller_memory(config["id"], self._caller_phone)
+            if prior:
+                instructions += (
+                    "\n\n# What you remember about this caller\n"
+                    "You've spoken with this caller before. Here's what you know from last time — "
+                    "greet them like someone you recognize and use this naturally, don't recite it "
+                    "back verbatim:\n" + prior
+                )
+
         reply_language = config.get("language") or "hi-IN"
         language_name = LANGUAGE_NAMES.get(reply_language, "Hindi")
         instructions += (
@@ -338,13 +396,26 @@ class RealEstateAgent(Agent):
                 config.get("voice") or "shubh",
                 TONE_PRESETS.get(config.get("tone") or DEFAULT_TONE, TONE_PRESETS[DEFAULT_TONE]),
             ),
-            tools=[check_availability, book_site_visit, log_lead, capture_platform_lead, end_call],
+            tools=_build_tools(config),
         )
         self._reply_language = reply_language
         self._pending_language: str | None = None
         self._pending_language_streak = 0
+        # Conversation-start behavior (see on_enter).
+        self._first_speaker = (config.get("first_speaker") or "agent").lower()
+        self._welcome_message = (config.get("welcome_message") or "").strip()
+        # Post-call structured extraction fields (parsed from the agent's JSON).
+        self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
 
     async def on_enter(self) -> None:
+        # first_speaker == 'user' means wait silently for the caller to open.
+        if self._first_speaker == "user":
+            return
+        if self._welcome_message:
+            # Operator wrote an exact opening line — speak it verbatim rather
+            # than letting the model improvise a greeting.
+            await self.session.say(self._welcome_message)
+            return
         self.session.generate_reply()
 
     async def on_user_turn_completed(
@@ -439,6 +510,54 @@ async def _hang_up(room_name: str) -> None:
         logger.warning("failed to end call gracefully for room %s", room_name, exc_info=True)
 
 
+async def _post_call_analysis(
+    transcript: list[dict], post_call_fields: list[dict], want_summary: bool
+) -> tuple[dict, str]:
+    """One post-call LLM pass over the transcript: pull the operator-defined
+    structured fields, and (for memory-enabled agents) a short summary to
+    recall this caller next time. Best-effort — returns ({}, "") on any
+    failure so call teardown never breaks."""
+    field_specs = [f for f in (post_call_fields or []) if f.get("key")]
+    if not transcript or (not field_specs and not want_summary):
+        return {}, ""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return {}, ""
+    convo = "\n".join(f"{t['role']}: {t['text']}" for t in transcript if t.get("text"))[:6000]
+    directives = ["Respond with ONLY a compact JSON object."]
+    if field_specs:
+        lines = "\n".join(f"- {f['key']}: {f.get('description') or f.get('type', 'string')}" for f in field_specs)
+        directives.append(
+            'Include a "fields" object with exactly these keys, filled from the transcript '
+            "(use null when the transcript doesn't cover one):\n" + lines
+        )
+    if want_summary:
+        directives.append(
+            'Include a "summary" string of 1-3 sentences capturing who the caller is and what '
+            "they wanted, written to help recognize and help them on a future call."
+        )
+    system = (
+        "You extract structured data from a voice-call transcript. " + " ".join(directives)
+    )
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=api_key)
+        resp = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": convo}],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        data = json.loads(resp.choices[0].message.content or "{}")
+        fields = data.get("fields") if field_specs else {}
+        summary = data.get("summary") if want_summary else ""
+        return (fields if isinstance(fields, dict) else {}), (summary if isinstance(summary, str) else "")
+    except Exception:
+        logger.warning("post-call analysis failed", exc_info=True)
+        return {}, ""
+
+
 async def entrypoint(ctx: JobContext) -> None:
     logger.info("starting session in room %s", ctx.room.name)
     call_context = _call_context_from_job(ctx)
@@ -458,30 +577,75 @@ async def entrypoint(ctx: JobContext) -> None:
         lead_data["name"] = call_context["visitor_name"]
     if call_context["visitor_phone"]:
         lead_data["phone"] = call_context["visitor_phone"]
+    cfg = config or {}
     agent = RealEstateAgent(config, call_context["visitor_name"], call_context["visitor_phone"])
-    userdata = {"room": ctx.room, "lead_data": lead_data, "ending_call": False}
+    userdata = {
+        "room": ctx.room,
+        "lead_data": lead_data,
+        "ending_call": False,
+        # Read by the transfer_call tool.
+        "transfer_phone": (cfg.get("transfer_phone") or "").strip(),
+        "silence_reminders": 0,
+    }
+
+    # interruption_sensitivity 0-1 → how many real words it takes to interrupt
+    # the agent. High sensitivity yields the floor on a single word; low
+    # sensitivity ignores stray noise and needs a few words. Default 0.5 ≈ the
+    # previous fixed min_words=2.
+    sensitivity = cfg.get("interruption_sensitivity")
+    sensitivity = 0.5 if sensitivity is None else max(0.0, min(1.0, float(sensitivity)))
+    min_words = max(1, round(4 - sensitivity * 3))
+    # Silence check-in cadence: how long the caller can be quiet before the
+    # session marks user_state "away" and the agent checks in (see below).
+    silence_reminder_ms = int(cfg.get("silence_reminder_ms") or 0)
+    away_timeout = silence_reminder_ms / 1000 if silence_reminder_ms > 0 else 6.5
+    silence_reminder_max = int(cfg.get("silence_reminder_max") or 1)
+    end_call_on_silence_ms = int(cfg.get("end_call_on_silence_ms") or 0)
+    max_call_duration_s = int(cfg.get("max_call_duration_s") or 0)
+
     session = AgentSession(
         userdata=userdata,
-        # A single stray word (noise, STT hallucination, or TTS bleeding
-        # back into the mic) shouldn't be enough to interrupt the agent
-        # mid-sentence — require a couple of real words first.
-        turn_handling=TurnHandlingOptions(interruption={"min_words": 2}),
-        # Silence check-in: if the caller goes quiet for this long, the
-        # session marks user_state "away" (see _on_user_state_changed
-        # below) rather than just sitting mute — a caller who lost audio,
-        # got distracted, or whose connection stalled would otherwise never
-        # know the agent is still there.
-        user_away_timeout=6.5,
+        turn_handling=TurnHandlingOptions(interruption={"min_words": min_words}),
+        user_away_timeout=away_timeout,
     )
 
+    # --- End-call-on-silence watchdog ---------------------------------------
+    # A resettable timer: if the caller produces no speech for
+    # end_call_on_silence_ms, hang up. Reset every time the user speaks.
+    silence_task: dict = {"handle": None}
+
+    def _reset_silence_hangup() -> None:
+        if end_call_on_silence_ms <= 0:
+            return
+        if silence_task["handle"]:
+            silence_task["handle"].cancel()
+
+        async def _watch() -> None:
+            try:
+                await asyncio.sleep(end_call_on_silence_ms / 1000)
+                logger.info("hanging up room %s after %dms of silence", ctx.room.name, end_call_on_silence_ms)
+                await _hang_up(ctx.room.name)
+            except asyncio.CancelledError:
+                pass
+
+        silence_task["handle"] = asyncio.create_task(_watch())
+
     def _on_user_state_changed(ev) -> None:
-        if ev.new_state == "away":
-            session.generate_reply(
-                instructions=(
-                    "The caller has gone quiet for a few seconds. Check in warmly and briefly — "
-                    "one short question like asking if they're still there — and nothing else."
+        if ev.new_state == "speaking":
+            # Caller is talking again — reset both the reminder count and the
+            # end-of-call silence timer.
+            userdata["silence_reminders"] = 0
+            _reset_silence_hangup()
+        elif ev.new_state == "away":
+            sent = userdata.get("silence_reminders", 0)
+            if sent < silence_reminder_max:
+                userdata["silence_reminders"] = sent + 1
+                session.generate_reply(
+                    instructions=(
+                        "The caller has gone quiet for a few seconds. Check in warmly and briefly — "
+                        "one short question like asking if they're still there — and nothing else."
+                    )
                 )
-            )
 
     def _on_agent_state_changed(ev) -> None:
         # end_call (tools.py) sets userdata["ending_call"] and returns
@@ -522,6 +686,11 @@ async def entrypoint(ctx: JobContext) -> None:
             for item in session.history.items
             if getattr(item, "text_content", None)
         ]
+        resolved_agent_id = call_context["agent_id"] or cfg.get("id")
+        want_memory = agent._memory_enabled and bool(agent._caller_phone)
+        extracted, memory_summary = await _post_call_analysis(
+            transcript, agent._post_call_fields, want_memory
+        )
         try:
             db.save_call(
                 {
@@ -537,16 +706,37 @@ async def entrypoint(ctx: JobContext) -> None:
                     # Which dashboard agent took the call — explicit from room
                     # metadata when routed, otherwise whichever agent config
                     # actually loaded (the default/first one).
-                    "agent_id": call_context["agent_id"] or (config or {}).get("id"),
-                    "account_id": (config or {}).get("account_id"),
+                    "agent_id": resolved_agent_id,
+                    "account_id": cfg.get("account_id"),
+                    "extracted_data": extracted,
                     **lead_data,
                 }
             )
             logger.info("saved call log for room %s (%d turns)", ctx.room.name, len(transcript))
         except Exception:
             logger.exception("failed to save call log for room %s", ctx.room.name)
+        # Persist returning-caller memory after the log (independent of it).
+        if want_memory and memory_summary and resolved_agent_id:
+            db.save_caller_memory(cfg.get("account_id"), resolved_agent_id, agent._caller_phone, memory_summary)
 
     ctx.add_shutdown_callback(log_call)
+
+    # Hard call-length ceiling: tear the room down after max_call_duration_s.
+    if max_call_duration_s > 0:
+
+        async def _max_duration_guard() -> None:
+            try:
+                await asyncio.sleep(max_call_duration_s)
+                logger.info("hanging up room %s after max duration %ds", ctx.room.name, max_call_duration_s)
+                await _hang_up(ctx.room.name)
+            except asyncio.CancelledError:
+                pass
+
+        asyncio.create_task(_max_duration_guard())
+    # Arm the end-call-on-silence watchdog for the opening stretch (no-ops if
+    # end_call_on_silence_ms is 0); it re-arms whenever the caller speaks.
+    _reset_silence_hangup()
+
     await session.start(agent=agent, room=ctx.room)
 
 
