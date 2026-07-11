@@ -12,6 +12,7 @@ from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
 from livekit.plugins import google, openai, sarvam
 
 import db
+from emotion import EMOTION_TONE_DELTAS, detect_caller_emotion
 from language import LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.platform_assistant import build_platform_assistant_prompt
@@ -387,20 +388,23 @@ class RealEstateAgent(Agent):
             f"{language_name} is the default until the caller's own language is clear. "
             "Once they speak, follow the multilingual rules above and match them."
         )
+        base_tone = TONE_PRESETS.get(config.get("tone") or DEFAULT_TONE, TONE_PRESETS[DEFAULT_TONE])
         super().__init__(
             instructions=instructions,
             stt=_build_stt(),
             llm=_build_llm(config.get("model") or "gpt-4.1"),
-            tts=_build_tts(
-                reply_language,
-                config.get("voice") or "shubh",
-                TONE_PRESETS.get(config.get("tone") or DEFAULT_TONE, TONE_PRESETS[DEFAULT_TONE]),
-            ),
+            tts=_build_tts(reply_language, config.get("voice") or "shubh", base_tone),
             tools=_build_tools(config),
         )
         self._reply_language = reply_language
         self._pending_language: str | None = None
         self._pending_language_streak = 0
+        # Prosody-adaptation baseline (see on_user_turn_completed) — deltas
+        # from a detected caller emotion apply on top of these, never replace
+        # them, so the agent's configured base personality always shows through.
+        self._base_pace = base_tone.get("pace", 1.0)
+        self._base_pitch = base_tone.get("pitch", 0.0)
+        self._current_emotion: str | None = None
         # Conversation-start behavior (see on_enter).
         self._first_speaker = (config.get("first_speaker") or "agent").lower()
         self._welcome_message = (config.get("welcome_message") or "").strip()
@@ -422,6 +426,18 @@ class RealEstateAgent(Agent):
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
         text = new_message.text_content
+
+        emotion = detect_caller_emotion(text)
+        if emotion != self._current_emotion:
+            self._current_emotion = emotion
+            delta = EMOTION_TONE_DELTAS.get(emotion, {}) if emotion else {}
+            new_pace = self._base_pace + delta.get("pace", 0.0)
+            new_pitch = self._base_pitch + delta.get("pitch", 0.0)
+            self.tts.update_options(pace=new_pace, pitch=new_pitch)
+            logger.info(
+                "caller tone -> %s (pace %.2f, pitch %.2f) from turn: %r",
+                emotion or "neutral", new_pace, new_pitch, text,
+            )
 
         candidate = detect_reply_language(text)
         if candidate is None or candidate == self._reply_language:
