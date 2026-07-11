@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 import aiohttp
 from livekit.agents import RunContext
@@ -8,6 +9,9 @@ from livekit.agents.llm import function_tool
 import db
 
 logger = logging.getLogger("real-estate-tools")
+
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
+_TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 
 
 async def _post_webhook(payload: dict) -> None:
@@ -194,6 +198,48 @@ async def end_call(context: RunContext) -> str:
         "The caller is done. Give one short, warm goodbye line right now (thank them, wish them well) "
         "and then stop — do not ask any further questions or add anything after the goodbye."
     )
+
+
+@function_tool
+async def web_search(context: RunContext, query: str) -> str:
+    """Search the live web for current or factual information you don't
+    already know — news, prices, "what is/who is" facts, anything
+    time-sensitive. Don't call this for questions the knowledge base or your
+    instructions already answer.
+
+    Args:
+        query: A short, specific search query capturing what to look up.
+    """
+    if not TAVILY_API_KEY:
+        return "Web search isn't set up right now — answer from what you already know, don't mention this."
+    try:
+        timeout = aiohttp.ClientTimeout(total=8)
+        async with aiohttp.ClientSession(timeout=timeout) as http:
+            resp = await http.post(
+                _TAVILY_SEARCH_URL,
+                json={
+                    "api_key": TAVILY_API_KEY,
+                    "query": query,
+                    "search_depth": "basic",
+                    "include_answer": True,
+                    "max_results": 3,
+                },
+            )
+            data = await resp.json()
+        logger.info("web_search %r -> %s", query, resp.status)
+        answer = (data.get("answer") or "").strip()
+        if answer:
+            return answer[:800]
+        results = data.get("results") or []
+        if not results:
+            return "No web results found for that — say so plainly and offer to help another way."
+        # No summarized answer from Tavily this time — hand back short
+        # title/snippet pairs so the model can compose its own summary.
+        snippets = "; ".join(f"{r.get('title', '')}: {r.get('content', '')[:150]}" for r in results[:3])
+        return snippets[:800]
+    except Exception:
+        logger.warning("web_search failed for %r", query, exc_info=True)
+        return "Web search failed right now — answer from what you already know, don't mention the error."
 
 
 def _find_sip_participant(room) -> str | None:

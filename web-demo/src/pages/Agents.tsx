@@ -334,21 +334,26 @@ function AgentEditor({
     setForm((f) => ({ ...f, [key]: value }))
 
   // enabledFunctions is a comma list of the OPTIONAL built-ins that are on;
-  // empty string means "all default on". Only end_call is toggled here —
-  // transfer_call is governed by whether a transfer number is set.
-  const endCallEnabled =
+  // empty string means "all default on". end_call and web_search are toggled
+  // here — transfer_call is governed by whether a transfer number is set.
+  const OPTIONAL_FUNCTIONS = ['end_call', 'transfer_call', 'web_search']
+  const enabledSet = (name: string) =>
     form.enabledFunctions.trim() === '' ||
-    form.enabledFunctions.split(',').map((s) => s.trim()).includes('end_call')
-  const setEndCall = (on: boolean) => {
+    form.enabledFunctions.split(',').map((s) => s.trim()).includes(name)
+  const endCallEnabled = enabledSet('end_call')
+  const webSearchEnabled = enabledSet('web_search')
+  const setOptionalFunction = (name: string, on: boolean) => {
     const current =
       form.enabledFunctions.trim() === ''
-        ? new Set(['end_call', 'transfer_call'])
+        ? new Set(OPTIONAL_FUNCTIONS)
         : new Set(form.enabledFunctions.split(',').map((s) => s.trim()).filter(Boolean))
-    if (on) current.add('end_call')
-    else current.delete('end_call')
-    const all = current.has('end_call') && current.has('transfer_call')
+    if (on) current.add(name)
+    else current.delete(name)
+    const all = OPTIONAL_FUNCTIONS.every((f) => current.has(f))
     set('enabledFunctions', all ? '' : [...current].join(','))
   }
+  const setEndCall = (on: boolean) => setOptionalFunction('end_call', on)
+  const setWebSearch = (on: boolean) => setOptionalFunction('web_search', on)
 
   const promptTokens = Math.max(0, Math.ceil(form.systemPrompt.length / 4))
 
@@ -510,6 +515,12 @@ function AgentEditor({
               onChange={setEndCall}
               label="Let the agent end the call"
               hint="The agent hangs up on its own once the caller clearly signals they're done."
+            />
+            <Toggle
+              checked={webSearchEnabled}
+              onChange={setWebSearch}
+              label="Let the agent search the web"
+              hint="Looks up current facts, prices, or news outside the knowledge base via Tavily. Requires TAVILY_API_KEY to be set on the agent worker — otherwise this has no effect."
             />
             <Field label="Transfer to a human — number to dial (blank = disabled)">
               <input

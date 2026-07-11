@@ -17,6 +17,7 @@ from language import LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.platform_assistant import build_platform_assistant_prompt
 from tools import (
+    TAVILY_API_KEY,
     book_site_visit,
     build_custom_function_tools,
     capture_platform_lead,
@@ -24,6 +25,7 @@ from tools import (
     end_call,
     log_lead,
     transfer_call,
+    web_search,
 )
 
 load_dotenv()
@@ -244,6 +246,8 @@ def _build_tools(config: dict) -> list:
         tools.append(end_call)
     if (config.get("transfer_phone") or "").strip() and _on("transfer_call"):
         tools.append(transfer_call)
+    if TAVILY_API_KEY and _on("web_search"):
+        tools.append(web_search)
     tools.extend(build_custom_function_tools(_parse_json_config(config.get("custom_functions"), [])))
     return tools
 
