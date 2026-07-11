@@ -62,16 +62,22 @@ def _secret() -> bytes:
     return (os.environ.get("AUTH_SECRET") or "dev-insecure-secret-change-me").encode()
 
 
-def make_session_token(user_id: int, account_id: int) -> str:
+def make_session_token(user_id: int, account_id: int, impersonator_id: int | None = None) -> str:
+    """`impersonator_id`, when set, marks this as a super-admin support session:
+    uid/aid point at the TARGET tenant (so every tenant route works unchanged),
+    while `imp` records the real platform-owner user driving it. read_session_token
+    surfaces it so /auth/me can show the support banner and gate the exit."""
     payload = {"uid": user_id, "aid": account_id, "exp": int(time.time()) + SESSION_TTL_SECONDS}
+    if impersonator_id is not None:
+        payload["imp"] = impersonator_id
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
     sig = _b64(hmac.new(_secret(), body.encode(), hashlib.sha256).digest())
     return f"{body}.{sig}"
 
 
 def read_session_token(token: str | None) -> dict | None:
-    """Returns {'uid', 'aid'} if the token is well-formed, correctly signed,
-    and unexpired; otherwise None."""
+    """Returns {'uid', 'aid', 'imp'} if the token is well-formed, correctly
+    signed, and unexpired; otherwise None. `imp` is None for a normal session."""
     if not token or "." not in token:
         return None
     body, _, sig = token.partition(".")
@@ -84,7 +90,7 @@ def read_session_token(token: str | None) -> dict | None:
         return None
     if payload.get("exp", 0) < int(time.time()):
         return None
-    return {"uid": payload.get("uid"), "aid": payload.get("aid")}
+    return {"uid": payload.get("uid"), "aid": payload.get("aid"), "imp": payload.get("imp")}
 
 
 # --- helpers ----------------------------------------------------------

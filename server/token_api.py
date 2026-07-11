@@ -6,6 +6,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import admin_db
 import auth
 import calls_db
 import email_sender
@@ -63,6 +64,10 @@ async def require_session(request: Request, call_next):
         # Stash for downstream handlers/dependencies (Phase 3 scopes queries by it).
         request.state.user_id = session["uid"]
         request.state.account_id = session["aid"]
+        # imp is set only in a super-admin support session — carries the real
+        # platform-owner user id so admin routes can attribute audit entries to
+        # them even while uid/aid point at the tenant being viewed.
+        request.state.impersonator_id = session.get("imp")
         return await call_next(request)
     # No session cookie — accept a programmatic API key instead. The key maps
     # to a tenant account; we give the request that account's owner user so
@@ -73,6 +78,7 @@ async def require_session(request: Request, call_next):
         if account_id is not None:
             request.state.account_id = account_id
             request.state.user_id = calls_db.account_owner_user_id(account_id)
+            request.state.impersonator_id = None
             return await call_next(request)
     return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
@@ -82,6 +88,19 @@ def current_user(request: Request) -> dict:
     already rejected unauthenticated requests, so state is always populated on
     guarded routes."""
     return {"user_id": request.state.user_id, "account_id": request.state.account_id}
+
+
+def require_platform_owner(request: Request) -> dict:
+    """Dependency for every /admin route. Resolves the ACTING platform owner —
+    normally the session user, but during a support session (imp set) it's the
+    impersonator, so an admin can't be locked out of admin routes while viewing
+    a tenant. Returns 404 (not 403) to non-owners so the panel's existence
+    isn't disclosed to regular tenants poking at URLs."""
+    acting_uid = getattr(request.state, "impersonator_id", None) or request.state.user_id
+    user = calls_db.get_user_by_id(acting_uid)
+    if user is None or not user["is_platform_owner"]:
+        raise HTTPException(404, "Not found")
+    return {"user_id": acting_uid, "email": user["email"]}
 
 
 # Browser demo runs on a different origin during local dev; tighten this once
@@ -155,11 +174,11 @@ def _set_session_cookie(response: Response, user_id: int, account_id: int) -> No
     )
 
 
-def _me_payload(user_id: int) -> dict:
+def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
     user = calls_db.get_user_by_id(user_id)
     if user is None:
         raise HTTPException(401, "Session user no longer exists")
-    return {
+    payload = {
         "id": user["id"],
         "name": user["name"],
         "email": user["email"],
@@ -169,7 +188,14 @@ def _me_payload(user_id: int) -> dict:
         "plan": user["account_plan"],
         "isPlatformOwner": bool(user["is_platform_owner"]),
         "onboarded": user["onboarded_at"] is not None,
+        "impersonating": False,
     }
+    if impersonator_id:
+        # Support session: the panel shows the "viewing as" banner and the
+        # sidebar admin link stays available so the owner can exit.
+        payload["impersonating"] = True
+        payload["isPlatformOwner"] = True
+    return payload
 
 
 @app.get("/auth/config")
@@ -190,20 +216,22 @@ def auth_config() -> dict:
 _OAUTH_STATE_COOKIE = "vv_oauth_state"
 
 
-def _oauth_or_create_user(email: str, name: str) -> dict:
+def _oauth_or_create_user(email: str, name: str, provider: str = "password") -> dict:
     """Finds the user by email, or provisions a brand-new account for them
     (mirrors /auth/signup) — OAuth is just a passwordless entry into the same
     signup path. A random unusable password hash fills the required column;
     the user can set a real password later via forgot-password if they want
-    one for non-OAuth login too."""
+    one for non-OAuth login too. `provider` is stamped for the admin panel."""
     email = email.lower()
     user = calls_db.get_user_by_email(email)
     if user is not None:
+        calls_db.record_login(user["id"], provider)
         return {"user_id": user["id"], "account_id": user["account_id"]}
     company_name = f"{name.split(' ')[0]}'s Workspace" if name else email.split("@")[0]
     created = calls_db.create_account_with_owner(
         company_name, name or email.split("@")[0], email, auth.hash_password(secrets.token_urlsafe(32))
     )
+    calls_db.record_login(created["user_id"], provider)
     return created
 
 
@@ -280,7 +308,7 @@ def auth_oauth_google_callback(request: Request, code: str | None = None, state:
     if not email or not userinfo.get("email_verified", True):
         return RedirectResponse(f"{base_url}/login?error=oauth_unverified_email")
 
-    account = _oauth_or_create_user(email, userinfo.get("name", ""))
+    account = _oauth_or_create_user(email, userinfo.get("name", ""), provider="google")
     redirect = RedirectResponse(f"{base_url}/dashboard")
     redirect.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
     _set_session_cookie(redirect, account["user_id"], account["account_id"])
@@ -365,7 +393,7 @@ def auth_oauth_github_callback(request: Request, code: str | None = None, state:
     if primary is None:
         return RedirectResponse(f"{base_url}/login?error=oauth_unverified_email")
 
-    account = _oauth_or_create_user(primary["email"], gh_user.get("name") or gh_user.get("login") or "")
+    account = _oauth_or_create_user(primary["email"], gh_user.get("name") or gh_user.get("login") or "", provider="github")
     redirect = RedirectResponse(f"{base_url}/dashboard")
     redirect.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
     _set_session_cookie(redirect, account["user_id"], account["account_id"])
@@ -387,6 +415,7 @@ def auth_signup(req: SignupRequest, response: Response) -> dict:
         req.company.strip(), req.name.strip(), email, auth.hash_password(req.password)
     )
     _set_session_cookie(response, created["user_id"], created["account_id"])
+    calls_db.record_login(created["user_id"], "password")
     logger.info("new signup: account #%s (%s)", created["account_id"], email)
     return {"ok": True, "user": _me_payload(created["user_id"])}
 
@@ -398,6 +427,7 @@ def auth_login(req: LoginRequest, response: Response) -> dict:
         # Same message either way — don't reveal which emails are registered.
         raise HTTPException(401, "Incorrect email or password")
     _set_session_cookie(response, user["id"], user["account_id"])
+    calls_db.record_login(user["id"])
     return {"ok": True, "user": _me_payload(user["id"])}
 
 
@@ -471,7 +501,7 @@ def auth_me(request: Request) -> dict:
     session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
     if session is None:
         raise HTTPException(401, "Not authenticated")
-    return {"user": _me_payload(session["uid"])}
+    return {"user": _me_payload(session["uid"], session.get("imp"))}
 
 
 class UpdateProfileRequest(BaseModel):
@@ -597,6 +627,204 @@ async def list_active_calls(user: dict = Depends(current_user)) -> list[dict]:
         return []
     finally:
         await lkapi.aclose()
+
+
+# ================================================= super-admin (platform owner)
+#
+# Every route below is gated by require_platform_owner (404 to everyone else)
+# and reads/writes ACROSS tenants via admin_db. Mutations write an immutable
+# admin_audit_log entry. Impersonation mints a scoped support session so the
+# owner can operate inside a tenant while the banner + audit trail stay on.
+
+
+async def _platform_live_call_count() -> int:
+    """Count of rooms currently live across ALL tenants (num_participants >= 2)."""
+    lkapi = api.LiveKitAPI()
+    try:
+        rooms = await lkapi.room.list_rooms(ListRoomsRequest())
+        return sum(1 for r in rooms.rooms if r.num_participants >= 2)
+    except Exception:
+        return 0
+    finally:
+        await lkapi.aclose()
+
+
+_ADMIN_API_KEY_ENVS = {
+    "Sarvam": "SARVAM_API_KEY",
+    "OpenAI": "OPENAI_API_KEY",
+    "Gemini": "GEMINI_API_KEY",
+    "Tavily": "TAVILY_API_KEY",
+    "Google OAuth": "GOOGLE_OAUTH_CLIENT_ID",
+    "GitHub OAuth": "GITHUB_OAUTH_CLIENT_ID",
+    "EnableX": "ENABLEX_APP_ID",
+    "LiveKit": "LIVEKIT_API_KEY",
+}
+
+
+@app.get("/admin/overview")
+async def admin_overview(days: int = 30, admin: dict = Depends(require_platform_owner)) -> dict:
+    data = admin_db.platform_overview(days)
+    data["kpis"]["liveCalls"] = await _platform_live_call_count()
+    return data
+
+
+@app.get("/admin/accounts")
+def admin_accounts(
+    search: str = "", plan: str = "", status: str = "", activity: str = "",
+    limit: int = 50, offset: int = 0, admin: dict = Depends(require_platform_owner),
+) -> dict:
+    return admin_db.list_accounts(search, plan, status, activity, limit, offset)
+
+
+@app.get("/admin/accounts/{account_id}")
+def admin_account_detail(account_id: int, admin: dict = Depends(require_platform_owner)) -> dict:
+    detail = admin_db.account_detail(account_id)
+    if detail is None:
+        raise HTTPException(404, "Account not found")
+    return detail
+
+
+@app.get("/admin/users")
+def admin_users(search: str = "", limit: int = 50, offset: int = 0, admin: dict = Depends(require_platform_owner)) -> dict:
+    return admin_db.list_all_users(search, limit, offset)
+
+
+@app.get("/admin/calls")
+def admin_calls(
+    account_id: int = 0, channel: str = "", days: int = 0, search: str = "",
+    limit: int = 50, offset: int = 0, admin: dict = Depends(require_platform_owner),
+) -> dict:
+    return admin_db.list_all_calls(account_id, channel, days, search, limit, offset)
+
+
+@app.get("/admin/calls/{call_id}")
+def admin_call_detail(call_id: int, admin: dict = Depends(require_platform_owner)) -> dict:
+    detail = admin_db.call_detail(call_id)
+    if detail is None:
+        raise HTTPException(404, "Call not found")
+    return detail
+
+
+@app.get("/admin/analytics")
+def admin_analytics(days: int = 30, admin: dict = Depends(require_platform_owner)) -> dict:
+    return admin_db.analytics(days)
+
+
+@app.get("/admin/billing")
+def admin_billing(admin: dict = Depends(require_platform_owner)) -> dict:
+    return admin_db.billing_overview()
+
+
+@app.get("/admin/audit")
+def admin_audit(action: str = "", limit: int = 100, offset: int = 0, admin: dict = Depends(require_platform_owner)) -> dict:
+    return admin_db.audit_log(action, limit, offset)
+
+
+@app.get("/admin/health")
+async def admin_health(admin: dict = Depends(require_platform_owner)) -> dict:
+    health = admin_db.system_health()
+    health["liveCalls"] = await _platform_live_call_count()
+    health["apiKeys"] = [{"name": n, "configured": bool(os.environ.get(env))} for n, env in _ADMIN_API_KEY_ENVS.items()]
+    return health
+
+
+class AdminCreditsRequest(BaseModel):
+    total: int
+    reason: str = ""
+
+
+@app.post("/admin/accounts/{account_id}/credits")
+def admin_set_credits(account_id: int, req: AdminCreditsRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    admin_db.adjust_credits(account_id, req.total)
+    admin_db.write_audit(admin["user_id"], admin["email"], "adjust_credits", account_id, detail=f"set credits_total={req.total}. {req.reason}".strip())
+    return admin_db.account_detail(account_id)
+
+
+class AdminPlanRequest(BaseModel):
+    plan: str
+    reason: str = ""
+
+
+@app.post("/admin/accounts/{account_id}/plan")
+def admin_set_plan(account_id: int, req: AdminPlanRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    if req.plan not in admin_db.PLAN_PRICING:
+        raise HTTPException(400, "Unknown plan")
+    admin_db.change_plan(account_id, req.plan)
+    admin_db.write_audit(admin["user_id"], admin["email"], "change_plan", account_id, detail=f"plan={req.plan}. {req.reason}".strip())
+    return admin_db.account_detail(account_id)
+
+
+class AdminStatusRequest(BaseModel):
+    status: str
+    reason: str = ""
+
+
+@app.post("/admin/accounts/{account_id}/status")
+def admin_set_status(account_id: int, req: AdminStatusRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    if req.status not in ("active", "suspended"):
+        raise HTTPException(400, "Status must be active or suspended")
+    admin_db.set_account_status(account_id, req.status)
+    admin_db.write_audit(admin["user_id"], admin["email"], "set_status", account_id, detail=f"status={req.status}. {req.reason}".strip())
+    return admin_db.account_detail(account_id)
+
+
+class AdminNotesRequest(BaseModel):
+    notes: str
+
+
+@app.post("/admin/accounts/{account_id}/notes")
+def admin_set_notes(account_id: int, req: AdminNotesRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    admin_db.set_account_notes(account_id, req.notes)
+    admin_db.write_audit(admin["user_id"], admin["email"], "add_note", account_id, detail="updated internal notes")
+    return admin_db.account_detail(account_id)
+
+
+@app.post("/admin/accounts/{account_id}/reset-password")
+def admin_reset_password(account_id: int, request: Request, admin: dict = Depends(require_platform_owner)) -> dict:
+    owner_uid = calls_db.account_owner_user_id(account_id)
+    if owner_uid is None:
+        raise HTTPException(404, "Account has no owner user")
+    user = calls_db.get_user_by_id(owner_uid)
+    token = calls_db.create_password_reset(owner_uid)
+    link = f"{_app_base_url(request)}/reset-password?token={token}"
+    html = (
+        f"<p>Hi {user['name']},</p><p>A Vistrow Voice support agent started a password reset for your "
+        f'account. Click below to set a new password (valid 1 hour):</p><p><a href="{link}">Reset password</a></p>'
+    )
+    sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", html)
+    admin_db.write_audit(admin["user_id"], admin["email"], "reset_password", account_id, owner_uid, detail=f"reset link issued to {user['email']}")
+    # Return the link so the operator can share it directly if email isn't configured.
+    return {"ok": True, "emailSent": sent, "resetLink": link}
+
+
+@app.post("/admin/impersonate/{account_id}")
+def admin_impersonate(account_id: int, response: Response, admin: dict = Depends(require_platform_owner)) -> dict:
+    """Start a support session AS this tenant's owner. uid/aid point at the
+    tenant (so every tenant route works), imp records the real owner so the
+    banner shows and the owner can exit."""
+    owner_uid = calls_db.account_owner_user_id(account_id)
+    if owner_uid is None:
+        raise HTTPException(404, "Account has no owner user")
+    response.set_cookie(
+        auth.COOKIE_NAME,
+        auth.make_session_token(owner_uid, account_id, impersonator_id=admin["user_id"]),
+        max_age=auth.SESSION_TTL_SECONDS, httponly=True, secure=_COOKIE_SECURE, samesite="lax", path="/",
+    )
+    admin_db.write_audit(admin["user_id"], admin["email"], "impersonate", account_id, owner_uid, detail="started support session")
+    return {"ok": True}
+
+
+@app.post("/admin/impersonate/exit")
+def admin_impersonate_exit(request: Request, response: Response) -> dict:
+    """End a support session and restore the platform owner's own session."""
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if session is None or not session.get("imp"):
+        raise HTTPException(400, "Not in a support session")
+    owner = calls_db.get_user_by_id(session["imp"])
+    if owner is None or not owner["is_platform_owner"]:
+        raise HTTPException(403, "Not permitted")
+    _set_session_cookie(response, owner["id"], owner["account_id"])
+    return {"ok": True}
 
 
 # ------------------------------------------------------ calls & leads
