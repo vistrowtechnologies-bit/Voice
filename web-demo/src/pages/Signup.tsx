@@ -49,7 +49,8 @@ export function Signup() {
     setBusy(true)
     try {
       await signup(form)
-      // Phase 4 will route new signups through onboarding first.
+      // DashboardLayout shows the onboarding modal automatically for any
+      // account that hasn't completed it yet — no special-case route here.
       navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create your account')

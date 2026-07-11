@@ -7,6 +7,7 @@ import { BRAND } from '../lib/brand'
 import { useAuth } from '../lib/auth'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { Icon } from './Icon'
+import { OnboardingModal } from './OnboardingModal'
 
 function initials(name: string): string {
   return (name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('') || '?').toUpperCase()
@@ -174,6 +175,7 @@ export function PageHeader({
 }
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   // Theme is a dashboard-only preference — apply the stored choice on mount
@@ -219,6 +221,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
         <main>{children}</main>
       </div>
+      {user && !user.onboarded && <OnboardingModal />}
     </div>
   )
 }

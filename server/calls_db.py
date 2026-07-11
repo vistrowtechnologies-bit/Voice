@@ -431,6 +431,19 @@ def init_tables() -> None:
             ):
                 conn.execute(f"ALTER TABLE agents ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_platform_owner INTEGER DEFAULT 0")
+            # NULL until the first-run onboarding modal is dismissed. Every
+            # pre-existing account (created before onboarding existed) should
+            # count as already onboarded rather than suddenly seeing the
+            # modal — but that backfill must run exactly once, the boot this
+            # column is introduced, or every later boot would immediately
+            # backfill brand-new accounts too (their created_at is already in
+            # the past by the time this runs) and the modal would never show.
+            column_existed = conn.execute(
+                "SELECT 1 FROM information_schema.columns WHERE table_name = 'accounts' AND column_name = 'onboarded_at'"
+            ).fetchone() is not None
+            conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS onboarded_at TEXT")
+            if not column_existed:
+                conn.execute("UPDATE accounts SET onboarded_at = created_at WHERE onboarded_at IS NULL")
             # Self-healing bootstrap: whichever account owns the platform
             # operator's own login gets is_platform_owner — runs on every
             # boot (idempotent) so it applies whether that account was
@@ -543,13 +556,24 @@ def get_user_by_id(user_id: int) -> dict | None:
             """
             SELECT u.id, u.email, u.name, u.role, u.account_id,
                    a.name AS account_name, a.plan AS account_plan,
-                   a.is_platform_owner
+                   a.is_platform_owner, a.onboarded_at
             FROM users u JOIN accounts a ON a.id = u.account_id
             WHERE u.id = ?
             """,
             (user_id,),
         ).fetchone()
         return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def mark_account_onboarded(account_id: int) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE accounts SET onboarded_at = {_NOW} WHERE id = ? AND onboarded_at IS NULL", (account_id,)
+            )
     finally:
         conn.close()
 

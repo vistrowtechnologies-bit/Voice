@@ -9,6 +9,7 @@ export interface AuthUser {
   accountName: string
   plan: string
   isPlatformOwner: boolean
+  onboarded: boolean
 }
 
 export interface AuthState {
@@ -55,6 +56,7 @@ export const apiLogout = () => authFetch<{ ok: boolean }>('/auth/logout', {})
 export const apiUpdateProfile = (data: { name?: string; currentPassword?: string; newPassword?: string }) =>
   authFetch<{ user: AuthUser }>('/profile', data, 'PATCH')
 export const apiUpdateAccount = (name: string) => authFetch<{ user: AuthUser }>('/account', { name }, 'PATCH')
+export const apiCompleteOnboarding = () => authFetch<{ user: AuthUser }>('/onboarding/complete', {})
 
 export interface AuthConfig {
   oauthProviders: string[]

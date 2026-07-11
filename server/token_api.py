@@ -168,6 +168,7 @@ def _me_payload(user_id: int) -> dict:
         "accountName": user["account_name"],
         "plan": user["account_plan"],
         "isPlatformOwner": bool(user["is_platform_owner"]),
+        "onboarded": user["onboarded_at"] is not None,
     }
 
 
@@ -508,6 +509,12 @@ def update_account(req: UpdateAccountRequest, user: dict = Depends(current_user)
     if not name:
         raise HTTPException(400, "Company name can't be empty")
     calls_db.update_account(user["account_id"], name=name)
+    return {"user": _me_payload(user["user_id"])}
+
+
+@app.post("/onboarding/complete")
+def complete_onboarding(user: dict = Depends(current_user)) -> dict:
+    calls_db.mark_account_onboarded(user["account_id"])
     return {"user": _me_payload(user["user_id"])}
 
 
