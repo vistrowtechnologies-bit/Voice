@@ -4,6 +4,7 @@ import { Link, NavLink } from 'react-router-dom'
 import { fetchBilling } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
 import { BRAND } from '../lib/brand'
+import { adminExitImpersonation } from '../lib/adminApi'
 import { useAuth } from '../lib/auth'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { Icon } from './Icon'
@@ -111,6 +112,16 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ))}
       </nav>
+      {user?.isPlatformOwner && !user?.impersonating && (
+        <NavLink
+          to="/admin"
+          onClick={onNavigate}
+          className="mb-3 flex items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20"
+        >
+          <Icon name="shield_person" className="text-[19px]" />
+          Admin panel
+        </NavLink>
+      )}
       <div className="flex items-center gap-2 border-t border-border pt-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
           {initials(workspace)}
@@ -174,6 +185,29 @@ export function PageHeader({
   )
 }
 
+/** Sticky red bar shown to the platform owner while inside a tenant's account
+ * via "View as". Exiting restores the owner's own session and returns to /admin. */
+function ImpersonationBanner({ accountName }: { accountName: string }) {
+  const { refresh } = useAuth()
+  const navigate = useNavigate()
+  const exit = async () => {
+    await adminExitImpersonation().catch(() => {})
+    await refresh()
+    navigate('/admin')
+  }
+  return (
+    <div className="fixed inset-x-0 top-0 z-50 flex h-9 items-center justify-between bg-destructive px-4 text-white">
+      <span className="flex items-center gap-2 text-xs font-semibold">
+        <Icon name="visibility" className="text-[16px]" />
+        Support session — viewing <strong>{accountName}</strong>. Actions are logged.
+      </span>
+      <button onClick={exit} className="flex items-center gap-1 text-xs font-bold hover:underline">
+        <Icon name="logout" className="text-[15px]" /> Exit
+      </button>
+    </div>
+  )
+}
+
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -188,7 +222,12 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <aside className="fixed left-0 top-0 hidden h-full w-60 flex-col border-r border-border bg-surface p-4 lg:flex">
+      {user?.impersonating && <ImpersonationBanner accountName={user.accountName} />}
+      <aside
+        className={`fixed left-0 hidden w-60 flex-col border-r border-border bg-surface p-4 lg:flex ${
+          user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'
+        }`}
+      >
         <SidebarContent />
       </aside>
 
@@ -205,7 +244,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className="min-w-0 lg:ml-60">
+      <div className={`min-w-0 lg:ml-60 ${user?.impersonating ? 'pt-9' : ''}`}>
         <div className="flex items-center gap-3 border-b border-border px-4 py-3 lg:hidden">
           <button
             aria-label="Open navigation"

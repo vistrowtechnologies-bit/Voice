@@ -2,6 +2,17 @@ import { Route, Routes } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { AuthProvider } from './components/AuthProvider'
 import { RequireAuth } from './components/RequireAuth'
+import { RequireOwner } from './components/RequireOwner'
+import { AdminDashboard } from './pages/admin/AdminDashboard'
+import { AdminAccounts } from './pages/admin/AdminAccounts'
+import { AdminAccountDetail } from './pages/admin/AdminAccountDetail'
+import { AdminUsers } from './pages/admin/AdminUsers'
+import { AdminCalls, AdminCallDetailPage } from './pages/admin/AdminCalls'
+import { AdminAnalytics } from './pages/admin/AdminAnalytics'
+import { AdminBilling } from './pages/admin/AdminBilling'
+import { AdminAudit } from './pages/admin/AdminAudit'
+import { AdminHealth } from './pages/admin/AdminHealth'
+import { AdminSettings } from './pages/admin/AdminSettings'
 import { Home } from './pages/marketing/Home'
 import { ProductOverview } from './pages/marketing/ProductOverview'
 import { ProductDetail } from './pages/marketing/ProductDetail'
@@ -80,6 +91,19 @@ function App() {
         <Route path="/dashboard/settings" element={guard(<Settings />)} />
         {/* Old bookmark path — same detail page as /dashboard/calls/:id */}
         <Route path="/dashboard/leads/:id" element={guard(<LeadDetail />)} />
+
+        {/* Platform-owner-only super-admin panel (RequireOwner wraps each in AdminLayout) */}
+        <Route path="/admin" element={<RequireOwner><AdminDashboard /></RequireOwner>} />
+        <Route path="/admin/accounts" element={<RequireOwner><AdminAccounts /></RequireOwner>} />
+        <Route path="/admin/accounts/:id" element={<RequireOwner><AdminAccountDetail /></RequireOwner>} />
+        <Route path="/admin/users" element={<RequireOwner><AdminUsers /></RequireOwner>} />
+        <Route path="/admin/calls" element={<RequireOwner><AdminCalls /></RequireOwner>} />
+        <Route path="/admin/calls/:id" element={<RequireOwner><AdminCallDetailPage /></RequireOwner>} />
+        <Route path="/admin/analytics" element={<RequireOwner><AdminAnalytics /></RequireOwner>} />
+        <Route path="/admin/billing" element={<RequireOwner><AdminBilling /></RequireOwner>} />
+        <Route path="/admin/audit" element={<RequireOwner><AdminAudit /></RequireOwner>} />
+        <Route path="/admin/health" element={<RequireOwner><AdminHealth /></RequireOwner>} />
+        <Route path="/admin/settings" element={<RequireOwner><AdminSettings /></RequireOwner>} />
       </Routes>
     </AuthProvider>
   )

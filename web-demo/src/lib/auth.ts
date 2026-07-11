@@ -10,6 +10,7 @@ export interface AuthUser {
   plan: string
   isPlatformOwner: boolean
   onboarded: boolean
+  impersonating: boolean
 }
 
 export interface AuthState {
