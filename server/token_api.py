@@ -260,6 +260,17 @@ def auth_oauth_google_callback(request: Request, code: str | None = None, state:
         )
         with urllib.request.urlopen(userinfo_req, timeout=10) as resp:
             userinfo = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        # Google's error body (e.g. {"error": "invalid_client", ...}) is the
+        # actual reason — swallowing it left every failure looking identical
+        # in the logs regardless of cause (bad secret vs bad redirect_uri vs
+        # revoked code).
+        try:
+            detail = e.read().decode()
+        except Exception:
+            detail = "<no body>"
+        logger.error("Google OAuth token/userinfo exchange failed: HTTP %s %s — %s", e.code, e.reason, detail)
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
     except Exception:
         logger.exception("Google OAuth exchange failed")
         return RedirectResponse(f"{base_url}/login?error=oauth_failed")
