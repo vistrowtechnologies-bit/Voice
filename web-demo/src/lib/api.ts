@@ -9,6 +9,7 @@ import type {
   DashboardSummary,
   InboundRoute,
   Integration,
+  ApiKey,
   KnowledgeBase,
   PhoneNumber,
   QaDraft,
@@ -84,6 +85,12 @@ export const createAgent = (data: Partial<AgentConfig>) => send<AgentConfig>('PO
 export const updateAgent = (id: number, data: Partial<AgentConfig>) =>
   send<AgentConfig>('PATCH', `/agents/${id}`, data)
 export const deleteAgent = (id: number) => send('DELETE', `/agents/${id}`)
+
+// -------------------------------------------------------------- api keys
+
+export const fetchApiKeys = () => get<ApiKey[]>('/api-keys')
+export const createApiKey = (name: string) => send<ApiKey & { key: string }>('POST', '/api-keys', { name })
+export const deleteApiKey = (id: number) => send('DELETE', `/api-keys/${id}`)
 
 // -------------------------------------------------------------- contacts
 

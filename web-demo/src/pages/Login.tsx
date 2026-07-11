@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { BRAND } from '../lib/brand'
 import { useAuth } from '../lib/auth'
-import { AuthShell } from './AuthShell'
+import { AuthShell, SocialButtons } from './AuthShell'
 
 export function Login() {
   const { login } = useAuth()
@@ -32,7 +32,16 @@ export function Login() {
   }
 
   return (
-    <AuthShell title="Welcome back" subtitle={`Sign in to your ${BRAND.name} dashboard.`}>
+    <AuthShell
+      title="Welcome back"
+      subtitle={`Sign in to your ${BRAND.name} dashboard.`}
+      headline={
+        <>
+          Welcome back to <span className="text-primary">{BRAND.name}.</span>
+        </>
+      }
+      features={['Answer & qualify calls 24/7', '30+ Indian languages', 'Every call logged & analyzed']}
+    >
       <form onSubmit={submit} className="flex flex-col gap-4">
         {error && (
           <div className="flex items-center gap-2 rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">
@@ -51,7 +60,13 @@ export function Login() {
             className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
           />
         </Field>
-        <Field label="Password">
+        <label className="flex flex-col gap-1.5">
+          <span className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-text-muted">Password</span>
+            <Link to="/forgot-password" className="text-xs font-semibold text-cyan hover:underline">
+              Forgot password?
+            </Link>
+          </span>
           <div className="relative">
             <input
               type={showPw ? 'text' : 'password'}
@@ -71,7 +86,7 @@ export function Login() {
               <Icon name={showPw ? 'visibility_off' : 'visibility'} className="text-[18px]" />
             </button>
           </div>
-        </Field>
+        </label>
         <button
           type="submit"
           disabled={busy}
@@ -80,6 +95,7 @@ export function Login() {
           {busy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-bg border-t-transparent" /> : 'Sign in'}
         </button>
       </form>
+      <SocialButtons />
       <p className="mt-6 text-center text-sm text-text-muted">
         New to {BRAND.name}?{' '}
         <Link to="/signup" className="font-semibold text-cyan hover:underline">

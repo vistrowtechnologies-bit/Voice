@@ -55,3 +55,14 @@ export const apiLogout = () => authFetch<{ ok: boolean }>('/auth/logout', {})
 export const apiUpdateProfile = (data: { name?: string; currentPassword?: string; newPassword?: string }) =>
   authFetch<{ user: AuthUser }>('/profile', data, 'PATCH')
 export const apiUpdateAccount = (name: string) => authFetch<{ user: AuthUser }>('/account', { name }, 'PATCH')
+
+export interface AuthConfig {
+  oauthProviders: string[]
+  emailConfigured: boolean
+}
+export const apiAuthConfig = () => authFetch<AuthConfig>('/auth/config')
+
+export const apiRequestPasswordReset = (email: string) =>
+  authFetch<{ ok: boolean }>('/auth/request-password-reset', { email })
+export const apiResetPassword = (token: string, password: string) =>
+  authFetch<{ ok: boolean; user?: AuthUser }>('/auth/reset-password', { token, password })

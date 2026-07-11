@@ -15,6 +15,8 @@ import { CallFlow } from './pages/CallFlow'
 import { Summary } from './pages/Summary'
 import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
+import { ForgotPassword } from './pages/ForgotPassword'
+import { ResetPassword } from './pages/ResetPassword'
 import { Dashboard } from './pages/Dashboard'
 import { Agents } from './pages/Agents'
 import { KnowledgeBasePage } from './pages/KnowledgeBasePage'
@@ -59,6 +61,8 @@ function App() {
         <Route path="/summary" element={<Summary />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Auth-gated dashboard */}
         <Route path="/dashboard" element={guard(<Dashboard />)} />

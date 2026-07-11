@@ -278,3 +278,11 @@ export interface Site {
   widgetLabel: string
   createdAt: string
 }
+
+export interface ApiKey {
+  id: number
+  name: string
+  prefix: string
+  lastUsedAt: string | null
+  createdAt: string
+}

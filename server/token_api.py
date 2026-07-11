@@ -5,6 +5,7 @@ from pathlib import Path
 
 import auth
 import calls_db
+import email_sender
 import kb_crawl
 import kb_extract
 import livekit_sip
@@ -55,12 +56,22 @@ async def require_session(request: Request, call_next):
     if request.method == "OPTIONS" or path in _PUBLIC_PATHS or path.startswith(_PUBLIC_PREFIXES):
         return await call_next(request)
     session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
-    if session is None:
-        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
-    # Stash for downstream handlers/dependencies (Phase 3 scopes queries by it).
-    request.state.user_id = session["uid"]
-    request.state.account_id = session["aid"]
-    return await call_next(request)
+    if session is not None:
+        # Stash for downstream handlers/dependencies (Phase 3 scopes queries by it).
+        request.state.user_id = session["uid"]
+        request.state.account_id = session["aid"]
+        return await call_next(request)
+    # No session cookie — accept a programmatic API key instead. The key maps
+    # to a tenant account; we give the request that account's owner user so
+    # handlers that read user_id keep working.
+    api_key = request.headers.get("X-Api-Key")
+    if api_key:
+        account_id = calls_db.resolve_api_key(api_key)
+        if account_id is not None:
+            request.state.account_id = account_id
+            request.state.user_id = calls_db.account_owner_user_id(account_id)
+            return await call_next(request)
+    return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
 
 def current_user(request: Request) -> dict:
@@ -157,6 +168,21 @@ def _me_payload(user_id: int) -> dict:
     }
 
 
+@app.get("/auth/config")
+def auth_config() -> dict:
+    """Which optional auth features are actually configured on this server, so
+    the frontend never shows a dead button. OAuth providers appear only when
+    their client id + secret env vars are set; password-reset email appears
+    only when an email provider is configured."""
+    providers = []
+    if os.environ.get("GOOGLE_OAUTH_CLIENT_ID") and os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET"):
+        providers.append("google")
+    if os.environ.get("GITHUB_OAUTH_CLIENT_ID") and os.environ.get("GITHUB_OAUTH_CLIENT_SECRET"):
+        providers.append("github")
+    email_configured = bool(os.environ.get("RESEND_API_KEY") or os.environ.get("SMTP_HOST"))
+    return {"oauthProviders": providers, "emailConfigured": email_configured}
+
+
 @app.post("/auth/signup")
 def auth_signup(req: SignupRequest, response: Response) -> dict:
     email = req.email.strip().lower()
@@ -184,6 +210,65 @@ def auth_login(req: LoginRequest, response: Response) -> dict:
         raise HTTPException(401, "Incorrect email or password")
     _set_session_cookie(response, user["id"], user["account_id"])
     return {"ok": True, "user": _me_payload(user["id"])}
+
+
+class RequestResetRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
+def _app_base_url(request: Request) -> str:
+    """Where the frontend lives, for building links in emails. APP_BASE_URL
+    wins; otherwise fall back to the request's own origin."""
+    base = os.environ.get("APP_BASE_URL")
+    if base:
+        return base.rstrip("/")
+    origin = request.headers.get("origin")
+    if origin:
+        return origin.rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
+@app.post("/auth/request-password-reset")
+def auth_request_password_reset(req: RequestResetRequest, request: Request) -> dict:
+    # Always report success — never reveal whether an email is registered.
+    user = calls_db.get_user_by_email(req.email.strip().lower())
+    if user is not None:
+        token = calls_db.create_password_reset(user["id"])
+        link = f"{_app_base_url(request)}/reset-password?token={token}"
+        html = (
+            f"<p>Hi {user['name']},</p>"
+            "<p>We received a request to reset your Vistrow Voice password. "
+            f'Click the link below to choose a new one (valid for 1 hour):</p>'
+            f'<p><a href="{link}">Reset your password</a></p>'
+            "<p>If you didn't request this, you can safely ignore this email.</p>"
+        )
+        sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", html)
+        if not sent:
+            # Email delivery isn't set up yet — surface the link in the server
+            # log so the operator can still complete a reset during setup.
+            logger.info("password reset link for %s (email not configured): %s", user["email"], link)
+    return {"ok": True}
+
+
+@app.post("/auth/reset-password")
+def auth_reset_password(req: ResetPasswordRequest, response: Response) -> dict:
+    if len(req.password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    user_id = calls_db.consume_password_reset(req.token)
+    if user_id is None:
+        raise HTTPException(400, "This reset link is invalid or has expired")
+    calls_db.update_user_profile(user_id, password_hash=auth.hash_password(req.password))
+    # Log them straight in on success.
+    user = calls_db.get_user_by_id(user_id)
+    if user is not None:
+        _set_session_cookie(response, user["id"], user["account_id"])
+        return {"ok": True, "user": _me_payload(user_id)}
+    return {"ok": True}
 
 
 @app.post("/auth/logout")
@@ -236,6 +321,30 @@ def update_account(req: UpdateAccountRequest, user: dict = Depends(current_user)
         raise HTTPException(400, "Company name can't be empty")
     calls_db.update_account(user["account_id"], name=name)
     return {"user": _me_payload(user["user_id"])}
+
+
+# --------------------------------------------------------------- api keys
+
+
+class CreateApiKeyRequest(BaseModel):
+    name: str = "API key"
+
+
+@app.get("/api-keys")
+def list_api_keys(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_api_keys(user["account_id"])
+
+
+@app.post("/api-keys")
+def create_api_key(req: CreateApiKeyRequest, user: dict = Depends(current_user)) -> dict:
+    # Returns the full key exactly once; the client must copy it immediately.
+    return calls_db.create_api_key(user["account_id"], req.name)
+
+
+@app.delete("/api-keys/{key_id}")
+def delete_api_key(key_id: int, user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_api_key(key_id, user["account_id"])
+    return {"ok": True}
 
 
 @app.get("/active-calls")
