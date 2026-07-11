@@ -286,6 +286,91 @@ def auth_oauth_google_callback(request: Request, code: str | None = None, state:
     return redirect
 
 
+@app.get("/auth/oauth/github/start")
+def auth_oauth_github_start(response: Response) -> RedirectResponse:
+    client_id = os.environ.get("GITHUB_OAUTH_CLIENT_ID")
+    redirect_uri = os.environ.get("GITHUB_OAUTH_REDIRECT_URI")
+    if not client_id or not os.environ.get("GITHUB_OAUTH_CLIENT_SECRET") or not redirect_uri:
+        raise HTTPException(404, "GitHub sign-in is not configured on this server")
+    state = secrets.token_urlsafe(24)
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": "read:user user:email",
+        "state": state,
+    }
+    redirect = RedirectResponse(f"https://github.com/login/oauth/authorize?{urllib.parse.urlencode(params)}")
+    redirect.set_cookie(_OAUTH_STATE_COOKIE, state, max_age=600, httponly=True, secure=_COOKIE_SECURE, samesite="lax")
+    return redirect
+
+
+@app.get("/auth/oauth/github/callback")
+def auth_oauth_github_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None) -> RedirectResponse:
+    base_url = _app_base_url(request)
+    if error or not code:
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+    expected_state = request.cookies.get(_OAUTH_STATE_COOKIE)
+    if not expected_state or state != expected_state:
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+
+    client_id = os.environ.get("GITHUB_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GITHUB_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("GITHUB_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+    token_body = urllib.parse.urlencode(
+        {"code": code, "client_id": client_id, "client_secret": client_secret, "redirect_uri": redirect_uri}
+    ).encode()
+    try:
+        token_req = urllib.request.Request(
+            "https://github.com/login/oauth/access_token",
+            data=token_body,
+            method="POST",
+            headers={"Accept": "application/json"},
+        )
+        with urllib.request.urlopen(token_req, timeout=10) as resp:
+            token_data = json.loads(resp.read())
+        access_token = token_data.get("access_token")
+        if not access_token:
+            logger.error("GitHub OAuth token exchange returned no access_token: %s", token_data)
+            return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+        # GitHub's API requires a User-Agent on every request or it 403s.
+        gh_headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "VistrowVoice",
+        }
+        user_req = urllib.request.Request("https://api.github.com/user", headers=gh_headers)
+        with urllib.request.urlopen(user_req, timeout=10) as resp:
+            gh_user = json.loads(resp.read())
+        # A GitHub account's primary email is frequently private, so /user's
+        # own "email" field is often null — /user/emails is the only reliable
+        # source, and we specifically need the verified primary one.
+        emails_req = urllib.request.Request("https://api.github.com/user/emails", headers=gh_headers)
+        with urllib.request.urlopen(emails_req, timeout=10) as resp:
+            gh_emails = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode()
+        except Exception:
+            detail = "<no body>"
+        logger.error("GitHub OAuth exchange failed: HTTP %s %s — %s", e.code, e.reason, detail)
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+    except Exception:
+        logger.exception("GitHub OAuth exchange failed")
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+
+    primary = next((e for e in gh_emails if e.get("primary") and e.get("verified")), None)
+    if primary is None:
+        return RedirectResponse(f"{base_url}/login?error=oauth_unverified_email")
+
+    account = _oauth_or_create_user(primary["email"], gh_user.get("name") or gh_user.get("login") or "")
+    redirect = RedirectResponse(f"{base_url}/dashboard")
+    redirect.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
+    _set_session_cookie(redirect, account["user_id"], account["account_id"])
+    return redirect
+
+
 @app.post("/auth/signup")
 def auth_signup(req: SignupRequest, response: Response) -> dict:
     email = req.email.strip().lower()
