@@ -1,20 +1,29 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { BRAND } from '../lib/brand'
 import { useAuth } from '../lib/auth'
 import { AuthShell, SocialButtons } from './AuthShell'
 
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  oauth_failed: "Something went wrong signing you in with Google. Please try again.",
+  oauth_unverified_email: "That Google account's email isn't verified — verify it with Google first.",
+}
+
 export function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const from = (location.state as { from?: string } | null)?.from || '/dashboard'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const oauthError = searchParams.get('error')
+  const [error, setError] = useState<string | null>(
+    oauthError ? OAUTH_ERROR_MESSAGES[oauthError] || 'Sign-in failed. Please try again.' : null
+  )
   const [busy, setBusy] = useState(false)
 
   const submit = async (e: React.FormEvent) => {

@@ -1,6 +1,9 @@
 import json
 import logging
 import os
+import secrets
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 import auth
@@ -12,7 +15,7 @@ import livekit_sip
 from dotenv import load_dotenv
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from livekit import api
 from livekit.api import CreateRoomRequest, ListParticipantsRequest, ListRoomsRequest
 from pydantic import BaseModel
@@ -181,6 +184,95 @@ def auth_config() -> dict:
         providers.append("github")
     email_configured = bool(os.environ.get("RESEND_API_KEY") or os.environ.get("SMTP_HOST"))
     return {"oauthProviders": providers, "emailConfigured": email_configured}
+
+
+_OAUTH_STATE_COOKIE = "vv_oauth_state"
+
+
+def _oauth_or_create_user(email: str, name: str) -> dict:
+    """Finds the user by email, or provisions a brand-new account for them
+    (mirrors /auth/signup) — OAuth is just a passwordless entry into the same
+    signup path. A random unusable password hash fills the required column;
+    the user can set a real password later via forgot-password if they want
+    one for non-OAuth login too."""
+    email = email.lower()
+    user = calls_db.get_user_by_email(email)
+    if user is not None:
+        return {"user_id": user["id"], "account_id": user["account_id"]}
+    company_name = f"{name.split(' ')[0]}'s Workspace" if name else email.split("@")[0]
+    created = calls_db.create_account_with_owner(
+        company_name, name or email.split("@")[0], email, auth.hash_password(secrets.token_urlsafe(32))
+    )
+    return created
+
+
+@app.get("/auth/oauth/google/start")
+def auth_oauth_google_start(response: Response) -> RedirectResponse:
+    client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+    redirect_uri = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI")
+    if not client_id or not os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET") or not redirect_uri:
+        raise HTTPException(404, "Google sign-in is not configured on this server")
+    state = secrets.token_urlsafe(24)
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "access_type": "online",
+        "prompt": "select_account",
+    }
+    redirect = RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}")
+    redirect.set_cookie(_OAUTH_STATE_COOKIE, state, max_age=600, httponly=True, secure=_COOKIE_SECURE, samesite="lax")
+    return redirect
+
+
+@app.get("/auth/oauth/google/callback")
+def auth_oauth_google_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None) -> RedirectResponse:
+    base_url = _app_base_url(request)
+    if error or not code:
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+    expected_state = request.cookies.get(_OAUTH_STATE_COOKIE)
+    if not expected_state or state != expected_state:
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+
+    client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+    token_body = urllib.parse.urlencode(
+        {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+    ).encode()
+    try:
+        token_req = urllib.request.Request("https://oauth2.googleapis.com/token", data=token_body, method="POST")
+        with urllib.request.urlopen(token_req, timeout=10) as resp:
+            token_data = json.loads(resp.read())
+        userinfo_req = urllib.request.Request(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {token_data['access_token']}"},
+        )
+        with urllib.request.urlopen(userinfo_req, timeout=10) as resp:
+            userinfo = json.loads(resp.read())
+    except Exception:
+        logger.exception("Google OAuth exchange failed")
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+
+    email = userinfo.get("email")
+    if not email or not userinfo.get("email_verified", True):
+        return RedirectResponse(f"{base_url}/login?error=oauth_unverified_email")
+
+    account = _oauth_or_create_user(email, userinfo.get("name", ""))
+    redirect = RedirectResponse(f"{base_url}/dashboard")
+    redirect.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
+    _set_session_cookie(redirect, account["user_id"], account["account_id"])
+    return redirect
 
 
 @app.post("/auth/signup")
