@@ -2919,12 +2919,14 @@ def add_dnc(account_id: int, phone: str, reason: str = "", source: str = "manual
     conn = _connect()
     try:
         with conn:
+            # RETURNING id + fetchone (the dbconn Cursor shim exposes no
+            # rowcount): a row on insert, None when the ON CONFLICT skipped it.
             cur = conn.execute(
                 "INSERT INTO dnc_list (account_id, phone, phone_norm, reason, source) "
-                "VALUES (?, ?, ?, ?, ?) ON CONFLICT(account_id, phone_norm) DO NOTHING",
+                "VALUES (?, ?, ?, ?, ?) ON CONFLICT(account_id, phone_norm) DO NOTHING RETURNING id",
                 (account_id, phone.strip(), norm, reason, source),
             )
-            return (cur.rowcount or 0) > 0
+            return cur.fetchone() is not None
     finally:
         conn.close()
 
@@ -2964,10 +2966,11 @@ def purge_expired_calls(account_id: int) -> int:
             # purge doesn't depend on exactly how started_at was serialized.
             cur = conn.execute(
                 "DELETE FROM calls WHERE account_id = ? "
-                "AND started_at::timestamptz < now() - (? || ' days')::interval",
+                "AND started_at::timestamptz < now() - (? || ' days')::interval "
+                "RETURNING id",
                 (account_id, days),
             )
-            return cur.rowcount or 0
+            return len(cur.fetchall())
     finally:
         conn.close()
 
