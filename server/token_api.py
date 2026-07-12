@@ -8,6 +8,7 @@ from pathlib import Path
 
 import admin_db
 import auth
+import call_intelligence
 import calls_db
 import campaign_dialer
 import email_sender
@@ -1015,6 +1016,26 @@ def get_call(call_id: int, user: dict = Depends(current_user)) -> dict:
     if call is None:
         raise HTTPException(404, "Call not found")
     return call
+
+
+@app.post("/calls/{call_id}/analyze")
+def analyze_call(call_id: int, user: dict = Depends(current_user)) -> dict:
+    """Run (or re-run) conversation intelligence on one call and cache it on
+    the row. Returns the intelligence object."""
+    transcript = calls_db.get_call_transcript(call_id, user["account_id"])
+    if transcript is None:
+        raise HTTPException(404, "Call not found")
+    try:
+        data = call_intelligence.analyze_transcript(transcript)
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc))
+    calls_db.save_call_intelligence(call_id, user["account_id"], data)
+    return data
+
+
+@app.get("/dashboard/intelligence")
+def dashboard_intelligence(days: int = 30, user: dict = Depends(current_user)) -> dict:
+    return calls_db.intelligence_summary(user["account_id"], days=days)
 
 
 # Leads are the same rows viewed CRM-style; kept as aliases so both mental

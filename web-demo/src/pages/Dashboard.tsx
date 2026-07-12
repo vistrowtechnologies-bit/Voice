@@ -9,8 +9,10 @@ import {
   fetchActiveCalls,
   fetchAnalytics,
   fetchDashboardSummary,
+  fetchIntelligence,
   fetchUsageTrends,
   formatDuration,
+  type IntelligenceSummary,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
@@ -54,6 +56,7 @@ export function Dashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [trends, setTrends] = useState<UsageTrends | null>(null)
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
+  const [intel, setIntel] = useState<IntelligenceSummary | null>(null)
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
   const [rangeDays, setRangeDays] = useState(14)
 
@@ -68,6 +71,7 @@ export function Dashboard() {
   useEffect(() => {
     fetchDashboardSummary().then(setSummary).catch(() => setSummary(null))
     fetchAnalytics().then(setAnalytics).catch(() => setAnalytics(null))
+    fetchIntelligence(30).then(setIntel).catch(() => setIntel(null))
   }, [])
 
   useEffect(() => {
@@ -265,6 +269,62 @@ export function Dashboard() {
 
         {tab === 'analytics' && (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border border-border bg-surface p-5 lg:col-span-2">
+              <div className="mb-4 flex items-center gap-2">
+                <Icon name="auto_awesome" className="text-[18px] text-cyan" />
+                <h3 className="text-sm font-semibold">Conversation intelligence</h3>
+                <span className="text-xs text-text-muted">· last 30 days</span>
+              </div>
+              {!intel || intel.analyzed === 0 ? (
+                <p className="text-sm text-text-muted">
+                  Analyze calls from any call's detail page to build sentiment, outcome, and QA insights here.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-5">
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    <IntelStat label="Calls analyzed" value={String(intel.analyzed)} />
+                    <IntelStat label="Avg agent QA" value={intel.avgQaScore != null ? `${intel.avgQaScore}/100` : '—'} tone="text-primary" />
+                    <IntelStat label="Positive" value={String(intel.sentiment.positive)} tone="text-success" />
+                    <IntelStat label="Negative" value={String(intel.sentiment.negative)} tone="text-destructive" />
+                  </div>
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <div>
+                      <p className="mb-2 text-xs font-semibold text-text-muted">Outcomes</p>
+                      <div className="flex flex-col gap-1.5">
+                        {intel.outcomes.map((o) => {
+                          const max = Math.max(...intel.outcomes.map((x) => x.count), 1)
+                          return (
+                            <div key={o.outcome} className="flex items-center gap-2 text-xs">
+                              <span className="w-28 shrink-0 capitalize text-text-muted">{o.outcome.replace(/_/g, ' ')}</span>
+                              <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-high">
+                                <div className="h-full bg-cyan" style={{ width: `${(o.count / max) * 100}%` }} />
+                              </div>
+                              <span className="w-6 text-right tabular-nums">{o.count}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-xs font-semibold text-text-muted">Top disqualification reasons</p>
+                      {intel.topDisqualifications.length === 0 ? (
+                        <p className="text-xs text-text-muted">None recorded.</p>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          {intel.topDisqualifications.map((r) => (
+                            <div key={r.reason} className="flex items-center justify-between gap-2 text-xs">
+                              <span className="truncate capitalize text-text">{r.reason}</span>
+                              <span className="shrink-0 rounded-full bg-surface-high px-2 py-0.5 tabular-nums text-text-muted">{r.count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="rounded-xl border border-border bg-surface p-5">
               <h3 className="mb-4 text-sm font-semibold">Calls by channel</h3>
               <div className="h-[200px]">
@@ -461,6 +521,15 @@ function EmptyChart({ text }: { text: string }) {
   return (
     <div className="flex h-full min-h-[100px] items-center justify-center px-4 text-center text-xs text-text-muted">
       {text}
+    </div>
+  )
+}
+
+function IntelStat({ label, value, tone = 'text-text' }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface-high/40 p-3">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{label}</p>
+      <p className={`mt-1 text-lg font-bold ${tone}`}>{value}</p>
     </div>
   )
 }

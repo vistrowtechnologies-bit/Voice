@@ -55,6 +55,15 @@ export interface CallRecord {
   replyLanguage: string | null
   siteVisit: { property_id?: string; date: string; time: string } | null
   transcript?: LeadTranscriptLine[]
+  intelligence?: {
+    summary: string
+    sentiment: 'positive' | 'neutral' | 'negative'
+    outcome: string
+    qa_score: number
+    disqualification_reason: string
+    key_points: string[]
+    action_items: string[]
+  } | null
 }
 
 export type Lead = CallRecord

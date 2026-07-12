@@ -516,6 +516,9 @@ def init_tables() -> None:
                 # JSON blob of post-call structured fields the agent extracted
                 # from this call's transcript (per the agent's post_call_fields).
                 ("extracted_data", "TEXT DEFAULT ''"),
+                # Cached conversation-intelligence JSON (summary/sentiment/
+                # outcome/qa_score/…) — populated on demand by call_intelligence.
+                ("intelligence_json", "TEXT DEFAULT ''"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
@@ -973,6 +976,7 @@ def _call_dict(
         "useCase": row["lead_use_case"] or "",
         "teamSize": row["lead_team_size"] or "",
         "extractedData": _load_json_field(row["extracted_data"], {}),
+        "intelligence": _load_json_field(_row_get(row, "intelligence_json"), None),
         "status": _lead_status(row),
         "callStatus": _status(row, transcript),
         "sentiment": _sentiment(transcript),
@@ -1035,6 +1039,98 @@ def get_call(call_id: int, account_id: int) -> dict | None:
         return _call_dict(row, sites_by_id=sites_by_id, agent_names=_agent_names_by_id(account_id))
     finally:
         conn.close()
+
+
+# ------------------------------------------------ conversation intelligence
+
+def get_call_transcript(call_id: int, account_id: int) -> list[dict] | None:
+    """Raw transcript turns for the analyzer. None if the call doesn't exist
+    for this tenant."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT transcript_json FROM calls WHERE id = ? AND account_id = ?", (call_id, account_id)
+        ).fetchone()
+        if row is None:
+            return None
+        return json.loads(row["transcript_json"]) if row["transcript_json"] else []
+    finally:
+        conn.close()
+
+
+def get_call_intelligence(call_id: int, account_id: int) -> dict | None:
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT intelligence_json FROM calls WHERE id = ? AND account_id = ?", (call_id, account_id)
+        ).fetchone()
+        if row is None:
+            return None
+        return _load_json_field(row["intelligence_json"], None)
+    finally:
+        conn.close()
+
+
+def save_call_intelligence(call_id: int, account_id: int, data: dict) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE calls SET intelligence_json = ? WHERE id = ? AND account_id = ?",
+                (json.dumps(data), call_id, account_id),
+            )
+    finally:
+        conn.close()
+
+
+def intelligence_summary(account_id: int, days: int = 30) -> dict:
+    """Aggregate the cached per-call intelligence into the ROI view: how many
+    calls have been analyzed, sentiment/outcome distributions, average agent QA
+    score, and the most common disqualification reasons. Pure Python over the
+    stored JSON blobs (small N per tenant; no need for JSON SQL operators)."""
+    conn = _connect()
+    try:
+        q = "SELECT intelligence_json FROM calls WHERE account_id = ? AND intelligence_json IS NOT NULL AND intelligence_json <> ''"
+        params: list = [account_id]
+        if days:
+            q += " AND started_at::date >= (CURRENT_DATE - (? || ' days')::interval)::date"
+            params.append(str(days - 1))
+        rows = conn.execute(q, params).fetchall()
+    finally:
+        conn.close()
+
+    sentiments = {"positive": 0, "neutral": 0, "negative": 0}
+    outcomes: dict[str, int] = {}
+    reasons: dict[str, int] = {}
+    qa_total = 0
+    qa_count = 0
+    analyzed = 0
+    for r in rows:
+        data = _load_json_field(r["intelligence_json"], None)
+        if not isinstance(data, dict):
+            continue
+        analyzed += 1
+        s = data.get("sentiment")
+        if s in sentiments:
+            sentiments[s] += 1
+        o = data.get("outcome") or "other"
+        outcomes[o] = outcomes.get(o, 0) + 1
+        reason = (data.get("disqualification_reason") or "").strip()
+        if reason:
+            key = reason.lower()
+            reasons[key] = reasons.get(key, 0) + 1
+        qa = data.get("qa_score")
+        if isinstance(qa, (int, float)):
+            qa_total += qa
+            qa_count += 1
+    top_reasons = sorted(reasons.items(), key=lambda kv: kv[1], reverse=True)[:6]
+    return {
+        "analyzed": analyzed,
+        "avgQaScore": round(qa_total / qa_count) if qa_count else None,
+        "sentiment": sentiments,
+        "outcomes": [{"outcome": k, "count": v} for k, v in sorted(outcomes.items(), key=lambda kv: kv[1], reverse=True)],
+        "topDisqualifications": [{"reason": k, "count": v} for k, v in top_reasons],
+    }
 
 
 def calls_csv(account_id: int) -> str:
@@ -1255,6 +1351,15 @@ def _load_json_field(raw: str | None, default):
     try:
         return json.loads(raw)
     except (ValueError, TypeError):
+        return default
+
+
+def _row_get(row, key, default=None):
+    """Safe column access for a DB row that may predate a newly-added column
+    (e.g. a cached row read on the same boot the column is introduced)."""
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
         return default
 
 

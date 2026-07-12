@@ -79,6 +79,27 @@ export const fetchDashboardSummary = () => get<DashboardSummary>('/dashboard/sum
 export const fetchUsageTrends = (days = 14) => get<UsageTrends>(`/dashboard/usage-trends?days=${days}`)
 export const fetchAnalytics = () => get<Analytics>('/dashboard/analytics')
 
+// ------------------------------------------------ conversation intelligence
+
+export interface CallIntelligence {
+  summary: string
+  sentiment: 'positive' | 'neutral' | 'negative'
+  outcome: string
+  qa_score: number
+  disqualification_reason: string
+  key_points: string[]
+  action_items: string[]
+}
+export interface IntelligenceSummary {
+  analyzed: number
+  avgQaScore: number | null
+  sentiment: { positive: number; neutral: number; negative: number }
+  outcomes: { outcome: string; count: number }[]
+  topDisqualifications: { reason: string; count: number }[]
+}
+export const analyzeCall = (id: number | string) => send<CallIntelligence>('POST', `/calls/${id}/analyze`)
+export const fetchIntelligence = (days = 30) => get<IntelligenceSummary>(`/dashboard/intelligence?days=${days}`)
+
 // ---------------------------------------------------------------- agents
 
 export const fetchAgents = () => get<AgentConfig[]>('/agents')
