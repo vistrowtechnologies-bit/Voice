@@ -491,12 +491,16 @@ def auth_request_password_reset(req: RequestResetRequest, request: Request) -> d
     if user is not None:
         token = calls_db.create_password_reset(user["id"])
         link = f"{_app_base_url(request)}/reset-password?token={token}"
-        html = (
-            f"<p>Hi {user['name']},</p>"
-            "<p>We received a request to reset your Vistrow Voice password. "
-            f'Click the link below to choose a new one (valid for 1 hour):</p>'
-            f'<p><a href="{link}">Reset your password</a></p>'
-            "<p>If you didn't request this, you can safely ignore this email.</p>"
+        html = email_sender.render_email(
+            preheader="Reset your Vistrow Voice password",
+            heading="Reset your password",
+            body_html=(
+                f"Hi {user['name']}, we received a request to reset your Vistrow Voice password. "
+                "Click below to choose a new one — this link is valid for 1 hour. "
+                "If you didn't request this, you can safely ignore this email."
+            ),
+            cta_label="Reset password",
+            cta_url=link,
         )
         sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", html)
         if not sent:
@@ -674,11 +678,16 @@ def team_invite(req: InviteMemberRequest, request: Request, user: dict = Depends
     inviter = calls_db.get_user_by_id(user["user_id"])
     invite = calls_db.create_invite(user["account_id"], email, name, role, user["user_id"])
     link = f"{_app_base_url(request)}/invite/{invite['token']}"
-    html = (
-        f"<p>Hi {name},</p>"
-        f"<p>{inviter['name']} invited you to join <strong>{inviter['account_name']}</strong> on "
-        f"Vistrow Voice as a <strong>{role}</strong>.</p>"
-        f'<p><a href="{link}">Accept invite</a> (valid for 7 days)</p>'
+    html = email_sender.render_email(
+        preheader=f"{inviter['name']} invited you to join {inviter['account_name']} on Vistrow Voice",
+        heading="You're invited",
+        body_html=(
+            f"Hi {name}, {inviter['name']} invited you to join "
+            f"<strong style=\"color:{email_sender.TEXT}\">{inviter['account_name']}</strong> on Vistrow Voice as "
+            f"a <strong style=\"color:{email_sender.TEXT}\">{role}</strong>. This invite is valid for 7 days."
+        ),
+        cta_label="Accept invite",
+        cta_url=link,
     )
     sent = email_sender.send_email(email, f"You're invited to join {inviter['account_name']} on Vistrow Voice", html)
     if not sent:
@@ -929,9 +938,15 @@ def admin_reset_password(account_id: int, request: Request, admin: dict = Depend
     user = calls_db.get_user_by_id(owner_uid)
     token = calls_db.create_password_reset(owner_uid)
     link = f"{_app_base_url(request)}/reset-password?token={token}"
-    html = (
-        f"<p>Hi {user['name']},</p><p>A Vistrow Voice support agent started a password reset for your "
-        f'account. Click below to set a new password (valid 1 hour):</p><p><a href="{link}">Reset password</a></p>'
+    html = email_sender.render_email(
+        preheader="Reset your Vistrow Voice password",
+        heading="Reset your password",
+        body_html=(
+            f"Hi {user['name']}, a Vistrow Voice support agent started a password reset for your account. "
+            "Click below to set a new password — this link is valid for 1 hour."
+        ),
+        cta_label="Reset password",
+        cta_url=link,
     )
     sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", html)
     admin_db.write_audit(admin["user_id"], admin["email"], "reset_password", account_id, owner_uid, detail=f"reset link issued to {user['email']}")
