@@ -606,6 +606,9 @@ async def entrypoint(ctx: JobContext) -> None:
         # Read by the transfer_call tool.
         "transfer_phone": (cfg.get("transfer_phone") or "").strip(),
         "silence_reminders": 0,
+        # Which tenant this call belongs to — lets the lead-capture tools fan
+        # out to that tenant's connected integrations (Slack/Sheets/WhatsApp/CRM).
+        "account_id": cfg.get("account_id"),
     }
 
     # interruption_sensitivity 0-1 → how many real words it takes to interrupt

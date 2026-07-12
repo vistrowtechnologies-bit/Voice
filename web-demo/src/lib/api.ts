@@ -185,6 +185,8 @@ export const removeDnc = (id: number) => send('DELETE', `/compliance/dnc/${id}`)
 export const fetchIntegrations = () => get<Integration[]>('/integrations')
 export const updateIntegration = (key: string, status: string, config: Record<string, string>) =>
   send('PATCH', `/integrations/${key}`, { status, config })
+export const testIntegration = (key: string) =>
+  send<{ ok: boolean; detail: string }>('POST', `/integrations/${key}/test`)
 
 // ------------------------------------------------------- telephony (EnableX)
 

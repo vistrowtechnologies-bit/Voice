@@ -402,21 +402,33 @@ _PLATFORM_OWNER_EMAIL = "vistrowai@gmail.com"
 _SEED_INTEGRATIONS = [
     (
         "webhook",
-        "CRM webhook",
+        "CRM / Webhook",
         "CRM",
-        "POST every qualified lead and booked site visit to your CRM endpoint in real time.",
+        "POST every qualified lead as JSON to any endpoint (your CRM, Zapier, n8n, Make).",
     ),
     (
-        "calcom",
-        "Cal.com",
-        "Scheduling & Booking",
-        "Sync booking pages so agents schedule site visits directly on your calendar.",
+        "slack",
+        "Slack",
+        "Notifications",
+        "Get a Slack message the moment a call qualifies a lead. Paste an Incoming Webhook URL.",
+    ),
+    (
+        "whatsapp",
+        "WhatsApp",
+        "Messaging",
+        "Fire a WhatsApp follow-up after a call via your provider's send webhook.",
     ),
     (
         "sheets",
         "Google Sheets",
         "Reporting",
-        "Append every completed call as a row in a shared sheet.",
+        "Append every qualified lead as a row via a Google Apps Script web-app URL (no OAuth).",
+    ),
+    (
+        "calcom",
+        "Cal.com",
+        "Scheduling & Booking",
+        "Let agents book appointments on your Cal.com calendar during the call.",
     ),
 ]
 
@@ -2240,6 +2252,19 @@ def update_integration(key: str, status: str, config: dict, account_id: int) -> 
             conn.execute(
                 "UPDATE integrations SET status = ?, config_json = ? WHERE key = ? AND account_id = ?",
                 (status, json.dumps(config), key, account_id),
+            )
+    finally:
+        conn.close()
+
+
+def touch_integration_sync(account_id: int, key: str) -> None:
+    """Stamp last_sync = now after a successful delivery to this integration."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE integrations SET last_sync = {_NOW} WHERE key = ? AND account_id = ?",
+                (key, account_id),
             )
     finally:
         conn.close()

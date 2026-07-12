@@ -208,6 +208,27 @@ def get_webhook_url() -> str | None:
         conn.close()
 
 
+def get_delivery_integrations(account_id: int | None) -> list[dict]:
+    """This tenant's connected lead-delivery integrations (Slack/Sheets/
+    WhatsApp/CRM), account-scoped, as [{key, config}]. Empty on any error —
+    integration delivery is best-effort and must never break a live call."""
+    if account_id is None:
+        return []
+    conn = dbconn.connect()
+    try:
+        rows = conn.execute(
+            "SELECT key, config_json FROM integrations "
+            "WHERE account_id = ? AND status = 'connected' "
+            "AND key IN ('webhook', 'slack', 'whatsapp', 'sheets')",
+            (account_id,),
+        ).fetchall()
+        return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
+    except psycopg.Error:
+        return []
+    finally:
+        conn.close()
+
+
 def save_call(record: dict) -> None:
     """Persist one completed call. `record` keys:
 

@@ -32,6 +32,53 @@ async def _post_webhook(payload: dict) -> None:
         logger.warning("CRM webhook post failed", exc_info=True)
 
 
+def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | None:
+    """(url, json_body) for one delivery integration, or None to skip. Mirrors
+    the backend integrations_dispatch shapes so a Slack test-send and a live
+    call produce the same message."""
+    url = (config.get("url") or "").strip()
+    if not url:
+        return None
+    name = lead.get("name") or "Unknown caller"
+    if key == "slack":
+        line = " · ".join(str(x) for x in [name, lead.get("phone"), lead.get("company"), lead.get("use_case")] if x)
+        return url, {"text": f":telephone_receiver: *New qualified lead* — {line}"}
+    if key == "whatsapp":
+        return url, {
+            "to": lead.get("phone", ""),
+            "message": config.get("template") or f"Hi {name}, thanks for your call. We'll follow up shortly.",
+        }
+    return url, dict(lead)  # webhook + sheets: full lead JSON
+
+
+async def _fan_out_integrations(context: RunContext, lead: dict) -> None:
+    """Deliver a captured lead to every connected integration for this tenant.
+    Best-effort and heavily guarded — never lets a bad integration disturb the
+    live call. The per-agent CRM webhook (_post_webhook) still fires separately."""
+    try:
+        account_id = (context.userdata or {}).get("account_id")
+        integrations = db.get_delivery_integrations(account_id)
+    except Exception:
+        return
+    if not integrations:
+        return
+    try:
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(timeout=timeout) as http:
+            for integ in integrations:
+                shaped = _integration_body(integ["key"], integ.get("config") or {}, lead)
+                if shaped is None:
+                    continue
+                url, body = shaped
+                try:
+                    await http.post(url, json=body)
+                    logger.info("delivered lead to %s integration", integ["key"])
+                except Exception:
+                    logger.warning("integration %s delivery failed", integ["key"], exc_info=True)
+    except Exception:
+        logger.warning("integration fan-out failed", exc_info=True)
+
+
 async def _publish_event(context: RunContext, payload: dict) -> None:
     """Push a structured event to the browser client over the room data channel.
 
@@ -140,6 +187,7 @@ async def log_lead(
     }
     await _publish_event(context, event)
     await _post_webhook(event)
+    await _fan_out_integrations(context, event)
     return "Lead details recorded."
 
 
@@ -175,11 +223,13 @@ async def capture_platform_lead(
         "name": name,
         "company": company,
         "contact": contact,
+        "phone": contact,
         "use_case": use_case,
         "team_size": team_size,
     }
     await _publish_event(context, event)
     await _post_webhook(event)
+    await _fan_out_integrations(context, event)
     return "Lead details recorded."
 
 

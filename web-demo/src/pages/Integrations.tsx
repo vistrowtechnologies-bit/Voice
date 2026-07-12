@@ -1,23 +1,46 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
-import { fetchIntegrations, formatRelativeTime, updateIntegration } from '../lib/api'
+import { fetchIntegrations, formatRelativeTime, testIntegration, updateIntegration } from '../lib/api'
 import type { Integration } from '../lib/types'
+import { hasRole, useAuth } from '../lib/auth'
 
 const ICONS: Record<string, string> = {
   webhook: 'webhook',
-  calcom: 'event_available',
+  slack: 'forum',
+  whatsapp: 'chat',
   sheets: 'table_chart',
+  calcom: 'event_available',
 }
 
-// Only the webhook has a live implementation today (agent/tools.py posts
-// lead events to it); the others are placeholders until they're built.
-const IMPLEMENTED = new Set(['webhook'])
+// Lead-delivery integrations — a qualified lead is POSTed to each connected
+// one when a call captures it (agent/tools.py fan-out) and they support a
+// "Send test" from here. calcom is a mid-call booking action, not a delivery
+// target, so it stays "coming soon" on this page.
+const DELIVERY = new Set(['webhook', 'slack', 'whatsapp', 'sheets'])
+
+const URL_PLACEHOLDER: Record<string, string> = {
+  webhook: 'https://your-crm.example.com/webhook',
+  slack: 'https://hooks.slack.com/services/T000/B000/XXXX',
+  whatsapp: 'https://your-provider.example.com/whatsapp/send',
+  sheets: 'https://script.google.com/macros/s/…/exec',
+}
+
+const CONNECT_HINT: Record<string, string> = {
+  webhook: 'Every qualified lead POSTs to this URL as JSON in real time.',
+  slack: 'Paste a Slack Incoming Webhook URL — you’ll get a message per qualified lead.',
+  whatsapp: 'Your provider’s send endpoint receives { to, message } per lead.',
+  sheets: 'Paste a Google Apps Script web-app URL that appends the lead JSON as a row.',
+}
 
 export function Integrations() {
+  const { user } = useAuth()
+  const canManage = hasRole(user, 'admin')
   const [integrations, setIntegrations] = useState<Integration[]>([])
   const [configuring, setConfiguring] = useState<string | null>(null)
   const [url, setUrl] = useState('')
+  const [testing, setTesting] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<Record<string, string>>({})
 
   const reload = () => fetchIntegrations().then(setIntegrations).catch(() => setIntegrations([]))
 
@@ -38,6 +61,21 @@ export function Integrations() {
   const handleDisconnect = async (key: string) => {
     await updateIntegration(key, 'not_connected', {})
     reload()
+  }
+
+  const handleTest = async (key: string) => {
+    setTesting(key)
+    setTestResult((r) => ({ ...r, [key]: '' }))
+    try {
+      const res = await testIntegration(key)
+      setTestResult((r) => ({ ...r, [key]: res.ok ? 'Test lead delivered ✓' : `Failed: ${res.detail}` }))
+      reload()
+    } catch {
+      setTestResult((r) => ({ ...r, [key]: 'Test failed' }))
+    } finally {
+      setTesting(null)
+      setTimeout(() => setTestResult((r) => ({ ...r, [key]: '' })), 5000)
+    }
   }
 
   return (
@@ -84,12 +122,18 @@ export function Integrations() {
                 <InfoRow label="Last Sync" value={integration.lastSync ? formatRelativeTime(integration.lastSync) : '—'} />
               </dl>
 
+              {testResult[integration.key] && (
+                <p className={`mb-2 text-[11px] font-semibold ${testResult[integration.key].includes('✓') ? 'text-success' : 'text-destructive'}`}>
+                  {testResult[integration.key]}
+                </p>
+              )}
+
               {configuring === integration.key ? (
                 <div className="flex flex-col gap-2">
                   <input
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://your-crm.example.com/webhook"
+                    placeholder={URL_PLACEHOLDER[integration.key] ?? 'https://…'}
                     className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
                   />
                   <div className="flex gap-2">
@@ -100,19 +144,31 @@ export function Integrations() {
                       Save &amp; Connect
                     </button>
                   </div>
-                  <p className="text-[11px] text-text-muted">
-                    Every qualified lead and booked site visit will POST to this URL as JSON in real time.
-                  </p>
+                  <p className="text-[11px] text-text-muted">{CONNECT_HINT[integration.key] ?? ''}</p>
                 </div>
+              ) : !canManage ? (
+                <p className="mt-auto text-center text-[11px] text-text-muted">Admin access required to configure</p>
               ) : integration.status === 'connected' ? (
-                <button
-                  onClick={() => handleDisconnect(integration.key)}
-                  className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-destructive/40 py-2 text-xs font-bold text-destructive hover:bg-destructive/10"
-                >
-                  <Icon name="link_off" className="text-[15px]" />
-                  Disconnect
-                </button>
-              ) : IMPLEMENTED.has(integration.key) ? (
+                <div className="mt-auto flex gap-2">
+                  {DELIVERY.has(integration.key) && (
+                    <button
+                      onClick={() => handleTest(integration.key)}
+                      disabled={testing === integration.key}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cyan/40 py-2 text-xs font-bold text-cyan hover:bg-cyan/10 disabled:opacity-50"
+                    >
+                      <Icon name="send" className="text-[15px]" />
+                      {testing === integration.key ? 'Sending…' : 'Send test'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDisconnect(integration.key)}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-destructive/40 py-2 text-xs font-bold text-destructive hover:bg-destructive/10"
+                  >
+                    <Icon name="link_off" className="text-[15px]" />
+                    Disconnect
+                  </button>
+                </div>
+              ) : DELIVERY.has(integration.key) ? (
                 <button
                   onClick={() => setConfiguring(integration.key)}
                   className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-cyan/40 py-2 text-xs font-bold text-cyan hover:bg-cyan/10"

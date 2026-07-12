@@ -11,6 +11,7 @@ import auth
 import calls_db
 import campaign_dialer
 import email_sender
+import integrations_dispatch
 import kb_crawl
 import kb_extract
 import livekit_sip
@@ -1414,9 +1415,15 @@ def list_integrations(user: dict = Depends(current_user)) -> list[dict]:
 
 
 @app.patch("/integrations/{key}")
-def update_integration(key: str, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def update_integration(key: str, data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
     calls_db.update_integration(key, data.get("status", "not_connected"), data.get("config", {}), user["account_id"])
     return {"ok": True}
+
+
+@app.post("/integrations/{key}/test")
+def test_integration(key: str, user: dict = Depends(require_role("admin"))) -> dict:
+    ok, detail = integrations_dispatch.test_integration(user["account_id"], key)
+    return {"ok": ok, "detail": detail}
 
 
 # ----------------------------------------------------- telephony (EnableX)
