@@ -148,6 +148,117 @@ async def book_site_visit(
     return f"Site visit booked for {lead_name} on {date} at {time}."
 
 
+async def _calendar_request(context: RunContext, payload: dict) -> dict | None:
+    """POST to the tenant's connected Google-Calendar Apps Script web app.
+    Returns the parsed JSON, or None if no calendar is connected / the call
+    fails — callers turn None into a graceful spoken fallback."""
+    account_id = (context.userdata or {}).get("account_id")
+    url = db.get_calendar_url(account_id)
+    if not url:
+        return None
+    try:
+        timeout = aiohttp.ClientTimeout(total=8)
+        async with aiohttp.ClientSession(timeout=timeout) as http:
+            async with http.post(url, json=payload) as resp:
+                return await resp.json(content_type=None)
+    except Exception:
+        logger.warning("calendar request failed", exc_info=True)
+        return None
+
+
+@function_tool
+async def check_calendar_availability(context: RunContext, date: str, duration_minutes: int = 30) -> str:
+    """Check real open appointment slots on the business's calendar for a date.
+    Call this before offering times so you only offer slots that are actually
+    free. Works for any business (clinic, salon, property visit, consultation).
+
+    Args:
+        date: The date to check, in YYYY-MM-DD format.
+        duration_minutes: How long the appointment needs to be. Default 30.
+    """
+    logger.info("checking calendar availability for %s (%smin)", date, duration_minutes)
+    result = await _calendar_request(
+        context, {"action": "check", "date": date, "duration": duration_minutes}
+    )
+    if result is None:
+        # No calendar connected — don't invent slots; hand off honestly.
+        return (
+            "No live calendar is connected, so I can't confirm exact open times. "
+            "Note the caller's preferred date and time and tell them the team will confirm."
+        )
+    slots = result.get("slots") or []
+    if not slots:
+        return f"No open slots on {date}. Offer the caller a different day."
+    return f"Open slots on {date}: {', '.join(slots)}. Offer these to the caller."
+
+
+@function_tool
+async def book_appointment(
+    context: RunContext,
+    date: str,
+    time: str,
+    name: str,
+    phone: str,
+    purpose: str = "",
+    duration_minutes: int = 30,
+) -> str:
+    """Book a confirmed appointment on the business's calendar for any business
+    (clinic visit, consultation, property visit, service booking). Only call
+    this after confirming the slot is free with check_calendar_availability and
+    the caller has agreed to a specific time.
+
+    Args:
+        date: Appointment date in YYYY-MM-DD format.
+        time: Appointment time, 24-hour "HH:MM", e.g. "14:30".
+        name: The customer's name.
+        phone: The customer's phone number.
+        purpose: What the appointment is for, e.g. "dental cleaning", "site visit".
+        duration_minutes: Appointment length in minutes. Default 30.
+    """
+    logger.info("booking appointment: %s (%s) %s %s for %s", name, phone, date, time, purpose)
+    lead_data = (context.userdata or {}).get("lead_data")
+    if lead_data is not None:
+        lead_data.setdefault("name", name)
+        lead_data.setdefault("phone", phone)
+        lead_data["appointment"] = {"date": date, "time": time, "purpose": purpose}
+    result = await _calendar_request(
+        context,
+        {
+            "action": "book",
+            "date": date,
+            "time": time,
+            "duration": duration_minutes,
+            "name": name,
+            "phone": phone,
+            "purpose": purpose,
+        },
+    )
+    event = {
+        "type": "appointment_booked",
+        "date": date,
+        "time": time,
+        "purpose": purpose,
+        "name": name,
+        "phone": phone,
+    }
+    await _publish_event(context, event)
+    await _post_webhook(event)
+    await _fan_out_integrations(context, event)
+    if result is None:
+        # Recorded on the lead + pushed to integrations, but no calendar to
+        # write to — be honest rather than claim a calendar slot exists.
+        return (
+            f"Noted the appointment request for {name} on {date} at {time}. "
+            "Tell the caller the team will confirm it shortly."
+        )
+    if not result.get("ok", True):
+        return (
+            f"That slot couldn't be booked ({result.get('error', 'unavailable')}). "
+            "Offer the caller another time."
+        )
+    return f"Appointment confirmed for {name} on {date} at {time}. Confirm it warmly to the caller."
+
+
 @function_tool
 async def log_lead(
     context: RunContext,

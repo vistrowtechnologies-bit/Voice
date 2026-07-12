@@ -19,10 +19,12 @@ from prompts.platform_assistant import build_platform_assistant_prompt
 from prompts.voice_style import VOICE_STYLE_PROMPT
 from tools import (
     TAVILY_API_KEY,
+    book_appointment,
     book_site_visit,
     build_custom_function_tools,
     capture_platform_lead,
     check_availability,
+    check_calendar_availability,
     end_call,
     log_lead,
     transfer_call,
@@ -235,7 +237,14 @@ def _build_tools(config: dict) -> list:
     (they're how the call does its job); enabled_functions only gates the
     optional built-ins (end_call, transfer_call). Custom webhook tools and a
     transfer tool (only if a transfer number is set) are appended."""
-    tools = [check_availability, book_site_visit, log_lead, capture_platform_lead]
+    tools = [
+        check_availability,
+        book_site_visit,
+        check_calendar_availability,
+        book_appointment,
+        log_lead,
+        capture_platform_lead,
+    ]
     enabled_raw = (config.get("enabled_functions") or "").strip()
     enabled = {e.strip() for e in enabled_raw.split(",") if e.strip()} if enabled_raw else None
 
@@ -347,9 +356,14 @@ class RealEstateAgent(Agent):
             "use \"not applicable\" for any of these that don't fit this business), call "
             "log_lead to record what you've learned so far — call it again with the "
             "fuller picture if more comes up later in the same call, don't wait until "
-            "every field is known. If this is specifically a real-estate business and "
-            "the caller wants to see a property in person, use check_availability to "
-            "find open slots, then book_site_visit to confirm one.\n"
+            "every field is known.\n"
+            "- Booking an appointment (any business — clinic, salon, consultation, "
+            "service visit): when the caller wants to book a time, first call "
+            "check_calendar_availability for their preferred date to see real open "
+            "slots, offer those slots, and once they pick one call book_appointment to "
+            "confirm it. Never promise a specific slot before check_calendar_availability "
+            "confirms it's free. (Real-estate site visits can use the older "
+            "check_availability/book_site_visit pair instead.)\n"
             "- Vistrow Voice platform-assistant calls (explaining Vistrow Voice itself "
             "to a prospective customer): once you have the caller's name plus at least "
             "one more of company/contact/use case/team size, call "

@@ -10,8 +10,13 @@ const ICONS: Record<string, string> = {
   slack: 'forum',
   whatsapp: 'chat',
   sheets: 'table_chart',
+  gcal: 'calendar_month',
   calcom: 'event_available',
 }
+
+// Integrations that connect with a pasted URL (delivery targets + the Google
+// Calendar Apps Script bridge). calcom stays "coming soon" until its API build.
+const CONNECTABLE = new Set(['webhook', 'slack', 'whatsapp', 'sheets', 'gcal'])
 
 // Lead-delivery integrations — a qualified lead is POSTed to each connected
 // one when a call captures it (agent/tools.py fan-out) and they support a
@@ -24,6 +29,7 @@ const URL_PLACEHOLDER: Record<string, string> = {
   slack: 'https://hooks.slack.com/services/T000/B000/XXXX',
   whatsapp: 'https://your-provider.example.com/whatsapp/send',
   sheets: 'https://script.google.com/macros/s/…/exec',
+  gcal: 'https://script.google.com/macros/s/…/exec',
 }
 
 const CONNECT_HINT: Record<string, string> = {
@@ -31,6 +37,7 @@ const CONNECT_HINT: Record<string, string> = {
   slack: 'Paste a Slack Incoming Webhook URL — you’ll get a message per qualified lead.',
   whatsapp: 'Your provider’s send endpoint receives { to, message } per lead.',
   sheets: 'Paste a Google Apps Script web-app URL that appends the lead JSON as a row.',
+  gcal: 'Deploy the script below as a Web App, then paste its /exec URL. Agents will check real open slots and book on your Google Calendar during calls.',
 }
 
 export function Integrations() {
@@ -145,6 +152,16 @@ export function Integrations() {
                     </button>
                   </div>
                   <p className="text-[11px] text-text-muted">{CONNECT_HINT[integration.key] ?? ''}</p>
+                  {integration.key === 'gcal' && (
+                    <a
+                      href="/api/integrations/google-calendar-script.gs"
+                      download
+                      className="flex items-center gap-1 text-[11px] font-semibold text-cyan hover:underline"
+                    >
+                      <Icon name="download" className="text-[14px]" />
+                      Download the Google Calendar script
+                    </a>
+                  )}
                 </div>
               ) : !canManage ? (
                 <p className="mt-auto text-center text-[11px] text-text-muted">Admin access required to configure</p>
@@ -168,7 +185,7 @@ export function Integrations() {
                     Disconnect
                   </button>
                 </div>
-              ) : DELIVERY.has(integration.key) ? (
+              ) : CONNECTABLE.has(integration.key) ? (
                 <button
                   onClick={() => setConfiguring(integration.key)}
                   className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-cyan/40 py-2 text-xs font-bold text-cyan hover:bg-cyan/10"

@@ -425,6 +425,12 @@ _SEED_INTEGRATIONS = [
         "Append every qualified lead as a row via a Google Apps Script web-app URL (no OAuth).",
     ),
     (
+        "gcal",
+        "Google Calendar",
+        "Scheduling & Booking",
+        "Let agents check real open slots and book appointments on your Google Calendar during the call — via a Google Apps Script web-app URL (no OAuth).",
+    ),
+    (
         "calcom",
         "Cal.com",
         "Scheduling & Booking",

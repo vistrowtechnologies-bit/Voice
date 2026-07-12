@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 WIDGET_JS_PATH = Path(__file__).resolve().parent / "static" / "widget.js"
 WORDPRESS_PLUGIN_ZIP_PATH = Path(__file__).resolve().parent / "static" / "vistrow-voice-widget.zip"
+GCAL_APPSSCRIPT_PATH = Path(__file__).resolve().parent / "static" / "google-calendar-appsscript.gs"
 AGENT_ORB_VIDEO_PATH = Path(__file__).resolve().parent / "static" / "agent-orb.mp4"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -1654,6 +1655,17 @@ def widget_wordpress_plugin() -> FileResponse:
         WORDPRESS_PLUGIN_ZIP_PATH,
         media_type="application/zip",
         filename="vistrow-voice-widget.zip",
+    )
+
+
+@app.get("/integrations/google-calendar-script.gs")
+def google_calendar_script() -> FileResponse:
+    """The Apps Script a tenant pastes into script.google.com and deploys as a
+    Web App, then connects its /exec URL as the Google Calendar integration."""
+    return FileResponse(
+        GCAL_APPSSCRIPT_PATH,
+        media_type="text/plain; charset=utf-8",
+        filename="vistrow-google-calendar.gs",
     )
 
 

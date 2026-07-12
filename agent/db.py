@@ -208,6 +208,28 @@ def get_webhook_url() -> str | None:
         conn.close()
 
 
+def get_calendar_url(account_id: int | None) -> str | None:
+    """The connected Google-Calendar (Apps Script web-app) URL for this tenant,
+    or None. Account-scoped; None on any error so a booking tool degrades to a
+    graceful 'I'll have the team confirm' instead of crashing the call."""
+    if account_id is None:
+        return None
+    conn = dbconn.connect()
+    try:
+        row = conn.execute(
+            "SELECT config_json FROM integrations "
+            "WHERE account_id = ? AND key = 'gcal' AND status = 'connected'",
+            (account_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return json.loads(row["config_json"] or "{}").get("url") or None
+    except psycopg.Error:
+        return None
+    finally:
+        conn.close()
+
+
 def get_delivery_integrations(account_id: int | None) -> list[dict]:
     """This tenant's connected lead-delivery integrations (Slack/Sheets/
     WhatsApp/CRM), account-scoped, as [{key, config}]. Empty on any error —
