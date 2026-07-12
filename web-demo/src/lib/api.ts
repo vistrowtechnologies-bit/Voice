@@ -145,9 +145,10 @@ export const fetchInboundRoutes = () => get<InboundRoute[]>('/inbound-routes')
 export const createInboundRoute = (data: Record<string, unknown>) =>
   send('POST', '/inbound-routes', data)
 export const fetchCampaigns = () => get<Campaign[]>('/campaigns')
-export const createCampaign = (data: Record<string, unknown>) => send('POST', '/campaigns', data)
+export const fetchCampaign = (id: number) => get<Campaign>(`/campaigns/${id}`)
+export const createCampaign = (data: Record<string, unknown>) => send<Campaign>('POST', '/campaigns', data)
 export const updateCampaignStatus = (id: number, status: string) =>
-  send('PATCH', `/campaigns/${id}`, { status })
+  send<Campaign>('PATCH', `/campaigns/${id}`, { status })
 
 // ------------------------------------------------------------ compliance
 
