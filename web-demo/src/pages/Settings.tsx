@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import {
@@ -41,7 +42,10 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 
 export function Settings() {
   const { user } = useAuth()
-  const [tab, setTab] = useState<Tab>('general')
+  const [searchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const initialTab = TABS.some((t) => t.id === requestedTab) ? (requestedTab as Tab) : 'general'
+  const [tab, setTab] = useState<Tab>(initialTab)
 
   return (
     <DashboardLayout>

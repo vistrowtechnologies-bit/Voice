@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { fetchBilling } from '../lib/api'
@@ -64,14 +64,92 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
   },
 ]
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const workspace = user?.accountName || BRAND.defaultWorkspace
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onClickOutside = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [open])
+
+  const go = (to: string) => {
+    setOpen(false)
+    onNavigate?.()
+    navigate(to)
+  }
   const handleLogout = async () => {
+    setOpen(false)
     await logout()
     navigate('/login', { replace: true })
   }
+
+  return (
+    <div ref={rootRef} className="relative border-t border-border pt-3">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-surface-high"
+      >
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
+          {initials(workspace)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">{workspace}</p>
+          <p className="truncate text-[11px] text-text-muted">{user?.name || 'Admin'}</p>
+        </div>
+        <Icon name={open ? 'expand_more' : 'expand_less'} className="text-[18px] text-text-muted" />
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full left-0 z-20 mb-2 w-full overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
+              {initials(workspace)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{workspace}</p>
+            </div>
+          </div>
+          <div className="flex flex-col py-1">
+            <button
+              onClick={() => go('/dashboard/settings?tab=profile')}
+              className="flex items-center gap-2.5 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-surface-high"
+            >
+              <Icon name="person" className="text-[17px] text-text-muted" />
+              Profile
+            </button>
+            <button
+              onClick={() => go('/dashboard/settings')}
+              className="flex items-center gap-2.5 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-surface-high"
+            >
+              <Icon name="settings" className="text-[17px] text-text-muted" />
+              Settings
+            </button>
+          </div>
+          <div className="border-t border-border py-1">
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10"
+            >
+              <Icon name="logout" className="text-[17px]" />
+              Log out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const { user } = useAuth()
   return (
     <>
       <div className="mb-6 flex items-center gap-2 px-2">
@@ -122,23 +200,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           Admin panel
         </NavLink>
       )}
-      <div className="flex items-center gap-2 border-t border-border pt-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
-          {initials(workspace)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{workspace}</p>
-          <p className="truncate text-[11px] text-text-muted">{user?.name || 'Admin'}</p>
-        </div>
-        <button
-          onClick={handleLogout}
-          aria-label="Sign out"
-          title="Sign out"
-          className="text-text-muted transition-colors hover:text-destructive"
-        >
-          <Icon name="logout" className="text-[18px]" />
-        </button>
-      </div>
+      <AccountMenu onNavigate={onNavigate} />
     </>
   )
 }
