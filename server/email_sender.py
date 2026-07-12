@@ -54,7 +54,13 @@ def _send_resend(api_key: str, to: str, subject: str, html: str) -> bool:
     req = urllib.request.Request(
         "https://api.resend.com/emails",
         data=payload,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            # Cloudflare (in front of api.resend.com) blocks the default
+            # "Python-urllib/3.x" UA as a bot signature (error code 1010).
+            "User-Agent": "Vistrow-Voice/1.0",
+        },
         method="POST",
     )
     try:
