@@ -63,6 +63,10 @@ def _send_resend(api_key: str, to: str, subject: str, html: str) -> bool:
         if ok:
             logger.info("sent email to %s via Resend: %r", to, subject)
         return ok
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        logger.warning("Resend send failed for %s: HTTP %s %s", to, e.code, body)
+        return False
     except (urllib.error.URLError, TimeoutError):
         logger.warning("Resend send failed for %s", to, exc_info=True)
         return False
