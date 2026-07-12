@@ -574,6 +574,20 @@ def init_tables() -> None:
                 ("completed_at", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS {column} {coltype}")
+            # Refresh the integration catalog for EVERY existing tenant (the
+            # per-account seed only runs at signup). Inserts newly-added
+            # integrations (Slack/WhatsApp) for accounts that lack them and
+            # refreshes name/category/description on the seed rows — so old
+            # rows like "ArthaleLeads webhook" pick up current branding —
+            # without disturbing each tenant's status/config/last_sync.
+            for skey, sname, scategory, sdescription in _SEED_INTEGRATIONS:
+                conn.execute(
+                    "INSERT INTO integrations (account_id, key, name, category, description) "
+                    "SELECT a.id, ?, ?, ?, ? FROM accounts a "
+                    "ON CONFLICT (account_id, key) DO UPDATE SET "
+                    "name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description",
+                    (skey, sname, scategory, sdescription),
+                )
             # Self-healing bootstrap: whichever account owns the platform
             # operator's own login gets is_platform_owner — runs on every
             # boot (idempotent) so it applies whether that account was
