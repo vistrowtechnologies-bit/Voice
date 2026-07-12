@@ -105,7 +105,7 @@ def platform_overview(days: int = 30) -> dict:
         signup_series = [
             {"day": r["day"], "count": r["c"]}
             for r in conn.execute(
-                f"""SELECT created_at::date::text day, COUNT(*) c FROM accounts
+                f"""SELECT created_at::date::text AS day, COUNT(*) c FROM accounts
                     WHERE created_at::date >= (CURRENT_DATE - INTERVAL '{days} days')::date
                     GROUP BY day ORDER BY day"""
             ).fetchall()
@@ -395,7 +395,7 @@ def analytics(days: int = 30) -> dict:
         signup_series = [
             {"day": r["day"], "count": r["c"]}
             for r in conn.execute(
-                f"""SELECT created_at::date::text day, COUNT(*) c FROM accounts
+                f"""SELECT created_at::date::text AS day, COUNT(*) c FROM accounts
                     WHERE created_at::date >= (CURRENT_DATE - INTERVAL '{days} days')::date
                     GROUP BY day ORDER BY day"""
             ).fetchall()
@@ -403,7 +403,7 @@ def analytics(days: int = 30) -> dict:
         call_series = [
             {"day": r["day"], "calls": r["c"], "minutes": round(r["m"] or 0, 0)}
             for r in conn.execute(
-                f"""SELECT started_at::date::text day, COUNT(*) c, COALESCE(SUM(duration_seconds),0)/60.0 m FROM calls
+                f"""SELECT started_at::date::text AS day, COUNT(*) c, COALESCE(SUM(duration_seconds),0)/60.0 m FROM calls
                     WHERE started_at::date >= (CURRENT_DATE - INTERVAL '{days} days')::date
                     GROUP BY day ORDER BY day"""
             ).fetchall()
