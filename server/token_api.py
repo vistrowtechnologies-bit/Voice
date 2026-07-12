@@ -9,6 +9,7 @@ from pathlib import Path
 import admin_db
 import auth
 import calls_db
+import campaign_dialer
 import email_sender
 import kb_crawl
 import kb_extract
@@ -32,6 +33,9 @@ load_dotenv()
 
 app = FastAPI()
 calls_db.init_tables()
+# Background worker that places due campaign calls (compliance-gated). Daemon
+# thread, idempotent start — no-op until a campaign is set 'running'.
+campaign_dialer.start_dialer()
 
 # Cookie is Secure in production (HTTPS) and not in local http dev — set
 # AUTH_COOKIE_SECURE=1 on the deployment. In prod the browser hits the app's
@@ -1296,18 +1300,108 @@ def create_inbound_route(data: dict = Body(...), user: dict = Depends(current_us
 
 @app.get("/campaigns")
 def list_campaigns(user: dict = Depends(current_user)) -> list[dict]:
-    return calls_db.list_campaigns(user["account_id"])
+    return calls_db.list_campaigns_with_stats(user["account_id"])
+
+
+@app.get("/campaigns/{campaign_id}")
+def get_campaign(campaign_id: int, user: dict = Depends(current_user)) -> dict:
+    detail = calls_db.campaign_detail(campaign_id, user["account_id"])
+    if detail is None:
+        raise HTTPException(404, "Campaign not found")
+    return detail
+
+
+_CAMPAIGN_STATES = {"draft", "running", "paused", "completed", "cancelled"}
 
 
 @app.post("/campaigns")
-def create_campaign(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
-    calls_db.create_campaign(data, user["account_id"])
-    return {"ok": True}
+def create_campaign(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
+    # from_number must be one of this tenant's own numbers — the campaign dials
+    # from it and its assigned agent answers. Reject early with a clear message
+    # rather than letting the dialer silently pause a mis-configured campaign.
+    from_number = (data.get("fromNumber") or "").strip()
+    if from_number:
+        owned = {n["number"] for n in calls_db.list_phone_numbers(user["account_id"])}
+        if from_number not in owned:
+            raise HTTPException(400, "That from-number isn't one of your numbers")
+    campaign_id = calls_db.create_campaign(data, user["account_id"])
+    detail = calls_db.campaign_detail(campaign_id, user["account_id"])
+    if detail is not None and detail["stats"]["total"] == 0:
+        # An empty queue is almost always a wrong tag / empty upload — tell the
+        # operator instead of creating a campaign that can never dial anyone.
+        logger.info("campaign %s created with no contacts", campaign_id)
+    return detail or {"id": campaign_id}
 
 
 @app.patch("/campaigns/{campaign_id}")
-def update_campaign(campaign_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
-    calls_db.update_campaign_status(campaign_id, data.get("status", "paused"), user["account_id"])
+def update_campaign(campaign_id: int, data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
+    status = data.get("status", "paused")
+    if status not in _CAMPAIGN_STATES:
+        raise HTTPException(400, "Invalid campaign status")
+    calls_db.set_campaign_status(campaign_id, status, user["account_id"])
+    detail = calls_db.campaign_detail(campaign_id, user["account_id"])
+    if detail is None:
+        raise HTTPException(404, "Campaign not found")
+    return detail
+
+
+# --------------------------------------------------------- compliance
+#
+# DNC registry + calling-window/consent/retention config. Read is open to any
+# authenticated role (viewers should see the rules they operate under); writes
+# are admin+ because getting compliance wrong is a legal, not cosmetic, risk.
+
+
+@app.get("/compliance/settings")
+def get_compliance_settings(user: dict = Depends(current_user)) -> dict:
+    # Opportunistic retention enforcement — purge on read so DPDP retention is
+    # actually applied without a standalone scheduler (cheap, tenant-scoped,
+    # no-op when retention is unlimited).
+    try:
+        calls_db.purge_expired_calls(user["account_id"])
+    except Exception:
+        logger.exception("retention purge failed for account %s", user["account_id"])
+    return calls_db.get_compliance(user["account_id"])
+
+
+@app.patch("/compliance/settings")
+def update_compliance_settings(data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
+    return calls_db.save_compliance(user["account_id"], data)
+
+
+@app.get("/compliance/dnc")
+def list_dnc(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_dnc(user["account_id"])
+
+
+@app.post("/compliance/dnc")
+def add_dnc(data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
+    phone = (data.get("phone") or "").strip()
+    if not phone:
+        raise HTTPException(400, "A phone number is required")
+    added = calls_db.add_dnc(user["account_id"], phone, reason=(data.get("reason") or "").strip())
+    return {"ok": True, "added": added}
+
+
+@app.post("/compliance/dnc/bulk")
+def bulk_add_dnc(data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
+    # Accepts a raw pasted/uploaded blob — one number per line or comma-
+    # separated — and reports how many were newly added vs already present.
+    raw = data.get("numbers") or ""
+    if isinstance(raw, list):
+        candidates = [str(x) for x in raw]
+    else:
+        candidates = [chunk for line in str(raw).splitlines() for chunk in line.split(",")]
+    phones = [p.strip() for p in candidates if p.strip()]
+    if not phones:
+        raise HTTPException(400, "No phone numbers found to import")
+    added = calls_db.bulk_add_dnc(user["account_id"], phones)
+    return {"ok": True, "added": added, "total": len(phones)}
+
+
+@app.delete("/compliance/dnc/{dnc_id}")
+def remove_dnc(dnc_id: int, user: dict = Depends(require_role("admin"))) -> dict:
+    calls_db.remove_dnc(user["account_id"], dnc_id)
     return {"ok": True}
 
 

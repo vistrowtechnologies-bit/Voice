@@ -58,6 +58,7 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
     title: 'Operations',
     items: [
       { to: '/dashboard/numbers', label: 'Phone Numbers', icon: 'dialpad' },
+      { to: '/dashboard/compliance', label: 'Compliance', icon: 'verified_user' },
       { to: '/dashboard/billing', label: 'Billing', icon: 'credit_card' },
       { to: '/dashboard/settings', label: 'Settings', icon: 'settings' },
     ],

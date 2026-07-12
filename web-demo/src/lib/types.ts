@@ -220,16 +220,43 @@ export interface InboundRoute {
   created_at: string
 }
 
+export interface CampaignStats {
+  pending: number
+  calling: number
+  done: number
+  no_answer: number
+  failed: number
+  blocked: number
+  total: number
+}
+
+export interface CampaignContact {
+  id: number
+  name: string
+  phone: string
+  status: string
+  attempts: number
+  last_attempt_at: string | null
+  outcome: string
+  call_id: number | null
+}
+
 export interface Campaign {
   id: number
   name: string
   agent_id: number | null
+  from_number: string
   contact_tag: string
   scheduled_date: string | null
-  window_start: string | null
-  window_end: string | null
+  max_attempts: number
+  retry_minutes: number
+  concurrency: number
   status: string
+  started_at: string | null
+  completed_at: string | null
   created_at: string
+  stats: CampaignStats
+  contacts?: CampaignContact[]
 }
 
 export interface Integration {

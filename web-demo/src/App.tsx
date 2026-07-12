@@ -39,6 +39,7 @@ import { Contacts } from './pages/Contacts'
 import { Integrations } from './pages/Integrations'
 import { PhoneNumbers } from './pages/PhoneNumbers'
 import { Billing } from './pages/Billing'
+import { Compliance } from './pages/Compliance'
 import { LeadDetail } from './pages/LeadDetail'
 import { WebsiteWidget } from './pages/WebsiteWidget'
 import { Settings } from './pages/Settings'
@@ -88,6 +89,7 @@ function App() {
         <Route path="/dashboard/contacts" element={guard(<Contacts />)} />
         <Route path="/dashboard/integrations" element={guard(<Integrations />)} />
         <Route path="/dashboard/numbers" element={guard(<PhoneNumbers />)} />
+        <Route path="/dashboard/compliance" element={guard(<Compliance />)} />
         <Route path="/dashboard/website-widget" element={guard(<WebsiteWidget />)} />
         <Route path="/dashboard/billing" element={guard(<Billing />)} />
         <Route path="/dashboard/settings" element={guard(<Settings />)} />

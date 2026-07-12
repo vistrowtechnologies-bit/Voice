@@ -149,6 +149,36 @@ export const createCampaign = (data: Record<string, unknown>) => send('POST', '/
 export const updateCampaignStatus = (id: number, status: string) =>
   send('PATCH', `/campaigns/${id}`, { status })
 
+// ------------------------------------------------------------ compliance
+
+export interface ComplianceSettings {
+  enforce_window: boolean
+  window_start: string
+  window_end: string
+  active_days: string[]
+  timezone: string
+  honor_dnc: boolean
+  require_consent: boolean
+  record_calls: boolean
+  retention_days: number
+}
+export interface DncEntry {
+  id: number
+  phone: string
+  reason: string
+  source: string
+  created_at: string
+}
+export const fetchCompliance = () => get<ComplianceSettings>('/compliance/settings')
+export const updateCompliance = (data: Partial<ComplianceSettings>) =>
+  send<ComplianceSettings>('PATCH', '/compliance/settings', data)
+export const fetchDnc = () => get<DncEntry[]>('/compliance/dnc')
+export const addDnc = (phone: string, reason: string) =>
+  send<{ ok: boolean; added: boolean }>('POST', '/compliance/dnc', { phone, reason })
+export const bulkAddDnc = (numbers: string) =>
+  send<{ ok: boolean; added: number; total: number }>('POST', '/compliance/dnc/bulk', { numbers })
+export const removeDnc = (id: number) => send('DELETE', `/compliance/dnc/${id}`)
+
 // ---------------------------------------------------------- integrations
 
 export const fetchIntegrations = () => get<Integration[]>('/integrations')
