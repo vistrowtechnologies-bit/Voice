@@ -49,7 +49,7 @@ _PUBLIC_PATHS = {
     "/agent-orb.mp4",                  # widget avatar video
     "/telephony/enablex/inbound-event",  # EnableX inbound webhook (their server calls it)
 }
-_PUBLIC_PREFIXES = ("/auth/",)         # signup/login/logout/me handle their own logic
+_PUBLIC_PREFIXES = ("/auth/", "/invite/")  # signup/login/logout/me + invite-preview/accept handle their own logic
 
 
 @app.middleware("http")
@@ -101,6 +101,25 @@ def current_user(request: Request) -> dict:
     already rejected unauthenticated requests, so state is always populated on
     guarded routes."""
     return {"user_id": request.state.user_id, "account_id": request.state.account_id}
+
+
+def require_role(min_role: str):
+    """Dependency factory gating a route to `min_role` or higher, per
+    calls_db.ROLE_RANK (viewer < member < admin < owner). Looks the caller's
+    role up fresh on each request rather than trusting the session, since role can
+    change after the cookie was issued. A super-admin support session (imp
+    set) always passes — the platform owner never gets locked out of a
+    tenant's own team/billing screens while impersonating."""
+
+    def dep(request: Request, user: dict = Depends(current_user)) -> dict:
+        if getattr(request.state, "impersonator_id", None):
+            return user
+        full = calls_db.get_user_by_id(user["user_id"])
+        if full is None or calls_db.ROLE_RANK.get(full["role"], 0) < calls_db.ROLE_RANK[min_role]:
+            raise HTTPException(403, "You don't have permission to do this")
+        return user
+
+    return dep
 
 
 def require_platform_owner(request: Request) -> dict:
@@ -509,6 +528,42 @@ def auth_logout(response: Response) -> dict:
     return {"ok": True}
 
 
+@app.get("/invite/{token}")
+def get_invite(token: str) -> dict:
+    """Public preview so the accept page can greet the invitee by name/org
+    before asking them to set a password — no auth required, matches
+    /auth/reset-password's own token-in-URL pattern."""
+    invite = calls_db.get_invite_by_token(token)
+    if invite is None:
+        raise HTTPException(404, "This invite link is invalid or has expired")
+    return {
+        "email": invite["email"],
+        "name": invite["name"],
+        "role": invite["role"],
+        "accountName": invite["account_name"],
+    }
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str
+    password: str
+
+
+@app.post("/invite/accept")
+def accept_invite(req: AcceptInviteRequest, response: Response) -> dict:
+    if len(req.password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    invite = calls_db.get_invite_by_token(req.token)
+    if invite is None:
+        raise HTTPException(400, "This invite link is invalid or has expired")
+    if calls_db.email_exists(invite["email"]):
+        raise HTTPException(409, "An account with this email already exists — sign in instead")
+    result = calls_db.accept_invite(invite["id"], auth.hash_password(req.password))
+    _set_session_cookie(response, result["user_id"], result["account_id"])
+    calls_db.record_login(result["user_id"], "password")
+    return {"ok": True, "user": _me_payload(result["user_id"])}
+
+
 @app.get("/auth/me")
 def auth_me(request: Request) -> dict:
     session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
@@ -574,14 +629,88 @@ def list_api_keys(user: dict = Depends(current_user)) -> list[dict]:
 
 
 @app.post("/api-keys")
-def create_api_key(req: CreateApiKeyRequest, user: dict = Depends(current_user)) -> dict:
-    # Returns the full key exactly once; the client must copy it immediately.
+def create_api_key(req: CreateApiKeyRequest, user: dict = Depends(require_role("admin"))) -> dict:
+    # Full API access via a key is an admin-level grant. Returns the full key
+    # exactly once; the client must copy it immediately.
     return calls_db.create_api_key(user["account_id"], req.name)
 
 
 @app.delete("/api-keys/{key_id}")
-def delete_api_key(key_id: int, user: dict = Depends(current_user)) -> dict:
+def delete_api_key(key_id: int, user: dict = Depends(require_role("admin"))) -> dict:
     calls_db.delete_api_key(key_id, user["account_id"])
+    return {"ok": True}
+
+
+# -------------------------------------------------------------- team & invites
+
+
+class InviteMemberRequest(BaseModel):
+    email: str
+    name: str
+    role: str = "member"
+
+
+@app.get("/team/members")
+def team_members(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_team_members(user["account_id"])
+
+
+@app.get("/team/invites")
+def team_invites(user: dict = Depends(require_role("admin"))) -> list[dict]:
+    return calls_db.list_invites(user["account_id"])
+
+
+@app.post("/team/invite")
+def team_invite(req: InviteMemberRequest, request: Request, user: dict = Depends(require_role("admin"))) -> dict:
+    email = req.email.strip().lower()
+    name = req.name.strip()
+    role = req.role if req.role in ("admin", "member", "viewer") else "member"
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(400, "Enter a valid email address")
+    if not name:
+        raise HTTPException(400, "Name is required")
+    if calls_db.email_exists(email):
+        raise HTTPException(409, "A user with this email already exists")
+    inviter = calls_db.get_user_by_id(user["user_id"])
+    invite = calls_db.create_invite(user["account_id"], email, name, role, user["user_id"])
+    link = f"{_app_base_url(request)}/invite/{invite['token']}"
+    html = (
+        f"<p>Hi {name},</p>"
+        f"<p>{inviter['name']} invited you to join <strong>{inviter['account_name']}</strong> on "
+        f"Vistrow Voice as a <strong>{role}</strong>.</p>"
+        f'<p><a href="{link}">Accept invite</a> (valid for 7 days)</p>'
+    )
+    sent = email_sender.send_email(email, f"You're invited to join {inviter['account_name']} on Vistrow Voice", html)
+    if not sent:
+        logger.info("invite link for %s (email not configured): %s", email, link)
+    return {"ok": True, "emailSent": sent, "inviteLink": link}
+
+
+@app.post("/team/invites/{invite_id}/revoke")
+def team_revoke_invite(invite_id: int, user: dict = Depends(require_role("admin"))) -> dict:
+    calls_db.revoke_invite(user["account_id"], invite_id)
+    return {"ok": True}
+
+
+class UpdateMemberRoleRequest(BaseModel):
+    role: str
+
+
+@app.patch("/team/members/{member_id}")
+def team_update_role(member_id: int, req: UpdateMemberRoleRequest, user: dict = Depends(require_role("admin"))) -> dict:
+    try:
+        calls_db.update_member_role(user["account_id"], member_id, req.role)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
+
+
+@app.delete("/team/members/{member_id}")
+def team_remove_member(member_id: int, user: dict = Depends(require_role("admin"))) -> dict:
+    try:
+        calls_db.remove_team_member(user["account_id"], member_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     return {"ok": True}
 
 

@@ -28,6 +28,7 @@ import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
 import { ForgotPassword } from './pages/ForgotPassword'
 import { ResetPassword } from './pages/ResetPassword'
+import { InviteAccept } from './pages/InviteAccept'
 import { Dashboard } from './pages/Dashboard'
 import { Agents } from './pages/Agents'
 import { KnowledgeBasePage } from './pages/KnowledgeBasePage'
@@ -74,6 +75,7 @@ function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/invite/:token" element={<InviteAccept />} />
 
         {/* Auth-gated dashboard */}
         <Route path="/dashboard" element={guard(<Dashboard />)} />

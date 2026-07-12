@@ -70,3 +70,52 @@ export const apiRequestPasswordReset = (email: string) =>
   authFetch<{ ok: boolean }>('/auth/request-password-reset', { email })
 export const apiResetPassword = (token: string, password: string) =>
   authFetch<{ ok: boolean; user?: AuthUser }>('/auth/reset-password', { token, password })
+
+// --- team & invites ---------------------------------------------------
+
+// Mirrors calls_db.ROLE_RANK — the single client-side source of truth for
+// "can this role do that" UI gating (hide/disable, not the real enforcement,
+// which is server-side via require_role).
+export const ROLE_RANK: Record<string, number> = { viewer: 0, member: 1, admin: 2, owner: 3 }
+export const hasRole = (user: AuthUser | null, min: string) =>
+  !!user && (ROLE_RANK[user.role] ?? 0) >= ROLE_RANK[min]
+
+export interface TeamMember {
+  id: number
+  name: string
+  email: string
+  role: string
+  auth_provider: string | null
+  last_login_at: string | null
+  created_at: string
+}
+
+export interface PendingInvite {
+  id: number
+  email: string
+  name: string
+  role: string
+  status: string
+  created_at: string
+  expires_at: number
+}
+
+export interface InviteInfo {
+  email: string
+  name: string
+  role: string
+  accountName: string
+}
+
+export const apiTeamMembers = () => authFetch<TeamMember[]>('/team/members')
+export const apiTeamInvites = () => authFetch<PendingInvite[]>('/team/invites')
+export const apiInviteMember = (data: { email: string; name: string; role: string }) =>
+  authFetch<{ ok: boolean; emailSent: boolean; inviteLink: string }>('/team/invite', data)
+export const apiRevokeInvite = (id: number) => authFetch<{ ok: boolean }>(`/team/invites/${id}/revoke`, {})
+export const apiUpdateMemberRole = (id: number, role: string) =>
+  authFetch<{ ok: boolean }>(`/team/members/${id}`, { role }, 'PATCH')
+export const apiRemoveMember = (id: number) => authFetch<{ ok: boolean }>(`/team/members/${id}`, undefined, 'DELETE')
+
+export const apiGetInvite = (token: string) => authFetch<InviteInfo>(`/invite/${token}`)
+export const apiAcceptInvite = (token: string, password: string) =>
+  authFetch<{ ok: boolean; user: AuthUser }>('/invite/accept', { token, password })
