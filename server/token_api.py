@@ -53,6 +53,19 @@ _PUBLIC_PREFIXES = ("/auth/",)         # signup/login/logout/me handle their own
 
 
 @app.middleware("http")
+async def no_store_api_responses(request: Request, call_next):
+    """Every /api/* response is dashboard/admin data that must never be served
+    stale — a super-admin adjusting an account's credits, plan, or status must
+    see the change on the very next fetch. Without an explicit no-store, a
+    dynamic-content GET can still get cached by an intermediate layer (Vercel's
+    edge, a browser's heuristic cache) since FastAPI sets no cache headers of
+    its own by default."""
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return response
+
+
+@app.middleware("http")
 async def require_session(request: Request, call_next):
     """Gate the dashboard API behind a valid session cookie. Public demo,
     widget, webhook, and auth routes are allowlisted; CORS preflight passes."""

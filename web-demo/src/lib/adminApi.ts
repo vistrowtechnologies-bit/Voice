@@ -6,8 +6,11 @@ function onUnauthorized() {
   window.dispatchEvent(new Event('vv-unauthorized'))
 }
 
+// no-store on every call: an admin adjusting credits/plan/status must see it
+// reflected on the very next fetch — never a browser-cached GET, since the
+// account detail and list views are read right after a mutation.
 async function aget<T>(path: string): Promise<T> {
-  const res = await fetch(`/api/admin${path}`, { credentials: 'include' })
+  const res = await fetch(`/api/admin${path}`, { credentials: 'include', cache: 'no-store' })
   if (res.status === 401) onUnauthorized()
   if (!res.ok) throw new Error(`GET ${path} failed (${res.status})`)
   return res.json()
@@ -17,6 +20,7 @@ async function apost<T = unknown>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api/admin${path}`, {
     method: 'POST',
     credentials: 'include',
+    cache: 'no-store',
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })

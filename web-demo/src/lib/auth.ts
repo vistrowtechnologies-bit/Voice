@@ -37,6 +37,7 @@ async function authFetch<T>(path: string, body?: unknown, method?: string): Prom
   const res = await fetch(`/api${path}`, {
     method: method || (body ? 'POST' : 'GET'),
     credentials: 'include',
+    cache: 'no-store',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   })
