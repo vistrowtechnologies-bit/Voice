@@ -16,6 +16,7 @@ from emotion import EMOTION_TONE_DELTAS, detect_caller_emotion
 from language import LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.platform_assistant import build_platform_assistant_prompt
+from prompts.voice_style import VOICE_STYLE_PROMPT
 from tools import (
     TAVILY_API_KEY,
     book_site_visit,
@@ -329,6 +330,12 @@ class RealEstateAgent(Agent):
         # every call in whatever language it defaulted to, ignoring the
         # dashboard's configured language, since reply_language below only
         # ever fed the TTS pronunciation hint, never the LLM's own text.
+        # Master voice-style layer — appended to EVERY agent (built-in,
+        # generic, and custom system_prompt) so tight turn-taking, fillers,
+        # and language-mirroring hold no matter what the business content is.
+        # A custom system_prompt replaces the persona/content above, never
+        # these conversation rules.
+        instructions += "\n\n" + VOICE_STYLE_PROMPT
         instructions += (
             "\n\n# Lead capture (do this regardless of the persona/rules above)\n"
             "Use whichever of these tools actually matches what this call is about — "
