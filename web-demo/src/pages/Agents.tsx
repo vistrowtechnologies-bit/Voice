@@ -434,6 +434,13 @@ function AgentEditor({
                   {voiceLabel(form.voice)} (current — not in curated list)
                 </option>
               )}
+              <optgroup label="ElevenLabs (most expressive — reacts to caller emotion live)">
+                {ELEVENLABS_VOICES.map((v) => (
+                  <option key={v.value} value={v.value}>
+                    {v.label}
+                  </option>
+                ))}
+              </optgroup>
               <optgroup label="Sarvam bulbul:v3" className="capitalize">
                 {VOICES.map((v) => (
                   <option key={v} value={v} className="capitalize">
@@ -450,13 +457,6 @@ function AgentEditor({
               </optgroup>
               <optgroup label="Google Cloud TTS">
                 {GOOGLE_VOICES.map((v) => (
-                  <option key={v.value} value={v.value}>
-                    {v.label}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="ElevenLabs">
-                {ELEVENLABS_VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
                     {v.label}
                   </option>
