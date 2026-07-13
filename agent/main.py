@@ -9,7 +9,7 @@ from livekit import api
 from livekit.agents import Agent, AgentSession, JobContext, TurnHandlingOptions, WorkerOptions, cli, llm
 from livekit.agents.stt import FallbackAdapter as SttFallbackAdapter
 from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
-from livekit.plugins import google, openai, sarvam
+from livekit.plugins import elevenlabs, google, openai, sarvam
 
 import db
 from emotion import EMOTION_TONE_DELTAS, detect_caller_emotion
@@ -161,6 +161,11 @@ _GOOGLE_TTS_KWARGS = {"use_streaming": False}
 # https://docs.cloud.google.com/text-to-speech/docs/gemini-tts#voice_options
 _GOOGLE_MULTILINGUAL_VOICES = {"charon", "kore"}
 
+_ELEVENLABS_VOICE_PREFIX = "elevenlabs:"
+# Unlike Google above, there's no known outage/billing blocker for
+# ElevenLabs — it's simply on whenever a key is configured, same as Sarvam.
+_ELEVENLABS_API_KEY = os.environ.get("ELEVEN_API_KEY")
+
 
 def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
     """Same fallback pattern as _build_stt, for TTS. Google's voice catalog
@@ -179,7 +184,17 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
     - "google:<locale>-<model>-<voice>" (e.g. "google:hi-IN-Neural2-A") — a
       locale-specific voice; the voice name's own language prefix (its
       first two hyphen-separated segments) is used for `language=` rather
-      than reply_language, since these are locked to one specific locale."""
+      than reply_language, since these are locked to one specific locale.
+
+    A third form, "elevenlabs:<voice_id>" (a voice ID from the operator's
+    own ElevenLabs account), routes to ElevenLabs' TTS instead — also
+    standalone, not wrapped in a fallback adapter, since it's an explicit
+    choice rather than an outage safety net. eleven_flash_v2_5 is the
+    lowest-latency multilingual model, matching this product's real-time
+    call latency bar."""
+    if speaker.startswith(_ELEVENLABS_VOICE_PREFIX) and _ELEVENLABS_API_KEY:
+        voice_id = speaker[len(_ELEVENLABS_VOICE_PREFIX) :]
+        return elevenlabs.TTS(voice_id=voice_id, model="eleven_flash_v2_5", language=reply_language.split("-")[0])
     if speaker.startswith(_GOOGLE_VOICE_PREFIX) and _GOOGLE_CREDENTIALS is not None and _GOOGLE_VOICE_ENABLED:
         voice_name = speaker[len(_GOOGLE_VOICE_PREFIX) :]
         if voice_name.lower() in _GOOGLE_MULTILINGUAL_VOICES:
@@ -197,10 +212,13 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
             credentials_info=_GOOGLE_CREDENTIALS,
             **_GOOGLE_TTS_KWARGS,
         )
-    # A Google voice selected with no credentials configured falls back to
-    # the default Sarvam speaker rather than passing the raw "google:..."
-    # string through as an invalid Sarvam speaker name.
-    sarvam_speaker = speaker if not speaker.startswith(_GOOGLE_VOICE_PREFIX) else "shubh"
+    # A Google or ElevenLabs voice selected with no credentials/key
+    # configured falls back to the default Sarvam speaker rather than
+    # passing the raw "google:..."/"elevenlabs:..." string through as an
+    # invalid Sarvam speaker name.
+    sarvam_speaker = (
+        "shubh" if speaker.startswith((_GOOGLE_VOICE_PREFIX, _ELEVENLABS_VOICE_PREFIX)) else speaker
+    )
     sarvam_tts = sarvam.TTS(
         target_language_code=reply_language,
         # bulbul:v2 speakers (added to compare quality/cost against v3,

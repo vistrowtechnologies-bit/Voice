@@ -57,8 +57,21 @@ const GOOGLE_VOICES = [
   { value: 'google:hi-IN-Neural2-A', label: 'Google — Hindi, Female' },
   { value: 'google:hi-IN-Neural2-B', label: 'Google — Hindi, Male' },
 ] as const
+// ElevenLabs' own long-standing premade voices — multilingual by model
+// (eleven_flash_v2_5 in agent/main.py), not by voice, so any of these can
+// speak every language this platform supports. The "elevenlabs:" prefix is
+// how _build_tts tells these apart from a Sarvam speaker name; only takes
+// effect once ELEVEN_API_KEY is configured on the agent service — selecting
+// one before that just falls back to Sarvam "shubh" silently, same as an
+// unconfigured Google voice above.
+const ELEVENLABS_VOICES = [
+  { value: 'elevenlabs:21m00Tcm4TlvDq8ikWAM', label: 'ElevenLabs — Rachel (Female)' },
+  { value: 'elevenlabs:ErXwobaYiN019PkySvjV', label: 'ElevenLabs — Adam (Male)' },
+  { value: 'elevenlabs:EXAVITQu4vr4xnSDxMaL', label: 'ElevenLabs — Bella (Female)' },
+] as const
 const voiceLabel = (voice: string) =>
   GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
+  ELEVENLABS_VOICES.find((v) => v.value === voice)?.label ??
   SARVAM_V2_VOICES.find((v) => v.value === voice)?.label ??
   voice
 // The raw model string stays under the hood; operators only ever see the
@@ -412,9 +425,12 @@ function AgentEditor({
                   silently shows the first option as "selected" while the real stored
                   value is untouched, so hitting Save re-persists the OLD voice even
                   though the dropdown visibly displayed a different one. */}
-              {![...VOICES, ...SARVAM_V2_VOICES.map((v) => v.value), ...GOOGLE_VOICES.map((v) => v.value)].includes(
-                form.voice,
-              ) && (
+              {![
+                ...VOICES,
+                ...SARVAM_V2_VOICES.map((v) => v.value),
+                ...GOOGLE_VOICES.map((v) => v.value),
+                ...ELEVENLABS_VOICES.map((v) => v.value),
+              ].includes(form.voice) && (
                 <option value={form.voice}>
                   {voiceLabel(form.voice)} (current — not in curated list)
                 </option>
@@ -435,6 +451,13 @@ function AgentEditor({
               </optgroup>
               <optgroup label="Google Cloud TTS">
                 {GOOGLE_VOICES.map((v) => (
+                  <option key={v.value} value={v.value}>
+                    {v.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="ElevenLabs">
+                {ELEVENLABS_VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
                     {v.label}
                   </option>
