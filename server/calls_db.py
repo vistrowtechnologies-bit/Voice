@@ -2605,7 +2605,9 @@ _VOICE_TIER_MULTIPLIERS = {"economy": 0.5, "standard": 1.0, "premium": 2.0}
 # web-demo/src/pages/Agents.tsx's SARVAM_V2_VOICES — duplicated across all
 # three the same way the full voice lists already are.
 _ECONOMY_VOICES = {"abhilash", "anushka"}
-_PREMIUM_VOICE_PREFIX = "elevenlabs:"
+# Both the normal (Flash v2.5) and experimental (v3, agent/main.py's
+# _ELEVENLABS_V3_VOICE_PREFIX) ElevenLabs voice forms bill as premium.
+_PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:")
 
 
 def voice_tier(voice: str | None) -> str:
@@ -2617,7 +2619,7 @@ def voice_tier(voice: str | None) -> str:
     own unconfigured-provider fallback."""
     if not voice:
         return "standard"
-    if voice.startswith(_PREMIUM_VOICE_PREFIX):
+    if voice.startswith(_PREMIUM_VOICE_PREFIXES):
         return "premium"
     if voice in _ECONOMY_VOICES:
         return "economy"

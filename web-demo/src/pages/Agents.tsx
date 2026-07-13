@@ -68,9 +68,19 @@ const ELEVENLABS_VOICES = [
   { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '* ElevenLabs — Abhi (Male)' },
   { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '* ElevenLabs — Monika (Female)' },
 ] as const
+// Same two voices, routed through eleven_v3 instead of Flash — see
+// agent/main.py's _build_tts docstring for the tradeoffs (StreamAdapter
+// non-streaming synthesis works, but with a gap before each sentence and
+// no live mid-call emotion reactivity). Kept as a separate, clearly
+// "experimental" group rather than folded into ELEVENLABS_VOICES above.
+const ELEVENLABS_V3_VOICES = [
+  { value: 'elevenlabs-v3:7b9mYhmnp0y2qSH1FnBL', label: '* Abhi (Male) — v3' },
+  { value: 'elevenlabs-v3:zmh5xhBvMzqR4ZlXgcgL', label: '* Monika (Female) — v3' },
+] as const
 const voiceLabel = (voice: string) =>
   GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
   ELEVENLABS_VOICES.find((v) => v.value === voice)?.label ??
+  ELEVENLABS_V3_VOICES.find((v) => v.value === voice)?.label ??
   SARVAM_V2_VOICES.find((v) => v.value === voice)?.label ??
   voice
 // The raw model string stays under the hood; operators only ever see the
@@ -438,6 +448,7 @@ function AgentEditor({
                 ...SARVAM_V2_VOICES.map((v) => v.value),
                 ...GOOGLE_VOICES.map((v) => v.value),
                 ...ELEVENLABS_VOICES.map((v) => v.value),
+                ...ELEVENLABS_V3_VOICES.map((v) => v.value),
               ].includes(form.voice) && (
                 <option value={form.voice}>
                   {voiceLabel(form.voice)} (current — not in curated list)
@@ -445,6 +456,13 @@ function AgentEditor({
               )}
               <optgroup label="ElevenLabs — Premium (2x credits, most expressive — reacts to caller emotion live)">
                 {ELEVENLABS_VOICES.map((v) => (
+                  <option key={v.value} value={v.value}>
+                    {v.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="ElevenLabs v3 — Experimental (2x credits, gap between sentences, no live emotion reactivity)">
+                {ELEVENLABS_V3_VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
                     {v.label}
                   </option>

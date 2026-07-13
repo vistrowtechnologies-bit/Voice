@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from livekit import api
-from livekit.agents import Agent, AgentSession, JobContext, TurnHandlingOptions, WorkerOptions, cli, llm
+from livekit.agents import Agent, AgentSession, JobContext, TurnHandlingOptions, WorkerOptions, cli, llm, tokenize
+from livekit.agents.tts import StreamAdapter
 from livekit.agents.stt import FallbackAdapter as SttFallbackAdapter
 from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
 from livekit.plugins import elevenlabs, google, openai, sarvam
@@ -185,6 +186,10 @@ _GOOGLE_TTS_KWARGS = {"use_streaming": False}
 _GOOGLE_MULTILINGUAL_VOICES = {"charon", "kore"}
 
 _ELEVENLABS_VOICE_PREFIX = "elevenlabs:"
+# Experimental — see _build_tts's docstring. Distinct prefix so it's an
+# explicit, separately-labeled opt-in in the dashboard picker rather than
+# silently replacing the working Flash path.
+_ELEVENLABS_V3_VOICE_PREFIX = "elevenlabs-v3:"
 # Unlike Google above, there's no known outage/billing blocker for
 # ElevenLabs — it's simply on whenever a key is configured, same as Sarvam.
 _ELEVENLABS_API_KEY = os.environ.get("ELEVEN_API_KEY")
@@ -223,17 +228,42 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     lowest-latency multilingual model, matching this product's real-time
     call latency bar.
 
-    eleven_v3 (which supports [emotion] bracket tags) was tried and
-    confirmed broken for live calls, not just slower: the LiveKit plugin's
-    v3 WebSocket handshake gets a hard 403 (aiohttp.WSServerHandshakeError,
-    "Invalid response status" on the multi-stream-input endpoint), so the
-    call has NO TTS output at all — not degraded audio, total silence.
-    Confirmed against production logs on 2026-07-13. Do not switch this
-    back to eleven_v3 without ElevenLabs/LiveKit fixing that connection
-    path. Emotional reactivity doesn't need v3 anyway — it reuses the same
-    caller-emotion detection that drives Sarvam's pace/pitch (see
-    emotion.py's ELEVENLABS_EMOTION_DELTAS), applied to VoiceSettings live
-    via update_options, which works fine on Flash."""
+    eleven_v3 (which supports [emotion] bracket tags) is confirmed broken
+    on ElevenLabs' own streaming endpoint for live calls — the LiveKit
+    plugin's v3 WebSocket handshake gets a hard 403
+    (aiohttp.WSServerHandshakeError, "Invalid response status" on the
+    multi-stream-input endpoint), so a plain elevenlabs.TTS(model="eleven_v3")
+    has NO TTS output at all. Confirmed against production logs on
+    2026-07-13. A fourth form, "elevenlabs-v3:<voice_id>", makes v3 usable
+    anyway by wrapping it in agents.tts.StreamAdapter — the same fallback
+    the framework itself uses automatically for any TTS that can't stream,
+    tokenizing text into sentences and calling ElevenLabs' plain non-
+    streaming HTTP endpoint (elevenlabs.TTS.synthesize(), not the
+    WebSocket) per sentence. This genuinely produces audio, but with two
+    real costs an operator should know before picking it: (1) a network
+    round-trip gap before each sentence starts playing instead of Flash's
+    continuous stream — audibly less smooth; (2) StreamAdapter has no
+    update_options, so agent/emotion.py's live per-turn reactivity (see
+    on_user_turn_completed) silently can't reach it — a v3 call uses one
+    fixed voice_settings for the whole call. Kept as a separate,
+    clearly-labeled experimental option rather than replacing Flash."""
+    if speaker.startswith(_ELEVENLABS_V3_VOICE_PREFIX) and _ELEVENLABS_API_KEY:
+        voice_id = speaker[len(_ELEVENLABS_V3_VOICE_PREFIX) :]
+        base = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
+        raw_tts = elevenlabs.TTS(
+            voice_id=voice_id,
+            model="eleven_v3",
+            language=reply_language.split("-")[0],
+            voice_settings=elevenlabs.VoiceSettings(
+                stability=base["stability"],
+                similarity_boost=_ELEVENLABS_SIMILARITY_BOOST,
+                style=base["style"],
+                speed=base["speed"],
+                use_speaker_boost=True,
+            ),
+        )
+        adapted = StreamAdapter(tts=raw_tts, sentence_tokenizer=tokenize.blingfire.SentenceTokenizer(retain_format=True))
+        return adapted, "elevenlabs-v3"
     if speaker.startswith(_ELEVENLABS_VOICE_PREFIX) and _ELEVENLABS_API_KEY:
         voice_id = speaker[len(_ELEVENLABS_VOICE_PREFIX) :]
         base = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
@@ -274,7 +304,9 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     # passing the raw "google:..."/"elevenlabs:..." string through as an
     # invalid Sarvam speaker name.
     sarvam_speaker = (
-        "shubh" if speaker.startswith((_GOOGLE_VOICE_PREFIX, _ELEVENLABS_VOICE_PREFIX)) else speaker
+        "shubh"
+        if speaker.startswith((_GOOGLE_VOICE_PREFIX, _ELEVENLABS_VOICE_PREFIX, _ELEVENLABS_V3_VOICE_PREFIX))
+        else speaker
     )
     sarvam_tts = sarvam.TTS(
         target_language_code=reply_language,
@@ -574,6 +606,15 @@ class RealEstateAgent(Agent):
                     "caller tone -> %s (style %.2f, speed %.2f) from turn: %r",
                     emotion or "neutral", new_style, new_speed, text,
                 )
+            elif self._tts_provider == "elevenlabs-v3":
+                # StreamAdapter (see _build_tts) has no update_options — v3
+                # runs one fixed voice_settings for the whole call, so there's
+                # nothing to push here. Still log the detected emotion so
+                # it's visible it just isn't reaching the voice.
+                logger.info(
+                    "caller tone -> %s (no-op: elevenlabs-v3 can't adapt mid-call) from turn: %r",
+                    emotion or "neutral", text,
+                )
             else:
                 delta = EMOTION_TONE_DELTAS.get(emotion, {}) if emotion else {}
                 new_pace = self._base_pace + delta.get("pace", 0.0) * self._emotion_intensity
@@ -609,7 +650,10 @@ class RealEstateAgent(Agent):
             self._pending_language_streak = 0
             if self._tts_provider == "elevenlabs":
                 self.tts.update_options(language=candidate.split("-")[0])
-            else:
+            elif self._tts_provider != "elevenlabs-v3":
+                # elevenlabs-v3 (StreamAdapter) has no update_options — the
+                # call keeps the language it opened with. Sarvam and Flash
+                # both support switching mid-call.
                 self.tts.update_options(target_language_code=candidate)
             logger.info("switching reply language to %s", candidate)
 
