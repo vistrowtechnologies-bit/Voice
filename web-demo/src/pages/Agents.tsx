@@ -68,7 +68,7 @@ const GOOGLE_VOICES = [
 // vendor model powers it" convention as MODEL_OPTIONS below.
 const ELEVENLABS_VOICES = [
   { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male)' },
-  { value: 'elevenlabs:1qEiC6qsybMkmnNdVMbK', label: '✨ Monika (Female)' },
+  { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '✨ Monika (Female)' },
 ] as const
 // Same two voices, routed through eleven_v3 instead of Flash — see
 // agent/main.py's _build_tts docstring for the tradeoffs (StreamAdapter
