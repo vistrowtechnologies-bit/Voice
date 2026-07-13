@@ -55,3 +55,18 @@ EMOTION_TONE_DELTAS: dict[str, dict[str, float]] = {
     "confused": {"pace": -0.12, "pitch": 0.0},
     "excited": {"pace": 0.06, "pitch": 0.03},
 }
+
+# ElevenLabs equivalent of EMOTION_TONE_DELTAS above — same caller-emotion
+# buckets, expressed as VoiceSettings deltas since ElevenLabs has no
+# pace/pitch knobs. `speed` is direct playback rate (same intent as
+# Sarvam's pace); `style` is ElevenLabs' "exaggeration" dial — turned down
+# for a calmer/more careful delivery, up for a more animated one. Applied
+# via tts.update_options(voice_settings=...) on eleven_flash_v2_5, which
+# supports live mid-call updates without the streaming/latency problems of
+# eleven_v3's bracket-tag emotion system (v3 isn't viable for real-time
+# calls — see agent/main.py's _build_tts docstring).
+ELEVENLABS_EMOTION_DELTAS: dict[str, dict[str, float]] = {
+    "frustrated": {"speed": -0.05, "style": -0.1},
+    "confused": {"speed": -0.08, "style": -0.1},
+    "excited": {"speed": 0.05, "style": 0.15},
+}

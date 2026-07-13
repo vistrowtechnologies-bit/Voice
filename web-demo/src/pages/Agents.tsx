@@ -57,17 +57,16 @@ const GOOGLE_VOICES = [
   { value: 'google:hi-IN-Neural2-A', label: 'Google — Hindi, Female' },
   { value: 'google:hi-IN-Neural2-B', label: 'Google — Hindi, Male' },
 ] as const
-// ElevenLabs' own long-standing premade voices — multilingual by model
-// (eleven_flash_v2_5 in agent/main.py), not by voice, so any of these can
-// speak every language this platform supports. The "elevenlabs:" prefix is
-// how _build_tts tells these apart from a Sarvam speaker name; only takes
-// effect once ELEVEN_API_KEY is configured on the agent service — selecting
-// one before that just falls back to Sarvam "shubh" silently, same as an
-// unconfigured Google voice above.
+// Two ElevenLabs voices from the operator's own ElevenLabs account —
+// multilingual by model (eleven_flash_v2_5 in agent/main.py), not by voice,
+// so either can speak every language this platform supports. The
+// "elevenlabs:" prefix is how _build_tts tells these apart from a Sarvam
+// speaker name; only takes effect once ELEVEN_API_KEY is configured on the
+// agent service — selecting one before that just falls back to Sarvam
+// "shubh" silently, same as an unconfigured Google voice above.
 const ELEVENLABS_VOICES = [
-  { value: 'elevenlabs:21m00Tcm4TlvDq8ikWAM', label: 'ElevenLabs — Rachel (Female)' },
-  { value: 'elevenlabs:ErXwobaYiN019PkySvjV', label: 'ElevenLabs — Adam (Male)' },
-  { value: 'elevenlabs:EXAVITQu4vr4xnSDxMaL', label: 'ElevenLabs — Bella (Female)' },
+  { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: 'ElevenLabs — Abhi (Male)' },
+  { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: 'ElevenLabs — Monika (Female)' },
 ] as const
 const voiceLabel = (voice: string) =>
   GOOGLE_VOICES.find((v) => v.value === voice)?.label ??

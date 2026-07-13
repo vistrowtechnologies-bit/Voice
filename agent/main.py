@@ -12,7 +12,7 @@ from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
 from livekit.plugins import elevenlabs, google, openai, sarvam
 
 import db
-from emotion import EMOTION_TONE_DELTAS, detect_caller_emotion
+from emotion import ELEVENLABS_EMOTION_DELTAS, EMOTION_TONE_DELTAS, detect_caller_emotion
 from language import LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.platform_assistant import build_platform_assistant_prompt
@@ -59,6 +59,22 @@ TONE_PRESETS: dict[str, dict[str, float]] = {
     "casual": {"pace": 1.08, "temperature": 0.85, "pitch": 0.05},
 }
 DEFAULT_TONE = "balanced"
+
+# ElevenLabs equivalent of TONE_PRESETS above, keyed by the same tone names
+# so an operator's Tone choice still means something on an ElevenLabs voice
+# instead of being silently ignored. stability/style/speed are
+# VoiceSettings fields (elevenlabs.TTS, imported below); similarity_boost
+# is fixed at ElevenLabs' own recommended default rather than exposed here.
+_ELEVENLABS_TONE_PRESETS: dict[str, dict[str, float]] = {
+    "professional": {"stability": 0.6, "style": 0.15, "speed": 0.97},
+    "balanced": {"stability": 0.5, "style": 0.3, "speed": 1.0},
+    "casual": {"stability": 0.4, "style": 0.45, "speed": 1.05},
+}
+_ELEVENLABS_SIMILARITY_BOOST = 0.75
+
+
+def _clamp(value: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, value))
 
 
 def _build_llm(model: str):
@@ -167,12 +183,19 @@ _ELEVENLABS_VOICE_PREFIX = "elevenlabs:"
 _ELEVENLABS_API_KEY = os.environ.get("ELEVEN_API_KEY")
 
 
-def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
-    """Same fallback pattern as _build_stt, for TTS. Google's voice catalog
-    doesn't map to Sarvam speaker names (shubh/priya) — the automatic
-    fallback just uses Google's own default voice for the reply language
-    rather than trying to match timbre, since it only ever fires when
-    Sarvam is already failing and *a* voice beats a dropped call.
+def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_name: str):
+    """Same fallback pattern as _build_stt, for TTS. Returns (tts, provider)
+    — provider is "elevenlabs" or "sarvam", telling the caller which
+    update_options kwarg shape to use for mid-call prosody/language updates
+    (see on_user_turn_completed: ElevenLabs takes voice_settings/language,
+    Sarvam takes pace+pitch/target_language_code — passing the wrong shape
+    raises rather than silently no-op-ing).
+
+    Google's voice catalog doesn't map to Sarvam speaker names
+    (shubh/priya) — the automatic fallback just uses Google's own default
+    voice for the reply language rather than trying to match timbre, since
+    it only ever fires when Sarvam is already failing and *a* voice beats a
+    dropped call.
 
     A dashboard-selected voice can also explicitly name a Google voice
     (stored verbatim as the agent's `voice` field, prefixed "google:") so
@@ -191,27 +214,48 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
     standalone, not wrapped in a fallback adapter, since it's an explicit
     choice rather than an outage safety net. eleven_flash_v2_5 is the
     lowest-latency multilingual model, matching this product's real-time
-    call latency bar."""
+    call latency bar — eleven_v3 (which supports [emotion] bracket tags)
+    is deliberately NOT used: it has no working streaming support in the
+    LiveKit plugin today and ElevenLabs themselves say it's unsuitable for
+    real-time calls. Emotional reactivity instead reuses the same
+    caller-emotion detection that drives Sarvam's pace/pitch (see
+    emotion.py's ELEVENLABS_EMOTION_DELTAS), applied to VoiceSettings
+    live via update_options — real-time-safe on Flash."""
     if speaker.startswith(_ELEVENLABS_VOICE_PREFIX) and _ELEVENLABS_API_KEY:
         voice_id = speaker[len(_ELEVENLABS_VOICE_PREFIX) :]
-        return elevenlabs.TTS(voice_id=voice_id, model="eleven_flash_v2_5", language=reply_language.split("-")[0])
+        base = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
+        tts = elevenlabs.TTS(
+            voice_id=voice_id,
+            model="eleven_flash_v2_5",
+            language=reply_language.split("-")[0],
+            voice_settings=elevenlabs.VoiceSettings(
+                stability=base["stability"],
+                similarity_boost=_ELEVENLABS_SIMILARITY_BOOST,
+                style=base["style"],
+                speed=base["speed"],
+                use_speaker_boost=True,
+            ),
+        )
+        return tts, "elevenlabs"
     if speaker.startswith(_GOOGLE_VOICE_PREFIX) and _GOOGLE_CREDENTIALS is not None and _GOOGLE_VOICE_ENABLED:
         voice_name = speaker[len(_GOOGLE_VOICE_PREFIX) :]
         if voice_name.lower() in _GOOGLE_MULTILINGUAL_VOICES:
-            return google.TTS(
+            google_tts = google.TTS(
                 language=reply_language,
                 voice_name=voice_name.capitalize(),
                 model_name="gemini-2.5-flash-tts",
                 credentials_info=_GOOGLE_CREDENTIALS,
                 **_GOOGLE_TTS_KWARGS,
             )
+            return google_tts, "sarvam"
         voice_language = "-".join(voice_name.split("-")[:2])
-        return google.TTS(
+        google_tts = google.TTS(
             language=voice_language,
             voice_name=voice_name,
             credentials_info=_GOOGLE_CREDENTIALS,
             **_GOOGLE_TTS_KWARGS,
         )
+        return google_tts, "sarvam"
     # A Google or ElevenLabs voice selected with no credentials/key
     # configured falls back to the default Sarvam speaker rather than
     # passing the raw "google:..."/"elevenlabs:..." string through as an
@@ -230,11 +274,11 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float]):
         **tone,
     )
     if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
-        return sarvam_tts
+        return sarvam_tts, "sarvam"
     google_tts = google.TTS(
         language=reply_language, credentials_info=_GOOGLE_CREDENTIALS, **_GOOGLE_TTS_KWARGS
     )
-    return TtsFallbackAdapter([sarvam_tts, google_tts])
+    return TtsFallbackAdapter([sarvam_tts, google_tts]), "sarvam"
 
 
 def _parse_json_config(raw, default):
@@ -431,22 +475,28 @@ class RealEstateAgent(Agent):
             f"{language_name} is the default until the caller's own language is clear. "
             "Once they speak, follow the multilingual rules above and match them."
         )
-        base_tone = TONE_PRESETS.get(config.get("tone") or DEFAULT_TONE, TONE_PRESETS[DEFAULT_TONE])
+        tone_name = config.get("tone") or DEFAULT_TONE
+        base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
+        tts, tts_provider = _build_tts(reply_language, config.get("voice") or "shubh", base_tone, tone_name)
         super().__init__(
             instructions=instructions,
             stt=_build_stt(),
             llm=_build_llm(config.get("model") or "gpt-4.1"),
-            tts=_build_tts(reply_language, config.get("voice") or "shubh", base_tone),
+            tts=tts,
             tools=_build_tools(config),
         )
         self._reply_language = reply_language
         self._pending_language: str | None = None
         self._pending_language_streak = 0
+        # Which update_options kwarg shape on_user_turn_completed should use
+        # for mid-call prosody/language changes — see _build_tts's docstring.
+        self._tts_provider = tts_provider
         # Prosody-adaptation baseline (see on_user_turn_completed) — deltas
         # from a detected caller emotion apply on top of these, never replace
         # them, so the agent's configured base personality always shows through.
         self._base_pace = base_tone.get("pace", 1.0)
         self._base_pitch = base_tone.get("pitch", 0.0)
+        self._base_elevenlabs = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
         self._current_emotion: str | None = None
         # Conversation-start behavior (see on_enter).
         self._first_speaker = (config.get("first_speaker") or "agent").lower()
@@ -473,14 +523,32 @@ class RealEstateAgent(Agent):
         emotion = detect_caller_emotion(text)
         if emotion != self._current_emotion:
             self._current_emotion = emotion
-            delta = EMOTION_TONE_DELTAS.get(emotion, {}) if emotion else {}
-            new_pace = self._base_pace + delta.get("pace", 0.0)
-            new_pitch = self._base_pitch + delta.get("pitch", 0.0)
-            self.tts.update_options(pace=new_pace, pitch=new_pitch)
-            logger.info(
-                "caller tone -> %s (pace %.2f, pitch %.2f) from turn: %r",
-                emotion or "neutral", new_pace, new_pitch, text,
-            )
+            if self._tts_provider == "elevenlabs":
+                delta = ELEVENLABS_EMOTION_DELTAS.get(emotion, {}) if emotion else {}
+                new_style = _clamp(self._base_elevenlabs["style"] + delta.get("style", 0.0), 0.0, 1.0)
+                new_speed = _clamp(self._base_elevenlabs["speed"] + delta.get("speed", 0.0), 0.8, 1.2)
+                self.tts.update_options(
+                    voice_settings=elevenlabs.VoiceSettings(
+                        stability=self._base_elevenlabs["stability"],
+                        similarity_boost=_ELEVENLABS_SIMILARITY_BOOST,
+                        style=new_style,
+                        speed=new_speed,
+                        use_speaker_boost=True,
+                    )
+                )
+                logger.info(
+                    "caller tone -> %s (style %.2f, speed %.2f) from turn: %r",
+                    emotion or "neutral", new_style, new_speed, text,
+                )
+            else:
+                delta = EMOTION_TONE_DELTAS.get(emotion, {}) if emotion else {}
+                new_pace = self._base_pace + delta.get("pace", 0.0)
+                new_pitch = self._base_pitch + delta.get("pitch", 0.0)
+                self.tts.update_options(pace=new_pace, pitch=new_pitch)
+                logger.info(
+                    "caller tone -> %s (pace %.2f, pitch %.2f) from turn: %r",
+                    emotion or "neutral", new_pace, new_pitch, text,
+                )
 
         candidate = detect_reply_language(text)
         if candidate is None or candidate == self._reply_language:
@@ -505,7 +573,10 @@ class RealEstateAgent(Agent):
             self._reply_language = candidate
             self._pending_language = None
             self._pending_language_streak = 0
-            self.tts.update_options(target_language_code=candidate)
+            if self._tts_provider == "elevenlabs":
+                self.tts.update_options(language=candidate.split("-")[0])
+            else:
+                self.tts.update_options(target_language_code=candidate)
             logger.info("switching reply language to %s", candidate)
 
 
