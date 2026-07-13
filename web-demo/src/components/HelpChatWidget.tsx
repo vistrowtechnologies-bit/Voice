@@ -58,13 +58,28 @@ export function HelpChatWidget() {
                 <div className="text-[11px] text-text-muted">Ask about Vistrow Voice</div>
               </div>
             </div>
-            <button
-              onClick={() => setOpen(false)}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text"
-              aria-label="Close help chat"
-            >
-              <Icon name="close" className="text-[18px]" />
-            </button>
+            <div className="flex items-center gap-1">
+              {messages.length > 0 && (
+                <button
+                  onClick={() => {
+                    setMessages([])
+                    setError('')
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text"
+                  aria-label="Back to FAQs"
+                  title="Back to FAQs"
+                >
+                  <Icon name="refresh" className="text-[18px]" />
+                </button>
+              )}
+              <button
+                onClick={() => setOpen(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text"
+                aria-label="Close help chat"
+              >
+                <Icon name="close" className="text-[18px]" />
+              </button>
+            </div>
           </div>
 
           <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-3">
