@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import arthaAvatar from '../assets/artha-avatar.png'
 import { fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
 import type { HelpChatMessage, HelpFaq } from '../lib/types'
 import { Icon } from './Icon'
@@ -50,12 +51,13 @@ export function HelpChatWidget() {
         <div className="flex h-[480px] w-[360px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary">
-                <Icon name="support_agent" className="text-[18px]" />
+              <div className="relative h-8 w-8 shrink-0">
+                <img src={arthaAvatar} alt="Artha" className="h-8 w-8 rounded-full object-cover" />
+                <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-surface bg-green-500" />
               </div>
               <div>
-                <div className="text-sm font-semibold">Help</div>
-                <div className="text-[11px] text-text-muted">Ask about Vistrow Voice</div>
+                <div className="text-sm font-semibold">Artha</div>
+                <div className="text-[11px] text-text-muted">Help Assistant</div>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -100,21 +102,26 @@ export function HelpChatWidget() {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {messages.map((m, i) => (
-                  <div
-                    key={i}
-                    className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
-                      m.role === 'user'
-                        ? 'ml-auto bg-primary text-bg'
-                        : 'mr-auto border border-border bg-surface-high text-text'
-                    }`}
-                  >
-                    {m.content}
-                  </div>
-                ))}
+                {messages.map((m, i) =>
+                  m.role === 'assistant' ? (
+                    <div key={i} className="mr-auto flex max-w-[85%] items-start gap-2">
+                      <img src={arthaAvatar} alt="Artha" className="mt-0.5 h-6 w-6 shrink-0 rounded-full object-cover" />
+                      <div className="rounded-xl border border-border bg-surface-high px-3 py-2 text-xs leading-relaxed text-text">
+                        {m.content}
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={i} className="ml-auto max-w-[85%] rounded-xl bg-primary px-3 py-2 text-xs leading-relaxed text-bg">
+                      {m.content}
+                    </div>
+                  )
+                )}
                 {sending && (
-                  <div className="mr-auto rounded-xl border border-border bg-surface-high px-3 py-2 text-xs text-text-muted">
-                    Thinking…
+                  <div className="mr-auto flex max-w-[85%] items-start gap-2">
+                    <img src={arthaAvatar} alt="Artha" className="mt-0.5 h-6 w-6 shrink-0 rounded-full object-cover" />
+                    <div className="rounded-xl border border-border bg-surface-high px-3 py-2 text-xs text-text-muted">
+                      Thinking…
+                    </div>
                   </div>
                 )}
               </div>
@@ -150,10 +157,17 @@ export function HelpChatWidget() {
       <button
         data-tour="help-chat"
         onClick={() => setOpen((v) => !v)}
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-bg shadow-lg transition-opacity hover:opacity-90"
+        className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg transition-opacity hover:opacity-90"
         aria-label={open ? 'Close help chat' : 'Open help chat'}
       >
-        <Icon name={open ? 'close' : 'chat_bubble'} className="text-[22px]" />
+        {open ? (
+          <Icon name="close" className="text-[22px] text-bg" />
+        ) : (
+          <>
+            <img src={arthaAvatar} alt="Artha" className="h-full w-full rounded-full object-cover" />
+            <span className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full border-2 border-bg bg-green-500" />
+          </>
+        )}
       </button>
     </div>
   )
