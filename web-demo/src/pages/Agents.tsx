@@ -455,13 +455,11 @@ function AgentEditor({
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="Google Cloud TTS">
-                {GOOGLE_VOICES.map((v) => (
-                  <option key={v.value} value={v.value}>
-                    {v.label}
-                  </option>
-                ))}
-              </optgroup>
+              {/* Google Cloud TTS hidden from the picker for now (removed on
+                  request) — GOOGLE_VOICES/voiceLabel stay so an agent still
+                  saved with a google: voice keeps rendering correctly via the
+                  "not in curated list" fallback above instead of corrupting
+                  on save. Re-add the optgroup here if Google TTS comes back. */}
             </select>
           </Field>
           <Field label="Default language">
