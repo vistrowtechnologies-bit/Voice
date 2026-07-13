@@ -73,11 +73,11 @@ const ELEVENLABS_VOICES = [
 // Same two voices, routed through eleven_v3 instead of Flash — see
 // agent/main.py's _build_tts docstring for the tradeoffs (StreamAdapter
 // non-streaming synthesis works, but with a gap before each sentence and
-// no live mid-call emotion reactivity). Kept as a separate, clearly
-// "experimental" group rather than folded into ELEVENLABS_VOICES above.
+// no live mid-call emotion reactivity). Scale-plan tier, kept as a
+// separate group rather than folded into ELEVENLABS_VOICES above.
 const ELEVENLABS_V3_VOICES = [
-  { value: 'elevenlabs-v3:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male) — Experimental' },
-  { value: 'elevenlabs-v3:zmh5xhBvMzqR4ZlXgcgL', label: '✨ Monika (Female) — Experimental' },
+  { value: 'elevenlabs-v3:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male) — Premium+' },
+  { value: 'elevenlabs-v3:zmh5xhBvMzqR4ZlXgcgL', label: '✨ Monika (Female) — Premium+' },
 ] as const
 const voiceLabel = (voice: string) =>
   GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
@@ -463,7 +463,7 @@ function AgentEditor({
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="Vistrow Premium+ — Experimental (2x credits, gap between sentences, no live emotion reactivity)">
+              <optgroup label="Vistrow Premium+ — Scale plan (2x credits, gap between sentences, no live emotion reactivity)">
                 {ELEVENLABS_V3_VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
                     {v.label}
