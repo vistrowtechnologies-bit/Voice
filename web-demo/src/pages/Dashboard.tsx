@@ -487,7 +487,7 @@ export function Dashboard() {
                   <EmptyChart text="Hourly distribution appears after the first calls." />
                 )}
               </div>
-              <p className="mt-2 text-[11px] text-text-muted">Times shown in UTC (call timestamps are stored in UTC).</p>
+              <p className="mt-2 text-[11px] text-text-muted">Times shown in IST (Indian Standard Time).</p>
             </div>
 
             {summary && (

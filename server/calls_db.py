@@ -1239,11 +1239,14 @@ def analytics(account_id: int) -> dict:
                 (account_id,),
             ).fetchall()
         ]
+        # started_at is stored naive-UTC; interpret it as UTC then convert to
+        # IST (Asia/Kolkata) so "peak call hours" reflects when Indian callers
+        # actually rang, not the raw UTC storage hour.
         hours = [
             {"hour": int(r["h"]), "count": r["c"]}
             for r in conn.execute(
-                "SELECT to_char(started_at::timestamp, 'HH24') h, COUNT(*) c FROM calls "
-                "WHERE account_id = ? GROUP BY h ORDER BY h",
+                "SELECT to_char((started_at::timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata', 'HH24') h, "
+                "COUNT(*) c FROM calls WHERE account_id = ? GROUP BY h ORDER BY h",
                 (account_id,),
             ).fetchall()
         ]

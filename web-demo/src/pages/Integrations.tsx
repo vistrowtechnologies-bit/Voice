@@ -19,13 +19,57 @@ const ICONS: Record<string, string> = {
   slack: 'forum',
   whatsapp: 'chat',
   sheets: 'table_chart',
-  gcal: 'calendar_month',
   calcom: 'event_available',
+}
+
+// The real Google Calendar app icon — a folded-corner "page" in the brand's
+// four colors with "31" on it, not the generic Material "calendar_month"
+// glyph every other card uses. Same official palette as GoogleLogo
+// (AuthShell.tsx). The clipPath carries the rounded top / folded
+// bottom-right corner so every color block underneath gets it for free.
+function GoogleCalendarIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <clipPath id="gcal-page">
+          <path d="M8 0h32a8 8 0 0 1 8 8v27L35 48H8a8 8 0 0 1-8-8V8a8 8 0 0 1 8-8z" />
+        </clipPath>
+      </defs>
+      {/* red, revealed only where the page's folded corner cuts away */}
+      <rect x="29" y="29" width="19" height="19" fill="#EA4335" />
+      <g clipPath="url(#gcal-page)">
+        <rect width="48" height="48" fill="#fff" />
+        <rect width="38" height="13" fill="#4285F4" />
+        <rect x="38" width="10" height="13" fill="#1967D2" />
+        <rect y="13" width="13" height="17" fill="#4285F4" />
+        <rect x="38" y="13" width="10" height="19" fill="#FBBC04" />
+        <rect y="30" width="24" height="18" fill="#34A853" />
+        <text
+          x="25"
+          y="34"
+          fontFamily="Arial, Helvetica, sans-serif"
+          fontWeight="700"
+          fontSize="17"
+          fill="#1967D2"
+          textAnchor="middle"
+        >
+          31
+        </text>
+      </g>
+    </svg>
+  )
 }
 
 // Integrations that connect with a pasted URL (delivery targets + the Google
 // Calendar Apps Script bridge). calcom stays "coming soon" until its API build.
 const CONNECTABLE = new Set(['webhook', 'slack', 'whatsapp', 'sheets', 'gcal'])
+
+// The API returns integrations in undefined DB row order — pin a deliberate
+// display order instead (Google Calendar first, since it's the flagship
+// booking integration) rather than leaving card position to chance.
+const DISPLAY_ORDER = ['gcal', 'webhook', 'slack', 'whatsapp', 'sheets', 'calcom']
+const sortIntegrations = (list: Integration[]) =>
+  [...list].sort((a, b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key))
 
 // Lead-delivery integrations — a qualified lead is POSTed to each connected
 // one when a call captures it (agent/tools.py fan-out) and they support a
@@ -70,7 +114,7 @@ export function Integrations() {
   const [searchParams, setSearchParams] = useSearchParams()
   const gcalNotice = searchParams.get('gcal')
 
-  const reload = () => fetchIntegrations().then(setIntegrations).catch(() => setIntegrations([]))
+  const reload = () => fetchIntegrations().then((list) => setIntegrations(sortIntegrations(list))).catch(() => setIntegrations([]))
 
   useEffect(() => {
     reload()
@@ -149,8 +193,12 @@ export function Integrations() {
             <div key={integration.key} className="flex flex-col rounded-xl border border-border bg-surface p-5">
               <div className="mb-3 flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 text-primary">
-                    <Icon name={ICONS[integration.key] ?? 'extension'} className="text-[20px]" />
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${integration.key === 'gcal' ? 'overflow-hidden bg-white' : 'bg-primary/20 text-primary'}`}>
+                    {integration.key === 'gcal' ? (
+                      <GoogleCalendarIcon className="h-full w-full" />
+                    ) : (
+                      <Icon name={ICONS[integration.key] ?? 'extension'} className="text-[20px]" />
+                    )}
                   </div>
                   <div>
                     <p className="font-semibold">{integration.name}</p>
