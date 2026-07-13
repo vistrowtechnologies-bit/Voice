@@ -456,15 +456,15 @@ function AgentEditor({
                   {voiceLabel(form.voice)} (current — not in curated list)
                 </option>
               )}
-              <optgroup label="Vistrow Premium (2x credits, most expressive — reacts to caller emotion live)">
-                {ELEVENLABS_VOICES.map((v) => (
+              <optgroup label="Vistrow Premium+ — Scale plan (2x credits, gap between sentences, no live emotion reactivity)">
+                {ELEVENLABS_V3_VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
                     {v.label}
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="Vistrow Premium+ — Scale plan (2x credits, gap between sentences, no live emotion reactivity)">
-                {ELEVENLABS_V3_VOICES.map((v) => (
+              <optgroup label="Vistrow Premium (2x credits, most expressive — reacts to caller emotion live)">
+                {ELEVENLABS_VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
                     {v.label}
                   </option>
