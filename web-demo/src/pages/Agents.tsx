@@ -104,6 +104,14 @@ const TONES = [
     description: 'Faster and more expressive — livelier pitch/pace variation. Fixes a flat or robotic-sounding voice.',
   },
 ] as const
+// How strongly the live per-turn caller-emotion detection (agent/emotion.py)
+// shows up in delivery — voice_settings on ElevenLabs, pace/pitch on
+// Sarvam. Matches agent/main.py's _EMOTION_INTENSITY_MULTIPLIERS exactly.
+const EMOTION_INTENSITIES = [
+  { value: 'off', label: 'Off', description: 'Flat delivery — ignores detected caller emotion entirely.' },
+  { value: 'subtle', label: 'Subtle', description: 'A light shift in delivery when the caller sounds frustrated, confused, or excited.' },
+  { value: 'strong', label: 'Strong', description: 'Full reactivity — the default. Noticeably warmer or calmer depending on the caller.' },
+] as const
 const LANGUAGES = [
   ['hi-IN', 'Hindi'],
   ['en-IN', 'English'],
@@ -324,6 +332,7 @@ function AgentEditor({
     systemPrompt: agent.systemPrompt,
     kbId: agent.kbId,
     tone: agent.tone || 'balanced',
+    emotionIntensity: agent.emotionIntensity || 'strong',
     isPlatformDemo: agent.isPlatformDemo,
     firstSpeaker: agent.firstSpeaker || 'agent',
     welcomeMessage: agent.welcomeMessage || '',
@@ -477,6 +486,19 @@ function AgentEditor({
               {TONES.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label} — {t.description.split('—')[0].trim()}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Emotion intensity">
+            <select
+              value={form.emotionIntensity}
+              onChange={(e) => set('emotionIntensity', e.target.value as AgentForm['emotionIntensity'])}
+              className={inputCls}
+            >
+              {EMOTION_INTENSITIES.map((i) => (
+                <option key={i.value} value={i.value}>
+                  {i.label} — {i.description}
                 </option>
               ))}
             </select>

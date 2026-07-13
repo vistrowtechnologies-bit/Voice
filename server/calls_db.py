@@ -550,6 +550,12 @@ def init_tables() -> None:
                 ("transfer_phone", "TEXT DEFAULT ''"),
                 ("custom_functions", "TEXT DEFAULT '[]'"),
                 ("post_call_fields", "TEXT DEFAULT '[]'"),
+                # How strongly agent/emotion.py's live per-turn caller-emotion
+                # detection shows up in delivery (voice_settings on ElevenLabs,
+                # pace/pitch on Sarvam) — "off"/"subtle"/"strong". Defaults to
+                # "strong" so every agent created before this field existed
+                # keeps today's full-strength behavior unchanged.
+                ("emotion_intensity", "TEXT DEFAULT 'strong'"),
                 ("webhook_url", "TEXT DEFAULT ''"),
                 ("memory_enabled", "INTEGER DEFAULT 0"),
             ):
@@ -1364,6 +1370,7 @@ _AGENT_FIELDS = (
     "silence_reminder_ms", "silence_reminder_max", "end_call_on_silence_ms",
     "max_call_duration_s", "enabled_functions", "transfer_phone",
     "custom_functions", "post_call_fields", "webhook_url", "memory_enabled",
+    "emotion_intensity",
 )
 # INTEGER columns fed from a JSON bool (Postgres has no bool->int cast).
 _AGENT_BOOL_FIELDS = frozenset({"is_platform_demo", "memory_enabled"})
@@ -1388,6 +1395,7 @@ _AGENT_CAMEL_TO_SNAKE = {
     "postCallFields": "post_call_fields",
     "webhookUrl": "webhook_url",
     "memoryEnabled": "memory_enabled",
+    "emotionIntensity": "emotion_intensity",
 }
 
 
@@ -1421,6 +1429,7 @@ def _agent_dict(row: dict) -> dict:
         "systemPrompt": row["system_prompt"],
         "kbId": row["kb_id"],
         "tone": row["tone"] or "balanced",
+        "emotionIntensity": row["emotion_intensity"] or "strong",
         "isPlatformDemo": bool(row["is_platform_demo"]),
         "firstSpeaker": row["first_speaker"] or "agent",
         "welcomeMessage": row["welcome_message"] or "",

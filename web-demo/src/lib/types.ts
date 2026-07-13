@@ -150,6 +150,7 @@ export interface AgentConfig {
   systemPrompt: string
   kbId: number | null
   tone: 'professional' | 'balanced' | 'casual'
+  emotionIntensity: 'off' | 'subtle' | 'strong'
   isPlatformDemo: boolean
   // Conversation start
   firstSpeaker: 'agent' | 'user'

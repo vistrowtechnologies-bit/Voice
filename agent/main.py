@@ -72,6 +72,13 @@ _ELEVENLABS_TONE_PRESETS: dict[str, dict[str, float]] = {
 }
 _ELEVENLABS_SIMILARITY_BOOST = 0.75
 
+# Dashboard-facing "Emotion intensity" dial (see Agents.tsx) — scales
+# EMOTION_TONE_DELTAS/ELEVENLABS_EMOTION_DELTAS deltas before they're applied
+# in on_user_turn_completed. "strong" (1.0) reproduces today's behavior
+# exactly; "off" (0.0) always reproduces the base tone regardless of detected
+# caller emotion.
+_EMOTION_INTENSITY_MULTIPLIERS = {"off": 0.0, "subtle": 0.5, "strong": 1.0}
+
 
 def _clamp(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
@@ -512,6 +519,13 @@ class RealEstateAgent(Agent):
         self._base_pace = base_tone.get("pace", 1.0)
         self._base_pitch = base_tone.get("pitch", 0.0)
         self._base_elevenlabs = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
+        # Scales how strongly a detected caller emotion moves delivery away
+        # from the base tone above — 0 ("off") always reproduces the base
+        # tone regardless of detected emotion, 1.0 ("strong") is today's
+        # full-strength default. Same dial for both providers.
+        self._emotion_intensity = _EMOTION_INTENSITY_MULTIPLIERS.get(
+            config.get("emotion_intensity") or "strong", 1.0
+        )
         self._current_emotion: str | None = None
         # Conversation-start behavior (see on_enter).
         self._first_speaker = (config.get("first_speaker") or "agent").lower()
@@ -540,8 +554,12 @@ class RealEstateAgent(Agent):
             self._current_emotion = emotion
             if self._tts_provider == "elevenlabs":
                 delta = ELEVENLABS_EMOTION_DELTAS.get(emotion, {}) if emotion else {}
-                new_style = _clamp(self._base_elevenlabs["style"] + delta.get("style", 0.0), 0.0, 1.0)
-                new_speed = _clamp(self._base_elevenlabs["speed"] + delta.get("speed", 0.0), 0.8, 1.2)
+                new_style = _clamp(
+                    self._base_elevenlabs["style"] + delta.get("style", 0.0) * self._emotion_intensity, 0.0, 1.0
+                )
+                new_speed = _clamp(
+                    self._base_elevenlabs["speed"] + delta.get("speed", 0.0) * self._emotion_intensity, 0.8, 1.2
+                )
                 self.tts.update_options(
                     voice_settings=elevenlabs.VoiceSettings(
                         stability=self._base_elevenlabs["stability"],
@@ -557,8 +575,8 @@ class RealEstateAgent(Agent):
                 )
             else:
                 delta = EMOTION_TONE_DELTAS.get(emotion, {}) if emotion else {}
-                new_pace = self._base_pace + delta.get("pace", 0.0)
-                new_pitch = self._base_pitch + delta.get("pitch", 0.0)
+                new_pace = self._base_pace + delta.get("pace", 0.0) * self._emotion_intensity
+                new_pitch = self._base_pitch + delta.get("pitch", 0.0) * self._emotion_intensity
                 self.tts.update_options(pace=new_pace, pitch=new_pitch)
                 logger.info(
                     "caller tone -> %s (pace %.2f, pitch %.2f) from turn: %r",
