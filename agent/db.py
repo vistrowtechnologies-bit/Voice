@@ -284,7 +284,9 @@ def save_call(record: dict) -> None:
     """Persist one completed call. `record` keys:
 
     room_name, visitor_identity, started_at, ended_at, duration_seconds,
-    reply_language, transcript (list of {role, text}), call_type
+    reply_language, voice (the exact voice string this call used, for
+    per-voice-tier credit billing — see server/calls_db.py's voice_tier()),
+    transcript (list of {role, text}), call_type
     ('phone'/'widget'/'browser'), site_id (for 'widget' calls), agent_id,
     account_id (which tenant this call belongs to), and optionally
     name/phone/budget/location/timeline/site_visit (dict with
@@ -300,12 +302,12 @@ def save_call(record: dict) -> None:
                 """
                 INSERT INTO calls (
                     room_name, visitor_identity, started_at, ended_at,
-                    duration_seconds, reply_language, lead_name, lead_phone,
+                    duration_seconds, reply_language, voice, lead_name, lead_phone,
                     lead_budget, lead_location, lead_timeline, lead_company,
                     lead_use_case, lead_team_size, site_visit_json,
                     transcript_json, call_type, site_id, agent_id, account_id,
                     extracted_data
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record["room_name"],
@@ -314,6 +316,7 @@ def save_call(record: dict) -> None:
                     record["ended_at"],
                     record["duration_seconds"],
                     record.get("reply_language"),
+                    record.get("voice"),
                     record.get("name"),
                     record.get("phone"),
                     record.get("budget"),

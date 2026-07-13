@@ -16,7 +16,7 @@ from emotion import ELEVENLABS_EMOTION_DELTAS, EMOTION_TONE_DELTAS, detect_calle
 from language import LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.platform_assistant import build_platform_assistant_prompt
-from prompts.voice_style import VOICE_STYLE_PROMPT
+from prompts.voice_style import ELEVENLABS_EXPRESSIVE_PROMPT, VOICE_STYLE_PROMPT
 from tools import (
     TAVILY_API_KEY,
     book_appointment,
@@ -337,6 +337,7 @@ class RealEstateAgent(Agent):
         # fall back to the in-code defaults.
         config = config or {}
         agent_name = config.get("name") or "Artha"
+        voice_value = config.get("voice") or "shubh"
         if config.get("system_prompt"):
             instructions = config["system_prompt"]
         elif config.get("is_platform_demo"):
@@ -407,6 +408,8 @@ class RealEstateAgent(Agent):
         # A custom system_prompt replaces the persona/content above, never
         # these conversation rules.
         instructions += "\n\n" + VOICE_STYLE_PROMPT
+        if voice_value.startswith(_ELEVENLABS_VOICE_PREFIX):
+            instructions += ELEVENLABS_EXPRESSIVE_PROMPT
         instructions += (
             "\n\n# Lead capture (do this regardless of the persona/rules above)\n"
             "Use whichever of these tools actually matches what this call is about — "
@@ -477,7 +480,7 @@ class RealEstateAgent(Agent):
         )
         tone_name = config.get("tone") or DEFAULT_TONE
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
-        tts, tts_provider = _build_tts(reply_language, config.get("voice") or "shubh", base_tone, tone_name)
+        tts, tts_provider = _build_tts(reply_language, voice_value, base_tone, tone_name)
         super().__init__(
             instructions=instructions,
             stt=_build_stt(),
@@ -491,6 +494,13 @@ class RealEstateAgent(Agent):
         # Which update_options kwarg shape on_user_turn_completed should use
         # for mid-call prosody/language changes — see _build_tts's docstring.
         self._tts_provider = tts_provider
+        # The exact voice string this call used — saved with the call record
+        # (see log_call in the module-level entrypoint) for per-voice-tier
+        # credit billing (server/calls_db.py's voice_tier()), captured here
+        # rather than read back from the agent's current config later so a
+        # later voice change on the agent never retroactively reclassifies
+        # this call's cost.
+        self._voice = voice_value
         # Prosody-adaptation baseline (see on_user_turn_completed) — deltas
         # from a detected caller emotion apply on top of these, never replace
         # them, so the agent's configured base personality always shows through.
@@ -833,6 +843,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     "ended_at": ended_at.isoformat(),
                     "duration_seconds": (ended_at - started_at).total_seconds(),
                     "reply_language": agent._reply_language,
+                    "voice": agent._voice,
                     "transcript": transcript,
                     "call_type": call_context["call_type"],
                     "site_id": call_context["site_id"],

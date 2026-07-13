@@ -285,6 +285,8 @@ export interface BillingSummary {
   minutesUsed: number
   minutesByType: Partial<Record<'browser' | 'widget' | 'phone', number>>
   creditRates: Partial<Record<'browser' | 'widget' | 'phone', number>>
+  minutesByVoiceTier: Partial<Record<'economy' | 'standard' | 'premium', number>>
+  voiceTierRates: Partial<Record<'economy' | 'standard' | 'premium', number>>
 }
 
 export interface TelephonyStatus {

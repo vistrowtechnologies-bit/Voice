@@ -434,21 +434,21 @@ function AgentEditor({
                   {voiceLabel(form.voice)} (current — not in curated list)
                 </option>
               )}
-              <optgroup label="ElevenLabs (most expressive — reacts to caller emotion live)">
+              <optgroup label="ElevenLabs — Premium (2x credits, most expressive — reacts to caller emotion live)">
                 {ELEVENLABS_VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
                     {v.label}
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="Sarvam bulbul:v3" className="capitalize">
+              <optgroup label="Sarvam bulbul:v3 — Standard (1x credits)" className="capitalize">
                 {VOICES.map((v) => (
                   <option key={v} value={v} className="capitalize">
                     {v}
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="Sarvam bulbul:v2 (cheaper, compare quality)">
+              <optgroup label="Sarvam bulbul:v2 — Economy (0.5x credits, cheaper, compare quality)">
                 {SARVAM_V2_VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
                     {v.label}

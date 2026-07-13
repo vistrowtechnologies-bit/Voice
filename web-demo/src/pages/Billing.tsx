@@ -94,6 +94,44 @@ export function Billing() {
           </div>
         )}
 
+        {billing && (
+          <div className="rounded-xl border border-border bg-surface">
+            <div className="border-b border-border px-5 py-4">
+              <h3 className="text-sm font-semibold">Usage by voice tier</h3>
+              <p className="mt-0.5 text-xs text-text-muted">
+                ElevenLabs voices burn more credits/min than Sarvam — they're pricier per minute to run, but sound
+                more expressive and react live to caller emotion.
+              </p>
+            </div>
+            <div className="divide-y divide-border">
+              {(
+                [
+                  ['economy', 'Economy (Sarvam bulbul:v2)', 'savings'],
+                  ['standard', 'Standard (Sarvam bulbul:v3)', 'graphic_eq'],
+                  ['premium', 'Premium (ElevenLabs)', 'auto_awesome'],
+                ] as const
+              ).map(([tier, label, icon]) => {
+                const minutes = billing.minutesByVoiceTier[tier] ?? 0
+                const rate = billing.voiceTierRates[tier] ?? 1
+                return (
+                  <div key={tier} className="flex items-center justify-between px-5 py-3 text-sm">
+                    <div className="flex items-center gap-2.5">
+                      <Icon name={icon} className="text-[16px] text-text-muted" />
+                      <span>{label}</span>
+                      <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-text-muted">
+                        {rate}x credits
+                      </span>
+                    </div>
+                    <span className="text-text-muted">
+                      {minutes} min · {Math.round(minutes * rate * 10) / 10} credits
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         <div>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold">Available plans</h2>

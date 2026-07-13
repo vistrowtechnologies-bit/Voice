@@ -525,6 +525,13 @@ def init_tables() -> None:
                 # Cached conversation-intelligence JSON (summary/sentiment/
                 # outcome/qa_score/…) — populated on demand by call_intelligence.
                 ("intelligence_json", "TEXT DEFAULT ''"),
+                # Exact voice string this call used (e.g. "priya",
+                # "elevenlabs:7b9m...") — captured at save time so a later
+                # voice change on the agent never retroactively reclassifies
+                # an old call's cost. NULL on every call recorded before this
+                # column existed; voice_tier() below treats that as "standard"
+                # so historical billing is unaffected.
+                ("voice", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
@@ -2578,6 +2585,36 @@ def set_credit_rate(call_type: str, rate: float, account_id: int) -> None:
     set_setting(setting_key, str(rate), account_id)
 
 
+# Platform-fixed, not a per-account setting like _CREDIT_RATE_SETTINGS above —
+# this reflects a real vendor cost difference (Sarvam bulbul:v2 ~$0.036/min,
+# bulbul:v3 ~$0.072/min, ElevenLabs Flash v2.5 ~$0.10-0.18/min), not a tenant
+# policy choice. Baselined at bulbul:v3 = 1.0x (today's implicit rate before
+# this feature shipped), so existing behavior is unchanged for every agent
+# still on a Sarvam v3/default voice.
+_VOICE_TIER_MULTIPLIERS = {"economy": 0.5, "standard": 1.0, "premium": 2.0}
+# Same Sarvam bulbul:v2 speaker set as agent/main.py's _SARVAM_V2_SPEAKERS and
+# web-demo/src/pages/Agents.tsx's SARVAM_V2_VOICES — duplicated across all
+# three the same way the full voice lists already are.
+_ECONOMY_VOICES = {"abhilash", "anushka"}
+_PREMIUM_VOICE_PREFIX = "elevenlabs:"
+
+
+def voice_tier(voice: str | None) -> str:
+    """Classifies a call's `voice` string into a credit-billing tier. None/
+    empty (every call recorded before the `voice` column existed) and any
+    unrecognized value (e.g. a `google:` voice, if one ever slips through
+    while that provider is otherwise hidden) both fall back to "standard" —
+    the same "don't guess, use the safe default" reasoning as agent/main.py's
+    own unconfigured-provider fallback."""
+    if not voice:
+        return "standard"
+    if voice.startswith(_PREMIUM_VOICE_PREFIX):
+        return "premium"
+    if voice in _ECONOMY_VOICES:
+        return "economy"
+    return "standard"
+
+
 def billing_summary(account_id: int) -> dict:
     conn = _connect()
     try:
@@ -2588,16 +2625,20 @@ def billing_summary(account_id: int) -> dict:
         rates = credit_rates(account_id)
 
         by_type: dict[str, float] = {}
+        by_voice_tier: dict[str, float] = {}
         used = 0.0
         for row in conn.execute(
-            "SELECT COALESCE(call_type, 'browser') call_type, "
-            "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls WHERE account_id = ? GROUP BY call_type",
+            "SELECT COALESCE(call_type, 'browser') call_type, voice, "
+            "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls WHERE account_id = ? "
+            "GROUP BY call_type, voice",
             (account_id,),
         ).fetchall():
             call_type = row["call_type"] if row["call_type"] in rates else "browser"
+            tier = voice_tier(row["voice"])
             minutes = row["m"]
-            credits = minutes * rates.get(call_type, 1.0)
+            credits = minutes * rates.get(call_type, 1.0) * _VOICE_TIER_MULTIPLIERS[tier]
             by_type[call_type] = round(by_type.get(call_type, 0.0) + minutes, 1)
+            by_voice_tier[tier] = round(by_voice_tier.get(tier, 0.0) + minutes, 1)
             used += credits
         used = round(used, 1)
 
@@ -2608,6 +2649,8 @@ def billing_summary(account_id: int) -> dict:
             "minutesUsed": round(sum(by_type.values()), 1),
             "minutesByType": by_type,
             "creditRates": rates,
+            "minutesByVoiceTier": by_voice_tier,
+            "voiceTierRates": _VOICE_TIER_MULTIPLIERS,
         }
     finally:
         conn.close()
