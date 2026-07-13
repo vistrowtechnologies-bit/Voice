@@ -67,7 +67,7 @@ const GOOGLE_VOICES = [
 // stays out of the label — same "operator sees a Vistrow tier, not which
 // vendor model powers it" convention as MODEL_OPTIONS below.
 const ELEVENLABS_VOICES = [
-  { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male)' },
+  { value: 'elevenlabs:zT03pEAEi0VHKciJODfn', label: '✨ Saurabh (Male)' },
   { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '✨ Monika (Female)' },
 ] as const
 // Same two voices, routed through eleven_v3 instead of Flash — see
