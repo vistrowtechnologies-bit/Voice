@@ -67,8 +67,8 @@ const GOOGLE_VOICES = [
 // stays out of the label — same "operator sees a Vistrow tier, not which
 // vendor model powers it" convention as MODEL_OPTIONS below.
 const ELEVENLABS_VOICES = [
-  { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '* Abhi (Male)' },
-  { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '* Monika (Female)' },
+  { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male)' },
+  { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '✨ Monika (Female)' },
 ] as const
 // Same two voices, routed through eleven_v3 instead of Flash — see
 // agent/main.py's _build_tts docstring for the tradeoffs (StreamAdapter
@@ -76,8 +76,8 @@ const ELEVENLABS_VOICES = [
 // no live mid-call emotion reactivity). Kept as a separate, clearly
 // "experimental" group rather than folded into ELEVENLABS_VOICES above.
 const ELEVENLABS_V3_VOICES = [
-  { value: 'elevenlabs-v3:7b9mYhmnp0y2qSH1FnBL', label: '* Abhi (Male) — Experimental' },
-  { value: 'elevenlabs-v3:zmh5xhBvMzqR4ZlXgcgL', label: '* Monika (Female) — Experimental' },
+  { value: 'elevenlabs-v3:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male) — Experimental' },
+  { value: 'elevenlabs-v3:zmh5xhBvMzqR4ZlXgcgL', label: '✨ Monika (Female) — Experimental' },
 ] as const
 const voiceLabel = (voice: string) =>
   GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
@@ -490,7 +490,7 @@ function AgentEditor({
                   "not in curated list" fallback above instead of corrupting
                   on save. Re-add the optgroup here if Google TTS comes back. */}
             </select>
-            <span className="text-[10px] text-text-muted">* Premium voice — Scale plan, burns credits faster (see Billing)</span>
+            <span className="text-[10px] text-text-muted">✨ Premium voice — Scale plan, burns credits faster (see Billing)</span>
           </Field>
           <Field label="Default language">
             <select value={form.language} onChange={(e) => set('language', e.target.value)} className={inputCls}>
