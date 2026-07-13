@@ -212,21 +212,26 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     A third form, "elevenlabs:<voice_id>" (a voice ID from the operator's
     own ElevenLabs account), routes to ElevenLabs' TTS instead — also
     standalone, not wrapped in a fallback adapter, since it's an explicit
-    choice rather than an outage safety net. eleven_flash_v2_5 is the
+    choice rather than an outage safety net.
+
+    TEMPORARY: model is eleven_v3 for manual listening tests only, at the
+    operator's explicit request — eleven_v3 has no working streaming
+    support in the LiveKit plugin today (WebSocket connection 403s; the
+    only fallback is a non-streaming call ElevenLabs' own docs call
+    unsuitable for real-time/conversational use) and WILL introduce
+    latency or breakage on real calls. Revert to "eleven_flash_v2_5" (the
     lowest-latency multilingual model, matching this product's real-time
-    call latency bar — eleven_v3 (which supports [emotion] bracket tags)
-    is deliberately NOT used: it has no working streaming support in the
-    LiveKit plugin today and ElevenLabs themselves say it's unsuitable for
-    real-time calls. Emotional reactivity instead reuses the same
+    call latency bar) before this goes back to production traffic.
+    Emotional reactivity doesn't need v3 either way — it reuses the same
     caller-emotion detection that drives Sarvam's pace/pitch (see
     emotion.py's ELEVENLABS_EMOTION_DELTAS), applied to VoiceSettings
-    live via update_options — real-time-safe on Flash."""
+    live via update_options, which works on both models."""
     if speaker.startswith(_ELEVENLABS_VOICE_PREFIX) and _ELEVENLABS_API_KEY:
         voice_id = speaker[len(_ELEVENLABS_VOICE_PREFIX) :]
         base = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
         tts = elevenlabs.TTS(
             voice_id=voice_id,
-            model="eleven_flash_v2_5",
+            model="eleven_v3",
             language=reply_language.split("-")[0],
             voice_settings=elevenlabs.VoiceSettings(
                 stability=base["stability"],
