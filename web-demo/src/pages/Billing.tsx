@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { fetchBilling } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import { BRAND } from '../lib/brand'
 import { PLANS } from '../lib/plans'
 import type { BillingSummary } from '../lib/types'
 
 export function Billing() {
+  const { user } = useAuth()
   const [billing, setBilling] = useState<BillingSummary | null>(null)
 
   useEffect(() => {
@@ -14,6 +16,11 @@ export function Billing() {
   }, [])
 
   const usedPct = billing ? Math.min(100, Math.round((billing.creditsUsed / billing.creditsTotal) * 100)) : 0
+  // The account's real plan, matched case-insensitively against PLANS for
+  // consistent display capitalization — falls back to the raw stored value
+  // (e.g. "free"/"trial", which aren't paid tiers in PLANS) or "Starter".
+  const currentPlanName =
+    PLANS.find((p) => p.name.toLowerCase() === (user?.plan || '').toLowerCase())?.name || user?.plan || 'Starter'
 
   return (
     <DashboardLayout>
@@ -47,7 +54,7 @@ export function Billing() {
 
           <div className="rounded-xl border border-border bg-surface p-5">
             <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Current plan</p>
-            <p className="mt-1 text-xl font-bold">Starter</p>
+            <p className="mt-1 text-xl font-bold">{currentPlanName}</p>
             <p className="mt-1 text-xs text-text-muted">Billed monthly · next renewal on the 1st</p>
             <p className="mt-3 flex items-center gap-1.5 text-xs text-cyan">
               <Icon name="check_circle" className="text-[14px]" />
@@ -170,8 +177,14 @@ export function Billing() {
                       {f}
                     </li>
                   ))}
+                  {plan.lockedFeatures?.map((f) => (
+                    <li key={f} className="flex items-center gap-1.5 text-text-muted/50">
+                      <Icon name="lock" className="text-[14px]" />
+                      {f}
+                    </li>
+                  ))}
                 </ul>
-                {plan.name === 'Starter' ? (
+                {plan.name === currentPlanName ? (
                   <button
                     disabled
                     className="mt-auto rounded-lg border border-cyan/40 py-2 text-sm font-bold text-cyan opacity-90"

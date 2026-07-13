@@ -8,6 +8,11 @@ export interface Plan {
   credits: string
   tag: string | null
   features: string[]
+  // Features shown greyed-out with a lock icon instead of a checkmark —
+  // things this plan doesn't include yet, shown so an operator on a lower
+  // tier can see what upgrading unlocks (currently just the ElevenLabs
+  // premium voice tier, gated to Scale).
+  lockedFeatures?: string[]
 }
 
 export const PLANS: Plan[] = [
@@ -17,6 +22,7 @@ export const PLANS: Plan[] = [
     credits: '300 credits/mo',
     tag: null,
     features: ['1 AI agent', '~5 concurrent calls', 'Web calling widget', 'Call history & analytics'],
+    lockedFeatures: ['Premium ElevenLabs voice'],
   },
   {
     name: 'Growth',
@@ -24,12 +30,20 @@ export const PLANS: Plan[] = [
     credits: '1,000 credits/mo',
     tag: 'Recommended',
     features: ['5 AI agents', '~15 concurrent calls', 'Inbound + outbound campaigns', 'CRM webhook integration', 'Priority support'],
+    lockedFeatures: ['Premium ElevenLabs voice'],
   },
   {
     name: 'Scale',
     price: '₹12,999',
     credits: '2,500 credits/mo',
     tag: 'Most Popular',
-    features: ['20 AI agents', '~30 concurrent calls', 'Full API access', 'Knowledge base (RAG)', 'Dedicated success manager'],
+    features: [
+      '20 AI agents',
+      '~30 concurrent calls',
+      'Full API access',
+      'Knowledge base (RAG)',
+      'Dedicated success manager',
+      'Premium ElevenLabs voice',
+    ],
   },
 ]

@@ -65,8 +65,8 @@ const GOOGLE_VOICES = [
 // agent service — selecting one before that just falls back to Sarvam
 // "shubh" silently, same as an unconfigured Google voice above.
 const ELEVENLABS_VOICES = [
-  { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: 'ElevenLabs — Abhi (Male)' },
-  { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: 'ElevenLabs — Monika (Female)' },
+  { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '* ElevenLabs — Abhi (Male)' },
+  { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '* ElevenLabs — Monika (Female)' },
 ] as const
 const voiceLabel = (voice: string) =>
   GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
@@ -461,6 +461,7 @@ function AgentEditor({
                   "not in curated list" fallback above instead of corrupting
                   on save. Re-add the optgroup here if Google TTS comes back. */}
             </select>
+            <span className="text-[10px] text-text-muted">* Premium voice — Scale plan, burns credits faster (see Billing)</span>
           </Field>
           <Field label="Default language">
             <select value={form.language} onChange={(e) => set('language', e.target.value)} className={inputCls}>
