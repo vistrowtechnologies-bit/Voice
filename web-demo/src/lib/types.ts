@@ -315,6 +315,16 @@ export interface Site {
   createdAt: string
 }
 
+export interface HelpFaq {
+  question: string
+  answer: string
+}
+
+export interface HelpChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export interface ApiKey {
   id: number
   name: string

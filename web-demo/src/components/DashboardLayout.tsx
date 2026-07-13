@@ -7,6 +7,8 @@ import { BRAND } from '../lib/brand'
 import { adminExitImpersonation } from '../lib/adminApi'
 import { useAuth } from '../lib/auth'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
+import { DashboardTour } from './DashboardTour'
+import { HelpChatWidget } from './HelpChatWidget'
 import { Icon } from './Icon'
 import { OnboardingModal } from './OnboardingModal'
 
@@ -29,13 +31,13 @@ function ThemeSwitcher() {
   )
 }
 
-const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: string }[] }[] = [
+const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: string; tour?: string }[] }[] = [
   {
     title: 'Platform',
     items: [
-      { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
-      { to: '/dashboard/agents', label: 'Agents', icon: 'smart_toy' },
-      { to: '/dashboard/knowledge', label: 'Knowledge Base', icon: 'menu_book' },
+      { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', tour: 'nav-dashboard' },
+      { to: '/dashboard/agents', label: 'Agents', icon: 'smart_toy', tour: 'nav-agents' },
+      { to: '/dashboard/knowledge', label: 'Knowledge Base', icon: 'menu_book', tour: 'nav-knowledge' },
     ],
   },
   {
@@ -50,7 +52,7 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
     items: [
       { to: '/dashboard/calls', label: 'All Calls History', icon: 'history' },
       { to: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
-      { to: '/dashboard/integrations', label: 'Integrations', icon: 'extension' },
+      { to: '/dashboard/integrations', label: 'Integrations', icon: 'extension', tour: 'nav-integrations' },
       { to: '/dashboard/website-widget', label: 'Website Widget', icon: 'widgets' },
     ],
   },
@@ -60,7 +62,7 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
       { to: '/dashboard/numbers', label: 'Phone Numbers', icon: 'dialpad' },
       { to: '/dashboard/compliance', label: 'Compliance', icon: 'verified_user' },
       { to: '/dashboard/billing', label: 'Billing', icon: 'credit_card' },
-      { to: '/dashboard/settings', label: 'Settings', icon: 'settings' },
+      { to: '/dashboard/settings', label: 'Settings', icon: 'settings', tour: 'nav-settings' },
     ],
   },
 ]
@@ -175,6 +177,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   to={item.to}
                   end={item.to === '/dashboard'}
                   onClick={onNavigate}
+                  data-tour={item.tour}
                   className={({ isActive }) =>
                     `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                       isActive
@@ -324,6 +327,8 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         <main>{children}</main>
       </div>
       {user && !user.onboarded && <OnboardingModal />}
+      {user && user.onboarded && !user.tourCompleted && <DashboardTour />}
+      {user && <HelpChatWidget />}
     </div>
   )
 }

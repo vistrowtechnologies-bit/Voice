@@ -568,6 +568,11 @@ def init_tables() -> None:
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TEXT")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'password'")
+            # NULL until the first-run dashboard tour is finished or skipped.
+            # Per-user (not per-account like onboarded_at above) so a
+            # teammate invited into an already-onboarded account still sees
+            # the tour once on their own first login.
+            conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tour_completed_at TEXT")
             # Campaign-engine columns added after the campaigns table shipped as
             # metadata-only — the real dialer needs a from-number and retry/
             # concurrency policy on the existing production table.
@@ -704,7 +709,7 @@ def get_user_by_id(user_id: int) -> dict | None:
     try:
         row = conn.execute(
             """
-            SELECT u.id, u.email, u.name, u.role, u.account_id,
+            SELECT u.id, u.email, u.name, u.role, u.account_id, u.tour_completed_at,
                    a.name AS account_name, a.plan AS account_plan,
                    a.is_platform_owner, a.onboarded_at
             FROM users u JOIN accounts a ON a.id = u.account_id
@@ -742,6 +747,17 @@ def mark_account_onboarded(account_id: int) -> None:
         with conn:
             conn.execute(
                 f"UPDATE accounts SET onboarded_at = {_NOW} WHERE id = ? AND onboarded_at IS NULL", (account_id,)
+            )
+    finally:
+        conn.close()
+
+
+def mark_user_tour_complete(user_id: int) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE users SET tour_completed_at = {_NOW} WHERE id = ? AND tour_completed_at IS NULL", (user_id,)
             )
     finally:
         conn.close()

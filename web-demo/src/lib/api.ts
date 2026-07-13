@@ -7,6 +7,8 @@ import type {
   CallRecord,
   Contact,
   DashboardSummary,
+  HelpChatMessage,
+  HelpFaq,
   InboundRoute,
   Integration,
   ApiKey,
@@ -245,6 +247,12 @@ export const deleteSite = (id: number) => send('DELETE', `/widget/sites/${id}`)
 export const regenerateSiteKey = (id: number) => send<Site>('POST', `/widget/sites/${id}/regenerate-key`)
 export const wordpressPluginUrl = '/api/widget/wordpress-plugin.zip'
 export const fetchWidgetBackendUrl = () => get<{ backendUrl: string | null }>('/widget/backend-url')
+
+// ------------------------------------------------------------- help chat
+
+export const fetchHelpFaqs = () => get<HelpFaq[]>('/help/faqs')
+export const sendHelpChatMessage = (message: string, history: HelpChatMessage[]) =>
+  send<{ reply: string }>('POST', '/help/chat', { message, history })
 
 // --------------------------------------------------------------- helpers
 

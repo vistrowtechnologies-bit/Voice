@@ -13,10 +13,12 @@ import call_intelligence
 import calls_db
 import campaign_dialer
 import email_sender
+import help_chat
 import integrations_dispatch
 import kb_crawl
 import kb_extract
 import livekit_sip
+from help_content import FAQS
 from dotenv import load_dotenv
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -228,6 +230,7 @@ def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
         "plan": user["account_plan"],
         "isPlatformOwner": bool(user["is_platform_owner"]),
         "onboarded": user["onboarded_at"] is not None,
+        "tourCompleted": user["tour_completed_at"] is not None,
         "impersonating": False,
     }
     if impersonator_id:
@@ -625,6 +628,12 @@ def update_account(req: UpdateAccountRequest, user: dict = Depends(current_user)
 @app.post("/onboarding/complete")
 def complete_onboarding(user: dict = Depends(current_user)) -> dict:
     calls_db.mark_account_onboarded(user["account_id"])
+    return {"user": _me_payload(user["user_id"])}
+
+
+@app.post("/tour/complete")
+def complete_tour(user: dict = Depends(current_user)) -> dict:
+    calls_db.mark_user_tour_complete(user["user_id"])
     return {"user": _me_payload(user["user_id"])}
 
 
@@ -1306,6 +1315,33 @@ def extract_qa_from_source(source_id: int, user: dict = Depends(current_user)) -
     except RuntimeError as exc:
         raise HTTPException(502, str(exc)) from exc
     return {"ok": True, "pairs": pairs}
+
+
+# ------------------------------------------------------------- help chat
+
+
+class HelpChatTurn(BaseModel):
+    role: str
+    content: str
+
+
+class HelpChatRequest(BaseModel):
+    message: str
+    history: list[HelpChatTurn] = []
+
+
+@app.get("/help/faqs")
+def list_help_faqs(user: dict = Depends(current_user)) -> list[dict]:
+    return FAQS
+
+
+@app.post("/help/chat")
+def help_chat_message(req: HelpChatRequest, user: dict = Depends(current_user)) -> dict:
+    try:
+        reply = help_chat.answer_help_question(req.message, [turn.model_dump() for turn in req.history])
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return {"reply": reply}
 
 
 # ----------------------------------------------------------- campaigns

@@ -10,6 +10,7 @@ export interface AuthUser {
   plan: string
   isPlatformOwner: boolean
   onboarded: boolean
+  tourCompleted: boolean
   impersonating: boolean
 }
 
@@ -59,6 +60,7 @@ export const apiUpdateProfile = (data: { name?: string; currentPassword?: string
   authFetch<{ user: AuthUser }>('/profile', data, 'PATCH')
 export const apiUpdateAccount = (name: string) => authFetch<{ user: AuthUser }>('/account', { name }, 'PATCH')
 export const apiCompleteOnboarding = () => authFetch<{ user: AuthUser }>('/onboarding/complete', {})
+export const apiCompleteTour = () => authFetch<{ user: AuthUser }>('/tour/complete', {})
 
 export interface AuthConfig {
   oauthProviders: string[]
