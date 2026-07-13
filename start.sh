@@ -1,20 +1,20 @@
 #!/bin/bash
-# Runs both processes in one Railway service, both pointed at the same
-# Postgres DATABASE_URL: the FastAPI backend (token API + telephony/SIP +
-# dashboard) and the LiveKit agent worker that actually answers calls. If
-# either exits, stop the container so Railway restarts it rather than
-# limping along with only one process alive.
+# Railway service startup — API/dashboard ONLY.
 #
-# Needs bash, not /bin/sh (dash on Debian) — `wait -n` is a bash builtin
-# feature; dash's wait doesn't support -n and errors on every invocation,
-# which silently prevented both processes from ever starting.
+# The FastAPI backend (token API + telephony/SIP + dashboard) and its
+# in-process campaign dialer run here, pointed at the Postgres DATABASE_URL.
+#
+# The LiveKit agent worker (agent/main.py) NO LONGER runs here — it was moved
+# to LiveKit Cloud Agents (agent id CA_TGdpVhSdxDyS, region ap-south / "India
+# West"), which auto-scales replicas per demand and gives each 2 CPU / 4GB RAM.
+# That removed the OOM/SIGKILL mid-call crashes this trial-plan container hit
+# when it tried to host both the API and the memory-heavy call worker together
+# (the "agent restarts and re-greets the caller" bug). Deploy/update it with:
+#   cd agent && lk agent deploy        (redeploy current code)
+#   lk agent status | lk agent logs    (health / runtime logs)
+# To roll back to the old single-container setup, restore the two-process
+# version of this file from git history (it ran `python agent/main.py start`
+# alongside uvicorn with `wait -n`).
 set -e
 
-uvicorn token_api:app --host 0.0.0.0 --port "${PORT:-8000}" --app-dir server &
-BACKEND_PID=$!
-
-python agent/main.py start &
-AGENT_PID=$!
-
-wait -n "$BACKEND_PID" "$AGENT_PID"
-exit $?
+exec uvicorn token_api:app --host 0.0.0.0 --port "${PORT:-8000}" --app-dir server
