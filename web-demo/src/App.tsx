@@ -22,6 +22,8 @@ import { Pricing } from './pages/marketing/Pricing'
 import { About } from './pages/marketing/About'
 import { Contact } from './pages/marketing/Contact'
 import { ComingSoon } from './pages/marketing/ComingSoon'
+import { Privacy } from './pages/marketing/Privacy'
+import { Terms } from './pages/marketing/Terms'
 import { CallFlow } from './pages/CallFlow'
 import { Summary } from './pages/Summary'
 import { Login } from './pages/Login'
@@ -64,8 +66,8 @@ function App() {
         <Route path="/resources/blog" element={<ComingSoon title="Blog — coming soon" />} />
         <Route path="/resources/docs" element={<ComingSoon title="Docs — coming soon" />} />
         <Route path="/resources/case-studies" element={<ComingSoon title="Case studies — coming soon" />} />
-        <Route path="/privacy" element={<ComingSoon title="Privacy Policy" />} />
-        <Route path="/terms" element={<ComingSoon title="Terms of Service" />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
 
         {/* /demo is the public live-demo call; /call is the same flow (kept for
             existing links/embeds). Both reuse CallFlow. */}
