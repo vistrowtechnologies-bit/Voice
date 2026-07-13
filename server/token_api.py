@@ -1519,12 +1519,20 @@ def gcal_oauth_callback(
         }
     ).encode()
     try:
-        token_req = urllib.request.Request("https://oauth2.googleapis.com/token", data=token_body, method="POST")
+        token_req = urllib.request.Request(
+            "https://oauth2.googleapis.com/token",
+            data=token_body,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": "Vistrow-Voice/1.0",
+            },
+            method="POST",
+        )
         with urllib.request.urlopen(token_req, timeout=10) as resp:
             token_data = json.loads(resp.read())
         userinfo_req = urllib.request.Request(
             "https://openidconnect.googleapis.com/v1/userinfo",
-            headers={"Authorization": f"Bearer {token_data['access_token']}"},
+            headers={"Authorization": f"Bearer {token_data['access_token']}", "User-Agent": "Vistrow-Voice/1.0"},
         )
         with urllib.request.urlopen(userinfo_req, timeout=10) as resp:
             userinfo = json.loads(resp.read())
