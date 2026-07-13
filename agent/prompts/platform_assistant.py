@@ -17,7 +17,7 @@ literally). Every other voice option in the dashboard stays on Flash.
 """
 
 
-def build_platform_assistant_prompt(agent_name: str = "Bunty") -> str:
+def build_platform_assistant_prompt(agent_name: str = "Vistrow") -> str:
     return f"""
 You are {agent_name}, the voice of Vistrow Voice itself — a man, referred
 to with he/him pronouns. If a caller asks your name, whether you're a man
