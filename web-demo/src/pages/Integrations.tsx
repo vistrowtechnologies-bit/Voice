@@ -13,6 +13,7 @@ import {
 import type { Integration } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import { GoogleLogo } from './AuthShell'
+import googleCalendarIcon from '../assets/google-calendar.webp'
 
 const ICONS: Record<string, string> = {
   webhook: 'webhook',
@@ -20,44 +21,6 @@ const ICONS: Record<string, string> = {
   whatsapp: 'chat',
   sheets: 'table_chart',
   calcom: 'event_available',
-}
-
-// The real Google Calendar app icon — a folded-corner "page" in the brand's
-// four colors with "31" on it, not the generic Material "calendar_month"
-// glyph every other card uses. Same official palette as GoogleLogo
-// (AuthShell.tsx). The clipPath carries the rounded top / folded
-// bottom-right corner so every color block underneath gets it for free.
-function GoogleCalendarIcon({ className = '' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <defs>
-        <clipPath id="gcal-page">
-          <path d="M8 0h32a8 8 0 0 1 8 8v27L35 48H8a8 8 0 0 1-8-8V8a8 8 0 0 1 8-8z" />
-        </clipPath>
-      </defs>
-      {/* red, revealed only where the page's folded corner cuts away */}
-      <rect x="29" y="29" width="19" height="19" fill="#EA4335" />
-      <g clipPath="url(#gcal-page)">
-        <rect width="48" height="48" fill="#fff" />
-        <rect width="38" height="13" fill="#4285F4" />
-        <rect x="38" width="10" height="13" fill="#1967D2" />
-        <rect y="13" width="13" height="17" fill="#4285F4" />
-        <rect x="38" y="13" width="10" height="19" fill="#FBBC04" />
-        <rect y="30" width="24" height="18" fill="#34A853" />
-        <text
-          x="25"
-          y="34"
-          fontFamily="Arial, Helvetica, sans-serif"
-          fontWeight="700"
-          fontSize="17"
-          fill="#1967D2"
-          textAnchor="middle"
-        >
-          31
-        </text>
-      </g>
-    </svg>
-  )
 }
 
 // Integrations that connect with a pasted URL (delivery targets + the Google
@@ -195,7 +158,7 @@ export function Integrations() {
                 <div className="flex items-center gap-3">
                   <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${integration.key === 'gcal' ? 'overflow-hidden bg-white' : 'bg-primary/20 text-primary'}`}>
                     {integration.key === 'gcal' ? (
-                      <GoogleCalendarIcon className="h-full w-full" />
+                      <img src={googleCalendarIcon} alt="Google Calendar" className="h-full w-full object-contain" />
                     ) : (
                       <Icon name={ICONS[integration.key] ?? 'extension'} className="text-[20px]" />
                     )}
