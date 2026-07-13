@@ -68,7 +68,7 @@ const GOOGLE_VOICES = [
 // vendor model powers it" convention as MODEL_OPTIONS below.
 const ELEVENLABS_VOICES = [
   { value: 'elevenlabs:zT03pEAEi0VHKciJODfn', label: '✨ Saurabh (Male)' },
-  { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '✨ Monika (Female)' },
+  { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '✨ Siya (Female)' },
   { value: 'elevenlabs:FmBhnvP58BK0vz65OOj7', label: '✨ Viraj (Male)' },
 ] as const
 // Same voice IDs as ELEVENLABS_VOICES above, routed through eleven_v3
@@ -83,6 +83,7 @@ const ELEVENLABS_V3_VOICES = [
   { value: 'elevenlabs-v3:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male) — Premium+' },
   { value: 'elevenlabs-v3:1qEiC6qsybMkmnNdVMbK', label: '✨ Monika (Female) — Premium+' },
   { value: 'elevenlabs-v3:FmBhnvP58BK0vz65OOj7', label: '✨ Pranav (Male) — Premium+' },
+  { value: 'elevenlabs-v3:9lx2GDtpvyyNBM7O9Mmx', label: '✨ Saavi (Female) — Premium+' },
 ] as const
 const voiceLabel = (voice: string) =>
   GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
