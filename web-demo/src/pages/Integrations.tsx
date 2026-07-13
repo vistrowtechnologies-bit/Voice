@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
-import { fetchIntegrations, formatRelativeTime, testIntegration, updateIntegration } from '../lib/api'
+import {
+  disconnectGcal,
+  fetchIntegrations,
+  formatRelativeTime,
+  gcalOauthStartUrl,
+  testIntegration,
+  updateIntegration,
+} from '../lib/api'
 import type { Integration } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
+import { GoogleLogo } from './AuthShell'
 
 const ICONS: Record<string, string> = {
   webhook: 'webhook',
@@ -40,6 +49,15 @@ const CONNECT_HINT: Record<string, string> = {
   gcal: 'Deploy the script below as a Web App, then paste its /exec URL. Agents will check real open slots and book on your Google Calendar during calls.',
 }
 
+const GCAL_STATUS_MESSAGE: Record<string, { text: string; ok: boolean }> = {
+  connected: { text: 'Google Calendar connected — agents can now book real appointments.', ok: true },
+  error: { text: 'Could not connect Google Calendar. Please try again.', ok: false },
+  error_no_refresh: {
+    text: 'Google didn’t grant offline access, so the connection can’t persist. Try connecting again and approve all requested permissions.',
+    ok: false,
+  },
+}
+
 export function Integrations() {
   const { user } = useAuth()
   const canManage = hasRole(user, 'admin')
@@ -48,12 +66,25 @@ export function Integrations() {
   const [url, setUrl] = useState('')
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, string>>({})
+  const [showGcalScript, setShowGcalScript] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const gcalNotice = searchParams.get('gcal')
 
   const reload = () => fetchIntegrations().then(setIntegrations).catch(() => setIntegrations([]))
 
   useEffect(() => {
     reload()
   }, [])
+
+  // Clear the ?gcal=... param once shown so a refresh doesn't re-show it.
+  useEffect(() => {
+    if (!gcalNotice) return
+    const t = setTimeout(() => {
+      searchParams.delete('gcal')
+      setSearchParams(searchParams, { replace: true })
+    }, 6000)
+    return () => clearTimeout(t)
+  }, [gcalNotice])
 
   const connected = integrations.filter((i) => i.status === 'connected').length
 
@@ -66,7 +97,11 @@ export function Integrations() {
   }
 
   const handleDisconnect = async (key: string) => {
-    await updateIntegration(key, 'not_connected', {})
+    if (key === 'gcal') {
+      await disconnectGcal()
+    } else {
+      await updateIntegration(key, 'not_connected', {})
+    }
     reload()
   }
 
@@ -90,6 +125,19 @@ export function Integrations() {
       <PageHeader title="Integrations" subtitle="Connect and manage external tools that power your agents" />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
+        {gcalNotice && GCAL_STATUS_MESSAGE[gcalNotice] && (
+          <div
+            className={`flex items-center gap-2 rounded-lg border-l-[3px] px-4 py-3 text-sm ${
+              GCAL_STATUS_MESSAGE[gcalNotice].ok
+                ? 'border-success bg-success/5 text-success'
+                : 'border-destructive bg-destructive/5 text-destructive'
+            }`}
+          >
+            <Icon name={GCAL_STATUS_MESSAGE[gcalNotice].ok ? 'check_circle' : 'error'} className="text-[16px]" />
+            {GCAL_STATUS_MESSAGE[gcalNotice].text}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard icon="link" label="Connected Integrations" value={String(connected)} hint={connected === 0 ? 'None connected' : 'live and syncing'} />
           <StatCard icon="apps" label="Available Integrations" value={String(integrations.length)} hint="Ready to connect" />
@@ -125,7 +173,11 @@ export function Integrations() {
 
               <dl className="mb-4 flex flex-col gap-1.5 rounded-lg border border-border bg-surface-high/40 p-3 text-xs">
                 <InfoRow label="Status" value={integration.status === 'connected' ? 'Connected' : 'Not Connected'} />
-                <InfoRow label="Endpoint" value={integration.config.url ? integration.config.url.slice(0, 40) : '—'} />
+                {integration.key === 'gcal' && integration.config.mode === 'oauth' ? (
+                  <InfoRow label="Google account" value={integration.config.connected_email || '—'} />
+                ) : (
+                  <InfoRow label="Endpoint" value={integration.config.url ? integration.config.url.slice(0, 40) : '—'} />
+                )}
                 <InfoRow label="Last Sync" value={integration.lastSync ? formatRelativeTime(integration.lastSync) : '—'} />
               </dl>
 
@@ -184,6 +236,46 @@ export function Integrations() {
                     <Icon name="link_off" className="text-[15px]" />
                     Disconnect
                   </button>
+                </div>
+              ) : integration.key === 'gcal' ? (
+                <div className="mt-auto flex flex-col gap-2">
+                  <a
+                    href={gcalOauthStartUrl}
+                    className="flex items-center justify-center gap-2 rounded-lg border border-[#dadce0] bg-white py-2 text-xs font-bold text-[#3c4043] shadow-sm transition-colors hover:bg-[#f8f8f8]"
+                  >
+                    <GoogleLogo className="h-[15px] w-[15px]" />
+                    Connect with Google
+                  </a>
+                  <button
+                    onClick={() => setShowGcalScript((v) => !v)}
+                    className="text-[11px] font-semibold text-text-muted hover:text-text"
+                  >
+                    {showGcalScript ? 'Hide advanced option' : 'Advanced: connect with a script instead'}
+                  </button>
+                  {showGcalScript && (
+                    <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-high/40 p-3">
+                      <input
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        placeholder={URL_PLACEHOLDER.gcal}
+                        className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+                      />
+                      <button
+                        onClick={() => handleConnect('gcal')}
+                        className="rounded-lg bg-surface py-2 text-xs font-bold hover:bg-border"
+                      >
+                        Save script URL
+                      </button>
+                      <a
+                        href="/api/integrations/google-calendar-script.gs"
+                        download
+                        className="flex items-center gap-1 text-[11px] font-semibold text-cyan hover:underline"
+                      >
+                        <Icon name="download" className="text-[14px]" />
+                        Download the Google Calendar script
+                      </a>
+                    </div>
+                  )}
                 </div>
               ) : CONNECTABLE.has(integration.key) ? (
                 <button

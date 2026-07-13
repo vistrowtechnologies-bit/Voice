@@ -208,10 +208,14 @@ def get_webhook_url() -> str | None:
         conn.close()
 
 
-def get_calendar_url(account_id: int | None) -> str | None:
-    """The connected Google-Calendar (Apps Script web-app) URL for this tenant,
-    or None. Account-scoped; None on any error so a booking tool degrades to a
-    graceful 'I'll have the team confirm' instead of crashing the call."""
+def get_gcal_config(account_id: int | None) -> dict | None:
+    """The connected Google Calendar integration's config for this tenant, or
+    None if nothing is connected. Two shapes depending on how the tenant
+    connected: {"mode":"oauth","access_token",...} for the one-click OAuth
+    connect (server/token_api.py's gcal_oauth_callback), or {"url":...} for
+    the older Apps Script web-app bridge. Account-scoped; None on any error
+    so a booking tool degrades to a graceful 'I'll have the team confirm'
+    instead of crashing the call."""
     if account_id is None:
         return None
     conn = dbconn.connect()
@@ -223,9 +227,34 @@ def get_calendar_url(account_id: int | None) -> str | None:
         ).fetchone()
         if row is None:
             return None
-        return json.loads(row["config_json"] or "{}").get("url") or None
+        cfg = json.loads(row["config_json"] or "{}")
+        return cfg or None
     except psycopg.Error:
         return None
+    finally:
+        conn.close()
+
+
+def update_gcal_access_token(account_id: int, access_token: str, expires_at: int) -> None:
+    """Persist a refreshed OAuth access token so the next call reuses it
+    instead of refreshing again. Read-modify-write to preserve the other
+    stored fields (refresh_token, connected_email)."""
+    conn = dbconn.connect()
+    try:
+        with conn:
+            row = conn.execute(
+                "SELECT config_json FROM integrations WHERE account_id = ? AND key = 'gcal'",
+                (account_id,),
+            ).fetchone()
+            cfg = json.loads(row["config_json"] or "{}") if row else {}
+            cfg["access_token"] = access_token
+            cfg["token_expires_at"] = expires_at
+            conn.execute(
+                "UPDATE integrations SET config_json = ? WHERE account_id = ? AND key = 'gcal'",
+                (json.dumps(cfg), account_id),
+            )
+    except psycopg.Error:
+        pass
     finally:
         conn.close()
 

@@ -208,6 +208,8 @@ export const updateIntegration = (key: string, status: string, config: Record<st
   send('PATCH', `/integrations/${key}`, { status, config })
 export const testIntegration = (key: string) =>
   send<{ ok: boolean; detail: string }>('POST', `/integrations/${key}/test`)
+export const gcalOauthStartUrl = '/api/integrations/gcal/oauth/start'
+export const disconnectGcal = () => send<{ ok: boolean }>('POST', '/integrations/gcal/disconnect')
 
 // ------------------------------------------------------- telephony (EnableX)
 

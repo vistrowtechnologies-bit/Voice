@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import secrets
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -1446,6 +1447,143 @@ def update_integration(key: str, data: dict = Body(...), user: dict = Depends(re
 def test_integration(key: str, user: dict = Depends(require_role("admin"))) -> dict:
     ok, detail = integrations_dispatch.test_integration(user["account_id"], key)
     return {"ok": ok, "detail": detail}
+
+
+# --------------------------------------------- Google Calendar (OAuth connect)
+#
+# A one-click "Connect Google Calendar" for booking — separate from the
+# login OAuth flow above, because it asks for a different, sensitive scope
+# (calendar.events, offline access for a refresh token) that Google requires
+# app verification for. Deliberately its own client-secret-bearing routes
+# rather than reusing /auth/oauth/google/* so a misconfiguration here can
+# never affect the login flow. These routes sit behind require_session (not
+# in _PUBLIC_PATHS/_PUBLIC_PREFIXES), so the browser's existing session
+# cookie survives the round-trip to Google and back — no need to smuggle
+# account_id through the state param.
+
+_GCAL_OAUTH_STATE_COOKIE = "vv_gcal_oauth_state"
+_GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+
+
+@app.get("/integrations/gcal/oauth/start")
+def gcal_oauth_start(response: Response, user: dict = Depends(require_role("admin"))) -> RedirectResponse:
+    client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("GOOGLE_CALENDAR_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        raise HTTPException(404, "Google Calendar connect is not configured on this server")
+    state = secrets.token_urlsafe(24)
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": _GCAL_SCOPE,
+        "state": state,
+        # offline + consent: the only way Google issues a refresh_token, which
+        # the agent needs to book appointments without the tenant present.
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+    redirect = RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}")
+    redirect.set_cookie(
+        _GCAL_OAUTH_STATE_COOKIE, state, max_age=600, httponly=True, secure=_COOKIE_SECURE, samesite="lax"
+    )
+    return redirect
+
+
+@app.get("/integrations/gcal/oauth/callback")
+def gcal_oauth_callback(
+    request: Request, code: str | None = None, state: str | None = None, error: str | None = None,
+    user: dict = Depends(require_role("admin")),
+) -> RedirectResponse:
+    base_url = _app_base_url(request)
+    fail = RedirectResponse(f"{base_url}/dashboard/integrations?gcal=error")
+    if error or not code:
+        return fail
+    expected_state = request.cookies.get(_GCAL_OAUTH_STATE_COOKIE)
+    if not expected_state or state != expected_state:
+        return fail
+
+    client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("GOOGLE_CALENDAR_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        return fail
+    token_body = urllib.parse.urlencode(
+        {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+    ).encode()
+    try:
+        token_req = urllib.request.Request("https://oauth2.googleapis.com/token", data=token_body, method="POST")
+        with urllib.request.urlopen(token_req, timeout=10) as resp:
+            token_data = json.loads(resp.read())
+        userinfo_req = urllib.request.Request(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {token_data['access_token']}"},
+        )
+        with urllib.request.urlopen(userinfo_req, timeout=10) as resp:
+            userinfo = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode("utf-8", "replace")[:500]
+        except Exception:
+            detail = "<no body>"
+        logger.error("Google Calendar OAuth token exchange failed: HTTP %s — %s", e.code, detail)
+        return fail
+    except Exception:
+        logger.exception("Google Calendar OAuth exchange failed")
+        return fail
+
+    refresh_token = token_data.get("refresh_token")
+    if not refresh_token:
+        # No refresh_token means we can't book anything once this access token
+        # expires (~1hr) — this shouldn't happen with prompt=consent, but if
+        # Google omits it (e.g. a weird re-consent edge case) fail loudly
+        # rather than silently storing a connection that dies in an hour.
+        logger.error("Google Calendar OAuth returned no refresh_token for account %s", user["account_id"])
+        return RedirectResponse(f"{base_url}/dashboard/integrations?gcal=error_no_refresh")
+
+    expires_at = int(time.time()) + int(token_data.get("expires_in", 3600))
+    calls_db.update_integration(
+        "gcal",
+        "connected",
+        {
+            "mode": "oauth",
+            "access_token": token_data["access_token"],
+            "refresh_token": refresh_token,
+            "token_expires_at": expires_at,
+            "connected_email": userinfo.get("email", ""),
+        },
+        user["account_id"],
+    )
+    redirect = RedirectResponse(f"{base_url}/dashboard/integrations?gcal=connected")
+    redirect.delete_cookie(_GCAL_OAUTH_STATE_COOKIE, path="/")
+    return redirect
+
+
+@app.post("/integrations/gcal/disconnect")
+def gcal_disconnect(user: dict = Depends(require_role("admin"))) -> dict:
+    integ = next((i for i in calls_db.list_integrations(user["account_id"]) if i["key"] == "gcal"), None)
+    token = (integ or {}).get("config", {}).get("access_token")
+    if token:
+        try:
+            urllib.request.urlopen(
+                urllib.request.Request(
+                    "https://oauth2.googleapis.com/revoke",
+                    data=urllib.parse.urlencode({"token": token}).encode(),
+                    method="POST",
+                ),
+                timeout=5,
+            )
+        except Exception:
+            logger.warning("Google token revoke failed (non-fatal)", exc_info=True)
+    calls_db.update_integration("gcal", "not_connected", {}, user["account_id"])
+    return {"ok": True}
 
 
 # ----------------------------------------------------- telephony (EnableX)

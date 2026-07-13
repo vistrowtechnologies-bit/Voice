@@ -79,7 +79,7 @@ export function AuthShell({
 // icon or a button recolored to match a dark app theme both read as "fake"
 // Google sign-in, which is worse for trust than briefly breaking theme
 // consistency.
-function GoogleLogo({ className = '' }: { className?: string }) {
+export function GoogleLogo({ className = '' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <path

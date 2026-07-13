@@ -148,21 +148,67 @@ async def book_site_visit(
     return f"Site visit booked for {lead_name} on {date} at {time}."
 
 
-async def _calendar_request(context: RunContext, payload: dict) -> dict | None:
-    """POST to the tenant's connected Google-Calendar Apps Script web app.
-    Returns the parsed JSON, or None if no calendar is connected / the call
-    fails — callers turn None into a graceful spoken fallback."""
+async def _calendar_check(context: RunContext, date: str, duration_minutes: int) -> list[str] | None:
+    """Real open HH:MM slots for `date`, or None if no calendar is connected
+    or the call fails — callers turn None into a graceful spoken fallback.
+    Branches on how the tenant connected: the one-click OAuth flow (native
+    Calendar API, refreshed token) or the older Apps Script web-app bridge."""
     account_id = (context.userdata or {}).get("account_id")
-    url = db.get_calendar_url(account_id)
+    cfg = db.get_gcal_config(account_id)
+    if not cfg:
+        return None
+    if cfg.get("mode") == "oauth":
+        import google_calendar
+
+        return await google_calendar.check_availability(account_id, cfg, date, duration_minutes)
+    url = cfg.get("url")
     if not url:
         return None
     try:
         timeout = aiohttp.ClientTimeout(total=8)
         async with aiohttp.ClientSession(timeout=timeout) as http:
-            async with http.post(url, json=payload) as resp:
+            async with http.post(url, json={"action": "check", "date": date, "duration": duration_minutes}) as resp:
+                result = await resp.json(content_type=None)
+        return result.get("slots") if result else None
+    except Exception:
+        logger.warning("calendar (script) availability request failed", exc_info=True)
+        return None
+
+
+async def _calendar_book(
+    context: RunContext, date: str, time: str, duration_minutes: int, name: str, phone: str, purpose: str
+) -> dict | None:
+    """{"ok": bool, "error"?: str}, or None if no calendar is connected /
+    unreachable. Same oauth-vs-script branch as _calendar_check."""
+    account_id = (context.userdata or {}).get("account_id")
+    cfg = db.get_gcal_config(account_id)
+    if not cfg:
+        return None
+    if cfg.get("mode") == "oauth":
+        import google_calendar
+
+        return await google_calendar.book_event(account_id, cfg, date, time, duration_minutes, name, phone, purpose)
+    url = cfg.get("url")
+    if not url:
+        return None
+    try:
+        timeout = aiohttp.ClientTimeout(total=8)
+        async with aiohttp.ClientSession(timeout=timeout) as http:
+            async with http.post(
+                url,
+                json={
+                    "action": "book",
+                    "date": date,
+                    "time": time,
+                    "duration": duration_minutes,
+                    "name": name,
+                    "phone": phone,
+                    "purpose": purpose,
+                },
+            ) as resp:
                 return await resp.json(content_type=None)
     except Exception:
-        logger.warning("calendar request failed", exc_info=True)
+        logger.warning("calendar (script) booking request failed", exc_info=True)
         return None
 
 
@@ -177,16 +223,14 @@ async def check_calendar_availability(context: RunContext, date: str, duration_m
         duration_minutes: How long the appointment needs to be. Default 30.
     """
     logger.info("checking calendar availability for %s (%smin)", date, duration_minutes)
-    result = await _calendar_request(
-        context, {"action": "check", "date": date, "duration": duration_minutes}
-    )
-    if result is None:
-        # No calendar connected — don't invent slots; hand off honestly.
+    slots = await _calendar_check(context, date, duration_minutes)
+    if slots is None:
+        # No calendar connected (or unreachable) — don't invent slots; hand
+        # off honestly.
         return (
             "No live calendar is connected, so I can't confirm exact open times. "
             "Note the caller's preferred date and time and tell them the team will confirm."
         )
-    slots = result.get("slots") or []
     if not slots:
         return f"No open slots on {date}. Offer the caller a different day."
     return f"Open slots on {date}: {', '.join(slots)}. Offer these to the caller."
@@ -221,18 +265,7 @@ async def book_appointment(
         lead_data.setdefault("name", name)
         lead_data.setdefault("phone", phone)
         lead_data["appointment"] = {"date": date, "time": time, "purpose": purpose}
-    result = await _calendar_request(
-        context,
-        {
-            "action": "book",
-            "date": date,
-            "time": time,
-            "duration": duration_minutes,
-            "name": name,
-            "phone": phone,
-            "purpose": purpose,
-        },
-    )
+    result = await _calendar_book(context, date, time, duration_minutes, name, phone, purpose)
     event = {
         "type": "appointment_booked",
         "date": date,
