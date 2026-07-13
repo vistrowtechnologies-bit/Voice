@@ -57,16 +57,18 @@ const GOOGLE_VOICES = [
   { value: 'google:hi-IN-Neural2-A', label: 'Google — Hindi, Female' },
   { value: 'google:hi-IN-Neural2-B', label: 'Google — Hindi, Male' },
 ] as const
-// Two ElevenLabs voices from the operator's own ElevenLabs account —
+// Two premium voices from the operator's own ElevenLabs account —
 // multilingual by model (eleven_flash_v2_5 in agent/main.py), not by voice,
 // so either can speak every language this platform supports. The
 // "elevenlabs:" prefix is how _build_tts tells these apart from a Sarvam
 // speaker name; only takes effect once ELEVEN_API_KEY is configured on the
 // agent service — selecting one before that just falls back to Sarvam
-// "shubh" silently, same as an unconfigured Google voice above.
+// "shubh" silently, same as an unconfigured Google voice above. Vendor name
+// stays out of the label — same "operator sees a Vistrow tier, not which
+// vendor model powers it" convention as MODEL_OPTIONS below.
 const ELEVENLABS_VOICES = [
-  { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '* ElevenLabs — Abhi (Male)' },
-  { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '* ElevenLabs — Monika (Female)' },
+  { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '* Abhi (Male)' },
+  { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '* Monika (Female)' },
 ] as const
 // Same two voices, routed through eleven_v3 instead of Flash — see
 // agent/main.py's _build_tts docstring for the tradeoffs (StreamAdapter
@@ -74,8 +76,8 @@ const ELEVENLABS_VOICES = [
 // no live mid-call emotion reactivity). Kept as a separate, clearly
 // "experimental" group rather than folded into ELEVENLABS_VOICES above.
 const ELEVENLABS_V3_VOICES = [
-  { value: 'elevenlabs-v3:7b9mYhmnp0y2qSH1FnBL', label: '* Abhi (Male) — v3' },
-  { value: 'elevenlabs-v3:zmh5xhBvMzqR4ZlXgcgL', label: '* Monika (Female) — v3' },
+  { value: 'elevenlabs-v3:7b9mYhmnp0y2qSH1FnBL', label: '* Abhi (Male) — Experimental' },
+  { value: 'elevenlabs-v3:zmh5xhBvMzqR4ZlXgcgL', label: '* Monika (Female) — Experimental' },
 ] as const
 const voiceLabel = (voice: string) =>
   GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
@@ -454,28 +456,28 @@ function AgentEditor({
                   {voiceLabel(form.voice)} (current — not in curated list)
                 </option>
               )}
-              <optgroup label="ElevenLabs — Premium (2x credits, most expressive — reacts to caller emotion live)">
+              <optgroup label="Vistrow Premium (2x credits, most expressive — reacts to caller emotion live)">
                 {ELEVENLABS_VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
                     {v.label}
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="ElevenLabs v3 — Experimental (2x credits, gap between sentences, no live emotion reactivity)">
+              <optgroup label="Vistrow Premium+ — Experimental (2x credits, gap between sentences, no live emotion reactivity)">
                 {ELEVENLABS_V3_VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
                     {v.label}
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="Sarvam bulbul:v3 — Standard (1x credits)" className="capitalize">
+              <optgroup label="Vistrow Standard (1x credits)" className="capitalize">
                 {VOICES.map((v) => (
                   <option key={v} value={v} className="capitalize">
                     {v}
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="Sarvam bulbul:v2 — Economy (0.5x credits, cheaper, compare quality)">
+              <optgroup label="Vistrow Lite (0.5x credits, cheaper, compare quality)">
                 {SARVAM_V2_VOICES.map((v) => (
                   <option key={v.value} value={v.value}>
                     {v.label}
