@@ -23,7 +23,6 @@ const TIER_ACCENT: Record<VoiceTier, string> = {
 }
 
 function TierGroup({
-  tier,
   entries,
   lang,
   busyVoice,
@@ -31,7 +30,6 @@ function TierGroup({
   onAdd,
   onRemove,
 }: {
-  tier: VoiceTier
   entries: VoiceEntry[]
   lang: string
   busyVoice: string | null
@@ -250,7 +248,6 @@ export function Voices() {
             )}
 
             <TierGroup
-              tier="premium"
               entries={byTier('premium')}
               lang={lang}
               busyVoice={busyVoice}
@@ -259,7 +256,6 @@ export function Voices() {
               onRemove={onRemove}
             />
             <TierGroup
-              tier="standard"
               entries={byTier('standard')}
               lang={lang}
               busyVoice={busyVoice}
@@ -268,7 +264,6 @@ export function Voices() {
               onRemove={onRemove}
             />
             <TierGroup
-              tier="lite"
               entries={byTier('lite')}
               lang={lang}
               busyVoice={busyVoice}
