@@ -52,7 +52,17 @@ CATALOG: list[dict] = [
     {"value": "elevenlabs:zmh5xhBvMzqR4ZlXgcgL", "name": "Siya", "gender": "female", "tier": "premium"},
     {"value": "elevenlabs:FmBhnvP58BK0vz65OOj7", "name": "Viraj", "gender": "male", "tier": "premium"},
     {"value": "elevenlabs:cFvQm3lZl5miSWHxawFj", "name": "Aarush", "gender": "male", "tier": "premium"},
-    {"value": "elevenlabs:UgBBYS2sOqTuMpoF3BR0", "name": "English Accent", "gender": "neutral", "tier": "premium", "note": "English accent"},
+    # Always previewed in English (forcePreviewLang) regardless of the
+    # dashboard's Hindi/English toggle — the whole point of this voice is its
+    # UK English accent, which the Hindi audition line doesn't demonstrate.
+    {
+        "value": "elevenlabs:UgBBYS2sOqTuMpoF3BR0",
+        "name": "Mark (English)",
+        "gender": "male",
+        "tier": "premium",
+        "note": "UK English accent",
+        "force_lang": "en",
+    },
     {"value": "elevenlabs:7b9mYhmnp0y2qSH1FnBL", "name": "Abhi", "gender": "male", "tier": "premium"},
     {"value": "elevenlabs:1qEiC6qsybMkmnNdVMbK", "name": "Monika", "gender": "female", "tier": "premium"},
     {"value": "elevenlabs:9lx2GDtpvyyNBM7O9Mmx", "name": "Saavi", "gender": "female", "tier": "premium"},
@@ -142,4 +152,9 @@ def public_entry(entry: dict, allowed_tiers: set[str]) -> dict:
         "tierRank": meta["rank"],
         "addable": addable,
         "lockedReason": "" if addable else f"{meta['label']} voices need the Scale plan",
+        # When set, the audition preview always uses this language for this
+        # voice regardless of the picker's own Hindi/English toggle — for a
+        # voice whose whole point is a specific accent (e.g. Mark's UK
+        # English), the Hindi sample line wouldn't demonstrate it.
+        "forceLang": entry.get("force_lang", ""),
     }

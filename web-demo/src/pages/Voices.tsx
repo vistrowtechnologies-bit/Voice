@@ -154,7 +154,7 @@ function VoiceCard({
       </div>
 
       <div className="mb-3 flex items-center justify-center rounded-lg border border-border bg-surface-high/40 py-3">
-        <VoicePreviewButton voice={entry.value} lang={lang} className="border-0 bg-transparent" />
+        <VoicePreviewButton voice={entry.value} lang={entry.forceLang || lang} className="border-0 bg-transparent" />
         <span className="text-xs text-text-muted">Listen to {entry.name}</span>
       </div>
 

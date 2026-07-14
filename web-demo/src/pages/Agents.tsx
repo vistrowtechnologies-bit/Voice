@@ -80,7 +80,7 @@ const ELEVENLABS_VOICES = [
   { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '✨ Siya (Female)' },
   { value: 'elevenlabs:FmBhnvP58BK0vz65OOj7', label: '✨ Viraj (Male)' },
   { value: 'elevenlabs:cFvQm3lZl5miSWHxawFj', label: '✨ Aarush (Male)' },
-  { value: 'elevenlabs:UgBBYS2sOqTuMpoF3BR0', label: '✨ English Accent' },
+  { value: 'elevenlabs:UgBBYS2sOqTuMpoF3BR0', label: '✨ Mark (English)' },
   { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male)' },
   { value: 'elevenlabs:1qEiC6qsybMkmnNdVMbK', label: '✨ Monika (Female)' },
   { value: 'elevenlabs:9lx2GDtpvyyNBM7O9Mmx', label: '✨ Saavi (Female)' },
@@ -482,12 +482,16 @@ function AgentEditor({
                   )
                 })}
               </select>
-              {myVoices.some((v) => v.value === form.voice) && (
-                <VoicePreviewButton
-                  voice={form.voice}
-                  lang={(form.language || 'hi').startsWith('en') ? 'en' : 'hi'}
-                />
-              )}
+              {(() => {
+                const current = myVoices.find((v) => v.value === form.voice)
+                if (!current) return null
+                return (
+                  <VoicePreviewButton
+                    voice={form.voice}
+                    lang={current.forceLang || ((form.language || 'hi').startsWith('en') ? 'en' : 'hi')}
+                  />
+                )
+              })()}
             </div>
             <span className="text-[10px] text-text-muted">
               {myVoices.length === 0 ? (

@@ -351,6 +351,10 @@ export interface VoiceEntry {
   tierRank: number
   addable: boolean
   lockedReason: string
+  // When set, previews of this voice always use this language regardless of
+  // the picker's own language toggle (e.g. an English-accent voice should
+  // always be auditioned in English, not the default Hindi sample line).
+  forceLang: string
   selected?: boolean
 }
 
