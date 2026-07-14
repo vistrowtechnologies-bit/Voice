@@ -18,6 +18,8 @@ import type {
   Site,
   TelephonyStatus,
   UsageTrends,
+  VoiceCatalog,
+  VoiceEntry,
 } from './types'
 
 // A 401 from any data call means the session expired mid-use. Broadcast it so
@@ -60,6 +62,21 @@ export function fetchCalls(params?: { search?: string; status?: string; days?: n
 }
 
 export const fetchLeads = () => get<CallRecord[]>('/leads')
+
+// ---------------------------------------------------------- voices
+
+// Full catalog annotated for this account (selected / addable / slots left).
+export const fetchVoiceCatalog = () => get<VoiceCatalog>('/voices/catalog')
+// The account's curated menu — the only voices the agent picker offers.
+export const fetchMyVoices = () => get<VoiceEntry[]>('/voices/mine')
+export const addVoice = (voice: string) =>
+  send<{ ok: boolean; voices: VoiceEntry[] }>('POST', '/voices/mine', { voice })
+export const removeVoice = (voice: string) =>
+  send<{ ok: boolean; voices: VoiceEntry[] }>('DELETE', `/voices/mine/${encodeURIComponent(voice)}`)
+// Direct URL for the cached audition audio (same-origin, cookie-authed). First
+// hit for a (voice, lang) synthesizes + caches server-side; later hits are free.
+export const voicePreviewUrl = (voice: string, lang: string) =>
+  `/api/voices/preview?voice=${encodeURIComponent(voice)}&lang=${encodeURIComponent(lang)}`
 
 export async function fetchLead(id: string): Promise<CallRecord | undefined> {
   const res = await fetch(`/api/calls/${id}`, { credentials: 'include' })

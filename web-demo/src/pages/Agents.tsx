@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { VoicePreviewButton } from '../components/VoicePreviewButton'
 import { BrowserTestModal, DialTestModal } from '../components/AgentTestCall'
 import { useAuth } from '../lib/auth'
 import {
@@ -9,6 +10,7 @@ import {
   deleteAgent,
   fetchAgents,
   fetchKnowledgeBases,
+  fetchMyVoices,
   fetchPhoneNumbers,
   formatDateTime,
   updateAgent,
@@ -19,6 +21,7 @@ import type {
   KnowledgeBase,
   PhoneNumber,
   PostCallField,
+  VoiceEntry,
 } from '../lib/types'
 
 // Curated down to one male (shubh) and one female (priya) voice — the full
@@ -89,12 +92,20 @@ const ELEVENLABS_V3_VOICES = [
   { value: 'elevenlabs-v3:cFvQm3lZl5miSWHxawFj', label: '✨ Aarush (Male) — Premium+' },
   { value: 'elevenlabs-v3:UgBBYS2sOqTuMpoF3BR0', label: '✨ English Accent — Premium+' },
 ] as const
+// The agent voice picker is now driven by the account's curated menu
+// (GET /voices/mine, see the Voices page) rather than these hardcoded arrays.
+// The arrays are kept only as a label lookup for a legacy/out-of-menu voice a
+// stored agent might still carry (e.g. a google: voice), so the dropdown's
+// fallback option shows a friendly name instead of the raw string.
 const voiceLabel = (voice: string) =>
   GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
   ELEVENLABS_VOICES.find((v) => v.value === voice)?.label ??
   ELEVENLABS_V3_VOICES.find((v) => v.value === voice)?.label ??
   SARVAM_V2_VOICES.find((v) => v.value === voice)?.label ??
+  (VOICES.includes(voice) ? voice : undefined) ??
   voice
+// Tier display order in the picker's optgroups — premium tiers first.
+const VOICE_TIER_ORDER = ['premium_plus', 'premium', 'standard', 'lite'] as const
 // The raw model string stays under the hood; operators only ever see the
 // Vistrow tier name + quality tag, so we never expose which vendor model
 // powers each tier. Order = premium → economy.
@@ -372,6 +383,11 @@ function AgentEditor({
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  // The account's curated voice menu — the only voices this picker offers.
+  const [myVoices, setMyVoices] = useState<VoiceEntry[]>([])
+  useEffect(() => {
+    fetchMyVoices().then(setMyVoices).catch(() => setMyVoices([]))
+  }, [])
 
   const set = <K extends keyof AgentForm>(key: K, value: AgentForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
@@ -449,58 +465,49 @@ function AgentEditor({
             </select>
           </Field>
           <Field label="Voice">
-            <select value={form.voice} onChange={(e) => set('voice', e.target.value)} className={inputCls}>
-              {/* A voice saved before the roster was curated down (or set directly
-                  via API) won't match any option below — without this, the browser
-                  silently shows the first option as "selected" while the real stored
-                  value is untouched, so hitting Save re-persists the OLD voice even
-                  though the dropdown visibly displayed a different one. */}
-              {![
-                ...VOICES,
-                ...SARVAM_V2_VOICES.map((v) => v.value),
-                ...GOOGLE_VOICES.map((v) => v.value),
-                ...ELEVENLABS_VOICES.map((v) => v.value),
-                ...ELEVENLABS_V3_VOICES.map((v) => v.value),
-              ].includes(form.voice) && (
-                <option value={form.voice}>
-                  {voiceLabel(form.voice)} (current — not in curated list)
-                </option>
+            <div className="flex items-center gap-2">
+              <select value={form.voice} onChange={(e) => set('voice', e.target.value)} className={inputCls}>
+                {/* Current voice isn't in this account's menu (a legacy voice, or
+                    one removed from the menu since it was set) — surface it so the
+                    browser doesn't silently show a different option as selected and
+                    re-persist the wrong voice on Save. */}
+                {!myVoices.some((v) => v.value === form.voice) && (
+                  <option value={form.voice}>{voiceLabel(form.voice)} (not in your voices)</option>
+                )}
+                {VOICE_TIER_ORDER.map((tier) => {
+                  const group = myVoices.filter((v) => v.tier === tier)
+                  if (group.length === 0) return null
+                  return (
+                    <optgroup key={tier} label={`Vistrow ${group[0].tierLabel} — ${group[0].tierNote}`}>
+                      {group.map((v) => (
+                        <option key={v.value} value={v.value}>
+                          {v.name}
+                          {v.note ? ` — ${v.note}` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )
+                })}
+              </select>
+              {myVoices.some((v) => v.value === form.voice) && (
+                <VoicePreviewButton
+                  voice={form.voice}
+                  lang={(form.language || 'hi').startsWith('en') ? 'en' : 'hi'}
+                />
               )}
-              <optgroup label="Vistrow Premium+ — Scale plan (2x credits, gap between sentences, no live emotion reactivity)">
-                {ELEVENLABS_V3_VOICES.map((v) => (
-                  <option key={v.value} value={v.value}>
-                    {v.label}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Vistrow Premium (2x credits, most expressive — reacts to caller emotion live)">
-                {ELEVENLABS_VOICES.map((v) => (
-                  <option key={v.value} value={v.value}>
-                    {v.label}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Vistrow Standard (1x credits)" className="capitalize">
-                {VOICES.map((v) => (
-                  <option key={v} value={v} className="capitalize">
-                    {v}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Vistrow Lite (0.5x credits, cheaper, compare quality)">
-                {SARVAM_V2_VOICES.map((v) => (
-                  <option key={v.value} value={v.value}>
-                    {v.label}
-                  </option>
-                ))}
-              </optgroup>
-              {/* Google Cloud TTS hidden from the picker for now (removed on
-                  request) — GOOGLE_VOICES/voiceLabel stay so an agent still
-                  saved with a google: voice keeps rendering correctly via the
-                  "not in curated list" fallback above instead of corrupting
-                  on save. Re-add the optgroup here if Google TTS comes back. */}
-            </select>
-            <span className="text-[10px] text-text-muted">✨ Premium voice — Scale plan, burns credits faster (see Billing)</span>
+            </div>
+            <span className="text-[10px] text-text-muted">
+              {myVoices.length === 0 ? (
+                'Loading your voices…'
+              ) : (
+                <>
+                  Only voices you’ve added appear here.{' '}
+                  <Link to="/dashboard/voices" className="text-primary hover:underline">
+                    Manage voices →
+                  </Link>
+                </>
+              )}
+            </span>
           </Field>
           <Field label="Default language">
             <select value={form.language} onChange={(e) => set('language', e.target.value)} className={inputCls}>

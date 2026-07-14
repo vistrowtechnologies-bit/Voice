@@ -335,3 +335,27 @@ export interface ApiKey {
   lastUsedAt: string | null
   createdAt: string
 }
+
+export type VoiceTier = 'premium_plus' | 'premium' | 'standard' | 'lite'
+
+// One voice as returned by the /voices API — a catalog entry annotated for the
+// current account (whether it's in their menu, addable on their plan, etc.).
+export interface VoiceEntry {
+  value: string
+  name: string
+  gender: 'male' | 'female' | 'neutral'
+  note: string
+  tier: VoiceTier
+  tierLabel: string
+  tierNote: string
+  tierRank: number
+  addable: boolean
+  lockedReason: string
+  selected?: boolean
+}
+
+export interface VoiceCatalog {
+  voices: VoiceEntry[]
+  maxVoices: number
+  selectedCount: number
+}

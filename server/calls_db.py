@@ -25,6 +25,7 @@ import time
 from zoneinfo import ZoneInfo
 
 import dbconn
+import voice_catalog
 
 # Every created_at/updated_at default below reproduces SQLite's
 # datetime('now') output exactly ("YYYY-MM-DD HH:MM:SS", UTC, no fractional
@@ -384,6 +385,33 @@ CREATE TABLE IF NOT EXISTS campaign_contacts (
     outcome TEXT DEFAULT '',
     call_id INTEGER,
     created_at TEXT DEFAULT {_NOW}
+);
+
+-- Each account's curated voice menu (max MAX_ACCOUNT_VOICES rows/account,
+-- enforced in add_account_voice). The agent voice picker only offers voices
+-- listed here; voice_string is a value from server/voice_catalog.py and is
+-- exactly what lands on agents.voice. An empty menu is auto-seeded with
+-- defaults on first read (see ensure_account_voices).
+CREATE TABLE IF NOT EXISTS account_voices (
+    account_id INTEGER NOT NULL,
+    voice_string TEXT NOT NULL,
+    added_at TEXT DEFAULT {_NOW},
+    PRIMARY KEY (account_id, voice_string)
+);
+
+-- Cached voice audition audio. The audition script is fixed per language
+-- (voice_catalog.SAMPLE_TEXTS), so each (voice, lang) is synthesized via the
+-- provider's REST TTS at most once ever, then served from here forever at
+-- zero API cost. text_version tracks which SAMPLE_TEXT_VERSION produced the
+-- bytes so an edited script can be regenerated.
+CREATE TABLE IF NOT EXISTS voice_samples (
+    voice_string TEXT NOT NULL,
+    lang TEXT NOT NULL DEFAULT 'hi',
+    audio BYTEA NOT NULL,
+    content_type TEXT NOT NULL DEFAULT 'audio/mpeg',
+    text_version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT DEFAULT {_NOW},
+    PRIMARY KEY (voice_string, lang)
 );
 """
 
@@ -2624,6 +2652,194 @@ def voice_tier(voice: str | None) -> str:
     if voice in _ECONOMY_VOICES:
         return "economy"
     return "standard"
+
+
+# ------------------------------------------------------------ voice menu
+
+class VoiceMenuError(Exception):
+    """Raised for a rejected add: cap reached, tier not on the account's plan,
+    or an unknown voice value. token_api maps this to a 400 with .message."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+def _account_plan_and_owner(conn, account_id: int) -> tuple[str, bool]:
+    row = conn.execute(
+        "SELECT plan, is_platform_owner FROM accounts WHERE id = ?", (account_id,)
+    ).fetchone()
+    if row is None:
+        return "starter", False
+    return (row["plan"] or "starter"), bool(row["is_platform_owner"])
+
+
+def _seed_default_voices(conn, account_id: int) -> None:
+    """Seed a never-configured account's menu so its agent picker isn't empty.
+    Menu = the distinct catalog voices its agents already use (so nothing an
+    account already relies on vanishes from the picker) plus the Standard
+    defaults, capped at MAX_ACCOUNT_VOICES. Runs inside the caller's txn."""
+    in_use = [
+        r["voice"]
+        for r in conn.execute(
+            "SELECT DISTINCT voice FROM agents WHERE account_id = ? AND voice IS NOT NULL",
+            (account_id,),
+        ).fetchall()
+        if r["voice"] and voice_catalog.get_voice(r["voice"])
+    ]
+    ordered: list[str] = []
+    for v in in_use + voice_catalog.DEFAULT_ACCOUNT_VOICES:
+        if v not in ordered:
+            ordered.append(v)
+    for v in ordered[: voice_catalog.MAX_ACCOUNT_VOICES]:
+        conn.execute(
+            "INSERT INTO account_voices (account_id, voice_string) VALUES (?, ?) "
+            "ON CONFLICT (account_id, voice_string) DO NOTHING",
+            (account_id, v),
+        )
+
+
+def list_account_voices(account_id: int) -> list[dict]:
+    """The account's curated voice menu as catalog entries (with tier display
+    info), most-premium first. Auto-seeds defaults on first read."""
+    conn = _connect()
+    try:
+        with conn:
+            rows = conn.execute(
+                "SELECT voice_string FROM account_voices WHERE account_id = ?", (account_id,)
+            ).fetchall()
+            if not rows:
+                _seed_default_voices(conn, account_id)
+                rows = conn.execute(
+                    "SELECT voice_string FROM account_voices WHERE account_id = ?", (account_id,)
+                ).fetchall()
+            plan, is_owner = _account_plan_and_owner(conn, account_id)
+    finally:
+        conn.close()
+    allowed = voice_catalog.allowed_tiers_for_plan(plan, is_owner)
+    out = []
+    for r in rows:
+        entry = voice_catalog.get_voice(r["voice_string"])
+        if entry is None:
+            continue  # a voice removed from the catalog since it was added
+        out.append(voice_catalog.public_entry(entry, allowed))
+    out.sort(key=lambda e: (e["tierRank"], e["name"].lower()))
+    return out
+
+
+def voice_catalog_for_account(account_id: int) -> dict:
+    """Full catalog annotated for this account: which voices are already in the
+    menu, which are addable on the account's plan, and the remaining slot count."""
+    conn = _connect()
+    try:
+        with conn:
+            selected = {
+                r["voice_string"]
+                for r in conn.execute(
+                    "SELECT voice_string FROM account_voices WHERE account_id = ?", (account_id,)
+                ).fetchall()
+            }
+            plan, is_owner = _account_plan_and_owner(conn, account_id)
+    finally:
+        conn.close()
+    allowed = voice_catalog.allowed_tiers_for_plan(plan, is_owner)
+    voices = []
+    for entry in voice_catalog.CATALOG:
+        pub = voice_catalog.public_entry(entry, allowed)
+        pub["selected"] = entry["value"] in selected
+        voices.append(pub)
+    voices.sort(key=lambda e: (e["tierRank"], e["name"].lower()))
+    return {
+        "voices": voices,
+        "maxVoices": voice_catalog.MAX_ACCOUNT_VOICES,
+        "selectedCount": len(selected),
+    }
+
+
+def add_account_voice(account_id: int, voice_string: str) -> None:
+    """Add a catalog voice to the account's menu. Enforces: known voice, tier
+    allowed on the account's plan (owner bypasses), and the MAX cap. Raises
+    VoiceMenuError on any rejection."""
+    entry = voice_catalog.get_voice(voice_string)
+    if entry is None:
+        raise VoiceMenuError("That voice isn't available.")
+    conn = _connect()
+    try:
+        with conn:
+            plan, is_owner = _account_plan_and_owner(conn, account_id)
+            allowed = voice_catalog.allowed_tiers_for_plan(plan, is_owner)
+            if entry["tier"] not in allowed:
+                label = voice_catalog.TIER_META[entry["tier"]]["label"]
+                raise VoiceMenuError(f"{label} voices need the Scale plan.")
+            already = conn.execute(
+                "SELECT 1 FROM account_voices WHERE account_id = ? AND voice_string = ?",
+                (account_id, voice_string),
+            ).fetchone()
+            if already:
+                return  # idempotent
+            count = conn.execute(
+                "SELECT COUNT(*) AS c FROM account_voices WHERE account_id = ?", (account_id,)
+            ).fetchone()["c"]
+            if count >= voice_catalog.MAX_ACCOUNT_VOICES:
+                raise VoiceMenuError(
+                    f"You can keep up to {voice_catalog.MAX_ACCOUNT_VOICES} voices. "
+                    "Remove one to add another."
+                )
+            conn.execute(
+                "INSERT INTO account_voices (account_id, voice_string) VALUES (?, ?)",
+                (account_id, voice_string),
+            )
+    finally:
+        conn.close()
+
+
+def remove_account_voice(account_id: int, voice_string: str) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "DELETE FROM account_voices WHERE account_id = ? AND voice_string = ?",
+                (account_id, voice_string),
+            )
+    finally:
+        conn.close()
+
+
+def get_voice_sample(voice_string: str, lang: str) -> dict | None:
+    """Cached audition audio for (voice, lang) at the current text version, or
+    None if it hasn't been synthesized yet (or is stale)."""
+    conn = _connect()
+    try:
+        with conn:
+            row = conn.execute(
+                "SELECT audio, content_type FROM voice_samples "
+                "WHERE voice_string = ? AND lang = ? AND text_version = ?",
+                (voice_string, lang, voice_catalog.SAMPLE_TEXT_VERSION),
+            ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return None
+    audio = row["audio"]
+    if isinstance(audio, memoryview):
+        audio = audio.tobytes()
+    return {"audio": bytes(audio), "content_type": row["content_type"]}
+
+
+def save_voice_sample(voice_string: str, lang: str, audio: bytes, content_type: str) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO voice_samples (voice_string, lang, audio, content_type, text_version) "
+                "VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT (voice_string, lang) DO UPDATE SET "
+                "audio = EXCLUDED.audio, content_type = EXCLUDED.content_type, "
+                "text_version = EXCLUDED.text_version, created_at = " + _NOW,
+                (voice_string, lang, audio, content_type, voice_catalog.SAMPLE_TEXT_VERSION),
+            )
+    finally:
+        conn.close()
 
 
 def billing_summary(account_id: int) -> dict:

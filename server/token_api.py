@@ -1803,6 +1803,72 @@ def billing(user: dict = Depends(current_user)) -> dict:
     return calls_db.billing_summary(user["account_id"])
 
 
+# ---------------------------------------------------------- voices
+
+@app.get("/voices/catalog")
+def voices_catalog(user: dict = Depends(current_user)) -> dict:
+    """The full voice catalog annotated for this account: which voices are in
+    its menu, which its plan can add, and remaining slots. Powers the Voices
+    page's add/remove grid."""
+    return calls_db.voice_catalog_for_account(user["account_id"])
+
+
+@app.get("/voices/mine")
+def voices_mine(user: dict = Depends(current_user)) -> list[dict]:
+    """The account's curated voice menu — the only voices the agent picker
+    offers. Auto-seeds sensible defaults on an account's first read."""
+    return calls_db.list_account_voices(user["account_id"])
+
+
+@app.post("/voices/mine")
+def voices_add(body: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    voice = (body or {}).get("voice", "")
+    try:
+        calls_db.add_account_voice(user["account_id"], voice)
+    except calls_db.VoiceMenuError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    return {"ok": True, "voices": calls_db.list_account_voices(user["account_id"])}
+
+
+@app.delete("/voices/mine/{voice:path}")
+def voices_remove(voice: str, user: dict = Depends(current_user)) -> dict:
+    calls_db.remove_account_voice(user["account_id"], voice)
+    return {"ok": True, "voices": calls_db.list_account_voices(user["account_id"])}
+
+
+@app.get("/voices/preview")
+def voices_preview(voice: str, lang: str = "", user: dict = Depends(current_user)) -> Response:
+    """Return the fixed Vistrow audition line spoken by `voice`. Served from
+    the Postgres cache when present (zero provider cost); synthesized once and
+    cached on the first request for a given (voice, lang)."""
+    import voice_catalog
+
+    lang = lang or voice_catalog.DEFAULT_SAMPLE_LANG
+    if voice_catalog.get_voice(voice) is None:
+        raise HTTPException(status_code=404, detail="Unknown voice.")
+    if lang not in voice_catalog.SAMPLE_TEXTS:
+        raise HTTPException(status_code=400, detail="Unsupported preview language.")
+
+    cached = calls_db.get_voice_sample(voice, lang)
+    if cached is None:
+        import voice_preview
+
+        try:
+            audio, content_type = voice_preview.synthesize(voice, lang)
+        except voice_preview.PreviewError as e:
+            raise HTTPException(status_code=502, detail=e.message)
+        calls_db.save_voice_sample(voice, lang, audio, content_type)
+        cached = {"audio": audio, "content_type": content_type}
+
+    return Response(
+        content=cached["audio"],
+        media_type=cached["content_type"],
+        # Immutable: the audition line is fixed, so the browser can cache the
+        # clip and not even re-request it on replay.
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
 # ---------------------------------------------------------- website widget
 
 
