@@ -24,20 +24,38 @@ const GENDER_ICON: Record<string, string> = { male: 'man', female: 'woman', neut
 // visually varied within a tier group; tier is still legible from the pill.
 const AVATAR_HUES = ['--color-primary', '--color-cyan', '--color-magenta', '--color-amber', '--color-success'] as const
 
-function hashStr(value: string): number {
-  let hash = 0
-  for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) | 0
-  return Math.abs(hash)
+// 4 distinct 3-blob layouts to combine with the hue picks below.
+const AVATAR_LAYOUTS = [
+  ['20% 20%', '85% 30%', '50% 90%'],
+  ['80% 15%', '15% 45%', '65% 90%'],
+  ['50% 10%', '90% 60%', '10% 75%'],
+  ['25% 80%', '85% 70%', '55% 15%'],
+] as const
+
+// djb2 — spreads short strings (voice names/ids are only a few characters)
+// far more evenly than a plain multiply-add hash, which visibly clustered
+// several voices onto the same hue pair/position (reported as "identical
+// avatars"). Two independent hashes (name and value) feed different parts
+// of the pick below so hue choice and layout choice aren't correlated with
+// each other the way they were when both came from bits of one hash.
+function hash(value: string): number {
+  let h = 5381
+  for (let i = 0; i < value.length; i++) h = ((h << 5) + h + value.charCodeAt(i)) | 0
+  return Math.abs(h)
 }
 
-function avatarGradient(value: string): string {
-  const hash = hashStr(value)
-  const first = hash % AVATAR_HUES.length
-  const second = (first + 1 + (hash % (AVATAR_HUES.length - 1))) % AVATAR_HUES.length
-  const [posA, posB] = hash % 2 === 0 ? ['25% 25%', '75% 75%'] : ['75% 25%', '25% 75%']
+function avatarGradient(value: string, name: string): string {
+  const hv = hash(value)
+  const hn = hash(name)
+  const first = hv % AVATAR_HUES.length
+  const second = (first + 1 + (hn % (AVATAR_HUES.length - 1))) % AVATAR_HUES.length
+  let third = (first + 2 + (hv % (AVATAR_HUES.length - 1))) % AVATAR_HUES.length
+  if (third === second) third = (third + 1) % AVATAR_HUES.length
+  const [posA, posB, posC] = AVATAR_LAYOUTS[hn % AVATAR_LAYOUTS.length]
   return (
-    `radial-gradient(circle at ${posA}, var(${AVATAR_HUES[first]}) 0%, transparent 60%), ` +
-    `radial-gradient(circle at ${posB}, var(${AVATAR_HUES[second]}) 0%, transparent 60%), ` +
+    `radial-gradient(circle at ${posA}, var(${AVATAR_HUES[first]}) 0%, transparent 65%), ` +
+    `radial-gradient(circle at ${posB}, var(${AVATAR_HUES[second]}) 0%, transparent 65%), ` +
+    `radial-gradient(circle at ${posC}, var(${AVATAR_HUES[third]}) 0%, transparent 65%), ` +
     `var(--color-surface-high)`
   )
 }
@@ -106,7 +124,18 @@ function VoiceCard({
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
-            <div className="h-11 w-11 rounded-full" style={{ background: avatarGradient(entry.value) }} />
+            <div className="relative h-11 w-11 overflow-hidden rounded-full">
+              {/* Inner layer is oversized and slowly spinning inside the
+                  clipped circle — the off-center blobs sweep past each other,
+                  giving the orb the same "alive" look as ElevenLabs' voice
+                  avatars instead of a static gradient. -inset-1/4 keeps the
+                  square's corners always covering the circle at every
+                  rotation angle. Disabled for prefers-reduced-motion. */}
+              <div
+                className="absolute -inset-1/4 animate-[spin_9s_linear_infinite] motion-reduce:animate-none"
+                style={{ background: avatarGradient(entry.value, entry.name) }}
+              />
+            </div>
             <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-surface bg-surface-high text-text-muted">
               <Icon name={GENDER_ICON[entry.gender] ?? 'graphic_eq'} className="text-[10px]" />
             </span>
