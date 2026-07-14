@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -41,13 +41,23 @@ function VoiceRow({
   onRemove: (v: string) => void
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5">
+    <div
+      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${
+        entry.selected ? 'border-primary/30 bg-primary/[0.04]' : 'border-border bg-surface'
+      }`}
+    >
       <VoicePreviewButton voice={entry.value} lang={lang} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <Icon name={GENDER_ICON[entry.gender] ?? 'graphic_eq'} className="text-[15px] text-text-muted" />
           <span className="truncate text-sm font-semibold">{entry.name}</span>
           <TierPill entry={entry} />
+          {entry.selected && (
+            <span className="flex items-center gap-0.5 text-[10px] font-semibold text-primary">
+              <Icon name="check_circle" className="text-[13px]" />
+              Added
+            </span>
+          )}
         </div>
         <p className="truncate text-[11px] text-text-muted">
           {entry.note ? `${entry.note} · ` : ''}
@@ -111,7 +121,11 @@ export function Voices() {
       await addVoice(voice)
       await load()
     } catch (e) {
-      setError(e instanceof Error && e.message.includes('400') ? 'That voice needs a plan upgrade or you’ve hit your limit.' : 'Could not add that voice.')
+      setError(
+        e instanceof Error && e.message.includes('400')
+          ? 'That voice needs a plan upgrade or you’ve hit your limit.'
+          : 'Could not add that voice.'
+      )
     } finally {
       setBusyVoice(null)
     }
@@ -130,16 +144,11 @@ export function Voices() {
     }
   }
 
-  const selected = useMemo(() => (data?.voices ?? []).filter((v) => v.selected), [data])
-  const available = useMemo(() => (data?.voices ?? []).filter((v) => !v.selected), [data])
   const slotsFull = !!data && data.selectedCount >= data.maxVoices
 
   return (
     <DashboardLayout>
-      <PageHeader
-        title="Voices"
-        subtitle="Curate the voices your agents can use — listen before you add"
-      >
+      <PageHeader title="Voices" subtitle="Preview any voice, then add it to your agents' picker">
         <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
           {PREVIEW_LANGS.map((l) => (
             <button
@@ -155,85 +164,45 @@ export function Voices() {
         </div>
       </PageHeader>
 
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 sm:p-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 sm:p-6">
         {!data ? (
           <div className="flex justify-center py-16">
             <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
         ) : (
           <>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-text-muted">
+                Only the voices you add here appear in the agent voice picker.
+              </p>
+              <span
+                className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                  slotsFull ? 'border-amber/40 bg-amber/10 text-amber' : 'border-border text-text-muted'
+                }`}
+              >
+                {data.selectedCount} / {data.maxVoices} added
+              </span>
+            </div>
+
             {error && (
               <div className="rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">
                 {error}
               </div>
             )}
 
-            {/* Your voices */}
-            <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-base font-bold">Your voices</p>
-                  <p className="text-xs text-text-muted">
-                    Only these appear in the agent voice picker.
-                  </p>
-                </div>
-                <span
-                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                    slotsFull ? 'border-amber/40 bg-amber/10 text-amber' : 'border-border text-text-muted'
-                  }`}
-                >
-                  {data.selectedCount} / {data.maxVoices}
-                </span>
-              </div>
-              {selected.length === 0 ? (
-                <p className="py-4 text-center text-sm text-text-muted">
-                  No voices yet — add some from the catalog below.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {selected.map((v) => (
-                    <VoiceRow
-                      key={v.value}
-                      entry={v}
-                      lang={lang}
-                      busy={busyVoice === v.value}
-                      slotsFull={slotsFull}
-                      onAdd={onAdd}
-                      onRemove={onRemove}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Add voices */}
-            <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 sm:p-5">
-              <div>
-                <p className="text-base font-bold">Add voices</p>
-                <p className="text-xs text-text-muted">
-                  Preview any voice, then add up to {data.maxVoices} total across all tiers.
-                </p>
-              </div>
-              {available.length === 0 ? (
-                <p className="py-4 text-center text-sm text-text-muted">
-                  Every available voice is already in your list.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {available.map((v) => (
-                    <VoiceRow
-                      key={v.value}
-                      entry={v}
-                      lang={lang}
-                      busy={busyVoice === v.value}
-                      slotsFull={slotsFull}
-                      onAdd={onAdd}
-                      onRemove={onRemove}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
+            <div className="flex flex-col gap-2">
+              {data.voices.map((v) => (
+                <VoiceRow
+                  key={v.value}
+                  entry={v}
+                  lang={lang}
+                  busy={busyVoice === v.value}
+                  slotsFull={slotsFull}
+                  onAdd={onAdd}
+                  onRemove={onRemove}
+                />
+              ))}
+            </div>
           </>
         )}
       </div>
