@@ -3325,8 +3325,11 @@ def _enablex_request(path: str, method: str, body: dict | None, account_id: int)
     instead of a proper HTTP error status (documented behavior other EnableX
     integrations have had to work around) — a bare "did the request throw"
     check would read that as success and leave the call bridged to nothing.
-    Treat a 200 response as an error if it carries an explicit error/status
-    field EnableX uses for that purpose.
+    Treat a 200 response as an error only if it carries an explicit error
+    message — NOT by statusCode value alone: EnableX's own success responses
+    embed a REST-style statusCode too (e.g. 201 "Created" for a placed call,
+    seen in production), so anything short of an explicit error field is a
+    real success and must not be rejected.
     """
     import base64
     import json as _json
@@ -3357,7 +3360,11 @@ def _enablex_request(path: str, method: str, body: dict | None, account_id: int)
     if isinstance(payload, dict):
         status_code = payload.get("statusCode")
         error_msg = payload.get("error") or payload.get("errorMessage")
-        if error_msg or (status_code is not None and str(status_code) not in ("0", "200")):
+        # Only statusCode >= 400 is an actual error range; EnableX's own
+        # success responses use REST-style 2xx values (200, 201, 202, ...)
+        # depending on the action, not a fixed "200".
+        is_error_status = isinstance(status_code, int) and status_code >= 400
+        if error_msg or is_error_status:
             return {"ok": False, "error": f"EnableX returned 200 with an error body: {payload}"[:400]}
     return {"ok": True, "response": payload}
 
