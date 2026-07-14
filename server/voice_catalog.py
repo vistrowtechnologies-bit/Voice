@@ -110,14 +110,24 @@ DEFAULT_ACCOUNT_VOICES = ["shubh", "priya"]
 # synthesized at most once per language ever (then cached in Postgres) — see
 # voice_preview.py. Bump SAMPLE_TEXT_VERSION when editing any line to force
 # regeneration of stale cached audio.
-SAMPLE_TEXT_VERSION = 1
+#
+# The Hindi line spells "AI" as "एआई" (Devanagari), not the Latin acronym.
+# bulbul:v3 and ElevenLabs code-switch mid-sentence well enough to read a bare
+# "AI" correctly, but bulbul:v2 (the Lite tier) doesn't — it sounds out the
+# two Latin letters as if they were Hindi syllables, audible as something
+# like "vi" instead of "AI" (reported directly against production: every
+# /voices/preview request for the new Lite voices returned 200 OK, so this
+# was never an error, just bad pronunciation from feeding v2 mixed-script
+# text it can't code-switch on). एआई is proper Hindi script for the same two
+# letters, so every model — including v2 — reads it correctly.
+SAMPLE_TEXT_VERSION = 2
 SAMPLE_TEXTS: dict[str, str] = {
     "en": (
         "Hi! I'm a Vistrow Voice AI agent. I can answer your calls, qualify "
         "leads, and book appointments — all in your customer's own language."
     ),
     "hi": (
-        "नमस्ते! मैं Vistrow Voice का AI एजेंट हूँ। मैं आपकी कॉल्स का जवाब देता हूँ, "
+        "नमस्ते! मैं Vistrow Voice का एआई एजेंट हूँ। मैं आपकी कॉल्स का जवाब देता हूँ, "
         "लीड्स क्वालिफाई करता हूँ और अपॉइंटमेंट बुक करता हूँ — वो भी आपके ग्राहक की अपनी भाषा में।"
     ),
 }
