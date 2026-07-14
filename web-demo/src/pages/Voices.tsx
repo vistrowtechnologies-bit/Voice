@@ -4,7 +4,7 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { VoicePreviewButton } from '../components/VoicePreviewButton'
 import { addVoice, fetchVoiceCatalog, removeVoice } from '../lib/api'
-import type { VoiceCatalog, VoiceEntry } from '../lib/types'
+import type { VoiceCatalog, VoiceEntry, VoiceTier } from '../lib/types'
 
 const PREVIEW_LANGS = [
   { code: 'hi', label: 'Hindi' },
@@ -13,19 +13,58 @@ const PREVIEW_LANGS = [
 
 const GENDER_ICON: Record<string, string> = { male: 'man', female: 'woman', neutral: 'graphic_eq' }
 
-function TierPill({ entry }: { entry: VoiceEntry }) {
-  const tone =
-    entry.tier === 'premium'
-      ? 'border-primary/40 bg-primary/10 text-primary'
-      : 'border-border bg-surface-high text-text-muted'
+// Same tier → accent mapping the app already uses elsewhere (cyan = "connected/
+// good" in Integrations.tsx, primary purple = the premium/paid signal in
+// Billing.tsx's plan cards).
+const TIER_ACCENT: Record<VoiceTier, string> = {
+  premium: 'bg-primary/20 text-primary',
+  standard: 'bg-cyan/20 text-cyan',
+  lite: 'bg-surface-high text-text-muted',
+}
+
+function TierGroup({
+  tier,
+  entries,
+  lang,
+  busyVoice,
+  slotsFull,
+  onAdd,
+  onRemove,
+}: {
+  tier: VoiceTier
+  entries: VoiceEntry[]
+  lang: string
+  busyVoice: string | null
+  slotsFull: boolean
+  onAdd: (v: string) => void
+  onRemove: (v: string) => void
+}) {
+  if (entries.length === 0) return null
+  const { tierLabel, tierNote } = entries[0]
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}>
-      {entry.tierLabel}
-    </span>
+    <section className="flex flex-col gap-3">
+      <div className="flex items-baseline gap-2">
+        <h2 className="text-sm font-bold">{tierLabel}</h2>
+        <span className="text-[11px] text-text-muted">{tierNote}</span>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {entries.map((entry) => (
+          <VoiceCard
+            key={entry.value}
+            entry={entry}
+            lang={lang}
+            busy={busyVoice === entry.value}
+            slotsFull={slotsFull}
+            onAdd={onAdd}
+            onRemove={onRemove}
+          />
+        ))}
+      </div>
+    </section>
   )
 }
 
-function VoiceRow({
+function VoiceCard({
   entry,
   lang,
   busy,
@@ -42,55 +81,60 @@ function VoiceRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${
-        entry.selected ? 'border-primary/30 bg-primary/[0.04]' : 'border-border bg-surface'
+      className={`flex flex-col rounded-xl border bg-surface p-4 ${
+        entry.selected ? 'border-primary/50' : 'border-border'
       }`}
     >
-      <VoicePreviewButton voice={entry.value} lang={lang} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <Icon name={GENDER_ICON[entry.gender] ?? 'graphic_eq'} className="text-[15px] text-text-muted" />
-          <span className="truncate text-sm font-semibold">{entry.name}</span>
-          <TierPill entry={entry} />
-          {entry.selected && (
-            <span className="flex items-center gap-0.5 text-[10px] font-semibold text-primary">
-              <Icon name="check_circle" className="text-[13px]" />
-              Added
-            </span>
-          )}
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${TIER_ACCENT[entry.tier]}`}>
+            <Icon name={GENDER_ICON[entry.gender] ?? 'graphic_eq'} className="text-[20px]" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate font-semibold">{entry.name}</p>
+            {entry.note && <p className="truncate text-[11px] text-text-muted">{entry.note}</p>}
+          </div>
         </div>
-        <p className="truncate text-[11px] text-text-muted">
-          {entry.note ? `${entry.note} · ` : ''}
-          {entry.tierNote}
-        </p>
+        {entry.selected && (
+          <span className="flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+            <Icon name="check" className="text-[12px]" />
+            Added
+          </span>
+        )}
       </div>
+
+      <div className="mb-3 flex items-center justify-center rounded-lg border border-border bg-surface-high/40 py-3">
+        <VoicePreviewButton voice={entry.value} lang={lang} className="border-0 bg-transparent" />
+        <span className="text-xs text-text-muted">Listen to {entry.name}</span>
+      </div>
+
       {entry.selected ? (
         <button
           onClick={() => onRemove(entry.value)}
           disabled={busy}
-          className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-destructive hover:text-destructive disabled:opacity-50"
+          className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs font-bold text-text-muted transition-colors hover:border-destructive hover:text-destructive disabled:opacity-50"
         >
-          <Icon name="remove" className="text-[15px]" />
+          <Icon name="remove_circle_outline" className="text-[15px]" />
           Remove
         </button>
       ) : !entry.addable ? (
         <Link
           to="/dashboard/billing"
           title={entry.lockedReason}
-          className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
+          className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs font-bold text-text-muted transition-colors hover:border-primary hover:text-primary"
         >
           <Icon name="lock" className="text-[15px]" />
-          Upgrade
+          Upgrade to add
         </Link>
       ) : (
         <button
           onClick={() => onAdd(entry.value)}
           disabled={busy || slotsFull}
           title={slotsFull ? 'Remove a voice first' : 'Add to your voices'}
-          className="flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-bold text-bg transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-40"
+          className="mt-auto flex items-center justify-center gap-1.5 rounded-lg bg-primary py-2 text-xs font-bold text-bg transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-40"
         >
           <Icon name="add" className="text-[15px]" />
-          Add
+          Add to my voices
         </button>
       )}
     </div>
@@ -145,6 +189,7 @@ export function Voices() {
   }
 
   const slotsFull = !!data && data.selectedCount >= data.maxVoices
+  const byTier = (tier: VoiceTier) => (data?.voices ?? []).filter((v) => v.tier === tier)
 
   return (
     <DashboardLayout>
@@ -164,24 +209,38 @@ export function Voices() {
         </div>
       </PageHeader>
 
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 sm:p-6">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-6">
         {!data ? (
           <div className="flex justify-center py-16">
             <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-text-muted">
-                Only the voices you add here appear in the agent voice picker.
-              </p>
-              <span
-                className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                  slotsFull ? 'border-amber/40 bg-amber/10 text-amber' : 'border-border text-text-muted'
-                }`}
-              >
-                {data.selectedCount} / {data.maxVoices} added
-              </span>
+            <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan/20 text-cyan">
+                  <Icon name="graphic_eq" className="text-[20px]" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold">Your voice menu</p>
+                  <p className="text-xs text-text-muted">Only added voices show up in the agent voice picker.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-high">
+                  <div
+                    className={`h-full rounded-full ${slotsFull ? 'bg-amber' : 'bg-cyan'}`}
+                    style={{ width: `${(data.selectedCount / data.maxVoices) * 100}%` }}
+                  />
+                </div>
+                <span
+                  className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                    slotsFull ? 'border-amber/40 bg-amber/10 text-amber' : 'border-border text-text-muted'
+                  }`}
+                >
+                  {data.selectedCount} / {data.maxVoices}
+                </span>
+              </div>
             </div>
 
             {error && (
@@ -190,19 +249,33 @@ export function Voices() {
               </div>
             )}
 
-            <div className="flex flex-col gap-2">
-              {data.voices.map((v) => (
-                <VoiceRow
-                  key={v.value}
-                  entry={v}
-                  lang={lang}
-                  busy={busyVoice === v.value}
-                  slotsFull={slotsFull}
-                  onAdd={onAdd}
-                  onRemove={onRemove}
-                />
-              ))}
-            </div>
+            <TierGroup
+              tier="premium"
+              entries={byTier('premium')}
+              lang={lang}
+              busyVoice={busyVoice}
+              slotsFull={slotsFull}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
+            <TierGroup
+              tier="standard"
+              entries={byTier('standard')}
+              lang={lang}
+              busyVoice={busyVoice}
+              slotsFull={slotsFull}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
+            <TierGroup
+              tier="lite"
+              entries={byTier('lite')}
+              lang={lang}
+              busyVoice={busyVoice}
+              slotsFull={slotsFull}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
           </>
         )}
       </div>
