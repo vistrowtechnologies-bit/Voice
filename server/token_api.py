@@ -58,6 +58,7 @@ _PUBLIC_PATHS = {
     "/widget/wordpress-plugin.zip",    # plugin download
     "/agent-orb.mp4",                  # widget avatar video
     "/telephony/enablex/inbound-event",  # EnableX inbound webhook (their server calls it)
+    "/telephony/enablex/outbound-test-event",  # EnableX outbound/test-call webhook (their server calls it — no session)
 }
 _PUBLIC_PREFIXES = ("/auth/", "/invite/")  # signup/login/logout/me + invite-preview/accept handle their own logic
 
