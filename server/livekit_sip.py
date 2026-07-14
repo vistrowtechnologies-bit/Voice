@@ -23,6 +23,7 @@ from livekit.protocol.sip import (
     CreateSIPInboundTrunkRequest,
     DeleteSIPDispatchRuleRequest,
     DeleteSIPTrunkRequest,
+    ListSIPDispatchRuleRequest,
     ListSIPInboundTrunkRequest,
     SIPDispatchRule,
     SIPDispatchRuleIndividual,
@@ -118,6 +119,34 @@ async def ensure_inbound_trunk() -> str | None:
             return trunk_id
 
 
+async def _drop_rules_for_number(lkapi, trunk_id: str, number: str) -> None:
+    """Delete every dispatch rule LiveKit currently holds for this trunk+number.
+
+    The DB's stored lkDispatchRuleId can drift out of sync with what LiveKit
+    actually has — a rule created on an earlier deploy, a DB restored from an
+    older backup, or a create that half-succeeded. When it drifts,
+    create_dispatch_rule below 400s with "... already exists in dispatch rule
+    SDR_xxx", the whole add/reassign silently fails, and (worse) the stale rule
+    keeps routing the number to whatever agent_id it was FIRST stamped with —
+    so reassigning the number to a different agent appears to work in the
+    dashboard but the old agent still answers the phone. Rather than trust the
+    DB pointer alone, ask LiveKit for the rules it really has on this trunk and
+    drop any bound to this number, so the recreate always wins and always
+    carries the current agent_id."""
+    try:
+        existing = await lkapi.sip.list_dispatch_rule(ListSIPDispatchRuleRequest(trunk_ids=[trunk_id]))
+    except Exception:
+        return  # best-effort; the create below will still surface a hard error
+    for item in existing.items:
+        if number in list(item.inbound_numbers):
+            try:
+                await lkapi.sip.delete_dispatch_rule(
+                    DeleteSIPDispatchRuleRequest(sip_dispatch_rule_id=item.sip_dispatch_rule_id)
+                )
+            except Exception:
+                pass
+
+
 async def upsert_dispatch_rule(number_row: dict) -> None:
     """(Re)create the SIP dispatch rule for one phone number so it routes to
     its currently-assigned agent. Safe to call whenever a number is added or
@@ -131,12 +160,10 @@ async def upsert_dispatch_rule(number_row: dict) -> None:
     agent_id = number_row.get("agentId")
 
     async with api.LiveKitAPI() as lkapi:
-        old_rule_id = number_row.get("lkDispatchRuleId")
-        if old_rule_id:
-            try:
-                await lkapi.sip.delete_dispatch_rule(DeleteSIPDispatchRuleRequest(sip_dispatch_rule_id=old_rule_id))
-            except Exception:
-                pass  # already gone — fine, we're about to replace it anyway
+        # Clear any rule LiveKit already has for this trunk+number (whether or
+        # not the DB knows its id) so the create below can't collide with a
+        # stale duplicate and the fresh rule carries the current agent_id.
+        await _drop_rules_for_number(lkapi, trunk_id, number)
 
         safe_prefix = "".join(c for c in number if c.isalnum()) or "call"
         rule = await lkapi.sip.create_dispatch_rule(
