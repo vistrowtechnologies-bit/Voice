@@ -15,11 +15,9 @@ const GENDER_ICON: Record<string, string> = { male: 'man', female: 'woman', neut
 
 function TierPill({ entry }: { entry: VoiceEntry }) {
   const tone =
-    entry.tier === 'premium_plus' || entry.tier === 'premium'
+    entry.tier === 'premium'
       ? 'border-primary/40 bg-primary/10 text-primary'
-      : entry.tier === 'lite'
-        ? 'border-border bg-surface-high text-text-muted'
-        : 'border-border bg-surface-high text-text-muted'
+      : 'border-border bg-surface-high text-text-muted'
   return (
     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}>
       {entry.tierLabel}

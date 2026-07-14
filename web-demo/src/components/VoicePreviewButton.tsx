@@ -4,6 +4,18 @@ import { voicePreviewUrl } from '../lib/api'
 
 type State = 'idle' | 'loading' | 'playing' | 'error'
 
+// Only one preview across the whole app may play at once. A plain module-
+// level EventTarget (not React state) so every mounted VoicePreviewButton —
+// across the Voices page's whole list, or a single instance in the Agents
+// editor — can hear "something else started" and stop itself, without
+// threading shared state through props/context.
+const PREVIEW_BUS = new EventTarget()
+const STARTED = 'preview-started'
+
+function announceStart(id: symbol) {
+  PREVIEW_BUS.dispatchEvent(new CustomEvent(STARTED, { detail: id }))
+}
+
 // Plays a voice's cached Vistrow audition line. The first play of a given
 // (voice, lang) triggers server-side synthesis (a second or two); every later
 // play is a free cached read. Fetched as a blob so we can show a real loading
@@ -20,6 +32,7 @@ export function VoicePreviewButton({
   const [state, setState] = useState<State>('idle')
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const urlRef = useRef<string | null>(null)
+  const idRef = useRef(Symbol('preview'))
 
   function cleanup() {
     if (audioRef.current) {
@@ -34,6 +47,18 @@ export function VoicePreviewButton({
 
   // Stop + revoke on unmount, and whenever the voice/lang changes.
   useEffect(() => cleanup, [voice, lang])
+
+  // Any other button starting playback stops this one.
+  useEffect(() => {
+    const onStart = (e: Event) => {
+      if ((e as CustomEvent).detail !== idRef.current) {
+        cleanup()
+        setState('idle')
+      }
+    }
+    PREVIEW_BUS.addEventListener(STARTED, onStart)
+    return () => PREVIEW_BUS.removeEventListener(STARTED, onStart)
+  }, [])
 
   async function toggle() {
     if (state === 'playing') {
@@ -53,6 +78,7 @@ export function VoicePreviewButton({
       audioRef.current = audio
       audio.onended = () => setState('idle')
       audio.onerror = () => setState('error')
+      announceStart(idRef.current) // stop any other playing preview first
       await audio.play()
       setState('playing')
     } catch {

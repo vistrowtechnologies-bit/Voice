@@ -626,6 +626,27 @@ def init_tables() -> None:
                 ("completed_at", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS {column} {coltype}")
+            # "Premium+" (ElevenLabs v3) was folded into Premium (Flash v2.5) on
+            # 2026-07-14 — v3's realtime endpoint 403s in production, so it was
+            # never a good tier to keep selling (see voice_catalog.py's CATALOG
+            # comment). Every v3 voice ID has an equivalent Premium catalog entry
+            # now, so this is a pure prefix rewrite, not a voice change — self-
+            # healing on every boot so any agent or account-voice-menu row still
+            # holding the old prefix (set before this migration first ran)
+            # follows automatically, with no separate one-off script needed.
+            conn.execute(
+                "UPDATE agents SET voice = 'elevenlabs:' || substring(voice from 15) "
+                "WHERE voice LIKE 'elevenlabs-v3:%%'"
+            )
+            conn.execute(
+                "UPDATE account_voices SET voice_string = 'elevenlabs:' || substring(voice_string from 15) "
+                "WHERE voice_string LIKE 'elevenlabs-v3:%%' "
+                "AND NOT EXISTS ("
+                "  SELECT 1 FROM account_voices av2 WHERE av2.account_id = account_voices.account_id "
+                "  AND av2.voice_string = 'elevenlabs:' || substring(account_voices.voice_string from 15)"
+                ")"
+            )
+            conn.execute("DELETE FROM account_voices WHERE voice_string LIKE 'elevenlabs-v3:%%'")
             # Refresh the integration catalog for EVERY existing tenant (the
             # per-account seed only runs at signup). Inserts newly-added
             # integrations (Slack/WhatsApp) for accounts that lack them and

@@ -69,28 +69,21 @@ const GOOGLE_VOICES = [
 // "shubh" silently, same as an unconfigured Google voice above. Vendor name
 // stays out of the label — same "operator sees a Vistrow tier, not which
 // vendor model powers it" convention as MODEL_OPTIONS below.
+// "Premium+" (ElevenLabs v3, [audio tag] support) was folded back into
+// Premium on 2026-07-14 — v3's realtime endpoint 403s in production, so it
+// was never usable for live calls without a choppy non-streaming workaround.
+// Every voice below runs on Flash v2.5 now; Abhi/Monika/Saavi are the three
+// that used to be v3-only. server/calls_db.py's init_tables() rewrites any
+// stored "elevenlabs-v3:" voice to the matching "elevenlabs:" entry here.
 const ELEVENLABS_VOICES = [
   { value: 'elevenlabs:zT03pEAEi0VHKciJODfn', label: '✨ Saurabh (Male)' },
   { value: 'elevenlabs:zmh5xhBvMzqR4ZlXgcgL', label: '✨ Siya (Female)' },
   { value: 'elevenlabs:FmBhnvP58BK0vz65OOj7', label: '✨ Viraj (Male)' },
   { value: 'elevenlabs:cFvQm3lZl5miSWHxawFj', label: '✨ Aarush (Male)' },
   { value: 'elevenlabs:UgBBYS2sOqTuMpoF3BR0', label: '✨ English Accent' },
-] as const
-// Same voice IDs as ELEVENLABS_VOICES above, routed through eleven_v3
-// instead of Flash — see agent/main.py's _build_tts docstring for the
-// tradeoffs (StreamAdapter non-streaming synthesis works, but with a gap
-// before each sentence and no live mid-call emotion reactivity). Scale-plan
-// tier, kept as a separate group rather than folded into ELEVENLABS_VOICES.
-// Persona names differ per tier even where the underlying ElevenLabs voice
-// ID is identical (Viraj on Flash === Pranav on v3) — same voice, offered
-// under a different name depending on which model it's paired with.
-const ELEVENLABS_V3_VOICES = [
-  { value: 'elevenlabs-v3:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male) — Premium+' },
-  { value: 'elevenlabs-v3:1qEiC6qsybMkmnNdVMbK', label: '✨ Monika (Female) — Premium+' },
-  { value: 'elevenlabs-v3:FmBhnvP58BK0vz65OOj7', label: '✨ Pranav (Male) — Premium+' },
-  { value: 'elevenlabs-v3:9lx2GDtpvyyNBM7O9Mmx', label: '✨ Saavi (Female) — Premium+' },
-  { value: 'elevenlabs-v3:cFvQm3lZl5miSWHxawFj', label: '✨ Aarush (Male) — Premium+' },
-  { value: 'elevenlabs-v3:UgBBYS2sOqTuMpoF3BR0', label: '✨ English Accent — Premium+' },
+  { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male)' },
+  { value: 'elevenlabs:1qEiC6qsybMkmnNdVMbK', label: '✨ Monika (Female)' },
+  { value: 'elevenlabs:9lx2GDtpvyyNBM7O9Mmx', label: '✨ Saavi (Female)' },
 ] as const
 // The agent voice picker is now driven by the account's curated menu
 // (GET /voices/mine, see the Voices page) rather than these hardcoded arrays.
@@ -100,12 +93,11 @@ const ELEVENLABS_V3_VOICES = [
 const voiceLabel = (voice: string) =>
   GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
   ELEVENLABS_VOICES.find((v) => v.value === voice)?.label ??
-  ELEVENLABS_V3_VOICES.find((v) => v.value === voice)?.label ??
   SARVAM_V2_VOICES.find((v) => v.value === voice)?.label ??
   (VOICES.includes(voice) ? voice : undefined) ??
   voice
 // Tier display order in the picker's optgroups — premium tiers first.
-const VOICE_TIER_ORDER = ['premium_plus', 'premium', 'standard', 'lite'] as const
+const VOICE_TIER_ORDER = ['premium', 'standard', 'lite'] as const
 // The raw model string stays under the hood; operators only ever see the
 // Vistrow tier name + quality tag, so we never expose which vendor model
 // powers each tier. Order = premium → economy.

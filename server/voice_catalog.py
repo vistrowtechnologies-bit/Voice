@@ -26,28 +26,36 @@ from __future__ import annotations
 
 # Display order + credit signalling per tier. tier -> (label, credits_note).
 TIER_META: dict[str, dict] = {
-    "premium_plus": {"label": "Premium+", "note": "2x credits · most expressive", "rank": 0},
-    "premium": {"label": "Premium", "note": "2x credits · reacts to caller emotion live", "rank": 1},
-    "standard": {"label": "Standard", "note": "1x credits", "rank": 2},
-    "lite": {"label": "Lite", "note": "0.5x credits · economy", "rank": 3},
+    "premium": {"label": "Premium", "note": "2x credits · most expressive, reacts to caller emotion live", "rank": 0},
+    "standard": {"label": "Standard", "note": "1x credits", "rank": 1},
+    "lite": {"label": "Lite", "note": "0.5x credits · economy", "rank": 2},
 }
 
 # The master catalog. Keep display names free of vendor branding.
 # gender: "male" | "female" | "neutral".
+#
+# There used to be a separate "Premium+" tier on ElevenLabs v3 (audio-
+# direction tags like [laughs]/[warmly]). v3's realtime streaming endpoint
+# 403s in production (see agent/main.py's _build_tts docstring) — the only
+# way to use it at all was a non-streaming per-sentence workaround with a
+# gap before every sentence, which isn't good enough to keep selling as a
+# tier. Folded back into Premium (Flash v2.5, real streaming) on 2026-07-14:
+# every v3 voice ID already existed here too under a Premium name (same
+# ElevenLabs voice, offered under two names/models) except Abhi/Monika/Saavi,
+# which are added below. calls_db.init_tables() rewrites any agent or
+# account-voice-menu row still holding the old "elevenlabs-v3:" prefix over
+# to "elevenlabs:" for the same ID, so nothing an account already configured
+# silently disappears.
 CATALOG: list[dict] = [
-    # --- Premium+ (ElevenLabs v3) -------------------------------------------
-    {"value": "elevenlabs-v3:7b9mYhmnp0y2qSH1FnBL", "name": "Abhi", "gender": "male", "tier": "premium_plus"},
-    {"value": "elevenlabs-v3:1qEiC6qsybMkmnNdVMbK", "name": "Monika", "gender": "female", "tier": "premium_plus"},
-    {"value": "elevenlabs-v3:FmBhnvP58BK0vz65OOj7", "name": "Pranav", "gender": "male", "tier": "premium_plus"},
-    {"value": "elevenlabs-v3:9lx2GDtpvyyNBM7O9Mmx", "name": "Saavi", "gender": "female", "tier": "premium_plus"},
-    {"value": "elevenlabs-v3:cFvQm3lZl5miSWHxawFj", "name": "Aarush", "gender": "male", "tier": "premium_plus"},
-    {"value": "elevenlabs-v3:UgBBYS2sOqTuMpoF3BR0", "name": "English Accent", "gender": "neutral", "tier": "premium_plus", "note": "English accent"},
     # --- Premium (ElevenLabs Flash v2.5) ------------------------------------
     {"value": "elevenlabs:zT03pEAEi0VHKciJODfn", "name": "Saurabh", "gender": "male", "tier": "premium"},
     {"value": "elevenlabs:zmh5xhBvMzqR4ZlXgcgL", "name": "Siya", "gender": "female", "tier": "premium"},
     {"value": "elevenlabs:FmBhnvP58BK0vz65OOj7", "name": "Viraj", "gender": "male", "tier": "premium"},
     {"value": "elevenlabs:cFvQm3lZl5miSWHxawFj", "name": "Aarush", "gender": "male", "tier": "premium"},
     {"value": "elevenlabs:UgBBYS2sOqTuMpoF3BR0", "name": "English Accent", "gender": "neutral", "tier": "premium", "note": "English accent"},
+    {"value": "elevenlabs:7b9mYhmnp0y2qSH1FnBL", "name": "Abhi", "gender": "male", "tier": "premium"},
+    {"value": "elevenlabs:1qEiC6qsybMkmnNdVMbK", "name": "Monika", "gender": "female", "tier": "premium"},
+    {"value": "elevenlabs:9lx2GDtpvyyNBM7O9Mmx", "name": "Saavi", "gender": "female", "tier": "premium"},
     # --- Standard (Sarvam bulbul:v3) ----------------------------------------
     {"value": "shubh", "name": "Shubh", "gender": "male", "tier": "standard"},
     {"value": "priya", "name": "Priya", "gender": "female", "tier": "standard"},
@@ -71,7 +79,7 @@ _BY_VALUE: dict[str, dict] = {v["value"]: v for v in CATALOG}
 PLAN_ALLOWED_TIERS: dict[str, set[str]] = {
     "starter": {"lite", "standard"},
     "growth": {"lite", "standard"},
-    "scale": {"lite", "standard", "premium", "premium_plus"},
+    "scale": {"lite", "standard", "premium"},
 }
 _BASE_TIERS = {"lite", "standard"}
 

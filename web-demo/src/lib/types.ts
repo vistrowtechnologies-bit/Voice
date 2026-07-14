@@ -336,7 +336,7 @@ export interface ApiKey {
   createdAt: string
 }
 
-export type VoiceTier = 'premium_plus' | 'premium' | 'standard' | 'lite'
+export type VoiceTier = 'premium' | 'standard' | 'lite'
 
 // One voice as returned by the /voices API — a catalog entry annotated for the
 // current account (whether it's in their menu, addable on their plan, etc.).
