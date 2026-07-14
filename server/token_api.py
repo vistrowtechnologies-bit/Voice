@@ -1730,6 +1730,16 @@ def telephony_sip_host() -> dict:
     return {"sipHost": livekit_sip.sip_host()}
 
 
+#  EnableX's own webhook 'state' values seen across accounts/portal configs
+#  aren't a single fixed string per lifecycle stage — mirror the broader set
+#  other EnableX integrations match on rather than a single literal, so a
+#  differently-worded event for the same lifecycle stage doesn't silently
+#  no-op the whole call.
+_ENABLEX_TERMINAL_STATES = {
+    "completed", "disconnected", "failed", "busy", "no-answer", "noanswer", "cancelled", "canceled",
+}
+
+
 @app.post("/telephony/enablex/inbound-event")
 async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     """Webhook EnableX calls for inbound-call lifecycle events.
@@ -1750,6 +1760,10 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     dialed_number = event.get("to")
     caller = event.get("from")
     logger.info("EnableX inbound event: state=%s voice_id=%s to=%s from=%s raw=%s", state, voice_id, dialed_number, caller, event)
+
+    if state in _ENABLEX_TERMINAL_STATES:
+        logger.info("EnableX inbound call %s ended: state=%s", voice_id, state)
+        return {"ok": True}
 
     if state != "incomingcall" or not voice_id or not dialed_number:
         return {"ok": True}
@@ -1772,6 +1786,13 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     return bridge
 
 
+# EnableX 'ready to bridge' states seen for the outbound leg — not just the
+# single 'connected' string this used to match on. Matching only one literal
+# state meant a differently-worded ready event for the same lifecycle point
+# left the call ringing with nothing ever bridging it — dead air, no error.
+_ENABLEX_ANSWERED_STATES = {"connected", "answered", "answer", "in-progress", "in_progress", "ongoing", "active", "bridged"}
+
+
 @app.post("/telephony/enablex/outbound-test-event")
 def enablex_outbound_test_event(event: dict = Body(...)) -> dict:
     """Webhook for the dashboard's "Call test" outbound calls (see
@@ -1782,7 +1803,11 @@ def enablex_outbound_test_event(event: dict = Body(...)) -> dict:
     voice_id = event.get("voice_id")
     logger.info("EnableX outbound-test event: state=%s voice_id=%s raw=%s", state, voice_id, event)
 
-    if state != "connected" or not voice_id:
+    if state in _ENABLEX_TERMINAL_STATES:
+        logger.info("EnableX outbound-test call %s ended before bridging: state=%s", voice_id, state)
+        return {"ok": True}
+
+    if state not in _ENABLEX_ANSWERED_STATES or not voice_id:
         return {"ok": True}
 
     bridge = calls_db.enablex_test_call_connected(voice_id)

@@ -3319,6 +3319,13 @@ def _enablex_request(path: str, method: str, body: dict | None, account_id: int)
     `path` is relative to ENABLEX_API_BASE (e.g. "/call", "/call/<id>/accept").
     Returns {"ok": bool, ...} — never raises, so callers on the live-call path
     can degrade gracefully. Uses urllib to avoid adding a dependency.
+
+    EnableX sometimes reports a failure with HTTP 200 and an error payload
+    instead of a proper HTTP error status (documented behavior other EnableX
+    integrations have had to work around) — a bare "did the request throw"
+    check would read that as success and leave the call bridged to nothing.
+    Treat a 200 response as an error if it carries an explicit error/status
+    field EnableX uses for that purpose.
     """
     import base64
     import json as _json
@@ -3340,12 +3347,42 @@ def _enablex_request(path: str, method: str, body: dict | None, account_id: int)
     try:
         with urllib.request.urlopen(request, timeout=15) as resp:
             payload = _json.loads(resp.read().decode() or "{}")
-            return {"ok": True, "response": payload}
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")[:400]
         return {"ok": False, "error": f"EnableX returned {exc.code}: {detail}"}
     except Exception as exc:  # network/DNS/timeout
         return {"ok": False, "error": f"Could not reach EnableX: {exc}"}
+
+    if isinstance(payload, dict):
+        status_code = payload.get("statusCode")
+        error_msg = payload.get("error") or payload.get("errorMessage")
+        if error_msg or (status_code is not None and str(status_code) not in ("0", "200")):
+            return {"ok": False, "error": f"EnableX returned 200 with an error body: {payload}"[:400]}
+    return {"ok": True, "response": payload}
+
+
+def _enablex_request_with_retry(
+    path: str, method: str, body: dict | None, account_id: int, attempts: int = 3
+) -> dict:
+    """Same as _enablex_request, but retries on failure with a short backoff.
+
+    EnableX's call-control API has a known race: accepting or connecting a
+    leg immediately after the prior step can 4xx/error-body because the call
+    isn't fully in that state on their side yet. A single-shot attempt (the
+    original behavior here) meant that race just silently killed the bridge —
+    the caller got dead air and nothing retried. Mirrors the backoff other
+    EnableX integrations use around the same race, scaled down for a webhook
+    handler that still needs to return quickly.
+    """
+    delays = (0, 1.0, 2.5, 4.0)[:attempts]
+    result: dict = {"ok": False, "error": "no attempt made"}
+    for i, delay in enumerate(delays):
+        if delay:
+            time.sleep(delay)
+        result = _enablex_request(path, method, body, account_id)
+        if result.get("ok"):
+            return result
+    return result
 
 
 def public_base_url() -> str | None:
@@ -3437,7 +3474,7 @@ def enablex_test_call_connected(voice_id: str) -> dict | None:
 
 def enablex_accept_call(voice_id: str, account_id: int) -> dict:
     """Answer a ringing inbound EnableX call leg (PUT /call/<id>/accept)."""
-    return _enablex_request(f"/call/{voice_id}/accept", "PUT", None, account_id)
+    return _enablex_request_with_retry(f"/call/{voice_id}/accept", "PUT", None, account_id)
 
 
 def enablex_connect_to_sip(voice_id: str, from_number: str, sip_uri: str, account_id: int) -> dict:
@@ -3447,7 +3484,7 @@ def enablex_connect_to_sip(voice_id: str, from_number: str, sip_uri: str, accoun
     so pointing it at LiveKit's per-project SIP host hands the audio to the
     LiveKit agent while EnableX bridges the two legs.
     """
-    return _enablex_request(
+    return _enablex_request_with_retry(
         f"/call/{voice_id}/connect",
         "PUT",
         {"from": from_number, "to": sip_uri},
