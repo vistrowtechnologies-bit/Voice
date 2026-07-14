@@ -158,12 +158,14 @@ def _build_stt():
 
 
 # bulbul:v3 is ~94% of Sarvam spend by character count (v3's per-character
-# rate is higher than v2's). These two bulbul:v2 speakers — one male, one
-# female — are offered in the dashboard voice picker labeled "(v2)" to let
-# an operator compare quality against a cheaper model before switching.
-# v2 and v3 have entirely separate, non-overlapping speaker rosters, so
-# picking the right TTS model per speaker (below) is required, not optional.
-_SARVAM_V2_SPEAKERS = {"abhilash", "anushka"}
+# rate is higher than v2's). These bulbul:v2 speakers are offered in the
+# dashboard voice picker as the cheaper "Lite" tier, to let an operator
+# compare quality against v3 before switching. v2 and v3 have entirely
+# separate, non-overlapping speaker rosters, so picking the right TTS model
+# per speaker (below) is required, not optional. Full v2 roster per Sarvam/
+# LiveKit's own plugin docs — do not add a name here without confirming it
+# against that roster first, since an unlisted name 404s against v2.
+_SARVAM_V2_SPEAKERS = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 
 _GOOGLE_VOICE_PREFIX = "google:"
 # Google's own streaming TTS path (livekit-plugins-google 1.6.4) has a real

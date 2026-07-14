@@ -34,7 +34,7 @@ _SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY")
 
 _ELEVEN_V3_PREFIX = "elevenlabs-v3:"
 _ELEVEN_PREFIX = "elevenlabs:"
-_SARVAM_V2_SPEAKERS = {"abhilash", "anushka"}
+_SARVAM_V2_SPEAKERS = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 
 # lang code (voice_catalog.SAMPLE_TEXTS keys) → Sarvam target_language_code.
 _SARVAM_LANG = {"hi": "hi-IN", "en": "en-IN"}

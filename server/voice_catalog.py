@@ -79,7 +79,11 @@ CATALOG: list[dict] = [
     {"value": "pooja", "name": "Pooja", "gender": "female", "tier": "standard"},
     # --- Lite (Sarvam bulbul:v2) --------------------------------------------
     {"value": "abhilash", "name": "Abhilash", "gender": "male", "tier": "lite"},
+    {"value": "hitesh", "name": "Hitesh", "gender": "male", "tier": "lite"},
+    {"value": "karun", "name": "Karun", "gender": "male", "tier": "lite"},
     {"value": "anushka", "name": "Anushka", "gender": "female", "tier": "lite"},
+    {"value": "arya", "name": "Arya", "gender": "female", "tier": "lite"},
+    {"value": "manisha", "name": "Manisha", "gender": "female", "tier": "lite"},
 ]
 
 _BY_VALUE: dict[str, dict] = {v["value"]: v for v in CATALOG}

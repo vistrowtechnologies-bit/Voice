@@ -30,7 +30,7 @@ import type {
 // sarvam.TTS; an agent already saved with a different (now-hidden) speaker
 // keeps working, it just won't be selectable again from this dropdown.
 const VOICES = ['shubh', 'priya', 'aditya', 'ritu', 'rohan', 'simran', 'kavya', 'amit', 'pooja']
-// bulbul:v3 is ~94% of Sarvam spend by character count. These two bulbul:v2
+// bulbul:v3 is ~94% of Sarvam spend by character count. These bulbul:v2
 // speakers — cheaper per Sarvam's pricing — are offered so an operator can
 // compare quality against v3 before switching a live agent over. Matches
 // agent/main.py's _SARVAM_V2_SPEAKERS exactly; the raw speaker name (no
@@ -38,7 +38,11 @@ const VOICES = ['shubh', 'priya', 'aditya', 'ritu', 'rohan', 'simran', 'kavya', 
 // _build_tts picks the right Sarvam model per speaker automatically.
 const SARVAM_V2_VOICES = [
   { value: 'abhilash', label: 'Abhilash (v2)' },
+  { value: 'hitesh', label: 'Hitesh (v2)' },
+  { value: 'karun', label: 'Karun (v2)' },
   { value: 'anushka', label: 'Anushka (v2)' },
+  { value: 'arya', label: 'Arya (v2)' },
+  { value: 'manisha', label: 'Manisha (v2)' },
 ] as const
 // Google Cloud TTS voices, offered alongside Sarvam so an operator can try
 // Google's voice quality directly rather than only hitting it as an

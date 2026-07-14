@@ -2653,7 +2653,7 @@ _VOICE_TIER_MULTIPLIERS = {"economy": 0.5, "standard": 1.0, "premium": 2.0}
 # Same Sarvam bulbul:v2 speaker set as agent/main.py's _SARVAM_V2_SPEAKERS and
 # web-demo/src/pages/Agents.tsx's SARVAM_V2_VOICES — duplicated across all
 # three the same way the full voice lists already are.
-_ECONOMY_VOICES = {"abhilash", "anushka"}
+_ECONOMY_VOICES = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 # Both the normal (Flash v2.5) and experimental (v3, agent/main.py's
 # _ELEVENLABS_V3_VOICE_PREFIX) ElevenLabs voice forms bill as premium.
 _PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:")
