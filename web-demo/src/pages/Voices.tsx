@@ -13,13 +13,30 @@ const PREVIEW_LANGS = [
 
 const GENDER_ICON: Record<string, string> = { male: 'man', female: 'woman', neutral: 'graphic_eq' }
 
-// Same tier → accent mapping the app already uses elsewhere (cyan = "connected/
-// good" in Integrations.tsx, primary purple = the premium/paid signal in
-// Billing.tsx's plan cards).
-const TIER_ACCENT: Record<VoiceTier, string> = {
-  premium: 'bg-primary/20 text-primary',
-  standard: 'bg-cyan/20 text-cyan',
-  lite: 'bg-surface-high text-text-muted',
+// Generated per-voice avatars — a colored initial "persona" circle (same idea
+// as Slack/Linear default avatars) so each voice reads as a distinct
+// character at a glance instead of every card in a tier sharing one identical
+// icon. Color is a deterministic hash of the voice's own value, not its tier,
+// so avatars stay visually varied across a tier group; tier is still legible
+// from the pill/border. Palette is the app's existing accent tokens only —
+// no new colors introduced.
+const AVATAR_PALETTE = [
+  'bg-primary/20 text-primary',
+  'bg-cyan/20 text-cyan',
+  'bg-magenta/20 text-magenta',
+  'bg-amber/20 text-amber',
+  'bg-success/20 text-success',
+] as const
+
+function avatarClass(value: string): string {
+  let hash = 0
+  for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) | 0
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length]
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  return parts.length > 1 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : name.slice(0, 2).toUpperCase()
 }
 
 function TierGroup({
@@ -45,7 +62,7 @@ function TierGroup({
         <h2 className="text-sm font-bold">{tierLabel}</h2>
         <span className="text-[11px] text-text-muted">{tierNote}</span>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {entries.map((entry) => (
           <VoiceCard
             key={entry.value}
@@ -85,8 +102,15 @@ function VoiceCard({
     >
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="flex items-center gap-3">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${TIER_ACCENT[entry.tier]}`}>
-            <Icon name={GENDER_ICON[entry.gender] ?? 'graphic_eq'} className="text-[20px]" />
+          <div className="relative shrink-0">
+            <div
+              className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold ${avatarClass(entry.value)}`}
+            >
+              {initials(entry.name)}
+            </div>
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-surface bg-surface-high text-text-muted">
+              <Icon name={GENDER_ICON[entry.gender] ?? 'graphic_eq'} className="text-[10px]" />
+            </span>
           </div>
           <div className="min-w-0">
             <p className="truncate font-semibold">{entry.name}</p>
@@ -207,7 +231,7 @@ export function Voices() {
         </div>
       </PageHeader>
 
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-6">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
         {!data ? (
           <div className="flex justify-center py-16">
             <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
