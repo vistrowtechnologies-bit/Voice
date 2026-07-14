@@ -13,6 +13,10 @@ from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
 from livekit.plugins import elevenlabs, google, openai, sarvam
 
 import db
+import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
+# agent build context can't reach ../server), kept in sync the same way
+# dbconn.py is duplicated into agent/. Used here only to resolve a voice's
+# gender so the LLM self-refers with the right grammatical gender.
 from emotion import ELEVENLABS_EMOTION_DELTAS, EMOTION_TONE_DELTAS, detect_caller_emotion
 from language import LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
@@ -525,6 +529,29 @@ class RealEstateAgent(Agent):
             f"{language_name} is the default until the caller's own language is clear. "
             "Once they speak, follow the multilingual rules above and match them."
         )
+        # Grammatical gender: many Indian languages (Hindi, Marathi, Gujarati,
+        # Punjabi, Bhojpuri…) inflect first-person verbs by the SPEAKER's
+        # gender, so the LLM must know whether this agent's voice is a woman or
+        # a man — otherwise it defaults to masculine forms and a female voice
+        # says "बताता हूँ" instead of "बताती हूँ". Derived from the voice's
+        # catalog gender so it's automatic for every voice, no per-agent config.
+        _gender = (voice_catalog.get_voice(voice_value) or {}).get("gender")
+        if _gender in ("male", "female"):
+            _woman = _gender == "female"
+            instructions += (
+                f"\n\n# Your voice and gender\nYou, {agent_name}, speak with a "
+                f"{'woman' if _woman else 'man'}'s voice — you ARE {'a woman' if _woman else 'a man'}. "
+                "In every language that marks the speaker's grammatical gender (Hindi, Marathi, "
+                "Gujarati, Punjabi, and others), always refer to yourself with the correct "
+                f"{'feminine' if _woman else 'masculine'} forms and never mix genders. For example in "
+                "Hindi say " + (
+                    "\"मैं बताती हूँ\", \"मैं करती हूँ\", \"मैं आई हूँ\" (feminine) — never the masculine "
+                    "\"बताता / करता / आया हूँ\"."
+                    if _woman else
+                    "\"मैं बताता हूँ\", \"मैं करता हूँ\", \"मैं आया हूँ\" (masculine) — never the feminine "
+                    "\"बताती / करती / आई हूँ\"."
+                )
+            )
         tone_name = config.get("tone") or DEFAULT_TONE
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         tts, tts_provider = _build_tts(reply_language, voice_value, base_tone, tone_name)

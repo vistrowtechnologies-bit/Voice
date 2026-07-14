@@ -106,9 +106,11 @@ def _synth_sarvam(speaker: str, model: str, lang: str, text: str) -> tuple[bytes
 def synthesize(voice_string: str, lang: str) -> tuple[bytes, str]:
     """Synthesize the fixed audition line for `voice_string` in `lang`.
     Returns (audio_bytes, content_type). Raises PreviewError on any failure."""
-    if voice_catalog.get_voice(voice_string) is None:
+    entry = voice_catalog.get_voice(voice_string)
+    if entry is None:
         raise PreviewError("That voice isn't available.")
-    text = voice_catalog.SAMPLE_TEXTS.get(lang)
+    # Gendered sample line so a female voice says "देती हूँ", not "देता हूँ".
+    text = voice_catalog.sample_text(lang, entry.get("gender"))
     if text is None:
         raise PreviewError(f"No preview script for language '{lang}'.")
 
