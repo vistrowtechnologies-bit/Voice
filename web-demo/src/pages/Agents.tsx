@@ -29,7 +29,7 @@ import type {
 // operators. The voice picked here is exactly what agent/main.py passes to
 // sarvam.TTS; an agent already saved with a different (now-hidden) speaker
 // keeps working, it just won't be selectable again from this dropdown.
-const VOICES = ['shubh', 'priya', 'aditya', 'ritu', 'rohan', 'simran', 'kavya', 'amit']
+const VOICES = ['shubh', 'priya', 'aditya', 'ritu', 'rohan', 'simran', 'kavya', 'amit', 'pooja']
 // bulbul:v3 is ~94% of Sarvam spend by character count. These two bulbul:v2
 // speakers — cheaper per Sarvam's pricing — are offered so an operator can
 // compare quality against v3 before switching a live agent over. Matches
@@ -84,6 +84,7 @@ const ELEVENLABS_VOICES = [
   { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male)' },
   { value: 'elevenlabs:1qEiC6qsybMkmnNdVMbK', label: '✨ Monika (Female)' },
   { value: 'elevenlabs:9lx2GDtpvyyNBM7O9Mmx', label: '✨ Saavi (Female)' },
+  { value: 'elevenlabs:mActWQg9kibLro6Z2ouY', label: '✨ Riya (Female)' },
 ] as const
 // The agent voice picker is now driven by the account's curated menu
 // (GET /voices/mine, see the Voices page) rather than these hardcoded arrays.

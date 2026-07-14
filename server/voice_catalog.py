@@ -56,6 +56,7 @@ CATALOG: list[dict] = [
     {"value": "elevenlabs:7b9mYhmnp0y2qSH1FnBL", "name": "Abhi", "gender": "male", "tier": "premium"},
     {"value": "elevenlabs:1qEiC6qsybMkmnNdVMbK", "name": "Monika", "gender": "female", "tier": "premium"},
     {"value": "elevenlabs:9lx2GDtpvyyNBM7O9Mmx", "name": "Saavi", "gender": "female", "tier": "premium"},
+    {"value": "elevenlabs:mActWQg9kibLro6Z2ouY", "name": "Riya", "gender": "female", "tier": "premium"},
     # --- Standard (Sarvam bulbul:v3) ----------------------------------------
     {"value": "shubh", "name": "Shubh", "gender": "male", "tier": "standard"},
     {"value": "priya", "name": "Priya", "gender": "female", "tier": "standard"},
@@ -65,6 +66,7 @@ CATALOG: list[dict] = [
     {"value": "simran", "name": "Simran", "gender": "female", "tier": "standard"},
     {"value": "kavya", "name": "Kavya", "gender": "female", "tier": "standard"},
     {"value": "amit", "name": "Amit", "gender": "male", "tier": "standard"},
+    {"value": "pooja", "name": "Pooja", "gender": "female", "tier": "standard"},
     # --- Lite (Sarvam bulbul:v2) --------------------------------------------
     {"value": "abhilash", "name": "Abhilash", "gender": "male", "tier": "lite"},
     {"value": "anushka", "name": "Anushka", "gender": "female", "tier": "lite"},
