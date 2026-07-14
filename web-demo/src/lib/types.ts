@@ -360,6 +360,5 @@ export interface VoiceEntry {
 
 export interface VoiceCatalog {
   voices: VoiceEntry[]
-  maxVoices: number
   selectedCount: number
 }

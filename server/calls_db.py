@@ -388,11 +388,12 @@ CREATE TABLE IF NOT EXISTS campaign_contacts (
     created_at TEXT DEFAULT {_NOW}
 );
 
--- Each account's curated voice menu (max MAX_ACCOUNT_VOICES rows/account,
--- enforced in add_account_voice). The agent voice picker only offers voices
--- listed here; voice_string is a value from server/voice_catalog.py and is
--- exactly what lands on agents.voice. An empty menu is auto-seeded with
--- defaults on first read (see ensure_account_voices).
+-- Each account's curated voice menu (any number of rows/account — no cap;
+-- tier gating by plan is still enforced in add_account_voice). The agent
+-- voice picker only offers voices listed here; voice_string is a value from
+-- server/voice_catalog.py and is exactly what lands on agents.voice. An
+-- empty menu is auto-seeded with defaults on first read (see
+-- ensure_account_voices).
 CREATE TABLE IF NOT EXISTS account_voices (
     account_id INTEGER NOT NULL,
     voice_string TEXT NOT NULL,
@@ -2700,7 +2701,7 @@ def _seed_default_voices(conn, account_id: int) -> None:
     """Seed a never-configured account's menu so its agent picker isn't empty.
     Menu = the distinct catalog voices its agents already use (so nothing an
     account already relies on vanishes from the picker) plus the Standard
-    defaults, capped at MAX_ACCOUNT_VOICES. Runs inside the caller's txn."""
+    defaults. Runs inside the caller's txn."""
     in_use = [
         r["voice"]
         for r in conn.execute(
@@ -2713,7 +2714,7 @@ def _seed_default_voices(conn, account_id: int) -> None:
     for v in in_use + voice_catalog.DEFAULT_ACCOUNT_VOICES:
         if v not in ordered:
             ordered.append(v)
-    for v in ordered[: voice_catalog.MAX_ACCOUNT_VOICES]:
+    for v in ordered:
         conn.execute(
             "INSERT INTO account_voices (account_id, voice_string) VALUES (?, ?) "
             "ON CONFLICT (account_id, voice_string) DO NOTHING",
@@ -2773,15 +2774,14 @@ def voice_catalog_for_account(account_id: int) -> dict:
     voices.sort(key=lambda e: (e["tierRank"], e["name"].lower()))
     return {
         "voices": voices,
-        "maxVoices": voice_catalog.MAX_ACCOUNT_VOICES,
         "selectedCount": len(selected),
     }
 
 
 def add_account_voice(account_id: int, voice_string: str) -> None:
-    """Add a catalog voice to the account's menu. Enforces: known voice, tier
-    allowed on the account's plan (owner bypasses), and the MAX cap. Raises
-    VoiceMenuError on any rejection."""
+    """Add a catalog voice to the account's menu. Enforces: known voice and
+    tier allowed on the account's plan (owner bypasses) — no cap on how many
+    voices an account can add. Raises VoiceMenuError on any rejection."""
     entry = voice_catalog.get_voice(voice_string)
     if entry is None:
         raise VoiceMenuError("That voice isn't available.")
@@ -2799,14 +2799,6 @@ def add_account_voice(account_id: int, voice_string: str) -> None:
             ).fetchone()
             if already:
                 return  # idempotent
-            count = conn.execute(
-                "SELECT COUNT(*) AS c FROM account_voices WHERE account_id = ?", (account_id,)
-            ).fetchone()["c"]
-            if count >= voice_catalog.MAX_ACCOUNT_VOICES:
-                raise VoiceMenuError(
-                    f"You can keep up to {voice_catalog.MAX_ACCOUNT_VOICES} voices. "
-                    "Remove one to add another."
-                )
             conn.execute(
                 "INSERT INTO account_voices (account_id, voice_string) VALUES (?, ?)",
                 (account_id, voice_string),

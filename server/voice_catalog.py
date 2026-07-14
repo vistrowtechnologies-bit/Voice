@@ -99,9 +99,6 @@ PLAN_ALLOWED_TIERS: dict[str, set[str]] = {
 }
 _BASE_TIERS = {"lite", "standard"}
 
-# Max voices any single account may keep in its menu, across all tiers.
-MAX_ACCOUNT_VOICES = 6
-
 # Voices auto-added to a brand-new (or never-configured) account's menu so the
 # agent picker is never empty. Both are free-tier Standard voices.
 DEFAULT_ACCOUNT_VOICES = ["shubh", "priya"]

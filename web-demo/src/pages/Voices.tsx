@@ -64,14 +64,12 @@ function TierGroup({
   entries,
   lang,
   busyVoice,
-  slotsFull,
   onAdd,
   onRemove,
 }: {
   entries: VoiceEntry[]
   lang: string
   busyVoice: string | null
-  slotsFull: boolean
   onAdd: (v: string) => void
   onRemove: (v: string) => void
 }) {
@@ -90,7 +88,6 @@ function TierGroup({
             entry={entry}
             lang={lang}
             busy={busyVoice === entry.value}
-            slotsFull={slotsFull}
             onAdd={onAdd}
             onRemove={onRemove}
           />
@@ -104,14 +101,12 @@ function VoiceCard({
   entry,
   lang,
   busy,
-  slotsFull,
   onAdd,
   onRemove,
 }: {
   entry: VoiceEntry
   lang: string
   busy: boolean
-  slotsFull: boolean
   onAdd: (v: string) => void
   onRemove: (v: string) => void
 }) {
@@ -179,8 +174,8 @@ function VoiceCard({
       ) : (
         <button
           onClick={() => onAdd(entry.value)}
-          disabled={busy || slotsFull}
-          title={slotsFull ? 'Remove a voice first' : 'Add to your voices'}
+          disabled={busy}
+          title="Add to your voices"
           className="mt-auto flex items-center justify-center gap-1.5 rounded-lg bg-primary py-2 text-xs font-bold text-bg transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-40"
         >
           <Icon name="add" className="text-[15px]" />
@@ -217,7 +212,7 @@ export function Voices() {
     } catch (e) {
       setError(
         e instanceof Error && e.message.includes('400')
-          ? 'That voice needs a plan upgrade or you’ve hit your limit.'
+          ? 'That voice needs a plan upgrade.'
           : 'Could not add that voice.'
       )
     } finally {
@@ -238,7 +233,6 @@ export function Voices() {
     }
   }
 
-  const slotsFull = !!data && data.selectedCount >= data.maxVoices
   const byTier = (tier: VoiceTier) => (data?.voices ?? []).filter((v) => v.tier === tier)
 
   return (
@@ -276,21 +270,9 @@ export function Voices() {
                   <p className="text-xs text-text-muted">Only added voices show up in the agent voice picker.</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-high">
-                  <div
-                    className={`h-full rounded-full ${slotsFull ? 'bg-amber' : 'bg-cyan'}`}
-                    style={{ width: `${(data.selectedCount / data.maxVoices) * 100}%` }}
-                  />
-                </div>
-                <span
-                  className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                    slotsFull ? 'border-amber/40 bg-amber/10 text-amber' : 'border-border text-text-muted'
-                  }`}
-                >
-                  {data.selectedCount} / {data.maxVoices}
-                </span>
-              </div>
+              <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-text-muted">
+                {data.selectedCount} added
+              </span>
             </div>
 
             {error && (
@@ -303,7 +285,6 @@ export function Voices() {
               entries={byTier('premium')}
               lang={lang}
               busyVoice={busyVoice}
-              slotsFull={slotsFull}
               onAdd={onAdd}
               onRemove={onRemove}
             />
@@ -311,7 +292,6 @@ export function Voices() {
               entries={byTier('standard')}
               lang={lang}
               busyVoice={busyVoice}
-              slotsFull={slotsFull}
               onAdd={onAdd}
               onRemove={onRemove}
             />
@@ -319,7 +299,6 @@ export function Voices() {
               entries={byTier('lite')}
               lang={lang}
               busyVoice={busyVoice}
-              slotsFull={slotsFull}
               onAdd={onAdd}
               onRemove={onRemove}
             />
