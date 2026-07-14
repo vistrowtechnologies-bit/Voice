@@ -13,30 +13,33 @@ const PREVIEW_LANGS = [
 
 const GENDER_ICON: Record<string, string> = { male: 'man', female: 'woman', neutral: 'graphic_eq' }
 
-// Generated per-voice avatars — a colored initial "persona" circle (same idea
-// as Slack/Linear default avatars) so each voice reads as a distinct
+// Generated per-voice avatars — a soft two-tone gradient orb (same idea as
+// ElevenLabs' own voice-library avatars) so each voice reads as a distinct
 // character at a glance instead of every card in a tier sharing one identical
-// icon. Color is a deterministic hash of the voice's own value, not its tier,
-// so avatars stay visually varied across a tier group; tier is still legible
-// from the pill/border. Palette is the app's existing accent tokens only —
-// no new colors introduced.
-const AVATAR_PALETTE = [
-  'bg-primary/20 text-primary',
-  'bg-cyan/20 text-cyan',
-  'bg-magenta/20 text-magenta',
-  'bg-amber/20 text-amber',
-  'bg-success/20 text-success',
-] as const
+// icon. Colors are the app's existing CSS custom properties (not Tailwind
+// utility classes, since a gradient string needs raw color refs) — using
+// var(--color-*) rather than hardcoded hex means the orb stays correct in
+// both themes automatically. Which two colors and where they sit is a
+// deterministic hash of the voice's own value, not its tier, so orbs stay
+// visually varied within a tier group; tier is still legible from the pill.
+const AVATAR_HUES = ['--color-primary', '--color-cyan', '--color-magenta', '--color-amber', '--color-success'] as const
 
-function avatarClass(value: string): string {
+function hashStr(value: string): number {
   let hash = 0
   for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) | 0
-  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length]
+  return Math.abs(hash)
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  return parts.length > 1 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : name.slice(0, 2).toUpperCase()
+function avatarGradient(value: string): string {
+  const hash = hashStr(value)
+  const first = hash % AVATAR_HUES.length
+  const second = (first + 1 + (hash % (AVATAR_HUES.length - 1))) % AVATAR_HUES.length
+  const [posA, posB] = hash % 2 === 0 ? ['25% 25%', '75% 75%'] : ['75% 25%', '25% 75%']
+  return (
+    `radial-gradient(circle at ${posA}, var(${AVATAR_HUES[first]}) 0%, transparent 60%), ` +
+    `radial-gradient(circle at ${posB}, var(${AVATAR_HUES[second]}) 0%, transparent 60%), ` +
+    `var(--color-surface-high)`
+  )
 }
 
 function TierGroup({
@@ -103,11 +106,7 @@ function VoiceCard({
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
-            <div
-              className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold ${avatarClass(entry.value)}`}
-            >
-              {initials(entry.name)}
-            </div>
+            <div className="h-11 w-11 rounded-full" style={{ background: avatarGradient(entry.value) }} />
             <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-surface bg-surface-high text-text-muted">
               <Icon name={GENDER_ICON[entry.gender] ?? 'graphic_eq'} className="text-[10px]" />
             </span>
