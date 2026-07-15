@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -47,6 +48,24 @@ logger.setLevel(logging.INFO)
 # require the same candidate language across this many consecutive turns
 # (roughly "a couple of sentences") before actually switching.
 LANGUAGE_SWITCH_CONFIRMATION_TURNS = 3
+
+# Fixed opening lines spoken verbatim (session.say(), no LLM round-trip) for
+# the Vistrow marketing site's live demo widget only — a first-time visitor
+# clicking "Talk to Artha live" was waiting 6-7s of dead air for
+# generate_reply() to produce a dynamic greeting before saying a word. One
+# is picked at random per call so it still varies, without paying that
+# latency every time. Deliberately scoped to is_platform_demo — the
+# button-click self-aware humor here is wrong for a tenant's paying
+# customers on their own agent, who should keep the LLM-generated dynamic
+# opener (or an operator's own welcome_message).
+_PLATFORM_DEMO_OPENERS = [
+    "वेलकम, वेलकम, वेलकम! आ गए आप आखिरकार — मुझे लगा शायद आप बस बटन hover करके सोच रहे थे 'दबाऊं या ना दबाऊं.' अच्छा किया दबाया। बताइए, आप यहाँ किसलिए आए?",
+    "वो बटन दबाया ना अभी? मुझे पता है आप सोच रहे थे 'चलो देखते हैं ये काम भी करता है या सिर्फ डेमो वीडियो है.' तो जनाब, मैं रियल हूँ। चौंक गए?",
+    "सच बताऊं? ज़्यादातर लोग डेमो बटन दबाकर सोचते हैं 'होल्ड म्यूज़िक आएगी, फिर एक रोबोट बोलेगा सेल्स के लिए एक दबाएँ.' मैंने वो सब स्किप कर दिया, सीधे बात कर रही हूँ।",
+    "मुझे पता है आप क्या सोच रहे हैं — 'ये तो रिकॉर्डिंग होगी, कुछ बोलकर देखता हूँ, रिस्पॉन्स आता है या नहीं.' जी हाँ, आता है। अब पूछिए कुछ भी!",
+    "आपने वो बटन दबाया, मुझे लगा शायद कोई और फॉर्म भरना पड़ेगा — नाम, ईमेल, फिर कोई सेल्सपर्सन कॉल करेगा तीन दिन बाद। उसकी जगह, मैं यहां हूँ, अभी। तो बताइए, काम क्या है?",
+    "मुझे पता है इस बटन को दबाने से पहले आपने सोचा होगा 'ये तो हर वेबसाइट पर होता है, कुछ नया नहीं.' ठीक है, चैलेंज एक्सेप्ट — प्रूव करती हूँ कि मैं अलग हूँ। कुछ भी पूछिए।",
+]
 
 
 # Sarvam bulbul:v3's own `pace`/`temperature`/`pitch` govern how the voice is
@@ -391,6 +410,7 @@ class RealEstateAgent(Agent):
         config = config or {}
         agent_name = config.get("name") or "Artha"
         voice_value = config.get("voice") or "shubh"
+        self._is_platform_demo = bool(config.get("is_platform_demo"))
         if config.get("system_prompt"):
             instructions = config["system_prompt"]
         elif config.get("is_platform_demo"):
@@ -615,6 +635,15 @@ class RealEstateAgent(Agent):
             # Operator wrote an exact opening line — speak it verbatim rather
             # than letting the model improvise a greeting.
             await self.session.say(self._welcome_message)
+            return
+        if self._is_platform_demo:
+            # A dynamic LLM-generated greeting sounds better, but costs a full
+            # generate_reply() round-trip (LLM + TTS) before the very first
+            # word — 6-7s of dead air a first-time website visitor wasn't
+            # expecting. Speaking a fixed line via say() skips straight to
+            # TTS. Picked at random per call so repeat visitors don't hear the
+            # same line every time.
+            await self.session.say(random.choice(_PLATFORM_DEMO_OPENERS))
             return
         self.session.generate_reply()
 
