@@ -2459,14 +2459,24 @@ def list_integrations(account_id: int) -> list[dict]:
         conn.close()
 
 
-def update_integration(key: str, status: str, config: dict, account_id: int) -> None:
+def update_integration(key: str, status: str, config: dict, account_id: int, name: str | None = None) -> None:
+    """name is optional — lets an operator relabel a generic slot (e.g. the
+    "webhook" integration) with the actual receiver's name, like "ArthaLeads
+    CRM", without touching _SEED_INTEGRATIONS (which every other tenant's
+    freshly-seeded row still starts from unchanged)."""
     conn = _connect()
     try:
         with conn:
-            conn.execute(
-                "UPDATE integrations SET status = ?, config_json = ? WHERE key = ? AND account_id = ?",
-                (status, json.dumps(config), key, account_id),
-            )
+            if name and name.strip():
+                conn.execute(
+                    "UPDATE integrations SET status = ?, config_json = ?, name = ? WHERE key = ? AND account_id = ?",
+                    (status, json.dumps(config), name.strip(), key, account_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE integrations SET status = ?, config_json = ? WHERE key = ? AND account_id = ?",
+                    (status, json.dumps(config), key, account_id),
+                )
     finally:
         conn.close()
 

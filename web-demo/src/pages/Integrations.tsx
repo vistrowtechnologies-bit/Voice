@@ -73,6 +73,7 @@ export function Integrations() {
   const [configuring, setConfiguring] = useState<string | null>(null)
   const [url, setUrl] = useState('')
   const [token, setToken] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, string>>({})
   const [showGcalScript, setShowGcalScript] = useState(false)
@@ -101,10 +102,11 @@ export function Integrations() {
     if (!url.trim()) return
     const config: { url: string; token?: string } = { url: url.trim() }
     if (key === 'webhook' && token.trim()) config.token = token.trim()
-    await updateIntegration(key, 'connected', config)
+    await updateIntegration(key, 'connected', config, key === 'webhook' ? displayName.trim() : undefined)
     setConfiguring(null)
     setUrl('')
     setToken('')
+    setDisplayName('')
     reload()
   }
 
@@ -205,6 +207,14 @@ export function Integrations() {
 
               {configuring === integration.key ? (
                 <div className="flex flex-col gap-2">
+                  {integration.key === 'webhook' && (
+                    <input
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="Display name (e.g. ArthaLeads CRM) — defaults to “CRM / Webhook”"
+                      className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
+                    />
+                  )}
                   <input
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
@@ -258,6 +268,7 @@ export function Integrations() {
                       onClick={() => {
                         setUrl(integration.config.url || '')
                         setToken(integration.config.token || '')
+                        setDisplayName(integration.key === 'webhook' ? integration.name : '')
                         setConfiguring(integration.key)
                       }}
                       className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-bold text-text-muted hover:border-primary"

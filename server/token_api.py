@@ -1482,7 +1482,13 @@ def list_integrations(user: dict = Depends(current_user)) -> list[dict]:
 
 @app.patch("/integrations/{key}")
 def update_integration(key: str, data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
-    calls_db.update_integration(key, data.get("status", "not_connected"), data.get("config", {}), user["account_id"])
+    calls_db.update_integration(
+        key,
+        data.get("status", "not_connected"),
+        data.get("config", {}),
+        user["account_id"],
+        name=data.get("name"),
+    )
     return {"ok": True}
 
 

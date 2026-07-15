@@ -223,8 +223,8 @@ export const removeDnc = (id: number) => send('DELETE', `/compliance/dnc/${id}`)
 // ---------------------------------------------------------- integrations
 
 export const fetchIntegrations = () => get<Integration[]>('/integrations')
-export const updateIntegration = (key: string, status: string, config: Record<string, string>) =>
-  send('PATCH', `/integrations/${key}`, { status, config })
+export const updateIntegration = (key: string, status: string, config: Record<string, string>, name?: string) =>
+  send('PATCH', `/integrations/${key}`, { status, config, name })
 export const testIntegration = (key: string) =>
   send<{ ok: boolean; detail: string }>('POST', `/integrations/${key}/test`)
 export const gcalOauthStartUrl = '/api/integrations/gcal/oauth/start'
