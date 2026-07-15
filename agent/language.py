@@ -17,6 +17,26 @@ LANGUAGE_NAMES: dict[str, str] = {
     "pa-IN": "Punjabi",
 }
 
+# Which of the languages above ElevenLabs' eleven_flash_v2_5 model actually
+# accepts as a `language` enforcement code. Confirmed against ElevenLabs'
+# own published 32-language list (elevenlabs.io/docs/overview/models,
+# 2026-07-15) — only Hindi, English, and Tamil overlap with our 10 offered
+# languages. This is NOT a quality/accent list (see the Marathi pronunciation
+# work elsewhere) — it's which codes the API will accept at all before
+# REJECTING the request outright. Passing an unlisted code (confirmed live in
+# production for "mr") gets an immediate hard error from ElevenLabs
+# ("Model 'eleven_flash_v2_5' does not support language_code 'mr'"), which
+# kills the whole TTS WebSocket connection (code 1008) and — because
+# livekit-agents doesn't recover a dead TTS pipeline mid-session — leaves the
+# agent permanently silent for the rest of the call while the room stays
+# connected: the caller sees an active call that never speaks again. Every
+# call site that sets `language=` on an ElevenLabs TTS instance (main.py's
+# _build_tts and its mid-call update_options paths, tools.py's
+# switch_reply_language) must check membership here first and omit the
+# `language` kwarg entirely for anything not in this set — ElevenLabs then
+# auto-detects from the text instead of enforcing (and rejecting) a code.
+ELEVENLABS_SUPPORTED_LANGUAGES = {"hi-IN", "en-IN", "ta-IN"}
+
 # Unicode script ranges for the Indic languages Sarvam's bulbul:v3 TTS
 # supports. Devanagari covers both Hindi and Marathi — script alone can't
 # tell them apart, so it maps to hi-IN here; on_user_turn_completed special

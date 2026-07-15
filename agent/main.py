@@ -11,6 +11,7 @@ from livekit.agents import Agent, AgentSession, JobContext, TurnHandlingOptions,
 from livekit.agents.tts import StreamAdapter
 from livekit.agents.stt import FallbackAdapter as SttFallbackAdapter
 from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
+from livekit.agents.types import NOT_GIVEN
 from livekit.plugins import elevenlabs, google, openai, sarvam
 
 import db
@@ -19,7 +20,7 @@ import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # dbconn.py is duplicated into agent/. Used here only to resolve a voice's
 # gender so the LLM self-refers with the right grammatical gender.
 from emotion import ELEVENLABS_EMOTION_DELTAS, EMOTION_TONE_DELTAS, detect_caller_emotion
-from language import LANGUAGE_NAMES, detect_reply_language
+from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.platform_assistant import build_platform_assistant_prompt
 from prompts.voice_style import ELEVENLABS_EXPRESSIVE_PROMPT, VOICE_STYLE_PROMPT
@@ -293,10 +294,20 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     if speaker.startswith(_ELEVENLABS_VOICE_PREFIX) and _ELEVENLABS_API_KEY:
         voice_id = speaker[len(_ELEVENLABS_VOICE_PREFIX) :]
         base = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
+        # eleven_flash_v2_5 hard-rejects a `language` code outside its own
+        # 32-language list (confirmed live: "does not support language_code
+        # 'mr'" kills the WebSocket, code 1008, and the agent goes silently
+        # dead for the rest of the call) — see language.py's
+        # ELEVENLABS_SUPPORTED_LANGUAGES for the full story. Only enforce a
+        # language ElevenLabs actually accepts; otherwise omit the kwarg so
+        # it auto-detects from the text instead of crashing the connection.
+        eleven_language = (
+            reply_language.split("-")[0] if reply_language in ELEVENLABS_SUPPORTED_LANGUAGES else NOT_GIVEN
+        )
         tts = elevenlabs.TTS(
             voice_id=voice_id,
             model="eleven_flash_v2_5",
-            language=reply_language.split("-")[0],
+            language=eleven_language,
             voice_settings=elevenlabs.VoiceSettings(
                 stability=base["stability"],
                 similarity_boost=_ELEVENLABS_SIMILARITY_BOOST,
@@ -728,7 +739,14 @@ class RealEstateAgent(Agent):
             self._pending_language = None
             self._pending_language_streak = 0
             if self._tts_provider == "elevenlabs":
-                self.tts.update_options(language=candidate.split("-")[0])
+                # Only enforce a language ElevenLabs' eleven_flash_v2_5
+                # actually accepts (see language.py's
+                # ELEVENLABS_SUPPORTED_LANGUAGES) — an unsupported code here
+                # is a confirmed live crash: ElevenLabs rejects the request,
+                # kills the TTS WebSocket, and the agent goes silently dead
+                # for the rest of the call.
+                if candidate in ELEVENLABS_SUPPORTED_LANGUAGES:
+                    self.tts.update_options(language=candidate.split("-")[0])
             elif self._tts_provider != "elevenlabs-v3":
                 # elevenlabs-v3 (StreamAdapter) has no update_options — the
                 # call keeps the language it opened with. Sarvam and Flash

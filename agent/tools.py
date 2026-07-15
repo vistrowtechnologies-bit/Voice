@@ -7,7 +7,7 @@ from livekit.agents import RunContext
 from livekit.agents.llm import function_tool
 
 import db
-from language import LANGUAGE_NAMES
+from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES
 
 logger = logging.getLogger("real-estate-tools")
 
@@ -426,20 +426,39 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
     agent = context.session.current_agent
     if getattr(agent, "_reply_language", None) == code:
         return f"Already replying in {language} — just continue."
+    voice_unsupported = False
     if hasattr(agent, "_reply_language"):
         agent._reply_language = code
         agent._pending_language = None
         agent._pending_language_streak = 0
         try:
-            if getattr(agent, "_tts_provider", None) == "elevenlabs":
-                agent.tts.update_options(language=code.split("-")[0])
-            elif getattr(agent, "_tts_provider", None) not in (None, "elevenlabs-v3"):
+            provider = getattr(agent, "_tts_provider", None)
+            if provider == "elevenlabs":
+                # eleven_flash_v2_5 hard-rejects a `language` code outside its
+                # own 32-language list — confirmed live in production: it
+                # kills the TTS WebSocket entirely and the agent goes
+                # silently dead for the rest of the call. Only enforce a
+                # language it actually accepts (see language.py); otherwise
+                # the LLM's text still switches (that's provider-independent)
+                # but the voice keeps auto-detecting rather than crashing.
+                if code in ELEVENLABS_SUPPORTED_LANGUAGES:
+                    agent.tts.update_options(language=code.split("-")[0])
+                else:
+                    voice_unsupported = True
+            elif provider not in (None, "elevenlabs-v3"):
                 agent.tts.update_options(target_language_code=code)
             # elevenlabs-v3 (StreamAdapter) has no update_options — same
             # known limitation as the automatic switch path in main.py.
         except Exception:
             logger.warning("switch_reply_language: update_options failed", exc_info=True)
-    logger.info("switch_reply_language -> %s (%s)", language, code)
+    logger.info("switch_reply_language -> %s (%s)%s", language, code, " [voice unsupported]" if voice_unsupported else "")
+    if voice_unsupported:
+        return (
+            f"Reply language switched to {language} for your WORDS — write your next reply in "
+            f"{language}. But this voice can't enforce {language} pronunciation specifically, so it "
+            "may sound accented rather than fully native. Don't apologize for this or mention it "
+            "unprompted; only acknowledge it briefly if the caller comments on the accent."
+        )
     return f"Reply language switched to {language}. Continue the conversation in {language} from your very next line."
 
 
