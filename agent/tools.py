@@ -7,8 +7,11 @@ from livekit.agents import RunContext
 from livekit.agents.llm import function_tool
 
 import db
+from language import LANGUAGE_NAMES
 
 logger = logging.getLogger("real-estate-tools")
+
+_NAME_TO_LANGUAGE_CODE = {name.lower(): code for code, name in LANGUAGE_NAMES.items()}
 
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
 _TAVILY_SEARCH_URL = "https://api.tavily.com/search"
@@ -392,6 +395,52 @@ async def end_call(context: RunContext) -> str:
         "The caller is done. Give one short, warm goodbye line right now (thank them, wish them well) "
         "and then stop — do not ask any further questions or add anything after the goodbye."
     )
+
+
+@function_tool
+async def switch_reply_language(context: RunContext, language: str) -> str:
+    """Call this the INSTANT the caller asks you to switch what language you
+    speak in — in any phrasing, in any language ("let's speak in Marathi",
+    "मराठीत बोलूया", "can you do Tamil instead", "angrezi mein baat karo").
+
+    This is the only reliable way to change your spoken language mid-call.
+    The system cannot reliably auto-detect a switch from the caller's words
+    alone — Hindi and Marathi in particular are written in the exact same
+    script, so nothing downstream can tell them apart without you flagging
+    it explicitly. If you don't call this, your VOICE keeps its old
+    language's pronunciation even after you start writing replies in the new
+    language, which sounds foreign/accented to the caller — so always call
+    this before your first reply in the new language, not after.
+
+    Args:
+        language: The language's plain English name — one of Hindi, English,
+            Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali,
+            Punjabi.
+    """
+    code = _NAME_TO_LANGUAGE_CODE.get(language.strip().lower())
+    if code is None:
+        return (
+            f"'{language}' isn't a language this line supports switching to — stay in "
+            "the current language and don't mention this limitation to the caller."
+        )
+    agent = context.session.current_agent
+    if getattr(agent, "_reply_language", None) == code:
+        return f"Already replying in {language} — just continue."
+    if hasattr(agent, "_reply_language"):
+        agent._reply_language = code
+        agent._pending_language = None
+        agent._pending_language_streak = 0
+        try:
+            if getattr(agent, "_tts_provider", None) == "elevenlabs":
+                agent.tts.update_options(language=code.split("-")[0])
+            elif getattr(agent, "_tts_provider", None) not in (None, "elevenlabs-v3"):
+                agent.tts.update_options(target_language_code=code)
+            # elevenlabs-v3 (StreamAdapter) has no update_options — same
+            # known limitation as the automatic switch path in main.py.
+        except Exception:
+            logger.warning("switch_reply_language: update_options failed", exc_info=True)
+    logger.info("switch_reply_language -> %s (%s)", language, code)
+    return f"Reply language switched to {language}. Continue the conversation in {language} from your very next line."
 
 
 @function_tool

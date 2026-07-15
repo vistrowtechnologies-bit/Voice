@@ -32,6 +32,7 @@ from tools import (
     check_calendar_availability,
     end_call,
     log_lead,
+    switch_reply_language,
     transfer_call,
     web_search,
 )
@@ -357,6 +358,7 @@ def _build_tools(config: dict) -> list:
         book_appointment,
         log_lead,
         capture_platform_lead,
+        switch_reply_language,
     ]
     enabled_raw = (config.get("enabled_functions") or "").strip()
     enabled = {e.strip() for e in enabled_raw.split(",") if e.strip()} if enabled_raw else None
@@ -527,7 +529,17 @@ class RealEstateAgent(Agent):
             f"\n\n# Default language\nOpen the call and speak first in {language_name} "
             "(native script, not romanized) — there's no caller input yet to mirror, so "
             f"{language_name} is the default until the caller's own language is clear. "
-            "Once they speak, follow the multilingual rules above and match them."
+            "Once they speak, follow the multilingual rules above and match them.\n\n"
+            "If the caller EXPLICITLY asks you to switch languages — in any phrasing, in "
+            "any language (\"let's speak in Marathi\", \"मराठीत बोलूया\", \"can you do Tamil "
+            "instead\") — call switch_reply_language with that language's name BEFORE your "
+            "next reply, every single time, with no exceptions. This is not optional: your "
+            "voice's pronunciation is driven entirely by that tool call, not by which script "
+            "you happen to write your reply in — some Indian languages (Hindi and Marathi "
+            "above all) are written in the identical script, so if you switch to writing "
+            "Marathi without calling the tool, your voice keeps speaking with Hindi "
+            "pronunciation and the caller hears an accent, even though your words are "
+            "correct. Call the tool first, then write your reply in the new language."
         )
         # Grammatical gender: many Indian languages (Hindi, Marathi, Gujarati,
         # Punjabi, Bhojpuri…) inflect first-person verbs by the SPEAKER's
