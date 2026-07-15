@@ -185,6 +185,7 @@ export function LeadDetail() {
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Extracted lead</h2>
             <dl className="flex flex-col gap-2 text-sm">
+              {call.email && <Row label="Email" value={call.email} />}
               {call.company || call.useCase || call.teamSize ? (
                 <>
                   <Row label="Company" value={call.company || '—'} />

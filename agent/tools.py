@@ -54,12 +54,16 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
     return url, dict(lead)  # webhook + sheets: full lead JSON
 
 
-async def _fan_out_integrations(context: RunContext, lead: dict) -> None:
-    """Deliver a captured lead to every connected integration for this tenant.
+async def _deliver_to_integrations(account_id: int | None, lead: dict) -> None:
+    """Deliver an event to every connected integration for this tenant.
     Best-effort and heavily guarded — never lets a bad integration disturb the
-    live call. The per-agent CRM webhook (_post_webhook) still fires separately."""
+    live call. The per-agent CRM webhook (_post_webhook) still fires separately.
+
+    Takes account_id directly rather than a RunContext so it can be called
+    from both mid-call function tools (via _fan_out_integrations below) and
+    agent/main.py's call-end log_call(), which has no RunContext at all.
+    """
     try:
-        account_id = (context.userdata or {}).get("account_id")
         integrations = db.get_delivery_integrations(account_id)
     except Exception:
         return
@@ -80,6 +84,13 @@ async def _fan_out_integrations(context: RunContext, lead: dict) -> None:
                     logger.warning("integration %s delivery failed", integ["key"], exc_info=True)
     except Exception:
         logger.warning("integration fan-out failed", exc_info=True)
+
+
+async def _fan_out_integrations(context: RunContext, lead: dict) -> None:
+    """Mid-call convenience wrapper — pulls account_id from the function
+    tool's RunContext.userdata. See _deliver_to_integrations for the actual
+    delivery logic."""
+    await _deliver_to_integrations((context.userdata or {}).get("account_id"), lead)
 
 
 async def _publish_event(context: RunContext, payload: dict) -> None:

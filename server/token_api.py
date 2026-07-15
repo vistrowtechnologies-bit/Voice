@@ -2045,6 +2045,7 @@ class WidgetTokenRequest(BaseModel):
     identity: str
     name: str
     phone: str
+    email: str
 
 
 @app.post("/widget/token")
@@ -2052,8 +2053,8 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
     """Public, unauthenticated endpoint the embeddable widget.js calls from
     an arbitrary third-party website — auth is the site key itself, not a
     dashboard session. Issues a LiveKit token for a fresh room pre-tagged
-    with {"agent_id", "site_id", "visitor_name", "visitor_phone"} so
-    agent/main.py's _call_context_from_job loads the right agent, seeds the
+    with {"agent_id", "site_id", "visitor_name", "visitor_phone", "visitor_email"}
+    so agent/main.py's _call_context_from_job loads the right agent, seeds the
     lead with the details the visitor already typed in before the call even
     starts, and logs the call as a 'widget' call against this site — same
     mechanism phone numbers and dashboard browser tests already use for
@@ -2067,6 +2068,10 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
     if not _looks_like_real_phone(req.phone):
         logger.warning("widget token rejected: invalid phone %r (site_key=%s)", req.phone, masked_key)
         raise HTTPException(400, "Enter a valid phone number in international format, e.g. +919812345678")
+    email = req.email.strip()
+    if not email or "@" not in email:
+        logger.warning("widget token rejected: invalid email (site_key=%s)", masked_key)
+        raise HTTPException(400, "Enter a valid email address")
 
     site = calls_db.get_site_by_key(req.siteKey)
     if site is None:
@@ -2100,6 +2105,7 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
                             "site_id": site["id"],
                             "visitor_name": name,
                             "visitor_phone": req.phone.strip(),
+                            "visitor_email": email,
                         }
                     ),
                 )

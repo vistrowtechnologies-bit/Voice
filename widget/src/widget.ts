@@ -30,6 +30,12 @@ function isValidPhone(phone: string): boolean {
   return true
 }
 
+// Basic shape check only — the point is to catch typos before a call
+// starts, not to be a full RFC 5322 validator.
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+}
+
 const MIC_ICON =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg>'
 const MIC_OFF_ICON =
@@ -119,6 +125,8 @@ function widgetHtml(label: string): string {
           <input id="av-name" type="text" autocomplete="name" placeholder="Your name" />
           <label for="av-phone">Phone number</label>
           <input id="av-phone" type="tel" autocomplete="tel" placeholder="+919812345678" />
+          <label for="av-email">Email</label>
+          <input id="av-email" type="email" autocomplete="email" placeholder="you@example.com" />
           <p id="av-form-error" class="av-error"></p>
           <button id="av-submit" class="av-submit">Start the call</button>
         </div>
@@ -168,6 +176,7 @@ function init(): void {
   const formEl = shadow.getElementById('av-form') as HTMLDivElement
   const nameInput = shadow.getElementById('av-name') as HTMLInputElement
   const phoneInput = shadow.getElementById('av-phone') as HTMLInputElement
+  const emailInput = shadow.getElementById('av-email') as HTMLInputElement
   const formError = shadow.getElementById('av-form-error') as HTMLParagraphElement
   const submitBtn = shadow.getElementById('av-submit') as HTMLButtonElement
 
@@ -329,7 +338,27 @@ function init(): void {
     }
   }
 
-  async function startCall(name: string, phone: string): Promise<void> {
+  // Standard GTM custom-event push — safe whether or not GTM has finished
+  // loading yet (creates the array if needed; GTM drains it once its own
+  // script initializes). Lets the host site's own Tag Manager container
+  // fire a Google Ads conversion tag off a Custom Event trigger without any
+  // code changes on their side.
+  function pushGtmEvent(name: string, phone: string, email: string): void {
+    try {
+      const w = window as unknown as { dataLayer?: unknown[] }
+      w.dataLayer = w.dataLayer || []
+      w.dataLayer.push({
+        event: 'vistrow_widget_lead_submit',
+        vistrow_lead_name: name,
+        vistrow_lead_phone: phone,
+        vistrow_lead_email: email,
+      })
+    } catch (err) {
+      console.warn('[Vistrow Voice widget] GTM dataLayer push failed:', err)
+    }
+  }
+
+  async function startCall(name: string, phone: string, email: string): Promise<void> {
     intentionalEnd = false
     formEl.style.display = 'none'
     callEl.style.display = 'block'
@@ -348,7 +377,7 @@ function init(): void {
       const res = await fetch(`${apiBase}/widget/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteKey, identity: randomId('visitor'), name, phone }),
+        body: JSON.stringify({ siteKey, identity: randomId('visitor'), name, phone, email }),
       })
       if (!res.ok) {
         const body = await res.text().catch(() => '')
@@ -360,6 +389,12 @@ function init(): void {
       failCall('Could not reach the call server — please try again shortly.')
       return
     }
+
+    // Fires only once the lead is validated server-side and the call is
+    // genuinely starting — not on raw button click, which could be an
+    // invalid or incomplete submit. This is the real "form submission
+    // succeeded" moment for ads conversion tracking.
+    pushGtmEvent(name, phone, email)
 
     try {
       room = new Room()
@@ -398,6 +433,7 @@ function init(): void {
   function submitForm(): void {
     const name = nameInput.value.trim()
     const phone = phoneInput.value.trim()
+    const email = emailInput.value.trim()
     if (!name) {
       formError.textContent = 'Please enter your name.'
       return
@@ -406,8 +442,12 @@ function init(): void {
       formError.textContent = 'Enter a valid phone number in international format, e.g. +919812345678.'
       return
     }
+    if (!isValidEmail(email)) {
+      formError.textContent = 'Please enter a valid email address.'
+      return
+    }
     formError.textContent = ''
-    void startCall(name, phone)
+    void startCall(name, phone, email)
   }
 
   button.addEventListener('click', showForm)
@@ -421,6 +461,9 @@ function init(): void {
   })
   submitBtn.addEventListener('click', submitForm)
   phoneInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitForm()
+  })
+  emailInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submitForm()
   })
   endBtn.addEventListener('click', endCall)

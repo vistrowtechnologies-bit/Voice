@@ -26,6 +26,7 @@ from prompts.platform_assistant import build_platform_assistant_prompt
 from prompts.voice_style import ELEVENLABS_EXPRESSIVE_PROMPT, VOICE_STYLE_PROMPT
 from tools import (
     TAVILY_API_KEY,
+    _deliver_to_integrations,
     book_appointment,
     book_site_visit,
     build_custom_function_tools,
@@ -761,16 +762,16 @@ def _call_context_from_job(ctx: JobContext) -> dict:
 
     - Phone: {"agent_id", "phone_number"} — stamped by the SIP dispatch rule
       in server/livekit_sip.py.
-    - Website widget: {"agent_id", "site_id", "visitor_name", "visitor_phone"}
-      — stamped by /widget/token in server/token_api.py from its pre-call
-      name/phone form.
+    - Website widget: {"agent_id", "site_id", "visitor_name", "visitor_phone",
+      "visitor_email"} — stamped by /widget/token in server/token_api.py from
+      its pre-call name/phone/email form.
     - Dashboard "Browser test": {"agent_id"} only — from /token.
     - Public demo call page: no metadata at all.
 
     Returns {"agent_id": int|None, "call_type": "phone"|"widget"|"browser",
-    "site_id": int|None, "visitor_name": str|None, "visitor_phone": str|None},
-    defaulting to the "browser" catch-all on anything unexpected so the call
-    still gets handled by the default agent.
+    "site_id": int|None, "visitor_name": str|None, "visitor_phone": str|None,
+    "visitor_email": str|None}, defaulting to the "browser" catch-all on
+    anything unexpected so the call still gets handled by the default agent.
     """
     default = {
         "agent_id": None,
@@ -778,6 +779,7 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "site_id": None,
         "visitor_name": None,
         "visitor_phone": None,
+        "visitor_email": None,
     }
     try:
         raw = ctx.job.room.metadata
@@ -799,6 +801,7 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "site_id": int(site_id) if site_id is not None else None,
         "visitor_name": meta.get("visitor_name"),
         "visitor_phone": meta.get("visitor_phone"),
+        "visitor_email": meta.get("visitor_email"),
     }
 
 
@@ -882,6 +885,8 @@ async def entrypoint(ctx: JobContext) -> None:
         lead_data["name"] = call_context["visitor_name"]
     if call_context["visitor_phone"]:
         lead_data["phone"] = call_context["visitor_phone"]
+    if call_context["visitor_email"]:
+        lead_data["email"] = call_context["visitor_email"]
     cfg = config or {}
     agent = RealEstateAgent(config, call_context["visitor_name"], call_context["visitor_phone"])
     userdata = {
@@ -1024,6 +1029,23 @@ async def entrypoint(ctx: JobContext) -> None:
             logger.info("saved call log for room %s (%d turns)", ctx.room.name, len(transcript))
         except Exception:
             logger.exception("failed to save call log for room %s", ctx.room.name)
+        # A separate, comprehensive delivery at call end — unlike the
+        # mid-call capture_lead/book_appointment fan-outs (small structured
+        # events for fast CRM visibility during the call), this one carries
+        # the full transcript, which is only known once the call is over.
+        await _deliver_to_integrations(
+            cfg.get("account_id"),
+            {
+                "type": "call_completed",
+                "name": lead_data.get("name"),
+                "phone": lead_data.get("phone"),
+                "email": lead_data.get("email"),
+                "channel": call_context["call_type"],
+                "duration_seconds": (ended_at - started_at).total_seconds(),
+                "transcript": transcript,
+                "extracted_data": extracted,
+            },
+        )
         # Persist returning-caller memory after the log (independent of it).
         if want_memory and memory_summary and resolved_agent_id:
             db.save_caller_memory(cfg.get("account_id"), resolved_agent_id, agent._caller_phone, memory_summary)

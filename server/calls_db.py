@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS calls (
     reply_language TEXT,
     lead_name TEXT,
     lead_phone TEXT,
+    lead_email TEXT,
     lead_budget TEXT,
     lead_location TEXT,
     lead_timeline TEXT,
@@ -549,6 +550,7 @@ def init_tables() -> None:
                 ("lead_company", "TEXT"),
                 ("lead_use_case", "TEXT"),
                 ("lead_team_size", "TEXT"),
+                ("lead_email", "TEXT"),
                 # JSON blob of post-call structured fields the agent extracted
                 # from this call's transcript (per the agent's post_call_fields).
                 ("extracted_data", "TEXT DEFAULT ''"),
@@ -1069,6 +1071,7 @@ def _call_dict(
         "name": name,
         "initials": _initials(name),
         "phone": row["lead_phone"] or "",
+        "email": row["lead_email"] or "",
         "budget": row["lead_budget"] or "",
         "location": row["lead_location"] or "",
         "timeline": row["lead_timeline"] or "",

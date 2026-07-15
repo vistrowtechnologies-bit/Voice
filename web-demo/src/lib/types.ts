@@ -38,6 +38,7 @@ export interface CallRecord {
   name: string
   initials: string
   phone: string
+  email: string
   budget: string
   location: string
   timeline: string

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS calls (
     reply_language TEXT,
     lead_name TEXT,
     lead_phone TEXT,
+    lead_email TEXT,
     lead_budget TEXT,
     lead_location TEXT,
     lead_timeline TEXT,
@@ -68,7 +69,7 @@ def init_db() -> None:
             # CREATE TABLE IF NOT EXISTS above (a no-op if it already exists) —
             # columns added after go-live still need an explicit migration to
             # land, regardless of boot order.
-            for column in ("lead_company", "lead_use_case", "lead_team_size"):
+            for column in ("lead_company", "lead_use_case", "lead_team_size", "lead_email"):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} TEXT")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS extracted_data TEXT DEFAULT ''")
     finally:
@@ -289,7 +290,7 @@ def save_call(record: dict) -> None:
     transcript (list of {role, text}), call_type
     ('phone'/'widget'/'browser'), site_id (for 'widget' calls), agent_id,
     account_id (which tenant this call belongs to), and optionally
-    name/phone/budget/location/timeline/site_visit (dict with
+    name/phone/email/budget/location/timeline/site_visit (dict with
     property_id/date/time) — matching the keys tools.py's log_lead and
     book_site_visit write into the shared lead_data dict — or
     company/use_case/team_size, matching capture_platform_lead's keys for
@@ -303,11 +304,11 @@ def save_call(record: dict) -> None:
                 INSERT INTO calls (
                     room_name, visitor_identity, started_at, ended_at,
                     duration_seconds, reply_language, voice, lead_name, lead_phone,
-                    lead_budget, lead_location, lead_timeline, lead_company,
+                    lead_email, lead_budget, lead_location, lead_timeline, lead_company,
                     lead_use_case, lead_team_size, site_visit_json,
                     transcript_json, call_type, site_id, agent_id, account_id,
                     extracted_data
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record["room_name"],
@@ -319,6 +320,7 @@ def save_call(record: dict) -> None:
                     record.get("voice"),
                     record.get("name"),
                     record.get("phone"),
+                    record.get("email"),
                     record.get("budget"),
                     record.get("location"),
                     record.get("timeline"),
