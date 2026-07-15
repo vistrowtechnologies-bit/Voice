@@ -154,21 +154,29 @@ export function HelpChatWidget() {
         </div>
       )}
 
-      <button
-        data-tour="help-chat"
-        onClick={() => setOpen((v) => !v)}
-        className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg transition-opacity hover:opacity-90"
-        aria-label={open ? 'Close help chat' : 'Open help chat'}
-      >
-        {open ? (
-          <Icon name="close" className="text-[22px] text-bg" />
-        ) : (
-          <>
-            <img src={arthaAvatar} alt="Artha" className="h-full w-full rounded-full object-cover" />
-            <span className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full border-2 border-bg bg-green-500" />
-          </>
+      <div className="relative">
+        {!open && (
+          <span
+            aria-hidden="true"
+            className="glow-pulse pointer-events-none absolute inset-0 -z-10 rounded-full bg-primary blur-xl"
+          />
         )}
-      </button>
+        <button
+          data-tour="help-chat"
+          onClick={() => setOpen((v) => !v)}
+          className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-[0_0_24px_-4px_rgba(168,85,247,0.8)] transition-all duration-200 hover:scale-105 hover:shadow-[0_0_32px_-2px_rgba(168,85,247,0.95)] active:scale-95"
+          aria-label={open ? 'Close help chat' : 'Open help chat'}
+        >
+          {open ? (
+            <Icon name="close" className="text-[22px] text-bg" />
+          ) : (
+            <>
+              <img src={arthaAvatar} alt="Artha" className="h-full w-full rounded-full object-cover" />
+              <span className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full border-2 border-bg bg-green-500" />
+            </>
+          )}
+        </button>
+      </div>
     </div>
   )
 }
