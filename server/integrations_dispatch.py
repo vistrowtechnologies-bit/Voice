@@ -2,11 +2,13 @@
 
 When a call qualifies a lead, fan it out to whichever destinations the tenant
 has connected on the Integrations page — CRM/webhook, Slack, WhatsApp, Google
-Sheets. Each is just an HTTPS POST with a per-provider body shape, so there's
-no OAuth to maintain: the operator pastes a webhook URL (Slack Incoming Webhook,
-a Google Apps Script web-app URL, a Zapier/Make catch hook, their CRM endpoint)
-and we deliver to it. Same stdlib-urllib, best-effort, never-raise philosophy
-as email_sender — a broken integration must never break a call.
+Sheets, ArthaLeads. Each is just an HTTPS POST with a per-provider body shape,
+so there's no OAuth to maintain: the operator pastes a webhook URL (Slack
+Incoming Webhook, a Google Apps Script web-app URL, a Zapier/Make catch hook,
+their CRM endpoint) and we deliver to it. ArthaLeads is the one exception —
+its endpoint is fixed, so the operator only pastes a token. Same
+stdlib-urllib, best-effort, never-raise philosophy as email_sender — a broken
+integration must never break a call.
 
 Cal.com is intentionally not a delivery target: it's a *booking* action the
 agent takes mid-call (see agent tools), not a place we push finished leads.
@@ -22,7 +24,9 @@ import calls_db
 logger = logging.getLogger("vistrow-integrations")
 
 # Only these keys receive lead deliveries; calcom is handled agent-side.
-_DELIVERY_KEYS = {"webhook", "slack", "whatsapp", "sheets"}
+_DELIVERY_KEYS = {"webhook", "slack", "whatsapp", "sheets", "arthaleads"}
+
+_ARTHALEADS_URL = "https://api.arthaleads.com/webhook/lead"
 
 
 def _post_json(url: str, payload: dict, timeout: int = 8) -> tuple[bool, str]:
@@ -55,7 +59,20 @@ def _lead_summary_line(lead: dict) -> str:
 
 def _body_for(key: str, config: dict, lead: dict) -> dict | None:
     """Shape the outgoing payload for a given provider. Returns None if the
-    integration is missing the URL it needs (treated as 'skip', not 'fail')."""
+    integration is missing what it needs to send (treated as 'skip', not
+    'fail')."""
+    if key == "arthaleads":
+        token = (config.get("token") or "").strip()
+        if not token:
+            return None
+        return {
+            "_url": _ARTHALEADS_URL,
+            "token": token,
+            "name": lead.get("name") or "Unknown caller",
+            "phone": lead.get("phone", ""),
+            "email": lead.get("email", ""),
+            "message": lead.get("summary") or _lead_summary_line(lead),
+        }
     url = (config.get("url") or "").strip()
     if not url:
         return None
@@ -131,9 +148,11 @@ def test_integration(account_id: int, key: str) -> tuple[bool, str]:
         "outcome": "qualified",
     }
     ok, detail = _deliver_one(key, integ.get("config") or {}, sample)
-    if ok:
-        try:
+    try:
+        if ok:
             calls_db.touch_integration_sync(account_id, key)
-        except Exception:
-            pass
+        else:
+            calls_db.mark_integration_error(account_id, key, detail)
+    except Exception:
+        pass
     return ok, detail

@@ -278,6 +278,7 @@ export interface Integration {
   status: 'connected' | 'not_connected'
   config: Record<string, string>
   lastSync: string | null
+  lastError: string | null
 }
 
 export interface BillingSummary {

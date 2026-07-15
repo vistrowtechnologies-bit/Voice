@@ -54,14 +54,37 @@ def _transcript_message(lead: dict) -> str:
     return "\n".join(lines)
 
 
+_ARTHALEADS_URL = "https://api.arthaleads.com/webhook/lead"
+
+
 def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | None:
     """(url, json_body) for one delivery integration, or None to skip. Mirrors
     the backend integrations_dispatch shapes so a Slack test-send and a live
     call produce the same message."""
+    name = lead.get("name") or "Unknown caller"
+    if key == "arthaleads":
+        # Dedicated, first-class integration: the endpoint is fixed (not a
+        # user-pasted URL) and the only thing the operator configures is
+        # their ArthaLeads API token. Fires exactly once per call — at
+        # call-end, with the full transcript, and only when the call was
+        # actually qualified (log_lead/book_appointment ran) — unlike the
+        # other integrations, which also get a small mid-call event per
+        # tool call. Mid-call events here are skipped by design.
+        token = (config.get("token") or "").strip()
+        if not token or lead.get("type") != "call_completed" or not lead.get("qualified"):
+            return None
+        if not (lead.get("name") and lead.get("phone")):
+            return None
+        return _ARTHALEADS_URL, {
+            "token": token,
+            "name": name,
+            "phone": lead.get("phone", ""),
+            "email": lead.get("email", ""),
+            "message": _transcript_message(lead),
+        }
     url = (config.get("url") or "").strip()
     if not url:
         return None
-    name = lead.get("name") or "Unknown caller"
     if key == "slack":
         line = " · ".join(str(x) for x in [name, lead.get("phone"), lead.get("company"), lead.get("use_case")] if x)
         return url, {"text": f":telephone_receiver: *New qualified lead* — {line}"}
@@ -105,10 +128,20 @@ async def _deliver_to_integrations(account_id: int | None, lead: dict) -> None:
                     continue
                 url, body = shaped
                 try:
-                    await http.post(url, json=body)
-                    logger.info("delivered lead to %s integration", integ["key"])
+                    async with http.post(url, json=body) as resp:
+                        if 200 <= resp.status < 300:
+                            logger.info("delivered lead to %s integration", integ["key"])
+                            db.touch_integration_sync(account_id, integ["key"])
+                        elif resp.status == 401:
+                            logger.warning("integration %s delivery failed: invalid token", integ["key"])
+                            db.mark_integration_error(account_id, integ["key"], "Invalid token — reconnect")
+                        else:
+                            text = (await resp.text())[:200]
+                            logger.warning("integration %s delivery failed: HTTP %s", integ["key"], resp.status)
+                            db.mark_integration_error(account_id, integ["key"], f"HTTP {resp.status}: {text}")
                 except Exception:
                     logger.warning("integration %s delivery failed", integ["key"], exc_info=True)
+                    db.mark_integration_error(account_id, integ["key"], "Network error — delivery failed")
     except Exception:
         logger.warning("integration fan-out failed", exc_info=True)
 
@@ -306,6 +339,7 @@ async def book_appointment(
         lead_data.setdefault("name", name)
         lead_data.setdefault("phone", phone)
         lead_data["appointment"] = {"date": date, "time": time, "purpose": purpose}
+        lead_data["qualified"] = True
     result = await _calendar_book(context, date, time, duration_minutes, name, phone, purpose)
     event = {
         "type": "appointment_booked",
@@ -362,6 +396,7 @@ async def log_lead(
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is not None:
         lead_data.update(name=name, phone=phone, budget=budget, location=location, timeline=timeline)
+        lead_data["qualified"] = True
     event = {
         "type": "lead_update",
         "name": name,
@@ -403,6 +438,7 @@ async def capture_platform_lead(
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is not None:
         lead_data.update(name=name, phone=contact, company=company, use_case=use_case, team_size=team_size)
+        lead_data["qualified"] = True
     event = {
         "type": "platform_lead_update",
         "name": name,

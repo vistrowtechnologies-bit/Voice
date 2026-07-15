@@ -15,6 +15,7 @@ import type { Integration } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import { GoogleLogo } from './AuthShell'
 import googleCalendarIcon from '../assets/google-calendar.webp'
+import arthaleadsIcon from '../assets/arthaleads-logo.png'
 
 const ICONS: Record<string, string> = {
   webhook: 'webhook',
@@ -25,13 +26,14 @@ const ICONS: Record<string, string> = {
 }
 
 // Integrations that connect with a pasted URL (delivery targets + the Google
-// Calendar Apps Script bridge). calcom stays "coming soon" until its API build.
-const CONNECTABLE = new Set(['webhook', 'slack', 'whatsapp', 'sheets', 'gcal'])
+// Calendar Apps Script bridge). arthaleads connects with just a token — its
+// endpoint is fixed. calcom stays "coming soon" until its API build.
+const CONNECTABLE = new Set(['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets', 'gcal'])
 
 // The API returns integrations in undefined DB row order — pin a deliberate
-// display order instead (Google Calendar first, since it's the flagship
-// booking integration) rather than leaving card position to chance.
-const DISPLAY_ORDER = ['gcal', 'webhook', 'slack', 'whatsapp', 'sheets', 'calcom']
+// display order instead (ArthaLeads first, since it's the flagship CRM;
+// Google Calendar next for booking) rather than leaving card position to chance.
+const DISPLAY_ORDER = ['arthaleads', 'gcal', 'webhook', 'slack', 'whatsapp', 'sheets', 'calcom']
 const sortIntegrations = (list: Integration[]) =>
   [...list].sort((a, b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key))
 
@@ -39,8 +41,10 @@ const sortIntegrations = (list: Integration[]) =>
 // one when a call captures it (agent/tools.py fan-out) and they support a
 // "Send test" from here. calcom is a mid-call booking action, not a delivery
 // target, so it stays "coming soon" on this page.
-const DELIVERY = new Set(['webhook', 'slack', 'whatsapp', 'sheets'])
+const DELIVERY = new Set(['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets'])
 
+// arthaleads has no URL field — its endpoint is fixed server-side, so it's
+// intentionally absent here (see the token-only form below).
 const URL_PLACEHOLDER: Record<string, string> = {
   webhook: 'https://your-crm.example.com/webhook',
   slack: 'https://hooks.slack.com/services/T000/B000/XXXX',
@@ -50,6 +54,7 @@ const URL_PLACEHOLDER: Record<string, string> = {
 }
 
 const CONNECT_HINT: Record<string, string> = {
+  arthaleads: 'Paste your ArthaLeads API token — the endpoint is already wired up. Every qualified lead posts straight into ArthaLeads with the full call transcript.',
   webhook: 'Every qualified lead POSTs to this URL as JSON in real time.',
   slack: 'Paste a Slack Incoming Webhook URL — you’ll get a message per qualified lead.',
   whatsapp: 'Your provider’s send endpoint receives { to, message } per lead.',
@@ -99,6 +104,16 @@ export function Integrations() {
   const connected = integrations.filter((i) => i.status === 'connected').length
 
   const handleConnect = async (key: string) => {
+    if (key === 'arthaleads') {
+      if (!token.trim()) return
+      await updateIntegration(key, 'connected', { token: token.trim() })
+      setConfiguring(null)
+      setUrl('')
+      setToken('')
+      setDisplayName('')
+      reload()
+      return
+    }
     if (!url.trim()) return
     const config: { url: string; token?: string } = { url: url.trim() }
     if (key === 'webhook' && token.trim()) config.token = token.trim()
@@ -163,9 +178,15 @@ export function Integrations() {
             <Card key={integration.key} className="flex flex-col">
               <div className="mb-3 flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${integration.key === 'gcal' ? 'overflow-hidden bg-white' : 'bg-primary/20 text-primary'}`}>
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                      integration.key === 'gcal' || integration.key === 'arthaleads' ? 'overflow-hidden' : 'bg-primary/20 text-primary'
+                    } ${integration.key === 'gcal' ? 'bg-white' : ''}`}
+                  >
                     {integration.key === 'gcal' ? (
                       <img src={googleCalendarIcon} alt="Google Calendar" className="h-full w-full object-contain" />
+                    ) : integration.key === 'arthaleads' ? (
+                      <img src={arthaleadsIcon} alt="ArthaLeads" className="h-full w-full object-cover" />
                     ) : (
                       <Icon name={ICONS[integration.key] ?? 'extension'} className="text-[20px]" />
                     )}
@@ -193,6 +214,8 @@ export function Integrations() {
                 <InfoRow label="Status" value={integration.status === 'connected' ? 'Connected' : 'Not Connected'} />
                 {integration.key === 'gcal' && integration.config.mode === 'oauth' ? (
                   <InfoRow label="Google account" value={integration.config.connected_email || '—'} />
+                ) : integration.key === 'arthaleads' ? (
+                  <InfoRow label="Endpoint" value="api.arthaleads.com" />
                 ) : (
                   <InfoRow label="Endpoint" value={integration.config.url ? integration.config.url.slice(0, 40) : '—'} />
                 )}
@@ -202,6 +225,13 @@ export function Integrations() {
               {testResult[integration.key] && (
                 <p className={`mb-2 text-[11px] font-semibold ${testResult[integration.key].includes('✓') ? 'text-success' : 'text-destructive'}`}>
                   {testResult[integration.key]}
+                </p>
+              )}
+
+              {!testResult[integration.key] && integration.status === 'connected' && integration.lastError && (
+                <p className="mb-2 flex items-center gap-1 text-[11px] font-semibold text-destructive">
+                  <Icon name="error" className="text-[13px]" />
+                  Last delivery failed: {integration.lastError}
                 </p>
               )}
 
@@ -215,19 +245,26 @@ export function Integrations() {
                       className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
                     />
                   )}
-                  <input
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder={URL_PLACEHOLDER[integration.key] ?? 'https://…'}
-                    className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
-                  />
-                  {integration.key === 'webhook' && (
+                  {integration.key !== 'arthaleads' && (
+                    <input
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder={URL_PLACEHOLDER[integration.key] ?? 'https://…'}
+                      className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
+                    />
+                  )}
+                  {(integration.key === 'webhook' || integration.key === 'arthaleads') && (
                     <input
                       value={token}
                       onChange={(e) => setToken(e.target.value)}
-                      placeholder="Auth token (optional — sent as a token field in the JSON body)"
+                      placeholder={integration.key === 'arthaleads' ? 'Account Token (e.g. AW-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)' : 'Auth token (optional — sent as a token field in the JSON body)'}
                       className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
                     />
+                  )}
+                  {integration.key === 'arthaleads' && (
+                    <p className="text-[11px] text-text-muted">
+                      Get this from ArthaLeads → Automation → Vistrow Voice → Add Voice Connection
+                    </p>
                   )}
                   <div className="flex gap-2">
                     <button onClick={() => setConfiguring(null)} className="flex-1 rounded-lg border border-border py-2 text-xs font-bold">
@@ -260,7 +297,11 @@ export function Integrations() {
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cyan/40 py-2 text-xs font-bold text-cyan hover:bg-cyan/10 disabled:opacity-50"
                     >
                       <Icon name="send" className="text-[15px]" />
-                      {testing === integration.key ? 'Sending…' : 'Send test'}
+                      {testing === integration.key
+                        ? 'Testing…'
+                        : integration.key === 'arthaleads'
+                          ? 'Test Connection'
+                          : 'Send test'}
                     </button>
                   )}
                   {CONNECTABLE.has(integration.key) && (

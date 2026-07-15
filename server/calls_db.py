@@ -432,6 +432,12 @@ _PLATFORM_OWNER_EMAIL = "vistrowai@gmail.com"
 
 _SEED_INTEGRATIONS = [
     (
+        "arthaleads",
+        "ArthaLeads CRM",
+        "CRM",
+        "Push every qualified lead — with the full call transcript — straight into ArthaLeads. Just paste your API token, no URL setup needed.",
+    ),
+    (
         "webhook",
         "CRM / Webhook",
         "CRM",
@@ -618,6 +624,11 @@ def init_tables() -> None:
             # teammate invited into an already-onboarded account still sees
             # the tour once on their own first login.
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tour_completed_at TEXT")
+            # Surfaces *why* a live-call delivery to an integration failed
+            # (e.g. "invalid token — reconnect") without flipping status away
+            # from 'connected' — the operator's saved config is still good,
+            # the last attempt just didn't land. Cleared on the next success.
+            conn.execute("ALTER TABLE integrations ADD COLUMN IF NOT EXISTS last_error TEXT")
             # Campaign-engine columns added after the campaigns table shipped as
             # metadata-only — the real dialer needs a from-number and retry/
             # concurrency policy on the existing production table.
@@ -2452,6 +2463,7 @@ def list_integrations(account_id: int) -> list[dict]:
                 "status": r["status"],
                 "config": json.loads(r["config_json"] or "{}"),
                 "lastSync": r["last_sync"],
+                "lastError": r["last_error"],
             }
             for r in conn.execute("SELECT * FROM integrations WHERE account_id = ?", (account_id,)).fetchall()
         ]
@@ -2482,13 +2494,30 @@ def update_integration(key: str, status: str, config: dict, account_id: int, nam
 
 
 def touch_integration_sync(account_id: int, key: str) -> None:
-    """Stamp last_sync = now after a successful delivery to this integration."""
+    """Stamp last_sync = now and clear any stale last_error after a
+    successful delivery to this integration."""
     conn = _connect()
     try:
         with conn:
             conn.execute(
-                f"UPDATE integrations SET last_sync = {_NOW} WHERE key = ? AND account_id = ?",
+                f"UPDATE integrations SET last_sync = {_NOW}, last_error = NULL WHERE key = ? AND account_id = ?",
                 (key, account_id),
+            )
+    finally:
+        conn.close()
+
+
+def mark_integration_error(account_id: int, key: str, message: str) -> None:
+    """Record why the last live-call delivery to this integration failed —
+    surfaced on the Integrations card so a bad token doesn't fail silently.
+    Deliberately leaves `status` alone: the operator's saved config is still
+    good, only the most recent attempt didn't land."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE integrations SET last_error = ? WHERE key = ? AND account_id = ?",
+                (message[:500], key, account_id),
             )
     finally:
         conn.close()

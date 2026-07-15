@@ -262,8 +262,9 @@ def update_gcal_access_token(account_id: int, access_token: str, expires_at: int
 
 def get_delivery_integrations(account_id: int | None) -> list[dict]:
     """This tenant's connected lead-delivery integrations (Slack/Sheets/
-    WhatsApp/CRM), account-scoped, as [{key, config}]. Empty on any error —
-    integration delivery is best-effort and must never break a live call."""
+    WhatsApp/CRM/ArthaLeads), account-scoped, as [{key, config}]. Empty on any
+    error — integration delivery is best-effort and must never break a live
+    call."""
     if account_id is None:
         return []
     conn = dbconn.connect()
@@ -271,12 +272,54 @@ def get_delivery_integrations(account_id: int | None) -> list[dict]:
         rows = conn.execute(
             "SELECT key, config_json FROM integrations "
             "WHERE account_id = ? AND status = 'connected' "
-            "AND key IN ('webhook', 'slack', 'whatsapp', 'sheets')",
+            "AND key IN ('webhook', 'slack', 'whatsapp', 'sheets', 'arthaleads')",
             (account_id,),
         ).fetchall()
         return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
     except psycopg.Error:
         return []
+    finally:
+        conn.close()
+
+
+_NOW = "(to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))"
+
+
+def touch_integration_sync(account_id: int | None, key: str) -> None:
+    """Stamp last_sync = now and clear any stale last_error after a
+    successful live-call delivery. Best-effort — a status-tracking hiccup
+    must never surface to the caller."""
+    if account_id is None:
+        return
+    conn = dbconn.connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE integrations SET last_sync = {_NOW}, last_error = NULL "
+                "WHERE key = ? AND account_id = ?",
+                (key, account_id),
+            )
+    except psycopg.Error:
+        pass
+    finally:
+        conn.close()
+
+
+def mark_integration_error(account_id: int | None, key: str, message: str) -> None:
+    """Record why the last live-call delivery to this integration failed, so
+    it's visible on the Integrations card (e.g. "invalid token — reconnect")
+    without disturbing the saved config."""
+    if account_id is None:
+        return
+    conn = dbconn.connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE integrations SET last_error = ? WHERE key = ? AND account_id = ?",
+                (message[:500], key, account_id),
+            )
+    except psycopg.Error:
+        pass
     finally:
         conn.close()
 

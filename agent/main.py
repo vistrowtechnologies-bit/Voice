@@ -1044,6 +1044,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 "duration_seconds": (ended_at - started_at).total_seconds(),
                 "transcript": transcript,
                 "extracted_data": extracted,
+                "qualified": lead_data.get("qualified", False),
             },
         )
         # Persist returning-caller memory after the log (independent of it).
