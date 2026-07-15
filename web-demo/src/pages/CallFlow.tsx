@@ -27,10 +27,15 @@ export function CallFlow() {
     setPhase('connecting')
     setErrorMessage(null)
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true })
       const identity = randomId('visitor')
       const room = randomId('voice-agent-demo')
-      const { token: newToken, url } = await fetchLiveKitToken(identity, room)
+      // Mic permission and the token fetch don't depend on each other — run
+      // them concurrently instead of back-to-back so the click-to-connect
+      // wait is max(mic prompt, token round-trip), not their sum.
+      const [, { token: newToken, url }] = await Promise.all([
+        navigator.mediaDevices.getUserMedia({ audio: true }),
+        fetchLiveKitToken(identity, room),
+      ])
       recordDemoCall()
       setToken(newToken)
       setServerUrl(url)
