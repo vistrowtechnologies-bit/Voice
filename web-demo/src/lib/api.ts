@@ -268,8 +268,8 @@ export const fetchWidgetBackendUrl = () => get<{ backendUrl: string | null }>('/
 // ------------------------------------------------------------- help chat
 
 export const fetchHelpFaqs = () => get<HelpFaq[]>('/help/faqs')
-export const sendHelpChatMessage = (message: string, history: HelpChatMessage[]) =>
-  send<{ reply: string }>('POST', '/help/chat', { message, history })
+export const sendHelpChatMessage = (message: string, history: HelpChatMessage[], currentPage?: string) =>
+  send<{ reply: string }>('POST', '/help/chat', { message, history, currentPage })
 
 // --------------------------------------------------------------- helpers
 

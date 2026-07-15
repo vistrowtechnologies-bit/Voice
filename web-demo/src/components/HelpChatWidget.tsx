@@ -1,20 +1,59 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import arthaAvatar from '../assets/artha-avatar.png'
 import { fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import type { HelpChatMessage, HelpFaq } from '../lib/types'
 import { Icon } from './Icon'
 
+// Page-specific quick questions, each backed by a real server/help_tools.py
+// function (dashboard_stats, calls_on_date, hottest_leads, billing_snapshot,
+// contacts_stats) — never a question the assistant can't actually answer
+// with real data. Keyed by route prefix, checked longest-first so
+// /dashboard/calls doesn't fall through to the generic /dashboard entry.
+const PAGE_SUGGESTIONS: Record<string, { label: string; questions: string[] }> = {
+  '/dashboard/calls': {
+    label: 'All Calls History',
+    questions: ['How many calls came in today?', 'Show me my most recent qualified leads'],
+  },
+  '/dashboard/contacts': {
+    label: 'Contacts',
+    questions: ['How many contacts do I have?', 'How many are qualified?'],
+  },
+  '/dashboard/billing': {
+    label: 'Billing',
+    questions: ['How many credits do I have left?'],
+  },
+  '/dashboard': {
+    label: 'Dashboard',
+    questions: ['How many calls came in today?', 'Who are my hottest leads right now?'],
+  },
+}
+
+function pageSuggestions(pathname: string) {
+  const prefix = Object.keys(PAGE_SUGGESTIONS)
+    .sort((a, b) => b.length - a.length)
+    .find((p) => pathname.startsWith(p))
+  return prefix ? PAGE_SUGGESTIONS[prefix] : null
+}
+
 /** Persistent text-only help chatbot, bottom-right on every dashboard page —
  * separate from the voice agent product. Answers are grounded in
- * server/help_content.py via POST /help/chat. */
+ * server/help_content.py, plus live account data via server/help_tools.py,
+ * via POST /help/chat. */
 export function HelpChatWidget() {
   const [open, setOpen] = useState(false)
   const [faqs, setFaqs] = useState<HelpFaq[]>([])
+  const [showFaqs, setShowFaqs] = useState(false)
   const [messages, setMessages] = useState<HelpChatMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const threadRef = useRef<HTMLDivElement>(null)
+  const { user } = useAuth()
+  const location = useLocation()
+  const page = pageSuggestions(location.pathname)
+  const firstName = (user?.name || '').split(' ')[0] || 'there'
 
   useEffect(() => {
     if (open && faqs.length === 0) {
@@ -36,7 +75,7 @@ export function HelpChatWidget() {
     setMessages(next)
     setSending(true)
     try {
-      const { reply } = await sendHelpChatMessage(trimmed, history)
+      const { reply } = await sendHelpChatMessage(trimmed, history, location.pathname)
       setMessages([...next, { role: 'assistant', content: reply }])
     } catch {
       setError("Couldn't reach the help assistant — try again in a moment.")
@@ -87,18 +126,46 @@ export function HelpChatWidget() {
           <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-3">
             {messages.length === 0 ? (
               <div className="flex flex-col gap-3">
-                <p className="text-xs text-text-muted">Common questions:</p>
-                <div className="flex flex-col gap-2">
-                  {faqs.map((faq) => (
-                    <button
-                      key={faq.question}
-                      onClick={() => send(faq.question)}
-                      className="rounded-lg border border-border bg-surface-high px-3 py-2 text-left text-xs text-text transition-colors hover:border-primary"
-                    >
-                      {faq.question}
-                    </button>
-                  ))}
-                </div>
+                <p className="text-xs leading-relaxed text-text-muted">
+                  Hi {firstName}!{page ? ` I can see you're on ${page.label}.` : ''} Ask me anything about your
+                  account, or tap a question below.
+                </p>
+
+                {page && page.questions.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    {page.questions.map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => send(q)}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-left text-xs font-medium text-text transition-colors hover:border-primary"
+                      >
+                        {q}
+                        <Icon name="arrow_forward" className="shrink-0 text-[14px] text-primary" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setShowFaqs((v) => !v)}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-left text-xs font-semibold text-text-muted transition-colors hover:text-text"
+                >
+                  Common questions
+                  <Icon name={showFaqs ? 'expand_less' : 'expand_more'} className="text-[16px]" />
+                </button>
+                {showFaqs && (
+                  <div className="flex flex-col gap-2">
+                    {faqs.map((faq) => (
+                      <button
+                        key={faq.question}
+                        onClick={() => send(faq.question)}
+                        className="rounded-lg border border-border bg-surface-high px-3 py-2 text-left text-xs text-text transition-colors hover:border-primary"
+                      >
+                        {faq.question}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -139,7 +206,7 @@ export function HelpChatWidget() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask a question…"
+              placeholder="Ask anything about your account…"
               className="flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-xs outline-none focus:border-primary"
             />
             <button
