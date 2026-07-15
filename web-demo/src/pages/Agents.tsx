@@ -56,14 +56,14 @@ const GOOGLE_VOICES = [
   // Gemini's multilingual voice personas — not locked to one locale, this
   // same voice speaks whatever language the conversation is actually in
   // (matches _build_tts's _GOOGLE_MULTILINGUAL_VOICES set exactly).
-  { value: 'google:charon', label: 'Google Multilingual — Male' },
-  { value: 'google:kore', label: 'Google Multilingual — Female' },
+  { value: 'google:charon', label: 'Multilingual — Male' },
+  { value: 'google:kore', label: 'Multilingual — Female' },
   // Locale-specific voices, kept for Hindi/English-India where an operator
   // wants that exact regional accent rather than the multilingual voice.
-  { value: 'google:en-IN-Neural2-D', label: 'Google — English (India), Female' },
-  { value: 'google:en-IN-Neural2-B', label: 'Google — English (India), Male' },
-  { value: 'google:hi-IN-Neural2-A', label: 'Google — Hindi, Female' },
-  { value: 'google:hi-IN-Neural2-B', label: 'Google — Hindi, Male' },
+  { value: 'google:en-IN-Neural2-D', label: 'English (India), Female' },
+  { value: 'google:en-IN-Neural2-B', label: 'English (India), Male' },
+  { value: 'google:hi-IN-Neural2-A', label: 'Hindi, Female' },
+  { value: 'google:hi-IN-Neural2-B', label: 'Hindi, Male' },
 ] as const
 // Two premium voices from the operator's own ElevenLabs account —
 // multilingual by model (eleven_flash_v2_5 in agent/main.py), not by voice,
@@ -127,7 +127,7 @@ const TONES = [
   {
     value: 'balanced',
     label: 'Balanced',
-    description: "Sarvam's natural conversational default. A good starting point for most agents.",
+    description: "The platform's natural conversational default — a good starting point for most agents.",
   },
   {
     value: 'casual',

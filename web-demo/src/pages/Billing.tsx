@@ -103,14 +103,14 @@ export function Billing() {
         {billing && (
           <SectionCard
             title="Usage by voice tier"
-            subtitle="ElevenLabs voices burn more credits/min than Sarvam — they're pricier per minute to run, but sound more expressive and react live to caller emotion."
+            subtitle="Premium voices burn more credits/min than Standard or Economy — they're pricier to run, but sound more expressive and react live to caller emotion."
           >
             <div className="divide-y divide-border">
               {(
                 [
-                  ['economy', 'Economy (Sarvam bulbul:v2)', 'savings'],
-                  ['standard', 'Standard (Sarvam bulbul:v3)', 'graphic_eq'],
-                  ['premium', 'Premium (ElevenLabs)', 'auto_awesome'],
+                  ['economy', 'Economy', 'savings'],
+                  ['standard', 'Standard', 'graphic_eq'],
+                  ['premium', 'Premium', 'auto_awesome'],
                 ] as const
               ).map(([tier, label, icon]) => {
                 const minutes = billing.minutesByVoiceTier[tier] ?? 0
