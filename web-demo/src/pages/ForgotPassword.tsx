@@ -32,7 +32,7 @@ export function ForgotPassword() {
           Locked out? <span className="text-primary">No problem.</span>
         </>
       }
-      features={['Answer & qualify calls 24/7', '30+ Indian languages', 'Every call logged & analyzed']}
+      features={['Answer & qualify calls 24/7', '10 Indian languages', 'Every call logged & analyzed']}
     >
       {sent ? (
         <div className="flex flex-col gap-4">

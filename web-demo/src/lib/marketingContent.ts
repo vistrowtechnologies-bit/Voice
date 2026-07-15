@@ -79,7 +79,7 @@ export const PRODUCT_DETAIL: Record<
     subhead:
       'A no-code builder for real-time AI phone agents. Set the persona, prompt, voice and language — publish, and Artha starts taking calls.',
     features: [
-      { icon: 'translate', title: 'Multilingual', body: 'Speaks 30+ Indian languages and Hinglish natively, switching mid-call to match the caller.' },
+      { icon: 'translate', title: 'Multilingual', body: 'Speaks 10 Indian languages and Hinglish natively, switching mid-call to match the caller.' },
       { icon: 'menu_book', title: 'Grounded answers', body: 'Ties responses to your knowledge base with strict-mode RAG, so the agent never makes things up.' },
       { icon: 'swap_calls', title: 'Human handoff', body: 'Escalates to a live person with full context when a call needs a human touch.' },
       { icon: 'analytics', title: 'Analytics & transcripts', body: 'Every call is transcribed, scored, and searchable across channels and agents.' },
@@ -141,7 +141,7 @@ export const PRODUCT_DETAIL: Record<
     features: [
       { icon: 'webhook', title: 'Webhooks', body: 'Fire a structured payload to any endpoint the moment a call completes.' },
       { icon: 'contacts', title: 'CRM sync', body: 'Create and update contacts and leads automatically in your CRM.' },
-      { icon: 'chat', title: 'Messaging', body: 'Trigger WhatsApp or SMS follow-ups off the back of a call outcome.' },
+      { icon: 'chat', title: 'Messaging', body: 'Trigger a WhatsApp follow-up off the back of a call outcome.' },
       { icon: 'api', title: 'Full API', body: 'Programmatic access to agents, calls, and analytics for custom workflows.' },
     ],
   },
@@ -241,7 +241,7 @@ export const HOME_FEATURES: NavLink[] = PRODUCT_PAGES
 export const HOW_IT_WORKS: FeatureRow[] = [
   { icon: 'dialpad', title: 'Connect a number', body: 'Bring your own number or get one from us. Point inbound calls at Vistrow in minutes.' },
   { icon: 'menu_book', title: 'Train on your knowledge', body: 'Upload PDFs and docs. Artha learns your business logic instantly with retrieval-grounded RAG.' },
-  { icon: 'rocket_launch', title: 'Go live', body: 'Publish your agent and it starts answering, qualifying, and booking — in 30+ Indian languages.' },
+  { icon: 'rocket_launch', title: 'Go live', body: 'Publish your agent and it starts answering, qualifying, and booking — in 10 Indian languages.' },
 ]
 
 // ---- Header navigation structure ----
@@ -304,9 +304,9 @@ export const CONTACT_PHONE = '+91 11 4056 6600'
 
 /** Headline stats shown under the hero. */
 export const HERO_STATS = [
-  { value: '30+', label: 'Languages' },
-  { value: '<1s', label: 'Response' },
-  { value: '10,000+', label: 'Leads qualified' },
+  { value: '10', label: 'Indian languages' },
+  { value: '24/7', label: 'Always answering' },
+  { value: '3', label: 'Channels — phone, web, widget' },
 ]
 
 /** Logos/tools shown in "works with" strips. */

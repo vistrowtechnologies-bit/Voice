@@ -160,11 +160,11 @@ export function DemoOrbCard() {
             <div className="mt-6 grid w-full grid-cols-2 gap-4 border-t border-border pt-5 text-left">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Native support</p>
-                <p className="mt-1 text-xs text-text">Hindi · Hinglish +28 more</p>
+                <p className="mt-1 text-xs text-text">Hindi · Hinglish +8 more</p>
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Low latency</p>
-                <p className="mt-1 text-xs text-text">&lt;300ms · emotion-aware</p>
+                <p className="mt-1 text-xs text-text">Real-time · emotion-aware</p>
               </div>
             </div>
           </>

@@ -12,7 +12,7 @@ const FAQ = [
   },
   {
     q: 'Which languages are supported?',
-    a: 'Artha speaks 30+ Indian languages including Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi and more — switching mid-call to match the caller.',
+    a: 'Artha speaks 10 Indian languages including Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi and more — switching mid-call to match the caller.',
   },
   {
     q: 'Can I bring my own phone number?',

@@ -68,7 +68,7 @@ export function Signup() {
           Intelligence in the <span className="text-primary">Dark.</span>
         </>
       }
-      features={['Go live in minutes', '30+ Indian languages', 'Every call logged & analyzed']}
+      features={['Go live in minutes', '10 Indian languages', 'Every call logged & analyzed']}
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
         {error && (

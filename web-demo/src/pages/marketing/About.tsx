@@ -4,16 +4,16 @@ import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 
 const VALUES = [
   { icon: 'translate', title: 'Bharat-first', body: 'We build for the languages and accents India actually speaks — not an afterthought translation.' },
-  { icon: 'bolt', title: 'Real-time', body: 'Sub-300ms responses. A conversation should feel like a conversation, never a delay.' },
+  { icon: 'bolt', title: 'Real-time', body: 'Low-latency, natural back-and-forth. A conversation should feel like a conversation, never a delay.' },
   { icon: 'shield', title: 'Grounded & honest', body: 'Answers tied to your knowledge base. No hallucinations, every call logged.' },
   { icon: 'diversity_3', title: 'For every business', body: 'From a single clinic to an enterprise call centre — the same platform scales with you.' },
 ]
 
 const STATS = [
-  { value: '30+', label: 'Languages' },
-  { value: '10,000+', label: 'Leads qualified' },
-  { value: '<300ms', label: 'Response time' },
-  { value: '99.9%', label: 'Uptime' },
+  { value: '10', label: 'Indian languages' },
+  { value: '24/7', label: 'Always answering' },
+  { value: '3', label: 'Call channels' },
+  { value: '100%', label: 'Calls logged & transcribed' },
 ]
 
 export function About() {

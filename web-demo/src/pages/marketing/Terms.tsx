@@ -13,7 +13,7 @@ export function Terms() {
       intro={`These terms govern your use of ${BRAND.name}, the AI voice-agent platform operated by Vistrow Technologies ("we", "us"). By creating an account or using the service, you agree to them.`}
     >
       <LegalSection title="1. The service">
-        <p>{BRAND.name} lets businesses ("Customers") build AI voice agents that answer inbound calls, place outbound calls, and take calls from a website widget, in 30+ Indian languages. Customers configure agents, connect phone numbers and integrations, and manage calls through the dashboard.</p>
+        <p>{BRAND.name} lets businesses ("Customers") build AI voice agents that answer inbound calls, place outbound calls, and take calls from a website widget, in 10 Indian languages. Customers configure agents, connect phone numbers and integrations, and manage calls through the dashboard.</p>
       </LegalSection>
 
       <LegalSection title="2. Accounts">

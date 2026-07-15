@@ -34,7 +34,7 @@ export function Home() {
           </h1>
           <p className="mt-5 max-w-lg text-lg leading-relaxed text-text-muted">
             Answer, qualify, and book — in your customers’ language. Inbound, outbound, and web calls
-            in 30+ Indian languages, sub-300ms.
+            in 10 Indian languages, live 24/7.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link

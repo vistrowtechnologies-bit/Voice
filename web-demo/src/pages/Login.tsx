@@ -49,7 +49,7 @@ export function Login() {
           Welcome back to <span className="text-primary">{BRAND.name}.</span>
         </>
       }
-      features={['Answer & qualify calls 24/7', '30+ Indian languages', 'Every call logged & analyzed']}
+      features={['Answer & qualify calls 24/7', '10 Indian languages', 'Every call logged & analyzed']}
     >
       <form onSubmit={submit} className="flex flex-col gap-4">
         {error && (

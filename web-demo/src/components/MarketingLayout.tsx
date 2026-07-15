@@ -140,7 +140,7 @@ function Header() {
   return (
     <>
       <div className="border-b border-border bg-primary/10 px-4 py-2 text-center text-xs text-text-muted">
-        <span className="text-cyan">New</span> · {BRAND.name} now speaks 30+ Indian languages{' '}
+        <span className="text-cyan">New</span> · {BRAND.name} now speaks 10 Indian languages{' '}
         <Link to="/product" className="font-semibold text-text hover:underline">
           →
         </Link>
