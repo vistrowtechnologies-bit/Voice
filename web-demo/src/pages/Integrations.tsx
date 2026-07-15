@@ -72,6 +72,7 @@ export function Integrations() {
   const [integrations, setIntegrations] = useState<Integration[]>([])
   const [configuring, setConfiguring] = useState<string | null>(null)
   const [url, setUrl] = useState('')
+  const [token, setToken] = useState('')
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, string>>({})
   const [showGcalScript, setShowGcalScript] = useState(false)
@@ -98,9 +99,12 @@ export function Integrations() {
 
   const handleConnect = async (key: string) => {
     if (!url.trim()) return
-    await updateIntegration(key, 'connected', { url: url.trim() })
+    const config: { url: string; token?: string } = { url: url.trim() }
+    if (key === 'webhook' && token.trim()) config.token = token.trim()
+    await updateIntegration(key, 'connected', config)
     setConfiguring(null)
     setUrl('')
+    setToken('')
     reload()
   }
 
@@ -207,6 +211,14 @@ export function Integrations() {
                     placeholder={URL_PLACEHOLDER[integration.key] ?? 'https://…'}
                     className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
                   />
+                  {integration.key === 'webhook' && (
+                    <input
+                      value={token}
+                      onChange={(e) => setToken(e.target.value)}
+                      placeholder="Auth token (optional — sent as a token field in the JSON body)"
+                      className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
+                    />
+                  )}
                   <div className="flex gap-2">
                     <button onClick={() => setConfiguring(null)} className="flex-1 rounded-lg border border-border py-2 text-xs font-bold">
                       Cancel
@@ -239,6 +251,20 @@ export function Integrations() {
                     >
                       <Icon name="send" className="text-[15px]" />
                       {testing === integration.key ? 'Sending…' : 'Send test'}
+                    </button>
+                  )}
+                  {CONNECTABLE.has(integration.key) && (
+                    <button
+                      onClick={() => {
+                        setUrl(integration.config.url || '')
+                        setToken(integration.config.token || '')
+                        setConfiguring(integration.key)
+                      }}
+                      className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-bold text-text-muted hover:border-primary"
+                      aria-label={`Edit ${integration.name}`}
+                      title="Edit URL / token"
+                    >
+                      <Icon name="edit" className="text-[15px]" />
                     </button>
                   )}
                   <button

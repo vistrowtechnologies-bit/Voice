@@ -35,6 +35,25 @@ async def _post_webhook(payload: dict) -> None:
         logger.warning("CRM webhook post failed", exc_info=True)
 
 
+def _transcript_message(lead: dict) -> str:
+    """Render lead['transcript'] (list of {role, text}) as readable
+    "Caller: ..." / "Agent: ..." lines for CRMs that want one freeform text
+    field (e.g. a "message" or "requirements" field) rather than a
+    structured transcript array. Empty string if there's no transcript on
+    this event (mid-call events like capture_lead/book_appointment don't
+    carry one — only the call-end event in agent/main.py's log_call does)."""
+    transcript = lead.get("transcript") or []
+    lines = []
+    for turn in transcript:
+        role = turn.get("role")
+        text = (turn.get("text") or "").strip()
+        if not text or role not in ("user", "assistant"):
+            continue
+        speaker = "Caller" if role == "user" else "Agent"
+        lines.append(f"{speaker}: {text}")
+    return "\n".join(lines)
+
+
 def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | None:
     """(url, json_body) for one delivery integration, or None to skip. Mirrors
     the backend integrations_dispatch shapes so a Slack test-send and a live
@@ -51,7 +70,15 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
             "to": lead.get("phone", ""),
             "message": config.get("template") or f"Hi {name}, thanks for your call. We'll follow up shortly.",
         }
-    return url, dict(lead)  # webhook + sheets: full lead JSON
+    # webhook + sheets: full lead JSON, plus a readable "message" field (the
+    # transcript, when there is one) and an optional auth token embedded in
+    # the body — some receivers (e.g. a CRM's inbound-lead endpoint) expect
+    # a body-level token rather than an Authorization header.
+    body = {**lead, "message": _transcript_message(lead)}
+    token = (config.get("token") or "").strip()
+    if token:
+        body["token"] = token
+    return url, body
 
 
 async def _deliver_to_integrations(account_id: int | None, lead: dict) -> None:
