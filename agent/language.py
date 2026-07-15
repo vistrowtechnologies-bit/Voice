@@ -19,13 +19,26 @@ LANGUAGE_NAMES: dict[str, str] = {
 
 # Unicode script ranges for the Indic languages Sarvam's bulbul:v3 TTS
 # supports. Devanagari covers both Hindi and Marathi — script alone can't
-# tell them apart, so it defaults to Hindi for that range.
+# tell them apart, so it maps to hi-IN here; on_user_turn_completed special
+# -cases the reverse (an mr-IN session seeing a Devanagari "hi-IN" candidate
+# must NOT be treated as a real switch signal, or every Marathi call would
+# get silently downgraded to Hindi after a few caller turns — this was a real
+# bug, not hypothetical, caught 2026-07-15).
+#
+# Odia is deliberately NOT listed here even though Sarvam supports it as a
+# language: it isn't one of LANGUAGE_NAMES' offered agent languages (no
+# operator can configure an agent to open in Odia), so nothing validates that
+# voice/TTS combination in production. Auto-detecting into an unconfigured,
+# never-tested target language via nothing but a Unicode script match is how
+# a caller's aside in Odia script could silently wreck an unrelated call —
+# same failure shape as the Marathi bug, just for a language nobody opted
+# into. (Also, if this is ever re-added, Odia's real ISO 639-1 code is "or",
+# not "od" — "od-IN" was never a valid BCP-47 tag for any TTS provider here.)
 _SCRIPT_RANGES: list[tuple[str, str]] = [
     ("hi-IN", r"[ऀ-ॿ]"),  # Devanagari (Hindi/Marathi)
     ("bn-IN", r"[ঀ-৿]"),  # Bengali
     ("pa-IN", r"[਀-੿]"),  # Gurmukhi (Punjabi)
     ("gu-IN", r"[઀-૿]"),  # Gujarati
-    ("od-IN", r"[଀-୿]"),  # Odia
     ("ta-IN", r"[஀-௿]"),  # Tamil
     ("te-IN", r"[ఀ-౿]"),  # Telugu
     ("kn-IN", r"[ಀ-೿]"),  # Kannada

@@ -655,6 +655,15 @@ class RealEstateAgent(Agent):
                 )
 
         candidate = detect_reply_language(text)
+        if candidate == "hi-IN" and self._reply_language == "mr-IN":
+            # Devanagari is shared by Hindi and Marathi — detect_reply_language()
+            # can only report the script it saw, not which of the two the
+            # caller meant (see language.py), so on a Marathi-configured call
+            # a "hi-IN" reading is not real signal that the caller switched
+            # languages. Treating it as one used to force every Marathi call
+            # to Hindi mid-conversation after a few caller turns, corrupting
+            # the TTS language hint the operator explicitly configured.
+            candidate = None
         if candidate is None or candidate == self._reply_language:
             # Ambiguous turn, or already the current language — nothing to
             # confirm. Reset the streak so a one-off stray word elsewhere
