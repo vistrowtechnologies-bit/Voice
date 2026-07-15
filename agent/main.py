@@ -1045,6 +1045,8 @@ async def entrypoint(ctx: JobContext) -> None:
                 "transcript": transcript,
                 "extracted_data": extracted,
                 "qualified": lead_data.get("qualified", False),
+                "language": agent._reply_language,
+                "agent_name": cfg.get("name"),
             },
         )
         # Persist returning-caller memory after the log (independent of it).

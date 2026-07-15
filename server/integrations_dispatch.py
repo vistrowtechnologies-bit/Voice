@@ -72,6 +72,13 @@ def _body_for(key: str, config: dict, lead: dict) -> dict | None:
             "phone": lead.get("phone", ""),
             "email": lead.get("email", ""),
             "message": lead.get("summary") or _lead_summary_line(lead),
+            "transcript": lead.get("transcript") or [],
+            "sentiment": lead.get("sentiment") or "neutral",
+            "duration_seconds": lead.get("duration_seconds"),
+            "channel": lead.get("channel") or "",
+            "language": lead.get("language") or "",
+            "agent_name": lead.get("agent_name") or "",
+            "extracted_data": lead.get("extracted_data") or {},
         }
     url = (config.get("url") or "").strip()
     if not url:
@@ -146,6 +153,16 @@ def test_integration(account_id: int, key: str) -> tuple[bool, str]:
         "use_case": "Sample delivery from Vistrow Voice",
         "summary": "This is a test payload to confirm your integration is wired correctly.",
         "outcome": "qualified",
+        "transcript": [
+            {"speaker": "Agent", "text": "Hi, thanks for calling! How can I help you today?"},
+            {"speaker": "Caller", "text": "I'm looking for a 2BHK apartment, this is just a test call."},
+            {"speaker": "Agent", "text": "Great, this is a sample transcript to confirm the integration works."},
+        ],
+        "sentiment": "positive",
+        "duration_seconds": 45,
+        "channel": "Website Widget",
+        "language": "en",
+        "agent_name": "Test Agent",
     }
     ok, detail = _deliver_one(key, integ.get("config") or {}, sample)
     try:

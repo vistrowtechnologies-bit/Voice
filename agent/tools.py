@@ -35,6 +35,39 @@ async def _post_webhook(payload: dict) -> None:
         logger.warning("CRM webhook post failed", exc_info=True)
 
 
+# Same Hinglish-aware word lists the dashboard's own sentiment badge uses
+# (server/calls_db.py's _sentiment) — duplicated here since agent/ and
+# server/ are separate deployables that don't share code.
+_NEGATIVE_WORDS = {
+    "frustrated", "frustrating", "annoyed", "annoying", "angry", "furious",
+    "ridiculous", "terrible", "horrible", "worst", "useless", "pathetic",
+    "waste", "complaint", "complain", "scam", "cheated", "fraud", "bakwas",
+    "bekaar", "faltu", "ghatiya", "dhokha", "problem", "problems", "issue",
+    "issues", "delay", "delayed", "nonsense", "stupid", "stop calling",
+}
+_POSITIVE_WORDS = {
+    "great", "perfect", "excellent", "wonderful", "amazing", "love", "happy",
+    "thanks", "thank you", "helpful", "badhiya", "accha", "acha", "shukriya",
+    "dhanyavad", "sahi", "wah", "interested", "excited",
+}
+
+
+def _sentiment(transcript: list[dict]) -> str:
+    visitor_text = " ".join(
+        (t.get("text") or "").lower() for t in transcript if t.get("role") == "user"
+    )
+    negative = sum(1 for w in _NEGATIVE_WORDS if w in visitor_text)
+    positive = sum(1 for w in _POSITIVE_WORDS if w in visitor_text)
+    if negative > positive:
+        return "negative"
+    if positive > negative:
+        return "positive"
+    return "neutral"
+
+
+_CHANNEL_LABELS = {"phone": "Phone", "widget": "Website Widget", "browser": "Web"}
+
+
 def _transcript_message(lead: dict) -> str:
     """Render lead['transcript'] (list of {role, text}) as readable
     "Caller: ..." / "Agent: ..." lines for CRMs that want one freeform text
@@ -75,12 +108,26 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
             return None
         if not (lead.get("name") and lead.get("phone")):
             return None
+        transcript = lead.get("transcript") or []
         return _ARTHALEADS_URL, {
             "token": token,
             "name": name,
             "phone": lead.get("phone", ""),
             "email": lead.get("email", ""),
+            # Freeform summary for CRMs that only have one text field...
             "message": _transcript_message(lead),
+            # ...and the structured version for a dedicated Transcript view.
+            "transcript": [
+                {"speaker": "Caller" if t.get("role") == "user" else "Agent", "text": (t.get("text") or "").strip()}
+                for t in transcript
+                if (t.get("text") or "").strip() and t.get("role") in ("user", "assistant")
+            ],
+            "sentiment": _sentiment(transcript),
+            "duration_seconds": lead.get("duration_seconds"),
+            "channel": _CHANNEL_LABELS.get(lead.get("channel"), lead.get("channel") or ""),
+            "language": lead.get("language") or "",
+            "agent_name": lead.get("agent_name") or "",
+            "extracted_data": lead.get("extracted_data") or {},
         }
     url = (config.get("url") or "").strip()
     if not url:
