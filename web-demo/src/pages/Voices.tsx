@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
 import { VoicePreviewButton } from '../components/VoicePreviewButton'
 import { addVoice, fetchVoiceCatalog, removeVoice } from '../lib/api'
 import type { VoiceCatalog, VoiceEntry, VoiceTier } from '../lib/types'
@@ -111,11 +112,7 @@ function VoiceCard({
   onRemove: (v: string) => void
 }) {
   return (
-    <div
-      className={`flex flex-col rounded-xl border bg-surface p-4 ${
-        entry.selected ? 'border-primary/50' : 'border-border'
-      }`}
-    >
+    <Card padding="sm" className={`flex flex-col ${entry.selected ? '!border-primary/50' : ''}`}>
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
@@ -182,7 +179,7 @@ function VoiceCard({
           Add to my voices
         </button>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -260,7 +257,7 @@ export function Voices() {
           </div>
         ) : (
           <>
-            <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
+            <Card padding="sm" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan/20 text-cyan">
                   <Icon name="graphic_eq" className="text-[20px]" />
@@ -273,7 +270,7 @@ export function Voices() {
               <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-text-muted">
                 {data.selectedCount} added
               </span>
-            </div>
+            </Card>
 
             {error && (
               <div className="rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">

@@ -228,26 +228,28 @@ export function PageHeader({
   }, [])
 
   return (
-    <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-border bg-bg/80 px-4 py-4 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/80 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:px-6">
       <div className="min-w-0 flex-1">
         <h1 className="text-lg font-semibold leading-tight">{title}</h1>
         {subtitle && <p className="truncate text-xs text-text-muted">{subtitle}</p>}
       </div>
-      {credits !== null && (
-        <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted">
-          <Icon name="toll" className="text-[15px] text-cyan" />
-          {credits} credits
-        </span>
-      )}
-      <ThemeSwitcher />
-      {children}
-      <Link
-        to="/dashboard/agents?new=1"
-        className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90"
-      >
-        <Icon name="add" className="text-[18px]" />
-        New Agent
-      </Link>
+      <div className="flex flex-wrap items-center gap-3">
+        {credits !== null && (
+          <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted">
+            <Icon name="toll" className="text-[15px] text-cyan" />
+            {credits} credits
+          </span>
+        )}
+        <ThemeSwitcher />
+        {children}
+        <Link
+          to="/dashboard/agents?new=1"
+          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90"
+        >
+          <Icon name="add" className="text-[18px]" />
+          New Agent
+        </Link>
+      </div>
     </header>
   )
 }

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
+import { SectionCard } from '../components/ui/SectionCard'
 import {
   addPhoneNumber,
   assignPhoneNumber,
@@ -137,7 +140,7 @@ function EnableXPanel() {
       </div>
 
       {!status?.connected ? (
-        <div className="rounded-xl border border-border bg-surface p-5">
+        <Card>
           <h3 className="mb-1 text-sm font-semibold">Connect your EnableX project</h3>
           <p className="mb-4 text-xs text-text-muted">
             Create a project with the Voice service in the EnableX portal, then paste its API
@@ -171,7 +174,7 @@ function EnableXPanel() {
             <Icon name="link" className="text-[18px]" />
             {connecting ? 'Connecting…' : 'Connect EnableX'}
           </button>
-        </div>
+        </Card>
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan/30 bg-cyan/5 p-4">
@@ -190,7 +193,7 @@ function EnableXPanel() {
             </button>
           </div>
 
-          <div className="rounded-xl border border-border bg-surface p-5">
+          <Card>
             <h3 className="mb-3 text-sm font-semibold">Add a virtual number</h3>
             <div className="flex flex-wrap items-end gap-3">
               <Field label="Virtual number (E.164)">
@@ -221,16 +224,11 @@ function EnableXPanel() {
             <p className="mt-2 text-[11px] text-text-muted">
               Provision the number in your EnableX portal first, then register it here to route its calls to an agent.
             </p>
-          </div>
+          </Card>
 
-          <div className="rounded-xl border border-border bg-surface">
-            <div className="border-b border-border px-5 py-4">
-              <h3 className="text-sm font-semibold">Your numbers ({numbers.length})</h3>
-            </div>
+          <SectionCard title={`Your numbers (${numbers.length})`}>
             {numbers.length === 0 ? (
-              <p className="px-5 py-8 text-center text-sm text-text-muted">
-                No numbers yet — add a provisioned EnableX virtual number above.
-              </p>
+              <EmptyState icon="dialpad" text="No numbers yet — add a provisioned EnableX virtual number above." />
             ) : (
               <div className="divide-y divide-border">
                 {numbers.map((n) => (
@@ -243,7 +241,7 @@ function EnableXPanel() {
                 ))}
               </div>
             )}
-          </div>
+          </SectionCard>
         </>
       )}
     </div>

@@ -4,24 +4,35 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import '../lib/chart-setup'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
+import { SectionCard } from '../components/ui/SectionCard'
+import { StatTile } from '../components/ui/StatTile'
 import {
   LANGUAGE_NAMES,
   fetchActiveCalls,
   fetchAnalytics,
+  fetchCalls,
   fetchDashboardSummary,
   fetchIntelligence,
   fetchUsageTrends,
+  formatDateTime,
   formatDuration,
   type IntelligenceSummary,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
-import type { ActiveCallInfo, Analytics, DashboardSummary, UsageTrends } from '../lib/types'
+import type { ActiveCallInfo, Analytics, CallRecord, DashboardSummary, UsageTrends } from '../lib/types'
 
 const AGENT_STATE_STYLES: Record<string, string> = {
   listening: 'bg-cyan/20 text-cyan border-cyan/30',
   thinking: 'bg-primary/20 text-primary border-primary/30',
   speaking: 'bg-magenta/20 text-magenta border-magenta/30',
+}
+
+const CALL_STATUS_STYLES: Record<string, string> = {
+  completed: 'bg-cyan/20 text-cyan border-cyan/30',
+  failed: 'bg-destructive/20 text-destructive border-destructive/30',
 }
 
 const RANGE_OPTIONS = [
@@ -58,6 +69,7 @@ export function Dashboard() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
   const [intel, setIntel] = useState<IntelligenceSummary | null>(null)
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
+  const [recentCalls, setRecentCalls] = useState<CallRecord[]>([])
   const [rangeDays, setRangeDays] = useState(14)
 
   const { user } = useAuth()
@@ -72,6 +84,7 @@ export function Dashboard() {
     fetchDashboardSummary().then(setSummary).catch(() => setSummary(null))
     fetchAnalytics().then(setAnalytics).catch(() => setAnalytics(null))
     fetchIntelligence(30).then(setIntel).catch(() => setIntel(null))
+    fetchCalls().then((calls) => setRecentCalls(calls.slice(0, 5))).catch(() => setRecentCalls([]))
   }, [])
 
   useEffect(() => {
@@ -94,6 +107,7 @@ export function Dashboard() {
   }, [])
 
   const successPct = summary ? Math.round(summary.qualifiedRatio * 100) : 0
+  const showingLive = activeCalls.length > 0
 
   return (
     <DashboardLayout>
@@ -125,29 +139,106 @@ export function Dashboard() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <MetricCard label="Total Minutes" value={String(summary?.totalMinutes ?? 0)} icon="timer" hint="across all calls" tone="cyan" />
-              <MetricCard label="Active Agents" value={String(summary?.activeAgents ?? 0)} icon="smart_toy" hint="live and taking calls" tone="primary" />
-              <MetricCard
-                label="Live Calls"
-                value={String(activeCalls.length)}
-                hint={activeCalls.length > 0 ? 'in progress right now' : 'none right now'}
-                pulse={activeCalls.length > 0}
-                tone="magenta"
-              />
-              <MetricCard label="Qualified Leads" value={String(summary?.qualifiedCalls ?? 0)} icon="check_circle" hint="name + intent captured" tone="success" />
-              <MetricCard label="Success Rate" value={`${successPct}%`} icon="trending_up" hint="calls that qualified" tone="amber" />
-              <MetricCard
+            {/* Hero: live calls when any are in progress, otherwise the most
+                recent calls — this is a voice platform, so the front page
+                leads with actual calls, not abstract numbers. */}
+            <SectionCard
+              title={showingLive ? 'Live calls' : 'Recent calls'}
+              action={
+                showingLive ? (
+                  <span className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                    <span className="pulse-dot h-2 w-2 rounded-full bg-cyan" />
+                    {activeCalls.length} in progress
+                  </span>
+                ) : (
+                  <Link to="/dashboard/calls" className="text-xs font-bold text-cyan hover:underline">
+                    View all →
+                  </Link>
+                )
+              }
+              footer={
+                !showingLive && recentCalls.length > 0 ? (
+                  <Link to="/dashboard/calls" className="font-bold text-cyan hover:underline">
+                    View full call history →
+                  </Link>
+                ) : undefined
+              }
+            >
+              <div className="divide-y divide-border">
+                {showingLive
+                  ? activeCalls.map((call) => (
+                      <div key={call.room} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
+                          {call.visitor_identity.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{call.visitor_identity}</p>
+                          <p className="truncate text-[11px] text-text-muted">{call.room}</p>
+                        </div>
+                        <span
+                          className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${
+                            AGENT_STATE_STYLES[call.state] ?? 'border-border text-text-muted'
+                          }`}
+                        >
+                          {call.state}
+                        </span>
+                      </div>
+                    ))
+                  : recentCalls.length === 0
+                    ? (
+                      <EmptyState
+                        icon="call"
+                        text="No calls yet — every call your agent takes lands here automatically."
+                      />
+                    )
+                    : recentCalls.map((call) => (
+                      <Link
+                        key={call.id}
+                        to={`/dashboard/calls/${call.id}`}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-surface-high/20 sm:px-5"
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
+                          {call.initials}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{call.name}</p>
+                          <p className="truncate text-[11px] text-text-muted">
+                            {call.channel} · {formatDateTime(call.callDate)}
+                          </p>
+                        </div>
+                        <span className="hidden shrink-0 text-xs text-text-muted sm:block">
+                          {formatDuration(call.durationSeconds)}
+                        </span>
+                        <span
+                          className={`shrink-0 whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${
+                            CALL_STATUS_STYLES[call.callStatus] ?? 'border-border text-text-muted'
+                          }`}
+                        >
+                          {call.callStatus}
+                        </span>
+                      </Link>
+                    ))}
+              </div>
+            </SectionCard>
+
+            {/* Secondary KPI strip — compact, not the page's hero. */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <StatTile compact label="Minutes" value={String(summary?.totalMinutes ?? 0)} icon="timer" tone="cyan" />
+              <StatTile compact label="Active Agents" value={String(summary?.activeAgents ?? 0)} icon="smart_toy" tone="primary" />
+              <StatTile compact label="Live Calls" value={String(activeCalls.length)} icon="sensors" pulse={activeCalls.length > 0} tone="magenta" />
+              <StatTile compact label="Qualified" value={String(summary?.qualifiedCalls ?? 0)} icon="check_circle" tone="success" />
+              <StatTile compact label="Success Rate" value={`${successPct}%`} icon="trending_up" tone="amber" />
+              <StatTile
+                compact
                 label="Conversion"
                 value={`${summary ? Math.round(summary.conversionRatio * 100) : 0}%`}
                 icon="event_available"
-                hint="calls → site visits"
                 tone="primary"
               />
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <div className="rounded-xl border border-border bg-surface p-5 lg:col-span-2">
+              <Card className="lg:col-span-2">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold">Usage trends</h3>
                   <div className="flex gap-1 rounded-lg border border-border p-0.5">
@@ -181,12 +272,12 @@ export function Dashboard() {
                       }}
                     />
                   ) : (
-                    <EmptyChart text="No calls yet in this range — every call the agent takes lands here automatically." />
+                    <EmptyState icon="show_chart" text="No calls yet in this range — every call the agent takes lands here automatically." />
                   )}
                 </div>
-              </div>
+              </Card>
 
-              <div className="flex flex-col rounded-xl border border-border bg-surface p-5">
+              <Card className="flex flex-col">
                 <h3 className="mb-4 text-sm font-semibold">Call outcomes</h3>
                 {summary && summary.totalCalls > 0 ? (
                   <>
@@ -219,66 +310,23 @@ export function Dashboard() {
                     </div>
                   </>
                 ) : (
-                  <EmptyChart text="Outcomes appear once calls are logged." />
+                  <EmptyState icon="donut_large" text="Outcomes appear once calls are logged." />
                 )}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border bg-surface">
-              <div className="flex items-center justify-between border-b border-border px-5 py-4">
-                <h3 className="flex items-center gap-2 text-sm font-semibold">
-                  Live calls
-                  {activeCalls.length > 0 && <span className="pulse-dot h-2 w-2 rounded-full bg-cyan" />}
-                </h3>
-                <span className="text-[11px] text-text-muted">{activeCalls.length} in progress</span>
-              </div>
-              <div className="divide-y divide-border">
-                {activeCalls.length === 0 && (
-                  <p className="px-5 py-6 text-sm text-text-muted">
-                    No live calls right now — this reflects real LiveKit rooms. Start a call from the
-                    landing page to see it appear here.
-                  </p>
-                )}
-                {activeCalls.map((call) => (
-                  <div key={call.room} className="flex items-center gap-3 px-5 py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
-                      {call.visitor_identity.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{call.visitor_identity}</p>
-                      <p className="truncate text-[11px] text-text-muted">{call.room}</p>
-                    </div>
-                    <span
-                      className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${
-                        AGENT_STATE_STYLES[call.state] ?? 'border-border text-text-muted'
-                      }`}
-                    >
-                      {call.state}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="border-t border-border px-5 py-3">
-                <Link to="/dashboard/calls" className="text-xs font-bold text-cyan hover:underline">
-                  View full call history →
-                </Link>
-              </div>
+              </Card>
             </div>
           </>
         )}
 
         {tab === 'analytics' && (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-border bg-surface p-5 lg:col-span-2">
+            <Card className="lg:col-span-2">
               <div className="mb-4 flex items-center gap-2">
                 <Icon name="auto_awesome" className="text-[18px] text-cyan" />
                 <h3 className="text-sm font-semibold">Conversation intelligence</h3>
                 <span className="text-xs text-text-muted">· last 30 days</span>
               </div>
               {!intel || intel.analyzed === 0 ? (
-                <p className="text-sm text-text-muted">
-                  Analyze calls from any call's detail page to build sentiment, outcome, and QA insights here.
-                </p>
+                <EmptyState icon="auto_awesome" text="Analyze calls from any call's detail page to build sentiment, outcome, and QA insights here." />
               ) : (
                 <div className="flex flex-col gap-5">
                   <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -323,9 +371,9 @@ export function Dashboard() {
                   </div>
                 </div>
               )}
-            </div>
+            </Card>
 
-            <div className="rounded-xl border border-border bg-surface p-5">
+            <Card>
               <h3 className="mb-4 text-sm font-semibold">Calls by channel</h3>
               <div className="h-[200px]">
                 {analytics && analytics.byChannel && analytics.byChannel.length > 0 ? (
@@ -344,12 +392,12 @@ export function Dashboard() {
                     }}
                   />
                 ) : (
-                  <EmptyChart text="Channel split appears after the first calls — Web, Website Widget, and Phone." />
+                  <EmptyState icon="bar_chart" text="Channel split appears after the first calls — Web, Website Widget, and Phone." />
                 )}
               </div>
-            </div>
+            </Card>
 
-            <div className="rounded-xl border border-border bg-surface p-5">
+            <Card>
               <h3 className="mb-4 text-sm font-semibold">Calls by agent</h3>
               <div className="h-[200px]">
                 {analytics && analytics.byAgent && analytics.byAgent.length > 0 ? (
@@ -368,12 +416,12 @@ export function Dashboard() {
                     }}
                   />
                 ) : (
-                  <EmptyChart text="Per-agent stats appear after the first calls." />
+                  <EmptyState icon="bar_chart" text="Per-agent stats appear after the first calls." />
                 )}
               </div>
-            </div>
+            </Card>
 
-            <div className="rounded-xl border border-border bg-surface p-5">
+            <Card>
               <h3 className="mb-4 text-sm font-semibold">Calls by language</h3>
               <div className="h-[200px]">
                 {analytics && analytics.languages.length > 0 ? (
@@ -389,12 +437,12 @@ export function Dashboard() {
                     }}
                   />
                 ) : (
-                  <EmptyChart text="Language mix appears after the first calls." />
+                  <EmptyState icon="translate" text="Language mix appears after the first calls." />
                 )}
               </div>
-            </div>
+            </Card>
 
-            <div className="rounded-xl border border-border bg-surface p-5">
+            <Card>
               <h3 className="mb-4 text-sm font-semibold">Average call duration — last 14 days</h3>
               <div className="h-[200px]">
                 {analytics && analytics.durationTrend.length > 0 ? (
@@ -418,12 +466,12 @@ export function Dashboard() {
                     }}
                   />
                 ) : (
-                  <EmptyChart text="Duration trend appears after the first calls." />
+                  <EmptyState icon="timer" text="Duration trend appears after the first calls." />
                 )}
               </div>
-            </div>
+            </Card>
 
-            <div className="rounded-xl border border-border bg-surface p-5">
+            <Card>
               <h3 className="mb-4 text-sm font-semibold">Qualification funnel</h3>
               {analytics ? (
                 <div className="flex flex-col gap-3 py-2">
@@ -433,11 +481,11 @@ export function Dashboard() {
                   <FunnelBar label="Site visit booked" value={analytics.funnel.visitBooked} max={analytics.funnel.answered} color="#FBBF24" />
                 </div>
               ) : (
-                <EmptyChart text="Funnel appears after the first calls." />
+                <EmptyState icon="filter_alt" text="Funnel appears after the first calls." />
               )}
-            </div>
+            </Card>
 
-            <div className="rounded-xl border border-border bg-surface p-5">
+            <Card>
               <h3 className="mb-4 text-sm font-semibold">Caller sentiment</h3>
               {analytics && (analytics.sentiment.positive + analytics.sentiment.neutral + analytics.sentiment.negative) > 0 ? (
                 <div className="flex items-center gap-6 py-2">
@@ -464,11 +512,11 @@ export function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <EmptyChart text="Sentiment split appears after the first calls." />
+                <EmptyState icon="mood" text="Sentiment split appears after the first calls." />
               )}
-            </div>
+            </Card>
 
-            <div className="rounded-xl border border-border bg-surface p-5 lg:col-span-2">
+            <Card className="lg:col-span-2">
               <h3 className="mb-4 text-sm font-semibold">Peak call hours</h3>
               <div className="h-[180px]">
                 {analytics && analytics.peakHours.length > 0 ? (
@@ -484,11 +532,11 @@ export function Dashboard() {
                     }}
                   />
                 ) : (
-                  <EmptyChart text="Hourly distribution appears after the first calls." />
+                  <EmptyState icon="schedule" text="Hourly distribution appears after the first calls." />
                 )}
               </div>
               <p className="mt-2 text-[11px] text-text-muted">Times shown in IST (Indian Standard Time).</p>
-            </div>
+            </Card>
 
             {summary && (
               <p className="text-xs text-text-muted lg:col-span-2">
@@ -517,63 +565,11 @@ function FunnelBar({ label, value, max, color }: { label: string; value: number;
   )
 }
 
-function EmptyChart({ text }: { text: string }) {
-  return (
-    <div className="flex h-full min-h-[100px] items-center justify-center px-4 text-center text-xs text-text-muted">
-      {text}
-    </div>
-  )
-}
-
 function IntelStat({ label, value, tone = 'text-text' }: { label: string; value: string; tone?: string }) {
   return (
     <div className="rounded-lg border border-border bg-surface-high/40 p-3">
       <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{label}</p>
       <p className={`mt-1 text-lg font-bold ${tone}`}>{value}</p>
-    </div>
-  )
-}
-
-const TONE_STYLES: Record<string, { chip: string; hint: string; border: string }> = {
-  primary: { chip: 'bg-primary/15 text-primary', hint: 'text-primary', border: 'hover:border-primary/50' },
-  cyan: { chip: 'bg-cyan/15 text-cyan', hint: 'text-cyan', border: 'hover:border-cyan/50' },
-  magenta: { chip: 'bg-magenta/15 text-magenta', hint: 'text-magenta', border: 'hover:border-magenta/50' },
-  amber: { chip: 'bg-amber/15 text-amber', hint: 'text-amber', border: 'hover:border-amber/50' },
-  success: { chip: 'bg-success/15 text-success', hint: 'text-success', border: 'hover:border-success/50' },
-}
-
-function MetricCard({
-  label,
-  value,
-  hint,
-  icon,
-  pulse,
-  tone = 'cyan',
-}: {
-  label: string
-  value: string
-  hint: string
-  icon?: string
-  pulse?: boolean
-  tone?: keyof typeof TONE_STYLES
-}) {
-  const t = TONE_STYLES[tone]
-  return (
-    <div className={`group rounded-xl border border-border bg-surface p-5 transition-all duration-200 ${t.border} hover:-translate-y-0.5`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{label}</p>
-          <p className="mt-1 text-2xl font-bold">{value}</p>
-        </div>
-        <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${t.chip}`}>
-          {pulse ? (
-            <span className="pulse-dot h-2.5 w-2.5 rounded-full bg-current" />
-          ) : (
-            icon && <Icon name={icon} className="text-[18px]" />
-          )}
-        </div>
-      </div>
-      <p className={`mt-2 text-xs ${t.hint}`}>{hint}</p>
     </div>
   )
 }

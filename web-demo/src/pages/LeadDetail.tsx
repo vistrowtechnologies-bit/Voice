@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
 import { LANGUAGE_NAMES, analyzeCall, fetchLead, formatDateTime, formatDuration } from '../lib/api'
 import type { CallRecord } from '../lib/types'
 
@@ -75,7 +77,7 @@ export function LeadDetail() {
       <PageHeader title={call.name} subtitle={call.phone || 'no phone captured'} />
 
       <section className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:grid-cols-3">
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 lg:col-span-2">
+        <Card className="flex flex-col gap-3 lg:col-span-2">
           <h2 className="text-sm font-semibold text-text-muted">Call transcript</h2>
           <div className="flex flex-col gap-2">
             {(call.transcript ?? []).map((line, i) => (
@@ -90,14 +92,12 @@ export function LeadDetail() {
                 <span>{line.text}</span>
               </div>
             ))}
-            {!call.transcript?.length && (
-              <p className="text-sm text-text-muted">No transcript recorded for this call.</p>
-            )}
+            {!call.transcript?.length && <EmptyState icon="forum" text="No transcript recorded for this call." compact />}
           </div>
-        </div>
+        </Card>
 
         <div className="flex flex-col gap-4">
-          <div className="rounded-xl border border-border bg-surface p-4">
+          <Card>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-text-muted">Conversation intelligence</h2>
               {call.transcript?.length ? (
@@ -165,9 +165,9 @@ export function LeadDetail() {
                   : 'No transcript to analyze.'}
               </p>
             )}
-          </div>
+          </Card>
 
-          <div className="rounded-xl border border-border bg-surface p-4">
+          <Card>
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Call details</h2>
             <dl className="flex flex-col gap-2 text-sm">
               <Row label="Status" value={call.status} />
@@ -180,9 +180,9 @@ export function LeadDetail() {
               <Row label="Language" value={call.replyLanguage ? (LANGUAGE_NAMES[call.replyLanguage] ?? call.replyLanguage) : '—'} />
               <Row label="Time" value={formatDateTime(call.callDate)} />
             </dl>
-          </div>
+          </Card>
 
-          <div className="rounded-xl border border-border bg-surface p-4">
+          <Card>
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Extracted lead</h2>
             <dl className="flex flex-col gap-2 text-sm">
               {call.company || call.useCase || call.teamSize ? (
@@ -205,9 +205,9 @@ export function LeadDetail() {
                 Site visit · {call.siteVisit.date} at {call.siteVisit.time}
               </div>
             )}
-          </div>
+          </Card>
 
-          <div className="rounded-xl border border-border bg-surface p-4">
+          <Card>
             <h2 className="mb-2 text-sm font-semibold text-text-muted">Notes</h2>
             <textarea
               value={notes}
@@ -215,7 +215,7 @@ export function LeadDetail() {
               placeholder="Add a note about this lead… (local only for now)"
               className="h-24 w-full resize-none rounded-lg border border-border bg-surface-high p-2 text-sm outline-none focus:border-primary"
             />
-          </div>
+          </Card>
         </div>
       </section>
     </DashboardLayout>

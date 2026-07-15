@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
+import { SectionCard } from '../components/ui/SectionCard'
 import { createInboundRoute, fetchAgents, fetchInboundRoutes, fetchPhoneNumbers } from '../lib/api'
 import type { AgentConfig, InboundRoute, PhoneNumber } from '../lib/types'
 
@@ -52,7 +54,7 @@ export function Inbound() {
       <PageHeader title="Inbound Calls" subtitle="Manage inbound call routing and dispatch rules" />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
-        <div className="rounded-xl border border-border bg-surface p-5">
+        <Card>
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan/20 text-cyan">
               <Icon name="phone_callback" className="text-[20px]" />
@@ -187,13 +189,10 @@ export function Inbound() {
               Create Route
             </button>
           </div>
-        </div>
+        </Card>
 
         {routes.length > 0 && (
-          <div className="rounded-xl border border-border bg-surface">
-            <div className="border-b border-border px-5 py-4">
-              <h3 className="text-sm font-semibold">Saved routes ({routes.length})</h3>
-            </div>
+          <SectionCard title={`Saved routes (${routes.length})`}>
             <div className="divide-y divide-border">
               {routes.map((r) => (
                 <div key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
@@ -207,7 +206,7 @@ export function Inbound() {
                 </div>
               ))}
             </div>
-          </div>
+          </SectionCard>
         )}
       </section>
     </DashboardLayout>

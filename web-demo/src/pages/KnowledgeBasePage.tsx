@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
 import {
   addKbQa,
   addKbQaBulk,
@@ -344,7 +345,7 @@ export function KnowledgeBasePage() {
             const pct = Math.min(100, Math.round((used / PROMPT_BUDGET_CHARS) * 100))
             const over = used > PROMPT_BUDGET_CHARS
             return (
-              <div key={kb.id} className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
+              <Card key={kb.id} className="flex flex-col gap-4">
                 {/* Header: name · counts · strict toggle */}
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -757,7 +758,7 @@ export function KnowledgeBasePage() {
                     )}
                   </div>
                 )}
-              </div>
+              </Card>
             )
           })}
         </div>

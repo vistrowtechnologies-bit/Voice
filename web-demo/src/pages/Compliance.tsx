@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card as UICard } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
 import {
   addDnc,
   bulkAddDnc,
@@ -18,13 +20,13 @@ const TIMEZONES = ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/Londo
 
 function Card({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
+    <UICard variant="flat" className="flex flex-col gap-4">
       <div>
         <p className="text-base font-bold">{title}</p>
         <p className="text-xs text-text-muted">{subtitle}</p>
       </div>
       {children}
-    </div>
+    </UICard>
   )
 }
 
@@ -310,9 +312,7 @@ export function Compliance() {
               )}
               <div className="flex max-h-72 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border">
                 {filteredDnc.length === 0 ? (
-                  <div className="px-3 py-6 text-center text-sm text-text-muted">
-                    {dnc.length === 0 ? 'No blocked numbers yet.' : 'No matches.'}
-                  </div>
+                  <EmptyState icon="block" text={dnc.length === 0 ? 'No blocked numbers yet.' : 'No matches.'} compact />
                 ) : (
                   filteredDnc.map((d) => (
                     <div key={d.id} className="flex items-center justify-between gap-2 px-3 py-2">

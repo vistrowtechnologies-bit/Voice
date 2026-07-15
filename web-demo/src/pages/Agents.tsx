@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
 import { VoicePreviewButton } from '../components/VoicePreviewButton'
 import { BrowserTestModal, DialTestModal } from '../components/AgentTestCall'
 import { useAuth } from '../lib/auth'
@@ -219,7 +220,7 @@ export function Agents() {
           </button>
 
           {agents.map((agent) => (
-            <div key={agent.id} className="flex flex-col rounded-xl border border-border bg-surface p-5">
+            <Card key={agent.id} className="flex flex-col">
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 text-sm font-bold text-primary">
@@ -292,7 +293,7 @@ export function Agents() {
                   <Icon name="mic" className="text-[16px]" />
                 </button>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
 

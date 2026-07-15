@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { DataTable } from '../components/ui/DataTable'
+import type { DataTableColumn } from '../components/ui/DataTable'
+import { StatTile } from '../components/ui/StatTile'
 import { callsExportUrl, fetchActiveCalls, fetchCalls, formatDateTime, formatDuration } from '../lib/api'
 import type { ActiveCallInfo, CallRecord, Sentiment } from '../lib/types'
 
@@ -46,6 +49,61 @@ export function CallsHistory() {
   const completed = calls.filter((c) => c.callStatus === 'completed').length
   const failed = calls.filter((c) => c.callStatus === 'failed').length
 
+  const columns: DataTableColumn<CallRecord>[] = [
+    {
+      key: 'caller',
+      header: 'Caller',
+      primary: true,
+      render: (call) => (
+        <Link to={`/dashboard/calls/${call.id}`} className="group flex items-center gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
+            {call.initials}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold group-hover:text-cyan">{call.name}</p>
+            {call.phone && <p className="text-[11px] text-text-muted">{call.phone}</p>}
+          </div>
+        </Link>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (call) => (
+        <span
+          className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${
+            call.callStatus === 'completed'
+              ? 'bg-cyan/20 text-cyan border-cyan/30'
+              : 'bg-destructive/20 text-destructive border-destructive/30'
+          }`}
+        >
+          {call.callStatus}
+        </span>
+      ),
+    },
+    { key: 'channel', header: 'Channel', render: (call) => <span className="text-sm text-text-muted">{call.channel}</span> },
+    { key: 'website', header: 'Website', render: (call) => <span className="text-sm text-text-muted">{call.website || '—'}</span> },
+    { key: 'duration', header: 'Duration', render: (call) => <span className="text-sm">{formatDuration(call.durationSeconds)}</span> },
+    {
+      key: 'sentiment',
+      header: 'Sentiment',
+      render: (call) => (
+        <span className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${SENTIMENT_STYLES[call.sentiment]}`}>
+          {call.sentiment}
+        </span>
+      ),
+    },
+    { key: 'agent', header: 'Agent', render: (call) => <span className="text-sm text-text-muted">{call.agent}</span> },
+    { key: 'time', header: 'Time', render: (call) => <span className="text-sm text-text-muted">{formatDateTime(call.callDate)}</span> },
+  ]
+
+  const emptyMessage =
+    channel === 'Phone'
+      ? 'No phone calls yet — phone calling needs a connected number (see Phone Numbers).'
+      : channel === 'Website Widget'
+        ? 'No widget calls yet — embed the call button on a client site (see Website Widget).'
+        : 'No calls found. Every call the agent takes is logged here automatically.'
+
   return (
     <DashboardLayout>
       <PageHeader title="All Calls History" subtitle={`${calls.length} calls total`}>
@@ -60,15 +118,15 @@ export function CallsHistory() {
       </PageHeader>
 
       <section className="flex flex-col gap-6 p-4 sm:p-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Total Calls" value={calls.length} icon="call" />
-          <StatCard label="Completed" value={completed} icon="check_circle" tone="text-cyan" />
-          <StatCard label="Failed / Dropped" value={failed} icon="cancel" tone="text-destructive" />
-          <StatCard label="In Progress" value={activeCalls.length} icon="progress_activity" tone="text-primary" pulse={activeCalls.length > 0} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile compact label="Total Calls" value={String(calls.length)} icon="call" tone="muted" />
+          <StatTile compact label="Completed" value={String(completed)} icon="check_circle" tone="cyan" />
+          <StatTile compact label="Failed / Dropped" value={String(failed)} icon="cancel" tone="destructive" />
+          <StatTile compact label="In Progress" value={String(activeCalls.length)} icon="sensors" pulse={activeCalls.length > 0} tone="primary" />
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 rounded-lg border border-border p-0.5">
+          <div className="flex flex-wrap gap-1 rounded-lg border border-border p-0.5">
             {CHANNELS.map((c) => (
               <button
                 key={c}
@@ -99,101 +157,14 @@ export function CallsHistory() {
           </button>
         </div>
 
-        <div className="rounded-xl border border-border bg-surface">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-surface-high/30 text-[11px] font-bold uppercase tracking-widest text-text-muted">
-                  <th className="py-3 pl-5 pr-3">Caller</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Channel</th>
-                  <th className="px-3 py-3">Website</th>
-                  <th className="px-3 py-3">Duration</th>
-                  <th className="px-3 py-3">Sentiment</th>
-                  <th className="px-3 py-3">Agent</th>
-                  <th className="px-3 py-3">Time</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-5 py-10 text-center text-sm text-text-muted">
-                      {channel === 'Phone'
-                        ? 'No phone calls yet — phone calling needs a connected number (see Phone Numbers).'
-                        : channel === 'Website Widget'
-                          ? 'No widget calls yet — embed the call button on a client site (see Website Widget).'
-                          : 'No calls found. Every call the agent takes is logged here automatically.'}
-                    </td>
-                  </tr>
-                )}
-                {filtered.map((call) => (
-                  <tr key={call.id} className="group hover:bg-surface-high/20">
-                    <td className="py-3 pl-5 pr-3">
-                      <Link to={`/dashboard/calls/${call.id}`} className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
-                          {call.initials}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold group-hover:text-cyan">{call.name}</p>
-                          {call.phone && <p className="text-[11px] text-text-muted">{call.phone}</p>}
-                        </div>
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3">
-                      <span
-                        className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${
-                          call.callStatus === 'completed'
-                            ? 'bg-cyan/20 text-cyan border-cyan/30'
-                            : 'bg-destructive/20 text-destructive border-destructive/30'
-                        }`}
-                      >
-                        {call.callStatus}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-sm text-text-muted">{call.channel}</td>
-                    <td className="px-3 py-3 text-sm text-text-muted">{call.website || '—'}</td>
-                    <td className="px-3 py-3 text-sm">{formatDuration(call.durationSeconds)}</td>
-                    <td className="px-3 py-3">
-                      <span className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${SENTIMENT_STYLES[call.sentiment]}`}>
-                        {call.sentiment}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-sm text-text-muted">{call.agent}</td>
-                    <td className="px-3 py-3 text-sm text-text-muted">{formatDateTime(call.callDate)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="border-t border-border px-5 py-3 text-xs text-text-muted">
-            Showing {filtered.length} of {calls.length} calls
-          </div>
-        </div>
+        <DataTable
+          columns={columns}
+          rows={filtered}
+          rowKey={(call) => call.id}
+          emptyMessage={emptyMessage}
+          footer={`Showing ${filtered.length} of ${calls.length} calls`}
+        />
       </section>
     </DashboardLayout>
-  )
-}
-
-function StatCard({
-  label,
-  value,
-  icon,
-  tone = 'text-text',
-  pulse,
-}: {
-  label: string
-  value: number
-  icon: string
-  tone?: string
-  pulse?: boolean
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-surface p-5">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{label}</p>
-        {pulse ? <span className="pulse-dot h-2 w-2 rounded-full bg-cyan" /> : <Icon name={icon} className={`text-[18px] ${tone}`} />}
-      </div>
-      <p className={`mt-1 text-2xl font-bold ${tone}`}>{value}</p>
-    </div>
   )
 }

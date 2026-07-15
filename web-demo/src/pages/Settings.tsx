@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
 import {
   apiInviteMember,
   apiRemoveMember,
@@ -21,13 +22,13 @@ import type { ApiKey } from '../lib/types'
 
 function SettingsCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
+    <Card variant="flat" className="flex flex-col gap-4">
       <div>
         <p className="text-base font-bold">{title}</p>
         <p className="text-xs text-text-muted">{subtitle}</p>
       </div>
       {children}
-    </div>
+    </Card>
   )
 }
 

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
+import { DataTable } from '../components/ui/DataTable'
+import type { DataTableColumn } from '../components/ui/DataTable'
 import {
   contactsExportUrl,
   createContact,
@@ -61,12 +64,83 @@ export function Contacts() {
     reload()
   }
 
+  const columns: DataTableColumn<Contact>[] = [
+    {
+      key: 'name',
+      header: 'Contact Name',
+      primary: true,
+      render: (c) => (
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
+            {c.name.slice(0, 2).toUpperCase()}
+          </div>
+          <span className="text-sm font-semibold">{c.name}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'info',
+      header: 'Contact Info',
+      render: (c) => (
+        <div className="text-sm text-text-muted">
+          <p>{c.phone || '—'}</p>
+          {c.email && <p className="text-[11px]">{c.email}</p>}
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (c) => (
+        <span className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLES[c.status] ?? STATUS_STYLES.new}`}>
+          {c.status.replace('_', ' ')}
+        </span>
+      ),
+    },
+    {
+      key: 'tags',
+      header: 'Tags',
+      render: (c) => (
+        <div className="flex flex-wrap gap-1">
+          {c.tags.length === 0 && <span className="text-sm text-text-muted">—</span>}
+          {c.tags.map((t) => (
+            <span key={t} className="rounded bg-surface-high px-1.5 py-0.5 text-[11px] text-text-muted">
+              {t}
+            </span>
+          ))}
+        </div>
+      ),
+    },
+    { key: 'source', header: 'Source', render: (c) => <span className="text-sm capitalize text-text-muted">{c.source}</span> },
+    {
+      key: 'lastCalled',
+      header: 'Last Called',
+      render: (c) => <span className="text-sm text-text-muted">{c.lastCalledAt ? formatRelativeTime(c.lastCalledAt) : 'never'}</span>,
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      className: 'text-center',
+      render: (c) => (
+        <div className="flex justify-center opacity-60 transition-opacity group-hover:opacity-100">
+          <button
+            onClick={() => deleteContact(c.id).then(reload)}
+            aria-label={`Delete ${c.name}`}
+            className="flex h-8 w-8 items-center justify-center rounded bg-surface-high text-destructive hover:bg-destructive hover:text-bg"
+          >
+            <Icon name="delete" className="text-[18px]" />
+          </button>
+        </div>
+      ),
+    },
+  ]
+
   return (
     <DashboardLayout>
       <PageHeader title="Contacts" subtitle="Global contact list — auto-synced from every qualified call" />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-4">
+        <Card padding="sm" className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-[220px] flex-1">
             <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted" />
             <input
@@ -112,10 +186,10 @@ export function Contacts() {
             <Icon name="add" className="text-[18px]" />
             Add Contact
           </button>
-        </div>
+        </Card>
 
         {showAdd && (
-          <div className="grid grid-cols-1 gap-3 rounded-xl border border-primary/40 bg-surface p-4 sm:grid-cols-2 lg:grid-cols-5">
+          <Card variant="flat" padding="sm" className="grid grid-cols-1 gap-3 !border-primary/40 sm:grid-cols-2 lg:grid-cols-5">
             {(
               [
                 ['name', 'Name'],
@@ -135,85 +209,16 @@ export function Contacts() {
             <button onClick={handleAdd} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90">
               Save contact
             </button>
-          </div>
+          </Card>
         )}
 
-        <div className="rounded-xl border border-border bg-surface">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-surface-high/30 text-[11px] font-bold uppercase tracking-widest text-text-muted">
-                  <th className="py-3 pl-5 pr-3">Contact Name</th>
-                  <th className="px-3 py-3">Contact Info</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Tags</th>
-                  <th className="px-3 py-3">Source</th>
-                  <th className="px-3 py-3">Last Called</th>
-                  <th className="px-3 py-3 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-text-muted">
-                      No contacts yet. They appear here automatically when the agent qualifies a caller,
-                      or add/import them manually.
-                    </td>
-                  </tr>
-                )}
-                {filtered.map((c) => (
-                  <tr key={c.id} className="group hover:bg-surface-high/20">
-                    <td className="py-3 pl-5 pr-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
-                          {c.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <span className="text-sm font-semibold">{c.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-sm text-text-muted">
-                      <p>{c.phone || '—'}</p>
-                      {c.email && <p className="text-[11px]">{c.email}</p>}
-                    </td>
-                    <td className="px-3 py-3">
-                      <span className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLES[c.status] ?? STATUS_STYLES.new}`}>
-                        {c.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {c.tags.length === 0 && <span className="text-sm text-text-muted">—</span>}
-                        {c.tags.map((t) => (
-                          <span key={t} className="rounded bg-surface-high px-1.5 py-0.5 text-[11px] text-text-muted">
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-sm capitalize text-text-muted">{c.source}</td>
-                    <td className="px-3 py-3 text-sm text-text-muted">
-                      {c.lastCalledAt ? formatRelativeTime(c.lastCalledAt) : 'never'}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex justify-center opacity-60 transition-opacity group-hover:opacity-100">
-                        <button
-                          onClick={() => deleteContact(c.id).then(reload)}
-                          aria-label={`Delete ${c.name}`}
-                          className="flex h-8 w-8 items-center justify-center rounded bg-surface-high text-destructive hover:bg-destructive hover:text-bg"
-                        >
-                          <Icon name="delete" className="text-[18px]" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="border-t border-border px-5 py-3 text-xs text-text-muted">
-            Showing {filtered.length} of {contacts.length} contacts
-          </div>
-        </div>
+        <DataTable
+          columns={columns}
+          rows={filtered}
+          rowKey={(c) => c.id}
+          emptyMessage="No contacts yet. They appear here automatically when the agent qualifies a caller, or add/import them manually."
+          footer={`Showing ${filtered.length} of ${contacts.length} contacts`}
+        />
       </section>
     </DashboardLayout>
   )

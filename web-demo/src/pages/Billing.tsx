@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
+import { SectionCard } from '../components/ui/SectionCard'
 import { fetchBilling } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { BRAND } from '../lib/brand'
@@ -28,7 +31,7 @@ export function Billing() {
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="rounded-xl border border-border bg-surface p-5 lg:col-span-2">
+          <Card className="lg:col-span-2">
             <div className="mb-3 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan/20 text-cyan">
                 <Icon name="toll" className="text-[20px]" />
@@ -50,9 +53,9 @@ export function Billing() {
             <p className="mt-2 text-xs text-text-muted">
               {billing ? `${billing.minutesUsed} call minutes used this cycle (1 credit ≈ 1 minute)` : 'Loading usage…'}
             </p>
-          </div>
+          </Card>
 
-          <div className="rounded-xl border border-border bg-surface p-5">
+          <Card variant="flat">
             <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Current plan</p>
             <p className="mt-1 text-xl font-bold">{currentPlanName}</p>
             <p className="mt-1 text-xs text-text-muted">Billed monthly · next renewal on the 1st</p>
@@ -60,18 +63,14 @@ export function Billing() {
               <Icon name="check_circle" className="text-[14px]" />
               All usage tracked from real call minutes
             </p>
-          </div>
+          </Card>
         </div>
 
         {billing && (
-          <div className="rounded-xl border border-border bg-surface">
-            <div className="border-b border-border px-5 py-4">
-              <h3 className="text-sm font-semibold">Usage by call type</h3>
-              <p className="mt-0.5 text-xs text-text-muted">
-                Phone calls burn more credits/min than browser or widget calls — they carry a telephony cost the
-                others don't.
-              </p>
-            </div>
+          <SectionCard
+            title="Usage by call type"
+            subtitle="Phone calls burn more credits/min than browser or widget calls — they carry a telephony cost the others don't."
+          >
             <div className="divide-y divide-border">
               {(
                 [
@@ -83,7 +82,7 @@ export function Billing() {
                 const minutes = billing.minutesByType[type] ?? 0
                 const rate = billing.creditRates[type] ?? 1
                 return (
-                  <div key={type} className="flex items-center justify-between px-5 py-3 text-sm">
+                  <div key={type} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm sm:px-5">
                     <div className="flex items-center gap-2.5">
                       <Icon name={icon} className="text-[16px] text-text-muted" />
                       <span>{label}</span>
@@ -98,18 +97,14 @@ export function Billing() {
                 )
               })}
             </div>
-          </div>
+          </SectionCard>
         )}
 
         {billing && (
-          <div className="rounded-xl border border-border bg-surface">
-            <div className="border-b border-border px-5 py-4">
-              <h3 className="text-sm font-semibold">Usage by voice tier</h3>
-              <p className="mt-0.5 text-xs text-text-muted">
-                ElevenLabs voices burn more credits/min than Sarvam — they're pricier per minute to run, but sound
-                more expressive and react live to caller emotion.
-              </p>
-            </div>
+          <SectionCard
+            title="Usage by voice tier"
+            subtitle="ElevenLabs voices burn more credits/min than Sarvam — they're pricier per minute to run, but sound more expressive and react live to caller emotion."
+          >
             <div className="divide-y divide-border">
               {(
                 [
@@ -121,7 +116,7 @@ export function Billing() {
                 const minutes = billing.minutesByVoiceTier[tier] ?? 0
                 const rate = billing.voiceTierRates[tier] ?? 1
                 return (
-                  <div key={tier} className="flex items-center justify-between px-5 py-3 text-sm">
+                  <div key={tier} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm sm:px-5">
                     <div className="flex items-center gap-2.5">
                       <Icon name={icon} className="text-[16px] text-text-muted" />
                       <span>{label}</span>
@@ -136,7 +131,7 @@ export function Billing() {
                 )
               })}
             </div>
-          </div>
+          </SectionCard>
         )}
 
         <div>
@@ -212,12 +207,9 @@ export function Billing() {
           </p>
         </div>
 
-        <div className="rounded-xl border border-border bg-surface">
-          <div className="border-b border-border px-5 py-4">
-            <h3 className="text-sm font-semibold">Invoices</h3>
-          </div>
-          <p className="px-5 py-8 text-center text-sm text-text-muted">No invoices yet.</p>
-        </div>
+        <SectionCard title="Invoices">
+          <EmptyState icon="receipt_long" text="No invoices yet." />
+        </SectionCard>
       </section>
     </DashboardLayout>
   )

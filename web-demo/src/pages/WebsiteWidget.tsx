@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
+import { SectionCard } from '../components/ui/SectionCard'
 import {
   createSite,
   deleteSite,
@@ -69,7 +72,7 @@ export function WebsiteWidget() {
           </div>
         )}
 
-        <div className="rounded-xl border border-border bg-surface p-5">
+        <Card>
           <h3 className="mb-3 text-sm font-semibold">Add a client website</h3>
           <div className="flex flex-wrap items-end gap-3">
             <Field label="Site name">
@@ -133,16 +136,11 @@ export function WebsiteWidget() {
             Every site gets its own key and its own call history, filterable on the Calls page — the domain field is
             just a label for now, not yet enforced.
           </p>
-        </div>
+        </Card>
 
-        <div className="rounded-xl border border-border bg-surface">
-          <div className="border-b border-border px-5 py-4">
-            <h3 className="text-sm font-semibold">Your sites ({sites.length})</h3>
-          </div>
+        <SectionCard title={`Your sites (${sites.length})`}>
           {sites.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-text-muted">
-              No sites yet — add one above to get an embeddable call widget.
-            </p>
+            <EmptyState icon="widgets" text="No sites yet — add one above to get an embeddable call widget." />
           ) : (
             <div className="divide-y divide-border">
               {sites.map((site) => (
@@ -156,9 +154,9 @@ export function WebsiteWidget() {
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
 
-        <div className="rounded-xl border border-border bg-surface p-5">
+        <Card>
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 text-primary">
               <Icon name="extension" className="text-[20px]" />
@@ -177,7 +175,7 @@ export function WebsiteWidget() {
               Download plugin
             </a>
           </div>
-        </div>
+        </Card>
       </section>
     </DashboardLayout>
   )

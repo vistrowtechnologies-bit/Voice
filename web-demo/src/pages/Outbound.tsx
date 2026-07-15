@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
 import {
   createCampaign,
   fetchAgents,
@@ -335,7 +337,7 @@ export function Outbound() {
           </div>
         )}
 
-        <div className="rounded-xl border border-border bg-surface">
+        <Card padding="none">
           {filtered.length === 0 ? (
             <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-text-muted">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-high">
@@ -447,7 +449,7 @@ export function Outbound() {
                               </div>
                             ))}
                             {(detail.contacts || []).length === 0 && (
-                              <div className="px-3 py-6 text-center text-sm text-text-muted">No contacts in this campaign.</div>
+                              <EmptyState text="No contacts in this campaign." compact />
                             )}
                           </div>
                         )}
@@ -458,7 +460,7 @@ export function Outbound() {
               })}
             </div>
           )}
-        </div>
+        </Card>
       </section>
     </DashboardLayout>
   )
@@ -466,9 +468,9 @@ export function Outbound() {
 
 function StatCard({ label, value, tone = 'text-text' }: { label: string; value: number | string; tone?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <Card padding="sm">
       <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{label}</p>
       <p className={`mt-1 text-xl font-bold ${tone}`}>{value}</p>
-    </div>
+    </Card>
   )
 }

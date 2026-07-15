@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
 import {
   disconnectGcal,
   fetchIntegrations,
@@ -153,7 +154,7 @@ export function Integrations() {
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {integrations.map((integration) => (
-            <div key={integration.key} className="flex flex-col rounded-xl border border-border bg-surface p-5">
+            <Card key={integration.key} className="flex flex-col">
               <div className="mb-3 flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${integration.key === 'gcal' ? 'overflow-hidden bg-white' : 'bg-primary/20 text-primary'}`}>
@@ -304,7 +305,7 @@ export function Integrations() {
                   Coming soon
                 </button>
               )}
-            </div>
+            </Card>
           ))}
         </div>
       </section>
