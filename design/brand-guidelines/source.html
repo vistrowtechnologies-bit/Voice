@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Vistrow Voice — Brand Guidelines</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Manrope', sans-serif;
+    color: #1a1523;
+    background: #ffffff;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 18mm 20mm;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+  .page:last-child { page-break-after: avoid; }
+
+  h1, h2, h3, .display {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .eyebrow {
+    font-family: 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #7f77dd;
+  }
+  .footer-tag {
+    position: absolute;
+    bottom: 12mm;
+    left: 20mm;
+    right: 20mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: #a49bc2;
+    letter-spacing: 0.04em;
+    border-top: 0.75px solid #ece8f6;
+    padding-top: 6px;
+  }
+
+  /* ---------- Cover ---------- */
+  .cover {
+    background: #0a0a12;
+    color: #f5f3ff;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 22mm 20mm;
+  }
+  .cover-mark {
+    width: 46px; height: 46px;
+    border-radius: 13px;
+    background: linear-gradient(155deg, #a855f7, #7c3aed);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 40mm;
+  }
+  .cover-mark svg { width: 24px; height: 24px; }
+  .cover-word {
+    font-family: 'Sora', sans-serif;
+    font-weight: 800;
+    font-size: 64px;
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+  }
+  .cover-tagline {
+    font-family: 'Manrope', sans-serif;
+    font-weight: 500;
+    font-size: 17px;
+    color: #cabdf0;
+    max-width: 380px;
+    margin-top: 18px;
+  }
+  .cover-swatches { display: flex; gap: 10px; margin-top: 46px; }
+  .cover-swatch { width: 34px; height: 34px; border-radius: 9px; }
+  .cover-footer {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    font-size: 11px; color: #6f6690; letter-spacing: 0.05em; text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* ---------- Section header pattern ---------- */
+  .section-num {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 60px;
+    color: #ede9fb;
+    position: absolute;
+    top: 16mm; right: 18mm;
+    line-height: 1;
+  }
+  .section-title { font-size: 30px; margin: 10px 0 6px; }
+  .section-sub { color: #5d5776; font-size: 14px; max-width: 440px; margin-bottom: 24px; }
+
+  p.body-copy { color: #453f5c; max-width: 480px; margin-bottom: 12px; }
+  p.body-copy:last-child { margin-bottom: 0; }
+
+  .pillars { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+  .pillar {
+    border: 0.75px solid #ddd7ec;
+    border-radius: 10px;
+    padding: 16px 18px;
+    background: #faf9fd;
+  }
+  .pillar h3 { font-size: 15px; color: #26215c; margin-bottom: 4px; }
+  .pillar p { font-size: 12.5px; color: #6a638a; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  table.tone { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12.5px; }
+  table.tone th { text-align: left; font-family: 'Sora', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 10px; border-bottom: 1.5px solid #26215c; }
+  table.tone td { padding: 9px 10px; border-bottom: 0.5px solid #e4e0f0; vertical-align: top; }
+  table.tone tr td:first-child { color: #26215c; font-weight: 600; width: 30%; }
+  table.tone tr td:last-child { color: #6a638a; }
+
+  /* ---------- Logo page ---------- */
+  .logo-directions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 20px 0; }
+  .direction-card { border: 0.75px solid #ddd7ec; border-radius: 10px; padding: 14px; }
+  .direction-card .num { font-family: 'Sora'; font-weight: 700; color: #a855f7; font-size: 12px; }
+  .direction-card h4 { font-size: 13px; margin: 6px 0 4px; color: #26215c; }
+  .direction-card p { font-size: 11.5px; color: #6a638a; }
+
+  .rule-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+  .rule-box { border-radius: 10px; padding: 16px; }
+  .rule-do { background: #eaf3de; }
+  .rule-dont { background: #fcebeb; }
+  .rule-box h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .rule-do h4 { color: #27500a; }
+  .rule-dont h4 { color: #791f1f; }
+  .rule-box ul { padding-left: 16px; font-size: 12px; }
+  .rule-do li { color: #3b6d11; margin-bottom: 4px; }
+  .rule-dont li { color: #a32d2d; margin-bottom: 4px; }
+
+  .clearspace-demo {
+    border: 1.5px dashed #cabdf0;
+    border-radius: 12px;
+    width: 220px; height: 140px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 18px 0;
+    position: relative;
+  }
+  .clearspace-mark { width: 40px; height: 40px; border-radius: 11px; background: #a855f7; }
+  .clearspace-demo .cap { position: absolute; font-size: 9px; color: #9089b0; letter-spacing: 0.06em; }
+  .cap.top { top: 8px; left: 50%; transform: translateX(-50%); }
+
+  /* ---------- Color page ---------- */
+  .swatch-row { display: flex; gap: 12px; margin: 4px 0 22px; }
+  .swatch {
+    flex: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 0.75px solid #ece8f6;
+  }
+  .swatch-fill { height: 78px; }
+  .swatch-label { padding: 9px 11px; background: #ffffff; }
+  .swatch-label .name { font-size: 12px; font-weight: 700; color: #26215c; }
+  .swatch-label .hex { font-family: 'Sora', sans-serif; font-size: 11px; color: #7a7391; margin-top: 2px; letter-spacing: 0.02em; }
+  .swatch-label .use { font-size: 10.5px; color: #a49bc2; margin-top: 4px; }
+
+  .dark-panel {
+    background: #0a0a12;
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-top: 4px;
+  }
+  .dark-panel .cap { color: #cabdf0; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 12px; }
+  .dark-swatch-row { display: flex; gap: 10px; }
+  .dark-chip { flex: 1; text-align: center; }
+  .dark-chip .dot { width: 100%; height: 44px; border-radius: 8px; margin-bottom: 6px; }
+  .dark-chip .hex { font-family: 'Sora'; font-size: 9.5px; color: #cabdf0; }
+
+  .usage-bar { display: flex; height: 26px; border-radius: 7px; overflow: hidden; margin: 14px 0 6px; }
+  .usage-seg { display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; font-weight: 700; }
+
+  /* ---------- Type page ---------- */
+  .type-sample { border-bottom: 0.5px solid #ece8f6; padding: 14px 0; display: grid; grid-template-columns: 90px 1fr; align-items: baseline; gap: 14px; }
+  .type-sample .tag { font-size: 10px; color: #a49bc2; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+  .type-sample .spec { font-size: 10px; color: #a49bc2; margin-top: 3px; }
+
+  .font-card { border: 0.75px solid #ddd7ec; border-radius: 12px; padding: 20px; text-align: center; }
+  .font-card .glyphs { font-size: 30px; margin: 10px 0; letter-spacing: 0.02em; }
+  .font-card .fname { font-size: 13px; font-weight: 700; color: #26215c; }
+  .font-card .frole { font-size: 11px; color: #a49bc2; margin-top: 2px; }
+
+  /* ---------- UI page ---------- */
+  .ui-card { border: 0.75px solid #ddd7ec; border-radius: 12px; padding: 16px; }
+  .ui-card h4 { font-size: 13px; color: #26215c; margin-bottom: 6px; }
+  .ui-card p { font-size: 11.5px; color: #6a638a; }
+  .status-pill { display: inline-flex; align-items: center; gap: 5px; border-radius: 20px; padding: 3px 10px; font-size: 10px; font-weight: 700; }
+
+  /* ---------- Quick ref ---------- */
+  .quickref { background: #0a0a12; color: #f5f3ff; }
+  .qr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 18px; }
+  .qr-block .cap { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: #7f77dd; font-weight: 700; margin-bottom: 10px; }
+  .qr-swatch-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .qr-chip { width: 56px; }
+  .qr-chip .dot { width: 56px; height: 40px; border-radius: 7px; }
+  .qr-chip .hex { font-family: 'Sora'; font-size: 9px; color: #cabdf0; margin-top: 5px; }
+  .qr-fontline { font-family: 'Sora'; font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ============ PAGE 1 — COVER ============ -->
+<section class="page cover">
+  <div>
+    <div class="cover-mark">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 12c0-1 .5-2 1.5-2s1.5 3 2.5 3 1-5 2-5 1 7 2 7 1-4 2-4 1 2 2 2 1.5-1 2.5-1" stroke="#f5f3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <p class="cover-word">Vistrow<br>Voice</p>
+    <p class="cover-tagline">AI voice agents that answer, qualify, and book — in your customers' language.</p>
+    <div class="cover-swatches">
+      <div class="cover-swatch" style="background:#A855F7"></div>
+      <div class="cover-swatch" style="background:#22D3EE"></div>
+      <div class="cover-swatch" style="background:#FF3D9A"></div>
+      <div class="cover-swatch" style="background:#FBBF24"></div>
+      <div class="cover-swatch" style="background:#34D399"></div>
+    </div>
+  </div>
+  <div class="cover-footer">
+    <span>Brand guidelines</span>
+    <span>Version 1.0 — 2026</span>
+  </div>
+</section>
+
+<!-- ============ PAGE 2 — WHO WE ARE ============ -->
+<section class="page">
+  <div class="section-num">01</div>
+  <p class="eyebrow">Brand overview</p>
+  <h1 class="section-title">Who we are</h1>
+  <p class="section-sub">The story, the mission, and the people we build for.</p>
+
+  <p class="body-copy">Vistrow Voice is an AI voice agent platform. Businesses connect it to their phone lines and websites, and it answers every call or chat instantly, in the caller's own language, qualifies the lead the way a trained salesperson would, and books the appointment before the conversation ends.</p>
+  <p class="body-copy">We exist because the moment a lead goes cold is almost always the moment nobody picked up. A missed call at 9pm, a website visitor who won't wait on hold, a regional-language caller a call centre script can't serve well — each one is revenue a growing business can't afford to lose, and can't afford to staff for around the clock.</p>
+  <p class="body-copy">Vistrow Voice is that always-on team member: patient, fluent, consistent, and never off shift.</p>
+
+  <div style="margin-top:28px;">
+    <p class="eyebrow" style="margin-bottom:10px;">Who we serve</p>
+    <p class="body-copy">Sales-driven Indian businesses with real call and lead volume — real estate developers, clinics, consultancies, and service businesses running ads or a busy front desk — who need every inbound lead handled the moment it arrives, in Hindi, English, or any of the languages their customers actually speak.</p>
+  </div>
+
+  <div class="pillars" style="margin-top:26px;">
+    <div class="pillar">
+      <h3>What we're not</h3>
+      <p>A chatbot bolted onto a website. A call centre you have to manage. A tool that only works in English.</p>
+    </div>
+    <div class="pillar">
+      <h3>What we are</h3>
+      <p>A voice-first, multilingual teammate that qualifies, books, and hands off — built for how Indian businesses actually sell.</p>
+    </div>
+  </div>
+
+  <div class="footer-tag"><span>Vistrow Voice — Brand Guidelines</span><span>01 / Brand Overview</span></div>
+</section>
+
+<!-- ============ PAGE 3 — PERSONALITY & VOICE ============ -->
+<section class="page">
+  <div class="section-num">02</div>
+  <p class="eyebrow">Brand personality</p>
+  <h1 class="section-title">How we come across</h1>
+  <p class="section-sub">Five traits that should be true of every touchpoint — the product, the website, the agent's own voice on a call.</p>
+
+  <div class="pillars">
+    <div class="pillar"><h3>Fluent</h3><p>Comfortable switching language mid-sentence, the way a good Indian salesperson naturally does. Never stilted, never translated-sounding.</p></div>
+    <div class="pillar"><h3>Composed</h3><p>Calm under a full call queue. Doesn't rush the customer, doesn't sound like it's reading a script.</p></div>
+    <div class="pillar"><h3>Attentive</h3><p>Remembers what the caller just said. Asks one relevant question at a time, not a form read aloud.</p></div>
+    <div class="pillar"><h3>Forward</h3><p>Modern and capable without being cold or over-engineered. Confidence, not jargon.</p></div>
+    <div class="pillar"><h3>Dependable</h3><p>Answers every time, logs every call, never drops a lead. The trait the other four exist to support.</p></div>
+  </div>
+
+  <p class="eyebrow" style="margin-top:30px; margin-bottom: 4px;">Voice and tone</p>
+  <table class="tone">
+    <tr><th>Context</th><th>We sound like</th></tr>
+    <tr><td>Marketing &amp; website</td><td>Direct and confident. Plain language over feature lists — say what it does, not what it "leverages" or "empowers."</td></tr>
+    <tr><td>Product UI</td><td>Efficient and calm. Short labels, sentence case, no exclamation marks, no "please" on system copy.</td></tr>
+    <tr><td>The agent, on a real call</td><td>Warm, patient, human-paced. Never robotic phrasing, never a wall of information at once.</td></tr>
+    <tr><td>Errors &amp; failures</td><td>Plain about what happened and what to do next. No apologising, no hiding behind vague error codes.</td></tr>
+  </table>
+
+  <div style="margin-top:22px;">
+    <p class="eyebrow" style="margin-bottom:8px;">Never</p>
+    <p class="body-copy" style="max-width:100%;">Name the underlying AI models, speech engines, or infrastructure vendors in anything customer-facing. The technology stack changes; "Vistrow Voice" is the only name that should ever reach a customer's ears or eyes.</p>
+  </div>
+
+  <div class="footer-tag"><span>Vistrow Voice — Brand Guidelines</span><span>02 / Personality &amp; Voice</span></div>
+</section>
+
+<!-- ============ PAGE 4 — LOGO DIRECTION ============ -->
+<section class="page">
+  <div class="section-num">03</div>
+  <p class="eyebrow">Logomark</p>
+  <h1 class="section-title">Logo direction</h1>
+  <p class="section-sub">There is no final mark yet — this is the creative brief to generate and evaluate one against.</p>
+
+  <p class="body-copy">The mark should read as <strong style="color:#26215c;">voice made visible</strong> — the moment sound becomes understanding. It needs to work as a tiny app icon and favicon first, and scale up from there — not the other way round.</p>
+
+  <div class="logo-directions">
+    <div class="direction-card">
+      <div class="num">Direction A</div>
+      <h4>Waveform pulse</h4>
+      <p>An abstract soundwave — a few bars or a single continuous line — with one bar or peak breaking rhythm to suggest a spoken word landing. Should feel alive, not decorative.</p>
+    </div>
+    <div class="direction-card">
+      <div class="num">Direction B</div>
+      <h4>The listening V</h4>
+      <p>A geometric "V" (for Vistrow) built from two soundwave strokes meeting at a point — doubles as a wordmark-free icon and a monogram.</p>
+    </div>
+    <div class="direction-card">
+      <div class="num">Direction C</div>
+      <h4>Open channel</h4>
+      <p>A rounded, open bracket or speech-bubble form with a single soundwave line passing through it — "the call that's always open."</p>
+    </div>
+  </div>
+
+  <p class="eyebrow" style="margin-top:10px; margin-bottom:8px;">Clear space &amp; minimum size</p>
+  <div class="clearspace-demo">
+    <span class="cap top">clear space = mark height, on all sides</span>
+    <div class="clearspace-mark"></div>
+  </div>
+  <p class="body-copy" style="font-size:12px; margin-top:-6px;">Minimum size: 24px for digital (favicon/app icon), 12mm for print. Below that, drop to the wordmark alone.</p>
+
+  <div class="rule-grid">
+    <div class="rule-box rule-do">
+      <h4>Do</h4>
+      <ul>
+        <li>Reduce cleanly to one flat colour</li>
+        <li>Work in reverse (light mark on dark, dark on light)</li>
+        <li>Stay legible at 24px</li>
+        <li>Keep it wordless-readable — the mark alone should say "Vistrow"</li>
+      </ul>
+    </div>
+    <div class="rule-box rule-dont">
+      <h4>Don't</h4>
+      <ul>
+        <li>Use a literal telephone handset or headset icon</li>
+        <li>Use a generic "AI circuit brain" motif</li>
+        <li>Rely on gradients to read correctly</li>
+        <li>Add fine detail that breaks up at small sizes</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer-tag"><span>Vistrow Voice — Brand Guidelines</span><span>03 / Logo Direction</span></div>
+</section>
+
+<!-- ============ PAGE 5 — COLOR (LIGHT) ============ -->
+<section class="page">
+  <div class="section-num">04</div>
+  <p class="eyebrow">Colour palette</p>
+  <h1 class="section-title">Primary &amp; accent colours</h1>
+  <p class="section-sub">One primary, four accents, each with a job. Colour should always mean something — never decorate.</p>
+
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-fill" style="background:#9333EA"></div>
+      <div class="swatch-label"><div class="name">Vistrow Violet</div><div class="hex">#9333EA</div><div class="use">Primary — CTAs, active states, wordmark</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-fill" style="background:#0E7490"></div>
+      <div class="swatch-label"><div class="name">Signal Cyan</div><div class="hex">#0E7490</div><div class="use">Live / connected / in-progress states</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-fill" style="background:#DB2777"></div>
+      <div class="swatch-label"><div class="name">Pulse Magenta</div><div class="hex">#DB2777</div><div class="use">Highlight accent — sparing use only</div></div>
+    </div>
+  </div>
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-fill" style="background:#B45309"></div>
+      <div class="swatch-label"><div class="name">Alert Amber</div><div class="hex">#B45309</div><div class="use">Attention / needs-review states</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-fill" style="background:#047857"></div>
+      <div class="swatch-label"><div class="name">Confirm Green</div><div class="hex">#047857</div><div class="use">Success only — never decorative</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-fill" style="background:#DC2626"></div>
+      <div class="swatch-label"><div class="name">Error Red</div><div class="hex">#DC2626</div><div class="use">Errors, destructive actions only</div></div>
+    </div>
+  </div>
+
+  <p class="eyebrow" style="margin-top:6px; margin-bottom:6px;">Balance — how much of each</p>
+  <div class="usage-bar">
+    <div class="usage-seg" style="background:#e8e5f2; color:#5d5776; flex:6;">Neutrals · 60%</div>
+    <div class="usage-seg" style="background:#9333EA; flex:3;">Violet · 30%</div>
+    <div class="usage-seg" style="background:#0E7490; flex:1;">Accents · 10%</div>
+  </div>
+  <p class="body-copy" style="font-size:11.5px;">Most of any screen should be neutral. Violet carries brand presence and primary actions. Cyan, magenta, amber, green and red are reserved for meaning, in small doses.</p>
+
+  <div class="dark-panel" style="margin-top:22px;">
+    <div class="cap">Dark mode variants</div>
+    <div class="dark-swatch-row">
+      <div class="dark-chip"><div class="dot" style="background:#A855F7"></div><div class="hex">#A855F7</div></div>
+      <div class="dark-chip"><div class="dot" style="background:#22D3EE"></div><div class="hex">#22D3EE</div></div>
+      <div class="dark-chip"><div class="dot" style="background:#FF3D9A"></div><div class="hex">#FF3D9A</div></div>
+      <div class="dark-chip"><div class="dot" style="background:#FBBF24"></div><div class="hex">#FBBF24</div></div>
+      <div class="dark-chip"><div class="dot" style="background:#34D399"></div><div class="hex">#34D399</div></div>
+      <div class="dark-chip"><div class="dot" style="background:#EF4444"></div><div class="hex">#EF4444</div></div>
+    </div>
+  </div>
+
+  <div class="footer-tag"><span>Vistrow Voice — Brand Guidelines</span><span>04 / Colour Palette</span></div>
+</section>
+
+<!-- ============ PAGE 6 — COLOR NEUTRALS + RULES ============ -->
+<section class="page">
+  <div class="section-num">05</div>
+  <p class="eyebrow">Colour palette</p>
+  <h1 class="section-title">Neutrals &amp; surfaces</h1>
+  <p class="section-sub">The quiet 90% of every screen. Two full sets — light mode is the default for marketing and documents, dark mode is the default for the product.</p>
+
+  <div class="two-col">
+    <div>
+      <p class="eyebrow" style="margin-bottom:10px;">Light mode</p>
+      <table class="tone">
+        <tr><td>Background</td><td style="font-family:'Sora'">#F4F2F9</td></tr>
+        <tr><td>Surface</td><td style="font-family:'Sora'">#FFFFFF</td></tr>
+        <tr><td>Surface (raised)</td><td style="font-family:'Sora'">#ECE8F6</td></tr>
+        <tr><td>Border</td><td style="font-family:'Sora'">#DDD7EC</td></tr>
+        <tr><td>Text</td><td style="font-family:'Sora'">#1A1523</td></tr>
+        <tr><td>Text, muted</td><td style="font-family:'Sora'">#5D5776</td></tr>
+      </table>
+    </div>
+    <div>
+      <p class="eyebrow" style="margin-bottom:10px;">Dark mode</p>
+      <table class="tone">
+        <tr><td>Background</td><td style="font-family:'Sora'">#0A0A12</td></tr>
+        <tr><td>Surface</td><td style="font-family:'Sora'">#17121F</td></tr>
+        <tr><td>Surface (raised)</td><td style="font-family:'Sora'">#201B3B</td></tr>
+        <tr><td>Border</td><td style="font-family:'Sora'">#2A2438</td></tr>
+        <tr><td>Text</td><td style="font-family:'Sora'">#F5F3FF</td></tr>
+        <tr><td>Text, muted</td><td style="font-family:'Sora'">#9089B0</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div style="margin-top:28px;">
+    <p class="eyebrow" style="margin-bottom:10px;">Rules</p>
+    <p class="body-copy">Dark mode is not light mode inverted — text and accent colours are re-picked for contrast in each mode, never auto-inverted. Every colour choice must pass a plain test: would this still be readable if the background were near-black? If not, it needs a dedicated dark-mode value, defined here, not guessed at build time.</p>
+    <p class="body-copy">Product UI defaults to dark mode. Marketing site, documents, and printed materials default to light mode.</p>
+  </div>
+
+  <div class="footer-tag"><span>Vistrow Voice — Brand Guidelines</span><span>05 / Neutrals &amp; Surfaces</span></div>
+</section>
+
+<!-- ============ PAGE 7 — TYPOGRAPHY ============ -->
+<section class="page">
+  <div class="section-num">06</div>
+  <p class="eyebrow">Typography</p>
+  <h1 class="section-title">Sora &amp; Manrope</h1>
+  <p class="section-sub">A technical display face paired with a warmer, rounder body face — precise, but never cold. This is what "soft futurism" means in type.</p>
+
+  <div class="two-col">
+    <div class="font-card">
+      <div class="frole">Display &amp; headings</div>
+      <div class="glyphs" style="font-family:'Sora'; font-weight:800;">Aa Bb Vv</div>
+      <div class="fname">Sora — 600 / 700 / 800</div>
+    </div>
+    <div class="font-card">
+      <div class="frole">Body &amp; UI</div>
+      <div class="glyphs" style="font-family:'Manrope'; font-weight:500;">Aa Bb Vv</div>
+      <div class="fname">Manrope — 400 / 500 / 700</div>
+    </div>
+  </div>
+
+  <div style="margin-top:26px;">
+    <div class="type-sample">
+      <div><div class="tag">Display</div><div class="spec">Sora 800 · 56px</div></div>
+      <div style="font-family:'Sora'; font-weight:800; font-size:40px; letter-spacing:-0.02em;">Vistrow Voice</div>
+    </div>
+    <div class="type-sample">
+      <div><div class="tag">H1</div><div class="spec">Sora 700 · 34px</div></div>
+      <div style="font-family:'Sora'; font-weight:700; font-size:28px;">Every call, answered.</div>
+    </div>
+    <div class="type-sample">
+      <div><div class="tag">H2</div><div class="spec">Sora 600 · 24px</div></div>
+      <div style="font-family:'Sora'; font-weight:600; font-size:21px;">Built for how India sells.</div>
+    </div>
+    <div class="type-sample">
+      <div><div class="tag">Body</div><div class="spec">Manrope 400 · 16px / 1.6</div></div>
+      <div style="font-family:'Manrope'; font-weight:400; font-size:14.5px; max-width:400px;">An AI voice agent that answers every call in the caller's own language, qualifies the lead, and books the appointment.</div>
+    </div>
+    <div class="type-sample">
+      <div><div class="tag">Caption</div><div class="spec">Manrope 700 · 11px · tracked</div></div>
+      <div style="font-family:'Manrope'; font-weight:700; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#7a7391;">Connected integrations</div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;">
+    <p class="eyebrow" style="margin-bottom:8px;">Fallback stack</p>
+    <p class="body-copy" style="font-family:'Sora'; font-size:12px; color:#5d5776;">--font-display: "Sora", "Manrope", sans-serif;<br>--font-sans: "Manrope", sans-serif;</p>
+  </div>
+
+  <div class="footer-tag"><span>Vistrow Voice — Brand Guidelines</span><span>06 / Typography</span></div>
+</section>
+
+<!-- ============ PAGE 8 — UI PRINCIPLES ============ -->
+<section class="page">
+  <div class="section-num">07</div>
+  <p class="eyebrow">Product &amp; UI</p>
+  <h1 class="section-title">How the brand behaves in product</h1>
+  <p class="section-sub">The dashboard, widget, and every screen a customer touches follow the same rules as the brand itself.</p>
+
+  <div class="two-col">
+    <div class="ui-card">
+      <h4>Cards, not tables-by-default</h4>
+      <p>Structured data lives in cards with a 12px radius and a hairline border. Tables appear only where rows are genuinely comparable, and collapse to stacked cards on mobile.</p>
+    </div>
+    <div class="ui-card">
+      <h4>Status is colour + shape</h4>
+      <p>Never colour alone — a status always pairs a coloured dot or pill with a plain-language label, so it still reads correctly for colour-blind users.</p>
+    </div>
+    <div class="ui-card">
+      <h4>Icons: outline, one family</h4>
+      <p>Material Symbols, outlined weight only, throughout the product. No mixed icon sets, no filled icons except for the rare "currently active" state.</p>
+    </div>
+    <div class="ui-card">
+      <h4>Flat surfaces, restrained accents</h4>
+      <p>No decorative gradients or glow effects on structural UI. Motion and glow are reserved for a small number of deliberate, meaningful moments — a live call indicator, a launcher bubble.</p>
+    </div>
+  </div>
+
+  <div style="margin-top:24px;">
+    <p class="eyebrow" style="margin-bottom:10px;">Status pill reference</p>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <span class="status-pill" style="background:#E1F5EE; color:#085041;">● Connected</span>
+      <span class="status-pill" style="background:#F1EFE8; color:#444441;">● Not connected</span>
+      <span class="status-pill" style="background:#FAEEDA; color:#633806;">● Needs attention</span>
+      <span class="status-pill" style="background:#FCEBEB; color:#791F1F;">● Failed</span>
+    </div>
+  </div>
+
+  <div class="footer-tag"><span>Vistrow Voice — Brand Guidelines</span><span>07 / Product &amp; UI</span></div>
+</section>
+
+<!-- ============ PAGE 9 — QUICK REFERENCE ============ -->
+<section class="page quickref">
+  <p class="eyebrow" style="color:#a855f7;">Quick reference</p>
+  <h1 class="section-title" style="color:#f5f3ff;">One page. Pin it up.</h1>
+
+  <div class="qr-grid">
+    <div class="qr-block">
+      <div class="cap">Colour</div>
+      <div class="qr-swatch-row">
+        <div class="qr-chip"><div class="dot" style="background:#A855F7"></div><div class="hex">#A855F7</div></div>
+        <div class="qr-chip"><div class="dot" style="background:#22D3EE"></div><div class="hex">#22D3EE</div></div>
+        <div class="qr-chip"><div class="dot" style="background:#FF3D9A"></div><div class="hex">#FF3D9A</div></div>
+        <div class="qr-chip"><div class="dot" style="background:#FBBF24"></div><div class="hex">#FBBF24</div></div>
+        <div class="qr-chip"><div class="dot" style="background:#34D399"></div><div class="hex">#34D399</div></div>
+        <div class="qr-chip"><div class="dot" style="background:#0A0A12; border:0.75px solid #2a2438;"></div><div class="hex">#0A0A12</div></div>
+      </div>
+    </div>
+    <div class="qr-block">
+      <div class="cap">Type</div>
+      <div class="qr-fontline">Sora — display</div>
+      <div class="qr-fontline" style="font-family:'Manrope'; font-weight:500;">Manrope — body</div>
+    </div>
+  </div>
+
+  <div style="margin-top:30px;">
+    <div class="cap">Five words we are</div>
+    <p style="font-family:'Sora'; font-size:19px; font-weight:600; color:#f5f3ff;">Fluent · Composed · Attentive · Forward · Dependable</p>
+  </div>
+
+  <div style="margin-top:30px;">
+    <div class="cap">Never</div>
+    <p style="font-size:13px; color:#cabdf0; max-width:420px;">Name the AI/speech vendors behind the product. Use a filled icon set. Use colour without a label. Let the logo need a gradient to read correctly.</p>
+  </div>
+
+  <div style="margin-top:36px; padding-top:16px; border-top:0.75px solid #2a2438;">
+    <div class="cap">Logo generation brief — paste-ready</div>
+    <p style="font-size:12px; color:#cabdf0; max-width:480px; line-height:1.7;">A minimal, geometric logomark for "Vistrow Voice," an AI voice-agent SaaS. Abstract soundwave or open-channel motif — flat, single-colour-reducible, works at 24px as an app icon/favicon, no literal phone or headset, no gradients required to read. Primary colour #A855F7 (violet) on dark or #9333EA on light. Pair with the wordmark "Vistrow Voice" set in Sora, weight 700–800.</p>
+  </div>
+
+  <div class="footer-tag" style="border-top-color:#2a2438;"><span style="color:#6f6690;">Vistrow Voice — Brand Guidelines</span><span style="color:#6f6690;">08 / Quick Reference</span></div>
+</section>
+
+</body>
+</html>
