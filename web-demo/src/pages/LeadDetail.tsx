@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { LANGUAGE_NAMES, analyzeCall, fetchLead, formatDateTime, formatDuration } from '../lib/api'
@@ -13,6 +13,7 @@ const SENTIMENT_STYLE: Record<string, string> = {
 
 export function LeadDetail() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [call, setCall] = useState<CallRecord | null | undefined>(undefined)
   const [notes, setNotes] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
@@ -49,10 +50,13 @@ export function LeadDetail() {
     return (
       <DashboardLayout>
         <div className="p-6">
+          <button
+            onClick={() => navigate('/dashboard/calls')}
+            className="mb-2 flex items-center gap-1 text-xs text-text-muted hover:text-text"
+          >
+            <Icon name="chevron_left" className="text-[16px]" /> Back
+          </button>
           <p className="text-sm text-text-muted">Call not found.</p>
-          <Link to="/dashboard/calls" className="text-sm text-cyan hover:underline">
-            Back to calls
-          </Link>
         </div>
       </DashboardLayout>
     )
@@ -60,16 +64,19 @@ export function LeadDetail() {
 
   return (
     <DashboardLayout>
+      <div className="flex items-center gap-3 border-b border-border px-4 pt-4 sm:px-6">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1 text-xs text-text-muted hover:text-text"
+        >
+          <Icon name="chevron_left" className="text-[16px]" /> Back
+        </button>
+      </div>
       <PageHeader title={call.name} subtitle={call.phone || 'no phone captured'} />
 
       <section className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:grid-cols-3">
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 lg:col-span-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text-muted">Call transcript</h2>
-            <Link to="/dashboard/calls" className="text-xs font-bold text-cyan hover:underline">
-              ← All calls
-            </Link>
-          </div>
+          <h2 className="text-sm font-semibold text-text-muted">Call transcript</h2>
           <div className="flex flex-col gap-2">
             {(call.transcript ?? []).map((line, i) => (
               <div
