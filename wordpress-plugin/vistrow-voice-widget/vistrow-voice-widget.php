@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.3.0
+ * Version: 1.3.1
  * Author: Vistrow Voice
  */
 
@@ -43,6 +43,23 @@ function vistrow_voice_get_settings() {
     return array_merge(vistrow_voice_default_settings(), is_array($saved) ? $saved : array());
 }
 
+// The admin-menu icon must be a base64-encoded SVG data URI, NOT a plain image
+// URL. WordPress only renders base64 SVGs the way sibling plugin icons look —
+// a single-colour glyph sized to 20px via CSS background-size, blending into
+// the dark sidebar. A raster PNG is dropped in as a literal <img> (shows its
+// own background/colours, so a full badge reads as an out-of-place tile), and
+// a plain .svg URL takes the same <img> path with no size constraint, so its
+// native 1254px dimensions render as a giant blob over the page. The glyph
+// file (assets/menu-icon.svg) is just the waveform, no badge, in WP's default
+// icon grey.
+function vistrow_voice_menu_icon() {
+    $svg = @file_get_contents(plugin_dir_path(__FILE__) . 'assets/menu-icon.svg');
+    if (!$svg) {
+        return 'dashicons-microphone'; // graceful fallback if the asset is missing
+    }
+    return 'data:image/svg+xml;base64,' . base64_encode($svg);
+}
+
 add_action('admin_menu', function () {
     // A top-level sidebar item (not tucked under Settings) so it survives
     // being obvious to find after every plugin re-upload/update — same
@@ -53,13 +70,7 @@ add_action('admin_menu', function () {
         'manage_options',
         'vistrow-voice-widget',
         'vistrow_voice_render_settings_page',
-        // A plain PNG, not SVG — WordPress applies CSS mask-sizing to .svg
-        // menu icons instead of a normal background-image, and that masking
-        // doesn't constrain to 20x20 the way it does for raster icons; a
-        // 1254x1254 SVG here rendered as a giant blob covering the page.
-        // 128px source gives clean downscaling to the 20x20 display size
-        // without that bug.
-        plugins_url('assets/icon.png', __FILE__),
+        vistrow_voice_menu_icon(),
         58
     );
 });
