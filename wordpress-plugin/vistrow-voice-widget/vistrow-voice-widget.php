@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.3.1
+ * Version: 1.3.2
  * Author: Vistrow Voice
  */
 
@@ -12,12 +12,16 @@ if (!defined('ABSPATH')) {
 
 define('VISTROW_VOICE_OPTION', 'vistrow_voice_widget_settings');
 
-// Every install of this plugin talks to the same Vistrow Voice backend, so
-// there's nothing for the site owner to look up or copy here — only the
-// site key (which identifies THEIR site) is install-specific. Kept as a
-// constant rather than a settings field so non-technical users only ever
-// have to paste one value.
-define('VISTROW_VOICE_DEFAULT_BACKEND_URL', 'https://voice-production-2950.up.railway.app');
+// The widget backend. This points at the Vercel dashboard's /api proxy, NOT the
+// raw Railway host: Railway's auto-generated *.up.railway.app domain stopped
+// resolving publicly (NXDOMAIN) even though the service is up, which silently
+// killed the widget on every site while the dashboard kept working (the
+// dashboard reaches the backend through this same Vercel server-side proxy).
+// Routing the widget through Vercel too means visitors' browsers only ever talk
+// to a domain that reliably resolves, and Vercel forwards to Railway internally.
+// Every install talks to the same backend, so this stays a constant (not a
+// settings field) — only the site key is install-specific.
+define('VISTROW_VOICE_DEFAULT_BACKEND_URL', 'https://voice-three-flax.vercel.app/api');
 
 // Where the "your leads" / "open dashboard" links on the settings page point —
 // the actual Vistrow Voice web app, a different host from the widget backend
@@ -266,9 +270,15 @@ add_action('wp_footer', function () {
             return; // this page wasn't checked in the settings page picker
         }
     }
+    // Always use the current constant, NOT $settings['backend_url']: older installs
+    // saved the now-dead Railway URL into the DB option the first time they hit
+    // Save, and a plugin update doesn't rewrite stored options — so trusting the
+    // saved value would keep pointing them at the broken host. The constant is the
+    // single source of truth for where the backend lives.
+    $backend = VISTROW_VOICE_DEFAULT_BACKEND_URL;
     printf(
         '<script src="%1$s/widget.js" data-site-key="%2$s" data-api-base="%1$s" data-position="%3$s" data-label="%4$s"></script>' . "\n",
-        esc_url($settings['backend_url']),
+        esc_url($backend),
         esc_attr($settings['site_key']),
         esc_attr($settings['position']),
         esc_attr($settings['label'])
