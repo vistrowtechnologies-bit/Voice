@@ -55,14 +55,21 @@ def _get_pool() -> ConnectionPool:
     if _pool is None:
         with _pool_lock:
             if _pool is None:
-                # Smaller than server/dbconn.py's pool — this process' own
-                # concurrency is already bounded by how many live calls one
-                # worker can host, and the server's own pool holds
-                # connections against the same Postgres instance too.
+                # LiveKit dispatches each concurrent call to its own OS
+                # subprocess (see num_idle_processes in main.py), and every
+                # subprocess constructs its own pool here — so this size
+                # multiplies by concurrent-call count, not just by how much
+                # one call needs. A single call only ever touches the DB for
+                # a config lookup and a handful of writes, never more than
+                # one or two at once, so keep this tight: at 100 concurrent
+                # calls, max_size=5 would mean up to 500 Postgres
+                # connections from the agent fleet alone. min_size=0 avoids
+                # holding a connection open for the (common) call that never
+                # needs one.
                 _pool = ConnectionPool(
                     _database_url(),
-                    min_size=1,
-                    max_size=5,
+                    min_size=0,
+                    max_size=2,
                     kwargs={"row_factory": dict_row},
                     open=True,
                 )
