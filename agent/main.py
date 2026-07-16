@@ -69,6 +69,22 @@ _PLATFORM_DEMO_OPENERS = [
     "मुझे पता है इस बटन को दबाने से पहले आपने सोचा होगा 'ये तो हर वेबसाइट पर होता है, कुछ नया नहीं.' ठीक है, चैलेंज एक्सेप्ट — प्रूव करती हूँ कि मैं अलग हूँ। कुछ भी पूछिए।",
 ]
 
+# Same "skip generate_reply(), speak a fixed line instantly" fix as the demo
+# opener above, generalized to every tenant agent that hasn't written its own
+# welcome_message — today, silently falling through to generate_reply() below
+# means EVERY such agent pays that 6-7s round-trip on every single call, not
+# just the demo. {agent_name}/{first_name} are filled in on_enter(); an
+# operator who wants a fully custom (or perfectly-translated) opener should
+# just set welcome_message, which already short-circuits before this.
+# Keyed by the dashboard's reply-language codes (see LANGUAGE_NAMES) — only
+# Hindi gets a dedicated line since it's the default reply_language and the
+# most common one left unset; every other language falls back to the English
+# line below rather than risk a mistranslated greeting, and the caller's own
+# first turn still drives the real language the call proceeds in.
+_DEFAULT_OPENER_HI = "{greeting} नमस्ते! ये {agent_name} है। बताइए, आपकी क्या मदद करूँ?"
+_DEFAULT_OPENER_EN = "{greeting} this is {agent_name}. Thanks for calling — how can I help you today?"
+_DEFAULT_OPENERS = {"hi-IN": _DEFAULT_OPENER_HI}
+
 
 # Sarvam bulbul:v3's own `pace`/`temperature`/`pitch` govern how the voice is
 # actually delivered (speaking speed and prosodic variation) — separate from
@@ -423,6 +439,8 @@ class RealEstateAgent(Agent):
         agent_name = config.get("name") or "Artha"
         voice_value = config.get("voice") or "shubh"
         self._is_platform_demo = bool(config.get("is_platform_demo"))
+        self._agent_name = agent_name
+        self._visitor_first_name = visitor_name.strip().split()[0] if visitor_name else None
         if config.get("system_prompt"):
             instructions = config["system_prompt"]
         elif config.get("is_platform_demo"):
@@ -657,7 +675,16 @@ class RealEstateAgent(Agent):
             # same line every time.
             await self.session.say(random.choice(_PLATFORM_DEMO_OPENERS))
             return
-        self.session.generate_reply()
+        # Same fix, generalized: every tenant agent without its own
+        # welcome_message used to fall through to generate_reply() here and
+        # pay the identical 6-7s round-trip on every call. A fast, lightly
+        # personalized default (agent name + caller's first name, if the
+        # widget already collected it) covers the vast majority of that gap;
+        # an operator who wants a fully custom line still sets welcome_message
+        # above, which short-circuits before this.
+        greeting = f"Hi {self._visitor_first_name}," if self._visitor_first_name else "Hi,"
+        template = _DEFAULT_OPENERS.get(self._reply_language, _DEFAULT_OPENER_EN)
+        await self.session.say(template.format(greeting=greeting, agent_name=self._agent_name))
 
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
@@ -1075,15 +1102,17 @@ async def entrypoint(ctx: JobContext) -> None:
 
 
 if __name__ == "__main__":
-    # num_idle_processes defaults to 4 in production mode — four prewarmed
-    # subprocesses, each with the full plugin stack (google/openai/sarvam)
-    # loaded, sitting in memory before a single call happens. On a memory-
-    # constrained Railway container that idle footprint alone can leave too
-    # little headroom for an actual call's audio buffers/STT/TTS
-    # connections, and the OS OOM-killer SIGKILLs the job subprocess
-    # (observed in production logs as "process exited with non-zero exit
-    # code -9" ~20-30s into a call) — livekit-agents then transparently
-    # respawns a fresh subprocess for the same job, which is why the agent
-    # appears to restart the conversation from scratch. 1 keeps one warm
-    # process (still fast pickup for the next call) without the 4x footprint.
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, num_idle_processes=1))
+    # num_idle_processes = how many warm subprocesses sit ready before a job
+    # ever arrives — with only 1 (the prior value), any call that lands while
+    # the single idle slot is already claimed by another call gets a fully
+    # cold subprocess: Python interpreter start + importing livekit-agents
+    # plus the openai/google/elevenlabs/sarvam plugin stack, which is a real
+    # multi-second cost on its own, on top of the greeting latency fixed
+    # above. That value was set low (see git history) to avoid the OS
+    # OOM-killer on a memory-constrained Railway trial container — this
+    # worker now runs on LiveKit Cloud with a dedicated 2 CPU / 4GB replica
+    # (see agent/livekit.toml), which has real headroom for more than one
+    # warm process. 2 is a conservative step up from 1, not livekit-agents'
+    # own default of 4 — watch `lk agent status`/logs after deploy and raise
+    # further if memory stays comfortable under real concurrent-call load.
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, num_idle_processes=2))
