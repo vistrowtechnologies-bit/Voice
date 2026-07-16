@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from livekit import api
@@ -50,6 +50,12 @@ logger.setLevel(logging.INFO)
 # require the same candidate language across this many consecutive turns
 # (roughly "a couple of sentences") before actually switching.
 LANGUAGE_SWITCH_CONFIRMATION_TURNS = 3
+
+# The LLM has no built-in notion of "today" — without this, it resolves
+# "next Sunday" / "tomorrow" against whatever date feels plausible from its
+# training data, which is how a real production call booked a site visit for
+# 2023-11-05. India-focused product, so IST rather than the room's UTC clock.
+_IST = timezone(timedelta(hours=5, minutes=30))
 
 # Fixed opening lines spoken verbatim (session.say(), no LLM round-trip) for
 # the Vistrow marketing site's live demo widget only — a first-time visitor
@@ -510,6 +516,14 @@ class RealEstateAgent(Agent):
         # and language-mirroring hold no matter what the business content is.
         # A custom system_prompt replaces the persona/content above, never
         # these conversation rules.
+        now_ist = datetime.now(_IST)
+        instructions += (
+            f"\n\n# Current date and time\nRight now it is {now_ist.strftime('%A, %d %B %Y')}, "
+            f"{now_ist.strftime('%H:%M')} IST. This is the ONLY source of truth for \"today\", "
+            "\"tomorrow\", \"next Monday\", \"this weekend\", etc. — never resolve a relative date "
+            "from memory or assumption. When calling check_calendar_availability or "
+            "book_appointment, compute the date argument (YYYY-MM-DD) from this real date."
+        )
         instructions += "\n\n" + VOICE_STYLE_PROMPT
         if voice_value.startswith(_ELEVENLABS_VOICE_PREFIX):
             instructions += ELEVENLABS_EXPRESSIVE_PROMPT
@@ -523,8 +537,11 @@ class RealEstateAgent(Agent):
             "context is actually relevant (budget/pricing, location, timing/urgency — "
             "use \"not applicable\" for any of these that don't fit this business), call "
             "log_lead to record what you've learned so far — call it again with the "
-            "fuller picture if more comes up later in the same call, don't wait until "
-            "every field is known.\n"
+            "fuller picture EVERY time the caller gives you a new detail (a budget, a "
+            "location preference, a timeline), even seconds later in the same turn — "
+            "don't wait until every field is known, and don't let booking an appointment "
+            "become the end of the call before you've re-logged whatever they just told "
+            "you.\n"
             "- Booking an appointment (any business — clinic, salon, consultation, "
             "service visit): when the caller wants to book a time, first call "
             "check_calendar_availability for their preferred date to see real open "
