@@ -335,7 +335,7 @@ def save_call(record: dict) -> None:
     account_id (which tenant this call belongs to), and optionally
     name/phone/email/budget/location/timeline/site_visit (dict with
     property_id/date/time) — matching the keys tools.py's log_lead and
-    book_site_visit write into the shared lead_data dict — or
+    book_appointment write into the shared lead_data dict — or
     company/use_case/team_size, matching capture_platform_lead's keys for
     the platform-assistant persona.
     """

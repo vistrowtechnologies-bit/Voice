@@ -28,10 +28,8 @@ from tools import (
     TAVILY_API_KEY,
     _deliver_to_integrations,
     book_appointment,
-    book_site_visit,
     build_custom_function_tools,
     capture_platform_lead,
-    check_availability,
     check_calendar_availability,
     end_call,
     log_lead,
@@ -405,8 +403,6 @@ def _build_tools(config: dict) -> list:
     optional built-ins (end_call, transfer_call). Custom webhook tools and a
     transfer tool (only if a transfer number is set) are appended."""
     tools = [
-        check_availability,
-        book_site_visit,
         check_calendar_availability,
         book_appointment,
         log_lead,
@@ -506,7 +502,7 @@ class RealEstateAgent(Agent):
         # — an operator-written custom system_prompt (config["system_prompt"])
         # REPLACES that built-in prompt entirely, and previously took its lead
         # -capture and language instructions down with it: a custom-prompted
-        # agent would never call log_lead/book_site_visit (tools are bound
+        # agent would never call log_lead/book_appointment (tools are bound
         # either way, but the LLM was never told to use them) and would open
         # every call in whatever language it defaulted to, ignoring the
         # dashboard's configured language, since reply_language below only
@@ -543,12 +539,11 @@ class RealEstateAgent(Agent):
             "become the end of the call before you've re-logged whatever they just told "
             "you.\n"
             "- Booking an appointment (any business — clinic, salon, consultation, "
-            "service visit): when the caller wants to book a time, first call "
+            "property site visit): when the caller wants to book a time, first call "
             "check_calendar_availability for their preferred date to see real open "
             "slots, offer those slots, and once they pick one call book_appointment to "
             "confirm it. Never promise a specific slot before check_calendar_availability "
-            "confirms it's free. (Real-estate site visits can use the older "
-            "check_availability/book_site_visit pair instead.)\n"
+            "confirms it's free.\n"
             "- Vistrow Voice platform-assistant calls (explaining Vistrow Voice itself "
             "to a prospective customer): once you have the caller's name plus at least "
             "one more of company/contact/use case/team size, call "

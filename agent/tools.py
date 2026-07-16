@@ -212,63 +212,6 @@ async def _publish_event(context: RunContext, payload: dict) -> None:
     await room.local_participant.publish_data(json.dumps(payload), topic="lead-events")
 
 
-@function_tool
-async def check_availability(context: RunContext, property_id: str, preferred_date: str) -> str:
-    """Check site-visit slot availability for a property on a given date.
-
-    Args:
-        property_id: The property/listing identifier the lead is interested in.
-        preferred_date: The date the lead wants to visit, in YYYY-MM-DD format.
-    """
-    logger.info("checking availability for %s on %s", property_id, preferred_date)
-    # TODO(phase 3): replace with a real inventory/CRM lookup.
-    return f"Slots available on {preferred_date} at 11:00 AM and 4:00 PM for property {property_id}."
-
-
-@function_tool
-async def book_site_visit(
-    context: RunContext,
-    property_id: str,
-    date: str,
-    time: str,
-    lead_name: str,
-    lead_phone: str,
-) -> str:
-    """Book a confirmed site visit slot for a qualified lead.
-
-    Args:
-        property_id: The property/listing identifier.
-        date: Visit date in YYYY-MM-DD format.
-        time: Visit time, e.g. "11:00 AM".
-        lead_name: The lead's name.
-        lead_phone: The lead's phone number.
-    """
-    logger.info(
-        "booking site visit: %s (%s) -> %s on %s %s",
-        lead_name,
-        lead_phone,
-        property_id,
-        date,
-        time,
-    )
-    lead_data = (context.userdata or {}).get("lead_data")
-    if lead_data is not None:
-        lead_data.setdefault("name", lead_name)
-        lead_data.setdefault("phone", lead_phone)
-        lead_data["site_visit"] = {"property_id": property_id, "date": date, "time": time}
-    event = {
-        "type": "site_visit_booked",
-        "property_id": property_id,
-        "date": date,
-        "time": time,
-        "lead_name": lead_name,
-        "lead_phone": lead_phone,
-    }
-    await _publish_event(context, event)
-    await _post_webhook(event)
-    return f"Site visit booked for {lead_name} on {date} at {time}."
-
-
 async def _calendar_check(context: RunContext, date: str, duration_minutes: int) -> list[str] | None:
     """Real open HH:MM slots for `date`, or None if no calendar is connected
     or the call fails — callers turn None into a graceful spoken fallback.
@@ -385,7 +328,11 @@ async def book_appointment(
     if lead_data is not None:
         lead_data.setdefault("name", name)
         lead_data.setdefault("phone", phone)
-        lead_data["appointment"] = {"date": date, "time": time, "purpose": purpose}
+        # "site_visit" (not "appointment") is the key agent/db.py's save_call
+        # and the dashboard's "Site Visit Booked" status/analytics actually
+        # read — an "appointment" key here would silently vanish, saved
+        # nowhere and shown nowhere.
+        lead_data["site_visit"] = {"date": date, "time": time, "purpose": purpose}
         lead_data["qualified"] = True
     result = await _calendar_book(context, date, time, duration_minutes, name, phone, purpose)
     event = {
