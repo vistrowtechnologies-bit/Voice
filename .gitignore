@@ -10,3 +10,7 @@ web-demo/dist/
 widget/dist/
 .DS_Store
 drive-download/
+
+# Regenerable local knowledge-graph index (graphify) — rebuild with
+# `graphify update .`, not something to diff or track in git.
+graphify-out/
