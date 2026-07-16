@@ -111,8 +111,12 @@ const MODEL_OPTIONS = [
   { value: 'gpt-4.1', label: 'Vistrow Prime', tag: 'Best reasoning & quality' },
   { value: 'gpt-4o', label: 'Vistrow Pro', tag: 'Fast & natural' },
   { value: 'gpt-4o-mini', label: 'Vistrow Standard', tag: 'Balanced · recommended' },
-  { value: 'gemini-2.5-flash', label: 'Vistrow Flash', tag: 'Fast · setup pending' },
-  { value: 'gemini-3.1-flash-lite', label: 'Vistrow Lite', tag: 'Economy · setup pending' },
+  // Vistrow Flash / Vistrow Lite (Gemini) are hidden until a working
+  // GOOGLE_API_KEY is configured on the agent worker — with no key, an
+  // agent saved on either tier crashes instantly on every call (the
+  // production outage of 2026-07-15). Restore when the key lands:
+  // { value: 'gemini-2.5-flash', label: 'Vistrow Flash', tag: 'Fast' },
+  // { value: 'gemini-3.1-flash-lite', label: 'Vistrow Lite', tag: 'Economy' },
 ] as const
 const modelLabel = (value: string) => MODEL_OPTIONS.find((m) => m.value === value)?.label ?? value
 // Presets for Sarvam bulbul:v3's own pace/temperature/pitch — controls how
