@@ -11,6 +11,7 @@ import { DashboardTour } from './DashboardTour'
 import { HelpChatWidget } from './HelpChatWidget'
 import { Icon } from './Icon'
 import { OnboardingModal } from './OnboardingModal'
+import vistrowMark from '../assets/vistrow-mark.png'
 
 function initials(name: string): string {
   return (name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('') || '?').toUpperCase()
@@ -157,9 +158,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
       <div className="mb-6 flex items-center gap-2 px-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-          <Icon name="auto_awesome" className="text-bg text-[18px]" />
-        </div>
+        <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
         <div>
           <span className="block text-base font-semibold leading-tight tracking-tight">{BRAND.name}</span>
           <span className="block text-[10px] uppercase tracking-widest text-text-muted">Enterprise</span>
@@ -322,9 +321,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           >
             <Icon name="menu" />
           </button>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
-            <Icon name="auto_awesome" className="text-bg text-[16px]" />
-          </div>
+          <img src={vistrowMark} alt="" className="h-7 w-7 rounded-lg" />
           <span className="font-semibold tracking-tight">{BRAND.name}</span>
         </div>
         <main>{children}</main>

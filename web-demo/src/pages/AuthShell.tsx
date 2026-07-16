@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { BRAND } from '../lib/brand'
 import { apiAuthConfig } from '../lib/auth'
+import vistrowMark from '../assets/vistrow-mark.png'
 
 /** Shared frame for the Login / Signup screens — a two-column dark-neon
  * layout: a brand/pitch panel on the left (headline, feature checklist, and a
@@ -26,9 +27,7 @@ export function AuthShell({
       {/* Pitch panel — hidden on small screens */}
       <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden border-r border-border bg-surface p-10 lg:flex xl:p-14">
         <Link to="/" className="relative z-10 flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <Icon name="graphic_eq" className="text-bg text-[20px]" />
-          </div>
+          <img src={vistrowMark} alt="" className="h-9 w-9 rounded-lg" />
           <span className="text-lg font-semibold tracking-tight">{BRAND.name}</span>
         </Link>
 
@@ -60,9 +59,7 @@ export function AuthShell({
       <div className="flex w-full flex-col items-center justify-center p-6 lg:w-1/2">
         <div className="w-full max-w-sm">
           <Link to="/" className="mb-8 flex items-center gap-2 lg:hidden">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Icon name="graphic_eq" className="text-bg text-[18px]" />
-            </div>
+            <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
             <span className="font-semibold tracking-tight">{BRAND.name}</span>
           </Link>
           <h1 className="font-display text-3xl font-bold tracking-tight">{title}</h1>

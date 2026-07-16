@@ -4,15 +4,12 @@ import { Link, useLocation } from 'react-router-dom'
 import { Icon } from './Icon'
 import { BRAND } from '../lib/brand'
 import { NAV, FOOTER_COLUMNS } from '../lib/marketingContent'
+import vistrowMark from '../assets/vistrow-mark.png'
 
-// Small orb logo mark — the same circular gradient motif as the call widget,
-// so the marketing site, dashboard, and widget all share one visual identity.
+// The official logo mark — used everywhere the brand appears (marketing
+// site, dashboard, auth pages) for one consistent visual identity.
 function OrbMark() {
-  return (
-    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-dark">
-      <Icon name="graphic_eq" className="text-[18px] text-white" />
-    </span>
-  )
+  return <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
 }
 
 function DesktopNav() {
