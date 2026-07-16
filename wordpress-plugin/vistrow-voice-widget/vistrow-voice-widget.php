@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: Vistrow Voice
  */
 
@@ -48,7 +48,7 @@ add_action('admin_menu', function () {
         'manage_options',
         'vistrow-voice-widget',
         'vistrow_voice_render_settings_page',
-        plugins_url('assets/icon.png', __FILE__),
+        plugins_url('assets/icon.svg', __FILE__),
         58
     );
 });
