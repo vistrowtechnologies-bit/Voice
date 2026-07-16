@@ -896,11 +896,32 @@ async def _post_call_analysis(
 async def entrypoint(ctx: JobContext) -> None:
     logger.info("starting session in room %s", ctx.room.name)
     call_context = _call_context_from_job(ctx)
-    config = db.get_agent_config(call_context["agent_id"])
+    # The agent-config lookup is a synchronous psycopg call — run it in a
+    # worker thread so it overlaps with connecting to the room and waiting
+    # for the caller below, instead of blocking this process's event loop
+    # (which also hosts every other concurrent call's session).
+    config_task = asyncio.create_task(asyncio.to_thread(db.get_agent_config, call_context["agent_id"]))
+    await ctx.connect()
+    # Don't say a word until the caller is actually in the room. Widget
+    # rooms are pre-created at token-issuance time (to carry visitor
+    # metadata), so this job usually starts BEFORE the visitor's browser
+    # finishes mic permission + WebRTC setup — greeting immediately meant
+    # the opener played into an empty room, the visitor joined to silence,
+    # and the first thing they actually heard was the 6.5s away-timeout
+    # "are you still there?" check-in. The same ordering protects outbound
+    # SIP calls from greeting into ringing before the callee picks up.
+    try:
+        first_participant = await asyncio.wait_for(ctx.wait_for_participant(), timeout=90)
+    except asyncio.TimeoutError:
+        logger.warning("no caller joined room %s within 90s — abandoning job", ctx.room.name)
+        return
+    config = await config_task
     if config and config.get("status") == "paused":
         # Paused from the dashboard — don't take the call.
         logger.info("agent '%s' is paused; skipping room %s", config.get("name"), ctx.room.name)
         return
+    # After the caller joins, not at job start — duration (and therefore
+    # credit billing) shouldn't include dispatch/connect/ring time.
     started_at = datetime.now(timezone.utc)
     # Pre-seed with whatever the visitor already typed into the widget's
     # pre-call form, so the call log has a name/phone even if the agent's
@@ -1000,24 +1021,10 @@ async def entrypoint(ctx: JobContext) -> None:
     session.on("user_state_changed", _on_user_state_changed)
     session.on("agent_state_changed", _on_agent_state_changed)
 
-    # Captured via event, not a point-in-time read — by the time the job
+    # Held in a dict (not read at shutdown time) because by the time the job
     # drains and the shutdown callback runs, the visitor has already left the
-    # participant list, and `ctx.room` isn't populated yet this early either
-    # (the room only actually connects during session.start() below).
-    visitor_holder: dict[str, str | None] = {"identity": None}
-
-    def _on_participant_connected(participant) -> None:
-        logger.info("DEBUG participant_connected fired: %s", participant.identity)
-        if visitor_holder["identity"] is None:
-            visitor_holder["identity"] = participant.identity
-
-    ctx.room.on("participant_connected", _on_participant_connected)
-    logger.info(
-        "DEBUG at listener-register time, remote_participants=%s",
-        list(ctx.room.remote_participants.keys()),
-    )
-    for existing in ctx.room.remote_participants.values():
-        _on_participant_connected(existing)
+    # participant list. wait_for_participant above guarantees we have them.
+    visitor_holder: dict[str, str | None] = {"identity": first_participant.identity}
 
     async def log_call() -> None:
         ended_at = datetime.now(timezone.utc)

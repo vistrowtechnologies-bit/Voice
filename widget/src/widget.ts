@@ -273,6 +273,7 @@ function init(): void {
   }
 
   function resetToIdle(): void {
+    clearAgentJoinWatchdog()
     stopVolumeReactivity?.()
     stopVolumeReactivity = null
     stopCountdown()
@@ -294,9 +295,23 @@ function init(): void {
   }
 
   let intentionalEnd = false
+  // Suppresses the Disconnected handler for exactly one teardown — used by
+  // the agent-join watchdog below when it abandons a dead room to retry
+  // with a fresh one, so the handler neither closes the panel nor shows
+  // "call ended unexpectedly" mid-retry.
+  let suppressDisconnect = false
+  let agentJoinTimer: number | null = null
+
+  function clearAgentJoinWatchdog(): void {
+    if (agentJoinTimer !== null) {
+      window.clearTimeout(agentJoinTimer)
+      agentJoinTimer = null
+    }
+  }
 
   function endCall(): void {
     intentionalEnd = true
+    clearAgentJoinWatchdog()
     room?.disconnect()
     resetToIdle()
   }
@@ -358,7 +373,7 @@ function init(): void {
     }
   }
 
-  async function startCall(name: string, phone: string, email: string): Promise<void> {
+  async function startCall(name: string, phone: string, email: string, attempt = 0): Promise<void> {
     intentionalEnd = false
     formEl.style.display = 'none'
     callEl.style.display = 'block'
@@ -393,8 +408,9 @@ function init(): void {
     // Fires only once the lead is validated server-side and the call is
     // genuinely starting — not on raw button click, which could be an
     // invalid or incomplete submit. This is the real "form submission
-    // succeeded" moment for ads conversion tracking.
-    pushGtmEvent(name, phone, email)
+    // succeeded" moment for ads conversion tracking. Skipped on the
+    // watchdog's automatic retry so one visitor never counts twice.
+    if (attempt === 0) pushGtmEvent(name, phone, email)
 
     try {
       room = new Room()
@@ -405,6 +421,7 @@ function init(): void {
         }
       })
       room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
+        clearAgentJoinWatchdog()
         setStatus('Agent joined — say hello!')
         applyAgentState(participant.attributes?.['lk.agent.state'])
       })
@@ -412,6 +429,10 @@ function init(): void {
         if ('lk.agent.state' in changed) applyAgentState(changed['lk.agent.state'])
       })
       room.on(RoomEvent.Disconnected, () => {
+        if (suppressDisconnect) {
+          suppressDisconnect = false
+          return
+        }
         if (intentionalEnd) {
           resetToIdle()
         } else {
@@ -422,8 +443,40 @@ function init(): void {
 
       await room.connect(url, token)
       await room.localParticipant.setMicrophoneEnabled(true)
-      setStatus('Waiting for the agent to join…')
+      // The agent usually joins the pre-created room BEFORE the visitor's
+      // browser finishes connecting — ParticipantConnected never fires for
+      // a participant that's already there, so without this check the UI
+      // stayed stuck on "Waiting for the agent to join…" for the whole call.
+      if (room.remoteParticipants.size > 0) {
+        setStatus('Agent joined — say hello!')
+        room.remoteParticipants.forEach((p: RemoteParticipant) => {
+          applyAgentState(p.attributes?.['lk.agent.state'])
+        })
+      } else {
+        setStatus('Waiting for the agent to join…')
+      }
       startCountdown()
+      // Dispatch loss (a deploy window, a worker hiccup) previously left the
+      // visitor waiting forever. One silent retry with a completely fresh
+      // room/token covers it; a second failure is shown honestly.
+      clearAgentJoinWatchdog()
+      agentJoinTimer = window.setTimeout(() => {
+        agentJoinTimer = null
+        if (!room || room.remoteParticipants.size > 0) return
+        suppressDisconnect = true
+        room.disconnect()
+        stopVolumeReactivity?.()
+        stopVolumeReactivity = null
+        stopCountdown()
+        room = null
+        if (attempt === 0) {
+          console.warn('[Vistrow Voice widget] no agent within 15s — retrying with a fresh call')
+          setStatus('Still connecting — one moment…')
+          void startCall(name, phone, email, 1)
+        } else {
+          failCall('The agent could not join the call — please try again in a moment.')
+        }
+      }, 15000)
     } catch (err) {
       console.error('[Vistrow Voice widget] LiveKit connect failed:', err)
       failCall('Could not connect the call — please try again.')
