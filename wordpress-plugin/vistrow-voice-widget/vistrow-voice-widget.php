@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.2.1
+ * Version: 1.2.2
  * Author: Vistrow Voice
  */
 
@@ -48,7 +48,13 @@ add_action('admin_menu', function () {
         'manage_options',
         'vistrow-voice-widget',
         'vistrow_voice_render_settings_page',
-        plugins_url('assets/icon.svg', __FILE__),
+        // A plain PNG, not SVG — WordPress applies CSS mask-sizing to .svg
+        // menu icons instead of a normal background-image, and that masking
+        // doesn't constrain to 20x20 the way it does for raster icons; a
+        // 1254x1254 SVG here rendered as a giant blob covering the page.
+        // 128px source gives clean downscaling to the 20x20 display size
+        // without that bug.
+        plugins_url('assets/icon.png', __FILE__),
         58
     );
 });
