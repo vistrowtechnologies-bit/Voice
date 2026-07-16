@@ -1045,6 +1045,17 @@ def analyze_call(call_id: int, user: dict = Depends(current_user)) -> dict:
     return data
 
 
+@app.post("/calls/{call_id}/push-to-arthaleads")
+def push_call_to_arthaleads(call_id: int, user: dict = Depends(require_role("admin"))) -> dict:
+    """Manually (re)send one call's lead to ArthaLeads — for a lead the
+    automatic delivery skipped (call never got marked qualified) or that
+    failed and the operator wants to retry after fixing the token."""
+    ok, detail = integrations_dispatch.push_call_to_arthaleads(user["account_id"], call_id)
+    if not ok and detail in ("Call not found",):
+        raise HTTPException(404, detail)
+    return {"ok": ok, "detail": detail}
+
+
 @app.get("/dashboard/intelligence")
 def dashboard_intelligence(days: int = 30, user: dict = Depends(current_user)) -> dict:
     return calls_db.intelligence_summary(user["account_id"], days=days)

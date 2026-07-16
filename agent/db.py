@@ -69,7 +69,13 @@ def init_db() -> None:
             # CREATE TABLE IF NOT EXISTS above (a no-op if it already exists) —
             # columns added after go-live still need an explicit migration to
             # land, regardless of boot order.
-            for column in ("lead_company", "lead_use_case", "lead_team_size", "lead_email"):
+            for column in (
+                "lead_company", "lead_use_case", "lead_team_size", "lead_email",
+                # Per-call ArthaLeads delivery outcome — see server/calls_db.py's
+                # matching migration for why this is separate from the
+                # integration-level last_sync/last_error.
+                "arthaleads_status", "arthaleads_synced_at", "arthaleads_error",
+            ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} TEXT")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS extracted_data TEXT DEFAULT ''")
     finally:
@@ -324,8 +330,10 @@ def mark_integration_error(account_id: int | None, key: str, message: str) -> No
         conn.close()
 
 
-def save_call(record: dict) -> None:
-    """Persist one completed call. `record` keys:
+def save_call(record: dict) -> int | None:
+    """Persist one completed call. Returns the new call's id (or None on
+    failure) — used to attach a per-call ArthaLeads delivery outcome after
+    the fact. `record` keys:
 
     room_name, visitor_identity, started_at, ended_at, duration_seconds,
     reply_language, voice (the exact voice string this call used, for
@@ -342,7 +350,7 @@ def save_call(record: dict) -> None:
     conn = dbconn.connect()
     try:
         with conn:
-            conn.execute(
+            cur = conn.execute(
                 """
                 INSERT INTO calls (
                     room_name, visitor_identity, started_at, ended_at,
@@ -352,6 +360,7 @@ def save_call(record: dict) -> None:
                     transcript_json, call_type, site_id, agent_id, account_id,
                     extracted_data
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
                 """,
                 (
                     record["room_name"],
@@ -381,5 +390,27 @@ def save_call(record: dict) -> None:
                     else "",
                 ),
             )
+            return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def set_call_arthaleads_status(call_id: int | None, status: str, error: str | None = None) -> None:
+    """Records this specific call's ArthaLeads delivery outcome — separate
+    from the integration-level last_sync/last_error, which only reflect the
+    most recent attempt across every call. Best-effort: a status-tracking
+    hiccup must never surface to the caller or disturb call teardown."""
+    if call_id is None:
+        return
+    conn = dbconn.connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE calls SET arthaleads_status = ?, arthaleads_synced_at = {_NOW}, "
+                "arthaleads_error = ? WHERE id = ?",
+                (status, error, call_id),
+            )
+    except psycopg.Error:
+        pass
     finally:
         conn.close()

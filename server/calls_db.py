@@ -570,6 +570,15 @@ def init_tables() -> None:
                 # column existed; voice_tier() below treats that as "standard"
                 # so historical billing is unaffected.
                 ("voice", "TEXT"),
+                # Per-call ArthaLeads delivery outcome — separate from the
+                # integration-level last_sync/last_error (which only reflect
+                # the most recent attempt across ALL calls), so an operator
+                # can see and act on exactly this lead's status. NULL means
+                # never attempted (call wasn't qualified, or no integration
+                # connected at call time) — not the same as "failed".
+                ("arthaleads_status", "TEXT"),
+                ("arthaleads_synced_at", "TEXT"),
+                ("arthaleads_error", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
@@ -1104,6 +1113,9 @@ def _call_dict(
         "durationSeconds": row["duration_seconds"],
         "replyLanguage": row["reply_language"],
         "siteVisit": json.loads(row["site_visit_json"]) if row["site_visit_json"] else None,
+        "arthaleadsStatus": _row_get(row, "arthaleads_status"),
+        "arthaleadsSyncedAt": _row_get(row, "arthaleads_synced_at"),
+        "arthaleadsError": _row_get(row, "arthaleads_error"),
     }
     if include_transcript:
         out["transcript"] = [
@@ -1151,6 +1163,23 @@ def get_call(call_id: int, account_id: int) -> dict | None:
             return None
         sites_by_id = {s["id"]: s for s in list_sites(account_id)}
         return _call_dict(row, sites_by_id=sites_by_id, agent_names=_agent_names_by_id(account_id))
+    finally:
+        conn.close()
+
+
+def set_call_arthaleads_status(call_id: int, account_id: int, status: str, error: str | None = None) -> None:
+    """Same per-call ArthaLeads outcome agent/db.py records from the live
+    delivery path — this dashboard-side twin is used by the manual "Push to
+    ArthaLeads" action (see token_api.py), account-scoped so one tenant can
+    never touch another's call row."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE calls SET arthaleads_status = ?, arthaleads_synced_at = {_NOW}, "
+                "arthaleads_error = ? WHERE id = ? AND account_id = ?",
+                (status, error, call_id, account_id),
+            )
     finally:
         conn.close()
 

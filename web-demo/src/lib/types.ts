@@ -65,6 +65,14 @@ export interface CallRecord {
     key_points: string[]
     action_items: string[]
   } | null
+  // Per-call ArthaLeads delivery outcome — null means never attempted (the
+  // call wasn't marked qualified, or nothing was connected at call time),
+  // not the same as "failed". Separate from the integration's own
+  // last_sync/last_error, which only reflect the most recent attempt
+  // across every call.
+  arthaleadsStatus: 'sent' | 'failed' | null
+  arthaleadsSyncedAt: string | null
+  arthaleadsError: string | null
 }
 
 export type Lead = CallRecord

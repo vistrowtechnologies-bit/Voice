@@ -151,7 +151,7 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
     return url, body
 
 
-async def _deliver_to_integrations(account_id: int | None, lead: dict) -> None:
+async def _deliver_to_integrations(account_id: int | None, lead: dict, call_id: int | None = None) -> None:
     """Deliver an event to every connected integration for this tenant.
     Best-effort and heavily guarded — never lets a bad integration disturb the
     live call. The per-agent CRM webhook (_post_webhook) still fires separately.
@@ -159,6 +159,12 @@ async def _deliver_to_integrations(account_id: int | None, lead: dict) -> None:
     Takes account_id directly rather than a RunContext so it can be called
     from both mid-call function tools (via _fan_out_integrations below) and
     agent/main.py's call-end log_call(), which has no RunContext at all.
+
+    call_id (only ever set from log_call, never mid-call) additionally
+    records THIS call's own ArthaLeads outcome on its calls row — separate
+    from the integration-level last_sync/last_error, which only reflect the
+    most recent attempt across every call and can't answer "did THIS lead
+    make it to the CRM?" from the call's own detail page.
     """
     try:
         integrations = db.get_delivery_integrations(account_id)
@@ -179,16 +185,24 @@ async def _deliver_to_integrations(account_id: int | None, lead: dict) -> None:
                         if 200 <= resp.status < 300:
                             logger.info("delivered lead to %s integration", integ["key"])
                             db.touch_integration_sync(account_id, integ["key"])
+                            if integ["key"] == "arthaleads":
+                                db.set_call_arthaleads_status(call_id, "sent")
                         elif resp.status == 401:
                             logger.warning("integration %s delivery failed: invalid token", integ["key"])
                             db.mark_integration_error(account_id, integ["key"], "Invalid token — reconnect")
+                            if integ["key"] == "arthaleads":
+                                db.set_call_arthaleads_status(call_id, "failed", "Invalid token — reconnect")
                         else:
                             text = (await resp.text())[:200]
                             logger.warning("integration %s delivery failed: HTTP %s", integ["key"], resp.status)
                             db.mark_integration_error(account_id, integ["key"], f"HTTP {resp.status}: {text}")
+                            if integ["key"] == "arthaleads":
+                                db.set_call_arthaleads_status(call_id, "failed", f"HTTP {resp.status}: {text}")
                 except Exception:
                     logger.warning("integration %s delivery failed", integ["key"], exc_info=True)
                     db.mark_integration_error(account_id, integ["key"], "Network error — delivery failed")
+                    if integ["key"] == "arthaleads":
+                        db.set_call_arthaleads_status(call_id, "failed", "Network error — delivery failed")
     except Exception:
         logger.warning("integration fan-out failed", exc_info=True)
 

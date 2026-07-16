@@ -173,3 +173,68 @@ def test_integration(account_id: int, key: str) -> tuple[bool, str]:
     except Exception:
         pass
     return ok, detail
+
+
+def _call_transcript_message(transcript: list[dict]) -> str:
+    """Renders a get_call()-shaped transcript ({speaker, text} turns) as
+    readable "Caller: ... / Agent: ..." lines — the ArthaLeads-side twin of
+    agent/tools.py's _transcript_message, which only ever sees the raw
+    {role, text} shape from a live session."""
+    lines = []
+    for turn in transcript:
+        text = (turn.get("text") or "").strip()
+        if not text:
+            continue
+        speaker = "Caller" if turn.get("speaker") == "visitor" else "Agent"
+        lines.append(f"{speaker}: {text}")
+    return "\n".join(lines)
+
+
+def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
+    """Manually (re)send one specific call's lead to ArthaLeads — for a call
+    the automatic delivery skipped (never marked qualified during the call)
+    or that failed and the operator wants to retry after fixing the token.
+    Stamps the call's own arthaleads_status either way, so the dashboard can
+    show a definitive per-lead outcome instead of just the integration's
+    most-recent-attempt status."""
+    call = calls_db.get_call(call_id, account_id)
+    if call is None:
+        return False, "Call not found"
+    integ = next((i for i in calls_db.list_integrations(account_id) if i["key"] == "arthaleads"), None)
+    if integ is None or integ.get("status") != "connected":
+        return False, "ArthaLeads isn't connected"
+    token = (integ.get("config") or {}).get("token", "").strip()
+    if not token:
+        return False, "No ArthaLeads token saved"
+    if not (call.get("name") and call.get("phone")):
+        return False, "This call has no name or phone number to send"
+    transcript = call.get("transcript") or []
+    body = {
+        "token": token,
+        "name": call.get("name") or "Unknown caller",
+        "phone": call.get("phone", ""),
+        "email": call.get("email", ""),
+        "message": _call_transcript_message(transcript),
+        "transcript": [
+            {"speaker": "Caller" if t.get("speaker") == "visitor" else "Agent", "text": t.get("text", "")}
+            for t in transcript
+            if (t.get("text") or "").strip()
+        ],
+        "sentiment": call.get("sentiment") or "neutral",
+        "duration_seconds": call.get("durationSeconds"),
+        "channel": call.get("channel") or "",
+        "language": call.get("replyLanguage") or "",
+        "agent_name": call.get("agent") or "",
+        "extracted_data": call.get("extractedData") or {},
+    }
+    ok, detail = _post_json(_ARTHALEADS_URL, body)
+    try:
+        if ok:
+            calls_db.touch_integration_sync(account_id, "arthaleads")
+            calls_db.set_call_arthaleads_status(call_id, account_id, "sent")
+        else:
+            calls_db.mark_integration_error(account_id, "arthaleads", detail)
+            calls_db.set_call_arthaleads_status(call_id, account_id, "failed", detail)
+    except Exception:
+        pass
+    return ok, detail

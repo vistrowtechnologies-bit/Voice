@@ -4,7 +4,7 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
-import { LANGUAGE_NAMES, analyzeCall, fetchLead, formatDateTime, formatDuration } from '../lib/api'
+import { LANGUAGE_NAMES, analyzeCall, fetchLead, formatDateTime, formatDuration, pushCallToArthaleads } from '../lib/api'
 import type { CallRecord } from '../lib/types'
 
 const SENTIMENT_STYLE: Record<string, string> = {
@@ -20,6 +20,8 @@ export function LeadDetail() {
   const [notes, setNotes] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
+  const [pushing, setPushing] = useState(false)
+  const [pushResult, setPushResult] = useState<{ ok: boolean; detail: string } | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -37,6 +39,30 @@ export function LeadDetail() {
       setAnalyzeError('Could not analyze this call. Make sure it has a transcript.')
     } finally {
       setAnalyzing(false)
+    }
+  }
+
+  const handlePush = async () => {
+    if (!id) return
+    setPushing(true)
+    setPushResult(null)
+    try {
+      const result = await pushCallToArthaleads(id)
+      setPushResult(result)
+      setCall((c) =>
+        c
+          ? {
+              ...c,
+              arthaleadsStatus: result.ok ? 'sent' : 'failed',
+              arthaleadsSyncedAt: new Date().toISOString(),
+              arthaleadsError: result.ok ? null : result.detail,
+            }
+          : c,
+      )
+    } catch {
+      setPushResult({ ok: false, detail: 'Push failed — please try again.' })
+    } finally {
+      setPushing(false)
     }
   }
 
@@ -165,6 +191,52 @@ export function LeadDetail() {
                   : 'No transcript to analyze.'}
               </p>
             )}
+          </Card>
+
+          <Card>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-text-muted">CRM status</h2>
+              {call.arthaleadsStatus === 'sent' ? (
+                <span className="flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">
+                  <Icon name="check_circle" className="text-[14px]" /> Sent
+                </span>
+              ) : call.arthaleadsStatus === 'failed' ? (
+                <span className="flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">
+                  <Icon name="error" className="text-[14px]" /> Failed
+                </span>
+              ) : (
+                <span className="rounded-full bg-surface-high px-2.5 py-1 text-xs font-semibold text-text-muted">Not sent</span>
+              )}
+            </div>
+            <dl className="flex flex-col gap-2 text-sm">
+              <Row
+                label="ArthaLeads CRM"
+                value={
+                  call.arthaleadsStatus === 'sent'
+                    ? 'Delivered'
+                    : call.arthaleadsStatus === 'failed'
+                      ? 'Delivery failed'
+                      : 'Not sent yet'
+                }
+              />
+              {call.arthaleadsSyncedAt && <Row label="Last attempt" value={formatDateTime(call.arthaleadsSyncedAt)} />}
+            </dl>
+            {call.arthaleadsStatus === 'failed' && call.arthaleadsError && (
+              <p className="mt-2 text-xs text-destructive">{call.arthaleadsError}</p>
+            )}
+            {pushResult && (
+              <p className={`mt-2 text-xs font-semibold ${pushResult.ok ? 'text-success' : 'text-destructive'}`}>
+                {pushResult.ok ? 'Sent to ArthaLeads ✓' : pushResult.detail}
+              </p>
+            )}
+            <button
+              onClick={handlePush}
+              disabled={pushing}
+              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-cyan/40 py-2 text-xs font-bold text-cyan hover:bg-cyan/10 disabled:opacity-50"
+            >
+              <Icon name="send" className="text-[14px]" />
+              {pushing ? 'Sending…' : call.arthaleadsStatus === 'sent' ? 'Re-send to ArthaLeads' : 'Push to ArthaLeads'}
+            </button>
           </Card>
 
           <Card>

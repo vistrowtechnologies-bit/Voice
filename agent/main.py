@@ -1050,8 +1050,9 @@ async def entrypoint(ctx: JobContext) -> None:
         extracted, memory_summary = await _post_call_analysis(
             transcript, agent._post_call_fields, want_memory
         )
+        saved_call_id: int | None = None
         try:
-            db.save_call(
+            saved_call_id = db.save_call(
                 {
                     "room_name": ctx.room.name,
                     "visitor_identity": visitor_holder["identity"],
@@ -1094,6 +1095,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 "language": agent._reply_language,
                 "agent_name": cfg.get("name"),
             },
+            call_id=saved_call_id,
         )
         # Persist returning-caller memory after the log (independent of it).
         if want_memory and memory_summary and resolved_agent_id:

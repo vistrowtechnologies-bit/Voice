@@ -118,6 +118,8 @@ export interface IntelligenceSummary {
 }
 export const analyzeCall = (id: number | string) => send<CallIntelligence>('POST', `/calls/${id}/analyze`)
 export const fetchIntelligence = (days = 30) => get<IntelligenceSummary>(`/dashboard/intelligence?days=${days}`)
+export const pushCallToArthaleads = (id: number | string) =>
+  send<{ ok: boolean; detail: string }>('POST', `/calls/${id}/push-to-arthaleads`)
 
 // ---------------------------------------------------------------- agents
 
