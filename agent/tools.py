@@ -99,12 +99,18 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
         # Dedicated, first-class integration: the endpoint is fixed (not a
         # user-pasted URL) and the only thing the operator configures is
         # their ArthaLeads API token. Fires exactly once per call — at
-        # call-end, with the full transcript, and only when the call was
-        # actually qualified (log_lead/book_appointment ran) — unlike the
-        # other integrations, which also get a small mid-call event per
-        # tool call. Mid-call events here are skipped by design.
+        # call-end, with the full transcript — unlike the other
+        # integrations, which also get a small mid-call event per tool
+        # call. Mid-call events here are skipped by design.
+        #
+        # Deliberately NOT gated on whether the LLM happened to call
+        # log_lead/book_appointment during the conversation — every widget
+        # visitor already went through a required name/phone/email form
+        # before the call even started, so every completed widget call is a
+        # real lead worth having in the CRM, regardless of what tools the
+        # model chose to invoke.
         token = (config.get("token") or "").strip()
-        if not token or lead.get("type") != "call_completed" or not lead.get("qualified"):
+        if not token or lead.get("type") != "call_completed":
             return None
         if not (lead.get("name") and lead.get("phone")):
             return None
@@ -347,7 +353,6 @@ async def book_appointment(
         # read — an "appointment" key here would silently vanish, saved
         # nowhere and shown nowhere.
         lead_data["site_visit"] = {"date": date, "time": time, "purpose": purpose}
-        lead_data["qualified"] = True
     result = await _calendar_book(context, date, time, duration_minutes, name, phone, purpose)
     event = {
         "type": "appointment_booked",
@@ -404,7 +409,6 @@ async def log_lead(
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is not None:
         lead_data.update(name=name, phone=phone, budget=budget, location=location, timeline=timeline)
-        lead_data["qualified"] = True
     event = {
         "type": "lead_update",
         "name": name,
@@ -446,7 +450,6 @@ async def capture_platform_lead(
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is not None:
         lead_data.update(name=name, phone=contact, company=company, use_case=use_case, team_size=team_size)
-        lead_data["qualified"] = True
     event = {
         "type": "platform_lead_update",
         "name": name,

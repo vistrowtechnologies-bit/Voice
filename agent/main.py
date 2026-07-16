@@ -1091,7 +1091,6 @@ async def entrypoint(ctx: JobContext) -> None:
                 "duration_seconds": (ended_at - started_at).total_seconds(),
                 "transcript": transcript,
                 "extracted_data": extracted,
-                "qualified": lead_data.get("qualified", False),
                 "language": agent._reply_language,
                 "agent_name": cfg.get("name"),
             },
