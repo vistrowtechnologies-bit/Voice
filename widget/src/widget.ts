@@ -15,6 +15,16 @@ function randomId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+// The phone field only collects a bare local number (visitors shouldn't have
+// to know or type their own country code) — this turns whatever digits they
+// typed into the E.164 shape the backend requires. Fixed +91 since every
+// campaign this widget currently runs on is India-only.
+function toE164Phone(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  const local = digits.length > 10 ? digits.slice(-10) : digits
+  return `+91${local}`
+}
+
 // Same "typed garbage to get past a required field" check the backend
 // enforces too (server/token_api.py's _looks_like_real_phone) — checked
 // here first purely for instant feedback; the server is the real gate.
@@ -88,6 +98,9 @@ const CSS = `
 .av-form label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #9089b0; }
 .av-form input { background: #201b3b; border: 1px solid #2a2440; border-radius: 10px; color: #f5f3ff; padding: 9px 11px; font-size: 13.5px; outline: none; font-family: inherit; }
 .av-form input:focus { border-color: #a855f7; }
+.av-phone-wrap { display: flex; align-items: stretch; gap: 6px; }
+.av-phone-prefix { display: flex; align-items: center; padding: 0 10px; background: #201b3b; border: 1px solid #2a2440; border-radius: 10px; font-size: 13.5px; color: #b8b2cf; font-weight: 600; }
+.av-phone-wrap input { flex: 1; min-width: 0; }
 .av-error { font-size: 12px; color: #f87171; min-height: 15px; }
 .av-submit { margin-top: 4px; background: linear-gradient(135deg,#a855f7,#7c3aed); border: none; border-radius: 10px; color: white; font-weight: 700; font-size: 13.5px; padding: 10px; cursor: pointer; }
 .av-submit:disabled { opacity: .5; cursor: default; }
@@ -106,7 +119,7 @@ function widgetHtml(label: string): string {
   return `
     <div class="av-root">
       <div id="av-greeting" class="av-greeting">
-        <span id="av-greeting-text">👋 Talk to our AI assistant — instant answers, no waiting.</span>
+        <span id="av-greeting-text">👋 Talk to Artha — instant answers, no waiting.</span>
         <button id="av-greeting-close" aria-label="Dismiss">${CLOSE_ICON}</button>
       </div>
 
@@ -124,7 +137,10 @@ function widgetHtml(label: string): string {
           <label for="av-name">Name</label>
           <input id="av-name" type="text" autocomplete="name" placeholder="Your name" />
           <label for="av-phone">Phone number</label>
-          <input id="av-phone" type="tel" autocomplete="tel" placeholder="+919812345678" />
+          <div class="av-phone-wrap">
+            <span class="av-phone-prefix">+91</span>
+            <input id="av-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="98765 43210" maxlength="10" />
+          </div>
           <label for="av-email">Email</label>
           <input id="av-email" type="email" autocomplete="email" placeholder="you@example.com" />
           <p id="av-form-error" class="av-error"></p>
@@ -485,14 +501,14 @@ function init(): void {
 
   function submitForm(): void {
     const name = nameInput.value.trim()
-    const phone = phoneInput.value.trim()
+    const phone = toE164Phone(phoneInput.value)
     const email = emailInput.value.trim()
     if (!name) {
       formError.textContent = 'Please enter your name.'
       return
     }
     if (!isValidPhone(phone)) {
-      formError.textContent = 'Enter a valid phone number in international format, e.g. +919812345678.'
+      formError.textContent = 'Enter a valid 10-digit phone number.'
       return
     }
     if (!isValidEmail(email)) {

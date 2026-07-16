@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Vistrow Voice
  */
 
@@ -24,7 +24,12 @@ function vistrow_voice_default_settings() {
         'site_key' => '',
         'backend_url' => VISTROW_VOICE_DEFAULT_BACKEND_URL,
         'position' => 'bottom-right',
-        'label' => 'Talk to us',
+        'label' => 'Talk to Artha',
+        // 'all' keeps existing installs behaving exactly as before (widget
+        // on every page) — 'selected' is opt-in so nobody's widget silently
+        // disappears sitewide just from upgrading the plugin.
+        'show_on' => 'all',
+        'pages' => array(),
     );
 }
 
@@ -34,12 +39,17 @@ function vistrow_voice_get_settings() {
 }
 
 add_action('admin_menu', function () {
-    add_options_page(
+    // A top-level sidebar item (not tucked under Settings) so it survives
+    // being obvious to find after every plugin re-upload/update — same
+    // pattern as other plugins' own dedicated menu entries.
+    add_menu_page(
         'Vistrow Voice Widget',
         'Vistrow Voice',
         'manage_options',
         'vistrow-voice-widget',
-        'vistrow_voice_render_settings_page'
+        'vistrow_voice_render_settings_page',
+        plugins_url('assets/icon.png', __FILE__),
+        58
     );
 });
 
@@ -56,6 +66,8 @@ function vistrow_voice_sanitize_settings($input) {
         'backend_url' => isset($input['backend_url']) ? esc_url_raw(rtrim($input['backend_url'], '/')) : $defaults['backend_url'],
         'position' => (isset($input['position']) && $input['position'] === 'bottom-left') ? 'bottom-left' : 'bottom-right',
         'label' => isset($input['label']) && $input['label'] !== '' ? sanitize_text_field($input['label']) : $defaults['label'],
+        'show_on' => (isset($input['show_on']) && $input['show_on'] === 'selected') ? 'selected' : 'all',
+        'pages' => isset($input['pages']) && is_array($input['pages']) ? array_map('absint', $input['pages']) : array(),
     );
 }
 
@@ -102,6 +114,39 @@ function vistrow_voice_render_settings_page() {
                         </select>
                     </td>
                 </tr>
+                <tr>
+                    <th scope="row">Show widget on</th>
+                    <td>
+                        <label style="display:block;margin-bottom:6px;">
+                            <input type="radio" name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[show_on]"
+                                value="all" <?php checked($settings['show_on'], 'all'); ?> />
+                            All pages
+                        </label>
+                        <label style="display:block;margin-bottom:8px;">
+                            <input type="radio" name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[show_on]"
+                                value="selected" <?php checked($settings['show_on'], 'selected'); ?> />
+                            Only the pages I select below
+                        </label>
+                        <?php
+                        $all_pages = get_pages(array('sort_column' => 'post_title'));
+                        if ($all_pages) :
+                        ?>
+                        <select name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[pages][]" multiple
+                            size="<?php echo esc_attr(min(10, max(4, count($all_pages)))); ?>"
+                            style="min-width:280px;">
+                            <?php foreach ($all_pages as $page) : ?>
+                                <option value="<?php echo esc_attr($page->ID); ?>"
+                                    <?php selected(in_array((int) $page->ID, $settings['pages'], true)); ?>>
+                                    <?php echo esc_html($page->post_title); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="description">Cmd/Ctrl-click to select more than one page.</p>
+                        <?php else : ?>
+                            <p class="description">No pages found on this site yet.</p>
+                        <?php endif; ?>
+                    </td>
+                </tr>
             </table>
             <?php submit_button('Save Settings'); ?>
         </form>
@@ -116,6 +161,12 @@ add_action('wp_footer', function () {
     $settings = vistrow_voice_get_settings();
     if (empty($settings['site_key'])) {
         return; // not configured yet — nothing to render
+    }
+    if ($settings['show_on'] === 'selected') {
+        $current_id = get_queried_object_id();
+        if (!$current_id || !in_array((int) $current_id, $settings['pages'], true)) {
+            return; // this page wasn't checked in the settings page picker
+        }
     }
     printf(
         '<script src="%1$s/widget.js" data-site-key="%2$s" data-api-base="%1$s" data-position="%3$s" data-label="%4$s"></script>' . "\n",
