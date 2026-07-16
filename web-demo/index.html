@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- Two favicon variants, matched to browser chrome (not the in-app
+         theme toggle): a dark OS/browser theme puts the tab bar on a dark
+         background, so the light/white-badge mark shows up best there —
+         and vice versa for a light OS theme. -->
+    <link rel="icon" type="image/png" href="/favicon.png" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" href="/favicon-dark.png" media="(prefers-color-scheme: light)" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vistrow Voice</title>
