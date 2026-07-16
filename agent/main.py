@@ -7,12 +7,22 @@ from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from livekit import api
-from livekit.agents import Agent, AgentSession, JobContext, TurnHandlingOptions, WorkerOptions, cli, llm, tokenize
+from livekit.agents import (
+    Agent,
+    AgentSession,
+    JobContext,
+    RoomInputOptions,
+    TurnHandlingOptions,
+    WorkerOptions,
+    cli,
+    llm,
+    tokenize,
+)
 from livekit.agents.tts import StreamAdapter
 from livekit.agents.stt import FallbackAdapter as SttFallbackAdapter
 from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
 from livekit.agents.types import NOT_GIVEN
-from livekit.plugins import elevenlabs, google, openai, sarvam
+from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarvam
 
 import db
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
@@ -1118,7 +1128,20 @@ async def entrypoint(ctx: JobContext) -> None:
     # end_call_on_silence_ms is 0); it re-arms whenever the caller speaks.
     _reset_silence_hangup()
 
-    await session.start(agent=agent, room=ctx.room)
+    # Strips steady background noise (traffic, crowd chatter, AC hum) from
+    # the caller's mic before it ever reaches STT — Krisp's model via
+    # LiveKit's noise-cancellation plugin, already bundled with
+    # livekit-agents[sarvam] so no separate install or paid plan is
+    # needed. Telephony audio (8kHz, already compressed by the carrier)
+    # needs the dedicated telephony-tuned model, not the general one.
+    noise_filter = (
+        noise_cancellation.BVCTelephony() if call_context["call_type"] == "phone" else noise_cancellation.BVC()
+    )
+    await session.start(
+        agent=agent,
+        room=ctx.room,
+        room_input_options=RoomInputOptions(noise_cancellation=noise_filter),
+    )
 
 
 if __name__ == "__main__":

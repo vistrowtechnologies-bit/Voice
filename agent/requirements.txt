@@ -2,5 +2,6 @@ livekit-agents[sarvam]>=1.6
 livekit-plugins-openai>=1.6
 livekit-plugins-google>=1.6
 livekit-plugins-elevenlabs>=1.6
+livekit-plugins-noise-cancellation>=0.2
 psycopg[binary,pool]>=3.2
 python-dotenv
