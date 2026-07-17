@@ -72,6 +72,18 @@ def _get_pool() -> ConnectionPool:
                     max_size=2,
                     kwargs={"row_factory": dict_row},
                     open=True,
+                    # A worker subprocess can sit idle for many minutes
+                    # between calls (each LiveKit job gets its own OS
+                    # process). Railway/Postgres can drop that idle
+                    # connection server-side well before the pool's own
+                    # max_idle cleanup runs, leaving a "zombie" connection
+                    # that looks fine to the pool but is actually dead —
+                    # every real call crashed the job on the first query
+                    # after the idle gap. check_connection round-trips a
+                    # cheap query before handing a pooled connection back
+                    # out, so a dead one gets discarded and replaced instead
+                    # of reaching call code.
+                    check=ConnectionPool.check_connection,
                 )
     return _pool
 

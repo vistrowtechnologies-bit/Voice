@@ -66,6 +66,16 @@ def _get_pool() -> ConnectionPool:
                     max_size=10,
                     kwargs={"row_factory": dict_row},
                     open=True,
+                    # Railway/Postgres can drop a pooled connection
+                    # server-side before the pool's own max_idle cleanup
+                    # runs, leaving a "zombie" that looks fine to the pool
+                    # but fails on first real use (agent/dbconn.py hit this
+                    # exact crash — job died on every call after ~15min
+                    # idle). check_connection round-trips a cheap query
+                    # before handing a pooled connection back out, so a dead
+                    # one gets discarded and replaced instead of reaching
+                    # request code.
+                    check=ConnectionPool.check_connection,
                 )
     return _pool
 
