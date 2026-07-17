@@ -133,6 +133,9 @@ function vistrow_voice_render_settings_page() {
         .vvw-link-btn:last-child { margin-bottom: 0; }
         .vvw-link-btn:hover { border-color: #7c3aed; color: #7c3aed; }
         .vvw-link-btn .dashicons { font-size: 16px; width: 16px; height: 16px; opacity: .6; }
+        .vvw-wrap .button-primary { background: linear-gradient(135deg,#a855f7,#7c3aed) !important; border-color: #7c3aed !important; color: #fff !important; text-shadow: none !important; box-shadow: none !important; }
+        .vvw-wrap .button-primary:hover, .vvw-wrap .button-primary:focus { background: linear-gradient(135deg,#9333ea,#6d28d9) !important; border-color: #6d28d9 !important; color: #fff !important; box-shadow: none !important; }
+        .vvw-wrap .button-primary:active { background: #6d28d9 !important; border-color: #6d28d9 !important; }
     </style>
     <div class="wrap vvw-wrap">
         <div class="vvw-header">
