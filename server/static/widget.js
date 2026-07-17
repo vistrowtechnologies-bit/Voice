@@ -79,12 +79,13 @@ a=extmap-allow-mixed`)!==-1){let n=t.sdp.split(`
 .av-form label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #9089b0; }
 .av-form input { background: #201b3b; border: 1px solid #2a2440; border-radius: 10px; color: #f5f3ff; padding: 9px 11px; font-size: 13.5px; outline: none; font-family: inherit; }
 .av-form input:focus { border-color: #a855f7; }
-.av-consent { margin: 2px 0 0; font-size: 10.5px; line-height: 1.4; color: #756e91; text-align: center; }
+.av-consent { margin: 6px 0 0; font-size: 9px; line-height: 1.35; color: #524b68; text-align: center; }
 .av-phone-wrap { display: flex; align-items: stretch; gap: 6px; }
 .av-phone-prefix { display: flex; align-items: center; padding: 0 10px; background: #201b3b; border: 1px solid #2a2440; border-radius: 10px; font-size: 13.5px; color: #b8b2cf; font-weight: 600; }
 .av-phone-wrap input { flex: 1; min-width: 0; }
-.av-error { font-size: 12px; color: #f87171; min-height: 15px; }
-.av-submit { margin-top: 4px; background: linear-gradient(135deg,#a855f7,#7c3aed); border: none; border-radius: 10px; color: white; font-weight: 700; font-size: 13.5px; padding: 10px; cursor: pointer; }
+.av-error { font-size: 12px; color: #f87171; min-height: 0; }
+.av-error:empty { display: none; }
+.av-submit { margin-top: 2px; background: linear-gradient(135deg,#a855f7,#7c3aed); border: none; border-radius: 10px; color: white; font-weight: 700; font-size: 13.5px; padding: 10px; cursor: pointer; }
 .av-submit:disabled { opacity: .5; cursor: default; }
 
 .av-body { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
@@ -123,7 +124,7 @@ audio { display: none; }
           <label for="av-email">Email</label>
           <input id="av-email" type="email" autocomplete="email" placeholder="you@example.com" />
           <p id="av-form-error" class="av-error"></p>
-          <button id="av-submit" class="av-submit">Start the call</button>
+          <button id="av-submit" class="av-submit">Talk to my AI agent</button>
           <p class="av-consent">This call may be recorded for quality and training purposes.</p>
         </div>
 
