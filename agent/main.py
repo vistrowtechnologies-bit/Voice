@@ -100,17 +100,6 @@ _DEFAULT_OPENER_HI = "{greeting} नमस्ते! ये {agent_name} है�
 _DEFAULT_OPENER_EN = "{greeting} this is {agent_name}. Thanks for calling — how can I help you today?"
 _DEFAULT_OPENERS = {"hi-IN": _DEFAULT_OPENER_HI}
 
-# Recording-consent disclosure. Every on_enter() branch below speaks a fixed
-# string via session.say() rather than the LLM (see the branches' own
-# comments for why — mainly latency), so a prompt-level consent instruction
-# would silently never fire for most calls. Instead this is prefixed onto
-# whichever fixed line is about to be spoken, in the SAME say() call, so
-# disclosure is guaranteed on every call without adding the extra TTS
-# round-trip the fixes below were written specifically to avoid.
-_CONSENT_NOTICE_HI = "बता दूं, क्वालिटी और ट्रेनिंग के लिए यह कॉल रिकॉर्ड हो सकती है। "
-_CONSENT_NOTICE_EN = "Just so you know, this call may be recorded for quality and training purposes. "
-_CONSENT_NOTICES = {"hi-IN": _CONSENT_NOTICE_HI}
-
 
 # Sarvam bulbul:v3's own `pace`/`temperature`/`pitch` govern how the voice is
 # actually delivered (speaking speed and prosodic variation) — separate from
@@ -559,7 +548,13 @@ class RealEstateAgent(Agent):
             "location preference, a timeline), even seconds later in the same turn — "
             "don't wait until every field is known, and don't let booking an appointment "
             "become the end of the call before you've re-logged whatever they just told "
-            "you.\n"
+            "you. This is not optional and not a low-priority background task: the moment "
+            "a number, price, or figure leaves the caller's mouth in answer to a "
+            "budget/pricing question (in any language or unit — \"एक करोड़\", \"50 lakh\", "
+            "\"around 2 crore\" all count), call log_lead with that value in the very next "
+            "tool call you make, before you say anything else back to them. The same rule "
+            "applies the instant they name a location or a timeline — log it immediately, "
+            "don't hold multiple details in your head to log together later.\n"
             "- Booking an appointment (any business — clinic, salon, consultation, "
             "property site visit): when the caller wants to book a time, first call "
             "check_calendar_availability for their preferred date to see real open "
@@ -692,19 +687,13 @@ class RealEstateAgent(Agent):
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
 
     async def on_enter(self) -> None:
-        consent = _CONSENT_NOTICES.get(self._reply_language, _CONSENT_NOTICE_EN)
-        # first_speaker == 'user' means wait silently for the caller to open —
-        # but consent still has to be disclosed, so it gets one short
-        # standalone line here, the only thing this branch ever speaks.
+        # first_speaker == 'user' means wait silently for the caller to open.
         if self._first_speaker == "user":
-            await self.session.say(consent)
             return
         if self._welcome_message:
             # Operator wrote an exact opening line — speak it verbatim rather
-            # than letting the model improvise a greeting. Consent is
-            # prefixed onto this same say() call rather than a separate one,
-            # so it doesn't add another TTS round-trip.
-            await self.session.say(consent + self._welcome_message)
+            # than letting the model improvise a greeting.
+            await self.session.say(self._welcome_message)
             return
         if self._is_platform_demo:
             # A dynamic LLM-generated greeting sounds better, but costs a full
@@ -713,7 +702,7 @@ class RealEstateAgent(Agent):
             # expecting. Speaking a fixed line via say() skips straight to
             # TTS. Picked at random per call so repeat visitors don't hear the
             # same line every time.
-            await self.session.say(consent + random.choice(_PLATFORM_DEMO_OPENERS))
+            await self.session.say(random.choice(_PLATFORM_DEMO_OPENERS))
             return
         # Same fix, generalized: every tenant agent without its own
         # welcome_message used to fall through to generate_reply() here and
@@ -724,7 +713,7 @@ class RealEstateAgent(Agent):
         # above, which short-circuits before this.
         greeting = f"Hi {self._visitor_first_name}," if self._visitor_first_name else "Hi,"
         template = _DEFAULT_OPENERS.get(self._reply_language, _DEFAULT_OPENER_EN)
-        await self.session.say(consent + template.format(greeting=greeting, agent_name=self._agent_name))
+        await self.session.say(template.format(greeting=greeting, agent_name=self._agent_name))
 
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
@@ -1181,9 +1170,12 @@ async def entrypoint(ctx: JobContext) -> None:
     # Started only after the session (and therefore both the caller's and
     # the agent's audio tracks) is actually up — see recording.py for why
     # this taps tracks directly instead of LiveKit's own record=True/Egress.
-    recorder = recording.CallRecorder(ctx.room)
-    recorder.start()
-    recorder_holder["recorder"] = recorder
+    try:
+        recorder = recording.CallRecorder(ctx.room)
+        recorder.start()
+        recorder_holder["recorder"] = recorder
+    except Exception:
+        logger.exception("failed to start call recorder for room %s", ctx.room.name)
 
 
 if __name__ == "__main__":

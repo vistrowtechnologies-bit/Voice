@@ -193,6 +193,7 @@ function SiteRow({
   onChange: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  const [keyCopied, setKeyCopied] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [labelDraft, setLabelDraft] = useState(site.widgetLabel)
   const [installMode, setInstallMode] = useState<'wordpress' | 'manual'>('wordpress')
@@ -205,6 +206,12 @@ function SiteRow({
     await navigator.clipboard.writeText(snippet)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  const copyKey = async () => {
+    await navigator.clipboard.writeText(site.siteKey)
+    setKeyCopied(true)
+    setTimeout(() => setKeyCopied(false), 1500)
   }
 
   // Always sends every field the backend's UPDATE statement writes, so a
@@ -276,6 +283,9 @@ function SiteRow({
         <span className="font-mono">{showKey ? site.siteKey : `${site.siteKey.slice(0, 12)}${'•'.repeat(16)}`}</span>
         <button onClick={() => setShowKey((v) => !v)} className="text-text-muted hover:text-text">
           <Icon name={showKey ? 'visibility_off' : 'visibility'} className="text-[15px]" />
+        </button>
+        <button onClick={copyKey} className="text-text-muted hover:text-text" aria-label="Copy site key">
+          <Icon name={keyCopied ? 'check' : 'content_copy'} className="text-[15px]" />
         </button>
       </div>
 

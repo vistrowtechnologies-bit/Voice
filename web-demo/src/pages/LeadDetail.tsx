@@ -8,6 +8,7 @@ import {
   LANGUAGE_NAMES,
   analyzeCall,
   fetchCallRecordingUrl,
+  fetchIntegrations,
   fetchLead,
   formatDateTime,
   formatDuration,
@@ -32,11 +33,18 @@ export function LeadDetail() {
   const [pushResult, setPushResult] = useState<{ ok: boolean; detail: string } | null>(null)
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null)
   const [recordingError, setRecordingError] = useState<string | null>(null)
+  const [arthaleadsConnected, setArthaleadsConnected] = useState(false)
 
   useEffect(() => {
     if (!id) return
     fetchLead(id).then((result) => setCall(result ?? null))
   }, [id])
+
+  useEffect(() => {
+    fetchIntegrations()
+      .then((integrations) => setArthaleadsConnected(integrations.some((i) => i.key === 'arthaleads' && i.status === 'connected')))
+      .catch(() => setArthaleadsConnected(false))
+  }, [])
 
   useEffect(() => {
     if (!id || !call?.hasRecording) return
@@ -211,6 +219,7 @@ export function LeadDetail() {
             )}
           </Card>
 
+          {arthaleadsConnected && (
           <Card>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-text-muted">CRM status</h2>
@@ -256,6 +265,7 @@ export function LeadDetail() {
               {pushing ? 'Sending…' : call.arthaleadsStatus === 'sent' ? 'Re-send to ArthaLeads' : 'Push to ArthaLeads'}
             </button>
           </Card>
+          )}
 
           {call.hasRecording && (
             <Card>
