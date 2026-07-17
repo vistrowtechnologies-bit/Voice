@@ -98,7 +98,7 @@ const CSS = `
 .av-form label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #9089b0; }
 .av-form input { background: #201b3b; border: 1px solid #2a2440; border-radius: 10px; color: #f5f3ff; padding: 9px 11px; font-size: 13.5px; outline: none; font-family: inherit; }
 .av-form input:focus { border-color: #a855f7; }
-.av-consent { margin: 6px 0 0; font-size: 9px; line-height: 1.35; color: #524b68; text-align: center; }
+.av-consent { margin: 6px 0 0; font-size: 8px; line-height: 1.3; color: #524b68; opacity: .55; text-align: center; }
 .av-phone-wrap { display: flex; align-items: stretch; gap: 6px; }
 .av-phone-prefix { display: flex; align-items: center; padding: 0 10px; background: #201b3b; border: 1px solid #2a2440; border-radius: 10px; font-size: 13.5px; color: #b8b2cf; font-weight: 600; }
 .av-phone-wrap input { flex: 1; min-width: 0; }
