@@ -85,6 +85,18 @@ export function CallsHistory() {
     { key: 'website', header: 'Website', render: (call) => <span className="text-sm text-text-muted">{call.website || '—'}</span> },
     { key: 'duration', header: 'Duration', render: (call) => <span className="text-sm">{formatDuration(call.durationSeconds)}</span> },
     {
+      key: 'recording',
+      header: 'Recording',
+      render: (call) =>
+        call.hasRecording ? (
+          <span className="flex items-center gap-1 text-sm text-cyan">
+            <Icon name="mic" className="text-[15px]" /> Yes
+          </span>
+        ) : (
+          <span className="text-sm text-text-muted">—</span>
+        ),
+    },
+    {
       key: 'sentiment',
       header: 'Sentiment',
       render: (call) => (
