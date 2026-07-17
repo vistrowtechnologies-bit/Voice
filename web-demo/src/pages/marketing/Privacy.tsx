@@ -9,7 +9,7 @@ export function Privacy() {
     <LegalLayout
       eyebrow="Legal"
       title="Privacy Policy"
-      updated="13 July 2026"
+      updated="17 July 2026"
       intro={`${BRAND.name} ("we", "us", "${BRAND.short}") builds AI voice agents that businesses use to answer and place phone calls. This policy explains what we collect, why, and the choices you have — whether you're a business running ${BRAND.name} or someone who spoke with an AI agent powered by it.`}
     >
       <LegalSection title="1. Who this policy covers">
@@ -18,8 +18,9 @@ export function Privacy() {
           workspace, and team data.
         </p>
         <p>
-          <b>If you called, or were called by, a {BRAND.name}-powered AI agent</b> ("Caller"), this
-          covers the call recording, transcript, and any details the agent captured during that
+          <b>If you called, or were called by, a {BRAND.name}-powered AI agent</b> ("Caller"): calls
+          may be recorded for quality, training, and record-keeping purposes, and this section
+          covers that call recording, transcript, and any details the agent captured during that
           call. Our Customers, not {BRAND.name}, decide when and why to call you — for questions
           about a specific call, contact that business directly. We act as their data processor for
           this data, and as a controller only for the platform-level data described below.

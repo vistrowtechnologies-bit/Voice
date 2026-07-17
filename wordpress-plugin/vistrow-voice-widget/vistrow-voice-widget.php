@@ -250,6 +250,25 @@ function vistrow_voice_render_settings_page() {
 
             <div>
                 <div class="vvw-card">
+                    <h2>Recording notice</h2>
+                    <p class="vvw-card-desc">
+                        Calls placed through this widget are recorded for quality and training
+                        purposes. This is disclosed to callers on the call itself, but you're also
+                        responsible for disclosing it in your own site's Privacy Policy before you
+                        go live.
+                    </p>
+                    <?php
+                    $vistrow_privacy_page_id = (int) get_option('wp_page_for_privacy_policy');
+                    $vistrow_privacy_edit_url = $vistrow_privacy_page_id
+                        ? get_edit_post_link($vistrow_privacy_page_id, '')
+                        : admin_url('options-privacy.php');
+                    ?>
+                    <a class="vvw-link-btn" href="<?php echo esc_url($vistrow_privacy_edit_url); ?>">
+                        <?php echo $vistrow_privacy_page_id ? 'Edit your Privacy Policy page' : 'Set up a Privacy Policy page'; ?>
+                        <span class="dashicons dashicons-edit"></span>
+                    </a>
+                </div>
+                <div class="vvw-card">
                     <h2>Your leads</h2>
                     <p class="vvw-card-desc">Every call this widget captures — name, phone, transcript — lands in
                         your Vistrow Voice CRM automatically.</p>
