@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.3.2
+ * Version: 1.3.3
  * Author: Vistrow Voice
  */
 
@@ -124,6 +124,11 @@ function vistrow_voice_render_settings_page() {
         .vvw-field label.vvw-label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 4px; }
         .vvw-help { color: #646970; font-size: 12.5px; margin: 4px 0 0; }
         .vvw-radio-row { display: block; margin-bottom: 6px; font-weight: 400; }
+        .vvw-page-list { max-height: 220px; overflow-y: auto; border: 1px solid #dcdcde; border-radius: 6px; background: #fbfbfc; min-width: 280px; max-width: 380px; }
+        .vvw-page-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-weight: 400; cursor: pointer; border-bottom: 1px solid #eee; }
+        .vvw-page-row:last-child { border-bottom: none; }
+        .vvw-page-row:hover { background: #f3eefc; }
+        .vvw-page-row input:checked ~ span { color: #7c3aed; font-weight: 600; }
         .vvw-link-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border: 1px solid #dcdcde; border-radius: 6px; text-decoration: none; color: #1d2327; font-size: 13px; font-weight: 500; margin-bottom: 8px; }
         .vvw-link-btn:last-child { margin-bottom: 0; }
         .vvw-link-btn:hover { border-color: #7c3aed; color: #7c3aed; }
@@ -140,6 +145,16 @@ function vistrow_voice_render_settings_page() {
                 <span class="dot"></span><?php echo $connected ? 'Connected' : 'Not connected'; ?>
             </span>
         </div>
+
+        <?php
+        // WordPress only auto-prints the "Settings saved." box on pages nested
+        // under the default Settings menu — a top-level page (like this one)
+        // has to render it itself, or a real save silently shows nothing.
+        if (isset($_GET['settings-updated'])) {
+            add_settings_error('vistrow_voice_messages', 'vvw_saved', 'Settings saved.', 'success');
+        }
+        settings_errors('vistrow_voice_messages');
+        ?>
 
         <div class="vvw-grid">
             <div>
@@ -201,20 +216,21 @@ function vistrow_voice_render_settings_page() {
                             $all_pages = get_pages(array('sort_column' => 'post_title'));
                             if ($all_pages) :
                             ?>
-                            <select name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[pages][]" multiple
-                                size="<?php echo esc_attr(min(10, max(4, count($all_pages)))); ?>"
-                                style="min-width:280px;">
+                            <div class="vvw-page-list">
                                 <?php foreach ($all_pages as $page) : ?>
-                                    <option value="<?php echo esc_attr($page->ID); ?>"
-                                        <?php selected(in_array((int) $page->ID, $settings['pages'], true)); ?>>
-                                        <?php echo esc_html($page->post_title); ?>
-                                    </option>
+                                    <label class="vvw-page-row">
+                                        <input type="checkbox"
+                                            name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[pages][]"
+                                            value="<?php echo esc_attr($page->ID); ?>"
+                                            <?php checked(in_array((int) $page->ID, $settings['pages'], true)); ?> />
+                                        <span><?php echo esc_html($page->post_title); ?></span>
+                                    </label>
                                 <?php endforeach; ?>
-                            </select>
+                            </div>
                             <p class="vvw-help">
                                 Choose whether the call button appears everywhere on this site or only on the
-                                pages you pick here. Cmd/Ctrl-click to select more than one. Only used when
-                                "Only the pages I select below" is chosen above.
+                                pages you check here. Only used when "Only the pages I select below" is chosen
+                                above.
                             </p>
                             <?php else : ?>
                                 <p class="vvw-help">No pages found on this site yet.</p>
