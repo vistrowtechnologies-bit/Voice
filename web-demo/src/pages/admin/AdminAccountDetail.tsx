@@ -140,6 +140,8 @@ export function AdminAccountDetail() {
         <ReasonModal
           title="Adjust credits"
           field={{ label: 'New credit total', type: 'number', initial: String(Math.round(d.billing.creditsTotal)) }}
+          helperText={`Currently ${Math.round(d.billing.creditsUsed).toLocaleString()} used of ${Math.round(d.billing.creditsTotal).toLocaleString()} — the field above is the new total, not an amount to add. Use a quick-add button below, or type total = used + however many credits you want remaining.`}
+          presets={[100, 500, 1000, 5000]}
           confirmLabel="Update credits"
           onClose={() => setModal(null)}
           onConfirm={async (val, reason) => {
@@ -392,6 +394,8 @@ function ReasonModal({
   field,
   confirmLabel,
   danger,
+  helperText,
+  presets,
   onClose,
   onConfirm,
 }: {
@@ -399,6 +403,14 @@ function ReasonModal({
   field?: { label: string; type: 'number' | 'select'; initial: string; options?: string[] }
   confirmLabel: string
   danger?: boolean
+  // Context shown under the field — e.g. current usage, so an admin setting
+  // an absolute total doesn't have to go look that number up elsewhere.
+  helperText?: string
+  // Quick "add N" buttons for numeric fields — the field itself is always an
+  // absolute total (that's what the backend takes), so a preset just fills
+  // in field's current numeric value + the preset amount rather than
+  // requiring the admin to do that math themselves.
+  presets?: number[]
   onClose: () => void
   onConfirm: (value: string, reason: string) => Promise<void>
 }) {
@@ -430,6 +442,21 @@ function ReasonModal({
                 </select>
               ) : (
                 <input type="number" value={value} onChange={(e) => setValue(e.target.value)} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary" />
+              )}
+              {helperText && <span className="text-[11px] text-text-muted">{helperText}</span>}
+              {presets && presets.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {presets.map((amount) => (
+                    <button
+                      key={amount}
+                      type="button"
+                      onClick={() => setValue(String((Number(field?.initial) || 0) + amount))}
+                      className="rounded-full border border-border px-2.5 py-1 text-[11px] font-semibold text-text-muted hover:border-primary hover:text-primary"
+                    >
+                      +{amount.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
               )}
             </label>
           )}
