@@ -75,7 +75,7 @@ def init_db() -> None:
                 # matching migration for why this is separate from the
                 # integration-level last_sync/last_error.
                 "arthaleads_status", "arthaleads_synced_at", "arthaleads_error",
-                # Cloudflare R2 object key for this call's recording (see
+                # Backblaze B2 object key for this call's recording (see
                 # recording.py), set after the fact once upload finishes —
                 # never the raw key surfaced to the frontend, only through a
                 # presigned URL route.

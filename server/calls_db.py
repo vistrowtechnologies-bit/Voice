@@ -579,7 +579,7 @@ def init_tables() -> None:
                 ("arthaleads_status", "TEXT"),
                 ("arthaleads_synced_at", "TEXT"),
                 ("arthaleads_error", "TEXT"),
-                # Cloudflare R2 object key for this call's recording (see
+                # Backblaze B2 object key for this call's recording (see
                 # agent/recording.py), set after the fact once the agent's
                 # post-call upload finishes. Never returned to the frontend
                 # directly — _call_dict below exposes only a hasRecording

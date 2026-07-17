@@ -1032,27 +1032,27 @@ def get_call(call_id: int, user: dict = Depends(current_user)) -> dict:
 
 @app.get("/calls/{call_id}/recording")
 def get_call_recording_url(call_id: int, user: dict = Depends(current_user)) -> dict:
-    """A short-lived presigned R2 GET URL for this call's recording — never
-    the raw storage key, and never proxied through this server (R2's own
-    $0-egress applies only to direct client downloads, not a relay through
-    here)."""
+    """A short-lived presigned Backblaze B2 GET URL for this call's
+    recording — never the raw storage key, and never proxied through this
+    server (client downloads directly from B2)."""
     key = calls_db.get_call_recording_key(call_id, user["account_id"])
     if not key:
         raise HTTPException(404, "No recording for this call")
-    account_id_str = os.environ.get("R2_ACCOUNT_ID")
-    access_key = os.environ.get("R2_ACCESS_KEY_ID")
-    secret_key = os.environ.get("R2_SECRET_ACCESS_KEY")
-    bucket = os.environ.get("R2_BUCKET_NAME")
-    if not (account_id_str and access_key and secret_key and bucket):
+    endpoint_url = os.environ.get("B2_ENDPOINT_URL")
+    key_id = os.environ.get("B2_KEY_ID")
+    application_key = os.environ.get("B2_APPLICATION_KEY")
+    bucket = os.environ.get("B2_BUCKET_NAME")
+    region = os.environ.get("B2_REGION")
+    if not (endpoint_url and key_id and application_key and bucket and region):
         raise HTTPException(503, "Recording storage not configured")
     import boto3
 
     client = boto3.client(
         "s3",
-        endpoint_url=f"https://{account_id_str}.r2.cloudflarestorage.com",
-        aws_access_key_id=access_key,
-        aws_secret_access_key=secret_key,
-        region_name="auto",
+        endpoint_url=endpoint_url,
+        aws_access_key_id=key_id,
+        aws_secret_access_key=application_key,
+        region_name=region,
     )
     url = client.generate_presigned_url(
         "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=3600

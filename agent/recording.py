@@ -4,7 +4,10 @@ JobContext.init_recording(), which (per livekit-agents' own job.py) spins up
 a billed cloud-observability pipeline any time audio recording is requested,
 regardless of whether traces/logs are separately disabled. Tapping the room's
 audio tracks directly here never touches that code path, so recording stays
-genuinely free — the only cost is R2 storage (see upload_recording below).
+genuinely free — the only cost is Backblaze B2 storage (see upload_recording
+below), chosen over Cloudflare R2 because B2's free tier (10GB, permanent)
+never requires a card on file, where R2 gates its free tier behind adding a
+payment method even at $0 due.
 
 Best-effort throughout: a recording hiccup must never break call teardown or
 surface to the caller. Every public function swallows its own exceptions.
@@ -126,31 +129,32 @@ class CallRecorder:
 
 
 def upload_recording(local_path: str, account_id: int | None, call_id: int | None) -> str | None:
-    """Uploads a local WAV to Cloudflare R2 and returns its object key, or
-    None if R2 isn't configured (a supported, silent no-op) or the upload
-    failed. Always deletes the local temp file."""
+    """Uploads a local WAV to Backblaze B2 (via its S3-compatible API) and
+    returns its object key, or None if B2 isn't configured (a supported,
+    silent no-op) or the upload failed. Always deletes the local temp file."""
     try:
-        account_id_str = os.environ.get("R2_ACCOUNT_ID")
-        access_key = os.environ.get("R2_ACCESS_KEY_ID")
-        secret_key = os.environ.get("R2_SECRET_ACCESS_KEY")
-        bucket = os.environ.get("R2_BUCKET_NAME")
-        if not (account_id_str and access_key and secret_key and bucket and call_id):
+        endpoint_url = os.environ.get("B2_ENDPOINT_URL")
+        key_id = os.environ.get("B2_KEY_ID")
+        application_key = os.environ.get("B2_APPLICATION_KEY")
+        bucket = os.environ.get("B2_BUCKET_NAME")
+        region = os.environ.get("B2_REGION")
+        if not (endpoint_url and key_id and application_key and bucket and region and call_id):
             return None
         import boto3
 
         client = boto3.client(
             "s3",
-            endpoint_url=f"https://{account_id_str}.r2.cloudflarestorage.com",
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            region_name="auto",
+            endpoint_url=endpoint_url,
+            aws_access_key_id=key_id,
+            aws_secret_access_key=application_key,
+            region_name=region,
         )
         key = f"recordings/{account_id or 0}/{call_id}.wav"
         with open(local_path, "rb") as f:
             client.upload_fileobj(io.BytesIO(f.read()), bucket, key, ExtraArgs={"ContentType": "audio/wav"})
         return key
     except Exception:
-        logger.exception("recording upload to R2 failed for call %s", call_id)
+        logger.exception("recording upload to B2 failed for call %s", call_id)
         return None
     finally:
         try:
