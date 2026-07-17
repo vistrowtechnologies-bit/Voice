@@ -1030,6 +1030,36 @@ def get_call(call_id: int, user: dict = Depends(current_user)) -> dict:
     return call
 
 
+@app.get("/calls/{call_id}/recording")
+def get_call_recording_url(call_id: int, user: dict = Depends(current_user)) -> dict:
+    """A short-lived presigned R2 GET URL for this call's recording — never
+    the raw storage key, and never proxied through this server (R2's own
+    $0-egress applies only to direct client downloads, not a relay through
+    here)."""
+    key = calls_db.get_call_recording_key(call_id, user["account_id"])
+    if not key:
+        raise HTTPException(404, "No recording for this call")
+    account_id_str = os.environ.get("R2_ACCOUNT_ID")
+    access_key = os.environ.get("R2_ACCESS_KEY_ID")
+    secret_key = os.environ.get("R2_SECRET_ACCESS_KEY")
+    bucket = os.environ.get("R2_BUCKET_NAME")
+    if not (account_id_str and access_key and secret_key and bucket):
+        raise HTTPException(503, "Recording storage not configured")
+    import boto3
+
+    client = boto3.client(
+        "s3",
+        endpoint_url=f"https://{account_id_str}.r2.cloudflarestorage.com",
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        region_name="auto",
+    )
+    url = client.generate_presigned_url(
+        "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=3600
+    )
+    return {"url": url}
+
+
 @app.post("/calls/{call_id}/analyze")
 def analyze_call(call_id: int, user: dict = Depends(current_user)) -> dict:
     """Run (or re-run) conversation intelligence on one call and cache it on

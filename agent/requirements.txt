@@ -5,3 +5,4 @@ livekit-plugins-elevenlabs>=1.6
 livekit-plugins-noise-cancellation>=0.2
 psycopg[binary,pool]>=3.2
 python-dotenv
+boto3

@@ -579,6 +579,12 @@ def init_tables() -> None:
                 ("arthaleads_status", "TEXT"),
                 ("arthaleads_synced_at", "TEXT"),
                 ("arthaleads_error", "TEXT"),
+                # Cloudflare R2 object key for this call's recording (see
+                # agent/recording.py), set after the fact once the agent's
+                # post-call upload finishes. Never returned to the frontend
+                # directly — _call_dict below exposes only a hasRecording
+                # bool; playback goes through a presigned-URL route instead.
+                ("recording_key", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
@@ -1116,6 +1122,9 @@ def _call_dict(
         "arthaleadsStatus": _row_get(row, "arthaleads_status"),
         "arthaleadsSyncedAt": _row_get(row, "arthaleads_synced_at"),
         "arthaleadsError": _row_get(row, "arthaleads_error"),
+        # Never the raw R2 key — just whether one exists, so the frontend
+        # knows to show a player and fetch a presigned URL on demand.
+        "hasRecording": bool(_row_get(row, "recording_key")),
     }
     if include_transcript:
         out["transcript"] = [
@@ -1163,6 +1172,20 @@ def get_call(call_id: int, account_id: int) -> dict | None:
             return None
         sites_by_id = {s["id"]: s for s in list_sites(account_id)}
         return _call_dict(row, sites_by_id=sites_by_id, agent_names=_agent_names_by_id(account_id))
+    finally:
+        conn.close()
+
+
+def get_call_recording_key(call_id: int, account_id: int) -> str | None:
+    """Account-scoped lookup of the raw R2 key — used only by the presigned-
+    URL route (token_api.py); never returned to the frontend directly (see
+    _call_dict's hasRecording bool)."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT recording_key FROM calls WHERE id = ? AND account_id = ?", (call_id, account_id)
+        ).fetchone()
+        return row["recording_key"] if row else None
     finally:
         conn.close()
 

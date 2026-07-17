@@ -3,3 +3,4 @@ uvicorn[standard]
 livekit-api
 psycopg[binary,pool]>=3.2
 python-dotenv
+boto3

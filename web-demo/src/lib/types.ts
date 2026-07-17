@@ -73,6 +73,9 @@ export interface CallRecord {
   arthaleadsStatus: 'sent' | 'failed' | null
   arthaleadsSyncedAt: string | null
   arthaleadsError: string | null
+  // Never the raw storage key — just whether a recording exists. Fetch a
+  // playback URL on demand via fetchCallRecordingUrl.
+  hasRecording: boolean
 }
 
 export type Lead = CallRecord

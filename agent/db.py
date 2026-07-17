@@ -75,6 +75,11 @@ def init_db() -> None:
                 # matching migration for why this is separate from the
                 # integration-level last_sync/last_error.
                 "arthaleads_status", "arthaleads_synced_at", "arthaleads_error",
+                # Cloudflare R2 object key for this call's recording (see
+                # recording.py), set after the fact once upload finishes —
+                # never the raw key surfaced to the frontend, only through a
+                # presigned URL route.
+                "recording_key",
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} TEXT")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS extracted_data TEXT DEFAULT ''")
@@ -409,6 +414,26 @@ def set_call_arthaleads_status(call_id: int | None, status: str, error: str | No
                 f"UPDATE calls SET arthaleads_status = ?, arthaleads_synced_at = {_NOW}, "
                 "arthaleads_error = ? WHERE id = ?",
                 (status, error, call_id),
+            )
+    except psycopg.Error:
+        pass
+    finally:
+        conn.close()
+
+
+def set_call_recording(call_id: int | None, recording_key: str) -> None:
+    """Attaches this call's R2 recording key after upload finishes — same
+    save-now-update-later shape as set_call_arthaleads_status above, since
+    the recording isn't ready until after save_call's initial INSERT.
+    Best-effort: a failure here must never disturb call teardown."""
+    if call_id is None:
+        return
+    conn = dbconn.connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE calls SET recording_key = ? WHERE id = ?",
+                (recording_key, call_id),
             )
     except psycopg.Error:
         pass

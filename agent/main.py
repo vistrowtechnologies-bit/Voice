@@ -25,6 +25,7 @@ from livekit.agents.types import NOT_GIVEN
 from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarvam
 
 import db
+import recording
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
 # dbconn.py is duplicated into agent/. Used here only to resolve a voice's
@@ -98,6 +99,17 @@ _PLATFORM_DEMO_OPENERS = [
 _DEFAULT_OPENER_HI = "{greeting} नमस्ते! ये {agent_name} है। बताइए, आपकी क्या मदद करूँ?"
 _DEFAULT_OPENER_EN = "{greeting} this is {agent_name}. Thanks for calling — how can I help you today?"
 _DEFAULT_OPENERS = {"hi-IN": _DEFAULT_OPENER_HI}
+
+# Recording-consent disclosure. Every on_enter() branch below speaks a fixed
+# string via session.say() rather than the LLM (see the branches' own
+# comments for why — mainly latency), so a prompt-level consent instruction
+# would silently never fire for most calls. Instead this is prefixed onto
+# whichever fixed line is about to be spoken, in the SAME say() call, so
+# disclosure is guaranteed on every call without adding the extra TTS
+# round-trip the fixes below were written specifically to avoid.
+_CONSENT_NOTICE_HI = "बता दूं, क्वालिटी और ट्रेनिंग के लिए यह कॉल रिकॉर्ड हो सकती है। "
+_CONSENT_NOTICE_EN = "Just so you know, this call may be recorded for quality and training purposes. "
+_CONSENT_NOTICES = {"hi-IN": _CONSENT_NOTICE_HI}
 
 
 # Sarvam bulbul:v3's own `pace`/`temperature`/`pitch` govern how the voice is
@@ -680,13 +692,19 @@ class RealEstateAgent(Agent):
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
 
     async def on_enter(self) -> None:
-        # first_speaker == 'user' means wait silently for the caller to open.
+        consent = _CONSENT_NOTICES.get(self._reply_language, _CONSENT_NOTICE_EN)
+        # first_speaker == 'user' means wait silently for the caller to open —
+        # but consent still has to be disclosed, so it gets one short
+        # standalone line here, the only thing this branch ever speaks.
         if self._first_speaker == "user":
+            await self.session.say(consent)
             return
         if self._welcome_message:
             # Operator wrote an exact opening line — speak it verbatim rather
-            # than letting the model improvise a greeting.
-            await self.session.say(self._welcome_message)
+            # than letting the model improvise a greeting. Consent is
+            # prefixed onto this same say() call rather than a separate one,
+            # so it doesn't add another TTS round-trip.
+            await self.session.say(consent + self._welcome_message)
             return
         if self._is_platform_demo:
             # A dynamic LLM-generated greeting sounds better, but costs a full
@@ -695,7 +713,7 @@ class RealEstateAgent(Agent):
             # expecting. Speaking a fixed line via say() skips straight to
             # TTS. Picked at random per call so repeat visitors don't hear the
             # same line every time.
-            await self.session.say(random.choice(_PLATFORM_DEMO_OPENERS))
+            await self.session.say(consent + random.choice(_PLATFORM_DEMO_OPENERS))
             return
         # Same fix, generalized: every tenant agent without its own
         # welcome_message used to fall through to generate_reply() here and
@@ -706,7 +724,7 @@ class RealEstateAgent(Agent):
         # above, which short-circuits before this.
         greeting = f"Hi {self._visitor_first_name}," if self._visitor_first_name else "Hi,"
         template = _DEFAULT_OPENERS.get(self._reply_language, _DEFAULT_OPENER_EN)
-        await self.session.say(template.format(greeting=greeting, agent_name=self._agent_name))
+        await self.session.say(consent + template.format(greeting=greeting, agent_name=self._agent_name))
 
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
@@ -1047,6 +1065,9 @@ async def entrypoint(ctx: JobContext) -> None:
     # drains and the shutdown callback runs, the visitor has already left the
     # participant list. wait_for_participant above guarantees we have them.
     visitor_holder: dict[str, str | None] = {"identity": first_participant.identity}
+    # Same reasoning as visitor_holder above — set once the recorder actually
+    # starts (after session.start(), below), read here once the call ends.
+    recorder_holder: dict[str, recording.CallRecorder | None] = {"recorder": None}
 
     async def log_call() -> None:
         ended_at = datetime.now(timezone.utc)
@@ -1086,6 +1107,21 @@ async def entrypoint(ctx: JobContext) -> None:
             logger.info("saved call log for room %s (%d turns)", ctx.room.name, len(transcript))
         except Exception:
             logger.exception("failed to save call log for room %s", ctx.room.name)
+        recorder = recorder_holder["recorder"]
+        if recorder is not None:
+            try:
+                local_path = await recorder.stop()
+                if local_path:
+                    # boto3's upload is blocking network I/O — run it off the
+                    # event loop so it doesn't stall every other concurrent
+                    # call's session while this one uploads.
+                    key = await asyncio.to_thread(
+                        recording.upload_recording, local_path, cfg.get("account_id"), saved_call_id
+                    )
+                    if key and saved_call_id is not None:
+                        db.set_call_recording(saved_call_id, key)
+            except Exception:
+                logger.exception("failed to finalize recording for room %s", ctx.room.name)
         # A separate, comprehensive delivery at call end — unlike the
         # mid-call capture_lead/book_appointment fan-outs (small structured
         # events for fast CRM visibility during the call), this one carries
@@ -1142,6 +1178,12 @@ async def entrypoint(ctx: JobContext) -> None:
         room=ctx.room,
         room_input_options=RoomInputOptions(noise_cancellation=noise_filter),
     )
+    # Started only after the session (and therefore both the caller's and
+    # the agent's audio tracks) is actually up — see recording.py for why
+    # this taps tracks directly instead of LiveKit's own record=True/Egress.
+    recorder = recording.CallRecorder(ctx.room)
+    recorder.start()
+    recorder_holder["recorder"] = recorder
 
 
 if __name__ == "__main__":

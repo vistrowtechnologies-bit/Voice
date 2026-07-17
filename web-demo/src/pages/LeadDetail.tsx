@@ -4,7 +4,15 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
-import { LANGUAGE_NAMES, analyzeCall, fetchLead, formatDateTime, formatDuration, pushCallToArthaleads } from '../lib/api'
+import {
+  LANGUAGE_NAMES,
+  analyzeCall,
+  fetchCallRecordingUrl,
+  fetchLead,
+  formatDateTime,
+  formatDuration,
+  pushCallToArthaleads,
+} from '../lib/api'
 import type { CallRecord } from '../lib/types'
 
 const SENTIMENT_STYLE: Record<string, string> = {
@@ -22,11 +30,21 @@ export function LeadDetail() {
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
   const [pushing, setPushing] = useState(false)
   const [pushResult, setPushResult] = useState<{ ok: boolean; detail: string } | null>(null)
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null)
+  const [recordingError, setRecordingError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
     fetchLead(id).then((result) => setCall(result ?? null))
   }, [id])
+
+  useEffect(() => {
+    if (!id || !call?.hasRecording) return
+    setRecordingError(null)
+    fetchCallRecordingUrl(id)
+      .then((r) => setRecordingUrl(r.url))
+      .catch(() => setRecordingError('Could not load the recording.'))
+  }, [id, call?.hasRecording])
 
   const runAnalysis = async () => {
     if (!id) return
@@ -238,6 +256,19 @@ export function LeadDetail() {
               {pushing ? 'Sending…' : call.arthaleadsStatus === 'sent' ? 'Re-send to ArthaLeads' : 'Push to ArthaLeads'}
             </button>
           </Card>
+
+          {call.hasRecording && (
+            <Card>
+              <h2 className="mb-3 text-sm font-semibold text-text-muted">Recording</h2>
+              {recordingUrl ? (
+                <audio controls src={recordingUrl} className="w-full" />
+              ) : recordingError ? (
+                <p className="text-xs text-destructive">{recordingError}</p>
+              ) : (
+                <p className="text-xs text-text-muted">Loading recording…</p>
+              )}
+            </Card>
+          )}
 
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Call details</h2>
