@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useLocalParticipant, useParticipantAttribute, useRemoteParticipants, useRoomContext, useTrackVolume, useTracks } from '@livekit/components-react'
-import { ConnectionState, Track } from 'livekit-client'
+import { LiveKitRoom, RoomAudioRenderer, useLocalParticipant, useParticipantAttribute, useRemoteParticipants, useRoomContext, useTrackVolume, useTracks } from '@livekit/components-react'
+import { Track } from 'livekit-client'
 import type { RemoteParticipant } from 'livekit-client'
 import { Icon } from './Icon'
 import {
@@ -13,7 +13,14 @@ import {
 } from '../lib/demoCallCap'
 import { fetchLiveKitToken, randomId } from '../lib/livekit'
 
-type Phase = 'idle' | 'connecting' | 'active' | 'denied' | 'capped'
+type Phase = 'idle' | 'connecting' | 'active' | 'denied' | 'capped' | 'unreachable'
+
+// How long the visitor's browser waits for the AI agent to actually join the
+// room after connecting. A healthy dispatch + (cold) worker start is a few
+// seconds; if no agent joins within this window the demo worker is genuinely
+// unavailable (restarting/crashed/no capacity), so we surface a clean retry
+// instead of leaving the visitor staring at a ticking timer over dead air.
+const AGENT_JOIN_TIMEOUT_MS = 20_000
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -76,6 +83,17 @@ export function DemoOrbCard() {
     setPhase(hasDemoCallsRemaining() ? 'idle' : 'capped')
   }, [])
 
+  // The browser connected to the room but no AI agent ever joined (worker
+  // unavailable). Tear down the connection and show an explicit retry rather
+  // than a fake "live call" over dead air — this is what a client saw as a
+  // "dead agent" before.
+  const handleAgentUnavailable = useCallback(() => {
+    setToken(null)
+    setServerUrl(null)
+    setErrorMessage('Artha didn’t pick up just now — please try again.')
+    setPhase('unreachable')
+  }, [])
+
   const exhausted = phase === 'capped'
   const isCallLive = phase === 'active'
 
@@ -94,7 +112,7 @@ export function DemoOrbCard() {
         {isCallLive && token && serverUrl ? (
           <LiveKitRoom serverUrl={serverUrl} token={token} connect audio onDisconnected={handleDisconnected}>
             <RoomAudioRenderer />
-            <InlineCallBody />
+            <InlineCallBody onAgentUnavailable={handleAgentUnavailable} />
           </LiveKitRoom>
         ) : (
           <>
@@ -117,19 +135,27 @@ export function DemoOrbCard() {
             </button>
 
             <h3 className="font-display text-2xl font-semibold">
-              {exhausted ? 'Book a live walkthrough' : phase === 'connecting' ? 'Connecting…' : phase === 'denied' ? 'Mic access blocked' : 'Tap to talk'}
+              {exhausted
+                ? 'Book a live walkthrough'
+                : phase === 'connecting'
+                  ? 'Connecting…'
+                  : phase === 'denied'
+                    ? 'Mic access blocked'
+                    : phase === 'unreachable'
+                      ? 'Couldn’t reach Artha'
+                      : 'Tap to talk'}
             </h3>
             <p className="mt-1 text-sm text-text-muted">
               {exhausted
                 ? 'You’ve used all your free demo calls'
                 : phase === 'connecting'
                   ? `Connecting you to Artha…`
-                  : phase === 'denied'
+                  : phase === 'denied' || phase === 'unreachable'
                     ? errorMessage
                     : 'Try Artha, no signup required'}
             </p>
 
-            {phase === 'denied' ? (
+            {phase === 'denied' || phase === 'unreachable' ? (
               <button
                 type="button"
                 onClick={handleStart}
@@ -178,20 +204,36 @@ export function DemoOrbCard() {
 // swapped from the idle "Tap to talk" content to live call state: a running
 // timer and mute/end-call controls. No "Listening…/Thinking…/Speaking…"
 // status text — it read as distracting chatter rather than useful signal.
-function InlineCallBody() {
+function InlineCallBody({ onAgentUnavailable }: { onAgentUnavailable: () => void }) {
   const room = useRoomContext()
-  const connectionState = useConnectionState()
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant()
   const remoteParticipants = useRemoteParticipants()
   const agentParticipant = remoteParticipants[0]
-  const [startedAt] = useState(() => Date.now())
+  const agentJoined = !!agentParticipant
+  // Timer starts when the AGENT joins, not when the browser connects to the
+  // room — otherwise a call that never got an agent still showed a ticking
+  // "live" timer against silence, which read as a broken/dead agent.
+  const [startedAt, setStartedAt] = useState<number | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
 
   useEffect(() => {
-    if (connectionState !== ConnectionState.Connected) return
+    if (agentJoined && startedAt === null) setStartedAt(Date.now())
+  }, [agentJoined, startedAt])
+
+  useEffect(() => {
+    if (startedAt === null) return
     const interval = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000)
     return () => clearInterval(interval)
-  }, [connectionState, startedAt])
+  }, [startedAt])
+
+  // If no agent joins within the timeout, the demo worker is unavailable —
+  // bail out to an explicit retry instead of holding the visitor on a silent
+  // dead call.
+  useEffect(() => {
+    if (agentJoined) return
+    const timer = setTimeout(onAgentUnavailable, AGENT_JOIN_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [agentJoined, onAgentUnavailable])
 
   return (
     <>
@@ -203,13 +245,20 @@ function InlineCallBody() {
         ) : (
           <span className="relative h-32 w-32 overflow-hidden rounded-full opacity-45 shadow-[0_0_60px_-5px_rgba(168,85,247,0.6)]">
             <video src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-bg/40">
+              <span className="h-7 w-7 animate-spin rounded-full border-2 border-cyan border-t-transparent" />
+            </span>
           </span>
         )}
       </div>
 
-      <div className="mt-5 rounded-xl border border-border bg-bg px-4 py-2 font-mono text-sm text-cyan">
-        {formatDuration(elapsedMs)}
-      </div>
+      {agentJoined ? (
+        <div className="mt-5 rounded-xl border border-border bg-bg px-4 py-2 font-mono text-sm text-cyan">
+          {formatDuration(elapsedMs)}
+        </div>
+      ) : (
+        <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>
+      )}
 
       <div className="mt-6 flex w-full items-center justify-center gap-4 border-t border-border pt-5">
         <button
