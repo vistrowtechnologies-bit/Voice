@@ -10,6 +10,7 @@ from livekit import api
 from livekit.agents import (
     Agent,
     AgentSession,
+    EndpointingOptions,
     JobContext,
     RoomInputOptions,
     TurnHandlingOptions,
@@ -1001,7 +1002,22 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         userdata=userdata,
-        turn_handling=TurnHandlingOptions(interruption={"min_words": min_words}),
+        turn_handling=TurnHandlingOptions(
+            interruption={"min_words": min_words},
+            # Sarvam's saaras:v3 can take longer than livekit-agents' 3.0s
+            # default max_delay to finalize a transcript on a longer
+            # utterance. When that happens the framework commits the user's
+            # turn as empty/stale and silently drops the late-arriving real
+            # transcript ("transcript arrives after turn has been
+            # committed" — confirmed live on a real call, job AJ_mCTsGQeHaBNf:
+            # two real follow-up questions never reached the LLM, and with
+            # no new content the away-timeout check-in below just repeated
+            # "are you still there?" instead of ever answering). Raising
+            # max_delay gives Sarvam enough runway to finish before the
+            # framework gives up; min_delay bumped slightly too per the
+            # library's own suggestion in that warning.
+            endpointing=EndpointingOptions(min_delay=0.7, max_delay=6.0),
+        ),
         user_away_timeout=away_timeout,
     )
 
