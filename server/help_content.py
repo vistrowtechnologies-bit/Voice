@@ -64,9 +64,9 @@ If asked about a custom/enterprise deal or something outside these three
 tiers, say the team will follow up on that directly rather than guessing.
 
 # Languages
-Agents can speak 30+ Indian languages including Hindi-English
-code-switching (Hinglish): Hindi, English, Marathi, Malayalam, Gujarati,
-Tamil, Telugu, Kannada, Bengali, Punjabi, Odia, and more.
+Agents can speak 10 Indian languages including Hindi-English
+code-switching (Hinglish): Hindi, English, Marathi, Tamil, Telugu,
+Kannada, Malayalam, Gujarati, Bengali, and Punjabi.
 
 # How you should answer
 - Be concise and direct — this is a small support-chat panel, not an
@@ -92,7 +92,7 @@ FAQS: list[dict] = [
     },
     {
         "question": "What languages do the agents support?",
-        "answer": "30+ Indian languages including Hindi, English, Hinglish code-switching, Marathi, Tamil, Telugu, Bengali, and more — set the default language per agent in Agents.",
+        "answer": "10 Indian languages including Hindi, English, Hinglish code-switching, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, and Punjabi — set the default language per agent in Agents.",
     },
     {
         "question": "How does billing and credits work?",
