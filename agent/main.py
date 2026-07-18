@@ -1012,11 +1012,17 @@ async def entrypoint(ctx: JobContext) -> None:
             # committed" — confirmed live on a real call, job AJ_mCTsGQeHaBNf:
             # two real follow-up questions never reached the LLM, and with
             # no new content the away-timeout check-in below just repeated
-            # "are you still there?" instead of ever answering). Raising
-            # max_delay gives Sarvam enough runway to finish before the
-            # framework gives up; min_delay bumped slightly too per the
-            # library's own suggestion in that warning.
-            endpointing=EndpointingOptions(min_delay=0.7, max_delay=6.0),
+            # "are you still there?" instead of ever answering).
+            #
+            # min_delay is left at its default (0.5s) deliberately — per
+            # audio_recognition.py's _bounce_eou_task, min_delay is the wait
+            # applied to EVERY turn, while max_delay only kicks in when the
+            # turn-detector model isn't confident the caller has finished
+            # speaking (endpointing_delay escalates from min_delay to
+            # max_delay only when end_of_turn_probability < unlikely_threshold).
+            # So raising max_delay alone fixes the slow/ambiguous-turn drop
+            # above with zero added latency on normal, confident replies.
+            endpointing=EndpointingOptions(max_delay=6.0),
         ),
         user_away_timeout=away_timeout,
     )
