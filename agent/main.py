@@ -76,16 +76,18 @@ _IST = timezone(timedelta(hours=5, minutes=30))
 # customers on their own agent, who should keep the LLM-generated dynamic
 # opener (or an operator's own welcome_message).
 #
-# Hinglish (Latin-script, code-mixed) rather than pure Hindi Devanagari —
-# reads as more natural/conversational and matches how the target audience
-# actually types/speaks, not a translated-sounding formal register.
+# Hinglish (code-mixed Hindi/English) written in Devanagari script rather
+# than Latin transliteration — Sarvam's bulbul TTS (see voice_catalog.py's
+# sample_text notes) code-switches mid-sentence far more reliably when the
+# English loanwords are spelled out phonetically in Devanagari than when
+# they're left in Latin script inside an otherwise-Devanagari sentence.
 _PLATFORM_DEMO_OPENERS = [
-    "Hey, aapne click kiya hai, toh ab mujhe prove karna padega ki main robot jaisi sound nahi karti. Main Artha hoon, Vistrow Voice se. Aap English, Hindi ya Hinglish mein baat kar sakte hain—batayiye, aapka business kis industry mein hai?",
-    "Hey, aapne 'Talk to Artha' click kiya, toh main officially duty par aa gayi. Bataiye, aapka business kya karta hai?",
-    "Hi, main Artha hoon, Vistrow Voice se. Mujhe 30 seconds dijiye, main dikhati hoon ki AI conversation kitni natural ho sakti hai. Aap kis business mein hain?",
-    "Okay, usually yahan AI ek boring robotic line bolta hai. Main woh nahi karungi. Seedha bataiye—your business does what?",
-    "Hi, main Artha hoon. Aap English, Hindi ya Hinglish mein baat kar sakte hain—jo comfortable lage. Toh batayiye, aapka business kis field mein hai?",
-    "Hey, main Artha hoon. Sochiye, aapki har customer call instantly answer ho—even after office hours. Abhi jab call miss hoti hai, toh aapki team kya karti hai?",
+    "हे, आपने क्लिक किया है, तो अब मुझे प्रूव करना पड़ेगा कि मैं रोबोट जैसी साउंड नहीं करती। मैं आर्था हूँ, विस्ट्रो वॉइस से। आप इंग्लिश, हिंदी या हिंग्लिश में बात कर सकते हैं—बताइए, आपका बिज़नेस किस इंडस्ट्री में है?",
+    "हे, आपने 'टॉक टू आर्था' क्लिक किया, तो मैं ऑफिशियली ड्यूटी पर आ गई। बताइए, आपका बिज़नेस क्या करता है?",
+    "हाय, मैं आर्था हूँ, विस्ट्रो वॉइस से। मुझे 30 सेकंड्स दीजिए, मैं दिखाती हूँ कि एआई कन्वर्सेशन कितनी नैचुरल हो सकती है। आप किस बिज़नेस में हैं?",
+    "ओके, यूज़ुअली यहाँ एआई एक बोरिंग रोबोटिक लाइन बोलता है। मैं वो नहीं करूँगी। सीधा बताइए—आपका बिज़नेस क्या करता है?",
+    "हाय, मैं आर्था हूँ। आप इंग्लिश, हिंदी या हिंग्लिश में बात कर सकते हैं—जो कम्फर्टेबल लगे। तो बताइए, आपका बिज़नेस किस फील्ड में है?",
+    "हे, मैं आर्था हूँ। सोचिए, आपकी हर कस्टमर कॉल इंस्टेंटली आंसर हो—ईवन आफ्टर ऑफिस आवर्स। अभी जब कॉल मिस होती है, तो आपकी टीम क्या करती है?",
 ]
 
 # Same "skip generate_reply(), speak a fixed line instantly" fix as the demo
