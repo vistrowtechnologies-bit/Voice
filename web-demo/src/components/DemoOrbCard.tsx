@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useLocalParticipant, useRemoteParticipants, useRoomContext, useTrackVolume, useTracks } from '@livekit/components-react'
+import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useLocalParticipant, useParticipantAttribute, useRemoteParticipants, useRoomContext, useTrackVolume, useTracks } from '@livekit/components-react'
 import { ConnectionState, Track } from 'livekit-client'
 import type { RemoteParticipant } from 'livekit-client'
 import { Icon } from './Icon'
@@ -107,7 +107,7 @@ export function DemoOrbCard() {
               <span className="absolute inset-0 rounded-full border border-primary/20" />
               <span className="absolute inset-5 rounded-full border border-primary/10" />
               <span className="relative h-32 w-32 overflow-hidden rounded-full shadow-[0_0_60px_-5px_rgba(168,85,247,0.6)] transition-transform group-hover:scale-105">
-                <video src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full object-cover" />
+                <video src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
               </span>
               {phase === 'connecting' && (
                 <span className="absolute inset-0 flex items-center justify-center rounded-full bg-bg/50">
@@ -202,7 +202,7 @@ function InlineCallBody() {
           <AgentVisual agentParticipant={agentParticipant} />
         ) : (
           <span className="relative h-32 w-32 overflow-hidden rounded-full opacity-45 shadow-[0_0_60px_-5px_rgba(168,85,247,0.6)]">
-            <video src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full object-cover" />
+            <video src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
           </span>
         )}
       </div>
@@ -234,18 +234,30 @@ function InlineCallBody() {
 // useParticipantAttribute throws if called before an agent participant
 // exists, so these only ever mount once InlineCallBody has confirmed
 // agentParticipant is defined — mirrors ActiveCallUI's AgentOrb pattern.
+// Video's ring animation spins at this rate while the agent is actively
+// speaking (vs. 1x its authored speed the rest of the time) — matches
+// ActiveCallUI.tsx's SPEAKING_PLAYBACK_RATE.
+const SPEAKING_PLAYBACK_RATE = 2.2
+
 function AgentVisual({ agentParticipant }: { agentParticipant: RemoteParticipant }) {
   const agentTracks = useTracks([Track.Source.Microphone]).filter(
     (t) => t.participant.identity === agentParticipant.identity,
   )
   const volume = useTrackVolume(agentTracks[0])
+  const agentState = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
   const scale = 1 + Math.min(volume, 1) * 0.14
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = agentState === 'speaking' ? SPEAKING_PLAYBACK_RATE : 1
+  }, [agentState])
+
   return (
     <span
       className="relative h-32 w-32 overflow-hidden rounded-full shadow-[0_0_60px_-5px_rgba(168,85,247,0.6)] transition-transform duration-150 ease-out"
       style={{ transform: `scale(${scale})` }}
     >
-      <video src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full object-cover" />
+      <video ref={videoRef} src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
     </span>
   )
 }

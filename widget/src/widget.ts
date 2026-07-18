@@ -77,7 +77,7 @@ const CSS = `
 }
 .av-button { width: 68px; height: 68px; border-radius: 9999px; background: #000; border: none; padding: 0; overflow: hidden; cursor: pointer; animation: av-pulse-ring 2.6s ease-out infinite, av-attention-pop 1.1s ease-in-out 1; transition: transform .15s ease; }
 .av-button:hover { transform: scale(1.06); }
-.av-button video { width: 100%; height: 100%; object-fit: cover; }
+.av-button video { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 
 .av-greeting { position: absolute; bottom: 8px; ${position === 'bottom-left' ? 'left: 78px;' : 'right: 78px;'} display: flex; align-items: center; gap: 8px; width: max-content; max-width: 220px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
 .av-greeting span { flex: 1 1 auto; min-width: 0; }
@@ -108,7 +108,7 @@ const CSS = `
 
 .av-body { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; }
-.av-orb video { width: 100%; height: 100%; object-fit: cover; }
+.av-orb video { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 .av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 32px; }
 .av-controls { display: flex; align-items: center; gap: 14px; padding: 0 16px 16px; }
 .av-ctrl-btn { width: 40px; height: 40px; border-radius: 9999px; border: 1px solid #2a2440; background: #201b3b; color: #b8b2cf; display: flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -199,7 +199,8 @@ function init(): void {
 
   const callEl = shadow.getElementById('av-call') as HTMLDivElement
   const statusEl = shadow.getElementById('av-status') as HTMLParagraphElement
-  const orbEl = shadow.getElementById('av-orb-video')?.parentElement as HTMLDivElement
+  const orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement
+  const orbEl = orbVideoEl?.parentElement as HTMLDivElement
   const timerEl = shadow.getElementById('av-timer') as HTMLSpanElement
   const muteBtn = shadow.getElementById('av-mute') as HTMLButtonElement
   const endBtn = shadow.getElementById('av-end') as HTMLButtonElement
@@ -246,8 +247,14 @@ function init(): void {
     speaking: 'Agent is speaking…',
   }
 
+  // Ring animation baked into the video spins at this rate while the agent
+  // is actively speaking, vs. 1x (its authored speed) otherwise — matches
+  // web-demo's ActiveCallUI.tsx/DemoOrbCard.tsx SPEAKING_PLAYBACK_RATE.
+  const SPEAKING_PLAYBACK_RATE = 2.2
+
   function applyAgentState(state: string | undefined): void {
     if (state && STATE_LABELS[state]) setStatus(STATE_LABELS[state])
+    if (orbVideoEl) orbVideoEl.playbackRate = state === 'speaking' ? SPEAKING_PLAYBACK_RATE : 1
   }
 
   function formatCountdown(totalSeconds: number): string {

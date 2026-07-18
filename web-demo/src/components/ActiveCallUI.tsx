@@ -37,11 +37,24 @@ function formatDuration(ms: number): string {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
 }
 
+// The video's own ring animation plays at this rate while the agent is
+// actively speaking, vs. 1x (its authored speed) the rest of the time — the
+// ring is designed to visibly spin faster as a "talking" cue.
+const SPEAKING_PLAYBACK_RATE = 2.2
+
 // Looping abstract orb animation used as the agent's visual — its scale
 // reacts in real time to the agent's mic track volume, so it reads as
-// "alive" rather than a static clip.
-function OrbVideo({ volume, dimmed }: { volume: number; dimmed?: boolean }) {
+// "alive" rather than a static clip. scale-150 crops in tighter on the
+// source video's bright ring/core, since the raw footage has a lot of black
+// margin around it that otherwise reads as dead space inside the circle.
+function OrbVideo({ volume, dimmed, speaking }: { volume: number; dimmed?: boolean; speaking?: boolean }) {
   const scale = 1 + Math.min(volume, 1) * 0.14
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = speaking ? SPEAKING_PLAYBACK_RATE : 1
+  }, [speaking])
+
   return (
     <div
       className="relative h-72 w-72 overflow-hidden rounded-full transition-transform duration-150 ease-out sm:h-[26rem] sm:w-[26rem]"
@@ -51,12 +64,13 @@ function OrbVideo({ volume, dimmed }: { volume: number; dimmed?: boolean }) {
       }}
     >
       <video
+        ref={videoRef}
         src="/agent-orb.mp4"
         autoPlay
         loop
         muted
         playsInline
-        className="h-full w-full object-cover"
+        className="h-full w-full scale-150 object-cover"
       />
     </div>
   )
@@ -76,7 +90,7 @@ function AgentOrb({ agentParticipant }: { agentParticipant: RemoteParticipant })
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <OrbVideo volume={volume} />
+      <OrbVideo volume={volume} speaking={agentState === 'speaking'} />
       <p className="text-sm text-text-muted">{stateStyle.label}</p>
     </div>
   )
