@@ -75,14 +75,17 @@ _IST = timezone(timedelta(hours=5, minutes=30))
 # button-click self-aware humor here is wrong for a tenant's paying
 # customers on their own agent, who should keep the LLM-generated dynamic
 # opener (or an operator's own welcome_message).
+#
+# Hinglish (Latin-script, code-mixed) rather than pure Hindi Devanagari —
+# reads as more natural/conversational and matches how the target audience
+# actually types/speaks, not a translated-sounding formal register.
 _PLATFORM_DEMO_OPENERS = [
-    "Hey, you clicked it — so now I have to prove I don't sound like a robot. I'm Artha from Vistrow Voice. You can speak in English, Hindi, or Hinglish. What kind of business do you run?",
-    "वेलकम, वेलकम, वेलकम! आ गए आप आखिरकार — मुझे लगा शायद आप बस बटन hover करके सोच रहे थे 'दबाऊं या ना दबाऊं.' अच्छा किया दबाया। बताइए, आप यहाँ किसलिए आए?",
-    "वो बटन दबाया ना अभी? मुझे पता है आप सोच रहे थे 'चलो देखते हैं ये काम भी करता है या सिर्फ डेमो वीडियो है.' तो जनाब, मैं रियल हूँ। चौंक गए?",
-    "सच बताऊं? ज़्यादातर लोग डेमो बटन दबाकर सोचते हैं 'होल्ड म्यूज़िक आएगी, फिर एक रोबोट बोलेगा सेल्स के लिए एक दबाएँ.' मैंने वो सब स्किप कर दिया, सीधे बात कर रही हूँ।",
-    "मुझे पता है आप क्या सोच रहे हैं — 'ये तो रिकॉर्डिंग होगी, कुछ बोलकर देखता हूँ, रिस्पॉन्स आता है या नहीं.' जी हाँ, आता है। अब पूछिए कुछ भी!",
-    "आपने वो बटन दबाया, मुझे लगा शायद कोई और फॉर्म भरना पड़ेगा — नाम, ईमेल, फिर कोई सेल्सपर्सन कॉल करेगा तीन दिन बाद। उसकी जगह, मैं यहां हूँ, अभी। तो बताइए, काम क्या है?",
-    "मुझे पता है इस बटन को दबाने से पहले आपने सोचा होगा 'ये तो हर वेबसाइट पर होता है, कुछ नया नहीं.' ठीक है, चैलेंज एक्सेप्ट — प्रूव करती हूँ कि मैं अलग हूँ। कुछ भी पूछिए।",
+    "Hey, aapne click kiya hai, toh ab mujhe prove karna padega ki main robot jaisi sound nahi karti. Main Artha hoon, Vistrow Voice se. Aap English, Hindi ya Hinglish mein baat kar sakte hain—batayiye, aapka business kis industry mein hai?",
+    "Hey, aapne 'Talk to Artha' click kiya, toh main officially duty par aa gayi. Bataiye, aapka business kya karta hai?",
+    "Hi, main Artha hoon, Vistrow Voice se. Mujhe 30 seconds dijiye, main dikhati hoon ki AI conversation kitni natural ho sakti hai. Aap kis business mein hain?",
+    "Okay, usually yahan AI ek boring robotic line bolta hai. Main woh nahi karungi. Seedha bataiye—your business does what?",
+    "Hi, main Artha hoon. Aap English, Hindi ya Hinglish mein baat kar sakte hain—jo comfortable lage. Toh batayiye, aapka business kis field mein hai?",
+    "Hey, main Artha hoon. Sochiye, aapki har customer call instantly answer ho—even after office hours. Abhi jab call miss hoti hai, toh aapki team kya karti hai?",
 ]
 
 # Same "skip generate_reply(), speak a fixed line instantly" fix as the demo
