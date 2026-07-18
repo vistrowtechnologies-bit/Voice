@@ -29,6 +29,12 @@ const STATE_STYLES: Record<string, { label: string }> = {
   speaking: { label: 'Agent is speaking…' },
 }
 const WAITING_STYLE = { label: 'Waiting for agent to join…' }
+// How long to wait before adding a "this is slow" hint under the plain
+// waiting label — a worker restart (crash, redeploy, LiveKit Cloud
+// recycling the node) can take 10-15s to cold-boot and pick up the job, and
+// without this the screen looks identical whether it's about to recover or
+// genuinely stuck, which is exactly what prompted "is it dead?" questions.
+const SLOW_JOIN_HINT_MS = 12_000
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -109,6 +115,7 @@ export function ActiveCallUI({
   const [showTranscript, setShowTranscript] = useState(true)
   const [startedAt] = useState(() => Date.now())
   const [elapsedMs, setElapsedMs] = useState(0)
+  const [slowJoin, setSlowJoin] = useState(false)
   const transcriptEndRef = useRef<HTMLDivElement>(null)
 
   const transcriptions = useTranscriptions()
@@ -133,6 +140,18 @@ export function ActiveCallUI({
     const interval = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000)
     return () => clearInterval(interval)
   }, [connectionState, startedAt])
+
+  // Surface a "this is slower than usual" hint once the wait crosses the
+  // threshold, instead of leaving a bare "Waiting for agent to join…" that
+  // reads identically whether the worker is about to recover or truly dead.
+  useEffect(() => {
+    if (agentParticipant) {
+      setSlowJoin(false)
+      return
+    }
+    const timer = setTimeout(() => setSlowJoin(true), SLOW_JOIN_HINT_MS)
+    return () => clearTimeout(timer)
+  }, [agentParticipant])
 
   useDataChannel('lead-events', (msg) => {
     try {
@@ -175,11 +194,16 @@ export function ActiveCallUI({
           {agentParticipant ? (
             <AgentOrb agentParticipant={agentParticipant} />
           ) : (
-            <div className="flex flex-col items-center gap-4">
+            <div className="flex flex-col items-center gap-2 text-center">
               <OrbVideo volume={0} dimmed />
               <p className="text-sm text-text-muted">
                 {connectionState === ConnectionState.Connected ? WAITING_STYLE.label : 'Connecting…'}
               </p>
+              {slowJoin && connectionState === ConnectionState.Connected && (
+                <p className="max-w-[220px] text-xs text-text-muted">
+                  Taking longer than usual — the agent worker may be restarting. You can keep waiting or end the call and try again shortly.
+                </p>
+              )}
             </div>
           )}
         </div>
