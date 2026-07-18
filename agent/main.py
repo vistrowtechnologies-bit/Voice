@@ -76,6 +76,7 @@ _IST = timezone(timedelta(hours=5, minutes=30))
 # customers on their own agent, who should keep the LLM-generated dynamic
 # opener (or an operator's own welcome_message).
 _PLATFORM_DEMO_OPENERS = [
+    "Hey, you clicked it — so now I have to prove I don't sound like a robot. I'm Artha from Vistrow Voice. You can speak in English, Hindi, or Hinglish. What kind of business do you run?",
     "वेलकम, वेलकम, वेलकम! आ गए आप आखिरकार — मुझे लगा शायद आप बस बटन hover करके सोच रहे थे 'दबाऊं या ना दबाऊं.' अच्छा किया दबाया। बताइए, आप यहाँ किसलिए आए?",
     "वो बटन दबाया ना अभी? मुझे पता है आप सोच रहे थे 'चलो देखते हैं ये काम भी करता है या सिर्फ डेमो वीडियो है.' तो जनाब, मैं रियल हूँ। चौंक गए?",
     "सच बताऊं? ज़्यादातर लोग डेमो बटन दबाकर सोचते हैं 'होल्ड म्यूज़िक आएगी, फिर एक रोबोट बोलेगा सेल्स के लिए एक दबाएँ.' मैंने वो सब स्किप कर दिया, सीधे बात कर रही हूँ।",

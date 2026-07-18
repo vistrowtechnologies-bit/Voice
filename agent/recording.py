@@ -13,8 +13,8 @@ Best-effort throughout: a recording hiccup must never break call teardown or
 surface to the caller. Every public function swallows its own exceptions.
 """
 
-import array
 import asyncio
+import audioop
 import io
 import logging
 import os
@@ -29,8 +29,10 @@ _SAMPLE_RATE = 16000
 
 
 class CallRecorder:
-    """Tapes both sides of one call into a single stereo WAV (caller on the
-    left channel, agent on the right). Attach right after session.start()."""
+    """Tapes both sides of one call into a single mono WAV, both sides mixed
+    together rather than hard-panned to a channel — a hard L/R split sounds
+    like only one party is speaking per ear on typical phone/laptop playback.
+    Attach right after session.start()."""
 
     def __init__(self, room: rtc.Room) -> None:
         self._room = room
@@ -132,25 +134,25 @@ class CallRecorder:
             return None
 
         try:
-            left = array.array("h")
-            left.frombytes(caller_pcm[: len(caller_pcm) - (len(caller_pcm) % 2)])
-            right = array.array("h")
-            right.frombytes(agent_pcm[: len(agent_pcm) - (len(agent_pcm) % 2)])
-            length = max(len(left), len(right))
-            left.extend([0] * (length - len(left)))
-            right.extend([0] * (length - len(right)))
-
-            stereo = array.array("h", bytes(length * 4))
-            stereo[0::2] = left
-            stereo[1::2] = right
+            caller_pcm = caller_pcm[: len(caller_pcm) - (len(caller_pcm) % 2)]
+            agent_pcm = agent_pcm[: len(agent_pcm) - (len(agent_pcm) % 2)]
+            # audioop.add requires equal-length fragments — pad the shorter
+            # side with silence so both lines up sample-for-sample.
+            length = max(len(caller_pcm), len(agent_pcm))
+            caller_pcm = caller_pcm + b"\x00" * (length - len(caller_pcm))
+            agent_pcm = agent_pcm + b"\x00" * (length - len(agent_pcm))
+            # Saturates on overflow rather than wrapping, so simultaneous
+            # speech (interruptions/overlap) won't produce audible clipping
+            # artifacts the way a naive sample-sum would.
+            mixed = audioop.add(caller_pcm, agent_pcm, 2)
 
             fd, path = tempfile.mkstemp(suffix=".wav")
             os.close(fd)
             with wave.open(path, "wb") as wav_file:
-                wav_file.setnchannels(2)
+                wav_file.setnchannels(1)
                 wav_file.setsampwidth(2)
                 wav_file.setframerate(_SAMPLE_RATE)
-                wav_file.writeframes(stereo.tobytes())
+                wav_file.writeframes(mixed)
             return path
         except Exception:
             logger.exception("failed to build recording WAV")
