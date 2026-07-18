@@ -1076,14 +1076,35 @@ def _agent_names_by_id(account_id: int) -> dict[int, str]:
         conn.close()
 
 
+def _visitor_numbers_by_id(conn, account_id: int) -> dict[int, int]:
+    """Stable per-account ordinal (creation order) for calls with no captured
+    lead name — lets the caller column read "Visitor #N" instead of the
+    client-generated random room identity ("visitor-a1b2c3d4"), which told a
+    tenant nothing about how many distinct anonymous visitors they'd had."""
+    rows = conn.execute(
+        "SELECT id FROM calls WHERE account_id = ? AND (lead_name IS NULL OR lead_name = '') "
+        # %% escapes the literal % for psycopg's own %s-style placeholder
+        # parsing — a bare % here collides with it (see dbconn.py's Conn.execute).
+        "AND visitor_identity LIKE 'visitor-%%' ORDER BY id",
+        (account_id,),
+    ).fetchall()
+    return {r["id"]: i + 1 for i, r in enumerate(rows)}
+
+
 def _call_dict(
     row: dict,
     include_transcript: bool = True,
     sites_by_id: dict[int, dict] | None = None,
     agent_names: dict[int, str] | None = None,
+    visitor_numbers: dict[int, int] | None = None,
 ) -> dict:
     transcript = json.loads(row["transcript_json"]) if row["transcript_json"] else []
-    name = row["lead_name"] or row["visitor_identity"] or "Unknown caller"
+    if row["lead_name"]:
+        name = row["lead_name"]
+    elif visitor_numbers and row["id"] in visitor_numbers:
+        name = f"Visitor #{visitor_numbers[row['id']]}"
+    else:
+        name = row["visitor_identity"] or "Unknown caller"
     call_type = row["call_type"] or "browser"
     site_id = row["site_id"]
     site = sites_by_id.get(site_id) if sites_by_id and site_id else None
@@ -1142,6 +1163,7 @@ def list_calls(account_id: int, limit: int = 200, search: str = "", status: str 
     agent_names = _agent_names_by_id(account_id)
     conn = _connect()
     try:
+        visitor_numbers = _visitor_numbers_by_id(conn, account_id)
         query = "SELECT * FROM calls WHERE account_id = ?"
         params: list = [account_id]
         if days:
@@ -1151,7 +1173,13 @@ def list_calls(account_id: int, limit: int = 200, search: str = "", status: str 
         params.append(limit)
         rows = conn.execute(query, params).fetchall()
         calls = [
-            _call_dict(r, include_transcript=False, sites_by_id=sites_by_id, agent_names=agent_names)
+            _call_dict(
+                r,
+                include_transcript=False,
+                sites_by_id=sites_by_id,
+                agent_names=agent_names,
+                visitor_numbers=visitor_numbers,
+            )
             for r in rows
         ]
         if search:
@@ -1171,7 +1199,12 @@ def get_call(call_id: int, account_id: int) -> dict | None:
         if not row:
             return None
         sites_by_id = {s["id"]: s for s in list_sites(account_id)}
-        return _call_dict(row, sites_by_id=sites_by_id, agent_names=_agent_names_by_id(account_id))
+        return _call_dict(
+            row,
+            sites_by_id=sites_by_id,
+            agent_names=_agent_names_by_id(account_id),
+            visitor_numbers=_visitor_numbers_by_id(conn, account_id),
+        )
     finally:
         conn.close()
 
