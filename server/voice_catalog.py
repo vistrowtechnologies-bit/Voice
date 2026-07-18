@@ -67,6 +67,8 @@ CATALOG: list[dict] = [
     {"value": "elevenlabs:1qEiC6qsybMkmnNdVMbK", "name": "Monika", "gender": "female", "tier": "premium"},
     {"value": "elevenlabs:9lx2GDtpvyyNBM7O9Mmx", "name": "Saavi", "gender": "female", "tier": "premium"},
     {"value": "elevenlabs:mActWQg9kibLro6Z2ouY", "name": "Riya", "gender": "female", "tier": "premium"},
+    {"value": "elevenlabs:OtEfb2LVzIE45wdYe54M", "name": "Zara", "gender": "female", "tier": "premium"},
+    {"value": "elevenlabs:6MoEUz34rbRrmmyxgRm4", "name": "Manav", "gender": "male", "tier": "premium"},
     # --- Standard (Sarvam bulbul:v3) ----------------------------------------
     {"value": "shubh", "name": "Shubh", "gender": "male", "tier": "standard"},
     {"value": "priya", "name": "Priya", "gender": "female", "tier": "standard"},
