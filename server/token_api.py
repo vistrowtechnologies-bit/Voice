@@ -163,7 +163,14 @@ class TokenRequest(BaseModel):
 
 
 @app.post("/token")
-async def create_token(req: TokenRequest) -> dict:
+async def create_token(req: TokenRequest, request: Request) -> dict:
+    # Public/unauthenticated: cap per client IP so a script can't mint
+    # unlimited join tokens or dispatch unlimited billable agent calls.
+    client_ip = (request.client.host if request.client else "") or "unknown"
+    if _token_rate_limited(client_ip):
+        logger.warning("token rejected: rate limited (ip=%s)", client_ip)
+        raise HTTPException(429, "Too many calls right now — please try again shortly.")
+
     api_key = os.environ.get("LIVEKIT_API_KEY")
     api_secret = os.environ.get("LIVEKIT_API_SECRET")
     livekit_url = os.environ.get("LIVEKIT_URL")
@@ -2053,6 +2060,28 @@ def delete_site(site_id: int, user: dict = Depends(current_user)) -> dict:
 _WIDGET_TOKEN_WINDOW_SECONDS = 60
 _WIDGET_TOKEN_MAX_PER_WINDOW = 30
 _widget_token_calls: dict[str, list[float]] = {}
+
+# Same first-line guard for the public, unauthenticated /token endpoint
+# (used by the marketing-site live demo and the dashboard browser-test). It
+# mints a real LiveKit join token and — when agentId is set — dispatches that
+# agent, i.e. a billable call against a tenant's credits + our STT/LLM/TTS
+# spend. Without a cap, anyone could script unlimited calls against any
+# agent id. The marketing demo's 5-call cap is client-side localStorage only,
+# so it's trivially bypassed — this is the server-side backstop. Keyed by
+# client IP.
+_TOKEN_WINDOW_SECONDS = 60
+_TOKEN_MAX_PER_WINDOW = 12
+_token_calls: dict[str, list[float]] = {}
+
+
+def _token_rate_limited(client_ip: str) -> bool:
+    import time
+
+    now = time.monotonic()
+    calls = [t for t in _token_calls.get(client_ip, []) if now - t < _TOKEN_WINDOW_SECONDS]
+    calls.append(now)
+    _token_calls[client_ip] = calls
+    return len(calls) > _TOKEN_MAX_PER_WINDOW
 
 
 def _widget_rate_limited(site_key: str) -> bool:
