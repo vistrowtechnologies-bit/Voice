@@ -22,6 +22,27 @@ const SENTIMENT_STYLE: Record<string, string> = {
   negative: 'text-destructive',
 }
 
+// Client-side .txt export of just one side of the conversation — an
+// operator reviewing a call often only wants what the agent said (to audit
+// wording/compliance) or just the caller's side (to skim what they asked
+// for), not the full interleaved transcript already visible on-screen.
+function downloadTranscript(call: CallRecord, speaker: 'agent' | 'visitor'): void {
+  const lines = (call.transcript ?? []).filter((line) => line.speaker === speaker)
+  const label = speaker === 'agent' ? 'Agent' : 'Customer'
+  const body = lines.length
+    ? lines.map((line) => line.text).join('\n\n')
+    : `(No ${label.toLowerCase()} lines in this transcript.)`
+  const blob = new Blob([body], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${call.name.replace(/[^\w-]+/g, '_')}-call-${call.id}-${label.toLowerCase()}.txt`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export function LeadDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -130,7 +151,27 @@ export function LeadDetail() {
 
       <section className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:grid-cols-3">
         <Card className="flex flex-col gap-3 lg:col-span-2">
-          <h2 className="text-sm font-semibold text-text-muted">Call transcript</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-text-muted">Call transcript</h2>
+            {!!call.transcript?.length && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadTranscript(call, 'agent')}
+                  className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
+                >
+                  <Icon name="download" className="text-[14px]" /> Agent side
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadTranscript(call, 'visitor')}
+                  className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
+                >
+                  <Icon name="download" className="text-[14px]" /> Customer side
+                </button>
+              </div>
+            )}
+          </div>
           <div className="flex flex-col gap-2">
             {(call.transcript ?? []).map((line, i) => (
               <div
