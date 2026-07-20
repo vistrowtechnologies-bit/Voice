@@ -2196,12 +2196,15 @@ def book_appointment_native(
     email: str = "",
     source: str = "agent",
 ) -> dict:
-    """{"ok": True, "id": ...} or {"ok": False, "error": ...}. Re-checks the
-    slot is free right before inserting to close the double-book race the
-    old Google FreeBusy re-check used to guard against."""
+    """{"ok": True, "id": ...} or {"ok": False, "error": ...}. Takes a
+    per-account-per-date advisory lock before the check-then-insert so two
+    concurrent bookings for the same day can't both pass the conflict check
+    before either commits (plain re-check alone doesn't prevent that under
+    READ COMMITTED)."""
     conn = _connect()
     try:
         with conn:
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (f"appt:{account_id}:{date}",))
             if _slot_conflict(conn, account_id, date, time, duration_minutes):
                 return {"ok": False, "error": "slot no longer available"}
             cur = conn.execute(
@@ -2239,6 +2242,7 @@ def reschedule_appointment(appt_id: int, account_id: int, new_date: str, new_tim
     conn = _connect()
     try:
         with conn:
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (f"appt:{account_id}:{new_date}",))
             old = conn.execute(
                 "SELECT * FROM appointments WHERE id = ? AND account_id = ?", (appt_id, account_id)
             ).fetchone()

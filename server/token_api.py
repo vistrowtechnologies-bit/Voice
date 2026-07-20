@@ -1575,6 +1575,8 @@ def list_appointments(start: str = "", end: str = "", status: str = "", search: 
 
 @app.post("/appointments")
 def create_appointment(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    if not data.get("date") or not data.get("time"):
+        raise HTTPException(400, "date and time are required")
     result = calls_db.book_appointment_native(
         user["account_id"], data.get("agentId"), None,
         data.get("name", ""), data.get("phone", ""), data["date"], data["time"],
@@ -1595,6 +1597,8 @@ def update_appointment_status(appt_id: int, data: dict = Body(...), user: dict =
 
 @app.post("/appointments/{appt_id}/reschedule")
 def reschedule_appointment(appt_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    if not data.get("date") or not data.get("time"):
+        raise HTTPException(400, "date and time are required")
     result = calls_db.reschedule_appointment(appt_id, user["account_id"], data["date"], data["time"])
     if not result.get("ok"):
         raise HTTPException(409, result.get("error", "could not reschedule"))

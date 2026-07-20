@@ -290,6 +290,11 @@ def check_appointment_availability(account_id: int | None, date: str, duration_m
     degrades gracefully — matches the old _calendar_check contract, except
     the "no calendar connected" case no longer exists (a native calendar
     always exists once this account has any config, default or not)."""
+    if account_id is None:
+        # No real account to check confirmed bookings against — reporting
+        # slots as free here would be a lie (the WHERE account_id = ? filter
+        # never matches NULL, so booked slots would silently look open).
+        return None
     conn = dbconn.connect()
     try:
         cfg = get_availability_config(account_id)
@@ -330,9 +335,12 @@ def book_native_appointment(
 ) -> dict | None:
     """{"ok": True/False, ...} on success/handled-failure, None only on a
     genuine DB error — matches the old _calendar_book contract."""
+    if account_id is None:
+        return None
     conn = dbconn.connect()
     try:
         with conn:
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (f"appt:{account_id}:{date}",))
             if _appt_slot_conflict(conn, account_id, date, time, duration_minutes):
                 return {"ok": False, "error": "slot no longer available"}
             conn.execute(
