@@ -37,7 +37,7 @@ function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean
       disabled={disabled}
       onClick={() => onChange(!on)}
       className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-        on ? 'bg-primary' : 'bg-surface-high'
+        on ? 'bg-primary' : 'bg-surface-high border border-border'
       }`}
       aria-pressed={on}
     >
