@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
+import vistrowMark from '../assets/vistrow-mark.png'
 import { useAuth } from '../lib/auth'
 import { Icon } from './Icon'
 
@@ -61,9 +62,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className="mb-6 flex items-center gap-2 px-1">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-          <Icon name="shield_person" className="text-bg text-[18px]" />
-        </div>
+        <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
         <div className="leading-tight">
           <div className="font-display text-sm font-bold">Vistrow Admin</div>
           <div className="text-[10px] uppercase tracking-widest text-text-muted">Platform Control</div>
