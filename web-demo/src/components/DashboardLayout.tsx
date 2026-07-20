@@ -17,7 +17,7 @@ function initials(name: string): string {
   return (name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('') || '?').toUpperCase()
 }
 
-function ThemeSwitcher() {
+export function ThemeSwitcher() {
   const theme = useTheme()
   const next = theme === 'dark' ? 'light' : 'dark'
   return (

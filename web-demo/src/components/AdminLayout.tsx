@@ -3,7 +3,9 @@ import type { ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import vistrowMark from '../assets/vistrow-mark.png'
 import { useAuth } from '../lib/auth'
+import { applyTheme, getStoredTheme } from '../lib/theme'
 import { Icon } from './Icon'
+import { ThemeSwitcher } from './DashboardLayout'
 
 const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: string; end?: boolean }[] }[] = [
   { title: 'Overview', items: [{ to: '/admin', label: 'Dashboard', icon: 'dashboard', end: true }] },
@@ -106,17 +108,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 /** Full-screen admin shell: persistent red "Mission Control" bar, 240px sidebar,
- * fluid content. Forces the dark theme (the panel is dark-first) by clearing any
- * data-theme the tenant dashboard left on the root, and restores it on exit. */
+ * fluid content. Applies the same stored light/dark preference as the tenant
+ * dashboard (dark by default) and restores whatever was set before on exit. */
 export function AdminLayout({ children }: { children: ReactNode }) {
   const [mobileNav, setMobileNav] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
     const prev = document.documentElement.getAttribute('data-theme')
-    document.documentElement.removeAttribute('data-theme') // default tokens = dark
+    applyTheme(getStoredTheme(), false)
     return () => {
       if (prev) document.documentElement.setAttribute('data-theme', prev)
+      else document.documentElement.removeAttribute('data-theme')
     }
   }, [])
 
@@ -128,13 +131,16 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           <Icon name="grid_view" className="text-[14px]" />
           Vistrow Admin · Platform Control
         </div>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="flex items-center gap-1 text-[11px] font-semibold hover:underline"
-        >
-          <Icon name="logout" className="text-[14px]" />
-          Exit to account
-        </button>
+        <div className="flex items-center gap-3">
+          <ThemeSwitcher />
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-1 text-[11px] font-semibold hover:underline"
+          >
+            <Icon name="logout" className="text-[14px]" />
+            Exit to account
+          </button>
+        </div>
       </div>
 
       <aside className="fixed left-0 top-8 hidden h-[calc(100%-2rem)] w-60 flex-col border-r border-border bg-surface p-4 lg:flex">
