@@ -26,6 +26,7 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
     items: [
       { to: '/admin/audit', label: 'Support & Audit', icon: 'support_agent' },
       { to: '/admin/health', label: 'System Health', icon: 'health_and_safety' },
+      { to: '/admin/vendor-credits', label: 'Vendor Credits', icon: 'account_balance_wallet' },
       { to: '/admin/settings', label: 'Settings', icon: 'settings' },
     ],
   },

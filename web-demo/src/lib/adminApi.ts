@@ -196,6 +196,21 @@ export interface AdminAuditEntry {
   created_at: string
 }
 
+export interface AdminVendorCredit {
+  key: string
+  name: string
+  category: string
+  mode: 'manual' | 'live'
+  balance: number | null
+  unit: string
+  threshold: number | null
+  notes: string
+  source: 'manual' | 'live' | 'live_failed'
+  checkedAt: string | null
+  lastError: string | null
+  updatedBy: string
+}
+
 export interface AdminHealth {
   dbOk: boolean
   liveCalls: number
@@ -238,6 +253,12 @@ export const adminAudit = (p: { action?: string; limit?: number; offset?: number
   aget<{ entries: AdminAuditEntry[]; total: number }>(`/audit${qs(p)}`)
 
 export const adminHealth = () => aget<AdminHealth>('/health')
+
+export const adminVendorCredits = () => aget<{ vendors: AdminVendorCredit[] }>('/vendor-credits')
+export const adminUpdateVendorCredit = (
+  key: string,
+  p: { balance: number | null; unit: string; threshold: number | null; notes: string },
+) => apost<{ vendors: AdminVendorCredit[] }>(`/vendor-credits/${key}`, p)
 
 // mutations
 export const adminSetCredits = (id: number, total: number, reason: string) =>

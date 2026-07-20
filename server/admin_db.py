@@ -16,6 +16,7 @@ calls_db.billing_summary() for the exact figure.
 import json
 
 import dbconn
+import vendor_live
 
 # Monthly plan pricing in INR — mirrors the marketing pricing page. The admin
 # "MRR" is estimated from this × each account's plan (no payment processor is
@@ -26,6 +27,10 @@ _FREE_PLANS = {"free", "trial", ""}
 
 # SQL fragment: credits burned by a call, using default per-channel rates.
 _CREDITS_EXPR = "COALESCE(duration_seconds, 0) / 60.0 * (CASE WHEN call_type = 'phone' THEN 1.5 ELSE 1.0 END)"
+
+# Mirrors calls_db.py's _NOW — duplicated rather than imported to keep this
+# module's deliberate separation from calls_db (see module docstring).
+_NOW = "(to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))"
 
 
 def _connect() -> dbconn.Conn:
@@ -599,3 +604,102 @@ def set_account_notes(account_id: int, notes: str) -> None:
             conn.execute("UPDATE accounts SET notes = ? WHERE id = ?", (notes, account_id))
     finally:
         conn.close()
+
+
+# ----------------------------------------------------------------- vendor credits
+
+# Every upstream vendor Vistrow itself pays for. category groups them in the
+# UI; mode is fixed here (not admin-editable) — "live" vendors get refreshed
+# from vendor_live.LIVE_CHECKERS on every list_vendor_credits() call, "manual"
+# vendors only change when an operator edits them.
+VENDOR_CATALOG = [
+    {"key": "sarvam", "name": "Sarvam AI", "category": "Speech", "mode": "manual"},
+    {"key": "elevenlabs", "name": "ElevenLabs", "category": "Speech", "mode": "live"},
+    {"key": "openai", "name": "OpenAI", "category": "LLM", "category_note": "conversation + KB + help chat", "mode": "manual"},
+    {"key": "gemini", "name": "Google Gemini", "category": "LLM", "mode": "manual"},
+    {"key": "livekit", "name": "LiveKit Cloud", "category": "Calling infra", "mode": "manual"},
+    {"key": "enablex", "name": "EnableX", "category": "Telephony", "mode": "manual"},
+    {"key": "b2", "name": "Backblaze B2", "category": "Recording storage", "mode": "manual"},
+    {"key": "resend", "name": "Resend", "category": "Email", "mode": "manual"},
+    {"key": "tavily", "name": "Tavily", "category": "Web search", "mode": "manual"},
+]
+
+
+def list_vendor_credits() -> list[dict]:
+    conn = _connect()
+    try:
+        rows = {r["key"]: dict(r) for r in conn.execute("SELECT * FROM vendor_credits").fetchall()}
+        result = []
+        for v in VENDOR_CATALOG:
+            row = rows.get(v["key"], {})
+            entry = {
+                "key": v["key"],
+                "name": v["name"],
+                "category": v["category"],
+                "mode": v["mode"],
+                "balance": row.get("balance"),
+                "unit": row.get("unit") or "",
+                "threshold": row.get("threshold"),
+                "notes": row.get("notes") or "",
+                "source": row.get("source") or "manual",
+                "checkedAt": row.get("checked_at"),
+                "lastError": row.get("last_error"),
+                "updatedBy": row.get("updated_by") or "",
+            }
+            checker = vendor_live.LIVE_CHECKERS.get(v["key"])
+            if checker:
+                try:
+                    balance, unit = checker()
+                    entry.update(balance=balance, unit=unit, source="live", lastError=None)
+                    _save_vendor_credit(v["key"], balance=balance, unit=unit, source="live", last_error=None)
+                except vendor_live.LiveCheckError as e:
+                    entry.update(source="live_failed", lastError=str(e))
+                    _save_vendor_credit(v["key"], source="live_failed", last_error=str(e))
+            result.append(entry)
+        return result
+    finally:
+        conn.close()
+
+
+def _save_vendor_credit(
+    key: str,
+    balance: float | None = None,
+    unit: str | None = None,
+    threshold: float | None = None,
+    notes: str | None = None,
+    source: str | None = None,
+    last_error: str | None = None,
+    updated_by: str | None = None,
+    checked_at: bool = True,
+) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO vendor_credits (key) VALUES (?) ON CONFLICT (key) DO NOTHING",
+                (key,),
+            )
+            sets, params = [], []
+            for col, val in (
+                ("balance", balance), ("unit", unit), ("threshold", threshold),
+                ("notes", notes), ("source", source), ("last_error", last_error),
+                ("updated_by", updated_by),
+            ):
+                if val is not None:
+                    sets.append(f"{col} = ?")
+                    params.append(val)
+            if checked_at:
+                sets.append("checked_at = " + _NOW)
+            if sets:
+                conn.execute(f"UPDATE vendor_credits SET {', '.join(sets)} WHERE key = ?", tuple(params) + (key,))
+    finally:
+        conn.close()
+
+
+def update_vendor_credit(
+    key: str, balance: float | None, unit: str, threshold: float | None, notes: str, updated_by: str,
+) -> None:
+    _save_vendor_credit(
+        key, balance=balance, unit=unit, threshold=threshold, notes=notes,
+        source="manual", last_error=None, updated_by=updated_by,
+    )

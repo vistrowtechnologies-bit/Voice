@@ -350,6 +350,25 @@ CREATE TABLE IF NOT EXISTS error_events (
     created_at TEXT DEFAULT {_NOW}
 );
 
+-- Vistrow's OWN upstream vendor accounts (Sarvam, ElevenLabs, LiveKit, etc.)
+-- — platform-wide, not tenant data. Lets the operator see at a glance which
+-- vendor is close to running out of balance/credits so it can be topped up
+-- before it breaks live calls. `balance`/`unit`/`threshold` are admin-entered
+-- for most vendors ("manual"); a few ("live") are refreshed automatically by
+-- admin_db.list_vendor_credits() from the vendor's own API, which overwrites
+-- these same columns on a successful check.
+CREATE TABLE IF NOT EXISTS vendor_credits (
+    key TEXT PRIMARY KEY,
+    balance REAL,
+    unit TEXT DEFAULT '',
+    threshold REAL,
+    notes TEXT DEFAULT '',
+    source TEXT DEFAULT 'manual',
+    checked_at TEXT,
+    last_error TEXT,
+    updated_by TEXT DEFAULT ''
+);
+
 -- Do-Not-Call registry, per tenant. Every outbound dial is scrubbed against
 -- this before it's placed (see check_call_allowed). phone_norm is the digits-
 -- only normalized form so "+91 98765 43210", "9876543210", and "098765 43210"

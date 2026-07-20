@@ -904,6 +904,27 @@ async def admin_health(admin: dict = Depends(require_platform_owner)) -> dict:
     return health
 
 
+@app.get("/admin/vendor-credits")
+def admin_vendor_credits(admin: dict = Depends(require_platform_owner)) -> dict:
+    return {"vendors": admin_db.list_vendor_credits()}
+
+
+class AdminVendorCreditRequest(BaseModel):
+    balance: float | None = None
+    unit: str = ""
+    threshold: float | None = None
+    notes: str = ""
+
+
+@app.post("/admin/vendor-credits/{key}")
+def admin_update_vendor_credit(key: str, req: AdminVendorCreditRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    if key not in {v["key"] for v in admin_db.VENDOR_CATALOG}:
+        raise HTTPException(404, "Unknown vendor")
+    admin_db.update_vendor_credit(key, req.balance, req.unit, req.threshold, req.notes, admin["email"])
+    admin_db.write_audit(admin["user_id"], admin["email"], "update_vendor_credit", None, detail=f"vendor={key} balance={req.balance} {req.unit}")
+    return {"vendors": admin_db.list_vendor_credits()}
+
+
 class AdminCreditsRequest(BaseModel):
     total: int
     reason: str = ""
