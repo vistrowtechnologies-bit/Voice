@@ -19,8 +19,26 @@ export function getStoredTheme(): Theme {
   }
 }
 
+let transitionTimer: ReturnType<typeof setTimeout> | undefined
+
+// Briefly tags <html> with a class that index.css uses to transition
+// background/text/border colors — so flipping the toggle fades between
+// themes instead of snapping instantly. Only active for the switch itself
+// (see TRANSITION_MS), so normal hover/focus states stay instant.
+const TRANSITION_MS = 320
+
 export function applyTheme(theme: Theme, persist = true) {
-  document.documentElement.setAttribute('data-theme', theme)
+  const root = document.documentElement
+  // persist=false means a layout is just reapplying the already-stored theme
+  // on mount/route-change (DashboardLayout/AdminLayout) — not a real switch,
+  // so it shouldn't fade. Only an actual toggle click (persist=true) animates.
+  if (persist) {
+    root.classList.add('theme-transition')
+    clearTimeout(transitionTimer)
+    transitionTimer = setTimeout(() => root.classList.remove('theme-transition'), TRANSITION_MS)
+  }
+
+  root.setAttribute('data-theme', theme)
   if (persist) {
     try {
       localStorage.setItem(STORAGE_KEY, theme)

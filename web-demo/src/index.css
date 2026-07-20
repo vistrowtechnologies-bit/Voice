@@ -50,6 +50,48 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Applied briefly by lib/theme.ts's applyTheme() during an actual toggle
+   click (not on route-change reapplication) so the light/dark switch fades
+   instead of snapping. Scoped to a transient class, not a permanent global
+   transition, so ordinary hover/focus color changes stay instant. */
+html.theme-transition,
+html.theme-transition * {
+  transition:
+    background-color 280ms ease,
+    color 280ms ease,
+    border-color 280ms ease,
+    fill 280ms ease,
+    stroke 280ms ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition,
+  html.theme-transition * {
+    transition: none !important;
+  }
+}
+
+/* Sun/moon icon on the ThemeSwitcher button — replays on every toggle via a
+   `key={theme}` remount in DashboardLayout/AdminLayout. */
+@keyframes theme-icon-pop {
+  from {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+}
+.theme-icon-pop {
+  animation: theme-icon-pop 320ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-icon-pop {
+    animation: none;
+  }
+}
+
 .material-symbols-outlined {
   font-family: "Material Symbols Outlined";
   font-weight: normal;

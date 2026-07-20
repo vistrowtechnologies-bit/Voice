@@ -25,9 +25,10 @@ export function ThemeSwitcher() {
       onClick={() => applyTheme(next)}
       aria-label={`Switch to ${next} mode`}
       title={`Switch to ${next} mode`}
-      className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-primary"
+      className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-primary"
     >
-      <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="text-[17px]" />
+      {/* key remount replays the spin-in animation every toggle, not just once. */}
+      <Icon key={theme} name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="theme-icon-pop text-[17px]" />
     </button>
   )
 }
