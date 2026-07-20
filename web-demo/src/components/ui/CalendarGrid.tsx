@@ -1,3 +1,4 @@
+import { formatTime12h } from '../../lib/api'
 import type { Appointment, AppointmentStatus } from '../../lib/types'
 
 const STATUS_CHIP: Record<AppointmentStatus, string> = {
@@ -89,7 +90,7 @@ export function CalendarGrid({
                   }}
                   className={`truncate rounded border px-1.5 py-0.5 text-left text-[11px] font-semibold ${STATUS_CHIP[appt.status]}`}
                 >
-                  {appt.time} {appt.name}
+                  {formatTime12h(appt.time)} {appt.name}
                 </button>
               ))}
               {hidden.length > 0 && (

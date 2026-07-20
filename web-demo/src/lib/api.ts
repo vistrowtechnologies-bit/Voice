@@ -327,6 +327,17 @@ export function formatDateTime(iso: string): string {
   })
 }
 
+/** Appointment times are stored/passed around as 24h "HH:MM" (matching what
+ * the agent computes and what <input type="time"> uses) — this is purely a
+ * display formatter for the Appointments UI, not a storage format change. */
+export function formatTime12h(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number)
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm
+  const period = h >= 12 ? 'PM' : 'AM'
+  const hour12 = h % 12 || 12
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`
+}
+
 export const LANGUAGE_NAMES: Record<string, string> = {
   'hi-IN': 'Hindi',
   'en-IN': 'English',

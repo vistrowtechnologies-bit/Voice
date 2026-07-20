@@ -10,6 +10,7 @@ import {
   checkAppointmentAvailability,
   createAppointment,
   fetchAppointments,
+  formatTime12h,
   rescheduleAppointment,
   updateAppointmentStatus,
 } from '../lib/api'
@@ -124,7 +125,7 @@ export function Appointments() {
         </div>
       ),
     },
-    { key: 'when', header: 'When', render: (a) => <span className="text-sm">{a.date} · {a.time}</span> },
+    { key: 'when', header: 'When', render: (a) => <span className="text-sm">{a.date} · {formatTime12h(a.time)}</span> },
     { key: 'purpose', header: 'Purpose', render: (a) => <span className="text-sm text-text-muted">{a.purpose || '—'}</span> },
     {
       key: 'status',
@@ -224,7 +225,7 @@ export function Appointments() {
                       onClick={() => handleAdd(s)}
                       className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:border-primary hover:text-primary"
                     >
-                      {s}
+                      {formatTime12h(s)}
                     </button>
                   ))
                 )}
@@ -345,7 +346,7 @@ export function Appointments() {
               </button>
             </div>
             <div className="mt-3 flex flex-col gap-1 text-sm">
-              <span>{selected.date} · {selected.time} ({selected.durationMinutes} min)</span>
+              <span>{selected.date} · {formatTime12h(selected.time)} ({selected.durationMinutes} min)</span>
               {selected.purpose && <span className="text-text-muted">{selected.purpose}</span>}
               <span className={`mt-1 w-fit rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLES[selected.status]}`}>
                 {selected.status.replace('_', ' ')}
