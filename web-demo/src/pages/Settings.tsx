@@ -17,8 +17,8 @@ import {
   type PendingInvite,
   type TeamMember,
 } from '../lib/auth'
-import { createApiKey, deleteApiKey, fetchApiKeys, formatDateTime } from '../lib/api'
-import type { ApiKey } from '../lib/types'
+import { createApiKey, deleteApiKey, fetchApiKeys, fetchAvailabilitySettings, formatDateTime, updateAvailabilitySettings } from '../lib/api'
+import type { ApiKey, AvailabilityConfig } from '../lib/types'
 
 function SettingsCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
@@ -32,13 +32,14 @@ function SettingsCard({ title, subtitle, children }: { title: string; subtitle: 
   )
 }
 
-type Tab = 'general' | 'profile' | 'security' | 'team' | 'apiKeys'
+type Tab = 'general' | 'profile' | 'security' | 'team' | 'apiKeys' | 'availability'
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'general', label: 'General', icon: 'business' },
   { id: 'profile', label: 'Profile', icon: 'person' },
   { id: 'security', label: 'Security', icon: 'lock' },
   { id: 'team', label: 'Team', icon: 'group' },
   { id: 'apiKeys', label: 'API Keys', icon: 'key' },
+  { id: 'availability', label: 'Availability', icon: 'event_available' },
 ]
 
 export function Settings() {
@@ -73,6 +74,7 @@ export function Settings() {
         {tab === 'security' && <SecurityTab />}
         {tab === 'team' && <TeamTab canManage={hasRole(user, 'admin')} />}
         {tab === 'apiKeys' && <ApiKeysCard canManage={hasRole(user, 'admin')} />}
+        {tab === 'availability' && <AvailabilityTab canManage={hasRole(user, 'admin')} />}
       </section>
     </DashboardLayout>
   )
@@ -587,6 +589,187 @@ function ApiKeysCard({ canManage }: { canManage: boolean }) {
             </div>
           ))}
         </div>
+      )}
+    </SettingsCard>
+  )
+}
+
+const WEEKDAYS: { key: string; label: string }[] = [
+  { key: 'Mon', label: 'Monday' },
+  { key: 'Tue', label: 'Tuesday' },
+  { key: 'Wed', label: 'Wednesday' },
+  { key: 'Thu', label: 'Thursday' },
+  { key: 'Fri', label: 'Friday' },
+  { key: 'Sat', label: 'Saturday' },
+  { key: 'Sun', label: 'Sunday' },
+]
+
+function AvailabilityTab({ canManage }: { canManage: boolean }) {
+  const [cfg, setCfg] = useState<AvailabilityConfig | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+  const [blackoutInput, setBlackoutInput] = useState('')
+
+  useEffect(() => {
+    fetchAvailabilitySettings().then(setCfg).catch(() => setCfg(null))
+  }, [])
+
+  if (!cfg) return <SettingsCard title="Availability" subtitle="Business hours the AI agent books appointments against.">
+    <p className="text-xs text-text-muted">Loading…</p>
+  </SettingsCard>
+
+  const save = async (next: AvailabilityConfig) => {
+    setCfg(next)
+    setSaving(true)
+    setMsg(null)
+    try {
+      const saved = await updateAvailabilitySettings(next)
+      setCfg(saved)
+      setMsg({ type: 'ok', text: 'Saved.' })
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Could not save.' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleDay = (day: string, open: boolean) => {
+    const hours = { ...cfg.hours, [day]: open ? { open: '10:00', close: '19:00' } : null }
+    save({ ...cfg, hours })
+  }
+
+  const setDayTime = (day: string, field: 'open' | 'close', value: string) => {
+    const current = cfg.hours[day]
+    if (!current) return
+    save({ ...cfg, hours: { ...cfg.hours, [day]: { ...current, [field]: value } } })
+  }
+
+  const addBlackout = () => {
+    if (!blackoutInput || cfg.blackout_dates.includes(blackoutInput)) return
+    save({ ...cfg, blackout_dates: [...cfg.blackout_dates, blackoutInput] })
+    setBlackoutInput('')
+  }
+
+  const removeBlackout = (date: string) => {
+    save({ ...cfg, blackout_dates: cfg.blackout_dates.filter((d) => d !== date) })
+  }
+
+  return (
+    <SettingsCard
+      title="Availability"
+      subtitle="Business hours, slot length, and timezone your AI agent checks and books appointments against — one set for your whole account."
+    >
+      {!canManage && (
+        <p className="flex items-center gap-1.5 text-xs text-text-muted">
+          <Icon name="info" className="text-[15px]" />
+          Only Admins and the Owner can change availability.
+        </p>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {WEEKDAYS.map(({ key, label }) => {
+          const hours = cfg.hours[key]
+          return (
+            <div key={key} className="flex flex-wrap items-center gap-3 rounded-lg border border-border px-3 py-2">
+              <label className="flex w-32 shrink-0 items-center gap-2 text-sm font-semibold">
+                <input
+                  type="checkbox"
+                  checked={!!hours}
+                  disabled={!canManage}
+                  onChange={(e) => toggleDay(key, e.target.checked)}
+                />
+                {label}
+              </label>
+              {hours ? (
+                <div className="flex items-center gap-2 text-sm text-text-muted">
+                  <input
+                    type="time"
+                    value={hours.open}
+                    disabled={!canManage}
+                    onChange={(e) => setDayTime(key, 'open', e.target.value)}
+                    className="rounded-lg border border-border bg-surface-high px-2 py-1 text-sm outline-none focus:border-primary"
+                  />
+                  <span>to</span>
+                  <input
+                    type="time"
+                    value={hours.close}
+                    disabled={!canManage}
+                    onChange={(e) => setDayTime(key, 'close', e.target.value)}
+                    className="rounded-lg border border-border bg-surface-high px-2 py-1 text-sm outline-none focus:border-primary"
+                  />
+                </div>
+              ) : (
+                <span className="text-sm text-text-muted">Closed</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm">
+          Slot length
+          <select
+            value={cfg.slot_minutes}
+            disabled={!canManage}
+            onChange={(e) => save({ ...cfg, slot_minutes: Number(e.target.value) })}
+            className="rounded-lg border border-border bg-surface-high px-2 py-1.5 text-sm outline-none focus:border-primary"
+          >
+            {[15, 30, 45, 60].map((m) => (
+              <option key={m} value={m}>{m} min</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          Timezone
+          <input
+            value={cfg.timezone}
+            disabled={!canManage}
+            onChange={(e) => save({ ...cfg, timezone: e.target.value })}
+            className="rounded-lg border border-border bg-surface-high px-2 py-1.5 text-sm outline-none focus:border-primary"
+          />
+        </label>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className="text-xs font-bold uppercase tracking-widest text-text-muted">Blackout dates</p>
+        {canManage && (
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={blackoutInput}
+              onChange={(e) => setBlackoutInput(e.target.value)}
+              className="rounded-lg border border-border bg-surface-high px-3 py-1.5 text-sm outline-none focus:border-primary"
+            />
+            <button
+              onClick={addBlackout}
+              className="rounded-lg border border-border px-3 py-1.5 text-sm font-bold hover:border-primary"
+            >
+              Add
+            </button>
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {cfg.blackout_dates.length === 0 && <span className="text-xs text-text-muted">None</span>}
+          {cfg.blackout_dates.map((d) => (
+            <span key={d} className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs">
+              {d}
+              {canManage && (
+                <button onClick={() => removeBlackout(d)} aria-label={`Remove ${d}`} className="text-text-muted hover:text-destructive">
+                  <Icon name="close" className="text-[13px]" />
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {saving && <p className="text-xs text-text-muted">Saving…</p>}
+      {msg && (
+        <p className={`flex items-center gap-1.5 text-xs ${msg.type === 'ok' ? 'text-success' : 'text-destructive'}`}>
+          <Icon name={msg.type === 'ok' ? 'check_circle' : 'error'} className="text-[15px]" />
+          {msg.text}
+        </p>
       )}
     </SettingsCard>
   )

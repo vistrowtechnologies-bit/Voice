@@ -12,9 +12,11 @@ original sqlite3-flavored form (`?` placeholders, `with conn:` committing
 without closing).
 """
 
+import datetime
 import json
 
 import psycopg
+from zoneinfo import ZoneInfo
 
 import dbconn
 
@@ -220,53 +222,128 @@ def get_webhook_url() -> str | None:
         conn.close()
 
 
-def get_gcal_config(account_id: int | None) -> dict | None:
-    """The connected Google Calendar integration's config for this tenant, or
-    None if nothing is connected. Two shapes depending on how the tenant
-    connected: {"mode":"oauth","access_token",...} for the one-click OAuth
-    connect (server/token_api.py's gcal_oauth_callback), or {"url":...} for
-    the older Apps Script web-app bridge. Account-scoped; None on any error
-    so a booking tool degrades to a graceful 'I'll have the team confirm'
-    instead of crashing the call."""
+# Native appointment-booking (replaces Google Calendar/Cal.com entirely).
+# Duplicates the SQL logic in server/calls_db.py's equivalents rather than
+# importing them — this package can't import server/ (see module docstring).
+_AVAILABILITY_DEFAULTS = {
+    "timezone": "Asia/Kolkata",
+    "slot_minutes": 30,
+    "hours": {
+        "Mon": {"open": "10:00", "close": "19:00"},
+        "Tue": {"open": "10:00", "close": "19:00"},
+        "Wed": {"open": "10:00", "close": "19:00"},
+        "Thu": {"open": "10:00", "close": "19:00"},
+        "Fri": {"open": "10:00", "close": "19:00"},
+        "Sat": {"open": "10:00", "close": "19:00"},
+        "Sun": None,
+    },
+    "blackout_dates": [],
+}
+_DAY_ABBR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def _hhmm_to_minutes(t: str) -> int:
+    h, m = t.split(":")
+    return int(h) * 60 + int(m)
+
+
+def get_availability_config(account_id: int | None) -> dict:
     if account_id is None:
-        return None
+        return dict(_AVAILABILITY_DEFAULTS)
     conn = dbconn.connect()
     try:
         row = conn.execute(
-            "SELECT config_json FROM integrations "
-            "WHERE account_id = ? AND key = 'gcal' AND status = 'connected'",
+            "SELECT value FROM settings WHERE account_id = ? AND key = 'availability.config'",
             (account_id,),
         ).fetchone()
-        if row is None:
-            return None
-        cfg = json.loads(row["config_json"] or "{}")
-        return cfg or None
+        cfg = dict(_AVAILABILITY_DEFAULTS)
+        if row and row["value"]:
+            stored = json.loads(row["value"])
+            if isinstance(stored, dict):
+                cfg.update({k: v for k, v in stored.items() if k in _AVAILABILITY_DEFAULTS})
+        return cfg
+    except psycopg.Error:
+        return dict(_AVAILABILITY_DEFAULTS)
+    finally:
+        conn.close()
+
+
+def _appt_slot_conflict(conn, account_id: int, appt_date: str, start_time: str, duration_minutes: int) -> bool:
+    rows = conn.execute(
+        "SELECT start_time, duration_minutes FROM appointments "
+        "WHERE account_id = ? AND appt_date = ? AND status = 'confirmed'",
+        (account_id, appt_date),
+    ).fetchall()
+    new_start = _hhmm_to_minutes(start_time)
+    new_end = new_start + duration_minutes
+    for r in rows:
+        s = _hhmm_to_minutes(r["start_time"])
+        e = s + r["duration_minutes"]
+        if new_start < e and new_end > s:
+            return True
+    return False
+
+
+def check_appointment_availability(account_id: int | None, date: str, duration_minutes: int) -> list[str] | None:
+    """Open HH:MM slots for `date` against the account's availability config +
+    existing confirmed bookings. None only on a genuine DB error, so the tool
+    degrades gracefully — matches the old _calendar_check contract, except
+    the "no calendar connected" case no longer exists (a native calendar
+    always exists once this account has any config, default or not)."""
+    conn = dbconn.connect()
+    try:
+        cfg = get_availability_config(account_id)
+        weekday = _DAY_ABBR[datetime.date.fromisoformat(date).weekday()]
+        if date in (cfg.get("blackout_dates") or []):
+            return []
+        hours = (cfg.get("hours") or {}).get(weekday)
+        if not hours:
+            return []
+        slot_minutes = int(cfg.get("slot_minutes", 30))
+        open_m, close_m = _hhmm_to_minutes(hours["open"]), _hhmm_to_minutes(hours["close"])
+        now = datetime.datetime.now(ZoneInfo(cfg.get("timezone", "Asia/Kolkata")))
+        is_today = date == now.date().isoformat()
+        now_minutes = now.hour * 60 + now.minute
+        slots: list[str] = []
+        cursor = open_m
+        while cursor + duration_minutes <= close_m:
+            hhmm = f"{cursor // 60:02d}:{cursor % 60:02d}"
+            if not (is_today and cursor <= now_minutes) and not _appt_slot_conflict(conn, account_id, date, hhmm, duration_minutes):
+                slots.append(hhmm)
+            cursor += slot_minutes
+        return slots
     except psycopg.Error:
         return None
     finally:
         conn.close()
 
 
-def update_gcal_access_token(account_id: int, access_token: str, expires_at: int) -> None:
-    """Persist a refreshed OAuth access token so the next call reuses it
-    instead of refreshing again. Read-modify-write to preserve the other
-    stored fields (refresh_token, connected_email)."""
+def book_native_appointment(
+    account_id: int | None,
+    agent_id: int | None,
+    date: str,
+    time: str,
+    duration_minutes: int,
+    name: str,
+    phone: str,
+    purpose: str,
+) -> dict | None:
+    """{"ok": True/False, ...} on success/handled-failure, None only on a
+    genuine DB error — matches the old _calendar_book contract."""
     conn = dbconn.connect()
     try:
         with conn:
-            row = conn.execute(
-                "SELECT config_json FROM integrations WHERE account_id = ? AND key = 'gcal'",
-                (account_id,),
-            ).fetchone()
-            cfg = json.loads(row["config_json"] or "{}") if row else {}
-            cfg["access_token"] = access_token
-            cfg["token_expires_at"] = expires_at
+            if _appt_slot_conflict(conn, account_id, date, time, duration_minutes):
+                return {"ok": False, "error": "slot no longer available"}
             conn.execute(
-                "UPDATE integrations SET config_json = ? WHERE account_id = ? AND key = 'gcal'",
-                (json.dumps(cfg), account_id),
+                "INSERT INTO appointments (account_id, agent_id, call_id, contact_name, contact_phone, "
+                "contact_email, purpose, appt_date, start_time, duration_minutes, status, source) "
+                "VALUES (?, ?, NULL, ?, ?, '', ?, ?, ?, ?, 'confirmed', 'agent')",
+                (account_id, agent_id, name, phone, purpose, date, time, duration_minutes),
             )
+            return {"ok": True}
     except psycopg.Error:
-        pass
+        return None
     finally:
         conn.close()
 

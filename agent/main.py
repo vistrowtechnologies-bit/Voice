@@ -983,6 +983,9 @@ async def entrypoint(ctx: JobContext) -> None:
         # Which tenant this call belongs to — lets the lead-capture tools fan
         # out to that tenant's connected integrations (Slack/Sheets/WhatsApp/CRM).
         "account_id": cfg.get("account_id"),
+        # This agent's own id, so book_appointment can attribute the booking
+        # to it (appointments.agent_id).
+        "agent_id": cfg.get("id"),
     }
 
     # interruption_sensitivity 0-1 → how many real words it takes to interrupt

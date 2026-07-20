@@ -9,9 +9,6 @@ their CRM endpoint) and we deliver to it. ArthaLeads is the one exception —
 its endpoint is fixed, so the operator only pastes a token. Same
 stdlib-urllib, best-effort, never-raise philosophy as email_sender — a broken
 integration must never break a call.
-
-Cal.com is intentionally not a delivery target: it's a *booking* action the
-agent takes mid-call (see agent tools), not a place we push finished leads.
 """
 
 import json
@@ -23,7 +20,6 @@ import calls_db
 
 logger = logging.getLogger("vistrow-integrations")
 
-# Only these keys receive lead deliveries; calcom is handled agent-side.
 _DELIVERY_KEYS = {"webhook", "slack", "whatsapp", "sheets", "arthaleads"}
 
 _ARTHALEADS_URL = "https://api.arthaleads.com/webhook/lead"

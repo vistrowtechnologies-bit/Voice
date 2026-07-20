@@ -29,7 +29,6 @@ from pydantic import BaseModel
 
 WIDGET_JS_PATH = Path(__file__).resolve().parent / "static" / "widget.js"
 WORDPRESS_PLUGIN_ZIP_PATH = Path(__file__).resolve().parent / "static" / "vistrow-voice-widget.zip"
-GCAL_APPSSCRIPT_PATH = Path(__file__).resolve().parent / "static" / "google-calendar-appsscript.gs"
 AGENT_ORB_VIDEO_PATH = Path(__file__).resolve().parent / "static" / "agent-orb.mp4"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -1567,149 +1566,62 @@ def test_integration(key: str, user: dict = Depends(require_role("admin"))) -> d
     return {"ok": ok, "detail": detail}
 
 
-# --------------------------------------------- Google Calendar (OAuth connect)
-#
-# A one-click "Connect Google Calendar" for booking — separate from the
-# login OAuth flow above, because it asks for a different, sensitive scope
-# (calendar.events, offline access for a refresh token) that Google requires
-# app verification for. Deliberately its own client-secret-bearing routes
-# rather than reusing /auth/oauth/google/* so a misconfiguration here can
-# never affect the login flow. These routes sit behind require_session (not
-# in _PUBLIC_PATHS/_PUBLIC_PREFIXES), so the browser's existing session
-# cookie survives the round-trip to Google and back — no need to smuggle
-# account_id through the state param.
+# --------------------------------------------------------------- appointments
 
-_GCAL_OAUTH_STATE_COOKIE = "vv_gcal_oauth_state"
-_GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+@app.get("/appointments")
+def list_appointments(start: str = "", end: str = "", status: str = "", search: str = "", user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_appointments(user["account_id"], start, end, status, search)
 
 
-@app.get("/integrations/gcal/oauth/start")
-def gcal_oauth_start(response: Response, user: dict = Depends(require_role("admin"))) -> RedirectResponse:
-    client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
-    client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
-    redirect_uri = os.environ.get("GOOGLE_CALENDAR_REDIRECT_URI")
-    if not client_id or not client_secret or not redirect_uri:
-        raise HTTPException(404, "Google Calendar connect is not configured on this server")
-    state = secrets.token_urlsafe(24)
-    params = {
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": _GCAL_SCOPE,
-        "state": state,
-        # offline + consent: the only way Google issues a refresh_token, which
-        # the agent needs to book appointments without the tenant present.
-        "access_type": "offline",
-        "prompt": "consent",
-    }
-    redirect = RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}")
-    redirect.set_cookie(
-        _GCAL_OAUTH_STATE_COOKIE, state, max_age=600, httponly=True, secure=_COOKIE_SECURE, samesite="lax"
+@app.post("/appointments")
+def create_appointment(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    result = calls_db.book_appointment_native(
+        user["account_id"], data.get("agentId"), None,
+        data.get("name", ""), data.get("phone", ""), data["date"], data["time"],
+        int(data.get("durationMinutes", 30)), data.get("purpose", ""), data.get("email", ""), source="manual",
     )
-    return redirect
+    if not result.get("ok"):
+        raise HTTPException(409, result.get("error", "could not book"))
+    return calls_db.get_appointment(result["id"], user["account_id"])
 
 
-@app.get("/integrations/gcal/oauth/callback")
-def gcal_oauth_callback(
-    request: Request, code: str | None = None, state: str | None = None, error: str | None = None,
-    user: dict = Depends(require_role("admin")),
-) -> RedirectResponse:
-    base_url = _app_base_url(request)
-    fail = RedirectResponse(f"{base_url}/dashboard/integrations?gcal=error")
-    if error or not code:
-        return fail
-    expected_state = request.cookies.get(_GCAL_OAUTH_STATE_COOKIE)
-    if not expected_state or state != expected_state:
-        return fail
-
-    client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
-    client_secret = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
-    redirect_uri = os.environ.get("GOOGLE_CALENDAR_REDIRECT_URI")
-    if not client_id or not client_secret or not redirect_uri:
-        return fail
-    token_body = urllib.parse.urlencode(
-        {
-            "code": code,
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "redirect_uri": redirect_uri,
-            "grant_type": "authorization_code",
-        }
-    ).encode()
-    try:
-        token_req = urllib.request.Request(
-            "https://oauth2.googleapis.com/token",
-            data=token_body,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": "Vistrow-Voice/1.0",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(token_req, timeout=10) as resp:
-            token_data = json.loads(resp.read())
-        userinfo_req = urllib.request.Request(
-            "https://openidconnect.googleapis.com/v1/userinfo",
-            headers={"Authorization": f"Bearer {token_data['access_token']}", "User-Agent": "Vistrow-Voice/1.0"},
-        )
-        with urllib.request.urlopen(userinfo_req, timeout=10) as resp:
-            userinfo = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        try:
-            detail = e.read().decode("utf-8", "replace")[:500]
-        except Exception:
-            detail = "<no body>"
-        logger.error("Google Calendar OAuth token exchange failed: HTTP %s — %s", e.code, detail)
-        return fail
-    except Exception:
-        logger.exception("Google Calendar OAuth exchange failed")
-        return fail
-
-    refresh_token = token_data.get("refresh_token")
-    if not refresh_token:
-        # No refresh_token means we can't book anything once this access token
-        # expires (~1hr) — this shouldn't happen with prompt=consent, but if
-        # Google omits it (e.g. a weird re-consent edge case) fail loudly
-        # rather than silently storing a connection that dies in an hour.
-        logger.error("Google Calendar OAuth returned no refresh_token for account %s", user["account_id"])
-        return RedirectResponse(f"{base_url}/dashboard/integrations?gcal=error_no_refresh")
-
-    expires_at = int(time.time()) + int(token_data.get("expires_in", 3600))
-    calls_db.update_integration(
-        "gcal",
-        "connected",
-        {
-            "mode": "oauth",
-            "access_token": token_data["access_token"],
-            "refresh_token": refresh_token,
-            "token_expires_at": expires_at,
-            "connected_email": userinfo.get("email", ""),
-        },
-        user["account_id"],
-    )
-    redirect = RedirectResponse(f"{base_url}/dashboard/integrations?gcal=connected")
-    redirect.delete_cookie(_GCAL_OAUTH_STATE_COOKIE, path="/")
-    return redirect
+@app.patch("/appointments/{appt_id}/status")
+def update_appointment_status(appt_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    appt = calls_db.update_appointment_status(appt_id, user["account_id"], data.get("status", ""))
+    if not appt:
+        raise HTTPException(404, "not found")
+    return appt
 
 
-@app.post("/integrations/gcal/disconnect")
-def gcal_disconnect(user: dict = Depends(require_role("admin"))) -> dict:
-    integ = next((i for i in calls_db.list_integrations(user["account_id"]) if i["key"] == "gcal"), None)
-    token = (integ or {}).get("config", {}).get("access_token")
-    if token:
-        try:
-            urllib.request.urlopen(
-                urllib.request.Request(
-                    "https://oauth2.googleapis.com/revoke",
-                    data=urllib.parse.urlencode({"token": token}).encode(),
-                    method="POST",
-                ),
-                timeout=5,
-            )
-        except Exception:
-            logger.warning("Google token revoke failed (non-fatal)", exc_info=True)
-    calls_db.update_integration("gcal", "not_connected", {}, user["account_id"])
+@app.post("/appointments/{appt_id}/reschedule")
+def reschedule_appointment(appt_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    result = calls_db.reschedule_appointment(appt_id, user["account_id"], data["date"], data["time"])
+    if not result.get("ok"):
+        raise HTTPException(409, result.get("error", "could not reschedule"))
+    return calls_db.get_appointment(result["id"], user["account_id"])
+
+
+@app.delete("/appointments/{appt_id}")
+def delete_appointment(appt_id: int, user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_appointment(appt_id, user["account_id"])
     return {"ok": True}
+
+
+@app.get("/appointments/availability")
+def appointments_check_availability(date: str, duration_minutes: int = 30, user: dict = Depends(current_user)) -> dict:
+    return {"slots": calls_db.check_availability(user["account_id"], date, duration_minutes)}
+
+
+# ------------------------------------------------------------ availability config
+
+@app.get("/availability/settings")
+def get_availability_settings(user: dict = Depends(current_user)) -> dict:
+    return calls_db.get_availability_config(user["account_id"])
+
+
+@app.patch("/availability/settings")
+def update_availability_settings(data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
+    return calls_db.save_availability_config(user["account_id"], data)
 
 
 # ----------------------------------------------------- telephony (EnableX)
@@ -2010,17 +1922,6 @@ def widget_wordpress_plugin() -> FileResponse:
         WORDPRESS_PLUGIN_ZIP_PATH,
         media_type="application/zip",
         filename="vistrow-voice-widget.zip",
-    )
-
-
-@app.get("/integrations/google-calendar-script.gs")
-def google_calendar_script() -> FileResponse:
-    """The Apps Script a tenant pastes into script.google.com and deploys as a
-    Web App, then connects its /exec URL as the Google Calendar integration."""
-    return FileResponse(
-        GCAL_APPSSCRIPT_PATH,
-        media_type="text/plain; charset=utf-8",
-        filename="vistrow-google-calendar.gs",
     )
 
 

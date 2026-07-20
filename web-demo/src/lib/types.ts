@@ -1,5 +1,5 @@
 export interface SiteVisit {
-  propertyId?: string
+  property_id?: string
   date: string
   time: string
 }
@@ -54,7 +54,7 @@ export interface CallRecord {
   callDate: string
   durationSeconds: number | null
   replyLanguage: string | null
-  siteVisit: { property_id?: string; date: string; time: string } | null
+  siteVisit: SiteVisit | null
   transcript?: LeadTranscriptLine[]
   intelligence?: {
     summary: string
@@ -79,6 +79,35 @@ export interface CallRecord {
 }
 
 export type Lead = CallRecord
+
+// Native appointment/booking system — replaces Google Calendar/Cal.com.
+export type AppointmentStatus = 'confirmed' | 'cancelled' | 'rescheduled' | 'completed' | 'no_show'
+
+export interface Appointment {
+  id: number
+  agentId: number | null
+  callId: number | null
+  name: string
+  phone: string
+  email: string
+  purpose: string
+  date: string // YYYY-MM-DD
+  time: string // HH:MM
+  durationMinutes: number
+  status: AppointmentStatus
+  source: 'agent' | 'manual'
+  notes: string
+  rescheduledFromId: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AvailabilityConfig {
+  timezone: string
+  slot_minutes: number
+  hours: Record<string, { open: string; close: string } | null>
+  blackout_dates: string[]
+}
 
 export interface ActiveCallInfo {
   room: string

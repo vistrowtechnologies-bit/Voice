@@ -233,67 +233,23 @@ async def _publish_event(context: RunContext, payload: dict) -> None:
 
 
 async def _calendar_check(context: RunContext, date: str, duration_minutes: int) -> list[str] | None:
-    """Real open HH:MM slots for `date`, or None if no calendar is connected
-    or the call fails — callers turn None into a graceful spoken fallback.
-    Branches on how the tenant connected: the one-click OAuth flow (native
-    Calendar API, refreshed token) or the older Apps Script web-app bridge."""
+    """Real open HH:MM slots for `date` from the native appointments system
+    (server/calls_db.py's counterpart is the source of truth for the
+    dashboard; this queries the same `appointments` table directly). None
+    only on a genuine DB error — a native calendar always exists, so unlike
+    the old Google-Calendar-backed version this no longer means "not
+    connected"."""
     account_id = (context.userdata or {}).get("account_id")
-    cfg = db.get_gcal_config(account_id)
-    if not cfg:
-        return None
-    if cfg.get("mode") == "oauth":
-        import google_calendar
-
-        return await google_calendar.check_availability(account_id, cfg, date, duration_minutes)
-    url = cfg.get("url")
-    if not url:
-        return None
-    try:
-        timeout = aiohttp.ClientTimeout(total=8)
-        async with aiohttp.ClientSession(timeout=timeout) as http:
-            async with http.post(url, json={"action": "check", "date": date, "duration": duration_minutes}) as resp:
-                result = await resp.json(content_type=None)
-        return result.get("slots") if result else None
-    except Exception:
-        logger.warning("calendar (script) availability request failed", exc_info=True)
-        return None
+    return db.check_appointment_availability(account_id, date, duration_minutes)
 
 
 async def _calendar_book(
     context: RunContext, date: str, time: str, duration_minutes: int, name: str, phone: str, purpose: str
 ) -> dict | None:
-    """{"ok": bool, "error"?: str}, or None if no calendar is connected /
-    unreachable. Same oauth-vs-script branch as _calendar_check."""
+    """{"ok": bool, "error"?: str}, or None only on a genuine DB error."""
     account_id = (context.userdata or {}).get("account_id")
-    cfg = db.get_gcal_config(account_id)
-    if not cfg:
-        return None
-    if cfg.get("mode") == "oauth":
-        import google_calendar
-
-        return await google_calendar.book_event(account_id, cfg, date, time, duration_minutes, name, phone, purpose)
-    url = cfg.get("url")
-    if not url:
-        return None
-    try:
-        timeout = aiohttp.ClientTimeout(total=8)
-        async with aiohttp.ClientSession(timeout=timeout) as http:
-            async with http.post(
-                url,
-                json={
-                    "action": "book",
-                    "date": date,
-                    "time": time,
-                    "duration": duration_minutes,
-                    "name": name,
-                    "phone": phone,
-                    "purpose": purpose,
-                },
-            ) as resp:
-                return await resp.json(content_type=None)
-    except Exception:
-        logger.warning("calendar (script) booking request failed", exc_info=True)
-        return None
+    agent_id = (context.userdata or {}).get("agent_id")
+    return db.book_native_appointment(account_id, agent_id, date, time, duration_minutes, name, phone, purpose)
 
 
 @function_tool
@@ -309,8 +265,8 @@ async def check_calendar_availability(context: RunContext, date: str, duration_m
     logger.info("checking calendar availability for %s (%smin)", date, duration_minutes)
     slots = await _calendar_check(context, date, duration_minutes)
     if slots is None:
-        # No calendar connected (or unreachable) — don't invent slots; hand
-        # off honestly.
+        # A native calendar always exists now — None here means the DB call
+        # itself failed. Don't invent slots; hand off honestly.
         return (
             "No live calendar is connected, so I can't confirm exact open times. "
             "Note the caller's preferred date and time and tell them the team will confirm."
@@ -366,8 +322,8 @@ async def book_appointment(
     await _post_webhook(event)
     await _fan_out_integrations(context, event)
     if result is None:
-        # Recorded on the lead + pushed to integrations, but no calendar to
-        # write to — be honest rather than claim a calendar slot exists.
+        # Recorded on the lead + pushed to integrations, but the native
+        # calendar DB call failed — be honest rather than claim a slot exists.
         return (
             f"Noted the appointment request for {name} on {date} at {time}. "
             "Tell the caller the team will confirm it shortly."

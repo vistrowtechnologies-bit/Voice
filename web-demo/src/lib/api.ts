@@ -2,6 +2,9 @@ import type {
   ActiveCallInfo,
   AgentConfig,
   Analytics,
+  Appointment,
+  AppointmentStatus,
+  AvailabilityConfig,
   BillingSummary,
   Campaign,
   CallRecord,
@@ -230,8 +233,30 @@ export const updateIntegration = (key: string, status: string, config: Record<st
   send('PATCH', `/integrations/${key}`, { status, config, name })
 export const testIntegration = (key: string) =>
   send<{ ok: boolean; detail: string }>('POST', `/integrations/${key}/test`)
-export const gcalOauthStartUrl = '/api/integrations/gcal/oauth/start'
-export const disconnectGcal = () => send<{ ok: boolean }>('POST', '/integrations/gcal/disconnect')
+
+// ------------------------------------------------------------ appointments
+
+export function fetchAppointments(params?: { start?: string; end?: string; status?: string; search?: string }) {
+  const q = new URLSearchParams()
+  if (params?.start) q.set('start', params.start)
+  if (params?.end) q.set('end', params.end)
+  if (params?.status) q.set('status', params.status)
+  if (params?.search) q.set('search', params.search)
+  const qs = q.toString()
+  return get<Appointment[]>(`/appointments${qs ? `?${qs}` : ''}`)
+}
+export const createAppointment = (data: Partial<Appointment>) => send<Appointment>('POST', '/appointments', data)
+export const updateAppointmentStatus = (id: number, status: AppointmentStatus) =>
+  send<Appointment>('PATCH', `/appointments/${id}/status`, { status })
+export const rescheduleAppointment = (id: number, date: string, time: string) =>
+  send<Appointment>('POST', `/appointments/${id}/reschedule`, { date, time })
+export const deleteAppointment = (id: number) => send('DELETE', `/appointments/${id}`)
+export const checkAppointmentAvailability = (date: string, durationMinutes = 30) =>
+  get<{ slots: string[] }>(`/appointments/availability?date=${date}&duration_minutes=${durationMinutes}`)
+
+export const fetchAvailabilitySettings = () => get<AvailabilityConfig>('/availability/settings')
+export const updateAvailabilitySettings = (data: Partial<AvailabilityConfig>) =>
+  send<AvailabilityConfig>('PATCH', '/availability/settings', data)
 
 // ------------------------------------------------------- telephony (EnableX)
 

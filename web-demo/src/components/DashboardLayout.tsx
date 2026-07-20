@@ -55,6 +55,7 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
     items: [
       { to: '/dashboard/calls', label: 'All Calls History', icon: 'history' },
       { to: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
+      { to: '/dashboard/appointments', label: 'Appointments', icon: 'event' },
       { to: '/dashboard/integrations', label: 'Integrations', icon: 'extension', tour: 'nav-integrations' },
       { to: '/dashboard/website-widget', label: 'Website Widget', icon: 'widgets' },
     ],

@@ -168,7 +168,7 @@ export function ActiveCallUI({
       } else if (data.type === 'site_visit_booked') {
         onLeadUpdate({
           siteVisit: {
-            propertyId: data.property_id as string,
+            property_id: data.property_id as string,
             date: data.date as string,
             time: data.time as string,
           },
