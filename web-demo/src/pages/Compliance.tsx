@@ -42,8 +42,8 @@ function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean
       aria-pressed={on}
     >
       <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-          on ? 'translate-x-[22px]' : 'translate-x-0.5'
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 ${
+          on ? 'left-[22px]' : 'left-0.5'
         }`}
       />
     </button>
