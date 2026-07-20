@@ -71,6 +71,7 @@ export function Dashboard() {
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
   const [recentCalls, setRecentCalls] = useState<CallRecord[]>([])
   const [rangeDays, setRangeDays] = useState(14)
+  const [recentCallsCollapsed, setRecentCallsCollapsed] = useState(false)
 
   const { user } = useAuth()
   // Re-render (and recompute chart colors) when the header toggles the theme.
@@ -145,26 +146,40 @@ export function Dashboard() {
             <SectionCard
               title={showingLive ? 'Live calls' : 'Recent calls'}
               action={
-                showingLive ? (
-                  <span className="flex items-center gap-1.5 text-[11px] text-text-muted">
-                    <span className="pulse-dot h-2 w-2 rounded-full bg-cyan" />
-                    {activeCalls.length} in progress
-                  </span>
-                ) : (
-                  <Link to="/dashboard/calls" className="text-xs font-bold text-cyan hover:underline">
-                    View all →
-                  </Link>
-                )
+                <div className="flex items-center gap-3">
+                  {showingLive ? (
+                    <span className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                      <span className="pulse-dot h-2 w-2 rounded-full bg-cyan" />
+                      {activeCalls.length} in progress
+                    </span>
+                  ) : (
+                    <Link to="/dashboard/calls" className="text-xs font-bold text-cyan hover:underline">
+                      View all →
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setRecentCallsCollapsed((c) => !c)}
+                    aria-label={recentCallsCollapsed ? 'Expand' : 'Minimize'}
+                    aria-expanded={!recentCallsCollapsed}
+                    className="flex h-6 w-6 items-center justify-center rounded text-text-muted transition-colors hover:bg-surface-high/40 hover:text-text"
+                  >
+                    <Icon
+                      name="expand_more"
+                      className={`text-[18px] transition-transform ${recentCallsCollapsed ? '-rotate-90' : ''}`}
+                    />
+                  </button>
+                </div>
               }
               footer={
-                !showingLive && recentCalls.length > 0 ? (
+                !recentCallsCollapsed && !showingLive && recentCalls.length > 0 ? (
                   <Link to="/dashboard/calls" className="font-bold text-cyan hover:underline">
                     View full call history →
                   </Link>
                 ) : undefined
               }
             >
-              <div className="divide-y divide-border">
+              <div className={`divide-y divide-border ${recentCallsCollapsed ? 'hidden' : ''}`}>
                 {showingLive
                   ? activeCalls.map((call) => (
                       <div key={call.room} className="flex items-center gap-3 px-4 py-3 sm:px-5">
