@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -604,6 +604,103 @@ const WEEKDAYS: { key: string; label: string }[] = [
   { key: 'Sun', label: 'Sunday' },
 ]
 
+// Fallback for browsers without Intl.supportedValuesOf('timeZone') (Safari <
+// 17, older WebViews) — covers every major region so the picker still works,
+// just with a shorter list.
+const TIMEZONE_FALLBACK = [
+  'UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Dhaka', 'Asia/Bangkok',
+  'Asia/Singapore', 'Asia/Hong_Kong', 'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Seoul',
+  'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Moscow',
+  'Africa/Cairo', 'Africa/Lagos', 'Africa/Johannesburg', 'Africa/Nairobi',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'America/Sao_Paulo', 'America/Mexico_City',
+  'Australia/Sydney', 'Australia/Perth', 'Pacific/Auckland',
+]
+
+function allTimezones(): string[] {
+  try {
+    const supported = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf
+    if (supported) return supported('timeZone')
+  } catch {
+    // fall through to the fallback list below
+  }
+  return TIMEZONE_FALLBACK
+}
+
+/** Searchable timezone picker — a button showing the current value that
+ * opens a filterable dropdown of every IANA zone, instead of a plain text
+ * input where a typo silently produces an invalid timezone. */
+function TimezoneSelect({ value, onChange, disabled }: { value: string; onChange: (tz: string) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
+  const zones = useMemo(allTimezones, [])
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return zones
+    return zones.filter((z) => z.toLowerCase().includes(q))
+  }, [zones, query])
+
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className="flex min-w-[180px] items-center justify-between gap-2 rounded-lg border border-border bg-surface-high px-2 py-1.5 text-sm outline-none focus:border-primary disabled:opacity-50"
+      >
+        {value || 'Select timezone'}
+        <Icon name={open ? 'expand_less' : 'expand_more'} className="text-[16px] text-text-muted" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-border bg-surface shadow-lg">
+          <div className="relative border-b border-border p-2">
+            <Icon name="search" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[16px] text-text-muted" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search time zones..."
+              className="w-full rounded-md border border-border bg-surface-high py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary"
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-3 text-xs text-text-muted">No matching time zones.</p>
+            ) : (
+              filtered.map((z) => (
+                <button
+                  key={z}
+                  type="button"
+                  onClick={() => {
+                    onChange(z)
+                    setQuery('')
+                    setOpen(false)
+                  }}
+                  className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-high ${
+                    z === value ? 'font-semibold text-primary' : ''
+                  }`}
+                >
+                  {z}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AvailabilityTab({ canManage }: { canManage: boolean }) {
   const [cfg, setCfg] = useState<AvailabilityConfig | null>(null)
   const [saving, setSaving] = useState(false)
@@ -722,11 +819,10 @@ function AvailabilityTab({ canManage }: { canManage: boolean }) {
         </label>
         <label className="flex items-center gap-2 text-sm">
           Timezone
-          <input
+          <TimezoneSelect
             value={cfg.timezone}
             disabled={!canManage}
-            onChange={(e) => save({ ...cfg, timezone: e.target.value })}
-            className="rounded-lg border border-border bg-surface-high px-2 py-1.5 text-sm outline-none focus:border-primary"
+            onChange={(tz) => save({ ...cfg, timezone: tz })}
           />
         </label>
       </div>
