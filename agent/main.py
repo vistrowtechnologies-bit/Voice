@@ -951,6 +951,20 @@ async def entrypoint(ctx: JobContext) -> None:
     except asyncio.TimeoutError:
         logger.warning("no caller joined room %s within 90s — abandoning job", ctx.room.name)
         return
+    # /widget/warm pre-creates the room (to give the agent a head start
+    # waking up) before the visitor has typed their name/phone/email, so
+    # call_context above may have been read from a metadata snapshot that
+    # predates /widget/token filling those fields in. ctx.room.metadata is
+    # the live value (kept in sync by the SDK), so re-read it now that
+    # someone has actually joined — by this point /widget/token has always
+    # already run, since that's what hands the visitor their access token.
+    try:
+        live_meta = json.loads(ctx.room.metadata) if ctx.room.metadata else {}
+    except ValueError:
+        live_meta = {}
+    for key in ("visitor_name", "visitor_phone", "visitor_email"):
+        if live_meta.get(key):
+            call_context[key] = live_meta[key]
     config = await config_task
     if config and config.get("status") == "paused":
         # Paused from the dashboard — don't take the call.

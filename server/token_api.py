@@ -24,7 +24,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from livekit import api
-from livekit.api import CreateRoomRequest, ListParticipantsRequest, ListRoomsRequest
+from livekit.api import CreateRoomRequest, ListParticipantsRequest, ListRoomsRequest, UpdateRoomMetadataRequest
 from pydantic import BaseModel
 
 WIDGET_JS_PATH = Path(__file__).resolve().parent / "static" / "widget.js"
@@ -2023,6 +2023,24 @@ def _widget_rate_limited(site_key: str) -> bool:
     return len(calls) > _WIDGET_TOKEN_MAX_PER_WINDOW
 
 
+# Separate, looser limiter for /widget/warm: it fires on every widget open
+# (form shown), not just on a completed submit, so it sees several times the
+# traffic of /widget/token for the same amount of real visitor activity.
+_WIDGET_WARM_WINDOW_SECONDS = 60
+_WIDGET_WARM_MAX_PER_WINDOW = 60
+_widget_warm_calls: dict[str, list[float]] = {}
+
+
+def _widget_warm_rate_limited(site_key: str) -> bool:
+    import time
+
+    now = time.monotonic()
+    calls = [t for t in _widget_warm_calls.get(site_key, []) if now - t < _WIDGET_WARM_WINDOW_SECONDS]
+    calls.append(now)
+    _widget_warm_calls[site_key] = calls
+    return len(calls) > _WIDGET_WARM_MAX_PER_WINDOW
+
+
 def _looks_like_real_phone(phone: str) -> bool:
     """Rejects obviously-fake test input (9999999999, 7778889999,
     1234567890, ...) in addition to basic E.164 shape — client-side already
@@ -2045,12 +2063,63 @@ def _looks_like_real_phone(phone: str) -> bool:
     return True
 
 
+class WidgetWarmRequest(BaseModel):
+    siteKey: str
+
+
+@app.post("/widget/warm")
+async def warm_widget_agent(req: WidgetWarmRequest) -> dict:
+    """Best-effort: pre-create the LiveKit room the instant a visitor opens
+    the widget's pre-call form — well before they've finished typing their
+    name/phone/email — so the agent (which auto-dispatches into a room as
+    soon as it's created) gets a head start waking up if it's been idle.
+    The room only carries {"agent_id", "site_id"} for now; /widget/token
+    fills in the visitor's details once they actually submit, reusing this
+    same room instead of creating a fresh one. If the visitor never submits,
+    the empty room is just abandoned — the agent's own 90s
+    wait_for_participant timeout (agent/main.py) cleans that job up on its
+    own, same as it already does for a normal widget room nobody joins.
+    """
+    site = calls_db.get_site_by_key(req.siteKey)
+    if site is None or site["status"] == "paused":
+        # Silent no-op, not an error — this is a speculative optimization
+        # the widget fires on every open; a bad/paused site key will get a
+        # proper error from /widget/token when the visitor actually submits.
+        return {"room": None}
+    if _widget_warm_rate_limited(req.siteKey):
+        return {"room": None}
+
+    api_key = os.environ.get("LIVEKIT_API_KEY")
+    api_secret = os.environ.get("LIVEKIT_API_SECRET")
+    livekit_url = os.environ.get("LIVEKIT_URL")
+    if not api_key or not api_secret or not livekit_url:
+        return {"room": None}
+
+    import secrets
+
+    room = f"widget-{site['id']}-{secrets.token_hex(8)}"
+    try:
+        async with api.LiveKitAPI() as lkapi:
+            await lkapi.room.create_room(
+                CreateRoomRequest(
+                    name=room,
+                    metadata=json.dumps({"agent_id": site["agentId"], "site_id": site["id"]}),
+                )
+            )
+        logger.info("widget warm: pre-created room=%s for site=%s", room, site["name"])
+    except Exception:
+        logger.warning("widget warm: could not pre-create room for site=%s", site["name"], exc_info=True)
+        return {"room": None}
+    return {"room": room}
+
+
 class WidgetTokenRequest(BaseModel):
     siteKey: str
     identity: str
     name: str
     phone: str
     email: str
+    room: str | None = None
 
 
 @app.post("/widget/token")
@@ -2098,23 +2167,34 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
 
     import secrets
 
-    room = f"widget-{site['id']}-{secrets.token_hex(8)}"
+    metadata = json.dumps(
+        {
+            "agent_id": site["agentId"],
+            "site_id": site["id"],
+            "visitor_name": name,
+            "visitor_phone": req.phone.strip(),
+            "visitor_email": email,
+        }
+    )
+    # Reuse the room /widget/warm pre-created (and the agent may already be
+    # joining/waiting in) when its prefix matches this site — updating its
+    # metadata rather than creating a new one keeps the agent's head start.
+    # Falls back to creating fresh whenever warm wasn't called, failed, or
+    # named a room for a different site (stale/tampered value).
+    room = req.room if req.room and req.room.startswith(f"widget-{site['id']}-") else None
     try:
         async with api.LiveKitAPI() as lkapi:
-            await lkapi.room.create_room(
-                CreateRoomRequest(
-                    name=room,
-                    metadata=json.dumps(
-                        {
-                            "agent_id": site["agentId"],
-                            "site_id": site["id"],
-                            "visitor_name": name,
-                            "visitor_phone": req.phone.strip(),
-                            "visitor_email": email,
-                        }
-                    ),
-                )
-            )
+            if room:
+                try:
+                    await lkapi.room.update_room_metadata(
+                        UpdateRoomMetadataRequest(room=room, metadata=metadata)
+                    )
+                except Exception:
+                    logger.info("widget token: warmed room=%s gone, creating fresh (site=%s)", room, site["name"])
+                    room = None
+            if not room:
+                room = f"widget-{site['id']}-{secrets.token_hex(8)}"
+                await lkapi.room.create_room(CreateRoomRequest(name=room, metadata=metadata))
         logger.info("widget token issued: site=%s agent_id=%s room=%s", site["name"], site["agentId"], room)
     except Exception:
         logger.exception("widget token failed: could not create LiveKit room for site=%s", site["name"])

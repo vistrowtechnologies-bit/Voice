@@ -211,6 +211,12 @@ function init(): void {
   let micEnabled = true
   let stopVolumeReactivity: (() => void) | null = null
   let countdownInterval: number | null = null
+  // Set by warmAgent() the instant the pre-call form opens, well before the
+  // visitor finishes typing — startCall() hands this room name back to
+  // /widget/token so it reuses the same (already agent-dispatching) room
+  // instead of creating a fresh one, shaving the agent's cold-start wait off
+  // the time the visitor spends filling in name/phone/email.
+  let warmRoom: string | null = null
 
   // Hard cap on call length — every minute of every call costs real STT/LLM/
   // TTS spend, so an unattended or forgotten tab shouldn't run indefinitely.
@@ -287,6 +293,24 @@ function init(): void {
     timerEl.style.display = 'none'
   }
 
+  function warmAgent(): void {
+    warmRoom = null
+    fetch(`${apiBase}/widget/warm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siteKey }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { room: string | null } | null) => {
+        if (data?.room) warmRoom = data.room
+      })
+      .catch((err) => {
+        // Best-effort only — startCall() falls back to a fresh room if this
+        // never lands, so a failure here is silently swallowed.
+        console.warn('[Vistrow Voice widget] warm request failed:', err)
+      })
+  }
+
   function showForm(): void {
     hideGreeting()
     formError.textContent = ''
@@ -294,6 +318,7 @@ function init(): void {
     callEl.style.display = 'none'
     panel.style.display = 'flex'
     button.style.display = 'none'
+    warmAgent()
   }
 
   function resetToIdle(): void {
@@ -416,8 +441,9 @@ function init(): void {
       const res = await fetch(`${apiBase}/widget/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteKey, identity: randomId('visitor'), name, phone, email }),
+        body: JSON.stringify({ siteKey, identity: randomId('visitor'), name, phone, email, room: warmRoom }),
       })
+      warmRoom = null
       if (!res.ok) {
         const body = await res.text().catch(() => '')
         throw new Error(`${res.status} ${res.statusText}: ${body}`)
