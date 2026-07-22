@@ -3905,7 +3905,11 @@ def enablex_test_call_connected(voice_id: str) -> dict | None:
     if not tracked:
         return None
     from_number, account_id = tracked
-    sip_uri = f"sip:{from_number}@{livekit_sip.sip_host()}"
+    # EnableX's SIP gateway appears to validate a "+"-prefixed user-part
+    # against its own carrier routing tables before proxying, declining with
+    # "Unallocated (unassigned) number" — every example in EnableX's own API
+    # docs uses bare-digit numbers (e.g. "91xxxxxxxxxx"), so try without "+".
+    sip_uri = f"sip:{from_number.lstrip('+')}@{livekit_sip.sip_host()}"
     return enablex_connect_to_sip(voice_id, from_number, sip_uri, account_id)
 
 

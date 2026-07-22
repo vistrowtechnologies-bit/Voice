@@ -1777,7 +1777,10 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
         logger.error("failed to accept EnableX call %s: %s", voice_id, accept.get("error"))
         return accept
 
-    sip_uri = f"sip:{dialed_number}@{livekit_sip.sip_host()}"
+    # See enablex_test_call_connected in calls_db.py for why the "+" is
+    # stripped here — EnableX's gateway appears to reject a "+"-prefixed SIP
+    # user-part with "Unallocated (unassigned) number".
+    sip_uri = f"sip:{dialed_number.lstrip('+')}@{livekit_sip.sip_host()}"
     bridge = calls_db.enablex_connect_to_sip(voice_id, dialed_number, sip_uri, account_id)
     if not bridge.get("ok"):
         logger.error("failed to bridge EnableX call %s to %s: %s", voice_id, sip_uri, bridge.get("error"))
