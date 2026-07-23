@@ -50,6 +50,8 @@ export function Contacts() {
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [customLabels, setCustomLabels] = useState<Record<string, string>>({})
   const [importing, setImporting] = useState(false)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const reload = () => fetchContacts().then(setContacts).catch(() => setContacts([]))
 
@@ -134,7 +136,57 @@ export function Contacts() {
     reload()
   }
 
+  const toggleOne = (id: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((c) => selected.has(c.id))
+  const toggleAllFiltered = () => {
+    setSelected((prev) => {
+      if (allFilteredSelected) {
+        const next = new Set(prev)
+        filtered.forEach((c) => next.delete(c.id))
+        return next
+      }
+      const next = new Set(prev)
+      filtered.forEach((c) => next.add(c.id))
+      return next
+    })
+  }
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selected.size} selected contact${selected.size === 1 ? '' : 's'}?`)) return
+    setBulkDeleting(true)
+    try {
+      await Promise.all([...selected].map((id) => deleteContact(id)))
+      setSelected(new Set())
+      reload()
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   const columns: DataTableColumn<Contact>[] = [
+    {
+      key: 'select',
+      header: '',
+      hideOnCard: true,
+      className: 'w-10',
+      render: (c) => (
+        <input
+          type="checkbox"
+          checked={selected.has(c.id)}
+          onChange={() => toggleOne(c.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="h-4 w-4 accent-primary"
+        />
+      ),
+    },
     {
       key: 'name',
       header: 'Contact Name',
@@ -214,6 +266,10 @@ export function Contacts() {
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <Card padding="sm" className="flex flex-wrap items-center gap-3">
+          <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-text-muted">
+            <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} className="h-4 w-4 accent-primary" />
+            Select all
+          </label>
           <div className="relative min-w-[220px] flex-1">
             <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted" />
             <input
@@ -260,6 +316,29 @@ export function Contacts() {
             Add Contact
           </button>
         </Card>
+
+        {selected.size > 0 && (
+          <Card padding="sm" className="flex flex-wrap items-center gap-3 !border-primary/40">
+            <label className="flex items-center gap-2 text-sm font-semibold">
+              <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} className="h-4 w-4 accent-primary" />
+              {selected.size} selected
+            </label>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-text"
+            >
+              Clear
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              className="flex items-center gap-1 rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              <Icon name="delete" className="text-[15px]" />
+              {bulkDeleting ? 'Deleting…' : 'Delete selected'}
+            </button>
+          </Card>
+        )}
 
         {showAdd && (
           <Card variant="flat" padding="sm" className="grid grid-cols-1 gap-3 !border-primary/40 sm:grid-cols-2 lg:grid-cols-5">
