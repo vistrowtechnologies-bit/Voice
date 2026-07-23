@@ -3834,15 +3834,29 @@ def public_base_url() -> str | None:
     return f"https://{domain}" if domain else None
 
 
-# voice_id -> (from_number, account_id) for outbound test calls awaiting
-# their "connected" webhook, so we know both which agent's SIP number to
-# bridge to and whose EnableX credentials to bridge with. EnableX's generic
-# webhook from/to fields aren't reliably documented for the outbound
-# direction, so we track this ourselves rather than trust them.
-_TEST_CALL_FROM_BY_VOICE_ID: dict[str, tuple[str, int]] = {}
+# voice_id -> (from_number, account_id, contact_name, contact_phone) for
+# outbound test calls awaiting their "connected" webhook, so we know both
+# which agent's SIP number to bridge to and whose EnableX credentials to
+# bridge with. EnableX's generic webhook from/to fields aren't reliably
+# documented for the outbound direction, so we track this ourselves rather
+# than trust them. contact_name/contact_phone (campaign dials only, "" for a
+# plain dashboard test call) let enablex_test_call_connected personalize the
+# room for the agent — both are needed together, since agent/main.py's
+# RealEstateAgent only adds its "greet by name" instruction when visitor_name
+# AND visitor_phone are both set. See livekit_sip.tag_newest_room for why
+# this out-of-band tracking is the only way to carry it across, and its
+# documented raciness under concurrent dials.
+_TEST_CALL_FROM_BY_VOICE_ID: dict[str, tuple[str, int, str, str]] = {}
+
+# Room names livekit_sip.tag_newest_room has already claimed this process
+# lifetime, so a second concurrent dial to the same number doesn't re-tag
+# the same room. Unbounded growth is harmless (room names, not rows) but
+# capped defensively in case a process runs for a very long time.
+_TAGGED_ROOMS: set = set()
+_TAGGED_ROOMS_MAX = 2000
 
 
-def place_test_call(from_number: str, to_number: str, account_id: int) -> dict:
+def place_test_call(from_number: str, to_number: str, account_id: int, contact_name: str = "") -> dict:
     """Place a real outbound call through the EnableX Voice API. Once the
     destination answers (the "connected" webhook event), the outbound-test
     webhook bridges the leg to the LiveKit agent assigned to `from_number` —
@@ -3851,6 +3865,10 @@ def place_test_call(from_number: str, to_number: str, account_id: int) -> dict:
     connectVoice API (enablex_connect_to_sip), same as real inbound calls.
     This is what lets an operator actually talk to the agent (and hear it use
     the knowledge base) before running a campaign, instead of a canned line.
+
+    `contact_name` (campaign dials) is later stamped onto the bridged room's
+    metadata as "visitor_name" so the agent greets the contact by name — see
+    enablex_test_call_connected.
     """
     base_url = public_base_url()
     if not base_url:
@@ -3889,7 +3907,7 @@ def place_test_call(from_number: str, to_number: str, account_id: int) -> dict:
     )
     voice_id = (result.get("response") or {}).get("voice_id") if result.get("ok") else None
     if voice_id:
-        _TEST_CALL_FROM_BY_VOICE_ID[voice_id] = (from_number, account_id)
+        _TEST_CALL_FROM_BY_VOICE_ID[voice_id] = (from_number, account_id, contact_name.strip(), to_number.strip())
     return result
 
 
@@ -3899,18 +3917,41 @@ def enablex_test_call_connected(voice_id: str) -> dict | None:
     agent assigned to whichever number placed this test call. Returns None
     if this voice_id isn't a tracked test call (e.g. a duplicate webhook
     delivery after we've already bridged it once)."""
+    import asyncio
+
     import livekit_sip  # local import: livekit_sip imports this module at load time
 
     tracked = _TEST_CALL_FROM_BY_VOICE_ID.pop(voice_id, None)
     if not tracked:
         return None
-    from_number, account_id = tracked
+    from_number, account_id, contact_name, contact_phone = tracked
     # EnableX's SIP gateway appears to validate a "+"-prefixed user-part
     # against its own carrier routing tables before proxying, declining with
     # "Unallocated (unassigned) number" — every example in EnableX's own API
     # docs uses bare-digit numbers (e.g. "91xxxxxxxxxx"), so try without "+".
     sip_uri = f"sip:{from_number.lstrip('+')}@{livekit_sip.sip_host()}"
-    return enablex_connect_to_sip(voice_id, from_number, sip_uri, account_id)
+    result = enablex_connect_to_sip(voice_id, from_number, sip_uri, account_id)
+
+    if contact_name and result.get("ok"):
+        # Best-effort personalization backfill — see tag_newest_room's
+        # docstring for why this out-of-band room lookup is necessary and
+        # what its accuracy limits are under concurrent dials. Blocking here
+        # (up to ~2.5s) is fine: this runs on the webhook route's own
+        # threadpool thread, not the event loop other requests share.
+        for _ in range(5):
+            try:
+                claimed = asyncio.run(
+                    livekit_sip.tag_newest_room(from_number, contact_name, contact_phone, _TAGGED_ROOMS)
+                )
+            except Exception:
+                break  # best-effort — a failed tag just means no personalization this call
+            if claimed:
+                if len(_TAGGED_ROOMS) >= _TAGGED_ROOMS_MAX:
+                    _TAGGED_ROOMS.clear()
+                _TAGGED_ROOMS.add(claimed)
+                break
+            time.sleep(0.5)
+    return result
 
 
 def enablex_accept_call(voice_id: str, account_id: int) -> dict:

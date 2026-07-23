@@ -62,7 +62,7 @@ def _dial_one(campaign: dict) -> None:
         if contact is None:
             break
         try:
-            result = calls_db.place_test_call(from_number, contact["phone"], account_id)
+            result = calls_db.place_test_call(from_number, contact["phone"], account_id, contact.get("name", ""))
         except Exception:
             logger.exception("dial failed for contact %s", contact["id"])
             calls_db.record_campaign_dial_result(contact["id"], cid, "failed")

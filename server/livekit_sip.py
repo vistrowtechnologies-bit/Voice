@@ -17,7 +17,7 @@ import os
 
 from livekit import api
 from livekit.api.twirp_client import TwirpError
-from livekit.protocol.room import RoomConfiguration
+from livekit.protocol.room import ListRoomsRequest, RoomConfiguration, UpdateRoomMetadataRequest
 from livekit.protocol.sip import (
     CreateSIPDispatchRuleRequest,
     CreateSIPInboundTrunkRequest,
@@ -196,3 +196,49 @@ async def delete_dispatch_rule(number_row: dict) -> None:
             await lkapi.sip.delete_dispatch_rule(DeleteSIPDispatchRuleRequest(sip_dispatch_rule_id=rule_id))
         except Exception:
             pass
+
+
+async def tag_newest_room(number: str, contact_name: str, contact_phone: str, exclude: set) -> str | None:
+    """Best-effort: find the most recently created, not-yet-tagged room for
+    this number's dispatch prefix and stamp contact_name/contact_phone onto
+    it as "visitor_name"/"visitor_phone" — the same metadata keys
+    agent/main.py's _call_context_from_job/lead_data pre-seed already read,
+    so a campaign dial gets the same name-personalization the widget flow
+    gets, with no agent-side changes. Both fields are required together:
+    RealEstateAgent's "greet by name" instruction only activates when
+    visitor_name AND visitor_phone are both present (agent/main.py:470).
+
+    Necessary because EnableX's outbound-test bridge (see
+    calls_db.enablex_test_call_connected) always uses our own number as both
+    the "from" and the SIP URI's user-part — the contact's identity never
+    appears anywhere in the SIP signaling LiveKit receives, so there's no
+    other channel to carry it across.
+
+    Racy under concurrent campaign dials to the same number: two calls
+    bridging within the same instant could both see the same "newest" room
+    before either tags it. `exclude` (rooms this process has already
+    claimed) narrows the window but a caller placing many simultaneous
+    dials to one number should expect occasional misattribution — accurate
+    personalization isn't guaranteed above a couple of concurrent calls per
+    number today. Returns the claimed room name, or None if no untagged
+    room was found yet (caller should retry briefly)."""
+    safe_prefix = "".join(c for c in number if c.isalnum()) or "call"
+    prefix = f"phone-{safe_prefix}"
+    async with api.LiveKitAPI() as lkapi:
+        rooms = (await lkapi.room.list_rooms(ListRoomsRequest())).rooms
+        candidates = [r for r in rooms if r.name.startswith(prefix) and r.name not in exclude]
+        if not candidates:
+            return None
+        newest = max(candidates, key=lambda r: r.creation_time)
+        try:
+            meta = json.loads(newest.metadata) if newest.metadata else {}
+        except ValueError:
+            meta = {}
+        if meta.get("visitor_name"):
+            return None  # already tagged by another concurrent dial
+        meta["visitor_name"] = contact_name
+        meta["visitor_phone"] = contact_phone
+        await lkapi.room.update_room_metadata(
+            UpdateRoomMetadataRequest(room=newest.name, metadata=json.dumps(meta))
+        )
+        return newest.name
