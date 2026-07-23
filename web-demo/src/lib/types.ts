@@ -227,6 +227,7 @@ export interface Contact {
   source: string
   lastCalledAt: string | null
   createdAt: string
+  updatedAt: string
 }
 
 export interface ContactNote {
@@ -256,7 +257,8 @@ export interface ContactDetail extends Contact {
   callStats: {
     total: number
     completed: number
-    notConnected: number
+    noAnswer: number
+    failed: number
     avgDurationSeconds: number
     totalDurationSeconds: number
   }

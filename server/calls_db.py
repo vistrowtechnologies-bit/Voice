@@ -200,6 +200,7 @@ CREATE TABLE IF NOT EXISTS contacts (
     source TEXT DEFAULT 'manual',
     last_called_at TEXT,
     created_at TEXT DEFAULT {_NOW},
+    updated_at TEXT DEFAULT {_NOW},
     UNIQUE(account_id, phone)
 );
 
@@ -723,6 +724,7 @@ def init_tables() -> None:
             # after contacts shipped name/phone/email/tags-only.
             conn.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS company TEXT DEFAULT ''")
             conn.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS custom_fields TEXT DEFAULT '{}'")
+            conn.execute(f"ALTER TABLE contacts ADD COLUMN IF NOT EXISTS updated_at TEXT DEFAULT {_NOW}")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS company TEXT DEFAULT ''")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS custom_fields TEXT DEFAULT '{}'")
             # "Premium+" (ElevenLabs v3) was folded into Premium (Flash v2.5) on
@@ -1942,13 +1944,14 @@ def _sync_contacts_from_calls(conn: dbconn.Conn, account_id: int) -> None:
     with conn:
         for row in rows:
             conn.execute(
-                """
+                f"""
                 INSERT INTO contacts (account_id, name, phone, status, source, last_called_at)
                 VALUES (?, ?, ?, ?, 'call', ?)
                 ON CONFLICT(account_id, phone) DO UPDATE SET
                     name = excluded.name,
                     status = excluded.status,
-                    last_called_at = excluded.last_called_at
+                    last_called_at = excluded.last_called_at,
+                    updated_at = {_NOW}
                 """,
                 (
                     account_id,
@@ -1977,6 +1980,7 @@ def list_contacts(account_id: int) -> list[dict]:
                 "source": r["source"],
                 "lastCalledAt": r["last_called_at"],
                 "createdAt": r["created_at"],
+                "updatedAt": r["updated_at"],
             }
             for r in conn.execute(
                 "SELECT * FROM contacts WHERE account_id = ? ORDER BY created_at DESC", (account_id,)
@@ -2001,13 +2005,14 @@ def create_contact(data: dict, account_id: int) -> None:
     try:
         with conn:
             conn.execute(
-                """
+                f"""
                 INSERT INTO contacts (account_id, name, phone, email, company, custom_fields, status, tags, source)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(account_id, phone) DO UPDATE SET
                     name = excluded.name, email = excluded.email, company = excluded.company,
                     custom_fields = excluded.custom_fields,
-                    status = excluded.status, tags = excluded.tags
+                    status = excluded.status, tags = excluded.tags,
+                    updated_at = {_NOW}
                 """,
                 (
                     account_id,
@@ -2124,12 +2129,13 @@ def import_contacts_mapped(text: str, mapping: dict, account_id: int) -> int:
 
 def contact_detail(contact_id: int, account_id: int) -> dict | None:
     """Everything the Contacts detail page's Activity/Calls/Campaigns/Notes
-    tabs need in one call. Call-outcome stats use duration_seconds as the
-    only generic signal available on `calls` (no per-call outcome column
-    exists outside campaign_contacts) — "completed" is any call with real
-    talk time, "not connected" covers everything else (no-answer, failed,
-    rejected); that's coarser than campaign_contacts' own status/outcome,
-    which is used as-is for the Campaigns tab instead."""
+    tabs need in one call. Call-outcome stats prefer campaign_contacts'
+    own status/outcome (joined by call_id) where a call was placed by a
+    campaign, since that's a real no_answer/failed/blocked classification —
+    duration_seconds alone (the only signal on non-campaign calls: widget,
+    inbound, browser test) can't distinguish "declined immediately" from
+    "rang out unanswered", so those fall back to a coarser completed/
+    no-answer split by whether any talk time was recorded."""
     conn = _connect()
     try:
         contact = conn.execute(
@@ -2148,9 +2154,33 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
             if phone
             else []
         )
+        # call_id -> campaign_contacts.status, for the calls that were placed
+        # by a campaign dial (NULL/missing for widget/inbound/browser calls).
+        campaign_outcome_by_call_id: dict[int, str] = {}
+        if calls:
+            call_ids = [c["id"] for c in calls]
+            placeholders = ",".join("?" * len(call_ids))
+            for r in conn.execute(
+                f"SELECT call_id, status FROM campaign_contacts WHERE call_id IN ({placeholders})",
+                tuple(call_ids),
+            ).fetchall():
+                campaign_outcome_by_call_id[r["call_id"]] = r["status"]
+
         total_calls = len(calls)
-        completed = sum(1 for c in calls if (c["duration_seconds"] or 0) > 0)
-        total_seconds = sum((c["duration_seconds"] or 0) for c in calls)
+        completed = no_answer = failed = 0
+        total_seconds = 0.0
+        for c in calls:
+            duration = c["duration_seconds"] or 0
+            total_seconds += duration
+            outcome = campaign_outcome_by_call_id.get(c["id"])
+            if outcome == "failed":
+                failed += 1
+            elif outcome == "no_answer":
+                no_answer += 1
+            elif duration > 0:
+                completed += 1
+            else:
+                no_answer += 1
 
         campaign_rows = (
             conn.execute(
@@ -2181,11 +2211,13 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
             "tags": [t for t in (contact["tags"] or "").split(",") if t],
             "source": contact["source"],
             "createdAt": contact["created_at"],
+            "updatedAt": contact["updated_at"],
             "lastCalledAt": contact["last_called_at"],
             "callStats": {
                 "total": total_calls,
                 "completed": completed,
-                "notConnected": total_calls - completed,
+                "noAnswer": no_answer,
+                "failed": failed,
                 "avgDurationSeconds": round(total_seconds / completed) if completed else 0,
                 "totalDurationSeconds": round(total_seconds),
             },
