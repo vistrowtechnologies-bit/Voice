@@ -9,6 +9,8 @@ import type {
   Campaign,
   CallRecord,
   Contact,
+  ContactDetail,
+  CsvPreview,
   DashboardSummary,
   HelpChatMessage,
   HelpFaq,
@@ -145,9 +147,18 @@ export const fetchContacts = () => get<Contact[]>('/contacts')
 export const createContact = (data: Partial<Contact>) => send('POST', '/contacts', data)
 export const deleteContact = (id: number) => send('DELETE', `/contacts/${id}`)
 export const deleteAllContacts = () => send('DELETE', '/contacts')
-export const importContactsCsv = (csv: string) =>
-  send<{ imported: number }>('POST', '/contacts/import', { csv })
 export const contactsExportUrl = '/api/contacts/export.csv'
+export const fetchContactDetail = (id: number) => get<ContactDetail>(`/contacts/${id}`)
+export const addContactNote = (id: number, body: string) => send('POST', `/contacts/${id}/notes`, { body })
+export const deleteContactNote = (contactId: number, noteId: number) =>
+  send('DELETE', `/contacts/${contactId}/notes/${noteId}`)
+
+// Column-mapping import (Facebook Custom-Audience style): preview the
+// uploaded CSV's headers/sample rows, let the operator map each column to a
+// field, then import with that mapping.
+export const previewContactsImport = (csv: string) => send<CsvPreview>('POST', '/contacts/import/preview', { csv })
+export const importContactsMapped = (csv: string, mapping: Record<string, string>) =>
+  send<{ imported: number }>('POST', '/contacts/import/mapped', { csv, mapping })
 
 // -------------------------------------------------------- knowledge base
 
@@ -193,6 +204,12 @@ export const createInboundRoute = (data: Record<string, unknown>) =>
 export const fetchCampaigns = () => get<Campaign[]>('/campaigns')
 export const fetchCampaign = (id: number) => get<Campaign>(`/campaigns/${id}`)
 export const createCampaign = (data: Record<string, unknown>) => send<Campaign>('POST', '/campaigns', data)
+export const fetchCampaignSegmentCount = (segment: string, tag: string) => {
+  const q = new URLSearchParams()
+  if (segment) q.set('segment', segment)
+  if (tag) q.set('tag', tag)
+  return get<{ count: number }>(`/campaigns/segment-count${q.toString() ? `?${q}` : ''}`)
+}
 export const updateCampaignStatus = (id: number, status: string) =>
   send<Campaign>('PATCH', `/campaigns/${id}`, { status })
 

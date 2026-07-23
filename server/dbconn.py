@@ -104,6 +104,10 @@ class Cursor:
             self._fetched = True
         return self._lastrowid
 
+    @property
+    def rowcount(self) -> int:
+        return self._raw.rowcount
+
 
 class Conn:
     """sqlite3.Connection-shaped wrapper around a psycopg connection."""

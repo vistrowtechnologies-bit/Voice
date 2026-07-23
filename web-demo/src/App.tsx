@@ -40,6 +40,7 @@ import { Inbound } from './pages/Inbound'
 import { Outbound } from './pages/Outbound'
 import { CallsHistory } from './pages/CallsHistory'
 import { Contacts } from './pages/Contacts'
+import { ContactDetail } from './pages/ContactDetail'
 import { Appointments } from './pages/Appointments'
 import { Integrations } from './pages/Integrations'
 import { PhoneNumbers } from './pages/PhoneNumbers'
@@ -93,6 +94,7 @@ function App() {
         <Route path="/dashboard/calls" element={guard(<CallsHistory />)} />
         <Route path="/dashboard/calls/:id" element={guard(<LeadDetail />)} />
         <Route path="/dashboard/contacts" element={guard(<Contacts />)} />
+        <Route path="/dashboard/contacts/:id" element={guard(<ContactDetail />)} />
         <Route path="/dashboard/appointments" element={guard(<Appointments />)} />
         <Route path="/dashboard/integrations" element={guard(<Integrations />)} />
         <Route path="/dashboard/numbers" element={guard(<PhoneNumbers />)} />

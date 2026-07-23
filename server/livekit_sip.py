@@ -198,13 +198,17 @@ async def delete_dispatch_rule(number_row: dict) -> None:
             pass
 
 
-async def tag_newest_room(number: str, contact_name: str, contact_phone: str, exclude: set) -> str | None:
+async def tag_newest_room(
+    number: str, contact_name: str, contact_phone: str, contact_company: str, contact_custom_fields: str, exclude: set
+) -> str | None:
     """Best-effort: find the most recently created, not-yet-tagged room for
-    this number's dispatch prefix and stamp contact_name/contact_phone onto
-    it as "visitor_name"/"visitor_phone" — the same metadata keys
-    agent/main.py's _call_context_from_job/lead_data pre-seed already read,
-    so a campaign dial gets the same name-personalization the widget flow
-    gets, with no agent-side changes. Both fields are required together:
+    this number's dispatch prefix and stamp the contact's identity onto it —
+    visitor_name/visitor_phone (the same metadata keys agent/main.py's
+    _call_context_from_job/lead_data pre-seed already read, so a campaign
+    dial gets the same name-personalization the widget flow gets, with no
+    agent-side changes) plus company/custom_fields, which agent/main.py
+    substitutes into {{company}}/{{custom.X}} template tokens in the agent's
+    own prompt. Both visitor_name/visitor_phone are required together:
     RealEstateAgent's "greet by name" instruction only activates when
     visitor_name AND visitor_phone are both present (agent/main.py:470).
 
@@ -238,6 +242,8 @@ async def tag_newest_room(number: str, contact_name: str, contact_phone: str, ex
             return None  # already tagged by another concurrent dial
         meta["visitor_name"] = contact_name
         meta["visitor_phone"] = contact_phone
+        meta["company"] = contact_company
+        meta["custom_fields"] = contact_custom_fields
         await lkapi.room.update_room_metadata(
             UpdateRoomMetadataRequest(room=newest.name, metadata=json.dumps(meta))
         )

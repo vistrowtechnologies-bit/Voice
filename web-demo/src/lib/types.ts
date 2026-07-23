@@ -220,11 +220,54 @@ export interface Contact {
   name: string
   phone: string
   email: string
+  company: string
+  customFields: Record<string, string>
   status: string
   tags: string[]
   source: string
   lastCalledAt: string | null
   createdAt: string
+}
+
+export interface ContactNote {
+  id: number
+  body: string
+  createdBy: string
+  createdAt: string
+}
+
+export interface ContactCallSummary {
+  id: number
+  startedAt: string
+  durationSeconds: number
+  callType: string
+}
+
+export interface ContactCampaignMembership {
+  campaignId: number
+  campaignName: string
+  campaignStatus: string
+  contactStatus: string
+  outcome: string
+  attempts: number
+}
+
+export interface ContactDetail extends Contact {
+  callStats: {
+    total: number
+    completed: number
+    notConnected: number
+    avgDurationSeconds: number
+    totalDurationSeconds: number
+  }
+  calls: ContactCallSummary[]
+  campaigns: ContactCampaignMembership[]
+  notes: ContactNote[]
+}
+
+export interface CsvPreview {
+  headers: string[]
+  sampleRows: string[][]
 }
 
 export interface KnowledgeSource {

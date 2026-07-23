@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+import re
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
@@ -843,6 +844,8 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "visitor_name": None,
         "visitor_phone": None,
         "visitor_email": None,
+        "company": "",
+        "custom_fields": {},
     }
     try:
         raw = ctx.job.room.metadata
@@ -858,6 +861,12 @@ def _call_context_from_job(ctx: JobContext) -> dict:
     agent_id = meta.get("agent_id")
     site_id = meta.get("site_id")
     call_type = "phone" if meta.get("phone_number") else "widget" if site_id is not None else "browser"
+    custom_fields = meta.get("custom_fields")
+    if isinstance(custom_fields, str):
+        try:
+            custom_fields = json.loads(custom_fields)
+        except ValueError:
+            custom_fields = {}
     return {
         "agent_id": int(agent_id) if agent_id is not None else None,
         "call_type": call_type,
@@ -865,7 +874,33 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "visitor_name": meta.get("visitor_name"),
         "visitor_phone": meta.get("visitor_phone"),
         "visitor_email": meta.get("visitor_email"),
+        # Campaign-dial personalization (see livekit_sip.tag_newest_room) —
+        # substituted into {{company}}/{{custom.X}} tokens in the agent's own
+        # prompt below, right before RealEstateAgent is constructed.
+        "company": meta.get("company") or "",
+        "custom_fields": custom_fields if isinstance(custom_fields, dict) else {},
     }
+
+
+_TEMPLATE_VAR_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
+
+
+def _substitute_template_vars(text: str, values: dict) -> str:
+    """Fill {{first_name}}/{{last_name}}/{{name}}/{{phone}}/{{company}}/
+    {{custom.KEY}} tokens in an operator-authored agent prompt with this
+    call's contact data (from a campaign dial's CSV import — see
+    server/calls_db.py's import_contacts_mapped). An unmatched token (typo,
+    or a {{custom.KEY}} the CSV never had) is left blank rather than as
+    literal braces, since a stray "{{whatever}}" read aloud by the TTS would
+    be far more jarring to a caller than a silently-dropped clause."""
+
+    def repl(match: re.Match) -> str:
+        key = match.group(1)
+        if key.startswith("custom."):
+            return str(values.get("custom", {}).get(key[7:], ""))
+        return str(values.get(key, ""))
+
+    return _TEMPLATE_VAR_RE.sub(repl, text)
 
 
 async def _hang_up(room_name: str) -> None:
@@ -962,9 +997,15 @@ async def entrypoint(ctx: JobContext) -> None:
         live_meta = json.loads(ctx.room.metadata) if ctx.room.metadata else {}
     except ValueError:
         live_meta = {}
-    for key in ("visitor_name", "visitor_phone", "visitor_email"):
+    for key in ("visitor_name", "visitor_phone", "visitor_email", "company"):
         if live_meta.get(key):
             call_context[key] = live_meta[key]
+    if live_meta.get("custom_fields"):
+        raw_custom = live_meta["custom_fields"]
+        try:
+            call_context["custom_fields"] = json.loads(raw_custom) if isinstance(raw_custom, str) else raw_custom
+        except ValueError:
+            pass
     config = await config_task
     if config and config.get("status") == "paused":
         # Paused from the dashboard — don't take the call.
@@ -986,6 +1027,19 @@ async def entrypoint(ctx: JobContext) -> None:
     if call_context["visitor_email"]:
         lead_data["email"] = call_context["visitor_email"]
     cfg = config or {}
+    if config and config.get("system_prompt") and "{{" in config["system_prompt"]:
+        visitor_name = call_context["visitor_name"] or ""
+        name_parts = visitor_name.split(None, 1)
+        template_vars = {
+            "first_name": name_parts[0] if name_parts else "",
+            "last_name": name_parts[1] if len(name_parts) > 1 else "",
+            "name": visitor_name,
+            "phone": call_context["visitor_phone"] or "",
+            "company": call_context["company"],
+            "custom": call_context["custom_fields"],
+        }
+        config = {**config, "system_prompt": _substitute_template_vars(config["system_prompt"], template_vars)}
+        cfg = config
     agent = RealEstateAgent(config, call_context["visitor_name"], call_context["visitor_phone"])
     userdata = {
         "room": ctx.room,

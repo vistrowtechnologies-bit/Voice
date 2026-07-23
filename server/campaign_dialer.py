@@ -62,7 +62,14 @@ def _dial_one(campaign: dict) -> None:
         if contact is None:
             break
         try:
-            result = calls_db.place_test_call(from_number, contact["phone"], account_id, contact.get("name", ""))
+            result = calls_db.place_test_call(
+                from_number,
+                contact["phone"],
+                account_id,
+                contact.get("name", ""),
+                contact.get("company", ""),
+                contact.get("custom_fields", "{}"),
+            )
         except Exception:
             logger.exception("dial failed for contact %s", contact["id"])
             calls_db.record_campaign_dial_result(contact["id"], cid, "failed")
@@ -85,6 +92,9 @@ def _loop() -> None:
     logger.info("campaign dialer started (tick=%ss)", _TICK_SECONDS)
     while True:
         try:
+            promoted = calls_db.promote_due_scheduled_campaigns()
+            if promoted:
+                logger.info("promoted %s scheduled campaign(s) to running", promoted)
             for campaign in calls_db.running_campaigns():
                 _dial_one(campaign)
         except Exception:

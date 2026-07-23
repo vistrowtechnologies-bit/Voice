@@ -1218,10 +1218,40 @@ def export_contacts_csv(user: dict = Depends(current_user)) -> PlainTextResponse
     )
 
 
-@app.post("/contacts/import")
-def import_contacts(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
-    count = calls_db.import_contacts_csv(data.get("csv", ""), user["account_id"])
+@app.post("/contacts/import/preview")
+def preview_contacts_import(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    """First step of the column-mapping import flow — parse just the header
+    row + a few sample rows so the frontend can render a Facebook-Custom-
+    Audience-style "map each column" screen before anything is imported."""
+    return calls_db.preview_csv_columns(data.get("csv", ""))
+
+
+@app.post("/contacts/import/mapped")
+def import_contacts_mapped(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    count = calls_db.import_contacts_mapped(data.get("csv", ""), data.get("mapping") or {}, user["account_id"])
     return {"imported": count}
+
+
+@app.get("/contacts/{contact_id}")
+def get_contact_detail(contact_id: int, user: dict = Depends(current_user)) -> dict:
+    detail = calls_db.contact_detail(contact_id, user["account_id"])
+    if detail is None:
+        raise HTTPException(404, "Contact not found")
+    return detail
+
+
+@app.post("/contacts/{contact_id}/notes")
+def create_contact_note(contact_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    body = (data.get("body") or "").strip()
+    if not body:
+        raise HTTPException(400, "Note body is required")
+    return calls_db.add_contact_note(contact_id, user["account_id"], body, user.get("email", ""))
+
+
+@app.delete("/contacts/{contact_id}/notes/{note_id}")
+def remove_contact_note(contact_id: int, note_id: int, user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_contact_note(note_id, user["account_id"])
+    return {"ok": True}
 
 
 # ------------------------------------------------------ knowledge base
@@ -1436,6 +1466,14 @@ def create_inbound_route(data: dict = Body(...), user: dict = Depends(current_us
 @app.get("/campaigns")
 def list_campaigns(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_campaigns_with_stats(user["account_id"])
+
+
+@app.get("/campaigns/segment-count")
+def campaign_segment_count(segment: str = "", tag: str = "", user: dict = Depends(current_user)) -> dict:
+    """Live "N contacts match" preview for the campaign picker's segment
+    tabs (Fresh Leads/Need Follow-up/Failed-Retry/All), narrowed by the
+    same optional tag filter create_campaign itself uses."""
+    return {"count": calls_db.count_contacts_by_segment(user["account_id"], segment, tag)}
 
 
 @app.get("/campaigns/{campaign_id}")

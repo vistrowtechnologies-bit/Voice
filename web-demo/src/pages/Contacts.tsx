@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -11,9 +12,22 @@ import {
   deleteContact,
   fetchContacts,
   formatRelativeTime,
-  importContactsCsv,
+  importContactsMapped,
+  previewContactsImport,
 } from '../lib/api'
-import type { Contact } from '../lib/types'
+import type { Contact, CsvPreview } from '../lib/types'
+
+const MAPPING_TARGETS = [
+  { value: '', label: 'Skip this column' },
+  { value: 'first_name', label: 'First Name' },
+  { value: 'last_name', label: 'Last Name' },
+  { value: 'name', label: 'Full Name' },
+  { value: 'phone', label: 'Phone' },
+  { value: 'email', label: 'Email' },
+  { value: 'company', label: 'Company' },
+  { value: 'tags', label: 'Tags' },
+  { value: '__custom__', label: 'Custom field…' },
+] as const
 
 const STATUS_STYLES: Record<string, string> = {
   new: 'bg-muted/20 text-text-muted border-muted/30',
@@ -28,6 +42,14 @@ export function Contacts() {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ name: '', phone: '', email: '', tags: '' })
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Column-mapping import flow: pick a file -> preview headers/sample rows
+  // -> map each column to a target field -> confirm.
+  const [importCsv, setImportCsv] = useState<string | null>(null)
+  const [importPreview, setImportPreview] = useState<CsvPreview | null>(null)
+  const [mapping, setMapping] = useState<Record<string, string>>({})
+  const [customLabels, setCustomLabels] = useState<Record<string, string>>({})
+  const [importing, setImporting] = useState(false)
 
   const reload = () => fetchContacts().then(setContacts).catch(() => setContacts([]))
 
@@ -51,11 +73,59 @@ export function Contacts() {
     reload()
   }
 
-  const handleImport = async (file: File) => {
+  const handlePickFile = async (file: File) => {
     const text = await file.text()
-    const result = await importContactsCsv(text)
-    alert(`Imported ${result.imported} contacts`)
-    reload()
+    const preview = await previewContactsImport(text)
+    // Best-effort auto-guess so the operator usually just confirms rather
+    // than mapping every column by hand — exact matches on common header
+    // spellings only; anything unrecognized defaults to "Skip".
+    const guesses: Record<string, string> = {
+      name: 'name', 'full name': 'name', fullname: 'name',
+      'first name': 'first_name', first: 'first_name', firstname: 'first_name',
+      'last name': 'last_name', last: 'last_name', lastname: 'last_name',
+      phone: 'phone', 'phone number': 'phone', mobile: 'phone', cell: 'phone', number: 'phone',
+      email: 'email', 'email address': 'email',
+      company: 'company', organization: 'company', org: 'company',
+      tags: 'tags', tag: 'tags',
+    }
+    const initialMapping: Record<string, string> = {}
+    for (const header of preview.headers) {
+      initialMapping[header] = guesses[header.trim().toLowerCase()] || ''
+    }
+    setImportCsv(text)
+    setImportPreview(preview)
+    setMapping(initialMapping)
+    setCustomLabels({})
+  }
+
+  const cancelImport = () => {
+    setImportCsv(null)
+    setImportPreview(null)
+    setMapping({})
+    setCustomLabels({})
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const confirmImport = async () => {
+    if (!importCsv) return
+    setImporting(true)
+    try {
+      const finalMapping: Record<string, string> = {}
+      for (const [header, target] of Object.entries(mapping)) {
+        if (target === '__custom__') {
+          const label = (customLabels[header] || '').trim()
+          if (label) finalMapping[header] = label
+        } else if (target) {
+          finalMapping[header] = target
+        }
+      }
+      const result = await importContactsMapped(importCsv, finalMapping)
+      alert(`Imported ${result.imported} contacts`)
+      cancelImport()
+      reload()
+    } finally {
+      setImporting(false)
+    }
   }
 
   const handleDeleteAll = async () => {
@@ -70,12 +140,15 @@ export function Contacts() {
       header: 'Contact Name',
       primary: true,
       render: (c) => (
-        <div className="flex items-center gap-2">
+        <Link to={`/dashboard/contacts/${c.id}`} className="flex items-center gap-2 hover:underline">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
             {c.name.slice(0, 2).toUpperCase()}
           </div>
-          <span className="text-sm font-semibold">{c.name}</span>
-        </div>
+          <div>
+            <span className="text-sm font-semibold">{c.name}</span>
+            {c.company && <p className="text-[11px] text-text-muted">{c.company}</p>}
+          </div>
+        </Link>
       ),
     },
     {
@@ -155,7 +228,7 @@ export function Contacts() {
             type="file"
             accept=".csv"
             className="hidden"
-            onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0])}
+            onChange={(e) => e.target.files?.[0] && handlePickFile(e.target.files[0])}
           />
           <button
             onClick={() => fileRef.current?.click()}
@@ -209,6 +282,78 @@ export function Contacts() {
             <button onClick={handleAdd} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90">
               Save contact
             </button>
+          </Card>
+        )}
+
+        {importPreview && (
+          <Card variant="flat" padding="sm" className="flex flex-col gap-3 !border-primary/40">
+            <div>
+              <p className="text-sm font-bold">Map your columns</p>
+              <p className="text-xs text-text-muted">
+                Tell us what each column in your file means — anything not mapped to a field below is saved as a
+                custom field, so a campaign call can reference it (e.g. an "appointment_date" column becomes{' '}
+                <code className="rounded bg-surface-high px-1 py-0.5">{'{{custom.appointment_date}}'}</code>).
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                    <th className="py-2 pr-3">Your column</th>
+                    <th className="py-2 pr-3">Sample data</th>
+                    <th className="py-2">Maps to</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importPreview.headers.map((header, i) => (
+                    <tr key={header} className="border-b border-border/60">
+                      <td className="py-2 pr-3 font-semibold">{header}</td>
+                      <td className="py-2 pr-3 text-text-muted">
+                        {importPreview.sampleRows.map((r) => r[i]).filter(Boolean).slice(0, 2).join(', ') || '—'}
+                      </td>
+                      <td className="py-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            value={mapping[header] ?? ''}
+                            onChange={(e) => setMapping({ ...mapping, [header]: e.target.value })}
+                            className="rounded-lg border border-border bg-surface-high px-2 py-1.5 text-sm outline-none focus:border-primary"
+                          >
+                            {MAPPING_TARGETS.map((t) => (
+                              <option key={t.value} value={t.value}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </select>
+                          {mapping[header] === '__custom__' && (
+                            <input
+                              value={customLabels[header] || ''}
+                              onChange={(e) => setCustomLabels({ ...customLabels, [header]: e.target.value })}
+                              placeholder="field_name"
+                              className="w-36 rounded-lg border border-border bg-surface-high px-2 py-1.5 text-sm outline-none focus:border-primary"
+                            />
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={confirmImport}
+                disabled={importing}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50"
+              >
+                {importing ? 'Importing…' : 'Import contacts'}
+              </button>
+              <button
+                onClick={cancelImport}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text"
+              >
+                Cancel
+              </button>
+            </div>
           </Card>
         )}
 

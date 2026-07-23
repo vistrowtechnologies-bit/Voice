@@ -8,21 +8,38 @@ import {
   createCampaign,
   fetchAgents,
   fetchCampaign,
+  fetchCampaignSegmentCount,
   fetchCampaigns,
   fetchPhoneNumbers,
   updateCampaignStatus,
 } from '../lib/api'
+
+const SEGMENTS = [
+  { value: '', label: 'All' },
+  { value: 'fresh', label: 'Fresh Leads' },
+  { value: 'followup', label: 'Need Follow-up' },
+  { value: 'failed_retry', label: 'Failed - Retry' },
+] as const
 import type { AgentConfig, Campaign, CampaignContact, PhoneNumber } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 
-const FILTERS = ['All', 'Running', 'Draft', 'Paused', 'Completed']
+const FILTERS = ['All', 'Running', 'Scheduled', 'Draft', 'Paused', 'Completed']
 
 const STATUS_STYLE: Record<string, string> = {
   running: 'border-cyan/30 bg-cyan/10 text-cyan',
+  scheduled: 'border-magenta/30 bg-magenta/10 text-magenta',
   draft: 'border-border bg-surface-high text-text-muted',
   paused: 'border-amber/30 bg-amber/10 text-amber',
   completed: 'border-success/30 bg-success/10 text-success',
   cancelled: 'border-destructive/30 bg-destructive/10 text-destructive',
+}
+
+// Converts a <input type="datetime-local"> value (the operator's own local
+// time — the browser has no idea what that offset is unless we ask `Date`
+// to interpret it) into the UTC "YYYY-MM-DD HH:MM:SS" string
+// promote_due_scheduled_campaigns compares against server-side.
+function toUtcSql(datetimeLocal: string): string {
+  return new Date(datetimeLocal).toISOString().slice(0, 19).replace('T', ' ')
 }
 
 const CONTACT_STATUS_STYLE: Record<string, string> = {
@@ -61,8 +78,24 @@ export function Outbound() {
     maxAttempts: 1,
     retryMinutes: 60,
     concurrency: 1,
+    scheduledDate: '', // datetime-local string, empty = launch on demand
+    segment: '' as string, // '' | 'fresh' | 'followup' | 'failed_retry'
   }
   const [form, setForm] = useState(blank)
+  const [segmentCount, setSegmentCount] = useState<number | null>(null)
+
+  // Live "N contacts match" preview as the operator picks a segment/tag —
+  // mirrors what create_campaign will actually load into the queue.
+  useEffect(() => {
+    if (form.source !== 'tag' || !showNew) return
+    let cancelled = false
+    fetchCampaignSegmentCount(form.segment, form.contactTag)
+      .then((r) => !cancelled && setSegmentCount(r.count))
+      .catch(() => !cancelled && setSegmentCount(null))
+    return () => {
+      cancelled = true
+    }
+  }, [form.source, form.segment, form.contactTag, showNew])
 
   const reload = () => fetchCampaigns().then(setCampaigns).catch(() => setCampaigns([]))
 
@@ -117,8 +150,12 @@ export function Outbound() {
       retryMinutes: form.retryMinutes,
       concurrency: form.concurrency,
     }
+    if (form.scheduledDate) {
+      payload.scheduledDate = toUtcSql(form.scheduledDate)
+    }
     if (form.source === 'tag') {
       payload.contactTag = form.contactTag
+      if (form.segment) payload.segment = form.segment
     } else {
       payload.contacts = form.paste
         .split('\n')
@@ -267,12 +304,30 @@ export function Outbound() {
                 ))}
               </div>
               {form.source === 'tag' ? (
-                <input
-                  value={form.contactTag}
-                  onChange={(e) => setForm({ ...form, contactTag: e.target.value })}
-                  placeholder="Contact tag to dial (blank = all contacts)"
-                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
-                />
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap gap-1 self-start rounded-lg border border-border bg-surface p-0.5">
+                    {SEGMENTS.map((s) => (
+                      <button
+                        key={s.value}
+                        onClick={() => setForm({ ...form, segment: s.value })}
+                        className={`rounded-md px-3 py-1 text-xs font-semibold ${
+                          form.segment === s.value ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    value={form.contactTag}
+                    onChange={(e) => setForm({ ...form, contactTag: e.target.value })}
+                    placeholder="Narrow further by tag (optional)"
+                    className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                  <p className="text-xs text-text-muted">
+                    {segmentCount === null ? 'Checking…' : `${segmentCount} contact${segmentCount === 1 ? '' : 's'} match`}
+                  </p>
+                </div>
               ) : (
                 <textarea
                   value={form.paste}
@@ -312,6 +367,15 @@ export function Outbound() {
                   min={1}
                   value={form.concurrency}
                   onChange={(e) => setForm({ ...form, concurrency: Math.max(1, Number(e.target.value) || 1) })}
+                  className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-text-muted">Schedule for later (optional)</span>
+                <input
+                  type="datetime-local"
+                  value={form.scheduledDate}
+                  onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })}
                   className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
                 />
               </label>
@@ -370,6 +434,9 @@ export function Outbound() {
                           <p className="truncate text-[11px] text-text-muted">
                             {c.from_number || 'no number'} ·{' '}
                             {agents.find((a) => a.id === c.agent_id)?.name ?? "number's default"} · {s.total} contacts
+                            {c.status === 'scheduled' && c.scheduled_date && (
+                              <> · starts {new Date(c.scheduled_date.replace(' ', 'T') + 'Z').toLocaleString()}</>
+                            )}
                           </p>
                         </div>
                       </button>
