@@ -1715,6 +1715,15 @@ async def _sync_dispatch_rule(number_id: int, account_id: int) -> str | None:
         return f"Number saved, but LiveKit call routing wasn't updated: {exc}"
 
 
+@app.get("/telephony/sip-auth")
+def get_sip_auth(user: dict = Depends(require_role("admin"))) -> dict:
+    """Credentials any SIP trunk provider (EnableX today) must send on every
+    INVITE to reach our shared LiveKit inbound trunk. One pair for the whole
+    platform — see livekit_sip.ensure_inbound_auth."""
+    username, password = livekit_sip.ensure_inbound_auth()
+    return {"username": username, "password": password, "sipHost": livekit_sip.sip_host()}
+
+
 @app.post("/telephony/numbers")
 async def add_phone_number(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     number = (data.get("number") or "").strip()

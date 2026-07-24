@@ -14,6 +14,7 @@ without a second worker process or explicit named dispatch.
 
 import json
 import os
+import secrets
 
 from livekit import api
 from livekit.api.twirp_client import TwirpError
@@ -33,6 +34,27 @@ from livekit.protocol.sip import (
 import calls_db
 
 TRUNK_ID_SETTING = "lk_inbound_trunk_id"
+AUTH_USERNAME_SETTING = "lk_inbound_auth_username"
+AUTH_PASSWORD_SETTING = "lk_inbound_auth_password"
+
+
+def ensure_inbound_auth() -> tuple[str, str]:
+    """Username/password every SIP provider's INVITEs must carry to reach our
+    shared inbound trunk (see ensure_inbound_trunk). One pair for the whole
+    platform, not per-tenant or per-provider: the trunk itself is shared
+    across every account's phone numbers (numbers list mirrors
+    phone_numbers globally, routing to the right agent happens afterwards
+    via each number's dispatch rule), so a single credential pair covers
+    every tenant automatically as new numbers/providers are added. Generated
+    once and persisted; safe to call repeatedly."""
+    username = calls_db.get_setting(AUTH_USERNAME_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
+    password = calls_db.get_setting(AUTH_PASSWORD_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
+    if not username or not password:
+        username = username or f"vistrow-{secrets.token_hex(4)}"
+        password = password or secrets.token_urlsafe(24)
+        calls_db.set_setting(AUTH_USERNAME_SETTING, username, calls_db.PLATFORM_ACCOUNT_ID)
+        calls_db.set_setting(AUTH_PASSWORD_SETTING, password, calls_db.PLATFORM_ACCOUNT_ID)
+    return username, password
 
 
 def sip_host() -> str:
@@ -66,12 +88,16 @@ async def ensure_inbound_trunk() -> str | None:
     field update) so the numbers list is set to exactly the current set;
     a partial "update numbers" call treats an empty list as "no change".
 
-    NOTE: the trunk is scoped by numbers only, so it accepts INVITEs for those
-    numbers from any source IP. For production, also set allowed_addresses to
-    EnableX's SIP egress IPs (or auth credentials) to lock down the source.
+    Locked down via auth_username/auth_password (see ensure_inbound_auth)
+    rather than allowed_addresses/IP allowlisting: LiveKit Cloud's SIP nodes
+    aren't behind a fixed IP either, so a provider whitelisting our egress IP
+    isn't an option on our end. Every SIP provider we connect (EnableX today,
+    others later) is handed the same one username/password pair and must
+    stamp it on every INVITE it sends toward this trunk.
     """
     numbers = [n["number"] for n in calls_db.list_all_phone_numbers()]
     trunk_id = calls_db.get_setting(TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
+    auth_username, auth_password = ensure_inbound_auth()
 
     async with api.LiveKitAPI() as lkapi:
         if not numbers:
@@ -85,14 +111,19 @@ async def ensure_inbound_trunk() -> str | None:
 
         if trunk_id:
             await lkapi.sip.update_inbound_trunk(
-                trunk_id, SIPInboundTrunkInfo(name=TRUNK_NAME, numbers=numbers)
+                trunk_id,
+                SIPInboundTrunkInfo(
+                    name=TRUNK_NAME, numbers=numbers, auth_username=auth_username, auth_password=auth_password
+                ),
             )
             return trunk_id
 
         try:
             trunk = await lkapi.sip.create_inbound_trunk(
                 CreateSIPInboundTrunkRequest(
-                    trunk=SIPInboundTrunkInfo(name=TRUNK_NAME, numbers=numbers)
+                    trunk=SIPInboundTrunkInfo(
+                        name=TRUNK_NAME, numbers=numbers, auth_username=auth_username, auth_password=auth_password
+                    )
                 )
             )
             calls_db.set_setting(TRUNK_ID_SETTING, trunk.sip_trunk_id, calls_db.PLATFORM_ACCOUNT_ID)
@@ -113,7 +144,10 @@ async def ensure_inbound_trunk() -> str | None:
                 raise
             trunk_id = existing.items[0].sip_trunk_id
             await lkapi.sip.update_inbound_trunk(
-                trunk_id, SIPInboundTrunkInfo(name=TRUNK_NAME, numbers=numbers)
+                trunk_id,
+                SIPInboundTrunkInfo(
+                    name=TRUNK_NAME, numbers=numbers, auth_username=auth_username, auth_password=auth_password
+                ),
             )
             calls_db.set_setting(TRUNK_ID_SETTING, trunk_id, calls_db.PLATFORM_ACCOUNT_ID)
             return trunk_id
