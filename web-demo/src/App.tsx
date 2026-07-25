@@ -25,8 +25,6 @@ import { Contact } from './pages/marketing/Contact'
 import { ComingSoon } from './pages/marketing/ComingSoon'
 import { Privacy } from './pages/marketing/Privacy'
 import { Terms } from './pages/marketing/Terms'
-import { CallFlow } from './pages/CallFlow'
-import { Summary } from './pages/Summary'
 import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
 import { ForgotPassword } from './pages/ForgotPassword'
@@ -73,11 +71,6 @@ function App() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
 
-        {/* /demo is the public live-demo call; /call is the same flow (kept for
-            existing links/embeds). Both reuse CallFlow. */}
-        <Route path="/demo" element={<CallFlow />} />
-        <Route path="/call" element={<CallFlow />} />
-        <Route path="/summary" element={<Summary />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />

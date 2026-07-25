@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
+import { TalkToArthaButton } from '../../components/MarketingBits'
 import { PLANS } from '../../lib/plans'
 import {
   HOME_FEATURES,
@@ -17,6 +19,16 @@ function SectionEyebrow({ children }: { children: string }) {
 }
 
 export function Home() {
+  // Reached via TalkToArthaButton's fallback (navigate('/#live-demo')) when
+  // a visitor clicks "Talk to Artha live" on a page with no on-page demo
+  // widget — React Router doesn't scroll to hashes on route change, so we
+  // finish the job ourselves once the hero (and its #live-demo orb) mounts.
+  useEffect(() => {
+    if (window.location.hash === '#live-demo') {
+      document.getElementById('live-demo')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [])
+
   return (
     <MarketingLayout>
       {/* ---------- Hero ---------- */}
@@ -37,13 +49,7 @@ export function Home() {
             in 10 Indian languages, live 24/7.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              to="/demo"
-              className="flex items-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
-            >
-              <Icon name="mic" className="text-[18px]" />
-              Talk to Artha live
-            </Link>
+            <TalkToArthaButton />
             <Link
               to="/contact"
               className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
@@ -218,13 +224,7 @@ export function Home() {
             Try Artha live in your browser, or book a walkthrough with our team.
           </p>
           <div className="relative mt-8 flex flex-wrap justify-center gap-3">
-            <Link
-              to="/demo"
-              className="flex items-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
-            >
-              <Icon name="mic" className="text-[18px]" />
-              Talk to Artha live
-            </Link>
+            <TalkToArthaButton />
             <Link
               to="/contact"
               className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"

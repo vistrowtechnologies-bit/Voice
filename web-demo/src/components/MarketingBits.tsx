@@ -1,8 +1,41 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from './Icon'
 
 export function SectionEyebrow({ children }: { children: string }) {
   return <span className="text-xs font-bold uppercase tracking-widest text-cyan">{children}</span>
+}
+
+// Every "Talk to Artha live" CTA, wherever it appears, points at the same
+// live demo widget rather than a separate call/summary route: scroll to it
+// if one's already on the page (Home/ProductDetail/SolutionDetail all embed
+// <DemoOrbCard id="live-demo">), otherwise navigate home and let Home's own
+// hash-scroll effect (see Home.tsx) finish the job once it mounts.
+export function TalkToArthaButton({ className }: { className?: string }) {
+  const navigate = useNavigate()
+
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault()
+    const el = document.getElementById('live-demo')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    } else {
+      navigate('/#live-demo')
+    }
+  }
+
+  return (
+    <a
+      href="#live-demo"
+      onClick={handleClick}
+      className={
+        className ??
+        'flex items-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90'
+      }
+    >
+      <Icon name="mic" className="text-[18px]" />
+      Talk to Artha live
+    </a>
+  )
 }
 
 /** The standard "Put an AI agent on every call" conversion band, reused across pages. */
@@ -20,13 +53,7 @@ export function CTABand({
         <h2 className="relative font-display text-4xl font-bold tracking-tight sm:text-5xl">{title}</h2>
         <p className="relative mx-auto mt-4 max-w-xl text-lg text-text-muted">{subtitle}</p>
         <div className="relative mt-8 flex flex-wrap justify-center gap-3">
-          <Link
-            to="/demo"
-            className="flex items-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
-          >
-            <Icon name="mic" className="text-[18px]" />
-            Talk to Artha live
-          </Link>
+          <TalkToArthaButton />
           <Link
             to="/contact"
             className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
@@ -58,13 +85,7 @@ export function PageHero({
         <h1 className="mt-4 font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl">{title}</h1>
         <p className="mt-5 max-w-lg text-lg leading-relaxed text-text-muted">{subhead}</p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            to="/demo"
-            className="flex items-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
-          >
-            <Icon name="mic" className="text-[18px]" />
-            Talk to Artha live
-          </Link>
+          <TalkToArthaButton />
           <Link
             to="/contact"
             className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
