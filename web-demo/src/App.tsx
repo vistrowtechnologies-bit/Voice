@@ -48,6 +48,9 @@ import { LeadDetail } from './pages/LeadDetail'
 import { WebsiteWidget } from './pages/WebsiteWidget'
 import { Settings } from './pages/Settings'
 import { hostBucket } from './lib/hostBuckets'
+import { useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
+import { trackPageView } from './lib/analytics'
 
 // Wrap every dashboard route in the auth gate — one helper keeps App.tsx
 // readable instead of nesting <RequireAuth> around each element.
@@ -64,9 +67,24 @@ function HomeOrDocsRoot() {
   return <Home />
 }
 
+// GA4's page_view is disabled in index.html (see the comment there) since
+// this is a client-side-routed SPA — this is what fires it instead, on the
+// initial load and every navigation after. The 0ms deferral lets whichever
+// page just mounted finish its own <Seo> effect first, so page_title
+// reflects the new page rather than the previous one.
+function AnalyticsListener() {
+  const location = useLocation()
+  useEffect(() => {
+    const id = setTimeout(() => trackPageView(location.pathname + location.search), 0)
+    return () => clearTimeout(id)
+  }, [location.pathname, location.search])
+  return null
+}
+
 function App() {
   return (
     <AuthProvider>
+      <AnalyticsListener />
       <Routes>
         {/* Public — marketing site */}
         <Route path="/" element={<HomeOrDocsRoot />} />

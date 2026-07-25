@@ -32,6 +32,17 @@
       content="Answer, qualify, and book — in your customers' language. Inbound, outbound, and web calls in 10 Indian languages, live 24/7."
     />
     <meta name="twitter:image" content="https://vistrowvoice.com/og-image.png" />
+    <!-- Google tag (gtag.js). send_page_view is off because this is a
+         client-side-routed SPA — the initial load and every in-app
+         navigation both fire through src/lib/analytics.ts instead, so
+         Home -> Pricing -> Contact are three page_views, not one. -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YSY7Z22NS2"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-YSY7Z22NS2', { send_page_view: false });
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
