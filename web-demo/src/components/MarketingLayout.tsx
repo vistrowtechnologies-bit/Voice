@@ -12,6 +12,25 @@ function OrbMark() {
   return <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
 }
 
+// Nav/footer entries are almost always internal routes (React Router
+// <Link>), but a couple — Docs & Help — point at the docs.vistrowvoice.com
+// subdomain, a real cross-origin navigation <Link> can't do. Render those as
+// a plain <a> instead; everything else keeps client-side routing.
+function NavLink({ to, className, onClick, children }: { to: string; className?: string; onClick?: () => void; children: ReactNode }) {
+  if (/^https?:\/\//.test(to)) {
+    return (
+      <a href={to} className={className} onClick={onClick}>
+        {children}
+      </a>
+    )
+  }
+  return (
+    <Link to={to} className={className} onClick={onClick}>
+      {children}
+    </Link>
+  )
+}
+
 function DesktopNav() {
   const [open, setOpen] = useState<string | null>(null)
   return (
@@ -32,7 +51,7 @@ function DesktopNav() {
               <div className="absolute left-1/2 top-full z-40 w-80 -translate-x-1/2 pt-2">
                 <div className="grid gap-1 rounded-2xl border border-border bg-surface p-2 shadow-2xl">
                   {group.items.map((item) => (
-                    <Link
+                    <NavLink
                       key={item.to}
                       to={item.to}
                       className="flex items-start gap-3 rounded-xl p-3 transition-colors hover:bg-surface-high"
@@ -46,7 +65,7 @@ function DesktopNav() {
                           <span className="mt-0.5 block text-xs leading-snug text-text-muted">{item.desc}</span>
                         )}
                       </span>
-                    </Link>
+                    </NavLink>
                   ))}
                 </div>
               </div>
@@ -88,14 +107,14 @@ function MobileNav({ onClose }: { onClose: () => void }) {
                   <p className="mb-2 text-xs font-bold uppercase tracking-widest text-text-muted">{group.label}</p>
                   <div className="flex flex-col gap-1">
                     {group.items.map((item) => (
-                      <Link
+                      <NavLink
                         key={item.to}
                         to={item.to}
                         onClick={onClose}
                         className="rounded-lg px-2 py-2 text-sm text-text hover:bg-surface-high"
                       >
                         {item.label}
-                      </Link>
+                      </NavLink>
                     ))}
                   </div>
                 </>
@@ -202,9 +221,9 @@ function Footer() {
               <ul className="flex flex-col gap-2">
                 {col.links.map((link) => (
                   <li key={link.to}>
-                    <Link to={link.to} className="text-sm text-text-muted transition-colors hover:text-text">
+                    <NavLink to={link.to} className="text-sm text-text-muted transition-colors hover:text-text">
                       {link.label}
-                    </Link>
+                    </NavLink>
                   </li>
                 ))}
               </ul>

@@ -260,7 +260,7 @@ export const NAV: NavGroup[] = [
     label: 'Resources',
     items: [
       { label: 'Blog', to: '/resources/blog', icon: 'article', desc: 'Product news and guides.' },
-      { label: 'Docs & Help', to: '/resources/docs', icon: 'description', desc: 'Set-up guides and API reference.' },
+      { label: 'Docs & Help', to: 'https://docs.vistrowvoice.com', icon: 'description', desc: 'Set-up guides and API reference.' },
       { label: 'Case Studies', to: '/resources/case-studies', icon: 'workspace_premium', desc: 'How teams use Vistrow Voice.' },
     ],
   },
@@ -284,7 +284,7 @@ export const FOOTER_COLUMNS = [
   {
     title: 'Resources',
     links: [
-      { label: 'Docs & Help', to: '/resources/docs' },
+      { label: 'Docs & Help', to: 'https://docs.vistrowvoice.com' },
       { label: 'Blog', to: '/resources/blog' },
       { label: 'Case Studies', to: '/resources/case-studies' },
     ],
