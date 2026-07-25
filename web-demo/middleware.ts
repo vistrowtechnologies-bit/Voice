@@ -25,13 +25,20 @@ export default function middleware(request: Request) {
   const current = hostBucket(host)
 
   // Root of the app subdomain has no marketing-bucket landing page of its
-  // own, so send it straight to the dashboard. Docs' root is handled by
-  // App.tsx rendering docs content directly at "/" (see HomeOrDocsRoot),
-  // so it deliberately does NOT redirect here — that would show
-  // /resources/docs in the address bar for what should look like its own
-  // clean landing page.
+  // own, so send it straight to the dashboard.
   if (url.pathname === '/' && current === 'app') {
     return Response.redirect(`https://${host}/dashboard`, 308)
+  }
+
+  // Every subdomain's own root is "owned" locally and must never bounce
+  // elsewhere: marketing's "/" really is Home, and docs' "/" is handled by
+  // App.tsx rendering docs content directly based on hostname (see
+  // HomeOrDocsRoot) rather than by carrying /resources/docs across in a
+  // redirect. Without this, pathBucket('/') defaults to 'marketing' and the
+  // generic mismatch check below would incorrectly redirect
+  // docs.vistrowvoice.com/ to vistrowvoice.com/.
+  if (url.pathname === '/') {
+    return next()
   }
 
   const target = pathBucket(url.pathname)
