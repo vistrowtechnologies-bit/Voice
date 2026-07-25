@@ -1,6 +1,5 @@
-import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
-import { MarketingLayout } from '../../components/MarketingLayout'
+import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { TalkToArthaButton } from '../../components/MarketingBits'
 
 // Placeholder for nav destinations that aren't built yet (Blog, Docs, Case
@@ -18,12 +17,12 @@ export function ComingSoon({ title = 'Coming soon' }: { title?: string }) {
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <TalkToArthaButton />
-          <Link
+          <NavLink
             to="/"
             className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
           >
             Back home
-          </Link>
+          </NavLink>
         </div>
       </section>
     </MarketingLayout>

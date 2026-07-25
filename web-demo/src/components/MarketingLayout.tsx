@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { Icon } from './Icon'
 import { BRAND } from '../lib/brand'
 import { NAV, FOOTER_COLUMNS } from '../lib/marketingContent'
+import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
 import vistrowMark from '../assets/vistrow-mark.png'
 
 // The official logo mark — used everywhere the brand appears (marketing
@@ -12,17 +13,38 @@ function OrbMark() {
   return <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
 }
 
-// Nav/footer entries are almost always internal routes (React Router
-// <Link>), but a couple — Docs & Help — point at the docs.vistrowvoice.com
-// subdomain, a real cross-origin navigation <Link> can't do. Render those as
-// a plain <a> instead; everything else keeps client-side routing.
-function NavLink({ to, className, onClick, children }: { to: string; className?: string; onClick?: () => void; children: ReactNode }) {
+// Every nav/footer/CTA link in this file must go through here instead of a
+// bare <Link> — three cases:
+//   1. Already absolute (Docs & Help → docs.vistrowvoice.com): real <a>,
+//      opened in a new tab since it's a distinct site from the visitor's
+//      point of view.
+//   2. A relative path whose bucket (app/docs/marketing) differs from the
+//      CURRENT hostname's bucket: also a real <a>, because a React Router
+//      <Link> only swaps components client-side — it never re-hits
+//      middleware.ts, so a plain <Link to="/login"> clicked while sitting on
+//      docs.vistrowvoice.com would render the login page *under the docs
+//      subdomain* instead of jumping to app.vistrowvoice.com/login. Forcing
+//      a real navigation here is what keeps the address bar honest.
+//   3. Same bucket as the current host: an ordinary client-side <Link>.
+export function NavLink({ to, className, onClick, children }: { to: string; className?: string; onClick?: () => void; children: ReactNode }) {
   if (/^https?:\/\//.test(to)) {
     return (
-      <a href={to} className={className} onClick={onClick}>
+      <a href={to} className={className} onClick={onClick} target="_blank" rel="noopener noreferrer">
         {children}
       </a>
     )
+  }
+  if (typeof window !== 'undefined') {
+    const current = hostBucket(window.location.hostname)
+    const target = pathBucket(to)
+    if (target !== current) {
+      const path = target === 'docs' ? '/' : to
+      return (
+        <a href={`https://${BUCKET_HOST[target]}${path}`} className={className} onClick={onClick}>
+          {children}
+        </a>
+      )
+    }
   }
   return (
     <Link to={to} className={className} onClick={onClick}>
@@ -72,13 +94,13 @@ function DesktopNav() {
             )}
           </div>
         ) : (
-          <Link
+          <NavLink
             key={group.label}
             to={group.to ?? '#'}
             className="rounded-full px-4 py-2 text-sm text-text-muted transition-colors hover:text-text"
           >
             {group.label}
-          </Link>
+          </NavLink>
         ),
       )}
     </nav>
@@ -119,32 +141,32 @@ function MobileNav({ onClose }: { onClose: () => void }) {
                   </div>
                 </>
               ) : (
-                <Link
+                <NavLink
                   to={group.to ?? '#'}
                   onClick={onClose}
                   className="block text-sm font-semibold text-text"
                 >
                   {group.label}
-                </Link>
+                </NavLink>
               )}
             </div>
           ))}
         </div>
         <div className="mt-8 flex flex-col gap-3">
-          <Link
+          <NavLink
             to="/login"
             onClick={onClose}
             className="rounded-full border border-border px-5 py-2.5 text-center text-sm font-semibold text-text"
           >
             Sign in
-          </Link>
-          <Link
+          </NavLink>
+          <NavLink
             to="/contact"
             onClick={onClose}
             className="rounded-full bg-gradient-to-br from-primary to-primary-dark px-5 py-2.5 text-center text-sm font-bold text-white"
           >
             Book a demo
-          </Link>
+          </NavLink>
         </div>
       </div>
     </div>
@@ -157,32 +179,32 @@ function Header() {
     <>
       <div className="border-b border-border bg-primary/10 px-4 py-2 text-center text-xs text-text-muted">
         <span className="text-cyan">New</span> · {BRAND.name} now speaks 10 Indian languages{' '}
-        <Link to="/product" className="font-semibold text-text hover:underline">
+        <NavLink to="/product" className="font-semibold text-text hover:underline">
           →
-        </Link>
+        </NavLink>
       </div>
       <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3.5 md:px-8">
-          <Link to="/" className="flex items-center gap-2">
+          <NavLink to="/" className="flex items-center gap-2">
             <OrbMark />
             <span className="font-display text-lg font-semibold tracking-tight">{BRAND.name}</span>
-          </Link>
+          </NavLink>
 
           <DesktopNav />
 
           <div className="flex items-center gap-2">
-            <Link
+            <NavLink
               to="/login"
               className="hidden rounded-full px-4 py-2 text-sm font-semibold text-text-muted transition-colors hover:text-text sm:block"
             >
               Sign in
-            </Link>
-            <Link
+            </NavLink>
+            <NavLink
               to="/contact"
               className="hidden rounded-full bg-gradient-to-br from-primary to-primary-dark px-5 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90 sm:block"
             >
               Book a demo
-            </Link>
+            </NavLink>
             <button
               className="text-text-muted hover:text-text lg:hidden"
               onClick={() => setMobileOpen(true)}
@@ -204,10 +226,10 @@ function Footer() {
       <div className="mx-auto max-w-7xl px-5 py-14 md:px-8">
         <div className="grid grid-cols-2 gap-10 md:grid-cols-7">
           <div className="col-span-2">
-            <Link to="/" className="flex items-center gap-2">
+            <NavLink to="/" className="flex items-center gap-2">
               <OrbMark />
               <span className="font-display text-lg font-semibold">{BRAND.name}</span>
-            </Link>
+            </NavLink>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-text-muted">{BRAND.tagline}</p>
             <div className="mt-5 flex gap-3 text-text-muted">
               <a href="#" className="hover:text-text"><Icon name="public" className="text-[20px]" /></a>

@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from './Icon'
+import { hostBucket } from '../lib/hostBuckets'
 
 export function SectionEyebrow({ children }: { children: string }) {
   return <span className="text-xs font-bold uppercase tracking-widest text-cyan">{children}</span>
@@ -8,8 +9,13 @@ export function SectionEyebrow({ children }: { children: string }) {
 // Every "Talk to Artha live" CTA, wherever it appears, points at the same
 // live demo widget rather than a separate call/summary route: scroll to it
 // if one's already on the page (Home/ProductDetail/SolutionDetail all embed
-// <DemoOrbCard id="live-demo">), otherwise navigate home and let Home's own
-// hash-scroll effect (see Home.tsx) finish the job once it mounts.
+// <DemoOrbCard id="live-demo">), otherwise get to Home and let its own
+// hash-scroll effect (see Home.tsx) finish the job once it mounts. That
+// widget only ever lives on the marketing host — clicked from
+// app./docs.vistrowvoice.com (e.g. the Docs coming-soon page), a plain
+// client-side navigate('/') would just re-render THAT subdomain's own root
+// (app → dashboard redirect, docs → itself), never reaching Home. Force a
+// real cross-host navigation whenever we're not already on marketing.
 export function TalkToArthaButton({ className }: { className?: string }) {
   const navigate = useNavigate()
 
@@ -18,8 +24,10 @@ export function TalkToArthaButton({ className }: { className?: string }) {
     const el = document.getElementById('live-demo')
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    } else {
+    } else if (hostBucket(window.location.hostname) === 'marketing') {
       navigate('/#live-demo')
+    } else {
+      window.location.href = 'https://vistrowvoice.com/#live-demo'
     }
   }
 

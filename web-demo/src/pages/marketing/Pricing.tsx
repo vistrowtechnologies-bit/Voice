@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
-import { MarketingLayout } from '../../components/MarketingLayout'
+import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { SectionEyebrow } from '../../components/MarketingBits'
 import { PLANS } from '../../lib/plans'
 
@@ -87,7 +86,7 @@ export function Pricing() {
                   </li>
                 ))}
               </ul>
-              <Link
+              <NavLink
                 to="/signup"
                 className={`mt-7 rounded-full px-5 py-2.5 text-center text-sm font-bold transition-opacity hover:opacity-90 ${
                   plan.tag === 'Recommended'
@@ -96,7 +95,7 @@ export function Pricing() {
                 }`}
               >
                 Start free
-              </Link>
+              </NavLink>
             </div>
           ))}
         </div>
@@ -136,12 +135,12 @@ export function Pricing() {
           <p className="mx-auto mt-2 max-w-md text-text-muted">
             High call volumes, on-prem, or a dedicated success manager — let’s talk.
           </p>
-          <Link
+          <NavLink
             to="/contact"
             className="mt-6 inline-block rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
           >
             Talk to sales
-          </Link>
+          </NavLink>
         </div>
       </section>
     </MarketingLayout>
