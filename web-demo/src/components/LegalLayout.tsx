@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { MarketingLayout } from './MarketingLayout'
 import { SectionEyebrow } from './MarketingBits'
+import { Seo } from './Seo'
 
 /** Shared shell for long-form legal documents (Privacy, Terms) — a narrow
  * reading column, consistent heading rhythm, and a "last updated" stamp so
@@ -10,16 +11,19 @@ export function LegalLayout({
   title,
   updated,
   intro,
+  path,
   children,
 }: {
   eyebrow: string
   title: string
   updated: string
   intro?: string
+  path: string
   children: ReactNode
 }) {
   return (
     <MarketingLayout>
+      <Seo title={`${title} — Vistrow Voice`} description={intro ?? `${title} for Vistrow Voice.`} path={path} />
       <article className="mx-auto max-w-3xl px-5 py-16 md:px-8 lg:py-24">
         <SectionEyebrow>{eyebrow}</SectionEyebrow>
         <h1 className="mt-4 font-display text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl">{title}</h1>

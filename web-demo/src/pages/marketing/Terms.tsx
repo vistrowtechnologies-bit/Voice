@@ -10,6 +10,7 @@ export function Terms() {
       eyebrow="Legal"
       title="Terms of Service"
       updated="13 July 2026"
+      path="/terms"
       intro={`These terms govern your use of ${BRAND.name}, the AI voice-agent platform operated by Vistrow Technologies ("we", "us"). By creating an account or using the service, you agree to them.`}
     >
       <LegalSection title="1. The service">

@@ -188,6 +188,7 @@ function Header() {
           <NavLink to="/" className="flex items-center gap-2">
             <OrbMark />
             <span className="font-display text-lg font-semibold tracking-tight">{BRAND.name}</span>
+            <span className="hidden font-mono text-xs text-text-muted sm:inline">by Vistrow</span>
           </NavLink>
 
           <DesktopNav />

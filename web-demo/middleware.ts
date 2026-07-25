@@ -15,7 +15,7 @@ import { pathBucket, hostBucket, BUCKET_HOST } from './src/lib/hostBuckets'
 // is what keeps client-side navigation from drifting onto the wrong host.
 export const config = {
   matcher: [
-    '/((?!api/|assets/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|mp4|woff2?|json|txt|xml)$).*)',
+    '/((?!api/|assets/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|mp4|woff2?|json|txt|xml|html)$).*)',
   ],
 }
 

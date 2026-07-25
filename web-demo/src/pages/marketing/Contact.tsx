@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
+import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
 import { CONTACT_PHONE } from '../../lib/marketingContent'
 
@@ -16,6 +17,11 @@ export function Contact() {
 
   return (
     <MarketingLayout>
+      <Seo
+        title="Book a Demo — Vistrow Voice"
+        description="See Vistrow Voice on a live call. Get a walkthrough tuned to your use case, watch Artha qualify a call in your language, and get a pricing and rollout plan."
+        path="/contact"
+      />
       <section className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-5 py-16 md:px-8 lg:grid-cols-2 lg:py-20">
         {/* Left — pitch + demo card */}
         <div>

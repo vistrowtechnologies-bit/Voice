@@ -1,12 +1,18 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
+import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { PRODUCT_PAGES, HOW_IT_WORKS } from '../../lib/marketingContent'
 
 export function ProductOverview() {
   return (
     <MarketingLayout>
+      <Seo
+        title="Product Overview — Vistrow Voice"
+        description="Voice Agents, Inbound Calling, Outbound Campaigns, Knowledge Base, Website Call Widget, and Integrations — one platform for every AI voice conversation."
+        path="/product"
+      />
       <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-24">
         <SectionEyebrow>The platform</SectionEyebrow>
         <h1 className="mt-4 font-display text-5xl font-bold leading-[1.05] tracking-tight">

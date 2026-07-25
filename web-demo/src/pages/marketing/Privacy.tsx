@@ -10,6 +10,7 @@ export function Privacy() {
       eyebrow="Legal"
       title="Privacy Policy"
       updated="17 July 2026"
+      path="/privacy"
       intro={`${BRAND.name} ("we", "us", "${BRAND.short}") builds AI voice agents that businesses use to answer and place phone calls. This policy explains what we collect, why, and the choices you have — whether you're a business running ${BRAND.name} or someone who spoke with an AI agent powered by it.`}
     >
       <LegalSection title="1. Who this policy covers">

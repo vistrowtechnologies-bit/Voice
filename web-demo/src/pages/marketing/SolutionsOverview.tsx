@@ -1,12 +1,18 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
+import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { SOLUTIONS } from '../../lib/marketingContent'
 
 export function SolutionsOverview() {
   return (
     <MarketingLayout>
+      <Seo
+        title="Solutions by Industry — Vistrow Voice"
+        description="Voice AI tuned to how your business takes calls — Real Estate, Healthcare, E-commerce, Finance & Collections, and Support & Helpdesk."
+        path="/solutions"
+      />
       <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-24">
         <SectionEyebrow>Solutions</SectionEyebrow>
         <h1 className="mt-4 font-display text-5xl font-bold leading-[1.05] tracking-tight">

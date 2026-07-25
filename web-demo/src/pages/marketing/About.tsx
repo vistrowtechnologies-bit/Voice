@@ -1,5 +1,6 @@
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Icon } from '../../components/Icon'
+import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 
 const VALUES = [
@@ -19,6 +20,11 @@ const STATS = [
 export function About() {
   return (
     <MarketingLayout>
+      <Seo
+        title="About — Vistrow Voice"
+        description="Vistrow Voice puts a capable AI agent on every call — in your customers' own language, at any hour. Voice AI, built for Bharat."
+        path="/about"
+      />
       <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-24">
         <SectionEyebrow>Company</SectionEyebrow>
         <h1 className="mt-4 font-display text-5xl font-bold leading-[1.05] tracking-tight">

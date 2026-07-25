@@ -1,0 +1,30 @@
+# Vistrow Voice
+
+> AI voice agents that answer, qualify, and book customer calls in 10 Indian languages — inbound, outbound, and web calls, live 24/7. Built by Vistrow.
+
+Vistrow Voice lets businesses put a real-time AI voice agent on every phone call and website visit. The agent answers inbound calls, runs outbound campaigns, answers questions grounded in a business's own knowledge base, and books appointments — in Hindi, Hinglish, and other Indian languages, switching mid-call to match the caller.
+
+## Core capabilities
+- Voice Agents: no-code AI agent builder — persona, prompt, voice, language.
+- Inbound Calling: answers every incoming call 24/7, qualifies and routes automatically.
+- Outbound Campaigns: bulk reminder, follow-up, and collection calls at scale.
+- Knowledge Base: retrieval-grounded answers from uploaded PDFs/docs, with a strict mode that disallows hallucination.
+- Website Call Widget: a one-tap browser voice-call button embeddable on any website, no phone number required.
+- Integrations: webhooks and CRM sync for every lead, transcript, and call outcome.
+
+## Industries served
+Real Estate (buyer qualification, site-visit booking), Healthcare & Clinics (appointment booking, patient FAQs), E-commerce & D2C (order status, returns), Finance & Collections (compliant reminder calls), Support & Helpdesk (tier-1 resolution).
+
+## Pricing
+Credit-based monthly plans starting at ₹2,999/mo. Full details: https://vistrowvoice.com/pricing
+
+## Key pages
+- Homepage: https://vistrowvoice.com/
+- Product overview: https://vistrowvoice.com/product
+- Solutions overview: https://vistrowvoice.com/solutions
+- Pricing: https://vistrowvoice.com/pricing
+- About: https://vistrowvoice.com/about
+- Contact / demo: https://vistrowvoice.com/contact
+
+## Company
+Vistrow Voice is a product of Vistrow (https://vistrow.com/).

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
+import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
 import { PLANS } from '../../lib/plans'
 
@@ -23,12 +24,31 @@ const FAQ = [
   },
 ]
 
+// Answer-engine-friendly (AEO/GEO): FAQPage structured data lets Google,
+// Bing, and LLM-based answer engines quote these Q&As directly instead of
+// having to scrape the accordion markup.
+const FAQ_JSONLD = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQ.map((item) => ({
+    '@type': 'Question',
+    name: item.q,
+    acceptedAnswer: { '@type': 'Answer', text: item.a },
+  })),
+}
+
 export function Pricing() {
   const [annual, setAnnual] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
 
   return (
     <MarketingLayout>
+      <Seo
+        title="Pricing — Vistrow Voice"
+        description="Simple, credit-based plans for AI voice agents. Every plan includes the web call widget, call history, and analytics — scale up as your call volume grows."
+        path="/pricing"
+        jsonLd={FAQ_JSONLD}
+      />
       <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-20">
         <SectionEyebrow>Pricing</SectionEyebrow>
         <h1 className="mt-4 font-display text-5xl font-bold leading-[1.05] tracking-tight">

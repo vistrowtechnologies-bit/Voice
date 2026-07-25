@@ -2,6 +2,7 @@ import { useParams, Navigate } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
+import { Seo } from '../../components/Seo'
 import { PageHero, CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { PRODUCT_DETAIL, WORKS_WITH } from '../../lib/marketingContent'
 
@@ -14,6 +15,7 @@ export function ProductDetail() {
 
   return (
     <MarketingLayout>
+      <Seo title={`${page.headline} — Vistrow Voice`} description={page.subhead} path={route} />
       <PageHero eyebrow={page.eyebrow} title={page.headline} subhead={page.subhead}>
         <DemoOrbCard />
       </PageHero>

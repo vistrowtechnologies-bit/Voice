@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
+import { Seo } from '../../components/Seo'
 import { TalkToArthaButton } from '../../components/MarketingBits'
 import { PLANS } from '../../lib/plans'
 import {
@@ -11,6 +12,31 @@ import {
   SOLUTIONS,
   HERO_STATS,
 } from '../../lib/marketingContent'
+
+const HOME_JSONLD = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Vistrow',
+    url: 'https://vistrowvoice.com/',
+    logo: 'https://vistrowvoice.com/apple-touch-icon.png',
+    sameAs: ['https://vistrow.com/'],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Vistrow Voice',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    description:
+      'AI voice agents that answer, qualify, and book customer calls in 10 Indian languages — inbound, outbound, and web calls, live 24/7.',
+    offers: {
+      '@type': 'Offer',
+      price: '2999',
+      priceCurrency: 'INR',
+    },
+  },
+]
 
 function SectionEyebrow({ children }: { children: string }) {
   return (
@@ -31,6 +57,12 @@ export function Home() {
 
   return (
     <MarketingLayout>
+      <Seo
+        title="Vistrow Voice — AI Voice Agents for Every Customer Call"
+        description="Answer, qualify, and book — in your customers' language. Vistrow Voice runs AI voice agents for inbound, outbound, and web calls in 10 Indian languages, live 24/7."
+        path="/"
+        jsonLd={HOME_JSONLD}
+      />
       {/* ---------- Hero ---------- */}
       <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-5 py-14 md:px-8 lg:grid-cols-2 lg:py-24">
         <div>
