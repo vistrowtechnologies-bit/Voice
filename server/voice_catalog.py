@@ -63,7 +63,7 @@ CATALOG: list[dict] = [
         "note": "UK English accent",
         "force_lang": "en",
     },
-    {"value": "elevenlabs:7b9mYhmnp0y2qSH1FnBL", "name": "Abhi", "gender": "male", "tier": "premium"},
+    {"value": "elevenlabs:7qBNUtXRGP0jPi0H4r8k", "name": "Abhi", "gender": "male", "tier": "premium"},
     {"value": "elevenlabs:1qEiC6qsybMkmnNdVMbK", "name": "Monika", "gender": "female", "tier": "premium"},
     {"value": "elevenlabs:9lx2GDtpvyyNBM7O9Mmx", "name": "Saavi", "gender": "female", "tier": "premium"},
     {"value": "elevenlabs:mActWQg9kibLro6Z2ouY", "name": "Riya", "gender": "female", "tier": "premium"},

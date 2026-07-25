@@ -86,7 +86,7 @@ const ELEVENLABS_VOICES = [
   { value: 'elevenlabs:FmBhnvP58BK0vz65OOj7', label: '✨ Viraj (Male)' },
   { value: 'elevenlabs:cFvQm3lZl5miSWHxawFj', label: '✨ Aarush (Male)' },
   { value: 'elevenlabs:UgBBYS2sOqTuMpoF3BR0', label: '✨ Mark (English)' },
-  { value: 'elevenlabs:7b9mYhmnp0y2qSH1FnBL', label: '✨ Abhi (Male)' },
+  { value: 'elevenlabs:7qBNUtXRGP0jPi0H4r8k', label: '✨ Abhi (Male)' },
   { value: 'elevenlabs:1qEiC6qsybMkmnNdVMbK', label: '✨ Monika (Female)' },
   { value: 'elevenlabs:9lx2GDtpvyyNBM7O9Mmx', label: '✨ Saavi (Female)' },
   { value: 'elevenlabs:mActWQg9kibLro6Z2ouY', label: '✨ Riya (Female)' },
