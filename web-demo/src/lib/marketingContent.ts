@@ -282,6 +282,14 @@ export const FOOTER_COLUMNS = [
   },
   { title: 'Solutions', links: SOLUTIONS.map((s) => ({ label: s.label, to: s.to })) },
   {
+    title: 'Resources',
+    links: [
+      { label: 'Docs & Help', to: '/resources/docs' },
+      { label: 'Blog', to: '/resources/blog' },
+      { label: 'Case Studies', to: '/resources/case-studies' },
+    ],
+  },
+  {
     title: 'Company',
     links: [
       { label: 'About', to: '/about' },
