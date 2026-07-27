@@ -76,28 +76,10 @@ def sip_host() -> str:
 TRUNK_NAME = "EnableX inbound"
 
 
-def _sip_variants(number: str) -> list[str]:
-    """Both forms a SIP provider's INVITE might carry a number in.
-
-    phone_numbers.number is stored '+'-prefixed (calls_db._normalize_sip_number),
-    but LiveKit matches a trunk's `numbers` / a dispatch rule's
-    `inbound_numbers` against the INVITE's dialed number literally, and SIP
-    providers disagree on whether that dialed number carries a leading '+' —
-    EnableX's own gateway rejects a '+'-prefixed SIP user-part with
-    "Unallocated (unassigned) number" (see token_api.py's inbound webhook, which
-    strips it before bridging), so a provider testing a direct SIP trunk
-    straight to us is just as likely to send the bare-digit form. Registering
-    both variants means whichever form actually shows up in the INVITE,
-    LiveKit finds a match instead of returning "404 No trunk found"."""
-    bare = number.lstrip("+")
-    return sorted({number, bare})
-
-
 async def ensure_inbound_trunk() -> str | None:
     """Create/resync the shared inbound trunk to hold exactly the numbers
-    currently in phone_numbers (each registered as both '+'- and non-'+'-
-    prefixed — see _sip_variants). Returns the trunk id, or None when there
-    are no numbers left.
+    currently in phone_numbers. Returns the trunk id, or None when there are
+    no numbers left.
 
     LiveKit rejects a trunk that has none of numbers / auth / allowed_addresses
     set (an open trunk is a security hole), so when the last number is removed
@@ -106,6 +88,16 @@ async def ensure_inbound_trunk() -> str | None:
     field update) so the numbers list is set to exactly the current set;
     a partial "update numbers" call treats an empty list as "no change".
 
+    NOTE: registering a number's '+'-prefixed AND bare-digit form together
+    was tried as a fix for an EnableX "404 No trunk found" test failure, but
+    LiveKit's own dispatch-rule uniqueness check treats '+917713128715' and
+    '917713128715' as the SAME number (confirmed directly against the API —
+    creating two rules, one per variant, on one trunk 400s with "...already
+    exists in dispatch rule ..."), which means LiveKit's inbound matching is
+    almost certainly '+'-agnostic too. So a format mismatch was very likely
+    never the actual cause of that 404 — don't reintroduce dual-variant
+    registration without new evidence it's needed.
+
     Locked down via auth_username/auth_password (see ensure_inbound_auth)
     rather than allowed_addresses/IP allowlisting: LiveKit Cloud's SIP nodes
     aren't behind a fixed IP either, so a provider whitelisting our egress IP
@@ -113,7 +105,7 @@ async def ensure_inbound_trunk() -> str | None:
     others later) is handed the same one username/password pair and must
     stamp it on every INVITE it sends toward this trunk.
     """
-    numbers = sorted({v for n in calls_db.list_all_phone_numbers() for v in _sip_variants(n["number"])})
+    numbers = [n["number"] for n in calls_db.list_all_phone_numbers()]
     trunk_id = calls_db.get_setting(TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
     auth_username, auth_password = ensure_inbound_auth()
 
@@ -189,9 +181,8 @@ async def _drop_rules_for_number(lkapi, trunk_id: str, number: str) -> None:
         existing = await lkapi.sip.list_dispatch_rule(ListSIPDispatchRuleRequest(trunk_ids=[trunk_id]))
     except Exception:
         return  # best-effort; the create below will still surface a hard error
-    variants = set(_sip_variants(number))
     for item in existing.items:
-        if variants & set(item.inbound_numbers):
+        if number in list(item.inbound_numbers):
             try:
                 await lkapi.sip.delete_dispatch_rule(
                     DeleteSIPDispatchRuleRequest(sip_dispatch_rule_id=item.sip_dispatch_rule_id)
@@ -225,7 +216,7 @@ async def upsert_dispatch_rule(number_row: dict) -> None:
                     dispatch_rule_individual=SIPDispatchRuleIndividual(room_prefix=f"phone-{safe_prefix}")
                 ),
                 trunk_ids=[trunk_id],
-                inbound_numbers=_sip_variants(number),
+                inbound_numbers=[number],
                 name=f"riya-inbound-{number}",
                 # Stamped onto each created room so the auto-dispatched agent
                 # knows which dashboard agent config to load for this number.
