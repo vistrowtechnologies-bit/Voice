@@ -15,7 +15,7 @@ _URGENT_PATTERNS = re.compile(
 )
 _EXCITED_PATTERNS = re.compile(
     r"\b(great|awesome|perfect|love it|amazing|wonderful|excellent|thank you so much|"
-    r"बहुत बढ़िया|शानदार|मज़ा आ गया|धन्यवाद|कमाल)\b",
+    r"बढ़िया|बहुत बढ़िया|शानदार|मज़ा आ गया|धन्यवाद|कमाल)\b",
     re.IGNORECASE,
 )
 _CONFUSED_PATTERNS = re.compile(
@@ -53,7 +53,11 @@ def detect_caller_emotion(text: str) -> str | None:
 EMOTION_TONE_DELTAS: dict[str, dict[str, float]] = {
     "frustrated": {"pace": -0.08, "pitch": -0.03},
     "confused": {"pace": -0.12, "pitch": 0.0},
-    "excited": {"pace": 0.06, "pitch": 0.03},
+    # Kept modest deliberately — this stacks additively on top of the
+    # agent's base tone (TONE_PRESETS), and "casual" alone already runs at
+    # pace 1.08. The original 0.06 pushed a casual agent to ~1.14, which
+    # read as rushed/too-fast rather than "upbeat."
+    "excited": {"pace": 0.03, "pitch": 0.02},
 }
 
 # ElevenLabs equivalent of EMOTION_TONE_DELTAS above — same caller-emotion
@@ -68,5 +72,8 @@ EMOTION_TONE_DELTAS: dict[str, dict[str, float]] = {
 ELEVENLABS_EMOTION_DELTAS: dict[str, dict[str, float]] = {
     "frustrated": {"speed": -0.05, "style": -0.1},
     "confused": {"speed": -0.08, "style": -0.1},
-    "excited": {"speed": 0.05, "style": 0.15},
+    # Same reasoning as EMOTION_TONE_DELTAS above — halved from the
+    # original 0.05/0.15, which stacked on "casual" tone's own speed 1.05
+    # base and read as rushed.
+    "excited": {"speed": 0.025, "style": 0.08},
 }
