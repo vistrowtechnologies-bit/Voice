@@ -118,11 +118,12 @@ async def stop_stream(voice_id: str, account_id: int) -> dict:
 
 
 async def place_outbound_call(from_number: str, to_number: str, account_id: int, event_url: str) -> dict:
-    """POST /call — places an outbound call. Auto-starts streaming the
-    moment it's answered via `action_on_connect.stream` (per EnableX's
-    docs), skipping the extra start_stream round trip start_stream() above
-    handles for the inbound path."""
-    wss_url = public_wss_host()
+    """POST /call — places an outbound call. Streaming is started the same
+    way as the inbound path: server.py's `connected` webhook handler issues
+    a signed token and calls start_stream once the call is actually
+    answered. (EnableX's action_on_connect.stream auto-start is deliberately
+    NOT used here — it has no way to carry our signed WS token, and our
+    /stream endpoint rejects unsigned connections.)"""
     body: dict = {
         "name": "Vistrow Voice orchestrator call",
         "owner_ref": "vistrow-orchestrator",
@@ -130,6 +131,4 @@ async def place_outbound_call(from_number: str, to_number: str, account_id: int,
         "to": to_number,
         "event_url": event_url,
     }
-    if wss_url:
-        body["action_on_connect"] = {"stream": {"wss_host": wss_url}}
     return await _request(("/call"), "POST", body, account_id)

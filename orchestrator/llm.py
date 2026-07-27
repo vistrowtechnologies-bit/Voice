@@ -14,10 +14,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
+from typing import Awaitable, Callable
 
 from openai import AsyncOpenAI
 
 _client: AsyncOpenAI | None = None
+_SENTENCE_BREAK = re.compile(r"[.!?\n]\s+")
+_MAX_CHUNK_CHARS = 220  # force-flush a long unpunctuated run so it isn't held forever
 
 
 def _get_client() -> AsyncOpenAI:
@@ -79,3 +83,79 @@ async def run_turn(
     # Ran out of hops without a final reply — degrade honestly rather than
     # hang the call or return an empty response.
     return "Let me follow up on that in a moment.", working[len(messages):]
+
+
+def _pop_complete_sentence(buf: str) -> tuple[str, str]:
+    """Splits off the first complete sentence from `buf` (ending in
+    . ! ? or a newline, followed by whitespace) and returns
+    (sentence, remainder). Force-flushes at the last space once `buf`
+    passes _MAX_CHUNK_CHARS so one long unpunctuated run (a list, a run-on
+    reply) still starts speaking promptly instead of waiting for a
+    terminator that may never come this early in the stream."""
+    match = _SENTENCE_BREAK.search(buf)
+    if match:
+        return buf[: match.end()].strip(), buf[match.end():]
+    if len(buf) >= _MAX_CHUNK_CHARS:
+        idx = buf.rfind(" ", 0, _MAX_CHUNK_CHARS)
+        if idx > 0:
+            return buf[:idx].strip(), buf[idx + 1:]
+    return "", buf
+
+
+async def stream_turn(
+    model: str,
+    messages: list[dict],
+    tool_schemas: list[dict],
+    tool_handlers: dict[str, callable],
+    session,
+    on_sentence: Callable[[str], Awaitable[None]],
+    max_tool_hops: int = 4,
+) -> tuple[str, list[dict]]:
+    """Streams a plain (no-tool-call) reply sentence-by-sentence, calling
+    `on_sentence(text)` — and therefore TTS — on each sentence the moment
+    it's complete, instead of waiting for the whole reply to finish
+    generating. This is what actually cuts perceived latency: the caller
+    hears the first words while the model is still writing the rest.
+
+    Tool calls can't be streamed usefully (the model needs the tool's
+    result before it can keep going), so the instant the stream's first
+    delta signals a tool call, this abandons streaming and falls back to
+    run_turn()'s tested full round-trip loop — nothing will have been
+    spoken yet at that point, since content and tool_calls don't interleave
+    within one OpenAI streamed response. Returns (full_reply_text,
+    updated_messages), same shape as run_turn.
+    """
+    client = _get_client()
+    stream = await client.chat.completions.create(
+        model=model,
+        messages=messages,
+        tools=tool_schemas or None,
+        tool_choice="auto" if tool_schemas else None,
+        stream=True,
+    )
+    pending = ""
+    parts: list[str] = []
+    first_delta = True
+    async for chunk in stream:
+        delta = chunk.choices[0].delta
+        if first_delta:
+            first_delta = False
+            if delta.tool_calls:
+                reply_text, new_messages = await run_turn(
+                    model, messages, tool_schemas, tool_handlers, session, max_tool_hops
+                )
+                if reply_text:
+                    await on_sentence(reply_text)
+                return reply_text, new_messages
+        if delta.content:
+            pending += delta.content
+            sentence, pending = _pop_complete_sentence(pending)
+            if sentence:
+                parts.append(sentence)
+                await on_sentence(sentence)
+    tail = pending.strip()
+    if tail:
+        parts.append(tail)
+        await on_sentence(tail)
+    full_text = " ".join(parts)
+    return full_text, [{"role": "assistant", "content": full_text}]

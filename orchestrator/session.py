@@ -21,9 +21,10 @@ follow-up work once the pipeline itself is proven.
 from __future__ import annotations
 
 import datetime
+import json
 import logging
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Awaitable, Callable
 
 import db
 import llm
@@ -62,6 +63,8 @@ class Session:
     model: str = "gpt-4o-mini"
     custom_system_prompt: str = ""
     kb_id: int | None = None
+    first_speaker: str = "agent"
+    welcome_message: str = ""
 
     lead_data: dict = field(default_factory=dict)
     messages: list[dict] = field(default_factory=list)
@@ -115,13 +118,75 @@ def build_system_prompt(session: Session) -> str:
     return "\n\n".join(parts)
 
 
-def build_tools_for_session(session: Session, custom_functions: list[dict] | None = None) -> None:
+_DEFAULT_OPENER_HI = "{greeting} नमस्ते! ये {agent_name} है। बताइए, आपकी क्या मदद करूँ?"
+_DEFAULT_OPENER_EN = "{greeting} this is {agent_name}. Thanks for calling — how can I help you today?"
+_DEFAULT_OPENERS = {"hi-IN": _DEFAULT_OPENER_HI}
+
+
+async def build_greeting_audio(session: Session) -> tuple[bytes, str] | None:
+    """Speaks first, like agent/main.py's on_enter() — a fixed line via TTS
+    only (no LLM round trip, so the caller isn't sitting in dead air for a
+    generate_reply() cycle). Returns None when first_speaker == 'user', per
+    the same opt-out agent/main.py supports."""
+    if session.first_speaker == "user":
+        return None
+    if session.welcome_message:
+        text = session.welcome_message
+    else:
+        greeting = f"Hi {session.visitor_name.split()[0]}," if session.visitor_name else "Hi,"
+        template = _DEFAULT_OPENERS.get(session.reply_language, _DEFAULT_OPENER_EN)
+        text = template.format(greeting=greeting, agent_name=session.agent_name)
+    session.messages.append({"role": "assistant", "content": text})
+    session.transcript.append({"role": "assistant", "text": text})
+    audio, content_type = await tts.synthesize(session.voice, text, session.reply_language)
+    return audio, content_type
+
+
+_LISTENING_CUE_TEXT = {"hi-IN": "जी, बताइए।"}
+_LISTENING_CUE_TEXT_DEFAULT = "Mm-hmm, go ahead."
+_listening_cue_cache: dict[tuple[str, str], tuple[bytes, str]] = {}
+
+
+async def get_listening_cue_audio(voice: str, reply_language: str) -> tuple[bytes, str]:
+    """A short, near-instant acknowledgment ('yes, go ahead') played the
+    moment a barge-in is detected — before STT/LLM/TTS have even started on
+    what the caller actually said. Without this, the real ~1-2s pipeline
+    latency after an interruption reads as dead air and callers hang up
+    thinking the call dropped. Cached per (voice, language) at process
+    scope — synthesized once, reused for every barge-in after that, so it
+    never adds latency of its own after the first use."""
+    key = (voice, reply_language)
+    cached = _listening_cue_cache.get(key)
+    if cached:
+        return cached
+    text = _LISTENING_CUE_TEXT.get(reply_language, _LISTENING_CUE_TEXT_DEFAULT)
+    result = await tts.synthesize(voice, text, reply_language)
+    _listening_cue_cache[key] = result
+    return result
+
+
+def _parse_json_config(raw, default):
+    """db.get_agent_config returns a raw DB row, so JSON columns
+    (custom_functions) arrive as strings — same defensive parse as
+    agent/main.py's _parse_json_config."""
+    if isinstance(raw, (list, dict)):
+        return raw
+    if not raw:
+        return default
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return default
+
+
+def build_tools_for_session(session: Session, custom_functions=None) -> None:
     """Merges the global tool set with any operator-defined custom
     functions for this agent, scoped to this Session instance only (mirrors
     agent/main.py building a fresh tool list per RealEstateAgent instance,
     not a process-global mutation)."""
     schemas = list(tools.TOOL_SCHEMAS)
     handlers = dict(tools.TOOL_FUNCTIONS)
+    custom_functions = _parse_json_config(custom_functions, [])
     if custom_functions:
         custom_schemas, custom_handlers = tools.build_custom_function_tools(custom_functions)
         schemas.extend(custom_schemas)
@@ -159,6 +224,49 @@ async def handle_utterance(session: Session, caller_wav_bytes: bytes) -> tuple[s
 
     audio_bytes, content_type = await tts.synthesize(session.voice, reply_text, session.reply_language)
     return reply_text, audio_bytes, content_type
+
+
+async def handle_utterance_streaming(
+    session: Session, caller_wav_bytes: bytes, on_reply_audio: Callable[[bytes, str], Awaitable[None]]
+) -> str:
+    """Same STT -> LLM -> TTS turn as handle_utterance, but pipelined:
+    llm.stream_turn() calls back per-sentence as the model generates them,
+    each sentence is synthesized and delivered via on_reply_audio()
+    immediately — the caller hears the first sentence while the model is
+    still writing the rest, instead of waiting for the full reply then the
+    full TTS render. Returns the full reply text (for transcript/logging).
+    Raises stt.STTError the same way handle_utterance does; a mid-reply
+    tts.TTSError is swallowed per-sentence (skip that sentence, keep going)
+    rather than aborting an otherwise-fine reply.
+    """
+    if not session.messages:
+        session.messages.append({"role": "system", "content": build_system_prompt(session)})
+
+    caller_text = await stt.transcribe(caller_wav_bytes)
+    if not caller_text:
+        raise stt.STTError("No speech detected in utterance.")
+
+    detected = detect_reply_language(caller_text)
+    if detected:
+        session.reply_language = detected
+
+    session.transcript.append({"role": "user", "text": caller_text})
+    session.messages.append({"role": "user", "content": caller_text})
+
+    async def _on_sentence(sentence: str) -> None:
+        try:
+            audio_bytes, content_type = await tts.synthesize(session.voice, sentence, session.reply_language)
+        except tts.TTSError as e:
+            logger.warning("TTS failed for one sentence, skipping it: %s", e)
+            return
+        await on_reply_audio(audio_bytes, content_type)
+
+    reply_text, new_messages = await llm.stream_turn(
+        session.model, session.messages, session.tool_schemas, session.tool_handlers, session, _on_sentence
+    )
+    session.messages.extend(new_messages)
+    session.transcript.append({"role": "assistant", "text": reply_text})
+    return reply_text
 
 
 def build_save_call_record(session: Session, room_name: str) -> dict:

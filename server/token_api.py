@@ -1764,6 +1764,27 @@ def telephony_test_call(data: dict = Body(...), user: dict = Depends(current_use
     to_number = (data.get("to") or "").strip()
     if not from_number or not to_number:
         raise HTTPException(400, "Both a from (virtual) number and a to number are required")
+
+    orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
+    orchestrator_test_account_id = os.environ.get("ORCHESTRATOR_TEST_ACCOUNT_ID")
+    if orchestrator_url and orchestrator_test_account_id and str(user["account_id"]) == orchestrator_test_account_id:
+        # This account is on the Railway-native pipeline (orchestrator/) —
+        # EnableX WebSocket streaming, no LiveKit SIP bridge involved. Every
+        # other account still goes through place_test_call() below until the
+        # full multi-tenant cutover (Phase 4 of the LiveKit-removal plan).
+        try:
+            request = urllib.request.Request(
+                f"{orchestrator_url.rstrip('/')}/telephony/enablex/outbound-test-call",
+                data=json.dumps({"to": to_number}).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=15) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as e:
+            logger.exception("orchestrator test-call proxy failed")
+            return {"ok": False, "error": f"Could not reach orchestrator: {e}"}
+
     return calls_db.place_test_call(from_number, to_number, user["account_id"])
 
 
