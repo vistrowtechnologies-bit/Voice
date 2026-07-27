@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
@@ -9,12 +10,26 @@ import { SOLUTIONS } from '../../lib/marketingContent'
 // One template renders all five industry pages, keyed by the :slug route param.
 export function SolutionDetail() {
   const { slug } = useParams()
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
   const solution = SOLUTIONS.find((s) => s.to === `/solutions/${slug}`)
   if (!solution) return <Navigate to="/solutions" replace />
 
+  // Answer-engine-friendly (AEO/GEO): FAQPage structured data lets Google,
+  // Bing, and LLM-based answer engines quote these Q&As directly instead of
+  // having to scrape the accordion markup.
+  const faqJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: solution.faqs.map((item) => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a },
+    })),
+  }
+
   return (
     <MarketingLayout>
-      <Seo title={`${solution.headline} — Vistrow Voice`} description={solution.subhead} path={solution.to} />
+      <Seo title={`${solution.headline} — Vistrow Voice`} description={solution.subhead} path={solution.to} jsonLd={faqJsonLd} />
       <PageHero
         eyebrow={`Solutions · ${solution.label}`}
         title={solution.headline}
@@ -75,6 +90,31 @@ export function SolutionDetail() {
               </li>
             ))}
           </ul>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="mx-auto max-w-3xl px-5 py-12 md:px-8">
+        <div className="mb-10 text-center">
+          <SectionEyebrow>FAQ</SectionEyebrow>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Questions, answered.</h2>
+        </div>
+        <div className="flex flex-col gap-3">
+          {solution.faqs.map((item, i) => (
+            <div key={item.q} className="rounded-2xl border border-border bg-surface">
+              <button
+                onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left"
+              >
+                <span className="font-semibold text-text">{item.q}</span>
+                <Icon
+                  name="expand_more"
+                  className={`text-[20px] text-text-muted transition-transform ${openFaq === i ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {openFaq === i && <p className="px-6 pb-5 text-sm leading-relaxed text-text-muted">{item.a}</p>}
+            </div>
+          ))}
         </div>
       </section>
 
