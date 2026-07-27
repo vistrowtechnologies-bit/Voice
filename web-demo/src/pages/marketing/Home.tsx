@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
@@ -13,6 +13,32 @@ import {
   HERO_STATS,
 } from '../../lib/marketingContent'
 
+const FAQ = [
+  {
+    q: 'What is Vistrow Voice?',
+    a: 'An AI voice-agent platform for Indian businesses — Artha answers, qualifies, and books inbound, outbound, and web calls in 10 Indian languages, live 24/7.',
+  },
+  {
+    q: 'Do I need to write code to set it up?',
+    a: 'No — build an agent with a no-code editor: persona, prompt, voice, and language, then publish. Most teams are live in under an hour.',
+  },
+  {
+    q: 'Which languages does Artha speak?',
+    a: 'Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi, and more — 10 Indian languages in total, switching mid-call to match the caller.',
+  },
+  {
+    q: 'Can I try it before signing up?',
+    a: 'Yes — talk to Artha live in your browser right now on this page, no signup or credit card required.',
+  },
+  {
+    q: 'Does it work for both inbound and outbound calling?',
+    a: 'Yes — one agent and one dashboard cover inbound calls, outbound campaigns, and web calls, sharing the same knowledge base and analytics.',
+  },
+]
+
+// Answer-engine-friendly (AEO/GEO): FAQPage structured data lets Google,
+// Bing, and LLM-based answer engines quote these Q&As directly instead of
+// having to scrape the accordion markup.
 const HOME_JSONLD = [
   {
     '@context': 'https://schema.org',
@@ -36,6 +62,15 @@ const HOME_JSONLD = [
       priceCurrency: 'INR',
     },
   },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQ.map((item) => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a },
+    })),
+  },
 ]
 
 function SectionEyebrow({ children }: { children: string }) {
@@ -45,6 +80,7 @@ function SectionEyebrow({ children }: { children: string }) {
 }
 
 export function Home() {
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
   // Reached via TalkToArthaButton's fallback (navigate('/#live-demo')) when
   // a visitor clicks "Talk to Artha live" on a page with no on-page demo
   // widget — React Router doesn't scroll to hashes on route change, so we
@@ -242,6 +278,31 @@ export function Home() {
           <Link to="/pricing" className="text-sm font-semibold text-primary hover:underline">
             See full pricing →
           </Link>
+        </div>
+      </section>
+
+      {/* ---------- FAQ ---------- */}
+      <section className="mx-auto max-w-3xl px-5 py-20 md:px-8">
+        <div className="mb-10 text-center">
+          <SectionEyebrow>FAQ</SectionEyebrow>
+          <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Questions, answered.</h2>
+        </div>
+        <div className="flex flex-col gap-3">
+          {FAQ.map((item, i) => (
+            <div key={item.q} className="rounded-2xl border border-border bg-surface">
+              <button
+                onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left"
+              >
+                <span className="font-semibold text-text">{item.q}</span>
+                <Icon
+                  name="expand_more"
+                  className={`text-[20px] text-text-muted transition-transform ${openFaq === i ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {openFaq === i && <p className="px-6 pb-5 text-sm leading-relaxed text-text-muted">{item.a}</p>}
+            </div>
+          ))}
         </div>
       </section>
 
