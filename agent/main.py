@@ -635,6 +635,12 @@ class RealEstateAgent(Agent):
         # says "बताता हूँ" instead of "बताती हूँ". Derived from the voice's
         # catalog gender so it's automatic for every voice, no per-agent config.
         _gender = (voice_catalog.get_voice(voice_value) or {}).get("gender")
+        # Also reinforced per-turn in on_user_turn_completed — a single
+        # system-prompt mention tends to drift over a long conversation
+        # (masculine Hindi/Marathi/Gujarati verb forms are simply far more
+        # frequent in training data, so the model's statistical default
+        # fights this instruction turn after turn).
+        self._voice_gender = _gender
         if _gender in ("male", "female"):
             _woman = _gender == "female"
             instructions += (
@@ -727,6 +733,18 @@ class RealEstateAgent(Agent):
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
         text = new_message.text_content
+
+        if self._voice_gender in ("male", "female"):
+            _woman = self._voice_gender == "female"
+            turn_ctx.add_message(
+                role="system",
+                content=(
+                    f"Reminder: you are {'a woman' if _woman else 'a man'} — in this reply, if you're "
+                    "speaking Hindi, Marathi, Gujarati, or Punjabi, use "
+                    + ("feminine (\"बताती/करती/आई हूँ\")" if _woman else "masculine (\"बताता/करता/आया हूँ\")")
+                    + " first-person verb forms, never the opposite."
+                ),
+            )
 
         emotion = detect_caller_emotion(text)
         if emotion != self._current_emotion:
