@@ -1,0 +1,12 @@
+openai>=1.40
+httpx>=0.27
+aiohttp
+psycopg[binary,pool]>=3.2
+python-dotenv
+boto3
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pyjwt>=2.8
+# Only needed if an agent's voice is an ElevenLabs one (MP3 TTS output) —
+# see audio.py's _decode_mp3. Requires ffmpeg on PATH.
+pydub>=0.25
