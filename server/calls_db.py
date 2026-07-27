@@ -20,6 +20,7 @@ import datetime
 import hashlib
 import io
 import json
+import logging
 import os
 import secrets
 import time
@@ -27,6 +28,8 @@ from zoneinfo import ZoneInfo
 
 import dbconn
 import voice_catalog
+
+logger = logging.getLogger(__name__)
 
 # Every created_at/updated_at default below reproduces SQLite's
 # datetime('now') output exactly ("YYYY-MM-DD HH:MM:SS", UTC, no fractional
@@ -784,6 +787,23 @@ def init_tables() -> None:
             first_account = conn.execute("SELECT MIN(id) AS id FROM accounts").fetchone()["id"]
             if first_account is not None:
                 _backfill_legacy_account_id(conn, first_account)
+            # Numbers added before add_phone_number normalized on the way in
+            # (e.g. without a leading '+') would otherwise mismatch every
+            # canonical-form lookup/trunk-sync from here on — backfill them
+            # to the same _normalize_sip_number form. Idempotent; skips a row
+            # if its normalized form collides with another existing number.
+            for row in conn.execute("SELECT id, number FROM phone_numbers").fetchall():
+                normalized = _normalize_sip_number(row["number"])
+                if normalized != row["number"]:
+                    try:
+                        conn.execute(
+                            "UPDATE phone_numbers SET number = ? WHERE id = ?", (normalized, row["id"])
+                        )
+                    except Exception:
+                        logger.warning(
+                            "skipping phone_numbers normalization for id=%s (%r -> %r): collides with an existing number",
+                            row["id"], row["number"], normalized,
+                        )
     finally:
         conn.close()
 
@@ -3737,16 +3757,22 @@ def get_phone_number(number_id: int, account_id: int) -> dict | None:
 def get_phone_number_by_number(number: str) -> dict | None:
     """Unscoped by design — called from the public EnableX inbound webhook,
     which has no dashboard session. The dialed number itself identifies which
-    tenant (via the returned row's account_id) and which agent to route to."""
+    tenant (via the returned row's account_id) and which agent to route to.
+    Normalizes the lookup key the same way add_phone_number normalizes
+    storage, so this matches regardless of whether the webhook's 'to' field
+    arrives with or without a '+'/country code."""
     conn = _connect()
     try:
-        row = conn.execute("SELECT * FROM phone_numbers WHERE number = ?", (number,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM phone_numbers WHERE number = ?", (_normalize_sip_number(number),)
+        ).fetchone()
         return _phone_number_dict(row) if row else None
     finally:
         conn.close()
 
 
 def add_phone_number(number: str, account_id: int, label: str = "", agent_id: int | None = None) -> int:
+    number = _normalize_sip_number(number)
     conn = _connect()
     try:
         with conn:
@@ -3871,6 +3897,25 @@ def _utc_now_str() -> str:
     ('YYYY-MM-DD HH:MM:SS'), so timestamps we generate in Python string-compare
     correctly against timestamps the DB wrote itself."""
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _normalize_sip_number(number: str) -> str:
+    """Canonical form for phone_numbers.number: always a leading '+', India
+    country code assumed for a bare 10-digit local number. Tolerant of
+    however a virtual number was typed (with/without +91, spaces, dashes,
+    a leading 0). Storage/lookup only — LiveKit's own trunk/dispatch-rule
+    matching against a SIP provider's INVITE is handled separately by
+    registering both '+'- and non-'+'-prefixed variants (see
+    livekit_sip._sip_variants), since providers disagree on which form
+    they actually send."""
+    digits = "".join(c for c in (number or "") if c.isdigit())
+    if not digits:
+        return (number or "").strip()
+    if len(digits) == 10:
+        digits = "91" + digits
+    elif digits.startswith("0") and len(digits) == 11:
+        digits = "91" + digits[1:]
+    return "+" + digits
 
 
 def _normalize_phone(phone: str) -> str:
