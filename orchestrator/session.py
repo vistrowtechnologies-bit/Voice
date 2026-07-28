@@ -20,6 +20,7 @@ follow-up work once the pipeline itself is proven.
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import json
 import logging
@@ -226,6 +227,62 @@ async def handle_utterance(session: Session, caller_wav_bytes: bytes) -> tuple[s
     return reply_text, audio_bytes, content_type
 
 
+class _OrderedTTSPipeline:
+    """Overlaps TTS synthesis with delivery: as soon as llm.stream_turn()
+    hands us a completed sentence, synthesis for it starts immediately in
+    the background while the PREVIOUS sentence is still being sent — instead
+    of synthesizing and sending one sentence fully before starting the next.
+    A single consumer task sends finished clips strictly in enqueue order,
+    so playback order is preserved even though synthesis overlaps.
+
+    Without this, a long multi-sentence reply pays N sequential TTS round
+    trips (~2-3s each on Sarvam) back to back — this cuts that to roughly
+    one round trip's worth of added latency regardless of sentence count.
+    """
+
+    def __init__(
+        self, voice: str, reply_language: str, on_reply_audio: Callable[[bytes, str], Awaitable[None]]
+    ) -> None:
+        self._voice = voice
+        self._reply_language = reply_language
+        self._on_reply_audio = on_reply_audio
+        self._queue: asyncio.Queue = asyncio.Queue()
+        self._consumer = asyncio.create_task(self._consume())
+
+    async def enqueue(self, sentence: str) -> None:
+        synth_task = asyncio.create_task(tts.synthesize(self._voice, sentence, self._reply_language))
+        await self._queue.put(synth_task)
+
+    async def _consume(self) -> None:
+        while True:
+            synth_task = await self._queue.get()
+            if synth_task is None:
+                return
+            try:
+                audio_bytes, content_type = await synth_task
+            except tts.TTSError as e:
+                logger.warning("TTS failed for one sentence, skipping it: %s", e)
+                continue
+            await self._on_reply_audio(audio_bytes, content_type)
+
+    async def close(self) -> None:
+        """Graceful end-of-turn: drain and send whatever's still queued."""
+        await self._queue.put(None)
+        await self._consumer
+
+    async def abort(self) -> None:
+        """Barge-in / cancellation: stop immediately, drop anything queued.
+        The consumer is its own asyncio.Task (a sibling, not a child of
+        whatever coroutine called enqueue()), so cancelling the turn that
+        created this pipeline does NOT automatically stop it — without this,
+        already-queued sentences would keep getting sent after a barge-in."""
+        self._consumer.cancel()
+        try:
+            await self._consumer
+        except asyncio.CancelledError:
+            pass
+
+
 async def handle_utterance_streaming(
     session: Session, caller_wav_bytes: bytes, on_reply_audio: Callable[[bytes, str], Awaitable[None]]
 ) -> str:
@@ -253,17 +310,22 @@ async def handle_utterance_streaming(
     session.transcript.append({"role": "user", "text": caller_text})
     session.messages.append({"role": "user", "content": caller_text})
 
-    async def _on_sentence(sentence: str) -> None:
-        try:
-            audio_bytes, content_type = await tts.synthesize(session.voice, sentence, session.reply_language)
-        except tts.TTSError as e:
-            logger.warning("TTS failed for one sentence, skipping it: %s", e)
-            return
-        await on_reply_audio(audio_bytes, content_type)
+    pipeline = _OrderedTTSPipeline(session.voice, session.reply_language, on_reply_audio)
 
-    reply_text, new_messages = await llm.stream_turn(
-        session.model, session.messages, session.tool_schemas, session.tool_handlers, session, _on_sentence
-    )
+    async def _on_sentence(sentence: str) -> None:
+        # Just enqueue — returns immediately so llm.stream_turn() can keep
+        # consuming the model's stream for the NEXT sentence right away,
+        # instead of blocking here for the ~2-3s this sentence's TTS takes.
+        await pipeline.enqueue(sentence)
+
+    try:
+        reply_text, new_messages = await llm.stream_turn(
+            session.model, session.messages, session.tool_schemas, session.tool_handlers, session, _on_sentence
+        )
+    except asyncio.CancelledError:
+        await pipeline.abort()
+        raise
+    await pipeline.close()
     session.messages.extend(new_messages)
     session.transcript.append({"role": "assistant", "text": reply_text})
     return reply_text
