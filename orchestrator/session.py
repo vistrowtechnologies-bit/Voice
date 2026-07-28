@@ -52,6 +52,8 @@ class Session:
     site_id: int | None = None
     voice: str = "shubh"
     reply_language: str = "hi-IN"
+    pending_language: str | None = None
+    pending_language_streak: int = 0
     transfer_phone: str = ""
     visitor_name: str = ""
     visitor_phone: str = ""
@@ -88,6 +90,42 @@ class Session:
         phone calls, which have no live UI to push to anyway."""
         if self.on_event is not None:
             self.on_event(payload)
+
+
+LANGUAGE_SWITCH_CONFIRMATION_TURNS = 3
+
+
+def _update_reply_language(session: Session, caller_text: str) -> None:
+    """Ported from agent/main.py's on_user_turn_completed (2026-07-15 fix,
+    see language.py's module docstring) — ported because it was NOT part of
+    Phase 1's prompt-assembly port and its absence here reproduced the exact
+    bug it fixed: a single noisy/ambiguous turn immediately flipping
+    reply_language mid-call. A same-voice TTS clip in a different language
+    also just sounds like a different person, so this shows up to the
+    caller as "two different voices", not only as wrong-language text.
+
+    Requires LANGUAGE_SWITCH_CONFIRMATION_TURNS consecutive turns agreeing
+    on the same candidate before actually switching, and treats a
+    Devanagari "hi-IN" reading as a non-signal on an already-mr-IN session
+    (script alone can't distinguish Hindi from Marathi)."""
+    candidate = detect_reply_language(caller_text)
+    if candidate == "hi-IN" and session.reply_language == "mr-IN":
+        candidate = None
+    if candidate is None or candidate == session.reply_language:
+        session.pending_language = None
+        session.pending_language_streak = 0
+        return
+
+    if candidate == session.pending_language:
+        session.pending_language_streak += 1
+    else:
+        session.pending_language = candidate
+        session.pending_language_streak = 1
+
+    if session.pending_language_streak >= LANGUAGE_SWITCH_CONFIRMATION_TURNS:
+        session.reply_language = candidate
+        session.pending_language = None
+        session.pending_language_streak = 0
 
 
 def build_system_prompt(session: Session) -> str:
@@ -210,9 +248,7 @@ async def handle_utterance(session: Session, caller_wav_bytes: bytes) -> tuple[s
     if not caller_text:
         raise stt.STTError("No speech detected in utterance.")
 
-    detected = detect_reply_language(caller_text)
-    if detected:
-        session.reply_language = detected
+    _update_reply_language(session, caller_text)
 
     session.transcript.append({"role": "user", "text": caller_text})
     session.messages.append({"role": "user", "content": caller_text})
@@ -303,9 +339,7 @@ async def handle_utterance_streaming(
     if not caller_text:
         raise stt.STTError("No speech detected in utterance.")
 
-    detected = detect_reply_language(caller_text)
-    if detected:
-        session.reply_language = detected
+    _update_reply_language(session, caller_text)
 
     session.transcript.append({"role": "user", "text": caller_text})
     session.messages.append({"role": "user", "content": caller_text})
