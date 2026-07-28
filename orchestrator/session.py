@@ -140,14 +140,43 @@ def build_system_prompt(session: Session) -> str:
     if session.kb_id is not None:
         kb_text = db.get_kb_content(session.kb_id)
         if kb_text:
-            strict = db.is_kb_strict(session.kb_id)
-            header = (
-                "## Knowledge base (answer ONLY from this for factual questions; if it's not "
-                "covered here, say you don't have that information rather than guessing)"
-                if strict
-                else "## Knowledge base (use this for factual questions; you may also use general knowledge)"
-            )
+            if db.is_kb_strict(session.kb_id):
+                # Ported from agent/main.py's equivalent block (same
+                # strict-mode wording, proven in production) — the KB is the
+                # only permitted source for concrete facts, which is what
+                # stops the model improvising a plausible but wrong number.
+                header = (
+                    "## Knowledge base — THE authoritative facts for this call\n"
+                    "The knowledge base below is your ONLY source for concrete facts about this "
+                    "business and its projects: prices, sizes, distances, dates, legal status, "
+                    "amenities, payment plans, contact details. Follow it strictly:\n"
+                    "- When a caller's question matches an approved answer below, give that answer "
+                    "(naturally rephrased for speech and translated into the caller's language, but "
+                    "with every number, price, and name kept exactly as written).\n"
+                    "- Never state a concrete fact about this business that is not in the knowledge "
+                    "base — no guessing, no rounding, no 'approximately' around a number that isn't "
+                    "there, even if you believe you know the answer.\n"
+                    "- If the knowledge base doesn't cover something, say you'll have the team "
+                    "confirm it, offer to note the question down, and move the conversation forward "
+                    "— that is always better than an invented answer.\n"
+                    "- Your general expertise is still fine for generic concepts related to this "
+                    "industry; strictness applies to THIS business's specific facts."
+                )
+            else:
+                header = "## Knowledge base (use this for factual questions; you may also use general knowledge)"
             parts.append(f"{header}\n{kb_text}")
+
+    # Unconditional regardless of persona type (built-in, generic, or a
+    # tenant's own custom system_prompt) — a custom prompt REPLACES the
+    # persona/content above but never this. Without it, a real-estate agent
+    # answering a caller's random tangent (health, weather, whatever) reads
+    # as broken/unfocused rather than a real sales rep staying on task.
+    parts.append(
+        "## Staying on topic\n"
+        "If the caller asks something entirely unrelated to this business (general life advice, "
+        "health, or any other unrelated topic), do not try to actually answer it — briefly and "
+        "warmly acknowledge them, then steer the conversation back to how you can help them here."
+    )
 
     memory = db.get_caller_memory(session.agent_id, session.visitor_phone) if session.agent_id else ""
     if memory:
