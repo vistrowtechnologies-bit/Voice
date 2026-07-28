@@ -134,6 +134,7 @@ export function useOrchestratorCall(agentId: number): UseOrchestratorCallResult 
         if (cancelled) return
 
         const playbackCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+        if (playbackCtx.state === 'suspended') await playbackCtx.resume()
         const analyser = playbackCtx.createAnalyser()
         analyser.fftSize = 256
         analyser.connect(playbackCtx.destination)
@@ -161,6 +162,12 @@ export function useOrchestratorCall(agentId: number): UseOrchestratorCallResult 
         micStreamRef.current = micStream
         const captureCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
         captureCtxRef.current = captureCtx
+        // Chrome can create a context in 'suspended' state when it isn't
+        // directly inside a synchronous user-gesture handler (several
+        // awaits removed from the click that opened this modal) — if so,
+        // the ScriptProcessorNode below never fires onaudioprocess at all,
+        // silently sending zero mic frames with no error anywhere.
+        if (captureCtx.state === 'suspended') await captureCtx.resume()
         const source = captureCtx.createMediaStreamSource(micStream)
         const processor = captureCtx.createScriptProcessor(4096, 1, 1)
         processorRef.current = processor

@@ -439,6 +439,7 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     agent_id = payload.get("agent_id") or TEST_AGENT_ID
     sess = _build_session(account_id, agent_id, call_type="browser")
     vad = audio.UtteranceVAD()
+    frame_count = 0
     speaking_task: asyncio.Task | None = None
     # Unlike the phone path, sending a reply clip here is near-instant (one
     # websocket.send_bytes, no real-time pacing) — actual playback happens
@@ -539,6 +540,7 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
                 event = data.get("event")
                 if event == "start":
                     sample_rate = int(data.get("sampleRate") or 48000)
+                    logger.info("browser stream got start event: sampleRate=%s", sample_rate)
                 elif event == "stop":
                     break
                 elif event == "speaking_start":
@@ -552,6 +554,12 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
                 continue
             pcm16_frame = msg["bytes"]
             frame_ms = int((len(pcm16_frame) / 2) / sample_rate * 1000) or 1
+            frame_count += 1
+            if frame_count == 1 or frame_count % 50 == 0:
+                logger.info(
+                    "browser stream frame #%s: %d bytes, energy=%d, sample_rate=%s",
+                    frame_count, len(pcm16_frame), audio.frame_energy_pcm16(pcm16_frame), sample_rate,
+                )
 
             if speaking_task is not None and not speaking_task.done():
                 if not client_speaking:
