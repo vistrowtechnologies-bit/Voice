@@ -196,6 +196,31 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
     return {"token": token, "url": livekit_url}
 
 
+@app.post("/orchestrator/platform-demo-token")
+async def orchestrator_platform_demo_token(request: Request) -> dict:
+    """Fallback token for the marketing site's live demo — DemoOrbCard
+    calls this when LiveKit's demo worker doesn't pick up within
+    AGENT_JOIN_TIMEOUT_MS (worker cold-start/crash/restart), instead of
+    just showing an error. Public/unauthenticated like /token above, so it
+    shares the same per-IP rate limit; unlike the dashboard's
+    /orchestrator/browser-token this needs no agentId — the orchestrator
+    resolves the same is_platform_demo-flagged agent LiveKit's own /token
+    route resolves for an unrouted call, off the same `agents` table."""
+    client_ip = (request.client.host if request.client else "") or "unknown"
+    if _token_rate_limited(client_ip):
+        raise HTTPException(429, "Too many calls right now — please try again shortly.")
+    orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
+    if not orchestrator_url:
+        return {"ok": False, "error": "Orchestrator not configured."}
+    try:
+        req = urllib.request.Request(f"{orchestrator_url.rstrip('/')}/browser/token/platform-demo", method="GET")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as e:
+        logger.exception("orchestrator platform-demo-token proxy failed")
+        return {"ok": False, "error": f"Could not reach orchestrator: {e}"}
+
+
 # --------------------------------------------------------------------- auth
 
 
@@ -1842,17 +1867,47 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     leg and bridge it to LiveKit's SIP host for the dialed number, so the
     same agent that powers browser calls handles the phone call — the
     LiveKit inbound trunk + per-number dispatch rule route it into a room
-    with the right agent auto-dispatched.
+    with the right agent auto-dispatched. EXCEPT for the one account on the
+    Railway-native orchestrator pipeline (ORCHESTRATOR_TEST_ACCOUNT_ID, same
+    gate /telephony/test-call uses) — every event for that account's number
+    is proxied to the orchestrator's own inbound-event handler instead,
+    which runs its own accept/connected/stream lifecycle. This keeps ONE
+    stable EnableX portal webhook URL regardless of which pipeline an
+    account is on, rather than requiring a portal change per migration.
 
     EnableX expects a 200 quickly; we respond immediately and only act on the
-    'incomingcall' state. (Encrypted webhook payloads aren't handled yet —
-    configure the portal webhook without encryption for now.)
+    'incomingcall' state (for the LiveKit path). (Encrypted webhook payloads
+    aren't handled yet — configure the portal webhook without encryption for
+    now.)
     """
     state = event.get("state")
     voice_id = event.get("voice_id")
     dialed_number = event.get("to")
     caller = event.get("from")
     logger.info("EnableX inbound event: state=%s voice_id=%s to=%s from=%s raw=%s", state, voice_id, dialed_number, caller, event)
+
+    if dialed_number:
+        number_row = calls_db.get_phone_number_by_number(dialed_number)
+        if number_row is not None:
+            orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
+            orchestrator_test_account_id = os.environ.get("ORCHESTRATOR_TEST_ACCOUNT_ID")
+            if (
+                orchestrator_url
+                and orchestrator_test_account_id
+                and str(number_row["accountId"]) == orchestrator_test_account_id
+            ):
+                try:
+                    request = urllib.request.Request(
+                        f"{orchestrator_url.rstrip('/')}/telephony/enablex/inbound-event",
+                        data=json.dumps(event).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(request, timeout=15) as resp:
+                        return json.loads(resp.read().decode())
+                except Exception as e:
+                    logger.exception("orchestrator inbound-event proxy failed")
+                    return {"ok": False, "error": f"Could not reach orchestrator: {e}"}
 
     if state in _ENABLEX_TERMINAL_STATES:
         logger.info("EnableX inbound call %s ended: state=%s", voice_id, state)

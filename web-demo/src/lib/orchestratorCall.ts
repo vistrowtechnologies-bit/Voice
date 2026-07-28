@@ -2,6 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchOrchestratorBrowserToken } from './api'
 import type { TranscriptEntry } from './types'
 
+// Public, unauthenticated fallback used by the marketing site's live demo
+// when LiveKit's demo worker doesn't pick up — deliberately a raw fetch
+// (no credentials, no api.ts `send()`) since send() dispatches a
+// 'vv-unauthorized' event on a 401 that redirects to /login, which is
+// wrong for an anonymous visitor and this route needs no auth anyway.
+async function fetchOrchestratorPlatformDemoToken(): Promise<{ ok: boolean; error?: string; wssUrl?: string }> {
+  const res = await fetch('/api/orchestrator/platform-demo-token', { method: 'POST' })
+  if (!res.ok) return { ok: false, error: `request failed with status ${res.status}` }
+  return res.json()
+}
+
 export type OrchestratorCallPhase = 'connecting' | 'active' | 'error' | 'ended'
 export type AgentState = 'listening' | 'thinking' | 'speaking'
 
@@ -31,7 +42,9 @@ function floatTo16BitPCM(float32: Float32Array): Int16Array {
  * hooks. Owns mic capture, playback (with an AnalyserNode so the orb still
  * reacts to the agent's voice like useTrackVolume did), and the
  * thinking/speaking/listening state the orb displays. */
-export function useOrchestratorCall(agentId: number): UseOrchestratorCallResult {
+// agentId: undefined means the public marketing-demo fallback — resolves
+// the platform-demo agent server-side instead of a specific operator agent.
+export function useOrchestratorCall(agentId?: number): UseOrchestratorCallResult {
   const [phase, setPhase] = useState<OrchestratorCallPhase>('connecting')
   const [error, setError] = useState<string | null>(null)
   const [agentState, setAgentState] = useState<AgentState>('listening')
@@ -129,7 +142,8 @@ export function useOrchestratorCall(agentId: number): UseOrchestratorCallResult 
 
     ;(async () => {
       try {
-        const data = await fetchOrchestratorBrowserToken(agentId)
+        const data =
+          agentId === undefined ? await fetchOrchestratorPlatformDemoToken() : await fetchOrchestratorBrowserToken(agentId)
         if (!data.ok || !data.wssUrl) throw new Error(data.error ?? 'Could not get a call token.')
         if (cancelled) return
 

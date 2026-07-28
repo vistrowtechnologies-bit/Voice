@@ -424,6 +424,30 @@ async def browser_token(account_id: int | None = None, agent_id: int | None = No
     return {"ok": True, "wssUrl": f"{wss_base}/browser/stream?token={token}"}
 
 
+@app.get("/browser/token/platform-demo")
+async def browser_token_platform_demo() -> dict:
+    """Public (no auth) token for the marketing site's live demo — used as
+    a fallback when LiveKit's demo worker doesn't pick up (see
+    server/token_api.py's /orchestrator/platform-demo-token, which is the
+    actual public-facing, rate-limited entry point; this route itself does
+    no rate limiting since it's only ever called server-to-server from
+    there). Resolves the SAME agent LiveKit's public /token route resolves
+    for an unrouted browser call: db.get_agent_config(None) prefers
+    whichever agent is flagged is_platform_demo, reading the same `agents`
+    table — no separate config needed here."""
+    cfg = db.get_agent_config(None) or {}
+    account_id = cfg.get("account_id")
+    agent_id = cfg.get("id")
+    if not account_id or not agent_id:
+        return {"ok": False, "error": "No platform demo agent configured."}
+    wss_base = enablex.public_wss_host()
+    if not wss_base:
+        return {"ok": False, "error": "PUBLIC_BASE_URL/WSS_PUBLIC_HOST not set."}
+    session_id = str(uuid.uuid4())
+    token = ws_security.issue_stream_token(session_id, account_id, agent_id)
+    return {"ok": True, "wssUrl": f"{wss_base}/browser/stream?token={token}"}
+
+
 @app.websocket("/browser/stream")
 async def browser_stream_ws(websocket: WebSocket) -> None:
     token = websocket.query_params.get("token", "")

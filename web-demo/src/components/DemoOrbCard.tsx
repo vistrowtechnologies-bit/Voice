@@ -12,8 +12,9 @@ import {
   recordDemoCall,
 } from '../lib/demoCallCap'
 import { fetchLiveKitToken, randomId } from '../lib/livekit'
+import { useOrchestratorCall } from '../lib/orchestratorCall'
 
-type Phase = 'idle' | 'connecting' | 'active' | 'denied' | 'capped' | 'unreachable'
+type Phase = 'idle' | 'connecting' | 'active' | 'active-orchestrator' | 'denied' | 'capped' | 'unreachable'
 
 // How long the visitor's browser waits for the AI agent to actually join the
 // room after connecting. A healthy dispatch + (cold) worker start is a few
@@ -84,18 +85,24 @@ export function DemoOrbCard() {
   }, [])
 
   // The browser connected to the room but no AI agent ever joined (worker
-  // unavailable). Tear down the connection and show an explicit retry rather
-  // than a fake "live call" over dead air — this is what a client saw as a
-  // "dead agent" before.
+  // cold-start/crash/restart — LiveKit Cloud's own agent worker, unrelated
+  // to the orchestrator). Instead of just erroring, fall back to the
+  // Railway-native orchestrator pipeline for this one call, same visitor
+  // experience either way — only errors out if THAT also fails.
   const handleAgentUnavailable = useCallback(() => {
     setToken(null)
     setServerUrl(null)
+    setPhase('active-orchestrator')
+  }, [])
+
+  const handleOrchestratorFailed = useCallback(() => {
     setErrorMessage('Artha didn’t pick up just now — please try again.')
     setPhase('unreachable')
   }, [])
 
   const exhausted = phase === 'capped'
   const isCallLive = phase === 'active'
+  const isCallLiveOrchestrator = phase === 'active-orchestrator'
 
   return (
     <div id="live-demo" className="relative mx-auto w-full max-w-[420px] lg:mx-0 lg:ml-auto">
@@ -114,6 +121,8 @@ export function DemoOrbCard() {
             <RoomAudioRenderer />
             <InlineCallBody onAgentUnavailable={handleAgentUnavailable} />
           </LiveKitRoom>
+        ) : isCallLiveOrchestrator ? (
+          <InlineOrchestratorCallBody onEnded={handleDisconnected} onFailed={handleOrchestratorFailed} />
         ) : (
           <>
             <button
@@ -277,6 +286,84 @@ function InlineCallBody({ onAgentUnavailable }: { onAgentUnavailable: () => void
         </button>
       </div>
     </>
+  )
+}
+
+// Same card, same footprint as InlineCallBody, but driven by
+// useOrchestratorCall's local state instead of LiveKit's room hooks — used
+// when LiveKit's demo worker didn't pick up and DemoOrbCard fell back to
+// the orchestrator (agentId omitted -> resolves the platform-demo agent).
+function InlineOrchestratorCallBody({ onEnded, onFailed }: { onEnded: () => void; onFailed: () => void }) {
+  const { phase, agentState, agentVolume, micEnabled, toggleMic, endCall, elapsedMs } = useOrchestratorCall()
+
+  useEffect(() => {
+    if (phase === 'error') onFailed()
+    else if (phase === 'ended') onEnded()
+  }, [phase, onFailed, onEnded])
+
+  const connected = phase === 'active'
+  const speaking = agentState === 'speaking'
+
+  return (
+    <>
+      <div className="relative my-6 flex h-48 w-48 items-center justify-center">
+        <span className="absolute inset-0 rounded-full border border-primary/20" />
+        <span className="absolute inset-5 rounded-full border border-primary/10" />
+        {connected ? (
+          <InlineOrchestratorVisual volume={speaking ? agentVolume : 0} speaking={speaking} />
+        ) : (
+          <span className="relative h-32 w-32 overflow-hidden rounded-full opacity-45 shadow-[0_0_60px_-5px_rgba(168,85,247,0.6)]">
+            <video src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-bg/40">
+              <span className="h-7 w-7 animate-spin rounded-full border-2 border-cyan border-t-transparent" />
+            </span>
+          </span>
+        )}
+      </div>
+
+      {connected ? (
+        <div className="mt-5 rounded-xl border border-border bg-bg px-4 py-2 font-mono text-sm text-cyan">
+          {formatDuration(elapsedMs)}
+        </div>
+      ) : (
+        <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>
+      )}
+
+      <div className="mt-6 flex w-full items-center justify-center gap-4 border-t border-border pt-5">
+        <button
+          aria-label={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
+          onClick={toggleMic}
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface-high text-text-muted transition-colors hover:text-text"
+        >
+          <Icon name={micEnabled ? 'mic' : 'mic_off'} />
+        </button>
+        <button
+          aria-label="End call"
+          onClick={endCall}
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive text-white transition-opacity hover:opacity-90"
+        >
+          <Icon name="call_end" className="text-[24px]" />
+        </button>
+      </div>
+    </>
+  )
+}
+
+function InlineOrchestratorVisual({ volume, speaking }: { volume: number; speaking: boolean }) {
+  const scale = 1 + Math.min(volume, 1) * 0.14
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = speaking ? SPEAKING_PLAYBACK_RATE : 1
+  }, [speaking])
+
+  return (
+    <span
+      className="relative h-32 w-32 overflow-hidden rounded-full shadow-[0_0_60px_-5px_rgba(168,85,247,0.6)] transition-transform duration-150 ease-out"
+      style={{ transform: `scale(${scale})` }}
+    >
+      <video ref={videoRef} src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
+    </span>
   )
 }
 
