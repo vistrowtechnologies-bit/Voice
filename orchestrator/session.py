@@ -320,7 +320,10 @@ class _OrderedTTSPipeline:
 
 
 async def handle_utterance_streaming(
-    session: Session, caller_wav_bytes: bytes, on_reply_audio: Callable[[bytes, str], Awaitable[None]]
+    session: Session,
+    caller_wav_bytes: bytes,
+    on_reply_audio: Callable[[bytes, str], Awaitable[None]],
+    on_transcript: Callable[[str, str], Awaitable[None]] | None = None,
 ) -> str:
     """Same STT -> LLM -> TTS turn as handle_utterance, but pipelined:
     llm.stream_turn() calls back per-sentence as the model generates them,
@@ -331,6 +334,11 @@ async def handle_utterance_streaming(
     Raises stt.STTError the same way handle_utterance does; a mid-reply
     tts.TTSError is swallowed per-sentence (skip that sentence, keep going)
     rather than aborting an otherwise-fine reply.
+
+    on_transcript, when given, is called with ("user"|"assistant", text) as
+    each side's text becomes final — the browser adapter uses this to push
+    a live transcript over the WS; the phone path has no on-screen surface
+    for it and leaves this None.
     """
     if not session.messages:
         session.messages.append({"role": "system", "content": build_system_prompt(session)})
@@ -343,6 +351,8 @@ async def handle_utterance_streaming(
 
     session.transcript.append({"role": "user", "text": caller_text})
     session.messages.append({"role": "user", "content": caller_text})
+    if on_transcript:
+        await on_transcript("user", caller_text)
 
     pipeline = _OrderedTTSPipeline(session.voice, session.reply_language, on_reply_audio)
 
@@ -362,6 +372,8 @@ async def handle_utterance_streaming(
     await pipeline.close()
     session.messages.extend(new_messages)
     session.transcript.append({"role": "assistant", "text": reply_text})
+    if on_transcript and reply_text:
+        await on_transcript("assistant", reply_text)
     return reply_text
 
 

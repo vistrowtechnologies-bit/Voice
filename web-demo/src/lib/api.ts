@@ -289,6 +289,8 @@ export const assignPhoneNumber = (id: number, agentId: number | null) =>
 export const deletePhoneNumber = (id: number) => send('DELETE', `/telephony/numbers/${id}`)
 export const placeTestCall = (from: string, to: string) =>
   send<{ ok: boolean; error?: string; response?: unknown }>('POST', '/telephony/test-call', { from, to })
+export const fetchOrchestratorBrowserToken = (agentId: number) =>
+  send<{ ok: boolean; error?: string; wssUrl?: string }>('POST', '/orchestrator/browser-token', { agentId })
 
 // --------------------------------------------------------------- billing
 

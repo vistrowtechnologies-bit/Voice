@@ -93,10 +93,16 @@ _PENDING_ACCOUNT_BY_VOICE_ID: dict[str, int] = {}
 def _build_session_for_test_call(call_type: str = "phone") -> session_module.Session:
     """Loads TEST_AGENT_ID's dashboard config into a fresh Session — same
     per-call config lookup agent/main.py did via db.get_agent_config."""
-    cfg = db.get_agent_config(TEST_AGENT_ID) or {}
+    return _build_session(TEST_ACCOUNT_ID, TEST_AGENT_ID, call_type)
+
+
+def _build_session(account_id: int, agent_id: int, call_type: str) -> session_module.Session:
+    """Loads agent_id's dashboard config into a fresh Session — same
+    per-call config lookup agent/main.py did via db.get_agent_config."""
+    cfg = db.get_agent_config(agent_id) or {}
     sess = session_module.Session(
-        account_id=TEST_ACCOUNT_ID or None,
-        agent_id=TEST_AGENT_ID or None,
+        account_id=account_id or None,
+        agent_id=agent_id or None,
         call_type=call_type,
         voice=cfg.get("voice") or "shubh",
         reply_language=cfg.get("language") or "hi-IN",
@@ -394,20 +400,26 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
 # straight to decodeAudioData — no chunking/pacing/fade-edges needed since
 # there's no fixed-rate telephony wire format to match.
 #
-# Feature-flagged to the same TEST_ACCOUNT_ID/TEST_AGENT_ID as the phone
-# path for this proving stage — not yet wired into the production widget.
+# Defaults to TEST_ACCOUNT_ID/TEST_AGENT_ID (the standalone test page never
+# passes account_id/agent_id) but accepts an explicit pair too — used by
+# server/token_api.py's authenticated /orchestrator/browser-token proxy so
+# the dashboard's own agent-test mic button can target the operator's real
+# account/agent instead of only the one fixed test agent. That proxy is the
+# trust boundary: this route itself does no dashboard auth of its own.
 # --------------------------------------------------------------------------
 
 
 @app.get("/browser/token")
-async def browser_token() -> dict:
-    if not TEST_ACCOUNT_ID or not TEST_AGENT_ID:
-        return {"ok": False, "error": "TEST_ACCOUNT_ID/TEST_AGENT_ID not configured."}
+async def browser_token(account_id: int | None = None, agent_id: int | None = None) -> dict:
+    account_id = account_id or TEST_ACCOUNT_ID or None
+    agent_id = agent_id or TEST_AGENT_ID or None
+    if not account_id or not agent_id:
+        return {"ok": False, "error": "account_id/agent_id not provided and TEST_ACCOUNT_ID/TEST_AGENT_ID not configured."}
     wss_base = enablex.public_wss_host()
     if not wss_base:
         return {"ok": False, "error": "PUBLIC_BASE_URL/WSS_PUBLIC_HOST not set."}
     session_id = str(uuid.uuid4())
-    token = ws_security.issue_stream_token(session_id, TEST_ACCOUNT_ID)
+    token = ws_security.issue_stream_token(session_id, account_id, agent_id)
     return {"ok": True, "wssUrl": f"{wss_base}/browser/stream?token={token}"}
 
 
@@ -423,7 +435,9 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
 
     await websocket.accept()
     session_id = payload["voice_id"]
-    sess = _build_session_for_test_call(call_type="browser")
+    account_id = payload.get("account_id") or TEST_ACCOUNT_ID
+    agent_id = payload.get("agent_id") or TEST_AGENT_ID
+    sess = _build_session(account_id, agent_id, call_type="browser")
     vad = audio.UtteranceVAD()
     speaking_task: asyncio.Task | None = None
     # Unlike the phone path, sending a reply clip here is near-instant (one
@@ -444,6 +458,12 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
         # protocol. content_type isn't sent explicitly: both WAV and MP3
         # are self-describing formats decodeAudioData can sniff.
         await websocket.send_bytes(reply_audio)
+
+    async def _send_transcript(role: str, text: str) -> None:
+        try:
+            await websocket.send_json({"event": "transcript", "role": role, "text": text})
+        except Exception:
+            logger.exception("unexpected error sending transcript event")
 
     async def _speak(reply_audio: bytes, content_type: str) -> None:
         try:
@@ -467,7 +487,13 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
 
     async def _process_turn(wav_bytes: bytes) -> None:
         try:
-            reply_text = await session_module.handle_utterance_streaming(sess, wav_bytes, _send_reply_audio)
+            await websocket.send_json({"event": "state", "state": "thinking"})
+        except Exception:
+            logger.exception("unexpected error sending state event")
+        try:
+            reply_text = await session_module.handle_utterance_streaming(
+                sess, wav_bytes, _send_reply_audio, _send_transcript
+            )
         except stt.STTError as e:
             logger.info("skipping turn, no speech detected: %s", e)
             return

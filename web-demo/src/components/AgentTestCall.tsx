@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react'
 import { ActiveCallUI } from './ActiveCallUI'
+import { OrchestratorTestCallUI } from './OrchestratorTestCallUI'
 import { Icon } from './Icon'
-import { placeTestCall } from '../lib/api'
+import { fetchOrchestratorBrowserToken, placeTestCall } from '../lib/api'
 import { fetchLiveKitToken, randomId } from '../lib/livekit'
 import { isE164 } from '../lib/phone'
 import type { AgentConfig } from '../lib/types'
@@ -99,14 +100,31 @@ export function DialTestModal({
  * THIS specific agent (via the token endpoint's agentId → room metadata),
  * not just whichever agent is first/live. */
 export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClose: () => void }) {
-  const [phase, setPhase] = useState<'connecting' | 'active' | 'error'>('connecting')
+  const [phase, setPhase] = useState<'checking' | 'connecting' | 'active' | 'error'>('checking')
   const [error, setError] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
+  const [useOrchestrator, setUseOrchestrator] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      // Accounts on the orchestrator pipeline (Phase 3 of the LiveKit-
+      // removal plan) get routed there instead — everyone else falls
+      // through to the existing LiveKit room flow below unchanged.
+      try {
+        const orch = await fetchOrchestratorBrowserToken(agent.id)
+        if (cancelled) return
+        if (orch.ok) {
+          setUseOrchestrator(true)
+          setPhase('active')
+          return
+        }
+      } catch {
+        // fall through to LiveKit
+      }
+      if (cancelled) return
+      setPhase('connecting')
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true })
         const identity = randomId('operator')
@@ -127,6 +145,10 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
     }
   }, [agent.id])
 
+  if (useOrchestrator && phase === 'active') {
+    return <OrchestratorTestCallUI agentId={agent.id} agentLabel={`${agent.name} · Test Call`} onClose={onClose} />
+  }
+
   if (phase === 'error') {
     return (
       <ModalShell title={`Browser test — ${agent.name}`} onClose={onClose}>
@@ -135,7 +157,7 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
     )
   }
 
-  if (phase === 'connecting') {
+  if (phase === 'checking' || phase === 'connecting') {
     return (
       <ModalShell title={`Browser test — ${agent.name}`} onClose={onClose}>
         <div className="flex items-center gap-3 py-2 text-sm text-cyan">

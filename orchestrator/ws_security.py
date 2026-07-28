@@ -29,15 +29,18 @@ def _secret() -> str:
     return secret
 
 
-def issue_stream_token(voice_id: str, account_id: int) -> str:
+def issue_stream_token(voice_id: str, account_id: int, agent_id: int | None = None) -> str:
     """One signed, single-use token authorizing exactly one streaming
     session for this voice_id. Embed as `?token=...` in the wss_host URL
-    passed to enablex.start_stream/place_outbound_call."""
+    passed to enablex.start_stream/place_outbound_call. agent_id is only
+    set for browser sessions that target a specific dashboard agent (the
+    EnableX phone path resolves its agent from the dialed number instead)."""
     now = int(time.time())
     payload = {
         "jti": str(uuid.uuid4()),
         "voice_id": voice_id,
         "account_id": account_id,
+        "agent_id": agent_id,
         "iat": now,
         "exp": now + _EXPIRY_SECONDS,
     }

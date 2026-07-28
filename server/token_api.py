@@ -1788,6 +1788,33 @@ def telephony_test_call(data: dict = Body(...), user: dict = Depends(current_use
     return calls_db.place_test_call(from_number, to_number, user["account_id"])
 
 
+@app.post("/orchestrator/browser-token")
+def orchestrator_browser_token(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    """Mints a browser-streaming token for the dashboard's own agent-test
+    mic button (AgentTestCall.tsx's BrowserTestModal) against the
+    Railway-native orchestrator, instead of a LiveKit room token. Gated to
+    the same one proven account as /telephony/test-call above — this isn't
+    a general multi-tenant route yet, just the one account currently on the
+    orchestrator pipeline (Phase 3 of the LiveKit-removal plan)."""
+    agent_id = data.get("agentId")
+    if not agent_id:
+        raise HTTPException(400, "agentId is required")
+
+    orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
+    orchestrator_test_account_id = os.environ.get("ORCHESTRATOR_TEST_ACCOUNT_ID")
+    if not (orchestrator_url and orchestrator_test_account_id and str(user["account_id"]) == orchestrator_test_account_id):
+        raise HTTPException(400, "This account isn't on the orchestrator pipeline yet.")
+
+    try:
+        url = f"{orchestrator_url.rstrip('/')}/browser/token?account_id={user['account_id']}&agent_id={agent_id}"
+        request = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(request, timeout=15) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as e:
+        logger.exception("orchestrator browser-token proxy failed")
+        return {"ok": False, "error": f"Could not reach orchestrator: {e}"}
+
+
 @app.get("/telephony/sip-host")
 def telephony_sip_host() -> dict:
     """The LiveKit SIP endpoint to register as the EnableX inbound webhook
