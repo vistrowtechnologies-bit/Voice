@@ -52,6 +52,12 @@ async def _synth_elevenlabs(voice_id: str, model_id: str, text: str, language_co
             resp = await client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
         except httpx.HTTPStatusError as e:
+            if language_code and e.response.status_code == 400 and "unsupported_language" in e.response.text:
+                # detect_reply_language() occasionally misreads a caller's
+                # accented speech as a language this model/voice doesn't
+                # support (e.g. 'gu') — rather than losing the whole reply,
+                # retry once letting ElevenLabs auto-detect from the text.
+                return await _synth_elevenlabs(voice_id, model_id, text, None)
             raise TTSError(f"ElevenLabs returned {e.response.status_code}: {e.response.text[:300]}") from e
         except httpx.HTTPError as e:
             raise TTSError(f"Could not reach ElevenLabs: {e}") from e

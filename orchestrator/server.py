@@ -25,11 +25,14 @@ import asyncio
 import audioop
 import base64
 import itertools
+import json
 import logging
 import os
 import time
+import uuid
 
 from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 import audio
 import db
@@ -43,7 +46,20 @@ import ws_security
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("orchestrator-server")
 
-app = FastAPI(title="Vistrow Voice orchestrator (Phase 2 — EnableX adapter)")
+app = FastAPI(title="Vistrow Voice orchestrator (Phase 2/3 — EnableX + browser adapters)")
+
+# The phone path is server-to-server (EnableX -> us) and never needs CORS.
+# /browser/token does — it's called via fetch() directly from a page in the
+# visitor's browser (marketing site, widget test page, eventually the real
+# widget), a different origin than this service. Wide open for the Phase 3
+# proving stage; tighten to the actual widget/marketing origins before the
+# real cutover.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
 
 # --- Phase 2 feature flag: ONE test number, hardcoded via env vars rather
 # than the production phone_numbers table, so this can't accidentally pick
@@ -74,14 +90,14 @@ _BARGE_IN_GRACE_MS = 500
 _PENDING_ACCOUNT_BY_VOICE_ID: dict[str, int] = {}
 
 
-def _build_session_for_test_call() -> session_module.Session:
+def _build_session_for_test_call(call_type: str = "phone") -> session_module.Session:
     """Loads TEST_AGENT_ID's dashboard config into a fresh Session — same
     per-call config lookup agent/main.py did via db.get_agent_config."""
     cfg = db.get_agent_config(TEST_AGENT_ID) or {}
     sess = session_module.Session(
         account_id=TEST_ACCOUNT_ID or None,
         agent_id=TEST_AGENT_ID or None,
-        call_type="phone",
+        call_type=call_type,
         voice=cfg.get("voice") or "shubh",
         reply_language=cfg.get("language") or "hi-IN",
         agent_name=cfg.get("name") or "Artha",
@@ -168,6 +184,13 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     return {"ok": True}
 
 
+async def _prefetch_listening_cue(voice: str, reply_language: str) -> None:
+    try:
+        await session_module.get_listening_cue_audio(voice, reply_language)
+    except Exception:
+        logger.exception("listening cue prefetch failed (non-fatal, will retry on next barge-in)")
+
+
 @app.websocket("/stream")
 async def stream_ws(websocket: WebSocket, token: str) -> None:
     try:
@@ -221,12 +244,6 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
             # retrieved" deep in asyncio's own logging, easy to miss) and
             # the caller just hears nothing with no trace of why.
             logger.exception("unexpected error sending audio")
-
-    async def _prefetch_listening_cue(voice: str, reply_language: str) -> None:
-        try:
-            await session_module.get_listening_cue_audio(voice, reply_language)
-        except Exception:
-            logger.exception("listening cue prefetch failed (non-fatal, will retry on next barge-in)")
 
     async def _process_turn(wav_bytes: bytes) -> None:
         # Whole turn (STT -> streamed LLM -> per-sentence TTS -> send) runs
@@ -366,3 +383,152 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                 db.set_call_recording(call_id, key)
         _PENDING_ACCOUNT_BY_VOICE_ID.pop(voice_id, None)
         logger.info("call finalized: voice_id=%s call_id=%s", voice_id, call_id)
+
+
+# --------------------------------------------------------------------------
+# Phase 3 — browser/widget adapter. Same orchestrator, same Session/
+# handle_utterance_streaming pipeline as the phone path above, but the
+# transport is different: no EnableX, no ulaw, no REST call-control. The
+# browser mic delivers raw PCM16 directly (decoded client-side via Web
+# Audio), and replies go back as whole WAV/MP3 clips the browser can feed
+# straight to decodeAudioData — no chunking/pacing/fade-edges needed since
+# there's no fixed-rate telephony wire format to match.
+#
+# Feature-flagged to the same TEST_ACCOUNT_ID/TEST_AGENT_ID as the phone
+# path for this proving stage — not yet wired into the production widget.
+# --------------------------------------------------------------------------
+
+
+@app.get("/browser/token")
+async def browser_token() -> dict:
+    if not TEST_ACCOUNT_ID or not TEST_AGENT_ID:
+        return {"ok": False, "error": "TEST_ACCOUNT_ID/TEST_AGENT_ID not configured."}
+    wss_base = enablex.public_wss_host()
+    if not wss_base:
+        return {"ok": False, "error": "PUBLIC_BASE_URL/WSS_PUBLIC_HOST not set."}
+    session_id = str(uuid.uuid4())
+    token = ws_security.issue_stream_token(session_id, TEST_ACCOUNT_ID)
+    return {"ok": True, "wssUrl": f"{wss_base}/browser/stream?token={token}"}
+
+
+@app.websocket("/browser/stream")
+async def browser_stream_ws(websocket: WebSocket) -> None:
+    token = websocket.query_params.get("token", "")
+    try:
+        payload = ws_security.verify_stream_token(token)
+    except ws_security.TokenError as e:
+        logger.warning("rejecting browser stream connection: %s", e)
+        await websocket.close(code=4401)
+        return
+
+    await websocket.accept()
+    session_id = payload["voice_id"]
+    sess = _build_session_for_test_call(call_type="browser")
+    vad = audio.UtteranceVAD()
+    speaking_task: asyncio.Task | None = None
+    speaking_started_at = 0.0
+    loud_streak = 0
+    sample_rate = 48000  # overwritten by the client's "start" message
+    logger.info("browser stream connected for session_id=%s", session_id)
+
+    async def _send_reply_audio(reply_audio: bytes, content_type: str) -> None:
+        # No chunking/pacing needed — the browser decodes and plays a
+        # whole clip at once, unlike EnableX's fixed-rate `media` wire
+        # protocol. content_type isn't sent explicitly: both WAV and MP3
+        # are self-describing formats decodeAudioData can sniff.
+        await websocket.send_bytes(reply_audio)
+
+    async def _speak(reply_audio: bytes, content_type: str) -> None:
+        try:
+            await _send_reply_audio(reply_audio, content_type)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("unexpected error sending browser reply audio")
+
+    async def _barge_in() -> None:
+        nonlocal speaking_task
+        if speaking_task and not speaking_task.done():
+            speaking_task.cancel()
+        speaking_task = None
+        try:
+            await websocket.send_json({"event": "clear_audio"})
+        except Exception:
+            logger.exception("unexpected error sending clear_audio")
+        vad.reset()
+
+    async def _process_turn(wav_bytes: bytes) -> None:
+        try:
+            reply_text = await session_module.handle_utterance_streaming(sess, wav_bytes, _send_reply_audio)
+        except stt.STTError as e:
+            logger.info("skipping turn, no speech detected: %s", e)
+            return
+        except tts.TTSError as e:
+            logger.warning("TTS failed mid-call: %s", e)
+            return
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception("unexpected error processing browser turn")
+            return
+        logger.info("agent replied: %s", reply_text)
+        if sess.ending_call:
+            await websocket.close()
+
+    try:
+        # Speak first, like the phone path's greeting — otherwise the
+        # visitor sits in silence waiting for the mic to pick something up.
+        try:
+            greeting = await session_module.build_greeting_audio(sess)
+        except tts.TTSError as e:
+            logger.warning("greeting TTS failed: %s", e)
+            greeting = None
+        if greeting:
+            greeting_audio, greeting_content_type = greeting
+            logger.info("greeting: %s", sess.transcript[-1]["text"])
+            speaking_task = asyncio.create_task(_speak(greeting_audio, greeting_content_type))
+            speaking_started_at = time.monotonic()
+        asyncio.create_task(_prefetch_listening_cue(sess.voice, sess.reply_language))
+
+        while True:
+            msg = await websocket.receive()
+            if "text" in msg and msg["text"] is not None:
+                data = json.loads(msg["text"])
+                if data.get("event") == "start":
+                    sample_rate = int(data.get("sampleRate") or 48000)
+                elif data.get("event") == "stop":
+                    break
+                continue
+
+            if "bytes" not in msg or msg["bytes"] is None:
+                continue
+            pcm16_frame = msg["bytes"]
+            frame_ms = int((len(pcm16_frame) / 2) / sample_rate * 1000) or 1
+
+            if speaking_task and not speaking_task.done():
+                if (time.monotonic() - speaking_started_at) * 1000 < _BARGE_IN_GRACE_MS:
+                    loud_streak = 0
+                    continue
+                if audio.frame_energy_pcm16(pcm16_frame) >= vad.energy_threshold:
+                    loud_streak += 1
+                else:
+                    loud_streak = 0
+                if loud_streak >= _BARGE_IN_FRAMES:
+                    loud_streak = 0
+                    await _barge_in()
+                    vad.push_pcm16_frame(pcm16_frame, frame_ms)
+                continue
+
+            utterance_pcm16 = vad.push_pcm16_frame(pcm16_frame, frame_ms)
+            if not utterance_pcm16:
+                continue
+            wav_bytes = audio.pcm16_to_wav(utterance_pcm16, sample_rate)
+            speaking_task = asyncio.create_task(_process_turn(wav_bytes))
+            speaking_started_at = time.monotonic()
+    except WebSocketDisconnect:
+        logger.info("browser stream disconnected for session_id=%s", session_id)
+    finally:
+        if speaking_task and not speaking_task.done():
+            speaking_task.cancel()
+        call_id = await session_module.finalize_call(sess, room_name=f"browser-{session_id}")
+        logger.info("browser call finalized: session_id=%s call_id=%s", session_id, call_id)

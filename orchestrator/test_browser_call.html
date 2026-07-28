@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Orchestrator browser-call test</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+  button { font-size: 16px; padding: 10px 20px; margin-right: 8px; }
+  #log { white-space: pre-wrap; background: #111; color: #0f0; padding: 12px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 13px; margin-top: 16px; }
+  #status { font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>Orchestrator browser-call test (Phase 3)</h1>
+<p>Status: <span id="status">idle</span></p>
+<button id="startBtn">Start call</button>
+<button id="stopBtn" disabled>End call</button>
+<div id="log"></div>
+
+<script>
+const ORCHESTRATOR_BASE = "https://orchestrator-production-b4bf.up.railway.app";
+const CHUNK_MS = 100; // how often we ship a batch of mic audio to the server
+
+const statusEl = document.getElementById("status");
+const logEl = document.getElementById("log");
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+
+function log(msg) {
+  logEl.textContent += msg + "\n";
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function setStatus(s) { statusEl.textContent = s; }
+
+let ws = null;
+let audioCtx = null;
+let micStream = null;
+let processorNode = null;
+let sourceNode = null;
+let playbackCtx = null;
+let currentSource = null;
+let playQueue = [];
+let playing = false;
+
+function floatTo16BitPCM(float32) {
+  const out = new Int16Array(float32.length);
+  for (let i = 0; i < float32.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out;
+}
+
+async function playNext() {
+  if (playing || playQueue.length === 0) return;
+  playing = true;
+  const buf = playQueue.shift();
+  try {
+    const audioBuffer = await playbackCtx.decodeAudioData(buf);
+    const src = playbackCtx.createBufferSource();
+    src.buffer = audioBuffer;
+    src.connect(playbackCtx.destination);
+    currentSource = src;
+    src.onended = () => {
+      currentSource = null;
+      playing = false;
+      playNext();
+    };
+    src.start();
+    log("[playback] playing " + audioBuffer.duration.toFixed(2) + "s clip");
+  } catch (e) {
+    log("[playback] decode error: " + e);
+    playing = false;
+    playNext();
+  }
+}
+
+function stopPlayback() {
+  playQueue = [];
+  if (currentSource) {
+    try { currentSource.stop(); } catch (e) {}
+    currentSource = null;
+  }
+  playing = false;
+}
+
+async function startCall() {
+  setStatus("requesting token...");
+  const res = await fetch(ORCHESTRATOR_BASE + "/browser/token");
+  const data = await res.json();
+  if (!data.ok) {
+    log("[error] token request failed: " + data.error);
+    setStatus("error");
+    return;
+  }
+  log("[token] got wssUrl");
+
+  playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } });
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  sourceNode = audioCtx.createMediaStreamSource(micStream);
+
+  const bufferSize = 4096;
+  processorNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+  sourceNode.connect(processorNode);
+  processorNode.connect(audioCtx.destination); // required by some browsers to keep the node alive; muted via gain below
+  processorNode.onaudioprocess = (e) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const input = e.inputBuffer.getChannelData(0);
+    const pcm16 = floatTo16BitPCM(input);
+    ws.send(pcm16.buffer);
+  };
+
+  ws = new WebSocket(data.wssUrl);
+  ws.binaryType = "arraybuffer";
+
+  ws.onopen = () => {
+    setStatus("connected — say hello");
+    log("[ws] open, sampleRate=" + audioCtx.sampleRate);
+    ws.send(JSON.stringify({ event: "start", sampleRate: audioCtx.sampleRate }));
+  };
+  ws.onmessage = (evt) => {
+    if (typeof evt.data === "string") {
+      const msg = JSON.parse(evt.data);
+      log("[ws] event: " + JSON.stringify(msg));
+      if (msg.event === "clear_audio") stopPlayback();
+      return;
+    }
+    log("[ws] received audio clip (" + evt.data.byteLength + " bytes)");
+    playQueue.push(evt.data);
+    playNext();
+  };
+  ws.onclose = () => {
+    setStatus("call ended");
+    log("[ws] closed");
+    cleanup();
+  };
+  ws.onerror = (e) => {
+    log("[ws] error");
+  };
+
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+}
+
+function cleanup() {
+  if (processorNode) { processorNode.disconnect(); processorNode = null; }
+  if (sourceNode) { sourceNode.disconnect(); sourceNode = null; }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+}
+
+function endCall() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ event: "stop" }));
+    ws.close();
+  }
+  cleanup();
+}
+
+startBtn.onclick = startCall;
+stopBtn.onclick = endCall;
+</script>
+</body>
+</html>

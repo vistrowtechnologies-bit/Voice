@@ -1,11 +1,16 @@
-"""Audio format conversion for EnableX's Media Streaming API.
+"""Audio format conversion, shared by the EnableX phone path (server.py)
+and the browser path (browser_server.py).
 
 EnableX sends/expects G.711 ulaw, 8000 Hz, mono, Base64-encoded per frame
 (confirmed against developer.enablex.io/voice/media-streaming.html,
-2026-07-27). Our STT/TTS pipeline (stt.py/tts.py) speaks WAV — Sarvam's
-STT accepts a WAV upload, and Sarvam/ElevenLabs TTS return WAV/MP3 at their
-own native sample rates (typically 22050+ Hz). This module is the glue
-between those two worlds: ulaw8k <-> PCM16, resampling, and WAV wrapping.
+2026-07-27) — the ulaw-specific helpers below (ulaw_b64_frames_to_wav,
+wav_or_mp3_to_ulaw, frame_energy, chunk_ulaw) exist only for that path.
+Browser mic audio arrives as raw PCM16 already (decoded client-side via
+Web Audio), so it skips ulaw entirely — pcm16_to_wav and
+UtteranceVAD.push_pcm16_frame are its equivalents. Our STT/TTS pipeline
+(stt.py/tts.py) speaks WAV — Sarvam's STT accepts a WAV upload, and
+Sarvam/ElevenLabs TTS return WAV/MP3 at their own native sample rates
+(typically 22050+ Hz).
 
 Uses stdlib `audioop` (ulaw2lin/lin2ulaw/ratecv) — no extra dependency,
 same module agent/recording.py already used for PCM mixing.
@@ -23,19 +28,25 @@ _FADE_SAMPLES = 80  # 10ms at 8000Hz
 _ULAW_SAMPLE_WIDTH = 2  # audioop's lin16 width used as the intermediate format
 
 
-def ulaw_b64_frames_to_wav(ulaw_bytes: bytes) -> bytes:
-    """Decodes a run of concatenated raw ulaw bytes (already Base64-decoded
-    by the caller) into a mono 16-bit PCM WAV at 8000 Hz — ready for
-    stt.transcribe(), which just needs *a* valid WAV; Sarvam handles
-    whatever sample rate the container declares."""
-    pcm16 = audioop.ulaw2lin(ulaw_bytes, 2)
+def pcm16_to_wav(pcm16: bytes, sample_rate: int) -> bytes:
+    """Wraps raw mono 16-bit PCM in a WAV container at the given sample
+    rate — ready for stt.transcribe(), which just needs *a* valid WAV;
+    Sarvam handles whatever sample rate the container declares. Shared by
+    both the EnableX path (8000Hz, decoded from ulaw first) and the
+    browser path (whatever rate the mic's AudioContext used)."""
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wav_file:
         wav_file.setnchannels(1)
         wav_file.setsampwidth(2)
-        wav_file.setframerate(_ULAW_SAMPLE_RATE)
+        wav_file.setframerate(sample_rate)
         wav_file.writeframes(pcm16)
     return buf.getvalue()
+
+
+def ulaw_b64_frames_to_wav(ulaw_bytes: bytes) -> bytes:
+    """Decodes a run of concatenated raw ulaw bytes (already Base64-decoded
+    by the caller) into a mono 16-bit PCM WAV at 8000 Hz."""
+    return pcm16_to_wav(audioop.ulaw2lin(ulaw_bytes, 2), _ULAW_SAMPLE_RATE)
 
 
 def _fade_edges(pcm16: bytes, fade_samples: int = _FADE_SAMPLES) -> bytes:
@@ -105,6 +116,12 @@ def frame_energy(ulaw_frame: bytes) -> int:
     return audioop.rms(audioop.ulaw2lin(ulaw_frame, 2), 2)
 
 
+def frame_energy_pcm16(pcm16_frame: bytes) -> int:
+    """Same as frame_energy, for the browser path — mic audio is already
+    PCM16, no ulaw decode needed first."""
+    return audioop.rms(pcm16_frame, 2)
+
+
 def chunk_ulaw(ulaw_bytes: bytes, frame_ms: int = 20) -> list[bytes]:
     """Splits raw ulaw bytes into frame_ms-sized chunks (default 20ms, the
     conventional RTP packetization interval EnableX's own inbound `media`
@@ -126,7 +143,7 @@ class UtteranceVAD:
     sound on real PSTN audio in ways a trained VAD model isn't.
     """
 
-    def __init__(self, silence_ms: int = 350, min_speech_ms: int = 300, energy_threshold: int = 400):
+    def __init__(self, silence_ms: int = 550, min_speech_ms: int = 300, energy_threshold: int = 400):
         self._silence_ms = silence_ms
         self._min_speech_ms = min_speech_ms
         self._energy_threshold = energy_threshold
@@ -139,12 +156,21 @@ class UtteranceVAD:
         return self._energy_threshold
 
     def push_ulaw_frame(self, ulaw_frame: bytes, frame_ms: int = 20) -> bytes | None:
-        """Feed one ~frame_ms chunk of raw ulaw audio. Returns the complete
-        utterance's raw ulaw bytes once silence-after-speech is detected,
-        else None (still listening)."""
-        pcm16 = audioop.ulaw2lin(ulaw_frame, 2)
-        energy = audioop.rms(pcm16, 2)
-        self._buffer.extend(ulaw_frame)
+        """EnableX path: feed one ~frame_ms chunk of raw ulaw audio. Returns
+        the complete utterance's raw ulaw bytes once silence-after-speech
+        is detected, else None (still listening)."""
+        return self._push(ulaw_frame, audioop.ulaw2lin(ulaw_frame, 2), frame_ms)
+
+    def push_pcm16_frame(self, pcm16_frame: bytes, frame_ms: int) -> bytes | None:
+        """Browser path: feed one ~frame_ms chunk of raw 16-bit PCM audio
+        (already decoded client-side, no ulaw involved). Returns the
+        complete utterance's raw PCM16 bytes once silence-after-speech is
+        detected, else None."""
+        return self._push(pcm16_frame, pcm16_frame, frame_ms)
+
+    def _push(self, raw_frame: bytes, pcm16_for_energy: bytes, frame_ms: int) -> bytes | None:
+        energy = audioop.rms(pcm16_for_energy, 2)
+        self._buffer.extend(raw_frame)
         if energy >= self._energy_threshold:
             self._speech_ms += frame_ms
             self._trailing_silence_ms = 0
