@@ -104,10 +104,15 @@ def _update_reply_language(session: Session, caller_text: str) -> None:
     also just sounds like a different person, so this shows up to the
     caller as "two different voices", not only as wrong-language text.
 
-    Requires LANGUAGE_SWITCH_CONFIRMATION_TURNS consecutive turns agreeing
-    on the same candidate before actually switching, and treats a
-    Devanagari "hi-IN" reading as a non-signal on an already-mr-IN session
-    (script alone can't distinguish Hindi from Marathi)."""
+    Treats a Devanagari "hi-IN" reading as a non-signal on an already-mr-IN
+    session (script alone can't distinguish Hindi from Marathi) — that pair
+    is the one genuinely ambiguous case, so it alone requires
+    LANGUAGE_SWITCH_CONFIRMATION_TURNS consecutive turns agreeing before
+    switching. Every other candidate is already a confident, unambiguous
+    script/Latin match (see language.py's ratio+char-count gate), so it
+    switches immediately — requiring the same 3-turn confirmation for those
+    too made "switch the instant they switch" (the promise in
+    VOICE_STYLE_PROMPT) feel broken/sluggish for the common case."""
     candidate = detect_reply_language(caller_text)
     if candidate == "hi-IN" and session.reply_language == "mr-IN":
         candidate = None
@@ -121,6 +126,13 @@ def _update_reply_language(session: Session, caller_text: str) -> None:
     else:
         session.pending_language = candidate
         session.pending_language_streak = 1
+
+    ambiguous_pair = candidate == "hi-IN" or session.reply_language == "hi-IN"
+    if not ambiguous_pair:
+        session.reply_language = candidate
+        session.pending_language = None
+        session.pending_language_streak = 0
+        return
 
     if session.pending_language_streak >= LANGUAGE_SWITCH_CONFIRMATION_TURNS:
         session.reply_language = candidate

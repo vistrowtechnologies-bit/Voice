@@ -22,6 +22,13 @@ from openai import AsyncOpenAI
 _client: AsyncOpenAI | None = None
 _SENTENCE_BREAK = re.compile(r"[.!?\n]\s+")
 _MAX_CHUNK_CHARS = 220  # force-flush a long unpunctuated run so it isn't held forever
+# A fragment shorter than this doesn't get flushed as its own TTS call even
+# on a real sentence-break match — each sentence is synthesized as an
+# independent Sarvam call with no prosody continuity from the last, so
+# splitting every few words (common with decimals like "2.5 lakh" or list
+# numbering like "1. First point", where the period reads as a sentence
+# break) makes the voice sound like it's changing word to word.
+_MIN_CHUNK_CHARS = 20
 
 
 def _get_client() -> AsyncOpenAI:
@@ -95,9 +102,22 @@ def _pop_complete_sentence(buf: str) -> tuple[str, str]:
     (sentence, remainder). Force-flushes at the last space once `buf`
     passes _MAX_CHUNK_CHARS so one long unpunctuated run (a list, a run-on
     reply) still starts speaking promptly instead of waiting for a
-    terminator that may never come this early in the stream."""
-    match = _SENTENCE_BREAK.search(buf)
-    if match:
+    terminator that may never come this early in the stream.
+
+    Skips a match immediately after a digit (a decimal point like "2.5",
+    not a sentence end) and any match that would flush a fragment shorter
+    than _MIN_CHUNK_CHARS — see _MIN_CHUNK_CHARS' docstring for why."""
+    pos = 0
+    while True:
+        match = _SENTENCE_BREAK.search(buf, pos)
+        if not match:
+            break
+        if buf[match.start()] == "." and match.start() > 0 and buf[match.start() - 1].isdigit():
+            pos = match.end()
+            continue
+        if match.end() < _MIN_CHUNK_CHARS:
+            pos = match.end()
+            continue
         return buf[: match.end()].strip(), buf[match.end():]
     if len(buf) >= _MAX_CHUNK_CHARS:
         idx = buf.rfind(" ", 0, _MAX_CHUNK_CHARS)
