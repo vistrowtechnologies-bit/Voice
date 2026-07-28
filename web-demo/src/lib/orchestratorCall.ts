@@ -202,15 +202,22 @@ export function useOrchestratorCall(agentId: number): UseOrchestratorCallResult 
             if (msg.event === 'clear_audio') stopPlayback()
             else if (msg.event === 'state' && msg.state === 'thinking') setAgentState('thinking')
             else if (msg.event === 'transcript') {
-              setTranscript((prev) => [
-                ...prev,
-                {
-                  id: `${prev.length}-${Date.now()}`,
-                  identity: msg.role === 'user' ? 'caller' : 'agent',
-                  text: String(msg.text ?? ''),
-                  isLocal: msg.role === 'user',
-                },
-              ])
+              const isLocal = msg.role === 'user'
+              const identity = isLocal ? 'caller' : 'agent'
+              const text = String(msg.text ?? '')
+              setTranscript((prev) => {
+                // Assistant replies arrive one sentence at a time (in sync
+                // with each sentence's TTS clip) — merge consecutive agent
+                // sentences into one growing bubble instead of a new one
+                // per sentence. A user turn always starts a fresh bubble.
+                const last = prev[prev.length - 1]
+                if (!isLocal && last && last.identity === 'agent') {
+                  const merged = prev.slice(0, -1)
+                  merged.push({ ...last, text: `${last.text} ${text}`.trim() })
+                  return merged
+                }
+                return [...prev, { id: `${prev.length}-${Date.now()}`, identity, text, isLocal }]
+              })
             }
             return
           }

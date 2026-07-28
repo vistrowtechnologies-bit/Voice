@@ -402,6 +402,13 @@ async def handle_utterance_streaming(
         # consuming the model's stream for the NEXT sentence right away,
         # instead of blocking here for the ~2-3s this sentence's TTS takes.
         await pipeline.enqueue(sentence)
+        if on_transcript:
+            # Per-sentence, not just once at the end with the full reply —
+            # a multi-sentence reply's audio starts playing immediately as
+            # each sentence is synthesized, but the full reply_text isn't
+            # known until stream_turn fully finishes. Waiting for that made
+            # the transcript visibly lag several seconds behind the audio.
+            await on_transcript("assistant", sentence)
 
     try:
         reply_text, new_messages = await llm.stream_turn(
@@ -413,8 +420,6 @@ async def handle_utterance_streaming(
     await pipeline.close()
     session.messages.extend(new_messages)
     session.transcript.append({"role": "assistant", "text": reply_text})
-    if on_transcript and reply_text:
-        await on_transcript("assistant", reply_text)
     return reply_text
 
 

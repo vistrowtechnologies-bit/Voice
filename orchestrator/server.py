@@ -438,7 +438,14 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     account_id = payload.get("account_id") or TEST_ACCOUNT_ID
     agent_id = payload.get("agent_id") or TEST_AGENT_ID
     sess = _build_session(account_id, agent_id, call_type="browser")
-    vad = audio.UtteranceVAD()
+    # UtteranceVAD's default energy_threshold=400 was tuned against
+    # mu-law-decoded 8kHz phone audio, which runs much hotter than a raw
+    # browser mic capture — real sessions here logged a median frame energy
+    # of ~36 and a mean of ~158, almost entirely under 400. That meant most
+    # actual speech was being classified as silence, cutting utterances off
+    # mid-word (STT "not listening properly"). 80 comfortably clears typical
+    # room-noise-floor readings (10-40) while still requiring real voice.
+    vad = audio.UtteranceVAD(energy_threshold=80)
     frame_count = 0
     speaking_task: asyncio.Task | None = None
     # Unlike the phone path, sending a reply clip here is near-instant (one
@@ -521,6 +528,7 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
         if greeting:
             greeting_audio, greeting_content_type = greeting
             logger.info("greeting: %s", sess.transcript[-1]["text"])
+            await _send_transcript("assistant", sess.transcript[-1]["text"])
             speaking_task = asyncio.create_task(_speak(greeting_audio, greeting_content_type))
         asyncio.create_task(_prefetch_listening_cue(sess.voice, sess.reply_language))
 
