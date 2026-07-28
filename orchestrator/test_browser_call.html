@@ -41,6 +41,15 @@ let playbackCtx = null;
 let currentSource = null;
 let playQueue = [];
 let playing = false;
+let wsSpeakingState = false;
+
+function setSpeaking(v) {
+  if (v === wsSpeakingState) return;
+  wsSpeakingState = v;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ event: v ? "speaking_start" : "speaking_end" }));
+  }
+}
 
 function floatTo16BitPCM(float32) {
   const out = new Int16Array(float32.length);
@@ -52,8 +61,10 @@ function floatTo16BitPCM(float32) {
 }
 
 async function playNext() {
-  if (playing || playQueue.length === 0) return;
+  if (playing) return;
+  if (playQueue.length === 0) { setSpeaking(false); return; }
   playing = true;
+  setSpeaking(true);
   const buf = playQueue.shift();
   try {
     const audioBuffer = await playbackCtx.decodeAudioData(buf);
@@ -82,6 +93,7 @@ function stopPlayback() {
     currentSource = null;
   }
   playing = false;
+  setSpeaking(false);
 }
 
 async function startCall() {

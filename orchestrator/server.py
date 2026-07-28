@@ -426,6 +426,13 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     sess = _build_session_for_test_call(call_type="browser")
     vad = audio.UtteranceVAD()
     speaking_task: asyncio.Task | None = None
+    # Unlike the phone path, sending a reply clip here is near-instant (one
+    # websocket.send_bytes, no real-time pacing) — actual playback happens
+    # client-side over the next several seconds. So speaking_task.done()
+    # says nothing about whether audio is still audible; barge-in instead
+    # gates on client_speaking, which the client toggles via speaking_start/
+    # speaking_end messages as its own playback queue starts/drains.
+    client_speaking = False
     speaking_started_at = 0.0
     loud_streak = 0
     sample_rate = 48000  # overwritten by the client's "start" message
@@ -447,10 +454,11 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
             logger.exception("unexpected error sending browser reply audio")
 
     async def _barge_in() -> None:
-        nonlocal speaking_task
+        nonlocal speaking_task, client_speaking
         if speaking_task and not speaking_task.done():
             speaking_task.cancel()
         speaking_task = None
+        client_speaking = False
         try:
             await websocket.send_json({"event": "clear_audio"})
         except Exception:
@@ -487,17 +495,31 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
             greeting_audio, greeting_content_type = greeting
             logger.info("greeting: %s", sess.transcript[-1]["text"])
             speaking_task = asyncio.create_task(_speak(greeting_audio, greeting_content_type))
-            speaking_started_at = time.monotonic()
         asyncio.create_task(_prefetch_listening_cue(sess.voice, sess.reply_language))
 
         while True:
-            msg = await websocket.receive()
+            try:
+                msg = await websocket.receive()
+            except RuntimeError:
+                # Raised if the socket was already closed (by us, e.g. from
+                # _process_turn on call end, or by the client) — treat like
+                # a disconnect rather than letting it blow up as an
+                # unhandled ASGI exception.
+                break
+            if msg.get("type") == "websocket.disconnect":
+                break
             if "text" in msg and msg["text"] is not None:
                 data = json.loads(msg["text"])
-                if data.get("event") == "start":
+                event = data.get("event")
+                if event == "start":
                     sample_rate = int(data.get("sampleRate") or 48000)
-                elif data.get("event") == "stop":
+                elif event == "stop":
                     break
+                elif event == "speaking_start":
+                    client_speaking = True
+                    speaking_started_at = time.monotonic()
+                elif event == "speaking_end":
+                    client_speaking = False
                 continue
 
             if "bytes" not in msg or msg["bytes"] is None:
@@ -505,7 +527,7 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
             pcm16_frame = msg["bytes"]
             frame_ms = int((len(pcm16_frame) / 2) / sample_rate * 1000) or 1
 
-            if speaking_task and not speaking_task.done():
+            if client_speaking:
                 if (time.monotonic() - speaking_started_at) * 1000 < _BARGE_IN_GRACE_MS:
                     loud_streak = 0
                     continue
@@ -524,7 +546,6 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
                 continue
             wav_bytes = audio.pcm16_to_wav(utterance_pcm16, sample_rate)
             speaking_task = asyncio.create_task(_process_turn(wav_bytes))
-            speaking_started_at = time.monotonic()
     except WebSocketDisconnect:
         logger.info("browser stream disconnected for session_id=%s", session_id)
     finally:
