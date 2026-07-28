@@ -70,13 +70,12 @@ def _fade_edges(pcm16: bytes, fade_samples: int = _FADE_SAMPLES) -> bytes:
     return samples.tobytes()
 
 
-def wav_or_mp3_to_ulaw(audio_bytes: bytes, content_type: str) -> bytes:
-    """Converts a TTS reply (WAV from Sarvam, or MP3 from ElevenLabs) down
-    to raw 8000 Hz mono ulaw bytes ready to chunk into EnableX `media`
-    events. MP3 needs decoding first — done via a lazy `pydub`/ffmpeg
+def _decode_to_pcm16(audio_bytes: bytes, content_type: str, target_rate: int) -> bytes:
+    """Shared by wav_or_mp3_to_ulaw and wav_or_mp3_to_pcm16 — decodes a TTS
+    reply (WAV from Sarvam, or MP3 from ElevenLabs) to mono 16-bit PCM at
+    target_rate. MP3 needs decoding first — done via a lazy `pydub`/ffmpeg
     import so a Sarvam-only deployment (no ElevenLabs voices in use)
-    doesn't need ffmpeg installed at all.
-    """
+    doesn't need ffmpeg installed at all."""
     if content_type == "audio/wav":
         with io.BytesIO(audio_bytes) as buf, wave.open(buf, "rb") as wav_file:
             n_channels = wav_file.getnchannels()
@@ -86,16 +85,29 @@ def wav_or_mp3_to_ulaw(audio_bytes: bytes, content_type: str) -> bytes:
     elif content_type == "audio/mpeg":
         pcm16, n_channels, sample_width, frame_rate = _decode_mp3(audio_bytes)
     else:
-        raise ValueError(f"Unsupported TTS content type for EnableX playback: {content_type!r}")
+        raise ValueError(f"Unsupported TTS content type: {content_type!r}")
 
     if sample_width != 2:
         pcm16 = audioop.lin2lin(pcm16, sample_width, 2)
     if n_channels == 2:
         pcm16 = audioop.tomono(pcm16, 2, 0.5, 0.5)
-    if frame_rate != _ULAW_SAMPLE_RATE:
-        pcm16, _ = audioop.ratecv(pcm16, 2, 1, frame_rate, _ULAW_SAMPLE_RATE, None)
-    pcm16 = _fade_edges(pcm16)
+    if frame_rate != target_rate:
+        pcm16, _ = audioop.ratecv(pcm16, 2, 1, frame_rate, target_rate, None)
+    return _fade_edges(pcm16)
+
+
+def wav_or_mp3_to_ulaw(audio_bytes: bytes, content_type: str) -> bytes:
+    """Converts a TTS reply down to raw 8000 Hz mono ulaw bytes ready to
+    chunk into EnableX `media` events."""
+    pcm16 = _decode_to_pcm16(audio_bytes, content_type, _ULAW_SAMPLE_RATE)
     return audioop.lin2ulaw(pcm16, 2)
+
+
+def wav_or_mp3_to_pcm16(audio_bytes: bytes, content_type: str, target_rate: int) -> bytes:
+    """Converts a TTS reply down to raw 16-bit mono PCM at target_rate —
+    used by the browser path to feed CallRecorder (which expects PCM16,
+    not ulaw)."""
+    return _decode_to_pcm16(audio_bytes, content_type, target_rate)
 
 
 def _decode_mp3(mp3_bytes: bytes) -> tuple[bytes, int, int, int]:

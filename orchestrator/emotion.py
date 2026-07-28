@@ -53,7 +53,10 @@ def detect_caller_emotion(text: str) -> str | None:
 EMOTION_TONE_DELTAS: dict[str, dict[str, float]] = {
     "frustrated": {"pace": -0.08, "pitch": -0.03},
     "confused": {"pace": -0.12, "pitch": 0.0},
-    "excited": {"pace": 0.06, "pitch": 0.03},
+    # Halved from the original {"pace": 0.06, "pitch": 0.03} — an already
+    # fast "casual" base tone plus the full delta made replies feel rushed
+    # (matches the fix already applied to agent/emotion.py this session).
+    "excited": {"pace": 0.03, "pitch": 0.02},
 }
 
 # ElevenLabs equivalent of EMOTION_TONE_DELTAS above — same caller-emotion
@@ -68,5 +71,7 @@ EMOTION_TONE_DELTAS: dict[str, dict[str, float]] = {
 ELEVENLABS_EMOTION_DELTAS: dict[str, dict[str, float]] = {
     "frustrated": {"speed": -0.05, "style": -0.1},
     "confused": {"speed": -0.08, "style": -0.1},
-    "excited": {"speed": 0.05, "style": 0.15},
+    # Halved from the original {"speed": 0.05, "style": 0.15} — same fix as
+    # EMOTION_TONE_DELTAS above.
+    "excited": {"speed": 0.025, "style": 0.08},
 }

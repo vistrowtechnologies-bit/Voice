@@ -111,6 +111,7 @@ def _build_session(account_id: int, agent_id: int, call_type: str) -> session_mo
         model=cfg.get("model") or "gpt-4o-mini",
         custom_system_prompt=cfg.get("system_prompt") or "",
         kb_id=cfg.get("kb_id"),
+        memory_enabled=bool(cfg.get("memory_enabled")),
         transfer_phone=cfg.get("transfer_phone") or "",
         first_speaker=(cfg.get("first_speaker") or "agent").lower(),
         welcome_message=cfg.get("welcome_message") or "",
@@ -447,6 +448,13 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     # room-noise-floor readings (10-40) while still requiring real voice.
     vad = audio.UtteranceVAD(energy_threshold=80)
     frame_count = 0
+    recorder = recording.CallRecorder()
+    # CallRecorder assumes 16kHz PCM16 input (matches the phone path's
+    # decoded-ulaw rate); the browser mic runs at whatever rate the client's
+    # AudioContext used (typically 48000), so both directions get resampled
+    # down. audioop.ratecv's `state` must persist across calls for a
+    # continuous, click-free resample — reassigned each call below.
+    caller_ratecv_state = None
     speaking_task: asyncio.Task | None = None
     # Unlike the phone path, sending a reply clip here is near-instant (one
     # websocket.send_bytes, no real-time pacing) — actual playback happens
@@ -465,6 +473,11 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
         # whole clip at once, unlike EnableX's fixed-rate `media` wire
         # protocol. content_type isn't sent explicitly: both WAV and MP3
         # are self-describing formats decodeAudioData can sniff.
+        try:
+            agent_pcm16 = audio.wav_or_mp3_to_pcm16(reply_audio, content_type, recording.RECORDING_SAMPLE_RATE)
+            recorder.append_agent_audio(agent_pcm16)
+        except Exception:
+            logger.exception("failed to append agent audio to recording")
         await websocket.send_bytes(reply_audio)
 
     async def _send_transcript(role: str, text: str) -> None:
@@ -562,6 +575,13 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
                 continue
             pcm16_frame = msg["bytes"]
             frame_ms = int((len(pcm16_frame) / 2) / sample_rate * 1000) or 1
+            try:
+                caller_pcm16, caller_ratecv_state = audioop.ratecv(
+                    pcm16_frame, 2, 1, sample_rate, recording.RECORDING_SAMPLE_RATE, caller_ratecv_state
+                )
+                recorder.append_caller_audio(caller_pcm16)
+            except Exception:
+                logger.exception("failed to append caller audio to recording")
             frame_count += 1
             if frame_count == 1 or frame_count % 50 == 0:
                 logger.info(
@@ -600,5 +620,10 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     finally:
         if speaking_task and not speaking_task.done():
             speaking_task.cancel()
+        wav_path = recorder.stop()
         call_id = await session_module.finalize_call(sess, room_name=f"browser-{session_id}")
+        if wav_path:
+            key = recording.upload_recording(wav_path, sess.account_id, call_id)
+            if key:
+                db.set_call_recording(call_id, key)
         logger.info("browser call finalized: session_id=%s call_id=%s", session_id, call_id)

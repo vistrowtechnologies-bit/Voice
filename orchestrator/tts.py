@@ -39,7 +39,14 @@ class TTSError(Exception):
         self.message = message
 
 
-async def _synth_elevenlabs(voice_id: str, model_id: str, text: str, language_code: str | None) -> tuple[bytes, str]:
+async def _synth_elevenlabs(
+    voice_id: str,
+    model_id: str,
+    text: str,
+    language_code: str | None,
+    speed: float | None = None,
+    style: float | None = None,
+) -> tuple[bytes, str]:
     if not _ELEVEN_API_KEY:
         raise TTSError("Premium voice isn't configured (no ElevenLabs key).")
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128"
@@ -47,6 +54,13 @@ async def _synth_elevenlabs(voice_id: str, model_id: str, text: str, language_co
     payload: dict = {"text": text, "model_id": model_id}
     if language_code:
         payload["language_code"] = language_code
+    if speed is not None or style is not None:
+        voice_settings: dict = {}
+        if speed is not None:
+            voice_settings["speed"] = speed
+        if style is not None:
+            voice_settings["style"] = style
+        payload["voice_settings"] = voice_settings
     async with httpx.AsyncClient(timeout=_TIMEOUT_S) as client:
         try:
             resp = await client.post(url, headers=headers, json=payload)
@@ -57,19 +71,30 @@ async def _synth_elevenlabs(voice_id: str, model_id: str, text: str, language_co
                 # accented speech as a language this model/voice doesn't
                 # support (e.g. 'gu') — rather than losing the whole reply,
                 # retry once letting ElevenLabs auto-detect from the text.
-                return await _synth_elevenlabs(voice_id, model_id, text, None)
+                return await _synth_elevenlabs(voice_id, model_id, text, None, speed, style)
             raise TTSError(f"ElevenLabs returned {e.response.status_code}: {e.response.text[:300]}") from e
         except httpx.HTTPError as e:
             raise TTSError(f"Could not reach ElevenLabs: {e}") from e
     return resp.content, "audio/mpeg"
 
 
-async def _synth_sarvam(speaker: str, model: str, target_language_code: str, text: str) -> tuple[bytes, str]:
+async def _synth_sarvam(
+    speaker: str,
+    model: str,
+    target_language_code: str,
+    text: str,
+    pace: float | None = None,
+    pitch: float | None = None,
+) -> tuple[bytes, str]:
     if not _SARVAM_API_KEY:
         raise TTSError("Voice isn't configured (no Sarvam key).")
     url = "https://api.sarvam.ai/text-to-speech"
     headers = {"api-subscription-key": _SARVAM_API_KEY, "Content-Type": "application/json"}
     payload = {"target_language_code": target_language_code, "text": text, "speaker": speaker, "model": model}
+    if pace is not None:
+        payload["pace"] = pace
+    if pitch is not None:
+        payload["pitch"] = pitch
     async with httpx.AsyncClient(timeout=_TIMEOUT_S) as client:
         try:
             resp = await client.post(url, headers=headers, json=payload)
@@ -86,19 +111,33 @@ async def _synth_sarvam(speaker: str, model: str, target_language_code: str, tex
     return base64.b64decode(b64), "audio/wav"
 
 
-async def synthesize(voice_string: str, text: str, reply_language: str | None = None) -> tuple[bytes, str]:
+async def synthesize(
+    voice_string: str,
+    text: str,
+    reply_language: str | None = None,
+    pace: float | None = None,
+    pitch: float | None = None,
+    speed: float | None = None,
+    style: float | None = None,
+) -> tuple[bytes, str]:
     """Synthesizes `text` with the given catalog voice string. Returns
     (audio_bytes, content_type). `reply_language` is a Sarvam-style
     "xx-IN" code (from language.detect_reply_language / switch_reply_language);
-    defaults to Hindi for Sarvam voices when unset, matching _build_tts."""
+    defaults to Hindi for Sarvam voices when unset, matching _build_tts.
+
+    pace/pitch (Sarvam) and speed/style (ElevenLabs flash v2.5 only — v3
+    has no per-call prosody knob, matching agent/main.py's _build_tts
+    limitation) let session.py apply live emotion-reactive delivery, same
+    intent as agent/main.py's on_user_turn_completed tts.update_options()
+    calls."""
     if voice_string.startswith(_ELEVEN_V3_PREFIX):
         lang = reply_language.split("-")[0] if reply_language else None
         return await _synth_elevenlabs(voice_string[len(_ELEVEN_V3_PREFIX):], "eleven_v3", text, lang)
     if voice_string.startswith(_ELEVEN_PREFIX):
         lang = reply_language.split("-")[0] if reply_language else None
-        return await _synth_elevenlabs(voice_string[len(_ELEVEN_PREFIX):], "eleven_flash_v2_5", text, lang)
+        return await _synth_elevenlabs(voice_string[len(_ELEVEN_PREFIX):], "eleven_flash_v2_5", text, lang, speed, style)
     model = "bulbul:v2" if voice_string in _SARVAM_V2_SPEAKERS else "bulbul:v3"
-    return await _synth_sarvam(voice_string, model, reply_language or _SARVAM_LANG_DEFAULT, text)
+    return await _synth_sarvam(voice_string, model, reply_language or _SARVAM_LANG_DEFAULT, text, pace, pitch)
 
 
 def tts_provider_of(voice_string: str) -> str:

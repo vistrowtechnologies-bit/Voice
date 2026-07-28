@@ -414,13 +414,29 @@ async def switch_reply_language(session, language: str) -> str:
     },
 })
 async def transfer_call(session) -> str:
-    # TODO(Phase 2): wire to EnableX's own call-transfer/hangup REST API once
-    # the phone-call adapter is live — LiveKit's SIP transfer doesn't apply
-    # to a raw WebSocket-bridged call. Honest fallback until then, matching
-    # what agent/tools.py already does when no transfer destination is set.
+    dest = (getattr(session, "transfer_phone", "") or "").strip()
+    if not dest:
+        return (
+            "Transfer isn't set up for this line. Apologize briefly, offer to take a message or have "
+            "the team call them back, and continue helping as best you can."
+        )
+    if session.call_type != "phone":
+        # Matches agent/tools.py's exact wording for the same case — a web
+        # call has nothing to bridge a phone transfer to.
+        return (
+            "This is a web call, which can't be transferred to a phone. Offer to have the team call "
+            "them back at a number they give you, and capture it."
+        )
+    # A destination IS configured and this IS a phone call — but unlike
+    # agent/tools.py's LiveKit path (which calls transfer_sip_participant),
+    # EnableX's call-control API for an in-progress transfer hasn't been
+    # confirmed/implemented here yet. Degrade honestly rather than silently
+    # doing nothing while claiming success — same fallback wording
+    # agent/tools.py uses when its own SIP transfer attempt fails.
+    logger.warning("transfer_call requested but EnableX transfer isn't implemented yet (dest=%s)", dest)
     return (
-        "Transfer isn't set up for this line yet. Apologize briefly, offer to take a message or have "
-        "the team call them back, and continue helping as best you can."
+        "The transfer couldn't go through right now. Apologize briefly, offer to take their number for "
+        "a callback, and carry on helping them yourself."
     )
 
 

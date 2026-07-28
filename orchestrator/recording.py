@@ -17,7 +17,7 @@ import wave
 
 logger = logging.getLogger("orchestrator-recording")
 
-_SAMPLE_RATE = 16000
+RECORDING_SAMPLE_RATE = 16000  # public: callers must resample to this before append_*_audio
 
 
 class CallRecorder:
@@ -59,7 +59,7 @@ class CallRecorder:
             with wave.open(path, "wb") as wav_file:
                 wav_file.setnchannels(1)
                 wav_file.setsampwidth(2)
-                wav_file.setframerate(_SAMPLE_RATE)
+                wav_file.setframerate(RECORDING_SAMPLE_RATE)
                 wav_file.writeframes(mixed)
             return path
         except Exception:

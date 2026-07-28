@@ -24,10 +24,13 @@ import asyncio
 import datetime
 import json
 import logging
+import os
+import re
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 
 import db
+import emotion
 import llm
 import stt
 import tts
@@ -38,6 +41,8 @@ from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.voice_style import VOICE_STYLE_PROMPT
 
 logger = logging.getLogger("orchestrator-session")
+
+_IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 
 @dataclass
@@ -51,6 +56,7 @@ class Session:
     call_type: str = "browser"  # "phone" | "widget" | "browser"
     site_id: int | None = None
     voice: str = "shubh"
+    voice_gender: str = ""  # set in __post_init__ from voice_catalog, below
     reply_language: str = "hi-IN"
     pending_language: str | None = None
     pending_language_streak: int = 0
@@ -66,6 +72,7 @@ class Session:
     model: str = "gpt-4o-mini"
     custom_system_prompt: str = ""
     kb_id: int | None = None
+    memory_enabled: bool = False
     first_speaker: str = "agent"
     welcome_message: str = ""
 
@@ -78,6 +85,15 @@ class Session:
     on_event: Callable[[dict], None] | None = None
     tool_schemas: list[dict] = field(default_factory=list)
     tool_handlers: dict[str, callable] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Ported from agent/main.py's __init__ — many Indian languages
+        # (Hindi, Marathi, Gujarati, Punjabi) inflect first-person verbs by
+        # the SPEAKER's gender, so the LLM must know whether this voice is a
+        # woman or a man, or it defaults to masculine forms even on a female
+        # voice. Derived from the voice catalog so it's automatic for every
+        # voice, no per-agent config needed.
+        self.voice_gender = (voice_catalog.get_voice(self.voice) or {}).get("gender") or ""
 
     @property
     def tts_provider(self) -> str:
@@ -140,11 +156,43 @@ def _update_reply_language(session: Session, caller_text: str) -> None:
         session.pending_language_streak = 0
 
 
+_TEMPLATE_VAR_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
+
+
+def _substitute_template_vars(session: Session) -> str:
+    """Ported from agent/main.py's _substitute_template_vars — fills
+    {{first_name}}/{{last_name}}/{{name}}/{{phone}}/{{company}}/
+    {{custom.KEY}} tokens in an operator-authored custom_system_prompt
+    (from a campaign dial's CSV import) with this call's contact data. An
+    unmatched token is left blank rather than as literal braces, since a
+    stray "{{whatever}}" read aloud by the TTS is far more jarring than a
+    silently-dropped clause."""
+    name_parts = session.visitor_name.split(None, 1) if session.visitor_name else []
+    values = {
+        "first_name": name_parts[0] if name_parts else "",
+        "last_name": name_parts[1] if len(name_parts) > 1 else "",
+        "name": session.visitor_name,
+        "phone": session.visitor_phone,
+        "company": session.company,
+        "custom": session.custom_fields,
+    }
+
+    def repl(match: re.Match) -> str:
+        key = match.group(1)
+        if key.startswith("custom."):
+            return str(values["custom"].get(key[7:], ""))
+        return str(values.get(key, ""))
+
+    return _TEMPLATE_VAR_RE.sub(repl, session.custom_system_prompt)
+
+
 def build_system_prompt(session: Session) -> str:
     """Assembles the system prompt: persona + KB + voice-style rules. See
     module docstring re: fidelity vs. agent/main.py's full prompt assembly."""
     if session.custom_system_prompt:
-        persona = session.custom_system_prompt
+        persona = (
+            _substitute_template_vars(session) if "{{" in session.custom_system_prompt else session.custom_system_prompt
+        )
     else:
         persona = build_generic_assistant_prompt(session.agent_name, session.business_name)
 
@@ -194,8 +242,64 @@ def build_system_prompt(session: Session) -> str:
     if memory:
         parts.append(f"## What you remember about this caller from before\n{memory}")
 
+    # Ported from agent/main.py — the only source of truth for "today",
+    # "tomorrow", "next Monday" etc.; without it the model resolves relative
+    # dates from training-data memory, which books appointments on the wrong
+    # date. check_calendar_availability/book_appointment need this to
+    # compute their date argument correctly.
+    now_ist = datetime.datetime.now(_IST)
+    parts.append(
+        f"## Current date and time\nRight now it is {now_ist.strftime('%A, %d %B %Y')}, "
+        f"{now_ist.strftime('%H:%M')} IST. This is the ONLY source of truth for \"today\", "
+        "\"tomorrow\", \"next Monday\", \"this weekend\", etc. — never resolve a relative date "
+        "from memory or assumption. When calling check_calendar_availability or book_appointment, "
+        "compute the date argument (YYYY-MM-DD) from this real date."
+    )
+
+    if session.voice_gender in ("male", "female"):
+        # Ported from agent/main.py (see Session.__post_init__ above for why
+        # this is derived from the voice catalog). Also reinforced per-turn
+        # in _gender_reminder_message below — a single system-prompt mention
+        # tends to drift over a long conversation since masculine Hindi/
+        # Marathi/Gujarati verb forms are simply far more frequent in
+        # training data, fighting this instruction turn after turn.
+        _woman = session.voice_gender == "female"
+        parts.append(
+            f"## Your voice and gender\nYou, {session.agent_name}, speak with a "
+            f"{'woman' if _woman else 'man'}'s voice — you ARE {'a woman' if _woman else 'a man'}. "
+            "In every language that marks the speaker's grammatical gender (Hindi, Marathi, "
+            "Gujarati, Punjabi, and others), always refer to yourself with the correct "
+            f"{'feminine' if _woman else 'masculine'} forms and never mix genders. For example in "
+            "Hindi say " + (
+                "\"मैं बताती हूँ\", \"मैं करती हूँ\", \"मैं आई हूँ\" (feminine) — never the masculine "
+                "\"बताता / करता / आया हूँ\"."
+                if _woman else
+                "\"मैं बताता हूँ\", \"मैं करता हूँ\", \"मैं आया हूँ\" (masculine) — never the feminine "
+                "\"बताती / करती / आई हूँ\"."
+            )
+        )
+
     parts.append(VOICE_STYLE_PROMPT)
     return "\n\n".join(parts)
+
+
+def _gender_reminder_message(session: Session) -> dict | None:
+    """Ported from agent/main.py's on_user_turn_completed — the one-time
+    system-prompt gender instruction drifts over a long conversation (see
+    build_system_prompt's comment), so this re-injects a short reminder
+    before every turn's LLM call, same as the proven LiveKit path does."""
+    if session.voice_gender not in ("male", "female"):
+        return None
+    _woman = session.voice_gender == "female"
+    return {
+        "role": "system",
+        "content": (
+            f"Reminder: you are {'a woman' if _woman else 'a man'} — in this reply, if you're "
+            "speaking Hindi, Marathi, Gujarati, or Punjabi, use "
+            + ("feminine (\"बताती/करती/आई हूँ\")" if _woman else "masculine (\"बताता/करता/आया हूँ\")")
+            + " first-person verb forms, never the opposite."
+        ),
+    }
 
 
 _DEFAULT_OPENER_HI = "{greeting} नमस्ते! ये {agent_name} है। बताइए, आपकी क्या मदद करूँ?"
@@ -293,6 +397,9 @@ async def handle_utterance(session: Session, caller_wav_bytes: bytes) -> tuple[s
 
     session.transcript.append({"role": "user", "text": caller_text})
     session.messages.append({"role": "user", "content": caller_text})
+    gender_reminder = _gender_reminder_message(session)
+    if gender_reminder:
+        session.messages.append(gender_reminder)
 
     reply_text, new_messages = await llm.run_turn(
         session.model, session.messages, session.tool_schemas, session.tool_handlers, session
@@ -300,8 +407,35 @@ async def handle_utterance(session: Session, caller_wav_bytes: bytes) -> tuple[s
     session.messages.extend(new_messages)
     session.transcript.append({"role": "assistant", "text": reply_text})
 
-    audio_bytes, content_type = await tts.synthesize(session.voice, reply_text, session.reply_language)
+    tone_kwargs = _tone_kwargs_for(session, caller_text)
+    audio_bytes, content_type = await tts.synthesize(session.voice, reply_text, session.reply_language, **tone_kwargs)
     return reply_text, audio_bytes, content_type
+
+
+def _tone_kwargs_for(session: Session, caller_text: str) -> dict:
+    """Ported from agent/main.py's on_user_turn_completed live prosody
+    adaptation (self.tts.update_options(pace=..., pitch=...)) — detects the
+    caller's emotion from their last turn and returns the matching delta as
+    kwargs for tts.synthesize(), applied on top of each provider's neutral
+    baseline (Sarvam pace=1.0/pitch=0.0, ElevenLabs speed=1.0/style=0.0).
+    Unlike agent/main.py there's no per-agent TONE_PRESETS base to layer
+    onto (no such config exists in the orchestrator's Session yet) — this
+    reacts relative to a flat neutral baseline, which still delivers real
+    emotion-adaptive delivery instead of the completely static TTS the
+    orchestrator had before. Returns {} for neutral/undetected emotion, so
+    the synthesize() call is byte-identical to today's for the common case."""
+    caller_emotion = emotion.detect_caller_emotion(caller_text)
+    if not caller_emotion:
+        return {}
+    if session.tts_provider == "elevenlabs":
+        delta = emotion.ELEVENLABS_EMOTION_DELTAS.get(caller_emotion)
+        if not delta:
+            return {}
+        return {"speed": 1.0 + delta.get("speed", 0.0), "style": 0.0 + delta.get("style", 0.0)}
+    delta = emotion.EMOTION_TONE_DELTAS.get(caller_emotion)
+    if not delta:
+        return {}
+    return {"pace": 1.0 + delta.get("pace", 0.0), "pitch": 0.0 + delta.get("pitch", 0.0)}
 
 
 class _OrderedTTSPipeline:
@@ -318,16 +452,23 @@ class _OrderedTTSPipeline:
     """
 
     def __init__(
-        self, voice: str, reply_language: str, on_reply_audio: Callable[[bytes, str], Awaitable[None]]
+        self,
+        voice: str,
+        reply_language: str,
+        on_reply_audio: Callable[[bytes, str], Awaitable[None]],
+        tone_kwargs: dict | None = None,
     ) -> None:
         self._voice = voice
         self._reply_language = reply_language
         self._on_reply_audio = on_reply_audio
+        self._tone_kwargs = tone_kwargs or {}
         self._queue: asyncio.Queue = asyncio.Queue()
         self._consumer = asyncio.create_task(self._consume())
 
     async def enqueue(self, sentence: str) -> None:
-        synth_task = asyncio.create_task(tts.synthesize(self._voice, sentence, self._reply_language))
+        synth_task = asyncio.create_task(
+            tts.synthesize(self._voice, sentence, self._reply_language, **self._tone_kwargs)
+        )
         await self._queue.put(synth_task)
 
     async def _consume(self) -> None:
@@ -392,10 +533,14 @@ async def handle_utterance_streaming(
 
     session.transcript.append({"role": "user", "text": caller_text})
     session.messages.append({"role": "user", "content": caller_text})
+    gender_reminder = _gender_reminder_message(session)
+    if gender_reminder:
+        session.messages.append(gender_reminder)
     if on_transcript:
         await on_transcript("user", caller_text)
 
-    pipeline = _OrderedTTSPipeline(session.voice, session.reply_language, on_reply_audio)
+    tone_kwargs = _tone_kwargs_for(session, caller_text)
+    pipeline = _OrderedTTSPipeline(session.voice, session.reply_language, on_reply_audio, tone_kwargs)
 
     async def _on_sentence(sentence: str) -> None:
         # Just enqueue — returns immediately so llm.stream_turn() can keep
@@ -447,6 +592,44 @@ def build_save_call_record(session: Session, room_name: str) -> dict:
     return record
 
 
+async def _post_call_summary(transcript: list[dict]) -> str:
+    """Simplified port of agent/main.py's _post_call_analysis — just the
+    memory-summary half (the operator-defined structured-field extraction
+    half has no orchestrator config equivalent yet, so isn't ported).
+    Best-effort — returns "" on any failure so call teardown never breaks."""
+    if not transcript:
+        return ""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return ""
+    convo = "\n".join(f"{t['role']}: {t['text']}" for t in transcript if t.get("text"))[:6000]
+    if not convo:
+        return ""
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=api_key)
+        resp = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Summarize this voice-call transcript in 1-3 sentences capturing who the "
+                        "caller is and what they wanted, written to help recognize and help them on "
+                        "a future call. Respond with ONLY the summary text, nothing else."
+                    ),
+                },
+                {"role": "user", "content": convo},
+            ],
+            temperature=0,
+        )
+        return (resp.choices[0].message.content or "").strip()
+    except Exception:
+        logger.warning("post-call summary failed", exc_info=True)
+        return ""
+
+
 async def finalize_call(session: Session, room_name: str) -> int | None:
     """Persists the call, fires the call_completed integration event and
     per-agent webhook — same call-end contract as agent/main.py's log_call.
@@ -467,4 +650,10 @@ async def finalize_call(session: Session, room_name: str) -> int | None:
     }
     await tools._post_webhook(event)
     await tools._deliver_to_integrations(session.account_id, event, call_id=call_id)
+
+    if session.memory_enabled and session.visitor_phone and session.agent_id:
+        summary = await _post_call_summary(session.transcript)
+        if summary:
+            db.save_caller_memory(session.account_id, session.agent_id, session.visitor_phone, summary)
+
     return call_id
