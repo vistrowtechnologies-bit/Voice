@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
-import { DemoOrbCard } from '../../components/DemoOrbCard'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
 import { CONTACT_PHONE } from '../../lib/marketingContent'
@@ -37,10 +36,7 @@ export function Contact() {
               </li>
             ))}
           </ul>
-          <div className="mt-8 max-w-sm">
-            <DemoOrbCard />
-          </div>
-          <p className="mt-6 text-sm text-text-muted">
+          <p className="mt-8 text-sm text-text-muted">
             Prefer to call?{' '}
             <a href={`tel:${CONTACT_PHONE.replace(/\s/g, '')}`} className="text-primary hover:underline">
               {CONTACT_PHONE}

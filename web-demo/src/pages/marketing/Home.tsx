@@ -43,7 +43,7 @@ const HOME_JSONLD = [
   {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: 'Vistrow',
+    name: 'Vistrow Voice',
     url: 'https://vistrowvoice.com/',
     logo: 'https://vistrowvoice.com/apple-touch-icon.png',
     sameAs: ['https://vistrow.com/'],

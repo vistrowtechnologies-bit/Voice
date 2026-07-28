@@ -58,6 +58,12 @@ export function Seo({ title, description, path, image = DEFAULT_IMAGE, noindex, 
     upsertMeta('property', 'og:description', description)
     upsertMeta('property', 'og:url', url)
     upsertMeta('property', 'og:image', image)
+    // og-image.png is currently the 180x180 app-icon badge, not a proper
+    // 1200x630 banner — without explicit dimensions, unfurlers assume a
+    // wide banner and stretch/pad the square icon, which reads as a
+    // stale/wrong logo in link previews.
+    upsertMeta('property', 'og:image:width', image === DEFAULT_IMAGE ? '180' : '')
+    upsertMeta('property', 'og:image:height', image === DEFAULT_IMAGE ? '180' : '')
 
     upsertMeta('name', 'twitter:card', 'summary_large_image')
     upsertMeta('name', 'twitter:title', title)
