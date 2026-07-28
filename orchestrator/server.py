@@ -527,7 +527,14 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
             pcm16_frame = msg["bytes"]
             frame_ms = int((len(pcm16_frame) / 2) / sample_rate * 1000) or 1
 
-            if client_speaking:
+            if speaking_task is not None and not speaking_task.done():
+                if not client_speaking:
+                    # Still generating this reply (STT/LLM, nothing audible
+                    # yet to interrupt) — wait rather than starting a second
+                    # concurrent turn against the same message history.
+                    # Two turns racing on session.messages is what corrupts
+                    # OpenAI's tool_call/tool pairing and 400s the next call.
+                    continue
                 if (time.monotonic() - speaking_started_at) * 1000 < _BARGE_IN_GRACE_MS:
                     loud_streak = 0
                     continue

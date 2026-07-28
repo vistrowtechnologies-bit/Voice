@@ -81,8 +81,12 @@ async def run_turn(
                 result = await handler(session, **arguments)
             working.append({"role": "tool", "tool_call_id": call.id, "content": str(result)})
     # Ran out of hops without a final reply — degrade honestly rather than
-    # hang the call or return an empty response.
-    return "Let me follow up on that in a moment.", working[len(messages):]
+    # hang the call or return an empty response. Must append a closing
+    # assistant message: otherwise `working` ends on a dangling 'tool'
+    # message, and the next turn's OpenAI call 400s on invalid pairing.
+    fallback_text = "Let me follow up on that in a moment."
+    working.append({"role": "assistant", "content": fallback_text})
+    return fallback_text, working[len(messages):]
 
 
 def _pop_complete_sentence(buf: str) -> tuple[str, str]:
