@@ -102,7 +102,13 @@ export function PageHero({
           </Link>
         </div>
       </div>
-      <div className="lg:justify-self-end">{children}</div>
+      {/* Must NOT use justify-self-end. That makes this grid item size to its
+          own content rather than filling the column, so DemoOrbCard's
+          `w-full max-w-[420px]` resolved against a shrunken parent and the
+          widget visibly changed width as its content changed (connecting vs
+          in-call vs error). Stretching here keeps the column fixed;
+          DemoOrbCard right-aligns itself with its own `lg:ml-auto`. */}
+      <div className="w-full">{children}</div>
     </section>
   )
 }

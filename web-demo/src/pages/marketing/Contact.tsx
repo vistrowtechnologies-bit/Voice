@@ -38,7 +38,11 @@ export function Contact() {
         </div>
 
         {/* Right — form */}
-        <div className="lg:justify-self-end lg:pl-6">
+        {/* w-full, not justify-self-end — same grid trap as PageHero: an
+            end-justified item sizes to its content, so the form column
+            narrowed to whatever the fields happened to measure instead of
+            filling its half of the grid. */}
+        <div className="w-full lg:pl-6">
           <div className="w-full rounded-3xl border border-border bg-surface p-7 sm:p-9">
             {sent ? (
               <div className="flex flex-col items-center py-16 text-center">
