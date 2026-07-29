@@ -102,10 +102,9 @@ export function Home() {
       {/* ---------- Hero ---------- */}
       <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-5 py-14 md:px-8 lg:grid-cols-2 lg:py-24">
         <div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-cyan" />
-            <span className="text-xs font-bold uppercase tracking-widest text-cyan">India-native voice AI platform</span>
-          </span>
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-cyan">
+            India <span className="text-text-muted">·</span> Native <span className="text-text-muted">·</span> Voice AI
+          </p>
           <h1 className="mt-5 font-display text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
             AI voice agents for{' '}
             <span className="bg-gradient-to-r from-primary to-magenta bg-clip-text text-transparent">

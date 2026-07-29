@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Icon } from './Icon'
 import { BRAND } from '../lib/brand'
-import { NAV, FOOTER_COLUMNS } from '../lib/marketingContent'
+import { NAV, FOOTER_COLUMNS, CONTACT_PHONE } from '../lib/marketingContent'
 import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
 import vistrowMark from '../assets/vistrow-mark.png'
 
@@ -233,9 +233,8 @@ function Footer() {
             </NavLink>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-text-muted">{BRAND.tagline}</p>
             <div className="mt-5 flex gap-3 text-text-muted">
-              <a href="#" className="hover:text-text"><Icon name="public" className="text-[20px]" /></a>
-              <a href="#" className="hover:text-text"><Icon name="mail" className="text-[20px]" /></a>
-              <a href="#" className="hover:text-text"><Icon name="call" className="text-[20px]" /></a>
+              <a href="mailto:vistrowai@gmail.com" className="hover:text-text"><Icon name="mail" className="text-[20px]" /></a>
+              <a href={`tel:${CONTACT_PHONE.replace(/\s/g, '')}`} className="hover:text-text"><Icon name="call" className="text-[20px]" /></a>
             </div>
           </div>
           {FOOTER_COLUMNS.map((col) => (

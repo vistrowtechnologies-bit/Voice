@@ -251,7 +251,7 @@ export const SOLUTIONS: Solution[] = [
     faqs: [
       { q: 'Can it check real order status?', a: 'Yes — grounded in your order data, Artha answers “where is my order” calls with the actual current status.' },
       { q: 'Can it handle returns without a human agent?', a: 'Yes — it guides customers through your returns and exchange policy end-to-end on the call.' },
-      { q: 'What languages can it support customers in?', a: 'Artha speaks 10 Indian languages plus English, matching whichever language the customer calls in.' },
+      { q: 'What languages can it support customers in?', a: 'Artha speaks 10 Indian languages, including Hindi and Hinglish, matching whichever language the customer calls in.' },
     ],
   },
   {
@@ -369,7 +369,7 @@ export const FOOTER_COLUMNS = [
   },
 ]
 
-/** Company phone, shown in footer + demo fallback. */
+/** Company phone, shown in the footer's tel: link. */
 export const CONTACT_PHONE = '+91 11 4056 6600'
 
 /** Headline stats shown under the hero. */
@@ -379,5 +379,5 @@ export const HERO_STATS = [
   { value: '3', label: 'Channels — phone, web, widget' },
 ]
 
-/** Logos/tools shown in "works with" strips. */
-export const WORKS_WITH = ['LiveKit', 'Sarvam', 'OpenAI', 'Gemini']
+/** Logos/tools shown in "works with" strips — only vendors actually powering the product. */
+export const WORKS_WITH = ['Sarvam', 'ElevenLabs', 'OpenAI']

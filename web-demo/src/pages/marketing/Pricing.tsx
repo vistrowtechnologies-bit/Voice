@@ -27,6 +27,11 @@ const FAQ = [
 // Answer-engine-friendly (AEO/GEO): FAQPage structured data lets Google,
 // Bing, and LLM-based answer engines quote these Q&As directly instead of
 // having to scrape the accordion markup.
+function annualPrice(price: string): string {
+  const n = Number(price.replace(/[^0-9]/g, ''))
+  return `₹${Math.round(n * 0.85).toLocaleString('en-IN')}`
+}
+
 const FAQ_JSONLD = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
@@ -93,7 +98,7 @@ export function Pricing() {
                 )}
               </div>
               <p className="mt-4 font-display text-4xl font-bold">
-                {plan.price}
+                {annual ? annualPrice(plan.price) : plan.price}
                 <span className="text-base font-normal text-text-muted">/mo</span>
               </p>
               <p className="mt-1 text-sm text-text-muted">{plan.credits}</p>
