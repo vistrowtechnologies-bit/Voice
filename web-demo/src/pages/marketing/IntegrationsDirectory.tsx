@@ -2,6 +2,7 @@ import { Icon } from '../../components/Icon'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
+import { Reveal } from '../../components/Reveal'
 import { INTEGRATION_DIRECTORY } from '../../lib/marketingContent'
 
 // The named counterpart to /product/integrations: that page sells the
@@ -37,8 +38,9 @@ export function IntegrationsDirectory() {
               {category}
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {INTEGRATION_DIRECTORY.filter((i) => i.category === category).map((entry) => (
-                <div key={entry.name} className="rounded-2xl border border-border bg-surface p-6">
+              {INTEGRATION_DIRECTORY.filter((i) => i.category === category).map((entry, i) => (
+                <Reveal key={entry.name} delayMs={(i % 3) * 70} className="h-full">
+                <div className="h-full rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary/60">
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="font-display text-base font-semibold">{entry.name}</h3>
                     <span
@@ -53,6 +55,7 @@ export function IntegrationsDirectory() {
                   </div>
                   <p className="mt-2.5 text-sm leading-relaxed text-text-muted">{entry.desc}</p>
                 </div>
+                </Reveal>
               ))}
             </div>
           </div>

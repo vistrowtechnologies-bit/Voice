@@ -148,3 +148,75 @@ html.theme-transition * {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------
+   Marketing-site motion. Everything here is decorative, so each rule has
+   a prefers-reduced-motion escape: the page must be fully readable and
+   correctly laid out with all animation disabled.
+   --------------------------------------------------------------------- */
+
+/* Continuous script marquee (homepage language band). The track holds the
+   list twice and travels exactly -50%, so the loop point is seamless. */
+@keyframes vv-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.vv-marquee-track {
+  animation: vv-marquee 48s linear infinite;
+  will-change: transform;
+}
+.vv-marquee:hover .vv-marquee-track {
+  animation-play-state: paused;
+}
+
+/* Hero greeting cross-fade as it cycles through Indian scripts. */
+@keyframes vv-greeting-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.18em);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+.vv-greeting {
+  animation: vv-greeting-in 560ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Scroll-triggered reveal. Starts hidden and is switched on by the
+   IntersectionObserver in components/Reveal.tsx — which also adds .vv-in
+   immediately when reduced motion is requested, so nothing can get stuck
+   invisible if the observer never fires. */
+.vv-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 620ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    transform 620ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.vv-reveal.vv-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vv-marquee-track {
+    animation: none;
+  }
+  .vv-greeting {
+    animation: none;
+  }
+  .vv-reveal,
+  .vv-reveal.vv-in {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

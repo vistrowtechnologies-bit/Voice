@@ -5,6 +5,7 @@ import { Icon } from './Icon'
 import { BRAND } from '../lib/brand'
 import { NAV, FOOTER_COLUMNS, CONTACT_PHONE } from '../lib/marketingContent'
 import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
+import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import vistrowMark from '../assets/vistrow-mark.png'
 
 // The official logo mark — used everywhere the brand appears (marketing
@@ -117,9 +118,14 @@ function MobileNav({ onClose }: { onClose: () => void }) {
             <OrbMark />
             <span className="font-display text-lg font-semibold">{BRAND.name}</span>
           </div>
-          <button onClick={onClose} className="text-text-muted hover:text-text">
-            <Icon name="close" className="text-[22px]" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* The header's switcher sits in the desktop-only cluster, so the
+                mobile drawer needs its own or touch users can't change theme. */}
+            <MarketingThemeSwitcher />
+            <button onClick={onClose} className="text-text-muted hover:text-text" aria-label="Close menu">
+              <Icon name="close" className="text-[22px]" />
+            </button>
+          </div>
         </div>
         <div className="flex flex-col gap-5">
           {NAV.map((group) => (
@@ -173,6 +179,28 @@ function MobileNav({ onClose }: { onClose: () => void }) {
   )
 }
 
+/** Light/dark switch for the marketing header. Shares lib/theme.ts with the
+ * dashboard's own switcher, so a visitor who picks light mode here stays in
+ * light mode after signing in — one preference, one storage key. */
+function MarketingThemeSwitcher({ className }: { className?: string }) {
+  const theme = useTheme()
+  const next = theme === 'dark' ? 'light' : 'dark'
+  return (
+    <button
+      onClick={() => applyTheme(next)}
+      aria-label={`Switch to ${next} mode`}
+      title={`Switch to ${next} mode`}
+      className={
+        className ??
+        'flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-primary'
+      }
+    >
+      {/* key remount replays the spin-in animation on every toggle. */}
+      <Icon key={theme} name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="theme-icon-pop text-[18px]" />
+    </button>
+  )
+}
+
 function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
   return (
@@ -194,6 +222,7 @@ function Header() {
           <DesktopNav />
 
           <div className="flex items-center gap-2">
+            <MarketingThemeSwitcher />
             <NavLink
               to="/login"
               className="hidden rounded-full px-4 py-2 text-sm font-semibold text-text-muted transition-colors hover:text-text sm:block"
@@ -262,6 +291,16 @@ function Footer() {
 
 export function MarketingLayout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
+
+  // The marketing site used to be dark-only by design; it now honours the
+  // same stored preference the dashboard uses. Applied on mount (persist=
+  // false, so re-entering a marketing route doesn't replay the fade), and
+  // cleared on unmount so pages outside either layout — auth screens, the
+  // standalone call UI — keep the fixed dark look they're designed for.
+  useEffect(() => {
+    applyTheme(getStoredTheme(), false)
+    return () => document.documentElement.removeAttribute('data-theme')
+  }, [])
 
   // Marketing routes should always open at the top, not retain scroll from the
   // previous page (default browser behaviour on client-side nav).

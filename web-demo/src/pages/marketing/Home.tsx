@@ -5,6 +5,8 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
 import { Seo } from '../../components/Seo'
 import { TalkToArthaButton } from '../../components/MarketingBits'
+import { RotatingGreeting, ScriptMarquee } from '../../components/BharatBits'
+import { Reveal } from '../../components/Reveal'
 import { PLANS } from '../../lib/plans'
 import {
   HOME_FEATURES,
@@ -73,6 +75,33 @@ const HOME_JSONLD = [
   },
 ]
 
+// The concrete things a globally-built agent gets wrong on an Indian call.
+// Each maps to real behaviour: mid-call language switching, the per-turn
+// gender-agreement reminder, the Hinglish sentiment cues in emotion.py, and
+// the ten-script voice catalog.
+const BHARAT_POINTS = [
+  {
+    glyph: 'हिं+EN',
+    title: 'Hinglish is the default, not a fallback',
+    body: 'Real callers start a sentence in Hindi and finish it in English. Artha follows the switch mid-sentence instead of forcing the caller to pick one language and stay in it.',
+  },
+  {
+    glyph: 'ने / नी',
+    title: 'Gender agreement that holds all call',
+    body: 'Hindi, Marathi, Gujarati, and Punjabi verbs agree with the speaker’s gender. Most models get the first line right and drift after that. Artha stays consistent with its own voice, every turn.',
+  },
+  {
+    glyph: '😤',
+    title: 'It knows “bakwas” means trouble',
+    body: 'Frustration in an Indian call rarely arrives in textbook English. Artha reads the cues people actually use — bekaar, faltu, bakwas — and softens its tone before the caller escalates.',
+  },
+  {
+    glyph: 'अ अ अ',
+    title: 'Ten scripts, one agent',
+    body: 'From Punjabi in the north to Malayalam in the south, one agent covers them all — no separate deployment, no per-language rebuild, no region left on an English-only fallback.',
+  },
+]
+
 function SectionEyebrow({ children }: { children: string }) {
   return (
     <span className="text-xs font-bold uppercase tracking-widest text-cyan">{children}</span>
@@ -102,18 +131,30 @@ export function Home() {
       {/* ---------- Hero ---------- */}
       <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-5 py-14 md:px-8 lg:grid-cols-2 lg:py-24">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.3em] text-cyan">
-            India <span className="text-text-muted">·</span> Native <span className="text-text-muted">·</span> Voice AI
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold uppercase tracking-[0.28em] text-cyan">
+            <span className="font-sans normal-case tracking-normal text-sm text-text-muted">
+              भारत के लिए
+            </span>
+            <span className="text-border">/</span>
+            Built for Bharat
           </p>
-          <h1 className="mt-5 font-display text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
-            AI voice agents for{' '}
-            <span className="bg-gradient-to-r from-primary to-magenta bg-clip-text text-transparent">
-              every customer call.
+          {/* The greeting rotates through all ten scripts Artha speaks. It
+              carries the positioning better than any adjective could: the
+              claim and the proof are the same object. */}
+          {/* Steps down to 4xl on the smallest screens — at 5xl this headline
+              wrapped to five lines on a 375px viewport and pushed the CTAs
+              entirely below the fold. */}
+          <h1 className="mt-5 font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl lg:text-6xl">
+            <RotatingGreeting className="block min-h-[1.1em]" />
+            <span className="mt-1 block">Voice AI that speaks</span>
+            <span className="block bg-gradient-to-r from-primary to-magenta bg-clip-text text-transparent">
+              your customer’s language.
             </span>
           </h1>
-          <p className="mt-5 max-w-lg text-lg leading-relaxed text-text-muted">
-            Answer, qualify, and book — in your customers’ language. Inbound, outbound, and web calls
-            in 10 Indian languages, live 24/7.
+          <p className="mt-6 max-w-lg text-lg leading-relaxed text-text-muted">
+            Ten Indian languages, mid-sentence code-switching, and the Hinglish people actually speak
+            on the phone. Artha answers, qualifies, and books — inbound, outbound, and on your
+            website, 24/7.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <TalkToArthaButton />
@@ -124,7 +165,7 @@ export function Home() {
               Book a demo
             </Link>
           </div>
-          <div className="mt-10 flex gap-8 border-t border-border pt-6">
+          <div className="mt-10 grid grid-cols-2 gap-6 border-t border-border pt-6 sm:grid-cols-3 sm:gap-8">
             {HERO_STATS.map((stat) => (
               <div key={stat.label}>
                 <p className="font-display text-2xl font-bold text-text">{stat.value}</p>
@@ -139,11 +180,54 @@ export function Home() {
         </div>
       </section>
 
-      {/* A "Trusted by fast-growing Indian businesses" strip used to sit here.
-          It was removed rather than kept as filler: with no logos or named
-          customers behind it, it's an unsubstantiated claim, and an empty
-          social-proof band reads as weaker than no band at all. Bring it
-          back as a real logo strip once there are logos to show. */}
+      {/* Sits in the slot the old "Trusted by fast-growing Indian businesses"
+          strip occupied. That line was an unsubstantiated claim with no logos
+          behind it; this says something true instead — every script shown is
+          a language the product genuinely speaks. */}
+      <ScriptMarquee />
+
+      {/* ---------- Built for Bharat ----------
+          Every point here maps to something the product actually does
+          (language switching, per-turn gender agreement, Hinglish sentiment
+          cues in emotion.py, the ten-script catalog). Kept concrete on
+          purpose — "built for India" as a slogan is worth nothing; the
+          specifics are what a foreign-built agent gets wrong. */}
+      <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
+        <Reveal>
+          <div className="mb-12 max-w-2xl">
+            {/* Not "Built for Bharat" — that's already the hero kicker, and
+                repeating it two screens later reads as a template, not a
+                point of view. */}
+            <SectionEyebrow>The difference</SectionEyebrow>
+            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">
+              Global voice AI treats India as an edge case.
+            </h2>
+            <p className="mt-4 text-lg leading-relaxed text-text-muted">
+              We started here. These aren’t features we bolted on for a market — they’re the
+              assumptions the whole system was built around.
+            </p>
+          </div>
+        </Reveal>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          {BHARAT_POINTS.map((point, i) => (
+            <Reveal key={point.title} delayMs={i * 70}>
+              <div className="group h-full rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-primary/60">
+                <div className="flex items-start justify-between gap-4">
+                  <h3 className="font-display text-lg font-semibold">{point.title}</h3>
+                  <span
+                    aria-hidden="true"
+                    className="shrink-0 font-display text-2xl text-text-muted transition-colors group-hover:text-primary"
+                  >
+                    {point.glyph}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-text-muted">{point.body}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
 
       {/* ---------- How it works ---------- */}
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">

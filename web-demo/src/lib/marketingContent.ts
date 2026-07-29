@@ -422,21 +422,26 @@ export interface LanguagePage {
   code: string
   /** Where this language actually concentrates — grounds the copy. */
   region: string
+  /** How a caller is actually greeted in this language, in its own script.
+   * Used by the homepage's rotating hero greeting and the script marquee —
+   * the most honest way to show what the product does is to show it doing
+   * it, rather than decorating the page with generic "Indian" motifs. */
+  greeting: string
   /** One-line positioning for the landing page hero. */
   blurb: string
 }
 
 export const LANGUAGES: LanguagePage[] = [
-  { slug: 'hindi', name: 'Hindi', native: 'हिन्दी', code: 'hi-IN', region: 'North & Central India', blurb: 'The default for most Indian call flows — including the everyday Hinglish your customers actually speak, not textbook Hindi.' },
-  { slug: 'marathi', name: 'Marathi', native: 'मराठी', code: 'mr-IN', region: 'Maharashtra', blurb: 'Answer Pune and Mumbai callers in Marathi instead of defaulting them into Hindi or English.' },
-  { slug: 'tamil', name: 'Tamil', native: 'தமிழ்', code: 'ta-IN', region: 'Tamil Nadu', blurb: 'Tamil callers rarely accept a Hindi-first IVR. Give them an agent that opens in their own language.' },
-  { slug: 'telugu', name: 'Telugu', native: 'తెలుగు', code: 'te-IN', region: 'Andhra Pradesh & Telangana', blurb: 'Handle Hyderabad and coastal Andhra call volume in Telugu, around the clock.' },
-  { slug: 'kannada', name: 'Kannada', native: 'ಕನ್ನಡ', code: 'kn-IN', region: 'Karnataka', blurb: 'Serve Bengaluru and wider Karnataka in Kannada, with English code-switching where it feels natural.' },
-  { slug: 'bengali', name: 'Bengali', native: 'বাংলা', code: 'bn-IN', region: 'West Bengal', blurb: 'Kolkata and West Bengal callers, answered in Bengali on the first ring.' },
-  { slug: 'gujarati', name: 'Gujarati', native: 'ગુજરાતી', code: 'gu-IN', region: 'Gujarat', blurb: 'Built for Gujarat’s business-heavy call patterns — enquiries, follow-ups, and payment reminders in Gujarati.' },
-  { slug: 'malayalam', name: 'Malayalam', native: 'മലയാളം', code: 'ml-IN', region: 'Kerala', blurb: 'Answer Kerala enquiries in Malayalam instead of routing them to an English-only queue.' },
-  { slug: 'punjabi', name: 'Punjabi', native: 'ਪੰਜਾਬੀ', code: 'pa-IN', region: 'Punjab', blurb: 'Punjabi-speaking customers, handled in Punjabi — including mixed Punjabi-Hindi speech.' },
-  { slug: 'odia', name: 'Odia', native: 'ଓଡ଼ିଆ', code: 'od-IN', region: 'Odisha', blurb: 'Odia coverage, so Odisha callers aren’t the ones who always get the English fallback.' },
+  { slug: 'hindi', name: 'Hindi', native: 'हिन्दी', code: 'hi-IN', region: 'North & Central India', greeting: 'नमस्ते', blurb: 'The default for most Indian call flows — including the everyday Hinglish your customers actually speak, not textbook Hindi.' },
+  { slug: 'marathi', name: 'Marathi', native: 'मराठी', code: 'mr-IN', region: 'Maharashtra', greeting: 'नमस्कार', blurb: 'Answer Pune and Mumbai callers in Marathi instead of defaulting them into Hindi or English.' },
+  { slug: 'tamil', name: 'Tamil', native: 'தமிழ்', code: 'ta-IN', region: 'Tamil Nadu', greeting: 'வணக்கம்', blurb: 'Tamil callers rarely accept a Hindi-first IVR. Give them an agent that opens in their own language.' },
+  { slug: 'telugu', name: 'Telugu', native: 'తెలుగు', code: 'te-IN', region: 'Andhra Pradesh & Telangana', greeting: 'నమస్కారం', blurb: 'Handle Hyderabad and coastal Andhra call volume in Telugu, around the clock.' },
+  { slug: 'kannada', name: 'Kannada', native: 'ಕನ್ನಡ', code: 'kn-IN', region: 'Karnataka', greeting: 'ನಮಸ್ಕಾರ', blurb: 'Serve Bengaluru and wider Karnataka in Kannada, with English code-switching where it feels natural.' },
+  { slug: 'bengali', name: 'Bengali', native: 'বাংলা', code: 'bn-IN', region: 'West Bengal', greeting: 'নমস্কার', blurb: 'Kolkata and West Bengal callers, answered in Bengali on the first ring.' },
+  { slug: 'gujarati', name: 'Gujarati', native: 'ગુજરાતી', code: 'gu-IN', region: 'Gujarat', greeting: 'નમસ્તે', blurb: 'Built for Gujarat’s business-heavy call patterns — enquiries, follow-ups, and payment reminders in Gujarati.' },
+  { slug: 'malayalam', name: 'Malayalam', native: 'മലയാളം', code: 'ml-IN', region: 'Kerala', greeting: 'നമസ്കാരം', blurb: 'Answer Kerala enquiries in Malayalam instead of routing them to an English-only queue.' },
+  { slug: 'punjabi', name: 'Punjabi', native: 'ਪੰਜਾਬੀ', code: 'pa-IN', region: 'Punjab', greeting: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ', blurb: 'Punjabi-speaking customers, handled in Punjabi — including mixed Punjabi-Hindi speech.' },
+  { slug: 'odia', name: 'Odia', native: 'ଓଡ଼ିଆ', code: 'od-IN', region: 'Odisha', greeting: 'ନମସ୍କାର', blurb: 'Odia coverage, so Odisha callers aren’t the ones who always get the English fallback.' },
 ]
 
 // ---- Integrations directory (feeds /integrations) ----

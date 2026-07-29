@@ -3,6 +3,7 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { NavLink } from '../../components/MarketingLayout'
+import { Reveal } from '../../components/Reveal'
 import { BRAND } from '../../lib/brand'
 
 // Every claim on this page maps to a control that actually exists in the
@@ -93,14 +94,18 @@ export function Security() {
 
       <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {CONTROLS.map((c) => (
-            <div key={c.title} className="rounded-2xl border border-border bg-surface p-6">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                <Icon name={c.icon} className="text-[22px]" />
-              </span>
-              <h2 className="mt-5 font-display text-lg font-semibold">{c.title}</h2>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{c.body}</p>
-            </div>
+          {CONTROLS.map((c, i) => (
+            // Stagger resets every row so the delay never compounds into a
+            // noticeable wait by the last card.
+            <Reveal key={c.title} delayMs={(i % 3) * 70} className="h-full">
+              <div className="group h-full rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary/60">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary transition-transform group-hover:scale-105">
+                  <Icon name={c.icon} className="text-[22px]" />
+                </span>
+                <h2 className="mt-5 font-display text-lg font-semibold">{c.title}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">{c.body}</p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
