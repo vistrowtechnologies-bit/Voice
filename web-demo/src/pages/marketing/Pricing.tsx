@@ -3,6 +3,7 @@ import { Icon } from '../../components/Icon'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
+import { RoiCalculator } from '../../components/RoiCalculator'
 import { PLANS } from '../../lib/plans'
 
 const FAQ = [
@@ -127,6 +128,16 @@ export function Pricing() {
         <p className="mt-6 text-center text-sm text-text-muted">
           A credit ≈ one minute of conversation. Web and phone calls share the same pool.
         </p>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
+        <div className="mb-8 text-center">
+          <SectionEyebrow>Estimate</SectionEyebrow>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">
+            Which plan fits your call volume?
+          </h2>
+        </div>
+        <RoiCalculator />
       </section>
 
       {/* FAQ */}

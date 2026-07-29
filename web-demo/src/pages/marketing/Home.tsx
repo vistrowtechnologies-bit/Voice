@@ -139,14 +139,11 @@ export function Home() {
         </div>
       </section>
 
-      {/* ---------- Trust strip ---------- */}
-      <section className="border-y border-border bg-surface/40">
-        <div className="mx-auto max-w-7xl px-5 py-8 md:px-8">
-          <p className="text-center text-xs uppercase tracking-widest text-text-muted">
-            Trusted by fast-growing Indian businesses
-          </p>
-        </div>
-      </section>
+      {/* A "Trusted by fast-growing Indian businesses" strip used to sit here.
+          It was removed rather than kept as filler: with no logos or named
+          customers behind it, it's an unsubstantiated claim, and an empty
+          social-proof band reads as weaker than no band at all. Bring it
+          back as a real logo strip once there are logos to show. */}
 
       {/* ---------- How it works ---------- */}
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">

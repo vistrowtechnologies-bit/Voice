@@ -195,7 +195,11 @@ export function DemoOrbCard() {
             <div className="mt-6 grid w-full grid-cols-2 gap-4 border-t border-border pt-5 text-left">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Native support</p>
-                <p className="mt-1 text-xs text-text">Hindi · Hinglish +8 more</p>
+                {/* Hindi + 9 others = the 10 Indian languages in LANGUAGE_NAMES.
+                    Hinglish isn't counted as an 11th — it's Hindi/English
+                    code-switching, and listing it as a separate language is
+                    what made the count drift across pages before. */}
+                <p className="mt-1 text-xs text-text">Hindi · Tamil +8 more</p>
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Low latency</p>

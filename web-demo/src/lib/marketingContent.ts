@@ -211,7 +211,7 @@ export const SOLUTIONS: Solution[] = [
     faqs: [
       { q: 'Can Artha book site visits automatically?', a: 'Yes — it checks real availability and books a site visit directly on the call, no back-and-forth needed.' },
       { q: 'Does it qualify budget and location before booking?', a: 'Yes — it captures budget, preferred location, and timeline, and scores the lead before handing it to your team.' },
-      { q: 'Does it handle Hindi-speaking callers?', a: 'Yes — Artha speaks Hindi, Hinglish, and 8 other Indian languages, switching mid-call to match the caller.' },
+      { q: 'Does it handle Hindi-speaking callers?', a: 'Yes — Artha speaks Hindi natively, including everyday Hinglish code-switching, plus 9 other Indian languages and English, switching mid-call to match the caller.' },
     ],
   },
   {
@@ -315,21 +315,29 @@ export const NAV: NavGroup[] = [
   },
   {
     label: 'Solutions',
-    items: [{ label: 'All industries', to: '/solutions', icon: 'grid_view', desc: 'Voice AI for every industry.' }, ...SOLUTIONS.map((s) => ({ label: s.label, to: s.to, icon: s.icon, desc: s.desc }))],
+    items: [
+      { label: 'All industries', to: '/solutions', icon: 'grid_view', desc: 'Voice AI for every industry.' },
+      ...SOLUTIONS.map((s) => ({ label: s.label, to: s.to, icon: s.icon, desc: s.desc })),
+      { label: 'By language', to: '/languages', icon: 'translate', desc: 'All 10 Indian languages Artha speaks.' },
+    ],
   },
   { label: 'Pricing', to: '/pricing' },
   {
     label: 'Resources',
     items: [
+      { label: 'Docs & Help', to: '/resources/docs', icon: 'description', desc: 'Set-up guides and how everything fits together.' },
+      { label: 'Integrations', to: '/integrations', icon: 'hub', desc: 'Every tool Vistrow Voice connects to.' },
+      { label: 'Changelog', to: '/changelog', icon: 'history', desc: 'What shipped, and when.' },
+      { label: 'vs. traditional IVR', to: '/vs-ivr', icon: 'compare_arrows', desc: 'How this differs from a phone menu.' },
       { label: 'Blog', to: '/resources/blog', icon: 'article', desc: 'Product news and guides.' },
-      { label: 'Docs & Help', to: 'https://docs.vistrowvoice.com', icon: 'description', desc: 'Set-up guides and API reference.' },
-      { label: 'Case Studies', to: '/resources/case-studies', icon: 'workspace_premium', desc: 'How teams use Vistrow Voice.' },
     ],
   },
   {
     label: 'Company',
     items: [
       { label: 'About', to: '/about', icon: 'info', desc: 'Voice AI, built for Bharat.' },
+      { label: 'Security', to: '/security', icon: 'shield', desc: 'How we handle your call data.' },
+      { label: 'Careers', to: '/careers', icon: 'work', desc: 'Build voice AI for a billion people.' },
       { label: 'Contact', to: '/contact', icon: 'mail', desc: 'Talk to sales or book a demo.' },
     ],
   },
@@ -342,19 +350,26 @@ export const FOOTER_COLUMNS = [
     title: 'Product',
     links: [{ label: 'Overview', to: '/product' }, ...PRODUCT_PAGES.map((p) => ({ label: p.label, to: p.to }))],
   },
-  { title: 'Solutions', links: SOLUTIONS.map((s) => ({ label: s.label, to: s.to })) },
+  {
+    title: 'Solutions',
+    links: [...SOLUTIONS.map((s) => ({ label: s.label, to: s.to })), { label: 'By language', to: '/languages' }],
+  },
   {
     title: 'Resources',
     links: [
-      { label: 'Docs & Help', to: 'https://docs.vistrowvoice.com' },
+      { label: 'Docs & Help', to: '/resources/docs' },
+      { label: 'Integrations', to: '/integrations' },
+      { label: 'Changelog', to: '/changelog' },
+      { label: 'vs. traditional IVR', to: '/vs-ivr' },
       { label: 'Blog', to: '/resources/blog' },
-      { label: 'Case Studies', to: '/resources/case-studies' },
     ],
   },
   {
     title: 'Company',
     links: [
       { label: 'About', to: '/about' },
+      { label: 'Security', to: '/security' },
+      { label: 'Careers', to: '/careers' },
       { label: 'Contact', to: '/contact' },
       { label: 'Pricing', to: '/pricing' },
       { label: 'Sign in', to: '/login' },
@@ -379,5 +394,99 @@ export const HERO_STATS = [
   { value: '3', label: 'Channels — phone, web, widget' },
 ]
 
-/** Logos/tools shown in "works with" strips — only vendors actually powering the product. */
-export const WORKS_WITH = ['Sarvam', 'ElevenLabs', 'OpenAI']
+/** Tools shown in "works with" strips.
+ *
+ * Deliberately the tools a CUSTOMER connects, never the LLM/STT/TTS vendors
+ * powering the product — naming those publicly is exactly what the agent
+ * prompts are written to deflect (so a competitor can't lift the stack from
+ * a demo call), and a marketing page that lists them defeats that entirely.
+ * It's also the more useful answer: a buyer is asking "does this fit my
+ * stack?", not "what's under the hood?". */
+export const WORKS_WITH = ['Slack', 'WhatsApp', 'Google Sheets', 'Zapier', 'Any CRM']
+
+// ---- Languages (feed /languages overview + per-language landing pages) ----
+//
+// Mirrors LANGUAGE_NAMES in lib/api.ts exactly — that map is what the agent
+// builder actually offers, so this list must never claim a language the
+// product can't be configured to speak. Ten Indian languages; English is
+// supported too but doesn't get a landing page (no search wedge there).
+
+export interface LanguagePage {
+  /** URL slug, e.g. "hindi" -> /languages/hindi */
+  slug: string
+  /** English name, matching LANGUAGE_NAMES. */
+  name: string
+  /** Native-script endonym, shown as the visual hook. */
+  native: string
+  /** BCP-47-ish code used by the agent builder. */
+  code: string
+  /** Where this language actually concentrates — grounds the copy. */
+  region: string
+  /** One-line positioning for the landing page hero. */
+  blurb: string
+}
+
+export const LANGUAGES: LanguagePage[] = [
+  { slug: 'hindi', name: 'Hindi', native: 'हिन्दी', code: 'hi-IN', region: 'North & Central India', blurb: 'The default for most Indian call flows — including the everyday Hinglish your customers actually speak, not textbook Hindi.' },
+  { slug: 'marathi', name: 'Marathi', native: 'मराठी', code: 'mr-IN', region: 'Maharashtra', blurb: 'Answer Pune and Mumbai callers in Marathi instead of defaulting them into Hindi or English.' },
+  { slug: 'tamil', name: 'Tamil', native: 'தமிழ்', code: 'ta-IN', region: 'Tamil Nadu', blurb: 'Tamil callers rarely accept a Hindi-first IVR. Give them an agent that opens in their own language.' },
+  { slug: 'telugu', name: 'Telugu', native: 'తెలుగు', code: 'te-IN', region: 'Andhra Pradesh & Telangana', blurb: 'Handle Hyderabad and coastal Andhra call volume in Telugu, around the clock.' },
+  { slug: 'kannada', name: 'Kannada', native: 'ಕನ್ನಡ', code: 'kn-IN', region: 'Karnataka', blurb: 'Serve Bengaluru and wider Karnataka in Kannada, with English code-switching where it feels natural.' },
+  { slug: 'bengali', name: 'Bengali', native: 'বাংলা', code: 'bn-IN', region: 'West Bengal', blurb: 'Kolkata and West Bengal callers, answered in Bengali on the first ring.' },
+  { slug: 'gujarati', name: 'Gujarati', native: 'ગુજરાતી', code: 'gu-IN', region: 'Gujarat', blurb: 'Built for Gujarat’s business-heavy call patterns — enquiries, follow-ups, and payment reminders in Gujarati.' },
+  { slug: 'malayalam', name: 'Malayalam', native: 'മലയാളം', code: 'ml-IN', region: 'Kerala', blurb: 'Answer Kerala enquiries in Malayalam instead of routing them to an English-only queue.' },
+  { slug: 'punjabi', name: 'Punjabi', native: 'ਪੰਜਾਬੀ', code: 'pa-IN', region: 'Punjab', blurb: 'Punjabi-speaking customers, handled in Punjabi — including mixed Punjabi-Hindi speech.' },
+  { slug: 'odia', name: 'Odia', native: 'ଓଡ଼ିଆ', code: 'od-IN', region: 'Odisha', blurb: 'Odia coverage, so Odisha callers aren’t the ones who always get the English fallback.' },
+]
+
+// ---- Integrations directory (feeds /integrations) ----
+//
+// Grounded in _SEED_INTEGRATIONS in server/calls_db.py — every entry here
+// is a connection an operator can actually configure in the dashboard
+// today. `viaWebhook` entries aren't bespoke integrations; they're things
+// the generic webhook reaches, and are labelled as such rather than
+// implying a first-class native connector.
+
+export interface IntegrationEntry {
+  name: string
+  category: string
+  desc: string
+  /** True when this is reached through the generic webhook, not a native connector. */
+  viaWebhook?: boolean
+}
+
+export const INTEGRATION_DIRECTORY: IntegrationEntry[] = [
+  { name: 'ArthaLeads CRM', category: 'CRM', desc: 'Native connector. Every qualified lead, with the full transcript, pushed on call end — paste a token, no URL setup.' },
+  { name: 'Slack', category: 'Notifications', desc: 'Native connector. A Slack message the moment a call qualifies a lead. Paste an Incoming Webhook URL.' },
+  { name: 'WhatsApp', category: 'Messaging', desc: 'Native connector. Fire a WhatsApp follow-up after a call through your provider’s send webhook.' },
+  { name: 'Google Sheets', category: 'Reporting', desc: 'Native connector. Appends every qualified lead as a row via an Apps Script web-app URL — no OAuth dance.' },
+  { name: 'Zapier', category: 'Automation', desc: 'Point the lead webhook at a Zapier catch hook to reach 6,000+ downstream apps.', viaWebhook: true },
+  { name: 'n8n', category: 'Automation', desc: 'Self-hosted automation — same JSON payload, your own infrastructure.', viaWebhook: true },
+  { name: 'Make', category: 'Automation', desc: 'Route call outcomes into Make scenarios for multi-step workflows.', viaWebhook: true },
+  { name: 'Salesforce, HubSpot, Zoho', category: 'CRM', desc: 'Any CRM that accepts an inbound webhook — or use the full API for a deeper two-way sync.', viaWebhook: true },
+]
+
+// ---- Changelog (feeds /changelog) ----
+//
+// Curated from real shipped work, newest first. Keep it honest: only list
+// things that actually went out, and describe them in customer terms
+// (what changed for them), never in commit-message terms. Never name the
+// underlying AI vendors here — same reason as WORKS_WITH above.
+
+export interface ChangelogEntry {
+  date: string
+  title: string
+  body: string
+  tag: 'New' | 'Improved' | 'Fixed'
+}
+
+export const CHANGELOG: ChangelogEntry[] = [
+  { date: '29 July 2026', tag: 'Improved', title: 'Faster first hello on phone calls', body: 'The agent’s opening line is now prepared while the call is still connecting, so callers hear it the moment they pick up instead of a few seconds of silence.' },
+  { date: '28 July 2026', tag: 'New', title: 'New voices: Tara and Bunty', body: 'Two more voices added to the catalog — one female, one male — both previewable in the agent builder before you publish.' },
+  { date: '28 July 2026', tag: 'Improved', title: 'Steadier language switching mid-call', body: 'The agent now waits for a clearer signal before switching languages, so a single ambiguous word no longer flips the whole conversation.' },
+  { date: '27 July 2026', tag: 'Improved', title: 'Better gender agreement in Indian languages', body: 'Hindi, Marathi, Gujarati, and Punjabi replies now consistently match the grammatical gender of the selected voice, turn after turn.' },
+  { date: '25 July 2026', tag: 'New', title: 'Native appointment booking', body: 'Agents check real availability and book appointments directly on the call, with your own availability rules — no external calendar account needed.' },
+  { date: '23 July 2026', tag: 'New', title: 'Personalised campaign calls', body: 'Outbound campaigns can use {{variables}} like a contact’s name or due date, so every call sounds tailored rather than scripted.' },
+  { date: '20 July 2026', tag: 'New', title: 'Call recordings on every call', body: 'Every call is recorded, stored, and playable from the call detail page, alongside the full combined transcript.' },
+  { date: '19 July 2026', tag: 'New', title: 'Compliance controls', body: 'A Do-Not-Call registry, enforced calling windows, spoken-consent capture, and configurable data retention — all per workspace.' },
+]

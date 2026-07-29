@@ -1,7 +1,7 @@
-import { MarketingLayout } from '../../components/MarketingLayout'
+import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Icon } from '../../components/Icon'
 import { Seo } from '../../components/Seo'
-import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
+import { SectionEyebrow } from '../../components/MarketingBits'
 
 const VALUES = [
   { icon: 'translate', title: 'Bharat-first', body: 'We build for the languages and accents India actually speaks — not an afterthought translation.' },
@@ -66,7 +66,33 @@ export function About() {
         </div>
       </section>
 
-      <CTABand title="Want to build with us?" subtitle="We’re hiring, and we’d love to hear from you." />
+      {/* Points at the real Careers page — this used to be a generic CTA band
+          claiming "we're hiring" with nowhere to actually apply. */}
+      <section className="mx-auto max-w-7xl px-5 pb-20 md:px-8">
+        <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-surface to-surface-high p-10 text-center sm:p-16">
+          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/20 blur-[100px]" />
+          <h2 className="relative font-display text-4xl font-bold tracking-tight sm:text-5xl">
+            Want to build with us?
+          </h2>
+          <p className="relative mx-auto mt-4 max-w-xl text-lg text-text-muted">
+            We’re a small team working on real-time voice AI for Indian languages.
+          </p>
+          <div className="relative mt-8 flex flex-wrap justify-center gap-3">
+            <NavLink
+              to="/careers"
+              className="rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
+            >
+              See careers
+            </NavLink>
+            <NavLink
+              to="/contact"
+              className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
+            >
+              Talk to us
+            </NavLink>
+          </div>
+        </div>
+      </section>
     </MarketingLayout>
   )
 }

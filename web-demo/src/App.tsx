@@ -23,6 +23,14 @@ import { Pricing } from './pages/marketing/Pricing'
 import { About } from './pages/marketing/About'
 import { Contact } from './pages/marketing/Contact'
 import { ComingSoon } from './pages/marketing/ComingSoon'
+import { Docs } from './pages/marketing/Docs'
+import { Security } from './pages/marketing/Security'
+import { Careers } from './pages/marketing/Careers'
+import { Changelog } from './pages/marketing/Changelog'
+import { IntegrationsDirectory } from './pages/marketing/IntegrationsDirectory'
+import { LanguagesOverview } from './pages/marketing/LanguagesOverview'
+import { LanguageDetail } from './pages/marketing/LanguageDetail'
+import { CompareIvr } from './pages/marketing/CompareIvr'
 import { Privacy } from './pages/marketing/Privacy'
 import { Terms } from './pages/marketing/Terms'
 import { Login } from './pages/Login'
@@ -62,7 +70,7 @@ const guard = (el: ReactNode) => <RequireAuth>{el}</RequireAuth>
 // middleware.ts deliberately leaves docs' root alone for exactly this reason.
 function HomeOrDocsRoot() {
   if (hostBucket(window.location.hostname) === 'docs') {
-    return <ComingSoon title="Docs — coming soon" />
+    return <Docs />
   }
   return <Home />
 }
@@ -95,9 +103,15 @@ function App() {
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
+        <Route path="/languages" element={<LanguagesOverview />} />
+        <Route path="/languages/:slug" element={<LanguageDetail />} />
+        <Route path="/integrations" element={<IntegrationsDirectory />} />
+        <Route path="/vs-ivr" element={<CompareIvr />} />
+        <Route path="/security" element={<Security />} />
+        <Route path="/careers" element={<Careers />} />
+        <Route path="/changelog" element={<Changelog />} />
         <Route path="/resources/blog" element={<ComingSoon title="Blog — coming soon" />} />
-        <Route path="/resources/docs" element={<ComingSoon title="Docs — coming soon" />} />
-        <Route path="/resources/case-studies" element={<ComingSoon title="Case studies — coming soon" />} />
+        <Route path="/resources/docs" element={<Docs />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
 
