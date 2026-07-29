@@ -89,6 +89,16 @@ _BARGE_IN_GRACE_MS = 500
 # it'll run across multiple replicas.
 _PENDING_ACCOUNT_BY_VOICE_ID: dict[str, int] = {}
 
+# voice_id -> (Session, greeting-synthesis Task) — started the moment the
+# `connected` webhook fires, running concurrently with start_stream()'s
+# retry loop and the EnableX->us WebSocket handshake instead of only
+# starting once `start_media` arrives. TTS synthesis was previously the
+# last step before any audio reached the caller, stacking on top of the
+# handshake latency as several extra seconds of dead air; overlapping it
+# here means the greeting is usually already synthesized by the time
+# start_media shows up.
+_PENDING_GREETING_BY_VOICE_ID: dict[str, tuple[session_module.Session, asyncio.Task]] = {}
+
 
 def _build_session_for_test_call(call_type: str = "phone") -> session_module.Session:
     """Loads TEST_AGENT_ID's dashboard config into a fresh Session — same
@@ -177,18 +187,37 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
         if not wss_base:
             logger.warning("PUBLIC_BASE_URL/WSS_PUBLIC_HOST not set — cannot start streaming")
             return {"ok": True}
+        sess = _build_session_for_test_call()
+        _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
+            sess,
+            asyncio.create_task(session_module.build_greeting_audio(sess)),
+        )
         token = ws_security.issue_stream_token(voice_id, account_id)
         wss_url = f"{wss_base}/stream?token={token}"
         result = await enablex.start_stream(voice_id, wss_url, account_id)
         if not result.get("ok"):
             logger.warning("start_stream failed: %s", result.get("error"))
+            _pop_pending_greeting(voice_id)
         return {"ok": True}
 
     if state in ("disconnected", "stream_stopped", "stream_failed"):
         _PENDING_ACCOUNT_BY_VOICE_ID.pop(voice_id, None)
+        _pop_pending_greeting(voice_id)
         return {"ok": True}
 
     return {"ok": True}
+
+
+def _pop_pending_greeting(voice_id: str) -> None:
+    """Cancels and discards a pre-started greeting task that was never
+    consumed by stream_ws (start_stream failed, or the call ended before
+    start_media ever arrived) — otherwise it'd run to completion unawaited
+    and leak in _PENDING_GREETING_BY_VOICE_ID forever."""
+    pending = _PENDING_GREETING_BY_VOICE_ID.pop(voice_id, None)
+    if pending:
+        _, task = pending
+        if not task.done():
+            task.cancel()
 
 
 async def _prefetch_listening_cue(voice: str, reply_language: str) -> None:
@@ -209,7 +238,16 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
 
     await websocket.accept()
     voice_id = payload["voice_id"]
-    sess = _build_session_for_test_call()
+    pending_greeting = _PENDING_GREETING_BY_VOICE_ID.pop(voice_id, None)
+    if pending_greeting:
+        sess, greeting_task = pending_greeting
+    else:
+        # Fallback for the token being verified without a matching pending
+        # entry (e.g. a service restart between the `connected` webhook and
+        # this WebSocket connecting) — same session build as before, just
+        # without the head start.
+        sess = _build_session_for_test_call()
+        greeting_task = None
     recorder = recording.CallRecorder()
     vad = audio.UtteranceVAD()
     seq_counter = itertools.count()
@@ -321,9 +359,13 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                 stream_ctx["voice_id"] = msg["start"]["voice_id"]
                 # Speak first, like agent/main.py's on_enter() — otherwise the
                 # caller sits in silence and the VAD's first "utterance" ends
-                # up being call-start noise instead of real speech.
+                # up being call-start noise instead of real speech. Usually
+                # already-synthesized by now (kicked off back at the
+                # `connected` webhook, well before start_media) — the
+                # fallback path only re-synthesizes if that head start
+                # wasn't available.
                 try:
-                    greeting = await session_module.build_greeting_audio(sess)
+                    greeting = await greeting_task if greeting_task else await session_module.build_greeting_audio(sess)
                 except tts.TTSError as e:
                     logger.warning("greeting TTS failed: %s", e)
                     greeting = None
@@ -382,6 +424,8 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
     finally:
         if speaking_task and not speaking_task.done():
             speaking_task.cancel()
+        if greeting_task and not greeting_task.done():
+            greeting_task.cancel()
         wav_path = recorder.stop()
         call_id = await session_module.finalize_call(sess, room_name=f"phone-{voice_id}")
         if wav_path:
