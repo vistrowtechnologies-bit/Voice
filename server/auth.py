@@ -55,11 +55,37 @@ COOKIE_NAME = "vv_session"
 SESSION_TTL_SECONDS = 30 * 24 * 3600  # 30 days
 
 
+_DEV_FALLBACK_SECRET = "dev-insecure-secret-change-me"
+
+
 def _secret() -> bytes:
     # A stable secret across restarts is required or every deploy logs
     # everyone out. Set AUTH_SECRET in prod; the dev fallback is fixed (not
     # random) so local sessions survive a reload, and is clearly not for prod.
-    return (os.environ.get("AUTH_SECRET") or "dev-insecure-secret-change-me").encode()
+    #
+    # HARD GUARD: session tokens are HMAC-signed with this value, so if it
+    # ever falls back to the public hardcoded string in a deployed
+    # environment, ANYONE reading this source can forge a session cookie for
+    # any user_id/account_id — a full auth bypass, including platform-owner
+    # admin. Refuse to run on a deploy (any RAILWAY_* / FLY_* / RENDER /
+    # K_SERVICE marker present) unless AUTH_SECRET is explicitly set, so this
+    # can never silently ship insecure again. Local dev (no such marker) still
+    # gets the convenient fixed fallback.
+    configured = os.environ.get("AUTH_SECRET")
+    if configured:
+        return configured.encode()
+    deployed = any(
+        os.environ.get(k)
+        for k in ("RAILWAY_ENVIRONMENT", "RAILWAY_SERVICE_ID", "FLY_APP_NAME", "RENDER", "K_SERVICE")
+    )
+    if deployed:
+        raise RuntimeError(
+            "AUTH_SECRET is not set in a deployed environment. Session tokens would be "
+            "signed with a public hardcoded fallback, allowing anyone to forge admin "
+            "sessions. Set AUTH_SECRET to a strong random value (e.g. "
+            "`python3 -c 'import secrets; print(secrets.token_urlsafe(48))'`) and redeploy."
+        )
+    return _DEV_FALLBACK_SECRET.encode()
 
 
 def make_session_token(user_id: int, account_id: int, impersonator_id: int | None = None) -> str:
