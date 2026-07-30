@@ -20,7 +20,8 @@ function passwordStrength(pw: string): { score: number; label: string } {
 
 const STRENGTH_COLORS = ['bg-border', 'bg-destructive', 'bg-amber', 'bg-cyan', 'bg-success']
 
-// Pure marketing attribution — optional, never validated or required.
+// Pure marketing attribution, but required — matches the competitor field
+// set + validation this was modeled on.
 const REFERRAL_SOURCES = [
   'Google Ad',
   'Facebook Ad',
@@ -33,14 +34,36 @@ const REFERRAL_SOURCES = [
   'Other',
 ]
 
+// Common dial codes, India first since that's this product's core market.
+// Phone is plain data collection only — email is the verified identity here,
+// so there's no OTP flow attached to this field.
+const DIAL_CODES = [
+  { code: 'IN', dial: '+91' },
+  { code: 'US', dial: '+1' },
+  { code: 'GB', dial: '+44' },
+  { code: 'AE', dial: '+971' },
+  { code: 'SG', dial: '+65' },
+  { code: 'AU', dial: '+61' },
+  { code: 'CA', dial: '+1' },
+]
+
 export function Signup() {
   const { signup } = useAuth()
   const navigate = useNavigate()
 
-  const [form, setForm] = useState({ name: '', company: '', email: '', password: '', referral_source: '' })
+  const [form, setForm] = useState({
+    name: '',
+    company: '',
+    email: '',
+    password: '',
+    referral_source: '',
+    phoneNumber: '',
+  })
+  const [dialCode, setDialCode] = useState('+91')
   const [agreed, setAgreed] = useState(false)
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [referralError, setReferralError] = useState(false)
   const [busy, setBusy] = useState(false)
   const shake = useShake(error)
 
@@ -52,8 +75,13 @@ export function Signup() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setReferralError(false)
     if (form.password.length < 8) {
       setError('Password must be at least 8 characters.')
+      return
+    }
+    if (!form.referral_source) {
+      setReferralError(true)
       return
     }
     if (!agreed) {
@@ -62,7 +90,8 @@ export function Signup() {
     }
     setBusy(true)
     try {
-      await signup(form)
+      const { phoneNumber, ...rest } = form
+      await signup({ ...rest, phone: phoneNumber ? `${dialCode} ${phoneNumber}` : '' })
       // DashboardLayout shows the onboarding modal automatically for any
       // account that hasn't completed it yet — no special-case route here.
       navigate('/dashboard', { replace: true })
@@ -96,6 +125,34 @@ export function Signup() {
           <AuthInput label="Company" required value={form.company} onChange={set('company')} error={!!error} />
         </div>
         <AuthInput label="Work email" type="email" required value={form.email} onChange={set('email')} error={!!error} />
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="phone-number" className="text-xs font-medium text-text-muted">
+            Phone Number
+          </label>
+          <div className="flex gap-2">
+            <select
+              value={dialCode}
+              onChange={(e) => setDialCode(e.target.value)}
+              aria-label="Country dial code"
+              className="rounded-lg border border-border bg-surface-high px-2 text-sm text-text outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+            >
+              {DIAL_CODES.map((c) => (
+                <option key={c.code} value={c.dial}>
+                  {c.code} {c.dial}
+                </option>
+              ))}
+            </select>
+            <input
+              id="phone-number"
+              type="tel"
+              inputMode="numeric"
+              placeholder="9876543210"
+              value={form.phoneNumber}
+              onChange={set('phoneNumber')}
+              className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-primary focus:ring-2 focus:ring-primary/15"
+            />
+          </div>
+        </div>
         <div>
           <AuthInput
             label="Password"
@@ -127,8 +184,13 @@ export function Signup() {
           <select
             id="referral-source"
             value={form.referral_source}
-            onChange={set('referral_source')}
-            className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm text-text outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+            onChange={(e) => {
+              setReferralError(false)
+              set('referral_source')(e)
+            }}
+            className={`w-full rounded-lg border bg-surface-high px-3 py-2.5 text-sm text-text outline-none transition-colors focus:ring-2 ${
+              referralError ? 'border-destructive focus:ring-destructive/20' : 'border-border focus:border-primary focus:ring-primary/15'
+            }`}
           >
             <option value="">Select an option</option>
             {REFERRAL_SOURCES.map((s) => (
@@ -137,6 +199,7 @@ export function Signup() {
               </option>
             ))}
           </select>
+          {referralError && <span className="text-xs text-destructive">Please tell us how you heard about us.</span>}
         </div>
         <label className="flex items-start gap-2 text-xs text-text-muted">
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />

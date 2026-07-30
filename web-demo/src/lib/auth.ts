@@ -18,7 +18,14 @@ export interface AuthState {
   user: AuthUser | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
-  signup: (data: { name: string; company: string; email: string; password: string; referral_source?: string }) => Promise<void>
+  signup: (data: {
+    name: string
+    company: string
+    email: string
+    password: string
+    referral_source?: string
+    phone?: string
+  }) => Promise<void>
   logout: () => Promise<void>
   refresh: () => Promise<void>
   setUser: (user: AuthUser) => void
@@ -53,8 +60,14 @@ async function authFetch<T>(path: string, body?: unknown, method?: string): Prom
 export const apiMe = () => authFetch<{ user: AuthUser }>('/auth/me')
 export const apiLogin = (email: string, password: string) =>
   authFetch<{ user: AuthUser }>('/auth/login', { email, password })
-export const apiSignup = (data: { name: string; company: string; email: string; password: string; referral_source?: string }) =>
-  authFetch<{ user: AuthUser }>('/auth/signup', data)
+export const apiSignup = (data: {
+  name: string
+  company: string
+  email: string
+  password: string
+  referral_source?: string
+  phone?: string
+}) => authFetch<{ user: AuthUser }>('/auth/signup', data)
 export const apiLogout = () => authFetch<{ ok: boolean }>('/auth/logout', {})
 export const apiUpdateProfile = (data: { name?: string; currentPassword?: string; newPassword?: string }) =>
   authFetch<{ user: AuthUser }>('/profile', data, 'PATCH')

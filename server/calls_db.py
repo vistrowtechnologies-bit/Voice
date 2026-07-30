@@ -709,6 +709,9 @@ def init_tables() -> None:
             # teammate invited into an already-onboarded account still sees
             # the tour once on their own first login.
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tour_completed_at TEXT")
+            # Self-reported at signup, plain data field — no OTP/verification
+            # flow attached (email is the verified identity here, not phone).
+            conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT ''")
             # Surfaces *why* a live-call delivery to an integration failed
             # (e.g. "invalid token — reconnect") without flipping status away
             # from 'connected' — the operator's saved config is still good,
@@ -828,7 +831,7 @@ def email_exists(email: str) -> bool:
 
 
 def create_account_with_owner(
-    company_name: str, user_name: str, email: str, password_hash: str, referral_source: str = ""
+    company_name: str, user_name: str, email: str, password_hash: str, referral_source: str = "", phone: str = ""
 ) -> dict:
     """Creates the tenant + its first (owner) user in one transaction.
     Returns {'account_id', 'user_id'}. Caller must have checked email_exists.
@@ -847,9 +850,9 @@ def create_account_with_owner(
             )
             account_id = cur.lastrowid
             cur = conn.execute(
-                "INSERT INTO users (account_id, email, name, password_hash, role) VALUES (?, ?, ?, ?, 'owner') "
-                "RETURNING id",
-                (account_id, email.lower(), user_name, password_hash),
+                "INSERT INTO users (account_id, email, name, password_hash, role, phone) "
+                "VALUES (?, ?, ?, ?, 'owner', ?) RETURNING id",
+                (account_id, email.lower(), user_name, password_hash, phone),
             )
             user_id = cur.lastrowid
             if email.lower() == _PLATFORM_OWNER_EMAIL:
