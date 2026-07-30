@@ -229,6 +229,7 @@ class SignupRequest(BaseModel):
     company: str
     email: str
     password: str
+    referral_source: str = ""
 
 
 class LoginRequest(BaseModel):
@@ -487,7 +488,7 @@ def auth_signup(req: SignupRequest, response: Response) -> dict:
     if calls_db.email_exists(email):
         raise HTTPException(409, "An account with this email already exists")
     created = calls_db.create_account_with_owner(
-        req.company.strip(), req.name.strip(), email, auth.hash_password(req.password)
+        req.company.strip(), req.name.strip(), email, auth.hash_password(req.password), req.referral_source.strip()
     )
     _set_session_cookie(response, created["user_id"], created["account_id"])
     calls_db.record_login(created["user_id"], "password")

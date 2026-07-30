@@ -699,6 +699,9 @@ def init_tables() -> None:
             # method they authenticate with (surfaced in the admin panel).
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'")
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''")
+            # Self-reported at signup ("How did you hear about us?") — pure
+            # marketing-attribution data, never read by app logic.
+            conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS referral_source TEXT DEFAULT ''")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TEXT")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'password'")
             # NULL until the first-run dashboard tour is finished or skipped.
@@ -824,7 +827,9 @@ def email_exists(email: str) -> bool:
         conn.close()
 
 
-def create_account_with_owner(company_name: str, user_name: str, email: str, password_hash: str) -> dict:
+def create_account_with_owner(
+    company_name: str, user_name: str, email: str, password_hash: str, referral_source: str = ""
+) -> dict:
     """Creates the tenant + its first (owner) user in one transaction.
     Returns {'account_id', 'user_id'}. Caller must have checked email_exists.
 
@@ -836,7 +841,10 @@ def create_account_with_owner(company_name: str, user_name: str, email: str, pas
     conn = _connect()
     try:
         with conn:
-            cur = conn.execute("INSERT INTO accounts (name) VALUES (?) RETURNING id", (company_name,))
+            cur = conn.execute(
+                "INSERT INTO accounts (name, referral_source) VALUES (?, ?) RETURNING id",
+                (company_name, referral_source),
+            )
             account_id = cur.lastrowid
             cur = conn.execute(
                 "INSERT INTO users (account_id, email, name, password_hash, role) VALUES (?, ?, ?, ?, 'owner') "

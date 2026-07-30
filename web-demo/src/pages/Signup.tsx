@@ -20,11 +20,24 @@ function passwordStrength(pw: string): { score: number; label: string } {
 
 const STRENGTH_COLORS = ['bg-border', 'bg-destructive', 'bg-amber', 'bg-cyan', 'bg-success']
 
+// Pure marketing attribution — optional, never validated or required.
+const REFERRAL_SOURCES = [
+  'Google Ad',
+  'Facebook Ad',
+  'LinkedIn',
+  'Twitter / X',
+  'Friend / Colleague',
+  'YouTube',
+  'Blog / Article',
+  'Product Hunt',
+  'Other',
+]
+
 export function Signup() {
   const { signup } = useAuth()
   const navigate = useNavigate()
 
-  const [form, setForm] = useState({ name: '', company: '', email: '', password: '' })
+  const [form, setForm] = useState({ name: '', company: '', email: '', password: '', referral_source: '' })
   const [agreed, setAgreed] = useState(false)
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -33,7 +46,7 @@ export function Signup() {
 
   const strength = passwordStrength(form.password)
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm({ ...form, [k]: e.target.value })
 
   const submit = async (e: React.FormEvent) => {
@@ -106,6 +119,24 @@ export function Signup() {
               <span className="text-[10px] text-text-muted">{strength.label}</span>
             </div>
           )}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="referral-source" className="text-xs font-medium text-text-muted">
+            How did you hear about us?
+          </label>
+          <select
+            id="referral-source"
+            value={form.referral_source}
+            onChange={set('referral_source')}
+            className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm text-text outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+          >
+            <option value="">Select an option</option>
+            {REFERRAL_SOURCES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
         </div>
         <label className="flex items-start gap-2 text-xs text-text-muted">
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
