@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { BharatOrbit } from '../components/BharatBits'
+import { BharatBackdrop, BharatOrbit } from '../components/BharatBits'
 import { BRAND } from '../lib/brand'
 import { apiAuthConfig } from '../lib/auth'
 import vistrowMark from '../assets/vistrow-mark.png'
@@ -71,9 +71,13 @@ export function AuthShell({
         </p>
       </div>
 
-      {/* Form panel */}
-      <div className="flex w-full flex-col items-center justify-center p-6 lg:w-1/2">
-        <div className="auth-panel-in w-full max-w-sm">
+      {/* Form panel — relative/overflow-hidden so BharatBackdrop can sit
+          behind the form as ambient texture instead of the right half
+          being flat empty space next to the left panel's illustration. */}
+      <div className="relative flex w-full flex-col items-center justify-center overflow-hidden p-6 lg:w-1/2">
+        <BharatBackdrop className="right-[-10%] top-[-15%] w-[65%]" />
+        <BharatBackdrop className="bottom-[-20%] left-[-15%] w-[55%]" />
+        <div className="auth-panel-in relative z-10 w-full max-w-sm">
           <Link to="/" className="mb-8 flex items-center gap-2 lg:hidden">
             <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
             <span className="font-semibold tracking-tight">{BRAND.name}</span>

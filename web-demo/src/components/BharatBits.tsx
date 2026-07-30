@@ -92,38 +92,86 @@ export function BharatOrbit({ className = '' }: { className?: string }) {
       <div className="absolute inset-[12%] rounded-full border border-border/40" />
       <div className="absolute inset-[24%] rounded-full border border-dashed border-cyan/25" />
 
-      {/* Center voice orb — same visual language as the demo widget's orb. */}
-      <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2">
+      {/* Center voice orb — same visual language as the demo widget's orb.
+          Sits outside the rotating ring below so it stays put while the
+          languages orbit it. */}
+      <div className="absolute left-1/2 top-1/2 z-10 h-16 w-16 -translate-x-1/2 -translate-y-1/2">
         <div className="glow-pulse absolute -inset-3 rounded-full bg-primary/50 blur-xl" aria-hidden="true" />
         <div className="relative flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-primary to-magenta shadow-lg shadow-primary/30">
           <Icon name="graphic_eq" className="text-[26px] text-white" />
         </div>
       </div>
 
-      {/* The ten scripts, evenly spaced around the ring. */}
-      {LANGUAGES.map((lang, i) => {
-        const angle = (i / LANGUAGES.length) * 2 * Math.PI - Math.PI / 2
-        const x = 50 + 46 * Math.cos(angle)
-        const y = 50 + 46 * Math.sin(angle)
-        return (
-          <div
-            key={lang.slug}
-            aria-hidden="true"
-            className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1"
-            style={{ left: `${x}%`, top: `${y}%` }}
-          >
-            <span
-              className="pulse-dot h-1.5 w-1.5 rounded-full bg-cyan"
-              style={{ animationDelay: `${i * 0.18}s` }}
-            />
-            <span className="whitespace-nowrap font-display text-sm text-text">{lang.greeting}</span>
-          </div>
-        )
-      })}
+      {/* The ten scripts, evenly spaced around the ring and slowly orbiting
+          it — auth-orbit-ring rotates this whole group; each label
+          counter-rotates at the same rate (auth-orbit-label) so the text
+          itself never tips over, only its position sweeps around. Hover
+          brightens a node — the one bit of this that's genuinely
+          interactive rather than ambient. */}
+      <div className="auth-orbit-ring absolute inset-0">
+        {LANGUAGES.map((lang, i) => {
+          const angle = (i / LANGUAGES.length) * 2 * Math.PI - Math.PI / 2
+          const x = 50 + 46 * Math.cos(angle)
+          const y = 50 + 46 * Math.sin(angle)
+          return (
+            <div
+              key={lang.slug}
+              className="absolute -translate-x-1/2 -translate-y-1/2"
+              style={{ left: `${x}%`, top: `${y}%` }}
+            >
+              <div className="auth-orbit-label group flex flex-col items-center gap-1">
+                <span
+                  className="pulse-dot h-1.5 w-1.5 rounded-full bg-cyan transition-colors group-hover:bg-primary"
+                  style={{ animationDelay: `${i * 0.18}s` }}
+                />
+                <span className="whitespace-nowrap font-display text-sm text-text transition-transform duration-200 group-hover:scale-125 group-hover:text-primary">
+                  {lang.greeting}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
       {/* The visible ring is decorative; the languages are already listed as
           text elsewhere on the page (feature list / marquee), so this whole
           illustration is redundant for screen readers rather than useful. */}
       <span className="sr-only">Speaks 10 Indian languages and English</span>
+    </div>
+  )
+}
+
+/** A very faint, oversized echo of BharatOrbit's motif — orbit rings and a
+ * couple of scripts, barely visible — used as ambient texture behind the
+ * form panel so the right half of the auth screen isn't just dead space.
+ * Deliberately not the same size/prominence as the real illustration on the
+ * left: this is background, not a second illustration competing for
+ * attention. Purely decorative (aria-hidden), and inherits the same orbit
+ * animation so it isn't just another static shape. */
+export function BharatBackdrop({ className = '' }: { className?: string }) {
+  const picks = [LANGUAGES[2], LANGUAGES[5], LANGUAGES[8]] // Tamil, Bengali, Punjabi — spread across scripts, not adjacent on the wheel
+  return (
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none absolute aspect-square opacity-[0.06] ${className}`}
+    >
+      <div className="absolute inset-0 rounded-full border border-cyan" />
+      <div className="absolute inset-[16%] rounded-full border border-dashed border-primary" />
+      <div className="auth-orbit-ring absolute inset-0">
+        {picks.map((lang, i) => {
+          const angle = (i / picks.length) * 2 * Math.PI
+          const x = 50 + 46 * Math.cos(angle)
+          const y = 50 + 46 * Math.sin(angle)
+          return (
+            <span
+              key={lang.slug}
+              className="auth-orbit-label absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-display text-4xl text-text"
+              style={{ left: `${x}%`, top: `${y}%` }}
+            >
+              {lang.greeting}
+            </span>
+          )
+        })}
+      </div>
     </div>
   )
 }

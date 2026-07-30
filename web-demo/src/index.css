@@ -243,7 +243,26 @@ html.theme-transition * {
 }
 .auth-shake { animation: auth-shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
 
+/* BharatOrbit: the ring of language nodes slowly orbits the center voice
+   orb, and each node counter-rotates at the same rate so its own script
+   stays upright instead of tumbling around with the ring — same trick as a
+   satellite diagram. Slow (110s) on purpose: this sits behind a login form
+   people are actually trying to use, so it should read as ambient, not
+   distracting. */
+@keyframes auth-orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes auth-orbit-spin-reverse {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+.auth-orbit-ring { animation: auth-orbit-spin 110s linear infinite; }
+.auth-orbit-label { animation: auth-orbit-spin-reverse 110s linear infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   .auth-panel-in { animation: none; }
   .auth-shake { animation: none; }
+  .auth-orbit-ring,
+  .auth-orbit-label { animation: none; }
 }
