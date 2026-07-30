@@ -1128,7 +1128,14 @@ async def entrypoint(ctx: JobContext) -> None:
             # max_delay only when end_of_turn_probability < unlikely_threshold).
             # So raising max_delay alone fixes the slow/ambiguous-turn drop
             # above with zero added latency on normal, confident replies.
-            endpointing=EndpointingOptions(max_delay=6.0),
+            #
+            # 6.0 fully covered the transcript-drop bug but made every
+            # low-confidence turn (common on Indian-English/code-mixed
+            # speech, this product's core case) wait up to 6s before
+            # replying — felt as "the agent is slow" in a 2026-07-30 client
+            # demo. 4.0 keeps real buffer over the old 3.0s default that
+            # caused the drop while roughly halving the worst-case reply lag.
+            endpointing=EndpointingOptions(max_delay=4.0),
         ),
         user_away_timeout=away_timeout,
     )
