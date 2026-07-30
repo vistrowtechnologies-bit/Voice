@@ -147,12 +147,13 @@ export function BharatOrbit({ className = '' }: { className?: string }) {
  * left: this is background, not a second illustration competing for
  * attention. Purely decorative (aria-hidden), and inherits the same orbit
  * animation so it isn't just another static shape. */
-export function BharatBackdrop({ className = '' }: { className?: string }) {
+export function BharatBackdrop({ className = '', opacity = 0.06 }: { className?: string; opacity?: number }) {
   const picks = [LANGUAGES[2], LANGUAGES[5], LANGUAGES[8]] // Tamil, Bengali, Punjabi — spread across scripts, not adjacent on the wheel
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none absolute aspect-square opacity-[0.06] ${className}`}
+      className={`pointer-events-none absolute aspect-square ${className}`}
+      style={{ opacity }}
     >
       <div className="absolute inset-0 rounded-full border border-cyan" />
       <div className="absolute inset-[16%] rounded-full border border-dashed border-primary" />

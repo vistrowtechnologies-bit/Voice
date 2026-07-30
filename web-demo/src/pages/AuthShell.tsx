@@ -73,10 +73,22 @@ export function AuthShell({
 
       {/* Form panel — relative/overflow-hidden so BharatBackdrop can sit
           behind the form as ambient texture instead of the right half
-          being flat empty space next to the left panel's illustration. */}
+          being flat empty space next to the left panel's illustration. The
+          form itself is only max-w-sm, so on a wide screen it leaves a wide
+          gutter on both sides of it inside this panel — the backdrop is
+          centered on the whole panel (not tucked in a corner) so it actually
+          fills that gutter, and the glow mirrors the left panel's so the two
+          halves read as one continuous atmosphere instead of "populated" vs
+          "empty". */}
       <div className="relative flex w-full flex-col items-center justify-center overflow-hidden p-6 lg:w-1/2">
-        <BharatBackdrop className="right-[-10%] top-[-15%] w-[65%]" />
-        <BharatBackdrop className="bottom-[-20%] left-[-15%] w-[55%]" />
+        <div
+          className="glow-pulse pointer-events-none absolute -right-24 -top-24 h-[26rem] w-[26rem] rounded-full opacity-30 blur-[120px]"
+          style={{ background: 'radial-gradient(circle, #22d3ee, transparent 70%)' }}
+        />
+        <BharatBackdrop
+          className="left-1/2 top-1/2 w-[80%] max-w-[620px] -translate-x-1/2 -translate-y-1/2"
+          opacity={0.09}
+        />
         <div className="auth-panel-in relative z-10 w-full max-w-sm">
           <Link to="/" className="mb-8 flex items-center gap-2 lg:hidden">
             <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
