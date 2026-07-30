@@ -240,12 +240,27 @@ function GitHubLogo({ className = '' }: { className?: string }) {
  * Clicking sends the user to the backend OAuth start endpoint. */
 export function SocialButtons() {
   const [providers, setProviders] = useState<string[]>([])
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     apiAuthConfig()
       .then((c) => setProviders(c.oauthProviders))
       .catch(() => setProviders([]))
+      .finally(() => setLoaded(true))
   }, [])
+
+  // Reserve the same footprint the real content will take so the form
+  // doesn't visibly jump once /auth/config resolves — a bare `return null`
+  // while loading left a one-beat pop-in of the divider + buttons.
+  if (!loaded) {
+    return (
+      <div className="mt-6 flex animate-pulse flex-col gap-3" aria-hidden="true">
+        <div className="my-1 h-px w-full bg-border" />
+        <div className="h-10 rounded-lg bg-surface-high" />
+        <div className="h-10 rounded-lg bg-surface-high" />
+      </div>
+    )
+  }
 
   if (providers.length === 0) return null
 
