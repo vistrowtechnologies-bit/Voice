@@ -94,9 +94,20 @@ export function AuthShell({
             <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
             <span className="font-semibold tracking-tight">{BRAND.name}</span>
           </Link>
-          <h1 className="font-display text-3xl font-bold tracking-tight">{title}</h1>
-          <p className="mt-1 mb-6 text-sm text-text-muted">{subtitle}</p>
-          {children}
+          {/* Glass card: translucent + blurred so the orbit backdrop and glow
+              behind it stay visible through the panel instead of being
+              hidden behind a flat surface — the point of putting ambient
+              texture back there in the first place. Border + inset highlight
+              give it an edge to catch light against the dark background;
+              shadow lifts it off the page so it doesn't look pasted on. */}
+          <div
+            className="rounded-2xl border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/40 backdrop-blur-xl"
+            style={{ boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.08), 0 20px 50px -12px rgba(0,0,0,0.5)' }}
+          >
+            <h1 className="font-display text-3xl font-bold tracking-tight">{title}</h1>
+            <p className="mt-1 mb-6 text-sm text-text-muted">{subtitle}</p>
+            {children}
+          </div>
         </div>
       </div>
     </div>
