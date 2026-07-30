@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { apiRequestPasswordReset } from '../lib/auth'
-import { AuthShell } from './AuthShell'
+import { AuthInput, AuthShell } from './AuthShell'
 
 export function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -50,18 +50,14 @@ export function ForgotPassword() {
       ) : (
         <>
           <form onSubmit={submit} className="flex flex-col gap-4">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-semibold text-text-muted">Work email</span>
-              <input
-                type="email"
-                required
-                autoFocus
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-                className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
-              />
-            </label>
+            <AuthInput
+              label="Work email"
+              type="email"
+              required
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
             <button
               type="submit"
               disabled={busy}

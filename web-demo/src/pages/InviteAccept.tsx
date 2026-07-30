@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { apiAcceptInvite, apiGetInvite, useAuth, type InviteInfo } from '../lib/auth'
-import { AuthShell } from './AuthShell'
+import { AuthInput, AuthShell, PasswordVisibilityToggle, useShake } from './AuthShell'
 
 const ROLE_LABELS: Record<string, string> = { admin: 'an Admin', member: 'a Member', viewer: 'a Viewer' }
 
@@ -17,6 +17,7 @@ export function InviteAccept() {
   const [showPw, setShowPw] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const shake = useShake(error)
 
   useEffect(() => {
     if (!token) {
@@ -74,7 +75,7 @@ export function InviteAccept() {
           <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       ) : (
-        <form onSubmit={submit} className="flex flex-col gap-4">
+        <form onSubmit={submit} className={`flex flex-col gap-4 ${shake ? 'auth-shake' : ''}`}>
           <div className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm">
             <span className="font-semibold">{invite.name}</span> · {invite.email}
             <div className="mt-1 text-xs text-text-muted">
@@ -89,28 +90,16 @@ export function InviteAccept() {
             </div>
           )}
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold text-text-muted">Set a password</span>
-            <div className="relative">
-              <input
-                type={showPw ? 'text' : 'password'}
-                required
-                autoFocus
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
-                className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 pr-10 text-sm outline-none focus:border-primary"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw((v) => !v)}
-                aria-label={showPw ? 'Hide password' : 'Show password'}
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:text-text"
-              >
-                <Icon name={showPw ? 'visibility_off' : 'visibility'} className="text-[18px]" />
-              </button>
-            </div>
-          </label>
+          <AuthInput
+            label="Set a password"
+            type={showPw ? 'text' : 'password'}
+            required
+            autoFocus
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            error={!!error}
+            trailing={<PasswordVisibilityToggle shown={showPw} onToggle={() => setShowPw((v) => !v)} />}
+          />
 
           <button
             type="submit"

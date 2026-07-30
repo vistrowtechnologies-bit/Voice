@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { useAuth } from '../lib/auth'
-import { AuthShell, SocialButtons } from './AuthShell'
+import { AuthInput, AuthShell, PasswordVisibilityToggle, SocialButtons, useShake } from './AuthShell'
 
 // Cheap client-side password strength: length + character-class variety.
 // Purely for the meter/feedback — the server enforces the 8-char minimum.
@@ -29,6 +29,7 @@ export function Signup() {
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const shake = useShake(error)
 
   const strength = passwordStrength(form.password)
 
@@ -70,7 +71,7 @@ export function Signup() {
       }
       features={['Go live in minutes', '10 Indian languages', 'Every call logged & analyzed']}
     >
-      <form onSubmit={submit} className="flex flex-col gap-4">
+      <form onSubmit={submit} className={`flex flex-col gap-4 ${shake ? 'auth-shake' : ''}`}>
         {error && (
           <div className="flex items-center gap-2 rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">
             <Icon name="error" className="text-[16px] text-destructive" />
@@ -78,70 +79,34 @@ export function Signup() {
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Your name">
-            <input
-              required
-              value={form.name}
-              onChange={set('name')}
-              autoFocus
-              placeholder="Abhi Sharma"
-              className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
-            />
-          </Field>
-          <Field label="Company">
-            <input
-              required
-              value={form.company}
-              onChange={set('company')}
-              placeholder="Acme Realty"
-              className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
-            />
-          </Field>
+          <AuthInput label="Your name" required value={form.name} onChange={set('name')} autoFocus error={!!error} />
+          <AuthInput label="Company" required value={form.company} onChange={set('company')} error={!!error} />
         </div>
-        <Field label="Work email">
-          <input
-            type="email"
+        <AuthInput label="Work email" type="email" required value={form.email} onChange={set('email')} error={!!error} />
+        <div>
+          <AuthInput
+            label="Password"
+            type={showPw ? 'text' : 'password'}
             required
-            value={form.email}
-            onChange={set('email')}
-            placeholder="you@company.com"
-            className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
+            value={form.password}
+            onChange={set('password')}
+            error={!!error}
+            trailing={<PasswordVisibilityToggle shown={showPw} onToggle={() => setShowPw((v) => !v)} />}
           />
-        </Field>
-        <Field label="Password">
-          <div className="relative">
-            <input
-              type={showPw ? 'text' : 'password'}
-              required
-              value={form.password}
-              onChange={set('password')}
-              placeholder="At least 8 characters"
-              className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 pr-10 text-sm outline-none focus:border-primary"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPw((v) => !v)}
-              aria-label={showPw ? 'Hide password' : 'Show password'}
-              title={showPw ? 'Hide password' : 'Show password'}
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:text-text"
-            >
-              <Icon name={showPw ? 'visibility_off' : 'visibility'} className="text-[18px]" />
-            </button>
-          </div>
           {form.password && (
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-1.5 flex items-center gap-2">
               <div className="flex flex-1 gap-1">
                 {[0, 1, 2, 3].map((i) => (
                   <span
                     key={i}
-                    className={`h-1 flex-1 rounded-full ${i < strength.score ? STRENGTH_COLORS[strength.score] : 'bg-border'}`}
+                    className={`h-1 flex-1 rounded-full transition-colors ${i < strength.score ? STRENGTH_COLORS[strength.score] : 'bg-border'}`}
                   />
                 ))}
               </div>
               <span className="text-[10px] text-text-muted">{strength.label}</span>
             </div>
           )}
-        </Field>
+        </div>
         <label className="flex items-start gap-2 text-xs text-text-muted">
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
           <span>
@@ -172,14 +137,5 @@ export function Signup() {
         </Link>
       </p>
     </AuthShell>
-  )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-semibold text-text-muted">{label}</span>
-      {children}
-    </label>
   )
 }

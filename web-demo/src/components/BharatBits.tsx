@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Icon } from './Icon'
 import { LANGUAGES } from '../lib/marketingContent'
 
 // Cultural identity here comes from the product itself — the actual scripts
@@ -71,5 +72,58 @@ export function ScriptMarquee() {
         ))}
       </div>
     </section>
+  )
+}
+
+/** The auth-page illustration: all ten scripts arranged in a ring around a
+ * pulsing voice orb, mandala-style — deliberately NOT a map of India.
+ * National borders are legally and politically fraught to render (Kashmir,
+ * Aksai Chin), so a map was never really an option; this sidesteps that
+ * entirely while still being unmistakably Bharat — the geometry echoes a
+ * rangoli/mandala, and every glyph on the ring is a language the product
+ * actually speaks, not decoration. Pure CSS positioning (trig computed once
+ * per render, ten items, cheap) rather than SVG so each script renders with
+ * the page's normal font stack instead of fighting SVG text/font quirks. */
+export function BharatOrbit({ className = '' }: { className?: string }) {
+  return (
+    <div className={`relative mx-auto aspect-square w-full max-w-[320px] ${className}`}>
+      {/* Orbit rings, faint to strong from outside in. */}
+      <div className="absolute inset-0 rounded-full border border-border/50" />
+      <div className="absolute inset-[12%] rounded-full border border-border/40" />
+      <div className="absolute inset-[24%] rounded-full border border-dashed border-cyan/25" />
+
+      {/* Center voice orb — same visual language as the demo widget's orb. */}
+      <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2">
+        <div className="glow-pulse absolute -inset-3 rounded-full bg-primary/50 blur-xl" aria-hidden="true" />
+        <div className="relative flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-primary to-magenta shadow-lg shadow-primary/30">
+          <Icon name="graphic_eq" className="text-[26px] text-white" />
+        </div>
+      </div>
+
+      {/* The ten scripts, evenly spaced around the ring. */}
+      {LANGUAGES.map((lang, i) => {
+        const angle = (i / LANGUAGES.length) * 2 * Math.PI - Math.PI / 2
+        const x = 50 + 46 * Math.cos(angle)
+        const y = 50 + 46 * Math.sin(angle)
+        return (
+          <div
+            key={lang.slug}
+            aria-hidden="true"
+            className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1"
+            style={{ left: `${x}%`, top: `${y}%` }}
+          >
+            <span
+              className="pulse-dot h-1.5 w-1.5 rounded-full bg-cyan"
+              style={{ animationDelay: `${i * 0.18}s` }}
+            />
+            <span className="whitespace-nowrap font-display text-sm text-text">{lang.greeting}</span>
+          </div>
+        )
+      })}
+      {/* The visible ring is decorative; the languages are already listed as
+          text elsewhere on the page (feature list / marquee), so this whole
+          illustration is redundant for screen readers rather than useful. */}
+      <span className="sr-only">Speaks 10 Indian languages and English</span>
+    </div>
   )
 }

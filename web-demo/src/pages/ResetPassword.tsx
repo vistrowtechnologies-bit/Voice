@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { useAuth } from '../lib/auth'
 import { apiResetPassword } from '../lib/auth'
-import { AuthShell } from './AuthShell'
+import { AuthInput, AuthShell, PasswordVisibilityToggle, useShake } from './AuthShell'
 
 export function ResetPassword() {
   const [params] = useSearchParams()
@@ -15,6 +15,7 @@ export function ResetPassword() {
   const [showPw, setShowPw] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const shake = useShake(error)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -58,35 +59,23 @@ export function ResetPassword() {
           </Link>
         </div>
       ) : (
-        <form onSubmit={submit} className="flex flex-col gap-4">
+        <form onSubmit={submit} className={`flex flex-col gap-4 ${shake ? 'auth-shake' : ''}`}>
           {error && (
             <div className="flex items-center gap-2 rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">
               <Icon name="error" className="text-[16px] text-destructive" />
               {error}
             </div>
           )}
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold text-text-muted">New password</span>
-            <div className="relative">
-              <input
-                type={showPw ? 'text' : 'password'}
-                required
-                autoFocus
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
-                className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 pr-10 text-sm outline-none focus:border-primary"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw((v) => !v)}
-                aria-label={showPw ? 'Hide password' : 'Show password'}
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:text-text"
-              >
-                <Icon name={showPw ? 'visibility_off' : 'visibility'} className="text-[18px]" />
-              </button>
-            </div>
-          </label>
+          <AuthInput
+            label="New password"
+            type={showPw ? 'text' : 'password'}
+            required
+            autoFocus
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            error={!!error}
+            trailing={<PasswordVisibilityToggle shown={showPw} onToggle={() => setShowPw((v) => !v)} />}
+          />
           <button
             type="submit"
             disabled={busy}

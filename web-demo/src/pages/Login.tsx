@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { Icon } from '../components/Icon'
 import { BRAND } from '../lib/brand'
 import { useAuth } from '../lib/auth'
-import { AuthShell, SocialButtons } from './AuthShell'
+import { AuthInput, AuthShell, PasswordVisibilityToggle, SocialButtons, useShake } from './AuthShell'
 
 const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   oauth_failed: "Something went wrong signing you in with Google. Please try again.",
@@ -25,6 +25,7 @@ export function Login() {
     oauthError ? OAUTH_ERROR_MESSAGES[oauthError] || 'Sign-in failed. Please try again.' : null
   )
   const [busy, setBusy] = useState(false)
+  const shake = useShake(error)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,51 +52,36 @@ export function Login() {
       }
       features={['Answer & qualify calls 24/7', '10 Indian languages', 'Every call logged & analyzed']}
     >
-      <form onSubmit={submit} className="flex flex-col gap-4">
+      <form onSubmit={submit} className={`flex flex-col gap-4 ${shake ? 'auth-shake' : ''}`}>
         {error && (
           <div className="flex items-center gap-2 rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">
             <Icon name="error" className="text-[16px] text-destructive" />
             {error}
           </div>
         )}
-        <Field label="Work email">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoFocus
-            placeholder="you@company.com"
-            className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
-          />
-        </Field>
-        <label className="flex flex-col gap-1.5">
-          <span className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-text-muted">Password</span>
+        <AuthInput
+          label="Work email"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoFocus
+          error={!!error}
+        />
+        <AuthInput
+          label="Password"
+          type={showPw ? 'text' : 'password'}
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          error={!!error}
+          topRight={
             <Link to="/forgot-password" className="text-xs font-semibold text-cyan hover:underline">
               Forgot password?
             </Link>
-          </span>
-          <div className="relative">
-            <input
-              type={showPw ? 'text' : 'password'}
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 pr-10 text-sm outline-none focus:border-primary"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPw((v) => !v)}
-              aria-label={showPw ? 'Hide password' : 'Show password'}
-              title={showPw ? 'Hide password' : 'Show password'}
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:text-text"
-            >
-              <Icon name={showPw ? 'visibility_off' : 'visibility'} className="text-[18px]" />
-            </button>
-          </div>
-        </label>
+          }
+          trailing={<PasswordVisibilityToggle shown={showPw} onToggle={() => setShowPw((v) => !v)} />}
+        />
         <button
           type="submit"
           disabled={busy}
@@ -112,14 +98,5 @@ export function Login() {
         </Link>
       </p>
     </AuthShell>
-  )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-semibold text-text-muted">{label}</span>
-      {children}
-    </label>
   )
 }

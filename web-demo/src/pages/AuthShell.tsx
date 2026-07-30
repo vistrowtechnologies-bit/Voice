@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
+import { BharatOrbit } from '../components/BharatBits'
 import { BRAND } from '../lib/brand'
 import { apiAuthConfig } from '../lib/auth'
 import vistrowMark from '../assets/vistrow-mark.png'
@@ -31,23 +32,38 @@ export function AuthShell({
           <span className="text-lg font-semibold tracking-tight">{BRAND.name}</span>
         </Link>
 
-        <div className="relative z-10 max-w-md">
-          <h2 className="font-display text-5xl font-bold leading-[1.05] tracking-tight">{headline}</h2>
-          <ul className="mt-8 flex flex-col gap-4 text-base text-text-muted">
-            {features.map((f) => (
-              <li key={f} className="flex items-center gap-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan/10">
-                  <Icon name="check_circle" className="text-[18px] text-cyan" />
-                </span>
-                {f}
-              </li>
-            ))}
-          </ul>
+        <div className="auth-panel-in relative z-10 flex max-w-md flex-col items-center gap-10">
+          {/* The illustration this panel was missing — a mandala of all ten
+              scripts Artha speaks around a pulsing voice orb. Deliberately
+              not a map of India (borders are a genuine legal/political
+              minefield); this is unmistakably Bharat without touching that
+              at all, and every glyph on the ring is real, not decorative. */}
+          <BharatOrbit />
+          <div className="w-full">
+            <h2 className="font-display text-5xl font-bold leading-[1.05] tracking-tight">{headline}</h2>
+            <ul className="mt-8 flex flex-col gap-4 text-base text-text-muted">
+              {features.map((f, i) => (
+                // Staggered entrance instead of all four items appearing at
+                // once — cheap to add, reads noticeably less static.
+                <li
+                  key={f}
+                  className="auth-panel-in flex items-center gap-3"
+                  style={{ animationDelay: `${80 + i * 70}ms` }}
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan/10">
+                    <Icon name="check_circle" className="text-[18px] text-cyan" />
+                  </span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
-        {/* Big soft orb glow, lower-left */}
+        {/* Soft orb glow, lower-left — breathing instead of static, same
+            glow-pulse keyframe the marketing site's demo card uses. */}
         <div
-          className="pointer-events-none absolute -bottom-24 left-0 h-[28rem] w-[28rem] rounded-full opacity-40 blur-[120px]"
+          className="glow-pulse pointer-events-none absolute -bottom-24 left-0 h-[28rem] w-[28rem] rounded-full opacity-40 blur-[120px]"
           style={{ background: 'radial-gradient(circle, #a855f7, transparent 70%)' }}
         />
         <p className="relative z-10 text-xs uppercase tracking-widest text-text-muted">
@@ -57,7 +73,7 @@ export function AuthShell({
 
       {/* Form panel */}
       <div className="flex w-full flex-col items-center justify-center p-6 lg:w-1/2">
-        <div className="w-full max-w-sm">
+        <div className="auth-panel-in w-full max-w-sm">
           <Link to="/" className="mb-8 flex items-center gap-2 lg:hidden">
             <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
             <span className="font-semibold tracking-tight">{BRAND.name}</span>
@@ -68,6 +84,99 @@ export function AuthShell({
         </div>
       </div>
     </div>
+  )
+}
+
+/** Retriggers a brief horizontal shake whenever `errorMessage` changes to a
+ * new non-empty value — applied to the <form> so a failed submit reads as
+ * an immediate rejection instead of a error banner quietly appearing. */
+export function useShake(errorMessage: string | null | undefined): boolean {
+  const [shaking, setShaking] = useState(false)
+  const seen = useRef<string | null>(null)
+  useEffect(() => {
+    if (!errorMessage || errorMessage === seen.current) return
+    seen.current = errorMessage
+    setShaking(true)
+    const t = setTimeout(() => setShaking(false), 400)
+    return () => clearTimeout(t)
+  }, [errorMessage])
+  return shaking
+}
+
+/** Floating-label text input shared by every auth form — replaces the
+ * static label-above-input pattern that made every field look identical
+ * whether empty, focused, or filled. `topRight` renders a row above the
+ * input (e.g. Login's "Forgot password?" link); `trailing` renders inside
+ * it on the right (e.g. the show/hide-password toggle). */
+export function AuthInput({
+  label,
+  topRight,
+  trailing,
+  error,
+  className = '',
+  onFocus,
+  onBlur,
+  ...props
+}: {
+  label: string
+  topRight?: ReactNode
+  trailing?: ReactNode
+  error?: boolean
+  className?: string
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'placeholder'>) {
+  const id = useId()
+  const [focused, setFocused] = useState(false)
+  const hasValue = props.value != null && String(props.value).length > 0
+  const floated = focused || hasValue
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {topRight && <div className="flex items-center justify-end">{topRight}</div>}
+      <div className="relative">
+        <input
+          id={id}
+          {...props}
+          placeholder=" "
+          onFocus={(e) => {
+            setFocused(true)
+            onFocus?.(e)
+          }}
+          onBlur={(e) => {
+            setFocused(false)
+            onBlur?.(e)
+          }}
+          className={`peer w-full rounded-lg border bg-surface-high px-3 pb-2 pt-4 text-sm text-text outline-none transition-colors focus:ring-2 ${
+            error ? 'border-destructive focus:ring-destructive/20' : 'border-border focus:border-primary focus:ring-primary/15'
+          } ${trailing ? 'pr-10' : ''} ${className}`}
+        />
+        <label
+          htmlFor={id}
+          className={`pointer-events-none absolute left-3 text-text-muted transition-all duration-150 ${
+            floated ? 'top-1.5 text-[10px] font-bold uppercase tracking-wide' : 'top-1/2 -translate-y-1/2 text-sm'
+          }`}
+        >
+          {label}
+        </label>
+        {trailing && <div className="absolute right-2 top-1/2 -translate-y-1/2">{trailing}</div>}
+      </div>
+    </div>
+  )
+}
+
+/** The show/hide toggle button every password field uses — extracted once
+ * both to cut duplication and so AuthInput's `trailing` slot has one
+ * consistent thing to hold. */
+export function PasswordVisibilityToggle({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={shown ? 'Hide password' : 'Show password'}
+      title={shown ? 'Hide password' : 'Show password'}
+      className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:text-text"
+    >
+      <Icon name={shown ? 'visibility_off' : 'visibility'} className="text-[18px]" />
+    </button>
   )
 }
 
