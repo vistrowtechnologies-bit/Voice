@@ -26,7 +26,7 @@ export function AuthShell({
   return (
     <div className="flex min-h-screen bg-bg text-text">
       {/* Pitch panel — hidden on small screens */}
-      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden border-r border-border bg-surface p-10 lg:flex xl:p-14">
+      <div className="relative hidden w-1/2 flex-col items-center justify-between overflow-hidden border-r border-border bg-surface p-10 lg:flex xl:p-14">
         <Link to="/" className="relative z-10 flex items-center gap-2">
           <img src={vistrowMark} alt="" className="h-9 w-9 rounded-lg" />
           <span className="text-lg font-semibold tracking-tight">{BRAND.name}</span>
