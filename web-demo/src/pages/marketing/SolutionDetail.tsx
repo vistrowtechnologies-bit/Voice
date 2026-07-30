@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
-import { DemoOrbCard } from '../../components/DemoOrbCard'
 import { Seo } from '../../components/Seo'
 import { PageHero, CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { SOLUTIONS } from '../../lib/marketingContent'
@@ -30,13 +29,13 @@ export function SolutionDetail() {
   return (
     <MarketingLayout>
       <Seo title={`${solution.headline} — Vistrow Voice`} description={solution.subhead} path={solution.to} jsonLd={faqJsonLd} />
+      {/* Live demo widget is homepage-only now — see PageHero's heroless-of-
+          children branch for how this renders without it. */}
       <PageHero
         eyebrow={`Solutions · ${solution.label}`}
         title={solution.headline}
         subhead={solution.subhead}
-      >
-        <DemoOrbCard />
-      </PageHero>
+      />
 
       {/* Pain → outcome */}
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">

@@ -86,6 +86,31 @@ export function PageHero({
   subhead: string
   children?: React.ReactNode
 }) {
+  // The live demo widget is homepage-only now — every other page that uses
+  // this hero has no `children`. Without this branch the empty second grid
+  // column left the text lopsided against a blank right half on desktop, so
+  // a heroless page instead gets a single centered column. TalkToArthaButton
+  // already handles the no-#live-demo-on-this-page case (navigates home and
+  // scrolls to it), so the CTA still works correctly either way.
+  if (!children) {
+    return (
+      <section className="mx-auto max-w-3xl px-5 py-14 text-center md:px-8 lg:py-20">
+        <SectionEyebrow>{eyebrow}</SectionEyebrow>
+        <h1 className="mt-4 font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl">{title}</h1>
+        <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-text-muted">{subhead}</p>
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <TalkToArthaButton />
+          <Link
+            to="/contact"
+            className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
+          >
+            Book a demo
+          </Link>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-5 py-14 md:px-8 lg:grid-cols-2 lg:py-20">
       <div>

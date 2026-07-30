@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
-import { DemoOrbCard } from '../../components/DemoOrbCard'
 import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
 import { LANGUAGES, SOLUTIONS } from '../../lib/marketingContent'
@@ -55,13 +54,13 @@ export function LanguageDetail() {
         jsonLd={faqJsonLd}
       />
 
+      {/* Live demo widget is homepage-only now — see PageHero's heroless-of-
+          children branch for how this renders without it. */}
       <PageHero
         eyebrow={`Languages · ${lang.name}`}
         title={`AI voice agents that speak ${lang.name}.`}
         subhead={lang.blurb}
-      >
-        <DemoOrbCard />
-      </PageHero>
+      />
 
       <section className="mx-auto max-w-7xl px-5 py-8 md:px-8">
         <div className="grid gap-5 sm:grid-cols-3">
