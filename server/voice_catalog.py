@@ -12,6 +12,7 @@ agent/main.py's _build_tts, AND classified for billing by
 calls_db.voice_tier() — the prefix convention there and here must agree:
   - "elevenlabs:<id>"     → ElevenLabs Flash v2.5  → tier "premium"      (2x credits)
   - "elevenlabs-v3:<id>"  → ElevenLabs v3          → tier "premium_plus" (2x credits)
+  - "google:<voice>"      → Google Cloud Standard  → tier "lite"         (0.5x credits)
   - bare Sarvam bulbul:v2 speaker (abhilash/anushka) → tier "lite"       (0.5x credits)
   - any other bare name (Sarvam bulbul:v3)           → tier "standard"   (1x credits)
 
@@ -81,6 +82,29 @@ CATALOG: list[dict] = [
     {"value": "kavya", "name": "Kavya", "gender": "female", "tier": "standard"},
     {"value": "amit", "name": "Amit", "gender": "male", "tier": "standard"},
     {"value": "pooja", "name": "Pooja", "gender": "female", "tier": "standard"},
+    # Google Cloud Standard — locale-specific economy alternatives. These use
+    # the recovered GCP promotional balance and avoid Gemini TTS's additional
+    # Vertex AI role requirement.
+{"value": "google:en-IN-Standard-D", "name": "Aarav (English)", "gender": "female", "tier": "lite", "force_lang": "en"},
+    {"value": "google:en-IN-Standard-B", "name": "Kabir (English)", "gender": "male", "tier": "lite", "force_lang": "en"},
+    {"value": "google:hi-IN-Standard-A", "name": "Aditi (Hindi)", "gender": "female", "tier": "lite", "force_lang": "hi"},
+    {"value": "google:hi-IN-Standard-B", "name": "Vihaan (Hindi)", "gender": "male", "tier": "lite", "force_lang": "hi"},
+    {"value": "google:mr-IN-Standard-A", "name": "Isha (Marathi)", "gender": "female", "tier": "lite", "force_lang": "mr"},
+    {"value": "google:mr-IN-Standard-B", "name": "Om (Marathi)", "gender": "male", "tier": "lite", "force_lang": "mr"},
+    {"value": "google:ta-IN-Standard-A", "name": "Nila (Tamil)", "gender": "female", "tier": "lite", "force_lang": "ta"},
+    {"value": "google:ta-IN-Standard-B", "name": "Arjun (Tamil)", "gender": "male", "tier": "lite", "force_lang": "ta"},
+    {"value": "google:te-IN-Standard-A", "name": "Ananya (Telugu)", "gender": "female", "tier": "lite", "force_lang": "te"},
+    {"value": "google:te-IN-Standard-B", "name": "Karthik (Telugu)", "gender": "male", "tier": "lite", "force_lang": "te"},
+    {"value": "google:kn-IN-Standard-A", "name": "Nandini (Kannada)", "gender": "female", "tier": "lite", "force_lang": "kn"},
+    {"value": "google:kn-IN-Standard-B", "name": "Vikram (Kannada)", "gender": "male", "tier": "lite", "force_lang": "kn"},
+    {"value": "google:ml-IN-Standard-A", "name": "Diya (Malayalam)", "gender": "female", "tier": "lite", "force_lang": "ml"},
+    {"value": "google:ml-IN-Standard-B", "name": "Nikhil (Malayalam)", "gender": "male", "tier": "lite", "force_lang": "ml"},
+    {"value": "google:gu-IN-Standard-A", "name": "Hetal (Gujarati)", "gender": "female", "tier": "lite", "force_lang": "gu"},
+    {"value": "google:gu-IN-Standard-B", "name": "Harsh (Gujarati)", "gender": "male", "tier": "lite", "force_lang": "gu"},
+    {"value": "google:bn-IN-Standard-A", "name": "Mrittika (Bengali)", "gender": "female", "tier": "lite", "force_lang": "bn"},
+    {"value": "google:bn-IN-Standard-B", "name": "Arindam (Bengali)", "gender": "male", "tier": "lite", "force_lang": "bn"},
+    {"value": "google:pa-IN-Standard-A", "name": "Gurleen (Punjabi)", "gender": "female", "tier": "lite", "force_lang": "pa"},
+    {"value": "google:pa-IN-Standard-B", "name": "Armaan (Punjabi)", "gender": "male", "tier": "lite", "force_lang": "pa"},
     # --- Lite (Sarvam bulbul:v2) --------------------------------------------
     {"value": "abhilash", "name": "Abhilash", "gender": "male", "tier": "lite"},
     {"value": "hitesh", "name": "Hitesh", "gender": "male", "tier": "lite"},
@@ -129,6 +153,14 @@ DEFAULT_ACCOUNT_VOICES = ["shubh", "priya"]
 # SAMPLE_TEXT_VERSION (regenerates cached audio) whenever any line changes.
 SAMPLE_TEXT_VERSION = 3
 SAMPLE_TEXTS: dict[str, str | dict[str, str]] = {
+    "mr": "नमस्कार! Vistrow Voice मध्ये आपले स्वागत आहे. हा आमच्या मराठी एआय आवाजाचा नमुना आहे.",
+    "ta": "வணக்கம்! Vistrow Voice-க்கு வரவேற்கிறோம். இது எங்கள் தமிழ் செயற்கை நுண்ணறிவு குரலின் மாதிரி.",
+    "te": "నమస్కారం! Vistrow Voice‌కు స్వాగతం. ఇది మా తెలుగు ఏఐ వాయిస్ నమూనా.",
+    "kn": "ನಮಸ್ಕಾರ! Vistrow Voice‌ಗೆ ಸ್ವಾಗತ. ಇದು ನಮ್ಮ ಕನ್ನಡ ಎಐ ಧ್ವನಿಯ ಮಾದರಿ.",
+    "ml": "നമസ്കാരം! Vistrow Voice-ലേക്ക് സ്വാഗതം. ഇത് ഞങ്ങളുടെ മലയാളം എഐ ശബ്ദത്തിന്റെ മാതൃകയാണ്.",
+    "gu": "નમસ્તે! Vistrow Voiceમાં આપનું સ્વાગત છે. આ અમારા ગુજરાતી એઆઈ અવાજનો નમૂનો છે.",
+    "bn": "নমস্কার! Vistrow Voice-এ স্বাগতম। এটি আমাদের বাংলা এআই কণ্ঠের নমুনা।",
+    "pa": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! Vistrow Voice ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ। ਇਹ ਸਾਡੀ ਪੰਜਾਬੀ ਏਆਈ ਆਵਾਜ਼ ਦਾ ਨਮੂਨਾ ਹੈ।",
     "en": (
         "Hi! I'm a Vistrow Voice AI agent. I can answer your calls, qualify "
         "leads, and book appointments — all in your customer's own language."

@@ -174,6 +174,8 @@ def _build_llm(model: str):
     SDK's own default env var) since either may already be set."""
     if model.startswith("gemini"):
         api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            raise RuntimeError(f"{model} is selected, but GEMINI_API_KEY is not configured.")
         return google.LLM(model=model, api_key=api_key)
     return openai.LLM(model=model)
 
@@ -198,15 +200,22 @@ def _google_credentials_info() -> dict | None:
 
 
 _GOOGLE_CREDENTIALS = _google_credentials_info()
-# Google Cloud's billing account is currently blocked ("Your project has
-# been denied access" on Speech-to-Text/Text-to-Speech AND the Gemini LLM),
-# so the Google STT/TTS path — however well it works once that's fixed — is
-# actively making calls worse right now (crashes, dead air) rather than
-# providing a safety net. This flag is the single switch to flip back to
-# True once Google Cloud billing is resolved; until then _build_stt/
-# _build_tts below always return Sarvam only, ignoring _GOOGLE_CREDENTIALS
-# even if it's configured.
-_GOOGLE_VOICE_ENABLED = False
+
+
+def _env_enabled(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# The recovered Google Cloud billing account is active again. Presence of a
+# valid service-account JSON therefore enables Google speech by default;
+# GOOGLE_VOICE_ENABLED=false remains an emergency kill switch that can be
+# changed in deployment secrets without another code release.
+_GOOGLE_VOICE_ENABLED = _GOOGLE_CREDENTIALS is not None and _env_enabled(
+    "GOOGLE_VOICE_ENABLED", default=True
+)
 
 
 def _build_stt():

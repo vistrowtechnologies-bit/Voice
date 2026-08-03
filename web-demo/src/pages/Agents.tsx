@@ -58,12 +58,28 @@ const GOOGLE_VOICES = [
   // (matches _build_tts's _GOOGLE_MULTILINGUAL_VOICES set exactly).
   { value: 'google:charon', label: 'Multilingual — Male' },
   { value: 'google:kore', label: 'Multilingual — Female' },
-  // Locale-specific voices, kept for Hindi/English-India where an operator
-  // wants that exact regional accent rather than the multilingual voice.
-  { value: 'google:en-IN-Neural2-D', label: 'English (India), Female' },
-  { value: 'google:en-IN-Neural2-B', label: 'English (India), Male' },
-  { value: 'google:hi-IN-Neural2-A', label: 'Hindi, Female' },
-  { value: 'google:hi-IN-Neural2-B', label: 'Hindi, Male' },
+  // Locale-specific, native Indian-language voices for operators who want
+  // a fixed regional voice rather than the multilingual Gemini persona.
+  { value: 'google:en-IN-Standard-D', label: 'English (India), Female' },
+  { value: 'google:en-IN-Standard-B', label: 'English (India), Male' },
+  { value: 'google:hi-IN-Standard-A', label: 'Hindi, Female' },
+  { value: 'google:hi-IN-Standard-B', label: 'Hindi, Male' },
+  { value: 'google:mr-IN-Standard-A', label: 'Marathi, Female' },
+  { value: 'google:mr-IN-Standard-B', label: 'Marathi, Male' },
+  { value: 'google:ta-IN-Standard-A', label: 'Tamil, Female' },
+  { value: 'google:ta-IN-Standard-B', label: 'Tamil, Male' },
+  { value: 'google:te-IN-Standard-A', label: 'Telugu, Female' },
+  { value: 'google:te-IN-Standard-B', label: 'Telugu, Male' },
+  { value: 'google:kn-IN-Standard-A', label: 'Kannada, Female' },
+  { value: 'google:kn-IN-Standard-B', label: 'Kannada, Male' },
+  { value: 'google:ml-IN-Standard-A', label: 'Malayalam, Female' },
+  { value: 'google:ml-IN-Standard-B', label: 'Malayalam, Male' },
+  { value: 'google:gu-IN-Standard-A', label: 'Gujarati, Female' },
+  { value: 'google:gu-IN-Standard-B', label: 'Gujarati, Male' },
+  { value: 'google:bn-IN-Standard-A', label: 'Bengali, Female' },
+  { value: 'google:bn-IN-Standard-B', label: 'Bengali, Male' },
+  { value: 'google:pa-IN-Standard-A', label: 'Punjabi, Female' },
+  { value: 'google:pa-IN-Standard-B', label: 'Punjabi, Male' },
 ] as const
 // Two premium voices from the operator's own ElevenLabs account —
 // multilingual by model (eleven_flash_v2_5 in agent/main.py), not by voice,
@@ -111,12 +127,8 @@ const MODEL_OPTIONS = [
   { value: 'gpt-4.1', label: 'Vistrow Prime', tag: 'Best reasoning & quality' },
   { value: 'gpt-4o', label: 'Vistrow Pro', tag: 'Fast & natural' },
   { value: 'gpt-4o-mini', label: 'Vistrow Standard', tag: 'Balanced · recommended' },
-  // Vistrow Flash / Vistrow Lite (Gemini) are hidden until a working
-  // GOOGLE_API_KEY is configured on the agent worker — with no key, an
-  // agent saved on either tier crashes instantly on every call (the
-  // production outage of 2026-07-15). Restore when the key lands:
-  // { value: 'gemini-2.5-flash', label: 'Vistrow Flash', tag: 'Fast' },
-  // { value: 'gemini-3.1-flash-lite', label: 'Vistrow Lite', tag: 'Economy' },
+  { value: 'gemini-3.6-flash', label: 'Vistrow Flash', tag: 'Fast' },
+  { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite', tag: 'Lowest cost' },
 ] as const
 const modelLabel = (value: string) => MODEL_OPTIONS.find((m) => m.value === value)?.label ?? value
 // Presets for Sarvam bulbul:v3's own pace/temperature/pitch — controls how

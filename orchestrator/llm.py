@@ -1,13 +1,11 @@
-"""LLM turn-taking — direct OpenAI Chat Completions call with function-calling,
+"""LLM turn-taking through OpenAI-compatible Chat Completions clients,
 replacing livekit-agents' openai.LLM plugin wrapper. Tool-calling shape
 mirrors server/help_chat.py's existing OpenAI function-calling pattern
 (TOOL_SCHEMAS/TOOL_FUNCTIONS passed straight into `tools=`).
 
-Only OpenAI is implemented for Phase 1. agent/main.py's _build_llm also
-supports a "gemini"-prefixed model via livekit.plugins.google — porting
-that is deferred until an agent config actually needs it live, rather than
-half-implementing a second provider now; model_name here is expected to be
-a plain OpenAI model id (e.g. "gpt-4o-mini").
+Gemini's official OpenAI-compatible endpoint lets this pipeline preserve the
+same streaming and function-calling code while routing gemini-* models with
+GEMINI_API_KEY.
 """
 
 from __future__ import annotations
@@ -19,7 +17,7 @@ from typing import Awaitable, Callable
 
 from openai import AsyncOpenAI
 
-_client: AsyncOpenAI | None = None
+_clients: dict[str, AsyncOpenAI] = {}
 _SENTENCE_BREAK = re.compile(r"[.!?\n]\s+")
 _MAX_CHUNK_CHARS = 220  # force-flush a long unpunctuated run so it isn't held forever
 # A fragment shorter than this doesn't get flushed as its own TTS call even
@@ -31,14 +29,23 @@ _MAX_CHUNK_CHARS = 220  # force-flush a long unpunctuated run so it isn't held f
 _MIN_CHUNK_CHARS = 20
 
 
-def _get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set.")
-        _client = AsyncOpenAI(api_key=api_key)
-    return _client
+def _get_client(model: str) -> AsyncOpenAI:
+    provider = "gemini" if model.startswith("gemini") else "openai"
+    if provider not in _clients:
+        if provider == "gemini":
+            api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+            if not api_key:
+                raise RuntimeError(f"{model} is selected, but GEMINI_API_KEY is not set.")
+            _clients[provider] = AsyncOpenAI(
+                api_key=api_key,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            )
+        else:
+            api_key = os.environ.get("OPENAI_API_KEY")
+            if not api_key:
+                raise RuntimeError("OPENAI_API_KEY is not set.")
+            _clients[provider] = AsyncOpenAI(api_key=api_key)
+    return _clients[provider]
 
 
 async def run_turn(
@@ -61,7 +68,7 @@ async def run_turn(
     spirit of agent/tools.py's various best-effort guards elsewhere in this
     codebase: fail safe, never hang a live call indefinitely.
     """
-    client = _get_client()
+    client = _get_client(model)
     working = list(messages)
     for _ in range(max_tool_hops):
         resp = await client.chat.completions.create(
@@ -149,7 +156,7 @@ async def stream_turn(
     within one OpenAI streamed response. Returns (full_reply_text,
     updated_messages), same shape as run_turn.
     """
-    client = _get_client()
+    client = _get_client(model)
     stream = await client.chat.completions.create(
         model=model,
         messages=messages,

@@ -10,3 +10,4 @@ pyjwt>=2.8
 # Only needed if an agent's voice is an ElevenLabs one (MP3 TTS output) —
 # see audio.py's _decode_mp3. Requires ffmpeg on PATH.
 pydub>=0.25
+google-cloud-texttospeech>=2.31.0

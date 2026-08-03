@@ -15,7 +15,9 @@ async, so this is a swap-in-place later, not a rewrite).
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import json
 import os
 
 import httpx
@@ -27,6 +29,7 @@ _SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY")
 
 _ELEVEN_V3_PREFIX = "elevenlabs-v3:"
 _ELEVEN_PREFIX = "elevenlabs:"
+_GOOGLE_PREFIX = "google:"
 _SARVAM_V2_SPEAKERS = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 _SARVAM_LANG_DEFAULT = "hi-IN"
 
@@ -111,6 +114,41 @@ async def _synth_sarvam(
     return base64.b64decode(b64), "audio/wav"
 
 
+def _synth_google_sync(voice_name: str, text: str) -> tuple[bytes, str]:
+    raw_credentials = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if not raw_credentials:
+        raise TTSError("Google voice isn't configured (no service-account credentials).")
+    try:
+        credentials_info = json.loads(raw_credentials)
+        from google.cloud import texttospeech
+        from google.oauth2 import service_account
+
+        credentials = service_account.Credentials.from_service_account_info(credentials_info)
+        client = texttospeech.TextToSpeechClient(credentials=credentials)
+        language_code = "-".join(voice_name.split("-")[:2])
+        response = client.synthesize_speech(
+            input=texttospeech.SynthesisInput(text=text),
+            voice=texttospeech.VoiceSelectionParams(
+                language_code=language_code,
+                name=voice_name,
+            ),
+            audio_config=texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.LINEAR16,
+            ),
+        )
+    except (ValueError, KeyError) as e:
+        raise TTSError("Google service-account credentials are invalid.") from e
+    except TTSError:
+        raise
+    except Exception as e:
+        raise TTSError(f"Google TTS failed: {e}") from e
+    return response.audio_content, "audio/wav"
+
+
+async def _synth_google(voice_name: str, text: str) -> tuple[bytes, str]:
+    return await asyncio.to_thread(_synth_google_sync, voice_name, text)
+
+
 async def synthesize(
     voice_string: str,
     text: str,
@@ -136,16 +174,20 @@ async def synthesize(
     if voice_string.startswith(_ELEVEN_PREFIX):
         lang = reply_language.split("-")[0] if reply_language else None
         return await _synth_elevenlabs(voice_string[len(_ELEVEN_PREFIX):], "eleven_flash_v2_5", text, lang, speed, style)
+    if voice_string.startswith(_GOOGLE_PREFIX):
+        return await _synth_google(voice_string[len(_GOOGLE_PREFIX):], text)
     model = "bulbul:v2" if voice_string in _SARVAM_V2_SPEAKERS else "bulbul:v3"
     return await _synth_sarvam(voice_string, model, reply_language or _SARVAM_LANG_DEFAULT, text, pace, pitch)
 
 
 def tts_provider_of(voice_string: str) -> str:
-    """'elevenlabs' | 'elevenlabs-v3' | 'sarvam' — mirrors main.py's
+    """'elevenlabs' | 'elevenlabs-v3' | 'google' | 'sarvam' — mirrors main.py's
     self._tts_provider, used by tools.py's switch_reply_language to decide
     whether a language code is safe to enforce."""
     if voice_string.startswith(_ELEVEN_V3_PREFIX):
         return "elevenlabs-v3"
     if voice_string.startswith(_ELEVEN_PREFIX):
         return "elevenlabs"
+    if voice_string.startswith(_GOOGLE_PREFIX):
+        return "google"
     return "sarvam"

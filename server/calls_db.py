@@ -3427,20 +3427,21 @@ _ECONOMY_VOICES = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 # Both the normal (Flash v2.5) and experimental (v3, agent/main.py's
 # _ELEVENLABS_V3_VOICE_PREFIX) ElevenLabs voice forms bill as premium.
 _PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:")
+_ECONOMY_VOICE_PREFIXES = ("google:",)
 
 
 def voice_tier(voice: str | None) -> str:
     """Classifies a call's `voice` string into a credit-billing tier. None/
     empty (every call recorded before the `voice` column existed) and any
-    unrecognized value (e.g. a `google:` voice, if one ever slips through
-    while that provider is otherwise hidden) both fall back to "standard" —
+    unrecognized value both fall back to "standard" — Google Cloud Standard
+    voices are intentionally classified as economy/Lite by prefix —
     the same "don't guess, use the safe default" reasoning as agent/main.py's
     own unconfigured-provider fallback."""
     if not voice:
         return "standard"
     if voice.startswith(_PREMIUM_VOICE_PREFIXES):
         return "premium"
-    if voice in _ECONOMY_VOICES:
+    if voice.startswith(_ECONOMY_VOICE_PREFIXES) or voice in _ECONOMY_VOICES:
         return "economy"
     return "standard"
 

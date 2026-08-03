@@ -34,6 +34,7 @@ _SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY")
 
 _ELEVEN_V3_PREFIX = "elevenlabs-v3:"
 _ELEVEN_PREFIX = "elevenlabs:"
+_GOOGLE_PREFIX = "google:"
 _SARVAM_V2_SPEAKERS = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 
 # lang code (voice_catalog.SAMPLE_TEXTS keys) → Sarvam target_language_code.
@@ -103,6 +104,35 @@ def _synth_sarvam(speaker: str, model: str, lang: str, text: str) -> tuple[bytes
     return base64.b64decode(b64), "audio/wav"
 
 
+def _synth_google(voice_name: str, text: str) -> tuple[bytes, str]:
+    raw_credentials = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if not raw_credentials:
+        raise PreviewError("Google voice preview isn't configured (no service-account credentials).")
+    try:
+        credentials_info = json.loads(raw_credentials)
+        from google.cloud import texttospeech
+        from google.oauth2 import service_account
+
+        credentials = service_account.Credentials.from_service_account_info(credentials_info)
+        client = texttospeech.TextToSpeechClient(credentials=credentials)
+        language_code = "-".join(voice_name.split("-")[:2])
+        response = client.synthesize_speech(
+            input=texttospeech.SynthesisInput(text=text),
+            voice=texttospeech.VoiceSelectionParams(
+                language_code=language_code,
+                name=voice_name,
+            ),
+            audio_config=texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.LINEAR16,
+            ),
+        )
+    except (ValueError, KeyError) as e:
+        raise PreviewError("Google service-account credentials are invalid.") from e
+    except Exception as e:
+        raise PreviewError(f"Google TTS failed: {e}") from e
+    return response.audio_content, "audio/wav"
+
+
 def synthesize(voice_string: str, lang: str) -> tuple[bytes, str]:
     """Synthesize the fixed audition line for `voice_string` in `lang`.
     Returns (audio_bytes, content_type). Raises PreviewError on any failure."""
@@ -118,5 +148,7 @@ def synthesize(voice_string: str, lang: str) -> tuple[bytes, str]:
         return _synth_elevenlabs(voice_string[len(_ELEVEN_V3_PREFIX):], "eleven_v3", text)
     if voice_string.startswith(_ELEVEN_PREFIX):
         return _synth_elevenlabs(voice_string[len(_ELEVEN_PREFIX):], "eleven_flash_v2_5", text)
+    if voice_string.startswith(_GOOGLE_PREFIX):
+        return _synth_google(voice_string[len(_GOOGLE_PREFIX):], text)
     model = "bulbul:v2" if voice_string in _SARVAM_V2_SPEAKERS else "bulbul:v3"
     return _synth_sarvam(voice_string, model, lang, text)
