@@ -63,12 +63,16 @@ function avatarGradient(value: string, name: string): string {
 
 function TierGroup({
   entries,
+  label,
+  note,
   lang,
   busyVoice,
   onAdd,
   onRemove,
 }: {
   entries: VoiceEntry[]
+  label?: string
+  note?: string
   lang: string
   busyVoice: string | null
   onAdd: (v: string) => void
@@ -79,8 +83,8 @@ function TierGroup({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-baseline gap-2">
-        <h2 className="text-sm font-bold">{tierLabel}</h2>
-        <span className="text-[11px] text-text-muted">{tierNote}</span>
+        <h2 className="text-sm font-bold">{label ?? tierLabel}</h2>
+        <span className="text-[11px] text-text-muted">{note ?? tierNote}</span>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {entries.map((entry) => (
@@ -231,6 +235,8 @@ export function Voices() {
   }
 
   const byTier = (tier: VoiceTier) => (data?.voices ?? []).filter((v) => v.tier === tier)
+  const sarvamLite = () => byTier('lite').filter((v) => !v.value.startsWith('google:'))
+  const googleLite = () => byTier('lite').filter((v) => v.value.startsWith('google:'))
 
   return (
     <DashboardLayout>
@@ -293,7 +299,18 @@ export function Voices() {
               onRemove={onRemove}
             />
             <TierGroup
-              entries={byTier('lite')}
+              entries={sarvamLite()}
+              label="Sarvam Lite v2"
+              note="0.5x credits · multilingual"
+              lang={lang}
+              busyVoice={busyVoice}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
+            <TierGroup
+              entries={googleLite()}
+              label="Google Voices"
+              note="0.5x credits · native Indian languages"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}

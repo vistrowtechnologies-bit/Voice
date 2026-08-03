@@ -120,6 +120,30 @@ const voiceLabel = (voice: string) =>
   voice
 // Tier display order in the picker's optgroups — premium tiers first.
 const VOICE_TIER_ORDER = ['premium', 'standard', 'lite'] as const
+
+// Lite voices share the same 0.5x billing tier, but the picker keeps Sarvam
+// v2 and Google Cloud voices in separate groups so operators can deliberately
+// choose the provider/voice family they want to test.
+const voicePickerGroups = (voices: VoiceEntry[]) => [
+  ...VOICE_TIER_ORDER.filter((tier) => tier !== 'lite').map((tier) => ({
+    key: tier,
+    label: voices.find((v) => v.tier === tier)?.tierLabel ?? tier,
+    note: voices.find((v) => v.tier === tier)?.tierNote ?? '',
+    voices: voices.filter((v) => v.tier === tier),
+  })),
+  {
+    key: 'sarvam-lite',
+    label: 'Sarvam Lite v2',
+    note: '0.5x credits · multilingual',
+    voices: voices.filter((v) => v.tier === 'lite' && !v.value.startsWith('google:')),
+  },
+  {
+    key: 'google-lite',
+    label: 'Google Voices',
+    note: '0.5x credits · native Indian languages',
+    voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:')),
+  },
+]
 // The raw model string stays under the hood; operators only ever see the
 // Vistrow tier name + quality tag, so we never expose which vendor model
 // powers each tier. Order = premium → economy.
@@ -488,12 +512,11 @@ function AgentEditor({
                 {!myVoices.some((v) => v.value === form.voice) && (
                   <option value={form.voice}>{voiceLabel(form.voice)} (not in your voices)</option>
                 )}
-                {VOICE_TIER_ORDER.map((tier) => {
-                  const group = myVoices.filter((v) => v.tier === tier)
-                  if (group.length === 0) return null
+                {voicePickerGroups(myVoices).map((group) => {
+                  if (group.voices.length === 0) return null
                   return (
-                    <optgroup key={tier} label={`Vistrow ${group[0].tierLabel} — ${group[0].tierNote}`}>
-                      {group.map((v) => (
+                    <optgroup key={group.key} label={`${group.label} — ${group.note}`}>
+                      {group.voices.map((v) => (
                         <option key={v.value} value={v.value}>
                           {v.name}
                           {v.note ? ` — ${v.note}` : ''}
