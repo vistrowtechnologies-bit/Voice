@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -61,10 +61,12 @@ export function LeadDetail() {
   const [arthaleadsConnected, setArthaleadsConnected] = useState(false)
   const [tab, setTab] = useState<'details' | 'history'>('details')
   const [history, setHistory] = useState<CallRecord[] | null>(null)
+  const [historySearch, setHistorySearch] = useState('')
 
   useEffect(() => {
     if (!id) return
     setTab('details')
+    setHistorySearch('')
     fetchLead(id).then((result) => setCall(result ?? null))
   }, [id])
 
@@ -78,6 +80,15 @@ export function LeadDetail() {
       .then((calls) => setHistory(calls.filter((c) => c.id !== call.id)))
       .catch(() => setHistory([]))
   }, [call?.phone, call?.id])
+
+  const filteredHistory = useMemo(() => {
+    if (!history) return []
+    const s = historySearch.trim().toLowerCase()
+    if (!s) return history
+    return history.filter(
+      (c) => c.name.toLowerCase().includes(s) || c.agent.toLowerCase().includes(s) || formatDateTime(c.callDate).toLowerCase().includes(s),
+    )
+  }, [history, historySearch])
 
   useEffect(() => {
     fetchIntegrations()
@@ -196,7 +207,18 @@ export function LeadDetail() {
       </div>
 
       {tab === 'history' ? (
-        <section className="p-4 sm:p-6">
+        <section className="flex flex-col gap-3 p-4 sm:p-6">
+          {!!history?.length && (
+            <div className="relative max-w-sm">
+              <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted" />
+              <input
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="Search by name, agent, or date…"
+                className="w-full rounded-lg border border-border bg-surface py-2 pl-10 pr-3 text-sm outline-none focus:border-primary"
+              />
+            </div>
+          )}
           <Card padding="none">
             {history === null ? (
               <div className="flex justify-center p-8">
@@ -204,9 +226,11 @@ export function LeadDetail() {
               </div>
             ) : history.length === 0 ? (
               <EmptyState icon="history" text="No other calls from this phone number yet." compact />
+            ) : filteredHistory.length === 0 ? (
+              <EmptyState icon="search_off" text={`No calls match "${historySearch}".`} compact />
             ) : (
               <div className="divide-y divide-border">
-                {history.map((c) => (
+                {filteredHistory.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => navigate(`/dashboard/calls/${c.id}`)}
