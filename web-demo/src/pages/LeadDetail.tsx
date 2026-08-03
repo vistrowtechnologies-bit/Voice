@@ -8,6 +8,7 @@ import {
   LANGUAGE_NAMES,
   analyzeCall,
   fetchCallRecordingUrl,
+  fetchCalls,
   fetchIntegrations,
   fetchLead,
   formatDateTime,
@@ -52,11 +53,25 @@ export function LeadDetail() {
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null)
   const [recordingError, setRecordingError] = useState<string | null>(null)
   const [arthaleadsConnected, setArthaleadsConnected] = useState(false)
+  const [tab, setTab] = useState<'details' | 'history'>('details')
+  const [history, setHistory] = useState<CallRecord[] | null>(null)
 
   useEffect(() => {
     if (!id) return
+    setTab('details')
     fetchLead(id).then((result) => setCall(result ?? null))
   }, [id])
+
+  // Every past call from this same phone number, so a repeat caller shows up
+  // as one lead's history instead of looking like a fresh, unrelated lead
+  // each time — search already matches on phone (see calls_db.list_calls).
+  useEffect(() => {
+    setHistory(null)
+    if (!call?.phone) return
+    fetchCalls({ search: call.phone })
+      .then((calls) => setHistory(calls.filter((c) => c.id !== call.id)))
+      .catch(() => setHistory([]))
+  }, [call?.phone, call?.id])
 
   useEffect(() => {
     fetchIntegrations()
@@ -146,6 +161,69 @@ export function LeadDetail() {
       </div>
       <PageHeader title={call.name} subtitle={call.phone || 'no phone captured'} />
 
+      <div className="flex gap-1 rounded-lg border border-border p-0.5 self-start mx-4 mt-4 sm:mx-6">
+        <button
+          onClick={() => setTab('details')}
+          className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+            tab === 'details' ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
+          }`}
+        >
+          Details
+        </button>
+        <button
+          onClick={() => setTab('history')}
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${
+            tab === 'history' ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
+          }`}
+        >
+          History
+          {!!history?.length && (
+            <span
+              className={`rounded-full px-1.5 text-[10px] ${
+                tab === 'history' ? 'bg-bg/20' : 'bg-surface-high text-text-muted'
+              }`}
+            >
+              {history.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {tab === 'history' ? (
+        <section className="p-4 sm:p-6">
+          <Card padding="none">
+            {history === null ? (
+              <div className="flex justify-center p-8">
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              </div>
+            ) : history.length === 0 ? (
+              <EmptyState icon="history" text="No other calls from this phone number yet." compact />
+            ) : (
+              <div className="divide-y divide-border">
+                {history.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => navigate(`/dashboard/calls/${c.id}`)}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-high"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {c.agent} · <span className="capitalize text-text-muted">{c.channel}</span>
+                      </p>
+                      <p className="text-[11px] text-text-muted">{formatDateTime(c.callDate)}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="text-xs capitalize text-text-muted">{c.sentiment}</span>
+                      <span className="text-sm text-text-muted">{formatDuration(c.durationSeconds)}</span>
+                      <Icon name="chevron_right" className="text-[16px] text-text-muted" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Card>
+        </section>
+      ) : (
       <section className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:grid-cols-3">
         <Card className="flex flex-col gap-3 lg:col-span-2">
           <div className="flex items-center justify-between">
@@ -361,6 +439,7 @@ export function LeadDetail() {
           </Card>
         </div>
       </section>
+      )}
     </DashboardLayout>
   )
 }
