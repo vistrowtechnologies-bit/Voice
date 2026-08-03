@@ -23,6 +23,12 @@ const SENTIMENT_STYLE: Record<string, string> = {
   negative: 'text-destructive',
 }
 
+// extractedData keys are operator-authored snake_case ("plot_configuration")
+// — turn that into a readable label the same way the fixed fields above do.
+function titleCase(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 // Client-side .txt export of the full conversation, both sides combined in
 // original chronological order, labeled by speaker for readability.
 function downloadTranscript(call: CallRecord): void {
@@ -419,6 +425,14 @@ export function LeadDetail() {
                   <Row label="Timeline" value={call.timeline || '—'} />
                 </>
               )}
+              {/* Whatever this agent's own Post-call fields config
+                  (Agents → edit → Post-call fields) asked the LLM to pull
+                  from the transcript — the generic per-business version of
+                  the fixed fields above, e.g. a real-estate agent's "plot
+                  size interest" or a clinic's "preferred doctor". */}
+              {Object.entries(call.extractedData ?? {}).map(([key, value]) => (
+                <Row key={key} label={titleCase(key)} value={String(value) || '—'} />
+              ))}
             </dl>
             {call.siteVisit && (
               <div className="mt-3 flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">

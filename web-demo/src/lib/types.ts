@@ -76,6 +76,12 @@ export interface CallRecord {
   // Never the raw storage key — just whether a recording exists. Fetch a
   // playback URL on demand via fetchCallRecordingUrl.
   hasRecording: boolean
+  // Operator-defined fields (agent.postCallFields) the post-call LLM pass
+  // pulled from this specific call's transcript — the generic, per-business
+  // extraction system underneath the fixed budget/location/timeline and
+  // company/useCase/teamSize fields above. {} when the agent has no custom
+  // fields configured, or extraction found nothing.
+  extractedData: Record<string, string>
 }
 
 export type Lead = CallRecord
