@@ -1270,8 +1270,17 @@ def list_calls(account_id: int, limit: int = 200, search: str = "", status: str 
     conn = _connect()
     try:
         visitor_numbers = _visitor_numbers_by_id(conn, account_id)
-        query = "SELECT * FROM calls WHERE account_id = ?"
-        params: list = [account_id]
+        # room_name 'test-agent-<id>-...' is BrowserTestModal's own dashboard
+        # "Test Call" button (AgentTestCall.tsx) — an operator poking at
+        # their own agent, not a real lead. Excluded from the call log/
+        # stats/CSV export entirely rather than just hidden client-side, so
+        # counts stay accurate wherever list_calls is the source (this
+        # function backs both the UI and the export).
+        # Bound param, not a literal '%' in the SQL string — dbconn.execute's
+        # "?" -> "%s" rewrite means a raw "%" in the query text collides with
+        # psycopg's own placeholder parsing and raises ProgrammingError.
+        query = "SELECT * FROM calls WHERE account_id = ? AND room_name NOT LIKE ?"
+        params: list = [account_id, "test-agent-%"]
         if days:
             query += " AND started_at::date >= (CURRENT_DATE - (? || ' days')::interval)::date"
             params.append(str(days - 1))
