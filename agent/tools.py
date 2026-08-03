@@ -253,7 +253,9 @@ async def _calendar_book(
 
 
 @function_tool
-async def check_calendar_availability(context: RunContext, date: str, duration_minutes: int = 30) -> str:
+async def check_calendar_availability(
+    context: RunContext, date: str, duration_minutes: int = 30, requested_time: str = ""
+) -> str:
     """Check real open appointment slots on the business's calendar for a date.
     Call this before offering times so you only offer slots that are actually
     free. Works for any business (clinic, salon, property visit, consultation).
@@ -261,8 +263,14 @@ async def check_calendar_availability(context: RunContext, date: str, duration_m
     Args:
         date: The date to check, in YYYY-MM-DD format.
         duration_minutes: How long the appointment needs to be. Default 30.
+        requested_time: If the caller already named a specific time (24-hour
+            "HH:MM", e.g. "13:00"), pass it here so the tool tells you
+            directly whether THAT exact time is free — don't try to
+            eyeball-match it against the slot list yourself.
     """
-    logger.info("checking calendar availability for %s (%smin)", date, duration_minutes)
+    logger.info(
+        "checking calendar availability for %s (%smin, requested=%s)", date, duration_minutes, requested_time or "-"
+    )
     slots = await _calendar_check(context, date, duration_minutes)
     if slots is None:
         # A native calendar always exists now — None here means the DB call
@@ -273,7 +281,24 @@ async def check_calendar_availability(context: RunContext, date: str, duration_m
         )
     if not slots:
         return f"No open slots on {date}. Offer the caller a different day."
-    return f"Open slots on {date}: {', '.join(slots)}. Offer these to the caller."
+    listing = f"Open slots on {date}: {', '.join(slots)}."
+    if requested_time:
+        # Deterministic exact-match check instead of leaving the model to
+        # scan a long comma list itself — a 2026-08-03 real call had the
+        # model claim a genuinely-open time ("13:00", present in the slot
+        # list) was unavailable. Stating the verdict directly removes that
+        # failure mode for the one case that matters most: the exact time
+        # the caller just asked for.
+        if requested_time in slots:
+            return (
+                f"YES — {requested_time} on {date} IS available. Offer it back to the caller and book it if they "
+                f"confirm; do not claim it's unavailable. {listing}"
+            )
+        return (
+            f"NO — {requested_time} on {date} is NOT available (already booked or outside business hours). "
+            f"Do not offer {requested_time}. {listing} Offer the caller 2-3 of these instead."
+        )
+    return f"{listing} Offer these to the caller."
 
 
 @function_tool
