@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
+from google.cloud import texttospeech
 from livekit import api
 from livekit.agents import (
     Agent,
@@ -267,7 +268,14 @@ _GOOGLE_VOICE_PREFIX = "google:"
 # use_streaming=False routes through the plugin's non-streaming
 # synthesize_speech call instead, which doesn't share that code path —
 # slightly higher per-utterance latency, but it doesn't crash.
-_GOOGLE_TTS_KWARGS = {"use_streaming": False}
+# The plugin defaults to AudioEncoding.PCM, which Gemini accepts only on its
+# streaming endpoint. We deliberately use the non-streaming path above, so
+# request LINEAR16 explicitly; otherwise synthesize_speech rejects every
+# utterance with `400 Unsupported audio encoding` after the room connects.
+_GOOGLE_TTS_KWARGS = {
+    "use_streaming": False,
+    "audio_encoding": texttospeech.AudioEncoding.LINEAR16,
+}
 # Gemini's prebuilt multilingual voice personas — unlike a locale-tagged
 # voice name (e.g. "hi-IN-Neural2-A", good for exactly one language), these
 # generate natural speech in whatever language the input text is actually

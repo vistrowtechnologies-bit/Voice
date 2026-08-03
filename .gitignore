@@ -14,3 +14,7 @@ drive-download/
 # Regenerable local knowledge-graph index (graphify) — rebuild with
 # `graphify update .`, not something to diff or track in git.
 graphify-out/
+
+# Vercel CLI link metadata and downloaded local environment files.
+.vercel
+.env*
