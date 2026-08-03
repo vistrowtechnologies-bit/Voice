@@ -133,13 +133,13 @@ const voicePickerGroups = (voices: VoiceEntry[]) => [
   })),
   {
     key: 'sarvam-lite',
-    label: 'Sarvam Lite v2',
+    label: 'Vistrow Lite v2',
     note: '0.5x credits · multilingual',
     voices: voices.filter((v) => v.tier === 'lite' && !v.value.startsWith('google:')),
   },
   {
     key: 'google-lite',
-    label: 'Google Voices',
+    label: 'Vistrow Native',
     note: '0.5x credits · native Indian languages',
     voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:')),
   },

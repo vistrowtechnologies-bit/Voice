@@ -300,7 +300,7 @@ export function Voices() {
             />
             <TierGroup
               entries={sarvamLite()}
-              label="Sarvam Lite v2"
+              label="Vistrow Lite v2"
               note="0.5x credits · multilingual"
               lang={lang}
               busyVoice={busyVoice}
@@ -309,7 +309,7 @@ export function Voices() {
             />
             <TierGroup
               entries={googleLite()}
-              label="Google Voices"
+              label="Vistrow Native"
               note="0.5x credits · native Indian languages"
               lang={lang}
               busyVoice={busyVoice}
