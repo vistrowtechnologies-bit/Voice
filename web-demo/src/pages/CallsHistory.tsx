@@ -22,6 +22,38 @@ const SENTIMENT_STYLES: Record<Sentiment, string> = {
   negative: 'bg-destructive/20 text-destructive border-destructive/30',
 }
 
+// Same caller identity used to group repeat calls into one row: phone first
+// (normalized — digits only, so "+91 706-688-0808" and "917066880808" match),
+// then email, then name. A call with none of those (an anonymous "Unknown
+// caller" row) gets a unique per-call key instead of grouping with every
+// other unidentified caller, which would wrongly merge unrelated people.
+function identityKey(c: CallRecord): string {
+  const phone = c.phone.replace(/\D/g, '')
+  if (phone) return `phone:${phone}`
+  if (c.email) return `email:${c.email.toLowerCase()}`
+  if (c.name && c.name.trim() && c.name.toLowerCase() !== 'unknown caller') return `name:${c.name.trim().toLowerCase()}`
+  return `call:${c.id}`
+}
+
+type GroupedCall = CallRecord & { callCount: number }
+
+function groupByCaller(rows: CallRecord[]): GroupedCall[] {
+  const groups = new Map<string, CallRecord[]>()
+  for (const c of rows) {
+    const key = identityKey(c)
+    const arr = groups.get(key)
+    if (arr) arr.push(c)
+    else groups.set(key, [c])
+  }
+  return Array.from(groups.values()).map((group) => {
+    // The most recent call represents the group regardless of the table's
+    // current sort direction — its own detail page's History tab (see
+    // LeadDetail.tsx) is where every other call in the group is reachable.
+    const [latest] = [...group].sort((a, b) => b.callDate.localeCompare(a.callDate))
+    return { ...latest, callCount: group.length }
+  })
+}
+
 export function CallsHistory() {
   const [calls, setCalls] = useState<CallRecord[]>([])
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
@@ -41,7 +73,8 @@ export function CallsHistory() {
       const s = search.toLowerCase()
       rows = rows.filter((c) => c.name.toLowerCase().includes(s) || c.phone.includes(s))
     }
-    return [...rows].sort((a, b) =>
+    const grouped = groupByCaller(rows)
+    return grouped.sort((a, b) =>
       sortDesc ? b.callDate.localeCompare(a.callDate) : a.callDate.localeCompare(b.callDate),
     )
   }, [calls, channel, search, sortDesc])
@@ -49,7 +82,7 @@ export function CallsHistory() {
   const completed = calls.filter((c) => c.callStatus === 'completed').length
   const failed = calls.filter((c) => c.callStatus === 'failed').length
 
-  const columns: DataTableColumn<CallRecord>[] = [
+  const columns: DataTableColumn<GroupedCall>[] = [
     {
       key: 'caller',
       header: 'Caller',
@@ -60,7 +93,14 @@ export function CallsHistory() {
             {call.initials}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold group-hover:text-cyan">{call.name}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-sm font-semibold group-hover:text-cyan">{call.name}</p>
+              {call.callCount > 1 && (
+                <span className="shrink-0 rounded-full bg-surface-high px-1.5 py-0.5 text-[10px] font-semibold text-text-muted">
+                  {call.callCount} calls
+                </span>
+              )}
+            </div>
             {call.phone && <p className="text-[11px] text-text-muted">{call.phone}</p>}
           </div>
         </Link>
@@ -174,7 +214,7 @@ export function CallsHistory() {
           rows={filtered}
           rowKey={(call) => call.id}
           emptyMessage={emptyMessage}
-          footer={`Showing ${filtered.length} of ${calls.length} calls`}
+          footer={`Showing ${filtered.length} caller${filtered.length === 1 ? '' : 's'} · ${calls.length} calls total`}
         />
       </section>
     </DashboardLayout>
