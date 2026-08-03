@@ -6,6 +6,7 @@ interface OrchestratorTestCallUIProps {
   agentId: number
   agentLabel: string
   onClose: () => void
+  onConnectionError: () => void
 }
 
 const STATE_LABEL: Record<string, string> = {
@@ -53,7 +54,7 @@ function OrbVideo({ volume, dimmed, speaking }: { volume: number; dimmed?: boole
  * (orb, states, transcript, mic/end/transcript-toggle controls) but driven
  * by useOrchestratorCall's local state instead of LiveKit's React hooks,
  * since there's no LiveKitRoom/participant model on this transport. */
-export function OrchestratorTestCallUI({ agentId, agentLabel, onClose }: OrchestratorTestCallUIProps) {
+export function OrchestratorTestCallUI({ agentId, agentLabel, onClose, onConnectionError }: OrchestratorTestCallUIProps) {
   const { phase, error, agentState, agentVolume, transcript, micEnabled, toggleMic, endCall, elapsedMs } =
     useOrchestratorCall(agentId)
   const [showTranscript, setShowTranscript] = useState(true)
@@ -66,6 +67,10 @@ export function OrchestratorTestCallUI({ agentId, agentLabel, onClose }: Orchest
   useEffect(() => {
     if (phase === 'ended') onClose()
   }, [phase, onClose])
+
+  useEffect(() => {
+    if (phase === 'error') onConnectionError()
+  }, [phase, onConnectionError])
 
   if (phase === 'error') {
     return (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react'
 import { ActiveCallUI } from './ActiveCallUI'
@@ -105,6 +105,17 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
   const [token, setToken] = useState<string | null>(null)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
   const [useOrchestrator, setUseOrchestrator] = useState(false)
+  const [forceLiveKit, setForceLiveKit] = useState(false)
+
+  const handleOrchestratorConnectionError = useCallback(() => {
+    // The orchestrator token endpoint can be reachable server-to-server
+    // while its public WebSocket hostname is blocked or unavailable from
+    // the operator's network. Fall back to LiveKit with the same agent ID
+    // instead of leaving the test call on a generic connection error.
+    setUseOrchestrator(false)
+    setPhase('connecting')
+    setForceLiveKit(true)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -112,16 +123,18 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
       // Accounts on the orchestrator pipeline (Phase 3 of the LiveKit-
       // removal plan) get routed there instead — everyone else falls
       // through to the existing LiveKit room flow below unchanged.
-      try {
-        const orch = await fetchOrchestratorBrowserToken(agent.id)
-        if (cancelled) return
-        if (orch.ok) {
-          setUseOrchestrator(true)
-          setPhase('active')
-          return
+      if (!forceLiveKit) {
+        try {
+          const orch = await fetchOrchestratorBrowserToken(agent.id)
+          if (cancelled) return
+          if (orch.ok) {
+            setUseOrchestrator(true)
+            setPhase('active')
+            return
+          }
+        } catch {
+          // fall through to LiveKit
         }
-      } catch {
-        // fall through to LiveKit
       }
       if (cancelled) return
       setPhase('connecting')
@@ -143,10 +156,17 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
     return () => {
       cancelled = true
     }
-  }, [agent.id])
+  }, [agent.id, forceLiveKit])
 
   if (useOrchestrator && phase === 'active') {
-    return <OrchestratorTestCallUI agentId={agent.id} agentLabel={`${agent.name} · Test Call`} onClose={onClose} />
+    return (
+      <OrchestratorTestCallUI
+        agentId={agent.id}
+        agentLabel={`${agent.name} · Test Call`}
+        onClose={onClose}
+        onConnectionError={handleOrchestratorConnectionError}
+      />
+    )
   }
 
   if (phase === 'error') {
