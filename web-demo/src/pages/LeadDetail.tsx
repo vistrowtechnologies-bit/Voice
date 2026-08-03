@@ -213,10 +213,21 @@ export function LeadDetail() {
                     className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-high"
                   >
                     <div className="min-w-0">
+                      {/* The name filled into the pre-call form varies call
+                          to call even for the same phone number — show what
+                          they actually gave that specific time, not just the
+                          agent/channel every row already shares. */}
                       <p className="truncate text-sm font-semibold">
-                        {c.agent} · <span className="capitalize text-text-muted">{c.channel}</span>
+                        {c.name}
+                        {c.name !== call.name && (
+                          <span className="ml-1.5 rounded bg-amber/10 px-1 py-0.5 text-[10px] font-semibold text-amber">
+                            different name
+                          </span>
+                        )}
                       </p>
-                      <p className="text-[11px] text-text-muted">{formatDateTime(c.callDate)}</p>
+                      <p className="truncate text-[11px] text-text-muted">
+                        {c.agent} · <span className="capitalize">{c.channel}</span> · {formatDateTime(c.callDate)}
+                      </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <span className="text-xs capitalize text-text-muted">{c.sentiment}</span>
