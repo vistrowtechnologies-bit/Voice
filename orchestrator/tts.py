@@ -30,6 +30,7 @@ _SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY")
 _ELEVEN_V3_PREFIX = "elevenlabs-v3:"
 _ELEVEN_PREFIX = "elevenlabs:"
 _GOOGLE_PREFIX = "google:"
+_GOOGLE_MULTILINGUAL_VOICES = {"charon", "kore"}
 _SARVAM_V2_SPEAKERS = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 _SARVAM_LANG_DEFAULT = "hi-IN"
 
@@ -114,7 +115,7 @@ async def _synth_sarvam(
     return base64.b64decode(b64), "audio/wav"
 
 
-def _synth_google_sync(voice_name: str, text: str) -> tuple[bytes, str]:
+def _synth_google_sync(voice_name: str, text: str, reply_language: str | None) -> tuple[bytes, str]:
     raw_credentials = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if not raw_credentials:
         raise TTSError("Google voice isn't configured (no service-account credentials).")
@@ -125,13 +126,17 @@ def _synth_google_sync(voice_name: str, text: str) -> tuple[bytes, str]:
 
         credentials = service_account.Credentials.from_service_account_info(credentials_info)
         client = texttospeech.TextToSpeechClient(credentials=credentials)
-        language_code = "-".join(voice_name.split("-")[:2])
+        is_multilingual = voice_name.lower() in _GOOGLE_MULTILINGUAL_VOICES
+        language_code = (reply_language or "hi-IN") if is_multilingual else "-".join(voice_name.split("-")[:2])
+        voice_kwargs = {
+            "language_code": language_code,
+            "name": voice_name.capitalize() if is_multilingual else voice_name,
+        }
+        if is_multilingual:
+            voice_kwargs["model_name"] = "gemini-2.5-flash-tts"
         response = client.synthesize_speech(
             input=texttospeech.SynthesisInput(text=text),
-            voice=texttospeech.VoiceSelectionParams(
-                language_code=language_code,
-                name=voice_name,
-            ),
+            voice=texttospeech.VoiceSelectionParams(**voice_kwargs),
             audio_config=texttospeech.AudioConfig(
                 audio_encoding=texttospeech.AudioEncoding.LINEAR16,
             ),
@@ -145,8 +150,8 @@ def _synth_google_sync(voice_name: str, text: str) -> tuple[bytes, str]:
     return response.audio_content, "audio/wav"
 
 
-async def _synth_google(voice_name: str, text: str) -> tuple[bytes, str]:
-    return await asyncio.to_thread(_synth_google_sync, voice_name, text)
+async def _synth_google(voice_name: str, text: str, reply_language: str | None) -> tuple[bytes, str]:
+    return await asyncio.to_thread(_synth_google_sync, voice_name, text, reply_language)
 
 
 async def synthesize(
@@ -175,7 +180,7 @@ async def synthesize(
         lang = reply_language.split("-")[0] if reply_language else None
         return await _synth_elevenlabs(voice_string[len(_ELEVEN_PREFIX):], "eleven_flash_v2_5", text, lang, speed, style)
     if voice_string.startswith(_GOOGLE_PREFIX):
-        return await _synth_google(voice_string[len(_GOOGLE_PREFIX):], text)
+        return await _synth_google(voice_string[len(_GOOGLE_PREFIX):], text, reply_language)
     model = "bulbul:v2" if voice_string in _SARVAM_V2_SPEAKERS else "bulbul:v3"
     return await _synth_sarvam(voice_string, model, reply_language or _SARVAM_LANG_DEFAULT, text, pace, pitch)
 

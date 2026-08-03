@@ -511,6 +511,15 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
                     agent.tts.update_options(language=code.split("-")[0])
                 else:
                     voice_unsupported = True
+            elif provider == "google-multilingual":
+                voice_name = getattr(agent, "_voice", "").removeprefix("google:")
+                agent.tts.update_options(
+                    language=code,
+                    voice_name=voice_name.capitalize(),
+                    model_name="gemini-2.5-flash-tts",
+                )
+            elif provider == "google-native":
+                voice_unsupported = True
             elif provider not in (None, "elevenlabs-v3"):
                 agent.tts.update_options(target_language_code=code)
             # elevenlabs-v3 (StreamAdapter) has no update_options — same

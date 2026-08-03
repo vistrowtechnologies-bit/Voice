@@ -56,8 +56,8 @@ const GOOGLE_VOICES = [
   // Gemini's multilingual voice personas — not locked to one locale, this
   // same voice speaks whatever language the conversation is actually in
   // (matches _build_tts's _GOOGLE_MULTILINGUAL_VOICES set exactly).
-  { value: 'google:charon', label: 'Multilingual — Male' },
-  { value: 'google:kore', label: 'Multilingual — Female' },
+  { value: 'google:charon', label: 'Arin — Multilingual Male' },
+  { value: 'google:kore', label: 'Mira — Multilingual Female' },
   // Locale-specific, native Indian-language voices for operators who want
   // a fixed regional voice rather than the multilingual Gemini persona.
   { value: 'google:en-IN-Standard-D', label: 'English (India), Female' },
@@ -138,10 +138,16 @@ const voicePickerGroups = (voices: VoiceEntry[]) => [
     voices: voices.filter((v) => v.tier === 'lite' && !v.value.startsWith('google:')),
   },
   {
-    key: 'google-lite',
+    key: 'multilingual-lite',
+    label: 'Vistrow Multilingual',
+    note: '0.5x credits · same voice switches languages live',
+    voices: voices.filter((v) => v.multilingual),
+  },
+  {
+    key: 'native-lite',
     label: 'Vistrow Native',
     note: '0.5x credits · native Indian languages',
-    voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:')),
+    voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
   },
 ]
 // The raw model string stays under the hood; operators only ever see the

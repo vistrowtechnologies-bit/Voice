@@ -139,6 +139,12 @@ function VoiceCard({
           <div className="min-w-0">
             <p className="truncate font-semibold">{entry.name}</p>
             {entry.note && <p className="truncate text-[11px] text-text-muted">{entry.note}</p>}
+            {entry.multilingual && (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-cyan/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan">
+                <Icon name="translate" className="text-[11px]" />
+                Multilingual
+              </span>
+            )}
           </div>
         </div>
         {entry.selected && (
@@ -236,7 +242,8 @@ export function Voices() {
 
   const byTier = (tier: VoiceTier) => (data?.voices ?? []).filter((v) => v.tier === tier)
   const sarvamLite = () => byTier('lite').filter((v) => !v.value.startsWith('google:'))
-  const googleLite = () => byTier('lite').filter((v) => v.value.startsWith('google:'))
+  const multilingualLite = () => byTier('lite').filter((v) => v.multilingual)
+  const nativeLite = () => byTier('lite').filter((v) => v.value.startsWith('google:') && !v.multilingual)
 
   return (
     <DashboardLayout>
@@ -308,7 +315,16 @@ export function Voices() {
               onRemove={onRemove}
             />
             <TierGroup
-              entries={googleLite()}
+              entries={multilingualLite()}
+              label="Vistrow Multilingual"
+              note="0.5x credits · same voice switches languages live"
+              lang={lang}
+              busyVoice={busyVoice}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
+            <TierGroup
+              entries={nativeLite()}
               label="Vistrow Native"
               note="0.5x credits · native Indian languages"
               lang={lang}

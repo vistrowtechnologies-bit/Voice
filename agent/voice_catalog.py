@@ -12,7 +12,7 @@ agent/main.py's _build_tts, AND classified for billing by
 calls_db.voice_tier() — the prefix convention there and here must agree:
   - "elevenlabs:<id>"     → ElevenLabs Flash v2.5  → tier "premium"      (2x credits)
   - "elevenlabs-v3:<id>"  → ElevenLabs v3          → tier "premium_plus" (2x credits)
-  - "google:<voice>"      → Google Cloud Standard  → tier "lite"         (0.5x credits)
+  - "google:<voice>"      → Google Cloud / Gemini TTS → tier "lite"      (0.5x credits)
   - bare Sarvam bulbul:v2 speaker (abhilash/anushka) → tier "lite"       (0.5x credits)
   - any other bare name (Sarvam bulbul:v3)           → tier "standard"   (1x credits)
 
@@ -82,10 +82,13 @@ CATALOG: list[dict] = [
     {"value": "kavya", "name": "Kavya", "gender": "female", "tier": "standard"},
     {"value": "amit", "name": "Amit", "gender": "male", "tier": "standard"},
     {"value": "pooja", "name": "Pooja", "gender": "female", "tier": "standard"},
-    # Google Cloud Standard — locale-specific economy alternatives. These use
-    # the recovered GCP promotional balance and avoid Gemini TTS's additional
-    # Vertex AI role requirement.
-{"value": "google:en-IN-Standard-D", "name": "Aarav (English)", "gender": "female", "tier": "lite", "force_lang": "en"},
+    # Gemini TTS personas keep the same voice identity while the reply
+    # language changes during a call. They use Cloud Text-to-Speech directly,
+    # so the existing service-account credential is sufficient.
+    {"value": "google:kore", "name": "Mira", "gender": "female", "tier": "lite", "multilingual": True, "note": "Same voice across languages"},
+    {"value": "google:charon", "name": "Arin", "gender": "male", "tier": "lite", "multilingual": True, "note": "Same voice across languages"},
+    # Google Cloud Standard — locale-specific economy alternatives.
+    {"value": "google:en-IN-Standard-D", "name": "Aarav (English)", "gender": "female", "tier": "lite", "force_lang": "en"},
     {"value": "google:en-IN-Standard-B", "name": "Kabir (English)", "gender": "male", "tier": "lite", "force_lang": "en"},
     {"value": "google:hi-IN-Standard-A", "name": "Aditi (Hindi)", "gender": "female", "tier": "lite", "force_lang": "hi"},
     {"value": "google:hi-IN-Standard-B", "name": "Vihaan (Hindi)", "gender": "male", "tier": "lite", "force_lang": "hi"},
@@ -227,4 +230,5 @@ def public_entry(entry: dict, allowed_tiers: set[str]) -> dict:
         # voice whose whole point is a specific accent (e.g. Mark's UK
         # English), the Hindi sample line wouldn't demonstrate it.
         "forceLang": entry.get("force_lang", ""),
+        "multilingual": bool(entry.get("multilingual")),
     }

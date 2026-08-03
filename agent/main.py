@@ -289,7 +289,7 @@ _ELEVENLABS_API_KEY = os.environ.get("ELEVEN_API_KEY")
 
 def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_name: str):
     """Same fallback pattern as _build_stt, for TTS. Returns (tts, provider)
-    — provider is "elevenlabs" or "sarvam", telling the caller which
+    — provider identifies the active TTS family, telling the caller which
     update_options kwarg shape to use for mid-call prosody/language updates
     (see on_user_turn_completed: ElevenLabs takes voice_settings/language,
     Sarvam takes pace+pitch/target_language_code — passing the wrong shape
@@ -392,7 +392,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 credentials_info=_GOOGLE_CREDENTIALS,
                 **_GOOGLE_TTS_KWARGS,
             )
-            return google_tts, "sarvam"
+            return google_tts, "google-multilingual"
         voice_language = "-".join(voice_name.split("-")[:2])
         google_tts = google.TTS(
             language=voice_language,
@@ -400,7 +400,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             credentials_info=_GOOGLE_CREDENTIALS,
             **_GOOGLE_TTS_KWARGS,
         )
-        return google_tts, "sarvam"
+        return google_tts, "google-native"
     # A Google or ElevenLabs voice selected with no credentials/key
     # configured falls back to the default Sarvam speaker rather than
     # passing the raw "google:..."/"elevenlabs:..." string through as an
@@ -805,6 +805,14 @@ class RealEstateAgent(Agent):
                     "caller tone -> %s (no-op: elevenlabs-v3 can't adapt mid-call) from turn: %r",
                     emotion or "neutral", text,
                 )
+            elif self._tts_provider.startswith("google-"):
+                # The Google Cloud plugin does not expose the same pace/pitch
+                # controls as Sarvam. Multilingual language changes are
+                # applied separately below without replacing the persona.
+                logger.info(
+                    "caller tone -> %s (no-op: Google voice uses fixed delivery) from turn: %r",
+                    emotion or "neutral", text,
+                )
             else:
                 delta = EMOTION_TONE_DELTAS.get(emotion, {}) if emotion else {}
                 new_pace = self._base_pace + delta.get("pace", 0.0) * self._emotion_intensity
@@ -856,10 +864,21 @@ class RealEstateAgent(Agent):
                 # for the rest of the call.
                 if candidate in ELEVENLABS_SUPPORTED_LANGUAGES:
                     self.tts.update_options(language=candidate.split("-")[0])
-            elif self._tts_provider != "elevenlabs-v3":
+            elif self._tts_provider == "google-multilingual":
+                # google.TTS.update_options rebuilds its VoiceSelectionParams,
+                # so resend persona + model with the new language. Otherwise
+                # a language switch would silently reset to the default voice.
+                voice_name = self._voice[len(_GOOGLE_VOICE_PREFIX):]
+                self.tts.update_options(
+                    language=candidate,
+                    voice_name=voice_name.capitalize(),
+                    model_name="gemini-2.5-flash-tts",
+                )
+            elif self._tts_provider not in ("elevenlabs-v3", "google-native"):
                 # elevenlabs-v3 (StreamAdapter) has no update_options — the
-                # call keeps the language it opened with. Sarvam and Flash
-                # both support switching mid-call.
+                # call keeps the language it opened with. Locale-specific
+                # Google voices are also intentionally fixed. Sarvam and
+                # ElevenLabs Flash both support switching mid-call.
                 self.tts.update_options(target_language_code=candidate)
             logger.info("switching reply language to %s", candidate)
 

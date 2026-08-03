@@ -448,6 +448,9 @@ export interface VoiceEntry {
   // the picker's own language toggle (e.g. an English-accent voice should
   // always be auditioned in English, not the default Hindi sample line).
   forceLang: string
+  // True when one voice persona can retain its identity while the call
+  // switches between supported languages.
+  multilingual: boolean
   selected?: boolean
 }
 
