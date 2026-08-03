@@ -1062,7 +1062,9 @@ async def entrypoint(ctx: JobContext) -> None:
     if call_context["visitor_email"]:
         lead_data["email"] = call_context["visitor_email"]
     cfg = config or {}
-    if config and config.get("system_prompt") and "{{" in config["system_prompt"]:
+    if config and (
+        ("{{" in (config.get("system_prompt") or "")) or ("{{" in (config.get("welcome_message") or ""))
+    ):
         visitor_name = call_context["visitor_name"] or ""
         name_parts = visitor_name.split(None, 1)
         template_vars = {
@@ -1073,7 +1075,15 @@ async def entrypoint(ctx: JobContext) -> None:
             "company": call_context["company"],
             "custom": call_context["custom_fields"],
         }
-        config = {**config, "system_prompt": _substitute_template_vars(config["system_prompt"], template_vars)}
+        config = {
+            **config,
+            "system_prompt": _substitute_template_vars(config.get("system_prompt") or "", template_vars),
+            # welcome_message is spoken verbatim by on_enter() (see
+            # RealEstateAgent.on_enter) — it never goes through the LLM, so
+            # an unsubstituted {{name}} would be read aloud by the TTS
+            # literally, e.g. "Hello Name" instead of the caller's name.
+            "welcome_message": _substitute_template_vars(config.get("welcome_message") or "", template_vars),
+        }
         cfg = config
     agent = RealEstateAgent(config, call_context["visitor_name"], call_context["visitor_phone"])
     userdata = {
