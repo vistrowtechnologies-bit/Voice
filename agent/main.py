@@ -927,7 +927,14 @@ def _substitute_template_vars(text: str, values: dict) -> str:
     server/calls_db.py's import_contacts_mapped). An unmatched token (typo,
     or a {{custom.KEY}} the CSV never had) is left blank rather than as
     literal braces, since a stray "{{whatever}}" read aloud by the TTS would
-    be far more jarring to a caller than a silently-dropped clause."""
+    be far more jarring to a caller than a silently-dropped clause.
+
+    A blank value still leaves the token's surrounding punctuation/spacing
+    behind (e.g. "नमस्कार {{name}}! मैं..." -> "नमस्कार !" — a stray space
+    before the "!" that reads as broken, not just quiet). The cleanup pass
+    below collapses runs of whitespace and drops any space sitting directly
+    before punctuation, so a skipped variable disappears cleanly instead of
+    leaving the hole visible."""
 
     def repl(match: re.Match) -> str:
         key = match.group(1)
@@ -935,7 +942,10 @@ def _substitute_template_vars(text: str, values: dict) -> str:
             return str(values.get("custom", {}).get(key[7:], ""))
         return str(values.get(key, ""))
 
-    return _TEMPLATE_VAR_RE.sub(repl, text)
+    filled = _TEMPLATE_VAR_RE.sub(repl, text)
+    filled = re.sub(r"[ \t]{2,}", " ", filled)
+    filled = re.sub(r" +([!?.,।])", r"\1", filled)
+    return filled.strip()
 
 
 async def _hang_up(room_name: str) -> None:
