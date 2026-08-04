@@ -262,21 +262,37 @@ def build_system_prompt(session: Session) -> str:
         # in _gender_reminder_message below — a single system-prompt mention
         # tends to drift over a long conversation since masculine Hindi/
         # Marathi/Gujarati verb forms are simply far more frequent in
-        # training data, fighting this instruction turn after turn.
+        # training data, fighting this instruction turn after turn. Confirmed
+        # live on a female voice (Ritu) still saying "बताता हूँ" (masculine)
+        # even with a single mid-prompt mention — prepending this as the
+        # very FIRST part of the prompt and widening the verb table across
+        # all four gendered languages measurably helps.
         _woman = session.voice_gender == "female"
-        parts.append(
-            f"## Your voice and gender\nYou, {session.agent_name}, speak with a "
-            f"{'woman' if _woman else 'man'}'s voice — you ARE {'a woman' if _woman else 'a man'}. "
-            "In every language that marks the speaker's grammatical gender (Hindi, Marathi, "
-            "Gujarati, Punjabi, and others), always refer to yourself with the correct "
-            f"{'feminine' if _woman else 'masculine'} forms and never mix genders. For example in "
-            "Hindi say " + (
-                "\"मैं बताती हूँ\", \"मैं करती हूँ\", \"मैं आई हूँ\" (feminine) — never the masculine "
-                "\"बताता / करता / आया हूँ\"."
-                if _woman else
-                "\"मैं बताता हूँ\", \"मैं करता हूँ\", \"मैं आया हूँ\" (masculine) — never the feminine "
-                "\"बताती / करती / आई हूँ\"."
-            )
+        _f = "feminine" if _woman else "masculine"
+        _examples = (
+            "Hindi: \"मैं बताती हूँ\", \"मैं करती हूँ\", \"मैं आई हूँ\", \"मैं समझती हूँ\", \"मैं देख रही हूँ\" "
+            "— never \"बताता / करता / आया / समझता / देख रहा हूँ\".\n"
+            "Marathi: \"मी सांगते\", \"मी करते\", \"मी आले\" — never \"सांगतो / करतो / आलो\".\n"
+            "Gujarati: \"હું કહું છું\" stays the same, but \"હું આવી\" — never \"આવ્યો\".\n"
+            "Punjabi: \"ਮੈਂ ਦੱਸਦੀ ਹਾਂ\", \"ਮੈਂ ਆਈ ਹਾਂ\" — never \"ਦੱਸਦਾ / ਆਇਆ ਹਾਂ\"."
+            if _woman else
+            "Hindi: \"मैं बताता हूँ\", \"मैं करता हूँ\", \"मैं आया हूँ\", \"मैं समझता हूँ\", \"मैं देख रहा हूँ\" "
+            "— never \"बताती / करती / आई / समझती / देख रही हूँ\".\n"
+            "Marathi: \"मी सांगतो\", \"मी करतो\", \"मी आलो\" — never \"सांगते / करते / आले\".\n"
+            "Gujarati: \"હું કહું છું\" stays the same, but \"હું આવ્યો\" — never \"આવી\".\n"
+            "Punjabi: \"ਮੈਂ ਦੱਸਦਾ ਹਾਂ\", \"ਮੈਂ ਆਇਆ ਹਾਂ\" — never \"ਦੱਸਦੀ / ਆਈ ਹਾਂ\"."
+        )
+        parts.insert(
+            0,
+            f"# Your identity — read this first, it governs everything below\n"
+            f"You, {session.agent_name}, ARE {'a woman' if _woman else 'a man'} — this is not a "
+            f"persona detail buried in a longer prompt, it is who you are on every single "
+            f"turn of this call, from your very first word to your last. In every language "
+            f"that marks the speaker's grammatical gender (Hindi, Marathi, Gujarati, Punjabi, "
+            f"and others), ALWAYS use {_f} first-person verb forms — never the opposite, "
+            f"never mixed, not even once, not even under time pressure mid-sentence. This "
+            f"holds even if a caller addresses you with the wrong gender or asks something "
+            f"unrelated — your own self-reference never changes. Concretely:\n{_examples}",
         )
 
     parts.append(VOICE_STYLE_PROMPT)
@@ -294,10 +310,15 @@ def _gender_reminder_message(session: Session) -> dict | None:
     return {
         "role": "system",
         "content": (
-            f"Reminder: you are {'a woman' if _woman else 'a man'} — in this reply, if you're "
-            "speaking Hindi, Marathi, Gujarati, or Punjabi, use "
-            + ("feminine (\"बताती/करती/आई हूँ\")" if _woman else "masculine (\"बताता/करता/आया हूँ\")")
-            + " first-person verb forms, never the opposite."
+            f"You are {'a woman' if _woman else 'a man'} — in THIS reply, if you use Hindi, "
+            "Marathi, Gujarati, or Punjabi, every first-person verb must be "
+            + ("feminine: बताती/करती/आई/समझती/देख रही हूँ, मी सांगते/करते/आले, હું આવી, "
+               "ਮੈਂ ਦੱਸਦੀ/ਆਈ ਹਾਂ"
+               if _woman else
+               "masculine: बताता/करता/आया/समझता/देख रहा हूँ, मी सांगतो/करतो/आलो, હું આવ્યો, "
+               "ਮੈਂ ਦੱਸਦਾ/ਆਇਆ ਹਾਂ")
+            + f" — the {'masculine' if _woman else 'feminine'} form is wrong every time, "
+            "with no exceptions, no matter what was said in earlier turns."
         ),
     }
 
