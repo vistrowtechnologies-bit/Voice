@@ -385,7 +385,7 @@ export const FOOTER_COLUMNS = [
 ]
 
 /** Company phone, shown in the footer's tel: link. */
-export const CONTACT_PHONE = '+91 11 4056 6600'
+export const CONTACT_PHONE = '+91 80801 97945'
 
 /** Headline stats shown under the hero. */
 export const HERO_STATS = [

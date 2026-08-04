@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 
-// Dashboard color scheme. Dark is the product default; the choice persists
-// in localStorage and is applied as data-theme on <html>, which index.css's
-// :root[data-theme="light"] token overrides pick up. Scoped to the dashboard:
-// DashboardLayout applies it on mount and reverts on unmount, so the public
-// landing/call pages keep their designed dark look.
+// Shared color scheme for the whole site. The choice persists in
+// localStorage and is applied as data-theme on <html>, which index.css's
+// :root[data-theme="light"] token overrides pick up. A first-time visitor
+// (nothing in localStorage yet) sees light mode by default; once they pick
+// a theme — anywhere, marketing site or dashboard — that choice is what
+// they see everywhere afterward, one preference, one storage key.
 
 export type Theme = 'dark' | 'light'
 
@@ -13,9 +14,9 @@ const EVENT = 'av-theme-change'
 
 export function getStoredTheme(): Theme {
   try {
-    return localStorage.getItem(STORAGE_KEY) === 'light' ? 'light' : 'dark'
+    return localStorage.getItem(STORAGE_KEY) === 'dark' ? 'dark' : 'light'
   } catch {
-    return 'dark'
+    return 'light'
   }
 }
 

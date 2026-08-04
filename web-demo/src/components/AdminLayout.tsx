@@ -109,7 +109,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 /** Full-screen admin shell: persistent red "Mission Control" bar, 240px sidebar,
  * fluid content. Applies the same stored light/dark preference as the tenant
- * dashboard (dark by default) and restores whatever was set before on exit. */
+ * dashboard (light by default for a first-time visitor) and restores
+ * whatever was set before on exit. */
 export function AdminLayout({ children }: { children: ReactNode }) {
   const [mobileNav, setMobileNav] = useState(false)
   const navigate = useNavigate()
