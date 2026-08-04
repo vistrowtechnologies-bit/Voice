@@ -46,12 +46,6 @@ export function hasDemoCallsRemaining(): boolean {
   return getRemainingDemoCalls() > 0
 }
 
-/** Milliseconds until the cap resets, or 0 if calls are already available. */
-export function getDemoCallResetMs(): number {
-  if (hasDemoCallsRemaining()) return 0
-  return Math.max(0, readWindow().windowStart + WINDOW_MS - Date.now())
-}
-
 export function recordDemoCall(): void {
   const w = readWindow()
   writeWindow({ count: w.count + 1, windowStart: w.count === 0 ? Date.now() : w.windowStart })

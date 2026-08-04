@@ -6,7 +6,6 @@ import type { RemoteParticipant } from 'livekit-client'
 import { Icon } from './Icon'
 import {
   DEMO_CALL_CAP,
-  getDemoCallResetMs,
   getRemainingDemoCalls,
   hasDemoCallsRemaining,
   recordDemoCall,
@@ -28,13 +27,6 @@ function formatDuration(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-}
-
-function formatResetHint(ms: number): string {
-  const hours = Math.floor(ms / (60 * 60 * 1000))
-  const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000))
-  if (hours < 1) return `Free calls refresh in ${Math.max(1, minutes)} min`
-  return `Free calls refresh in ${hours}h ${minutes}m`
 }
 
 // The recurring "LIVE DEMO" card — tapping the orb starts the call right
@@ -182,10 +174,6 @@ export function DemoOrbCard() {
                 <span className="font-bold text-cyan">{remaining}/{DEMO_CALL_CAP}</span>{' '}
                 <span className="text-text-muted">free calls left</span>
               </div>
-            )}
-
-            {exhausted && (
-              <p className="mt-2 text-xs text-text-muted">{formatResetHint(getDemoCallResetMs())}</p>
             )}
 
             {exhausted && (
