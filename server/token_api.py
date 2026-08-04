@@ -548,7 +548,7 @@ def public_contact(req: ContactRequest) -> dict:
         heading="New demo request",
         body_html=details,
     )
-    sent = email_sender.send_email(notify_to, f"New demo request: {name}", html)
+    sent = email_sender.send_email(notify_to, f"New demo request: {name}", html, email_sender.FROM_WEBSITE)
     if not sent:
         # Same "never crash on email failure" contract as password reset —
         # but this lead has nowhere else to land, so log it in full rather
@@ -596,7 +596,7 @@ def auth_request_password_reset(req: RequestResetRequest, request: Request) -> d
             cta_label="Reset password",
             cta_url=link,
         )
-        sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", html)
+        sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", html, email_sender.FROM_ACCOUNT_SECURITY)
         if not sent:
             # Email delivery isn't set up yet — surface the link in the server
             # log so the operator can still complete a reset during setup.
@@ -789,7 +789,7 @@ def team_invite(req: InviteMemberRequest, request: Request, user: dict = Depends
         cta_label="Accept invite",
         cta_url=link,
     )
-    sent = email_sender.send_email(email, f"You're invited to join {inviter['account_name']} on Vistrow Voice", html)
+    sent = email_sender.send_email(email, f"You're invited to join {inviter['account_name']} on Vistrow Voice", html, email_sender.FROM_INVITES)
     if not sent:
         logger.info("invite link for %s (email not configured): %s", email, link)
     return {"ok": True, "emailSent": sent, "inviteLink": link}
@@ -1069,7 +1069,7 @@ def admin_reset_password(account_id: int, request: Request, admin: dict = Depend
         cta_label="Reset password",
         cta_url=link,
     )
-    sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", html)
+    sent = email_sender.send_email(user["email"], "Reset your Vistrow Voice password", html, email_sender.FROM_ACCOUNT_SECURITY)
     admin_db.write_audit(admin["user_id"], admin["email"], "reset_password", account_id, owner_uid, detail=f"reset link issued to {user['email']}")
     # Return the link so the operator can share it directly if email isn't configured.
     return {"ok": True, "emailSent": sent, "resetLink": link}

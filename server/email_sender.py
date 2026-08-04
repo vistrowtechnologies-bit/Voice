@@ -25,13 +25,28 @@ logger = logging.getLogger("vistrow-email")
 
 _DEFAULT_FROM = "Vistrow Voice <noreply@vistrowvoice.com>"
 
+# Distinct From identities per email category — same verified domain
+# (vistrowvoice.com), different local part, so a recipient can tell at a
+# glance what kind of email this is before even opening it, and so replies
+# to each naturally land somewhere sensible (nobody should ever reply to a
+# password-reset email, but a contact-form notification is fair game).
+# EMAIL_FROM (if set) still overrides everything, same as before — these are
+# just better-labeled defaults, not a new configuration surface.
+FROM_ACCOUNT_SECURITY = "Vistrow Voice <security@vistrowvoice.com>"  # password reset
+FROM_INVITES = "Vistrow Voice <invites@vistrowvoice.com>"  # team member invites
+FROM_WEBSITE = "Vistrow Voice Website <contact@vistrowvoice.com>"  # contact-form notifications
+
 
 def is_configured() -> bool:
     return bool(os.environ.get("RESEND_API_KEY") or os.environ.get("SMTP_HOST"))
 
 
-def _from_address() -> str:
-    return os.environ.get("EMAIL_FROM") or _DEFAULT_FROM
+def _from_address(default: str = _DEFAULT_FROM) -> str:
+    # EMAIL_FROM is an escape hatch for an operator who wants every outbound
+    # email from one single address they control (e.g. their own domain
+    # isn't set up yet) — it deliberately overrides even a category-specific
+    # `default` passed by the caller.
+    return os.environ.get("EMAIL_FROM") or default
 
 
 # Mirrors web-demo/src/index.css's dark-theme tokens so transactional email
@@ -97,13 +112,17 @@ def render_email(*, preheader: str, heading: str, body_html: str, cta_label: str
 </html>"""
 
 
-def send_email(to: str, subject: str, html: str) -> bool:
-    """Best-effort send. Returns True only on a confirmed handoff to a provider."""
+def send_email(to: str, subject: str, html: str, from_address: str = _DEFAULT_FROM) -> bool:
+    """Best-effort send. Returns True only on a confirmed handoff to a provider.
+
+    `from_address` picks the category-specific identity (see FROM_* constants
+    above) — e.g. password resets come from security@, invites from
+    invites@. Still overridden globally by EMAIL_FROM if that's set."""
     resend_key = os.environ.get("RESEND_API_KEY")
     if resend_key:
-        return _send_resend(resend_key, to, subject, html)
+        return _send_resend(resend_key, to, subject, html, from_address)
     if os.environ.get("SMTP_HOST"):
-        return _send_smtp(to, subject, html)
+        return _send_smtp(to, subject, html, from_address)
     logger.warning(
         "email not configured — would have sent to %s: %r. Set RESEND_API_KEY or SMTP_* to enable.",
         to,
@@ -112,8 +131,10 @@ def send_email(to: str, subject: str, html: str) -> bool:
     return False
 
 
-def _send_resend(api_key: str, to: str, subject: str, html: str) -> bool:
-    payload = json.dumps({"from": _from_address(), "to": [to], "subject": subject, "html": html}).encode()
+def _send_resend(api_key: str, to: str, subject: str, html: str, from_address: str = _DEFAULT_FROM) -> bool:
+    payload = json.dumps(
+        {"from": _from_address(from_address), "to": [to], "subject": subject, "html": html}
+    ).encode()
     req = urllib.request.Request(
         "https://api.resend.com/emails",
         data=payload,
@@ -141,13 +162,13 @@ def _send_resend(api_key: str, to: str, subject: str, html: str) -> bool:
         return False
 
 
-def _send_smtp(to: str, subject: str, html: str) -> bool:
+def _send_smtp(to: str, subject: str, html: str, from_address: str = _DEFAULT_FROM) -> bool:
     host = os.environ["SMTP_HOST"]
     port = int(os.environ.get("SMTP_PORT") or 587)
     user = os.environ.get("SMTP_USER")
     password = os.environ.get("SMTP_PASSWORD")
     msg = EmailMessage()
-    msg["From"] = _from_address()
+    msg["From"] = _from_address(from_address)
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content("This message requires an HTML-capable email client.")
