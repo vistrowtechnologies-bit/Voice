@@ -513,6 +513,50 @@ def auth_login(req: LoginRequest, response: Response) -> dict:
     return {"ok": True, "user": _me_payload(user["id"])}
 
 
+class ContactRequest(BaseModel):
+    name: str
+    email: str
+    company: str = ""
+    team_size: str = ""
+    use_case: str = ""
+
+
+@app.post("/public/contact")
+def public_contact(req: ContactRequest) -> dict:
+    """The marketing site's "Book a Demo" form (web-demo/src/pages/marketing/
+    Contact.tsx) — unauthenticated, no per-tenant account involved, just a
+    prospective customer reaching the Vistrow Voice team directly. Notifies
+    the team by email rather than writing to any per-tenant table (this isn't
+    a lead for an account's own CRM, it's a lead for Vistrow itself)."""
+    name = req.name.strip()
+    email = req.email.strip().lower()
+    if not name or "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(400, "Enter a valid name and email address")
+    notify_to = os.environ.get("SALES_NOTIFY_EMAIL") or "vistrowai@gmail.com"
+    details = "".join(
+        f"<p style='margin:4px 0;'><strong>{label}:</strong> {value}</p>"
+        for label, value in [
+            ("Name", name),
+            ("Email", email),
+            ("Company", req.company.strip() or "—"),
+            ("Team size", req.team_size.strip() or "—"),
+            ("Use case", req.use_case.strip() or "—"),
+        ]
+    )
+    html = email_sender.render_email(
+        preheader=f"New demo request from {name}",
+        heading="New demo request",
+        body_html=details,
+    )
+    sent = email_sender.send_email(notify_to, f"New demo request: {name}", html)
+    if not sent:
+        # Same "never crash on email failure" contract as password reset —
+        # but this lead has nowhere else to land, so log it in full rather
+        # than just the fact that sending failed.
+        logger.info("demo request (email not configured/failed): %r", req.model_dump())
+    return {"ok": True}
+
+
 class RequestResetRequest(BaseModel):
     email: str
 

@@ -13,6 +13,8 @@ const BENEFITS = [
 
 export function Contact() {
   const [sent, setSent] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   return (
     <MarketingLayout>
@@ -57,10 +59,31 @@ export function Contact() {
               </div>
             ) : (
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault()
-                  trackQualifyLead('contact_form')
-                  setSent(true)
+                  setError(null)
+                  const form = new FormData(e.currentTarget)
+                  setBusy(true)
+                  try {
+                    const res = await fetch('/api/public/contact', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        name: form.get('name'),
+                        email: form.get('email'),
+                        company: form.get('company'),
+                        team_size: form.get('team_size'),
+                        use_case: form.get('use_case'),
+                      }),
+                    })
+                    if (!res.ok) throw new Error('Could not send your request')
+                    trackQualifyLead('contact_form')
+                    setSent(true)
+                  } catch {
+                    setError('Something went wrong — please try again, or email us directly.')
+                  } finally {
+                    setBusy(false)
+                  }
                 }}
                 className="flex flex-col gap-4"
               >
@@ -73,7 +96,10 @@ export function Contact() {
                   <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted">
                     Team size
                   </label>
-                  <select className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm text-text outline-none focus:border-primary">
+                  <select
+                    name="team_size"
+                    className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm text-text outline-none focus:border-primary"
+                  >
                     <option>1–10</option>
                     <option>11–50</option>
                     <option>51–200</option>
@@ -85,16 +111,19 @@ export function Contact() {
                     What do you want to use Artha for?
                   </label>
                   <textarea
+                    name="use_case"
                     rows={3}
                     placeholder="e.g. inbound lead qualification for real estate"
                     className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm text-text outline-none focus:border-primary"
                   />
                 </div>
+                {error && <p className="text-sm text-destructive">{error}</p>}
                 <button
                   type="submit"
-                  className="mt-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
+                  disabled={busy}
+                  className="mt-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
                 >
-                  Book my demo
+                  {busy ? 'Sending…' : 'Book my demo'}
                 </button>
               </form>
             )}

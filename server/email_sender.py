@@ -23,7 +23,7 @@ from email.message import EmailMessage
 
 logger = logging.getLogger("vistrow-email")
 
-_DEFAULT_FROM = "Vistrow Voice <noreply@vistrow.ai>"
+_DEFAULT_FROM = "Vistrow Voice <noreply@vistrowvoice.com>"
 
 
 def is_configured() -> bool:
