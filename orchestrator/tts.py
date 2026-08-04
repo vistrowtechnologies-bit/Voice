@@ -180,7 +180,17 @@ async def synthesize(
         lang = reply_language.split("-")[0] if reply_language else None
         return await _synth_elevenlabs(voice_string[len(_ELEVEN_PREFIX):], "eleven_flash_v2_5", text, lang, speed, style)
     if voice_string.startswith(_GOOGLE_PREFIX):
-        return await _synth_google(voice_string[len(_GOOGLE_PREFIX):], text, reply_language)
+        try:
+            return await _synth_google(voice_string[len(_GOOGLE_PREFIX):], text, reply_language)
+        except Exception:
+            # Google's non-streaming synthesize_speech has a confirmed live
+            # failure mode — it silently drops a chunk mid-reply even though
+            # the text was already generated (upstream livekit/agents issue
+            # #3347, unresolved). agent/main.py's LiveKit path guards the
+            # same failure with TtsFallbackAdapter; this pipeline has no
+            # adapter abstraction, so finish the utterance on Sarvam
+            # directly rather than the call going silent.
+            return await _synth_sarvam("shubh", "bulbul:v3", reply_language or _SARVAM_LANG_DEFAULT, text, pace, pitch)
     model = "bulbul:v2" if voice_string in _SARVAM_V2_SPEAKERS else "bulbul:v3"
     return await _synth_sarvam(voice_string, model, reply_language or _SARVAM_LANG_DEFAULT, text, pace, pitch)
 

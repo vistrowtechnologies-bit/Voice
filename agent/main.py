@@ -392,6 +392,17 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         return tts, "elevenlabs"
     if speaker.startswith(_GOOGLE_VOICE_PREFIX) and _GOOGLE_CREDENTIALS is not None and _GOOGLE_VOICE_ENABLED:
         voice_name = speaker[len(_GOOGLE_VOICE_PREFIX) :]
+        # Google's non-streaming synthesize_speech (forced by _GOOGLE_TTS_KWARGS
+        # to dodge the streaming crash, see its own comment) has its own
+        # confirmed live failure mode: it silently drops a chunk mid-reply
+        # ("no audio frames were pushed for text" — upstream livekit/agents
+        # issue #3347, unresolved) even though the LLM already produced the
+        # full text. An operator who explicitly picked a Google voice still
+        # gets it as primary; TtsFallbackAdapter catches that failure and
+        # finishes the utterance on Sarvam instead of the call going silent.
+        sarvam_safety_net = sarvam.TTS(
+            target_language_code=reply_language, model="bulbul:v3", speaker="shubh", **tone
+        )
         if voice_name.lower() in _GOOGLE_MULTILINGUAL_VOICES:
             google_tts = google.TTS(
                 language=reply_language,
@@ -400,7 +411,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 credentials_info=_GOOGLE_CREDENTIALS,
                 **_GOOGLE_TTS_KWARGS,
             )
-            return google_tts, "google-multilingual"
+            return TtsFallbackAdapter([google_tts, sarvam_safety_net]), "google-multilingual"
         voice_language = "-".join(voice_name.split("-")[:2])
         google_tts = google.TTS(
             language=voice_language,
@@ -408,7 +419,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             credentials_info=_GOOGLE_CREDENTIALS,
             **_GOOGLE_TTS_KWARGS,
         )
-        return google_tts, "google-native"
+        return TtsFallbackAdapter([google_tts, sarvam_safety_net]), "google-native"
     # A Google or ElevenLabs voice selected with no credentials/key
     # configured falls back to the default Sarvam speaker rather than
     # passing the raw "google:..."/"elevenlabs:..." string through as an
@@ -825,11 +836,19 @@ class RealEstateAgent(Agent):
                 delta = EMOTION_TONE_DELTAS.get(emotion, {}) if emotion else {}
                 new_pace = self._base_pace + delta.get("pace", 0.0) * self._emotion_intensity
                 new_pitch = self._base_pitch + delta.get("pitch", 0.0) * self._emotion_intensity
-                self.tts.update_options(pace=new_pace, pitch=new_pitch)
-                logger.info(
-                    "caller tone -> %s (pace %.2f, pitch %.2f) from turn: %r",
-                    emotion or "neutral", new_pace, new_pitch, text,
-                )
+                try:
+                    # self.tts is a TtsFallbackAdapter, not a raw sarvam.TTS,
+                    # whenever Google credentials are configured (see
+                    # _build_tts's default branch) — FallbackAdapter has no
+                    # update_options at all, so this raises AttributeError.
+                    # Never let a tone nudge kill the whole call over it.
+                    self.tts.update_options(pace=new_pace, pitch=new_pitch)
+                    logger.info(
+                        "caller tone -> %s (pace %.2f, pitch %.2f) from turn: %r",
+                        emotion or "neutral", new_pace, new_pitch, text,
+                    )
+                except AttributeError:
+                    logger.warning("caller tone update_options failed (fallback-wrapped TTS)", exc_info=True)
 
         candidate = detect_reply_language(text)
         if candidate == "hi-IN" and self._reply_language == "mr-IN":
@@ -876,18 +895,31 @@ class RealEstateAgent(Agent):
                 # google.TTS.update_options rebuilds its VoiceSelectionParams,
                 # so resend persona + model with the new language. Otherwise
                 # a language switch would silently reset to the default voice.
+                # self.tts is TtsFallbackAdapter-wrapped (see _build_tts) so
+                # Google's own confirmed mid-reply failures don't kill the
+                # call — FallbackAdapter has no update_options at all, so
+                # guard the same way tools.py's switch_reply_language does.
                 voice_name = self._voice[len(_GOOGLE_VOICE_PREFIX):]
-                self.tts.update_options(
-                    language=candidate,
-                    voice_name=voice_name.capitalize(),
-                    model_name="gemini-2.5-flash-tts",
-                )
+                try:
+                    self.tts.update_options(
+                        language=candidate,
+                        voice_name=voice_name.capitalize(),
+                        model_name="gemini-2.5-flash-tts",
+                    )
+                except AttributeError:
+                    logger.warning("language-switch update_options failed (fallback-wrapped TTS)", exc_info=True)
             elif self._tts_provider not in ("elevenlabs-v3", "google-native"):
                 # elevenlabs-v3 (StreamAdapter) has no update_options — the
                 # call keeps the language it opened with. Locale-specific
                 # Google voices are also intentionally fixed. Sarvam and
-                # ElevenLabs Flash both support switching mid-call.
-                self.tts.update_options(target_language_code=candidate)
+                # ElevenLabs Flash both support switching mid-call. self.tts
+                # is a TtsFallbackAdapter (not a raw sarvam.TTS) whenever
+                # Google credentials are configured — see _build_tts's
+                # default branch — and FallbackAdapter has no update_options.
+                try:
+                    self.tts.update_options(target_language_code=candidate)
+                except AttributeError:
+                    logger.warning("language-switch update_options failed (fallback-wrapped TTS)", exc_info=True)
             logger.info("switching reply language to %s", candidate)
 
 
