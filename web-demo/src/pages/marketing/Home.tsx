@@ -165,7 +165,7 @@ export function Home() {
               Book a demo
             </Link>
           </div>
-          <div className="mt-10 grid grid-cols-2 gap-6 border-t border-border pt-6 sm:grid-cols-3 sm:gap-8">
+          <div className="mt-10 grid grid-cols-3 gap-4 border-t border-border pt-6 sm:gap-8">
             {HERO_STATS.map((stat) => (
               <div key={stat.label}>
                 <p className="font-display text-2xl font-bold text-text">{stat.value}</p>
