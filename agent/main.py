@@ -745,34 +745,45 @@ class RealEstateAgent(Agent):
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
 
     async def on_enter(self) -> None:
-        # first_speaker == 'user' means wait silently for the caller to open.
+        # first_speaker == 'user' means wait silently for the caller to open —
+        # no greeting is ever queued, so away-tracking is valid immediately.
         if self._first_speaker == "user":
+            self.session.userdata["greeting_played"] = True
             return
-        if self._welcome_message:
-            # Operator wrote an exact opening line — speak it verbatim rather
-            # than letting the model improvise a greeting.
-            await self.session.say(self._welcome_message)
-            return
-        if self._is_platform_demo:
-            # A dynamic LLM-generated greeting sounds better, but costs a full
-            # generate_reply() round-trip (LLM + TTS) before the very first
-            # word — 6-7s of dead air a first-time website visitor wasn't
-            # expecting. Speaking a fixed line via say() skips straight to
-            # TTS. Picked at random per call so repeat visitors don't hear the
-            # same line every time.
-            openers = _PLATFORM_DEMO_OPENERS.get(self._voice_gender) or _PLATFORM_DEMO_OPENERS["female"]
-            await self.session.say(random.choice(openers))
-            return
-        # Same fix, generalized: every tenant agent without its own
-        # welcome_message used to fall through to generate_reply() here and
-        # pay the identical 6-7s round-trip on every call. A fast, lightly
-        # personalized default (agent name + caller's first name, if the
-        # widget already collected it) covers the vast majority of that gap;
-        # an operator who wants a fully custom line still sets welcome_message
-        # above, which short-circuits before this.
-        greeting = f"Hi {self._visitor_first_name}," if self._visitor_first_name else "Hi,"
-        template = _DEFAULT_OPENERS.get(self._reply_language, _DEFAULT_OPENER_EN)
-        await self.session.say(template.format(greeting=greeting, agent_name=self._agent_name))
+        try:
+            if self._welcome_message:
+                # Operator wrote an exact opening line — speak it verbatim
+                # rather than letting the model improvise a greeting.
+                await self.session.say(self._welcome_message)
+                return
+            if self._is_platform_demo:
+                # A dynamic LLM-generated greeting sounds better, but costs a
+                # full generate_reply() round-trip (LLM + TTS) before the very
+                # first word — 6-7s of dead air a first-time website visitor
+                # wasn't expecting. Speaking a fixed line via say() skips
+                # straight to TTS. Picked at random per call so repeat
+                # visitors don't hear the same line every time.
+                openers = _PLATFORM_DEMO_OPENERS.get(self._voice_gender) or _PLATFORM_DEMO_OPENERS["female"]
+                await self.session.say(random.choice(openers))
+                return
+            # Same fix, generalized: every tenant agent without its own
+            # welcome_message used to fall through to generate_reply() here
+            # and pay the identical 6-7s round-trip on every call. A fast,
+            # lightly personalized default (agent name + caller's first name,
+            # if the widget already collected it) covers the vast majority of
+            # that gap; an operator who wants a fully custom line still sets
+            # welcome_message above, which short-circuits before this.
+            greeting = f"Hi {self._visitor_first_name}," if self._visitor_first_name else "Hi,"
+            template = _DEFAULT_OPENERS.get(self._reply_language, _DEFAULT_OPENER_EN)
+            await self.session.say(template.format(greeting=greeting, agent_name=self._agent_name))
+        finally:
+            # Cold starts / slow TTS providers (Google) can push the opening
+            # line's actual playback well past the away-timeout — without
+            # this flag, _on_user_state_changed's "away" check-in fires while
+            # the greeting is still being synthesized and gets queued right
+            # behind it, so the caller hears the opener immediately followed
+            # by "are you still there?" before they've had a chance to speak.
+            self.session.userdata["greeting_played"] = True
 
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
@@ -1171,6 +1182,11 @@ async def entrypoint(ctx: JobContext) -> None:
         # Read by the transfer_call tool.
         "transfer_phone": (cfg.get("transfer_phone") or "").strip(),
         "silence_reminders": 0,
+        # Set True once the opening greeting has actually finished playing
+        # (see RealEstateAgent.on_enter) — gates the "are you still there?"
+        # away check-in so it can't fire while the greeting itself is still
+        # mid-flight due to cold-start/TTS latency.
+        "greeting_played": False,
         # Which tenant this call belongs to — lets the lead-capture tools fan
         # out to that tenant's connected integrations (Slack/Sheets/WhatsApp/CRM).
         "account_id": cfg.get("account_id"),
@@ -1256,6 +1272,10 @@ async def entrypoint(ctx: JobContext) -> None:
             userdata["silence_reminders"] = 0
             _reset_silence_hangup()
         elif ev.new_state == "away":
+            if not userdata.get("greeting_played", False):
+                # Away fired before the opening line finished playing (slow
+                # cold start / TTS) — not real caller silence, ignore it.
+                return
             sent = userdata.get("silence_reminders", 0)
             if sent < silence_reminder_max:
                 userdata["silence_reminders"] = sent + 1
