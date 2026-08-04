@@ -49,7 +49,7 @@ TIER_META: dict[str, dict] = {
 # silently disappears.
 CATALOG: list[dict] = [
     # --- Premium (ElevenLabs Flash v2.5) ------------------------------------
-    {"value": "elevenlabs:zT03pEAEi0VHKciJODfn", "name": "Saurabh", "gender": "male", "tier": "premium"},
+    {"value": "elevenlabs:zT03pEAEi0VHKciJODfn", "name": "Raju", "gender": "male", "tier": "premium"},
     {"value": "elevenlabs:zmh5xhBvMzqR4ZlXgcgL", "name": "Siya", "gender": "female", "tier": "premium"},
     {"value": "elevenlabs:FmBhnvP58BK0vz65OOj7", "name": "Viraj", "gender": "male", "tier": "premium"},
     {"value": "elevenlabs:cFvQm3lZl5miSWHxawFj", "name": "Aarush", "gender": "male", "tier": "premium"},
@@ -64,7 +64,7 @@ CATALOG: list[dict] = [
         "note": "UK English accent",
         "force_lang": "en",
     },
-    {"value": "elevenlabs:7qBNUtXRGP0jPi0H4r8k", "name": "Abhi", "gender": "male", "tier": "premium"},
+    {"value": "elevenlabs:7qBNUtXRGP0jPi0H4r8k", "name": "Bunty Conversational", "gender": "male", "tier": "premium"},
     {"value": "elevenlabs:1qEiC6qsybMkmnNdVMbK", "name": "Monika", "gender": "female", "tier": "premium"},
     {"value": "elevenlabs:9lx2GDtpvyyNBM7O9Mmx", "name": "Saavi", "gender": "female", "tier": "premium"},
     {"value": "elevenlabs:mActWQg9kibLro6Z2ouY", "name": "Riya", "gender": "female", "tier": "premium"},
@@ -82,6 +82,7 @@ CATALOG: list[dict] = [
     {"value": "kavya", "name": "Kavya", "gender": "female", "tier": "standard"},
     {"value": "amit", "name": "Amit", "gender": "male", "tier": "standard"},
     {"value": "pooja", "name": "Pooja", "gender": "female", "tier": "standard"},
+    {"value": "ishita", "name": "Ishita", "gender": "female", "tier": "standard"},
     # Gemini TTS personas keep the same voice identity while the reply
     # language changes during a call. They use Cloud Text-to-Speech directly,
     # so the existing service-account credential is sufficient.
