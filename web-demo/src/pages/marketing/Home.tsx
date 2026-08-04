@@ -18,7 +18,7 @@ import {
 const FAQ = [
   {
     q: 'What is Vistrow Voice?',
-    a: 'An AI voice-agent platform for Indian businesses — Artha answers, qualifies, and books inbound, outbound, and web calls in 10 Indian languages, live 24/7.',
+    a: 'An AI voice-agent platform for Indian businesses — Artha answers, qualifies, and books inbound, outbound, and web calls in 11 Indian languages, live 24/7.',
   },
   {
     q: 'Do I need to write code to set it up?',
@@ -26,7 +26,7 @@ const FAQ = [
   },
   {
     q: 'Which languages does Artha speak?',
-    a: 'Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi, and more — 10 Indian languages in total, switching mid-call to match the caller.',
+    a: 'Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi, and more — 11 Indian languages in total, switching mid-call to match the caller.',
   },
   {
     q: 'Can I try it before signing up?',
@@ -57,7 +57,7 @@ const HOME_JSONLD = [
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
     description:
-      'AI voice agents that answer, qualify, and book customer calls in 10 Indian languages — inbound, outbound, and web calls, live 24/7.',
+      'AI voice agents that answer, qualify, and book customer calls in 11 Indian languages — inbound, outbound, and web calls, live 24/7.',
     offers: {
       '@type': 'Offer',
       price: '2999',
@@ -124,7 +124,7 @@ export function Home() {
     <MarketingLayout>
       <Seo
         title="Vistrow Voice — AI Voice Agents for Every Customer Call"
-        description="Answer, qualify, and book — in your customers' language. Vistrow Voice runs AI voice agents for inbound, outbound, and web calls in 10 Indian languages, live 24/7."
+        description="Answer, qualify, and book — in your customers' language. Vistrow Voice runs AI voice agents for inbound, outbound, and web calls in 11 Indian languages, live 24/7."
         path="/"
         jsonLd={HOME_JSONLD}
       />
@@ -152,7 +152,7 @@ export function Home() {
             </span>
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-relaxed text-text-muted">
-            Ten Indian languages, mid-sentence code-switching, and the Hinglish people actually speak
+            Eleven Indian languages, mid-sentence code-switching, and the Hinglish people actually speak
             on the phone. Artha answers, qualifies, and books — inbound, outbound, and on your
             website, 24/7.
           </p>

@@ -46,7 +46,7 @@ export function ResetPassword() {
           A fresh <span className="text-primary">start.</span>
         </>
       }
-      features={['Answer & qualify calls 24/7', '10 Indian languages', 'Every call logged & analyzed']}
+      features={['Answer & qualify calls 24/7', '11 Indian languages', 'Every call logged & analyzed']}
     >
       {!token ? (
         <div className="flex flex-col gap-4">

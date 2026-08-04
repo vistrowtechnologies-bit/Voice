@@ -15,12 +15,13 @@ LANGUAGE_NAMES: dict[str, str] = {
     "gu-IN": "Gujarati",
     "bn-IN": "Bengali",
     "pa-IN": "Punjabi",
+    "od-IN": "Odia",
 }
 
 # Which of the languages above ElevenLabs' eleven_flash_v2_5 model actually
 # accepts as a `language` enforcement code. Confirmed against ElevenLabs'
 # own published 32-language list (elevenlabs.io/docs/overview/models,
-# 2026-07-15) — only Hindi, English, and Tamil overlap with our 10 offered
+# 2026-07-15) — only Hindi, English, and Tamil overlap with our 11 offered
 # languages. This is NOT a quality/accent list (see the Marathi pronunciation
 # work elsewhere) — it's which codes the API will accept at all before
 # REJECTING the request outright. Passing an unlisted code (confirmed live in
@@ -44,16 +45,6 @@ ELEVENLABS_SUPPORTED_LANGUAGES = {"hi-IN", "en-IN", "ta-IN"}
 # must NOT be treated as a real switch signal, or every Marathi call would
 # get silently downgraded to Hindi after a few caller turns — this was a real
 # bug, not hypothetical, caught 2026-07-15).
-#
-# Odia is deliberately NOT listed here even though Sarvam supports it as a
-# language: it isn't one of LANGUAGE_NAMES' offered agent languages (no
-# operator can configure an agent to open in Odia), so nothing validates that
-# voice/TTS combination in production. Auto-detecting into an unconfigured,
-# never-tested target language via nothing but a Unicode script match is how
-# a caller's aside in Odia script could silently wreck an unrelated call —
-# same failure shape as the Marathi bug, just for a language nobody opted
-# into. (Also, if this is ever re-added, Odia's real ISO 639-1 code is "or",
-# not "od" — "od-IN" was never a valid BCP-47 tag for any TTS provider here.)
 _SCRIPT_RANGES: list[tuple[str, str]] = [
     ("hi-IN", r"[ऀ-ॿ]"),  # Devanagari (Hindi/Marathi)
     ("bn-IN", r"[ঀ-৿]"),  # Bengali
@@ -63,6 +54,7 @@ _SCRIPT_RANGES: list[tuple[str, str]] = [
     ("te-IN", r"[ఀ-౿]"),  # Telugu
     ("kn-IN", r"[ಀ-೿]"),  # Kannada
     ("ml-IN", r"[ഀ-ൿ]"),  # Malayalam
+    ("od-IN", r"[଀-୿]"),  # Odia
 ]
 _SCRIPT_PATTERNS = [(code, re.compile(pattern)) for code, pattern in _SCRIPT_RANGES]
 _LATIN_PATTERN = re.compile(r"[A-Za-z]")

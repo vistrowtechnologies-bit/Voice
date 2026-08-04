@@ -85,7 +85,7 @@ export const PRODUCT_DETAIL: Record<
     subhead:
       'A no-code builder for real-time AI phone agents. Set the persona, prompt, voice and language — publish, and Artha starts taking calls.',
     features: [
-      { icon: 'translate', title: 'Multilingual', body: 'Speaks 10 Indian languages and Hinglish natively, switching mid-call to match the caller.' },
+      { icon: 'translate', title: 'Multilingual', body: 'Speaks 11 Indian languages and Hinglish natively, switching mid-call to match the caller.' },
       { icon: 'menu_book', title: 'Grounded answers', body: 'Ties responses to your knowledge base with strict-mode RAG, so the agent never makes things up.' },
       { icon: 'swap_calls', title: 'Human handoff', body: 'Escalates to a live person with full context when a call needs a human touch.' },
       { icon: 'analytics', title: 'Analytics & transcripts', body: 'Every call is transcribed, scored, and searchable across channels and agents.' },
@@ -211,7 +211,7 @@ export const SOLUTIONS: Solution[] = [
     faqs: [
       { q: 'Can Artha book site visits automatically?', a: 'Yes — it checks real availability and books a site visit directly on the call, no back-and-forth needed.' },
       { q: 'Does it qualify budget and location before booking?', a: 'Yes — it captures budget, preferred location, and timeline, and scores the lead before handing it to your team.' },
-      { q: 'Does it handle Hindi-speaking callers?', a: 'Yes — Artha speaks Hindi natively, including everyday Hinglish code-switching, plus 9 other Indian languages and English, switching mid-call to match the caller.' },
+      { q: 'Does it handle Hindi-speaking callers?', a: 'Yes — Artha speaks Hindi natively, including everyday Hinglish code-switching, plus 10 other Indian languages, switching mid-call to match the caller.' },
     ],
   },
   {
@@ -251,7 +251,7 @@ export const SOLUTIONS: Solution[] = [
     faqs: [
       { q: 'Can it check real order status?', a: 'Yes — grounded in your order data, Artha answers “where is my order” calls with the actual current status.' },
       { q: 'Can it handle returns without a human agent?', a: 'Yes — it guides customers through your returns and exchange policy end-to-end on the call.' },
-      { q: 'What languages can it support customers in?', a: 'Artha speaks 10 Indian languages, including Hindi and Hinglish, matching whichever language the customer calls in.' },
+      { q: 'What languages can it support customers in?', a: 'Artha speaks 11 Indian languages, including Hindi and Hinglish, matching whichever language the customer calls in.' },
     ],
   },
   {
@@ -303,7 +303,7 @@ export const HOME_FEATURES: NavLink[] = PRODUCT_PAGES
 export const HOW_IT_WORKS: FeatureRow[] = [
   { icon: 'dialpad', title: 'Connect a number', body: 'Bring your own number or get one from us. Point inbound calls at Vistrow in minutes.' },
   { icon: 'menu_book', title: 'Train on your knowledge', body: 'Upload PDFs and docs. Artha learns your business logic instantly with retrieval-grounded RAG.' },
-  { icon: 'rocket_launch', title: 'Go live', body: 'Publish your agent and it starts answering, qualifying, and booking — in 10 Indian languages.' },
+  { icon: 'rocket_launch', title: 'Go live', body: 'Publish your agent and it starts answering, qualifying, and booking — in 11 Indian languages.' },
 ]
 
 // ---- Header navigation structure ----
@@ -318,7 +318,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: 'All industries', to: '/solutions', icon: 'grid_view', desc: 'Voice AI for every industry.' },
       ...SOLUTIONS.map((s) => ({ label: s.label, to: s.to, icon: s.icon, desc: s.desc })),
-      { label: 'By language', to: '/languages', icon: 'translate', desc: 'All 10 Indian languages Artha speaks.' },
+      { label: 'By language', to: '/languages', icon: 'translate', desc: 'All 11 Indian languages Artha speaks.' },
     ],
   },
   { label: 'Pricing', to: '/pricing' },
@@ -389,7 +389,7 @@ export const CONTACT_PHONE = '+91 11 4056 6600'
 
 /** Headline stats shown under the hero. */
 export const HERO_STATS = [
-  { value: '10', label: 'Indian languages' },
+  { value: '11', label: 'Indian languages' },
   { value: '24/7', label: 'Always answering' },
   { value: '3', label: 'Channels — phone, web, widget' },
 ]
@@ -408,8 +408,9 @@ export const WORKS_WITH = ['Slack', 'WhatsApp', 'Google Sheets', 'Zapier', 'Any 
 //
 // Mirrors LANGUAGE_NAMES in lib/api.ts exactly — that map is what the agent
 // builder actually offers, so this list must never claim a language the
-// product can't be configured to speak. Ten Indian languages; English is
-// supported too but doesn't get a landing page (no search wedge there).
+// product can't be configured to speak. Ten regional languages here, plus
+// English (supported too but doesn't get a landing page — no search wedge
+// there) = the 11 languages counted in marketing copy site-wide.
 
 export interface LanguagePage {
   /** URL slug, e.g. "hindi" -> /languages/hindi */

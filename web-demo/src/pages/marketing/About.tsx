@@ -11,7 +11,7 @@ const VALUES = [
 ]
 
 const STATS = [
-  { value: '10', label: 'Indian languages' },
+  { value: '11', label: 'Indian languages' },
   { value: '24/7', label: 'Always answering' },
   { value: '3', label: 'Call channels' },
   { value: '100%', label: 'Calls logged & transcribed' },

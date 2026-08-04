@@ -200,6 +200,7 @@ const LANGUAGES = [
   ['gu-IN', 'Gujarati'],
   ['bn-IN', 'Bengali'],
   ['pa-IN', 'Punjabi'],
+  ['od-IN', 'Odia'],
 ] as const
 
 export function Agents() {
