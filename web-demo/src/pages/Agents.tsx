@@ -150,9 +150,12 @@ const voicePickerGroups = (voices: VoiceEntry[]) => [
     voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
   },
 ]
-// The raw model string stays under the hood; operators only ever see the
-// Vistrow tier name + quality tag, so we never expose which vendor model
-// powers each tier. Order = premium → economy.
+// Vistrow tier name + quality tag is the primary label (see
+// platform_assistant.py — the vendor never gets named to a prospect on a
+// live call), but the dashboard's own model picker shows the raw model
+// value in parentheses too, since an operator picking between tiers needs
+// to know which is actually the newer/faster one, not just a marketing
+// name. Order = premium → economy.
 const MODEL_OPTIONS = [
   { value: 'gpt-4.1', label: 'Vistrow Prime', tag: 'Best reasoning & quality' },
   { value: 'gpt-4o', label: 'Vistrow Pro', tag: 'Fast & natural' },
@@ -504,7 +507,7 @@ function AgentEditor({
             <select value={form.model} onChange={(e) => set('model', e.target.value)} className={inputCls}>
               {MODEL_OPTIONS.map((m) => (
                 <option key={m.value} value={m.value}>
-                  {m.label} — {m.tag}
+                  {m.label} ({m.value}) — {m.tag}
                 </option>
               ))}
             </select>
