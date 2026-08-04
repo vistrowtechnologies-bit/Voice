@@ -109,6 +109,12 @@ function DesktopNav() {
 }
 
 function MobileNav({ onClose }: { onClose: () => void }) {
+  // Closed by default — every group's items used to render fully expanded,
+  // so the drawer was one long undifferentiated scroll (30+ links) instead
+  // of a menu you could actually scan. One at a time, accordion-style,
+  // matches how the desktop header's own dropdowns behave (only one open).
+  const [openGroup, setOpenGroup] = useState<string | null>(null)
+
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
@@ -127,36 +133,52 @@ function MobileNav({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </div>
-        <div className="flex flex-col gap-5">
-          {NAV.map((group) => (
-            <div key={group.label}>
-              {group.items ? (
-                <>
-                  <p className="mb-2 text-xs font-bold uppercase tracking-widest text-text-muted">{group.label}</p>
-                  <div className="flex flex-col gap-1">
+        <div className="flex flex-col divide-y divide-border">
+          {NAV.map((group) => {
+            if (!group.items) {
+              return (
+                <NavLink
+                  key={group.label}
+                  to={group.to ?? '#'}
+                  onClick={onClose}
+                  className="block py-3 text-sm font-semibold text-text"
+                >
+                  {group.label}
+                </NavLink>
+              )
+            }
+            const isOpen = openGroup === group.label
+            return (
+              <div key={group.label}>
+                <button
+                  type="button"
+                  onClick={() => setOpenGroup(isOpen ? null : group.label)}
+                  aria-expanded={isOpen}
+                  className="flex w-full items-center justify-between py-3 text-sm font-semibold text-text"
+                >
+                  {group.label}
+                  <Icon
+                    name="expand_more"
+                    className={`text-[20px] text-text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {isOpen && (
+                  <div className="flex flex-col gap-1 pb-3 pl-2">
                     {group.items.map((item) => (
                       <NavLink
                         key={item.to}
                         to={item.to}
                         onClick={onClose}
-                        className="rounded-lg px-2 py-2 text-sm text-text hover:bg-surface-high"
+                        className="rounded-lg px-2 py-2 text-sm text-text-muted hover:bg-surface-high hover:text-text"
                       >
                         {item.label}
                       </NavLink>
                     ))}
                   </div>
-                </>
-              ) : (
-                <NavLink
-                  to={group.to ?? '#'}
-                  onClick={onClose}
-                  className="block text-sm font-semibold text-text"
-                >
-                  {group.label}
-                </NavLink>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            )
+          })}
         </div>
         <div className="mt-8 flex flex-col gap-3">
           <NavLink
