@@ -11,6 +11,7 @@ import {
   recordDemoCall,
 } from '../lib/demoCallCap'
 import { fetchLiveKitToken, randomId } from '../lib/livekit'
+import { trackQualifyLead } from '../lib/analytics'
 import { useOrchestratorCall } from '../lib/orchestratorCall'
 
 type Phase = 'idle' | 'connecting' | 'active' | 'active-orchestrator' | 'denied' | 'capped' | 'unreachable'
@@ -55,6 +56,7 @@ export function DemoOrbCard() {
       const room = randomId('voice-agent-demo')
       const { token: newToken, url } = await fetchLiveKitToken(identity, room)
       recordDemoCall()
+      trackQualifyLead('demo_call')
       setToken(newToken)
       setServerUrl(url)
       setPhase('active')

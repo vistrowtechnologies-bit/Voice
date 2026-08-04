@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { useAuth } from '../lib/auth'
+import { trackQualifyLead } from '../lib/analytics'
 import { AuthInput, AuthShell, PasswordVisibilityToggle, SocialButtons, useShake } from './AuthShell'
 
 // Cheap client-side password strength: length + character-class variety.
@@ -92,6 +93,7 @@ export function Signup() {
     try {
       const { phoneNumber, ...rest } = form
       await signup({ ...rest, phone: phoneNumber ? `${dialCode} ${phoneNumber}` : '' })
+      trackQualifyLead('signup')
       // DashboardLayout shows the onboarding modal automatically for any
       // account that hasn't completed it yet — no special-case route here.
       navigate('/dashboard', { replace: true })

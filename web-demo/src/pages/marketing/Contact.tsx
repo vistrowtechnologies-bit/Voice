@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { trackQualifyLead } from '../../lib/analytics'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
@@ -58,6 +59,7 @@ export function Contact() {
               <form
                 onSubmit={(e) => {
                   e.preventDefault()
+                  trackQualifyLead('contact_form')
                   setSent(true)
                 }}
                 className="flex flex-col gap-4"
