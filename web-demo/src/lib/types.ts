@@ -408,7 +408,14 @@ export interface Site {
   status: string
   widgetPosition: 'bottom-right' | 'bottom-left'
   widgetLabel: string
+  widgetAvatar: string
+  widgetGreeting: string
   createdAt: string
+}
+
+export interface WidgetAvatarOption {
+  key: string
+  label: string
 }
 
 export interface HelpFaq {

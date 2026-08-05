@@ -9,21 +9,32 @@ import {
   deleteSite,
   fetchAgents,
   fetchSites,
+  fetchWidgetAvatarCatalog,
   fetchWidgetBackendUrl,
   regenerateSiteKey,
   updateSite,
   wordpressPluginUrl,
 } from '../lib/api'
-import type { AgentConfig, Site } from '../lib/types'
+import type { AgentConfig, Site, WidgetAvatarOption } from '../lib/types'
+
+// The greeting can contain quotes/ampersands - this is copy-pasted verbatim
+// into a customer's own HTML, so it must be a well-formed attribute value,
+// not just readable text.
+function escapeHtmlAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
 
 function snippetFor(site: Site, backendUrl: string): string {
-  return `<script src="${backendUrl}/widget.js" data-site-key="${site.siteKey}" data-api-base="${backendUrl}" data-position="${site.widgetPosition}" data-label="${site.widgetLabel}"></script>`
+  const avatarAttr = site.widgetAvatar && site.widgetAvatar !== 'default' ? ` data-avatar="${site.widgetAvatar}"` : ''
+  const greetingAttr = site.widgetGreeting ? ` data-greeting="${escapeHtmlAttr(site.widgetGreeting)}"` : ''
+  return `<script src="${backendUrl}/widget.js" data-site-key="${site.siteKey}" data-api-base="${backendUrl}" data-position="${site.widgetPosition}" data-label="${site.widgetLabel}"${avatarAttr}${greetingAttr}></script>`
 }
 
 export function WebsiteWidget() {
   const [sites, setSites] = useState<Site[]>([])
   const [agents, setAgents] = useState<AgentConfig[]>([])
   const [backendUrl, setBackendUrl] = useState<string | null>(null)
+  const [avatarCatalog, setAvatarCatalog] = useState<WidgetAvatarOption[]>([])
   const [loaded, setLoaded] = useState(false)
 
   const [newName, setNewName] = useState('')
@@ -31,12 +42,17 @@ export function WebsiteWidget() {
   const [newAgentId, setNewAgentId] = useState('')
   const [newPosition, setNewPosition] = useState<Site['widgetPosition']>('bottom-right')
   const [newLabel, setNewLabel] = useState('Talk to us')
+  const [newAvatar, setNewAvatar] = useState('default')
+  const [newGreeting, setNewGreeting] = useState('')
 
   const reloadSites = () => fetchSites().then(setSites).catch(() => setSites([]))
 
   useEffect(() => {
     reloadSites()
     fetchAgents().then(setAgents).catch(() => setAgents([]))
+    fetchWidgetAvatarCatalog()
+      .then((r) => setAvatarCatalog(r.avatars))
+      .catch(() => setAvatarCatalog([]))
     fetchWidgetBackendUrl()
       .then((r) => setBackendUrl(r.backendUrl))
       .catch(() => setBackendUrl(null))
@@ -45,12 +61,22 @@ export function WebsiteWidget() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return
-    await createSite(newName.trim(), newAgentId ? Number(newAgentId) : null, newDomain.trim(), newPosition, newLabel.trim() || 'Talk to us')
+    await createSite(
+      newName.trim(),
+      newAgentId ? Number(newAgentId) : null,
+      newDomain.trim(),
+      newPosition,
+      newLabel.trim() || 'Talk to us',
+      newAvatar,
+      newGreeting.trim(),
+    )
     setNewName('')
     setNewDomain('')
     setNewAgentId('')
     setNewPosition('bottom-right')
     setNewLabel('Talk to us')
+    setNewAvatar('default')
+    setNewGreeting('')
     reloadSites()
   }
 
@@ -123,6 +149,14 @@ export function WebsiteWidget() {
                 className="w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
               />
             </Field>
+            <Field label="Greeting bubble (optional)">
+              <input
+                value={newGreeting}
+                onChange={(e) => setNewGreeting(e.target.value.slice(0, 140))}
+                placeholder="Hi! I'm Artha - ask me anything, no forms."
+                className="w-full min-w-[240px] rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+            </Field>
             <button
               onClick={handleCreate}
               disabled={!newName.trim()}
@@ -132,6 +166,12 @@ export function WebsiteWidget() {
               Generate embed code
             </button>
           </div>
+          {avatarCatalog.length > 0 && (
+            <div className="mt-3">
+              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-text-muted">Avatar color</p>
+              <AvatarPicker catalog={avatarCatalog} backendUrl={backendUrl} value={newAvatar} onChange={setNewAvatar} />
+            </div>
+          )}
           <p className="mt-2 text-[11px] text-text-muted">
             Every site gets its own key and its own call history, filterable on the Calls page - the domain field is
             just a label for now, not yet enforced.
@@ -149,6 +189,7 @@ export function WebsiteWidget() {
                   site={site}
                   agents={agents}
                   backendUrl={backendUrl}
+                  avatarCatalog={avatarCatalog}
                   onChange={reloadSites}
                 />
               ))}
@@ -185,19 +226,23 @@ function SiteRow({
   site,
   agents,
   backendUrl,
+  avatarCatalog,
   onChange,
 }: {
   site: Site
   agents: AgentConfig[]
   backendUrl: string | null
+  avatarCatalog: WidgetAvatarOption[]
   onChange: () => void
 }) {
   const [copied, setCopied] = useState(false)
   const [keyCopied, setKeyCopied] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [labelDraft, setLabelDraft] = useState(site.widgetLabel)
+  const [greetingDraft, setGreetingDraft] = useState(site.widgetGreeting)
   const [installMode, setInstallMode] = useState<'wordpress' | 'manual'>('wordpress')
   useEffect(() => setLabelDraft(site.widgetLabel), [site.widgetLabel])
+  useEffect(() => setGreetingDraft(site.widgetGreeting), [site.widgetGreeting])
 
   const snippet = backendUrl ? snippetFor(site, backendUrl) : null
 
@@ -225,6 +270,8 @@ function SiteRow({
       status: site.status,
       widgetPosition: site.widgetPosition,
       widgetLabel: site.widgetLabel,
+      widgetAvatar: site.widgetAvatar,
+      widgetGreeting: site.widgetGreeting,
       ...partial,
     }).then(onChange)
 
@@ -299,6 +346,29 @@ function SiteRow({
         />
       </div>
 
+      <div className="flex items-center gap-2 text-xs">
+        <span className="shrink-0 text-text-muted">Greeting bubble</span>
+        <input
+          value={greetingDraft}
+          onChange={(e) => setGreetingDraft(e.target.value.slice(0, 140))}
+          onBlur={() => greetingDraft !== site.widgetGreeting && patchSite({ widgetGreeting: greetingDraft.trim() })}
+          placeholder="Hi! I'm Artha - ask me anything, no forms."
+          className="w-full max-w-md rounded-lg border border-border bg-surface-high px-2 py-1 text-xs outline-none focus:border-primary"
+        />
+      </div>
+
+      {avatarCatalog.length > 0 && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="shrink-0 text-text-muted">Avatar color</span>
+          <AvatarPicker
+            catalog={avatarCatalog}
+            backendUrl={backendUrl}
+            value={site.widgetAvatar}
+            onChange={(key) => patchSite({ widgetAvatar: key })}
+          />
+        </div>
+      )}
+
       <div className="rounded-lg border border-border bg-surface-high/40 p-3">
         <div className="mb-2 flex gap-1 rounded-lg bg-surface p-1 text-xs">
           <button
@@ -363,5 +433,44 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{label}</span>
       {children}
     </label>
+  )
+}
+
+// Swatch grid for the curated avatar catalog (widget_avatars.py) - not a
+// free-form upload, so this is just picking a key, previewed against the
+// real served image so what you click is exactly what shows on the site.
+function AvatarPicker({
+  catalog,
+  backendUrl,
+  value,
+  onChange,
+}: {
+  catalog: WidgetAvatarOption[]
+  backendUrl: string | null
+  value: string
+  onChange: (key: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {catalog.map((opt) => (
+        <button
+          key={opt.key}
+          type="button"
+          onClick={() => onChange(opt.key)}
+          title={opt.label}
+          aria-label={opt.label}
+          aria-pressed={value === opt.key}
+          className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 transition-colors ${
+            value === opt.key ? 'border-primary' : 'border-transparent hover:border-border'
+          }`}
+        >
+          {backendUrl ? (
+            <img src={`${backendUrl}/widget-avatars/${opt.key}.png`} alt={opt.label} className="h-full w-full object-cover" />
+          ) : (
+            <span className="h-full w-full bg-surface-high" />
+          )}
+        </button>
+      ))}
+    </div>
   )
 }

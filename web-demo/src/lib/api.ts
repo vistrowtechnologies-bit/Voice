@@ -25,6 +25,7 @@ import type {
   UsageTrends,
   VoiceCatalog,
   VoiceEntry,
+  WidgetAvatarOption,
 } from './types'
 
 // A 401 from any data call means the session expired mid-use. Broadcast it so
@@ -305,10 +306,22 @@ export const createSite = (
   allowedDomain: string,
   widgetPosition: Site['widgetPosition'] = 'bottom-right',
   widgetLabel: string = 'Talk to us',
-) => send<Site>('POST', '/widget/sites', { name, agentId, allowedDomain, widgetPosition, widgetLabel })
+  widgetAvatar: string = 'default',
+  widgetGreeting: string = '',
+) =>
+  send<Site>('POST', '/widget/sites', {
+    name,
+    agentId,
+    allowedDomain,
+    widgetPosition,
+    widgetLabel,
+    widgetAvatar,
+    widgetGreeting,
+  })
 export const updateSite = (id: number, data: Partial<Site>) => send<Site>('PATCH', `/widget/sites/${id}`, data)
 export const deleteSite = (id: number) => send('DELETE', `/widget/sites/${id}`)
 export const regenerateSiteKey = (id: number) => send<Site>('POST', `/widget/sites/${id}/regenerate-key`)
+export const fetchWidgetAvatarCatalog = () => get<{ avatars: WidgetAvatarOption[] }>('/widget/avatar-catalog')
 export const wordpressPluginUrl = '/api/widget/wordpress-plugin.zip'
 export const fetchWidgetBackendUrl = () => get<{ backendUrl: string | null }>('/widget/backend-url')
 

@@ -18,6 +18,7 @@ import integrations_dispatch
 import kb_crawl
 import kb_extract
 import livekit_sip
+import widget_avatars
 from help_content import FAQS
 from dotenv import load_dotenv
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
@@ -30,6 +31,7 @@ from pydantic import BaseModel
 WIDGET_JS_PATH = Path(__file__).resolve().parent / "static" / "widget.js"
 WORDPRESS_PLUGIN_ZIP_PATH = Path(__file__).resolve().parent / "static" / "vistrow-voice-widget.zip"
 AGENT_ORB_VIDEO_PATH = Path(__file__).resolve().parent / "static" / "agent-orb.mp4"
+WIDGET_AVATARS_DIR = Path(__file__).resolve().parent / "static" / "widget-avatars"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("telephony")
@@ -60,7 +62,7 @@ _PUBLIC_PATHS = {
     "/telephony/enablex/inbound-event",  # EnableX inbound webhook (their server calls it)
     "/telephony/enablex/outbound-test-event",  # EnableX outbound/test-call webhook (their server calls it — no session)
 }
-_PUBLIC_PREFIXES = ("/auth/", "/invite/")  # signup/login/logout/me + invite-preview/accept handle their own logic
+_PUBLIC_PREFIXES = ("/auth/", "/invite/", "/widget-avatars/")  # signup/login/logout/me + invite-preview/accept handle their own logic; avatar images run on third-party sites, no session
 
 
 @app.middleware("http")
@@ -2143,6 +2145,18 @@ def widget_agent_orb() -> FileResponse:
     return FileResponse(AGENT_ORB_VIDEO_PATH, media_type="video/mp4")
 
 
+@app.get("/widget-avatars/{key}.png")
+def widget_avatar_image(key: str) -> FileResponse:
+    """Serves one of the curated avatar catalog images (widget_avatars.py)
+    to third-party sites embedding the widget — unauthenticated, like
+    agent-orb.mp4 above. The {key} path param is validated against the
+    known catalog before touching the filesystem, so this can't be used to
+    read arbitrary files off the static/ directory."""
+    if not widget_avatars.is_valid_avatar_key(key):
+        raise HTTPException(404, "Unknown avatar")
+    return FileResponse(WIDGET_AVATARS_DIR / f"{key}.png", media_type="image/png")
+
+
 @app.get("/widget/sites")
 def list_sites(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_sites(user["account_id"])
@@ -2160,7 +2174,14 @@ def create_site(data: dict = Body(...), user: dict = Depends(current_user)) -> d
         data.get("allowedDomain", ""),
         data.get("widgetPosition", "bottom-right"),
         data.get("widgetLabel", "Talk to us"),
+        data.get("widgetAvatar", "default"),
+        data.get("widgetGreeting", ""),
     )
+
+
+@app.get("/widget/avatar-catalog")
+def widget_avatar_catalog(user: dict = Depends(current_user)) -> dict:
+    return {"avatars": [{"key": k, "label": v} for k, v in widget_avatars.WIDGET_AVATAR_CATALOG.items()]}
 
 
 @app.patch("/widget/sites/{site_id}")

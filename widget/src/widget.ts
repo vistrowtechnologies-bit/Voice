@@ -10,6 +10,15 @@ const siteKey = scriptEl?.dataset.siteKey
 const apiBase = scriptEl?.dataset.apiBase?.replace(/\/$/, '')
 const position = scriptEl?.dataset.position === 'bottom-left' ? 'bottom-left' : 'bottom-right'
 const label = scriptEl?.dataset.label || 'Talk to us'
+// 'default' (or the attribute missing entirely) keeps today's animated
+// orb video exactly as-is - every other catalog key is a static color
+// variant (widget_avatars.py) rendered as a plain <img> instead.
+const avatarKey = scriptEl?.dataset.avatar || 'default'
+// Empty means "use the copy baked into this file" - keeps the actual
+// default string in one place instead of duplicated into the dashboard,
+// the WordPress plugin, and every existing site's stored settings.
+const customGreeting = scriptEl?.dataset.greeting || ''
+const DEFAULT_GREETING = "👋 Hi! I'm Artha - ask me anything, no forms."
 
 function randomId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
@@ -77,7 +86,7 @@ const CSS = `
 }
 .av-button { width: 68px; height: 68px; border-radius: 9999px; background: #000; border: none; padding: 0; overflow: hidden; cursor: pointer; animation: av-pulse-ring 2.6s ease-out infinite, av-attention-pop 1.1s ease-in-out 1; transition: transform .15s ease; }
 .av-button:hover { transform: scale(1.06); }
-.av-button video { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
+.av-button video, .av-button img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 
 .av-greeting { position: absolute; bottom: 8px; ${position === 'bottom-left' ? 'left: 78px;' : 'right: 78px;'} display: flex; align-items: center; gap: 8px; width: max-content; max-width: 220px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
 .av-greeting span { flex: 1 1 auto; min-width: 0; }
@@ -108,7 +117,7 @@ const CSS = `
 
 .av-body { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; }
-.av-orb video { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
+.av-orb video, .av-orb img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 .av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 32px; }
 .av-controls { display: flex; align-items: center; gap: 14px; padding: 0 16px 16px; }
 .av-ctrl-btn { width: 40px; height: 40px; border-radius: 9999px; border: 1px solid #2a2440; background: #201b3b; color: #b8b2cf; display: flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -116,11 +125,22 @@ const CSS = `
 audio { display: none; }
 `
 
+// 'default' keeps the animated video orb exactly as before; any other
+// catalog key swaps in a static color-variant image instead (no video
+// element to animate, so it's a plain <img>).
+function avatarTag(id?: string): string {
+  const idAttr = id ? ` id="${id}"` : ''
+  if (avatarKey === 'default') {
+    return `<video${idAttr} src="${apiBase}/agent-orb.mp4" autoplay loop muted playsinline></video>`
+  }
+  return `<img${idAttr} src="${apiBase}/widget-avatars/${avatarKey}.png" alt="" />`
+}
+
 function widgetHtml(label: string): string {
   return `
     <div class="av-root">
       <div id="av-greeting" class="av-greeting">
-        <span id="av-greeting-text">👋 Talk to Artha — instant answers, no waiting.</span>
+        <span id="av-greeting-text"></span>
         <button id="av-greeting-close" aria-label="Dismiss">${CLOSE_ICON}</button>
       </div>
 
@@ -151,7 +171,7 @@ function widgetHtml(label: string): string {
         <div id="av-call" style="display:none;">
           <div class="av-body">
             <div class="av-orb">
-              <video id="av-orb-video" src="${apiBase}/agent-orb.mp4" autoplay loop muted playsinline></video>
+              ${avatarTag('av-orb-video')}
             </div>
             <p id="av-status" class="av-status">Connecting…</p>
           </div>
@@ -164,7 +184,7 @@ function widgetHtml(label: string): string {
       </div>
 
       <button id="av-button" class="av-button" aria-label="${label}">
-        <video src="${apiBase}/agent-orb.mp4" autoplay loop muted playsinline></video>
+        ${avatarTag()}
       </button>
     </div>
   `
@@ -199,13 +219,20 @@ function init(): void {
 
   const callEl = shadow.getElementById('av-call') as HTMLDivElement
   const statusEl = shadow.getElementById('av-status') as HTMLParagraphElement
-  const orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement
+  // 'av-orb-video' is a real <video> only when avatarKey is 'default' - a
+  // color-variant catalog pick renders it as a plain <img> instead (see
+  // avatarTag()), which has no playbackRate to animate.
+  const orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement | HTMLImageElement | null
   const orbEl = orbVideoEl?.parentElement as HTMLDivElement
   const timerEl = shadow.getElementById('av-timer') as HTMLSpanElement
   const muteBtn = shadow.getElementById('av-mute') as HTMLButtonElement
   const endBtn = shadow.getElementById('av-end') as HTMLButtonElement
   const audioEl = shadow.getElementById('av-audio') as HTMLAudioElement
+  // Set via textContent, never interpolated into the HTML template string -
+  // this value can come from a customer's own dashboard/WordPress settings,
+  // so it must never be trusted as markup.
   const greetingText = shadow.getElementById('av-greeting-text') as HTMLSpanElement
+  greetingText.textContent = customGreeting || DEFAULT_GREETING
 
   let room: Room | null = null
   let micEnabled = true
@@ -260,7 +287,9 @@ function init(): void {
 
   function applyAgentState(state: string | undefined): void {
     if (state && STATE_LABELS[state]) setStatus(STATE_LABELS[state])
-    if (orbVideoEl) orbVideoEl.playbackRate = state === 'speaking' ? SPEAKING_PLAYBACK_RATE : 1
+    if (orbVideoEl instanceof HTMLVideoElement) {
+      orbVideoEl.playbackRate = state === 'speaking' ? SPEAKING_PLAYBACK_RATE : 1
+    }
   }
 
   function formatCountdown(totalSeconds: number): string {

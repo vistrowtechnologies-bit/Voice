@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 
 import dbconn
 import voice_catalog
+from widget_avatars import is_valid_avatar_key
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,11 @@ CREATE TABLE IF NOT EXISTS sites (
     status TEXT DEFAULT 'active',
     widget_position TEXT DEFAULT 'bottom-right',
     widget_label TEXT DEFAULT 'Talk to us',
+    widget_avatar TEXT DEFAULT 'default',
+    -- Empty string means "use the widget's own built-in default copy" -
+    -- keeps that default text living in one place (widget.ts) instead of
+    -- duplicated into every existing row.
+    widget_greeting TEXT DEFAULT '',
     created_at TEXT DEFAULT {_NOW}
 );
 
@@ -3270,6 +3276,8 @@ def _site_dict(r: dict) -> dict:
         "status": r["status"],
         "widgetPosition": r["widget_position"] or "bottom-right",
         "widgetLabel": r["widget_label"] or "Talk to us",
+        "widgetAvatar": r["widget_avatar"] or "default",
+        "widgetGreeting": r["widget_greeting"] or "",
         "createdAt": r["created_at"],
     }
 
@@ -3313,16 +3321,31 @@ def create_site(
     allowed_domain: str = "",
     widget_position: str = "bottom-right",
     widget_label: str = "Talk to us",
+    widget_avatar: str = "default",
+    widget_greeting: str = "",
 ) -> dict:
     if widget_position not in ("bottom-right", "bottom-left"):
         widget_position = "bottom-right"
+    if not is_valid_avatar_key(widget_avatar):
+        widget_avatar = "default"
+    widget_greeting = widget_greeting.strip()[:140]
     conn = _connect()
     try:
         with conn:
             cur = conn.execute(
-                "INSERT INTO sites (account_id, name, site_key, allowed_domain, agent_id, widget_position, widget_label) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
-                (account_id, name, _new_site_key(), allowed_domain, agent_id, widget_position, widget_label or "Talk to us"),
+                "INSERT INTO sites (account_id, name, site_key, allowed_domain, agent_id, widget_position, widget_label, widget_avatar, widget_greeting) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                (
+                    account_id,
+                    name,
+                    _new_site_key(),
+                    allowed_domain,
+                    agent_id,
+                    widget_position,
+                    widget_label or "Talk to us",
+                    widget_avatar,
+                    widget_greeting,
+                ),
             )
         row = conn.execute("SELECT * FROM sites WHERE id = ?", (cur.lastrowid,)).fetchone()
         return _site_dict(row)
@@ -3334,12 +3357,16 @@ def update_site(site_id: int, data: dict, account_id: int) -> dict | None:
     widget_position = data.get("widgetPosition", "bottom-right")
     if widget_position not in ("bottom-right", "bottom-left"):
         widget_position = "bottom-right"
+    widget_avatar = data.get("widgetAvatar", "default")
+    if not is_valid_avatar_key(widget_avatar):
+        widget_avatar = "default"
+    widget_greeting = (data.get("widgetGreeting") or "").strip()[:140]
     conn = _connect()
     try:
         with conn:
             conn.execute(
                 "UPDATE sites SET name = ?, allowed_domain = ?, agent_id = ?, status = ?, "
-                "widget_position = ?, widget_label = ? WHERE id = ? AND account_id = ?",
+                "widget_position = ?, widget_label = ?, widget_avatar = ?, widget_greeting = ? WHERE id = ? AND account_id = ?",
                 (
                     data.get("name"),
                     data.get("allowedDomain", ""),
@@ -3347,6 +3374,8 @@ def update_site(site_id: int, data: dict, account_id: int) -> dict | None:
                     data.get("status", "active"),
                     widget_position,
                     data.get("widgetLabel") or "Talk to us",
+                    widget_avatar,
+                    widget_greeting,
                     site_id,
                     account_id,
                 ),

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.3.4
+ * Version: 1.4.0
  * Author: Vistrow Voice
  */
 
@@ -20,13 +20,30 @@ define('VISTROW_VOICE_OPTION', 'vistrow_voice_widget_settings');
 // Routing the widget through Vercel too means visitors' browsers only ever talk
 // to a domain that reliably resolves, and Vercel forwards to Railway internally.
 // Every install talks to the same backend, so this stays a constant (not a
-// settings field) — only the site key is install-specific.
-define('VISTROW_VOICE_DEFAULT_BACKEND_URL', 'https://voice-three-flax.vercel.app/api');
+// settings field) — only the site key is install-specific. Uses the real
+// custom domain (not the *.vercel.app default) since that's what customers
+// actually recognize and what stays stable if the Vercel project is ever renamed.
+define('VISTROW_VOICE_DEFAULT_BACKEND_URL', 'https://www.vistrowvoice.com/api');
 
 // Where the "your leads" / "open dashboard" links on the settings page point —
 // the actual Vistrow Voice web app, a different host from the widget backend
 // above (that one just serves the embed script + call API).
-define('VISTROW_VOICE_DASHBOARD_URL', 'https://voice-three-flax.vercel.app');
+define('VISTROW_VOICE_DASHBOARD_URL', 'https://www.vistrowvoice.com');
+
+// Curated avatar catalog - kept in sync by hand with widget_avatars.py on
+// the backend, which is the source of truth (it validates and serves the
+// actual images). Duplicated here rather than fetched live because this
+// settings page has no session to call an authenticated dashboard API with.
+function vistrow_voice_avatar_catalog() {
+    return array(
+        'default' => 'Purple (default)',
+        'blue' => 'Blue',
+        'green' => 'Green',
+        'orange' => 'Orange',
+        'red' => 'Red',
+        'teal' => 'Teal',
+    );
+}
 
 function vistrow_voice_default_settings() {
     return array(
@@ -34,6 +51,10 @@ function vistrow_voice_default_settings() {
         'backend_url' => VISTROW_VOICE_DEFAULT_BACKEND_URL,
         'position' => 'bottom-right',
         'label' => 'Talk to Artha',
+        // Empty means "use the widget script's own built-in default copy" -
+        // keeps that default line living in one place (widget.ts).
+        'greeting' => '',
+        'avatar' => 'default',
         // 'all' keeps existing installs behaving exactly as before (widget
         // on every page) — 'selected' is opt-in so nobody's widget silently
         // disappears sitewide just from upgrading the plugin.
@@ -87,11 +108,18 @@ add_action('admin_init', function () {
 
 function vistrow_voice_sanitize_settings($input) {
     $defaults = vistrow_voice_default_settings();
+    $avatar_catalog = vistrow_voice_avatar_catalog();
+    $avatar = isset($input['avatar']) ? sanitize_text_field($input['avatar']) : $defaults['avatar'];
+    if (!array_key_exists($avatar, $avatar_catalog)) {
+        $avatar = $defaults['avatar'];
+    }
     return array(
         'site_key' => isset($input['site_key']) ? sanitize_text_field($input['site_key']) : $defaults['site_key'],
         'backend_url' => isset($input['backend_url']) ? esc_url_raw(rtrim($input['backend_url'], '/')) : $defaults['backend_url'],
         'position' => (isset($input['position']) && $input['position'] === 'bottom-left') ? 'bottom-left' : 'bottom-right',
         'label' => isset($input['label']) && $input['label'] !== '' ? sanitize_text_field($input['label']) : $defaults['label'],
+        'greeting' => isset($input['greeting']) ? mb_substr(sanitize_text_field($input['greeting']), 0, 140) : $defaults['greeting'],
+        'avatar' => $avatar,
         'show_on' => (isset($input['show_on']) && $input['show_on'] === 'selected') ? 'selected' : 'all',
         'pages' => isset($input['pages']) && is_array($input['pages']) ? array_map('absint', $input['pages']) : array(),
     );
@@ -136,6 +164,12 @@ function vistrow_voice_render_settings_page() {
         .vvw-wrap .button-primary { background: linear-gradient(135deg,#a855f7,#7c3aed) !important; border-color: #7c3aed !important; color: #fff !important; text-shadow: none !important; box-shadow: none !important; }
         .vvw-wrap .button-primary:hover, .vvw-wrap .button-primary:focus { background: linear-gradient(135deg,#9333ea,#6d28d9) !important; border-color: #6d28d9 !important; color: #fff !important; box-shadow: none !important; }
         .vvw-wrap .button-primary:active { background: #6d28d9 !important; border-color: #6d28d9 !important; }
+        .vvw-avatar-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .vvw-avatar-swatch { display: block; width: 40px; height: 40px; border-radius: 9999px; overflow: hidden; border: 2px solid transparent; cursor: pointer; }
+        .vvw-avatar-swatch:hover { border-color: #dcdcde; }
+        .vvw-avatar-swatch.is-selected, .vvw-avatar-swatch:has(input:checked) { border-color: #7c3aed; }
+        .vvw-avatar-swatch input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .vvw-avatar-swatch img { display: block; width: 100%; height: 100%; object-fit: cover; }
     </style>
     <div class="wrap vvw-wrap">
         <div class="vvw-header">
@@ -192,6 +226,36 @@ function vistrow_voice_render_settings_page() {
                                 value="<?php echo esc_attr($settings['label']); ?>"
                                 class="regular-text" />
                             <p class="vvw-help">The text visitors see next to the floating call button.</p>
+                        </div>
+
+                        <div class="vvw-field">
+                            <label class="vvw-label" for="vistrow_greeting">Greeting bubble</label>
+                            <input type="text" id="vistrow_greeting"
+                                name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[greeting]"
+                                value="<?php echo esc_attr($settings['greeting']); ?>"
+                                maxlength="140" class="regular-text"
+                                placeholder="Hi! I'm Artha - ask me anything, no forms." />
+                            <p class="vvw-help">
+                                The message that pops up next to the button after a few seconds, inviting a
+                                click. Leave blank to use our default line.
+                            </p>
+                        </div>
+
+                        <div class="vvw-field">
+                            <label class="vvw-label">Avatar color</label>
+                            <div class="vvw-avatar-grid">
+                                <?php foreach (vistrow_voice_avatar_catalog() as $avatar_key => $avatar_label) : ?>
+                                    <label class="vvw-avatar-swatch <?php echo $settings['avatar'] === $avatar_key ? 'is-selected' : ''; ?>"
+                                        title="<?php echo esc_attr($avatar_label); ?>">
+                                        <input type="radio" name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[avatar]"
+                                            value="<?php echo esc_attr($avatar_key); ?>"
+                                            <?php checked($settings['avatar'], $avatar_key); ?> />
+                                        <img src="<?php echo esc_url(rtrim(VISTROW_VOICE_DEFAULT_BACKEND_URL, '/') . '/widget-avatars/' . $avatar_key . '.png'); ?>"
+                                            alt="<?php echo esc_attr($avatar_label); ?>" />
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <p class="vvw-help">Pick an accent color for the call button and in-call orb.</p>
                         </div>
 
                         <div class="vvw-field">
@@ -314,11 +378,23 @@ add_action('wp_footer', function () {
     // saved value would keep pointing them at the broken host. The constant is the
     // single source of truth for where the backend lives.
     $backend = VISTROW_VOICE_DEFAULT_BACKEND_URL;
+    // 'default' and an empty greeting both mean "let widget.js use its own
+    // built-in default" - omitting the attribute entirely (rather than
+    // printing data-avatar="default" / data-greeting="") keeps that logic
+    // in one place instead of duplicated into every rendered tag.
+    $avatar_attr = ($settings['avatar'] !== 'default')
+        ? sprintf(' data-avatar="%s"', esc_attr($settings['avatar']))
+        : '';
+    $greeting_attr = ($settings['greeting'] !== '')
+        ? sprintf(' data-greeting="%s"', esc_attr($settings['greeting']))
+        : '';
     printf(
-        '<script src="%1$s/widget.js" data-site-key="%2$s" data-api-base="%1$s" data-position="%3$s" data-label="%4$s"></script>' . "\n",
+        '<script src="%1$s/widget.js" data-site-key="%2$s" data-api-base="%1$s" data-position="%3$s" data-label="%4$s"%5$s%6$s></script>' . "\n",
         esc_url($backend),
         esc_attr($settings['site_key']),
         esc_attr($settings['position']),
-        esc_attr($settings['label'])
+        esc_attr($settings['label']),
+        $avatar_attr,
+        $greeting_attr
     );
 });
