@@ -56,6 +56,7 @@ _PUBLIC_PATHS = {
     "/widget/token",                   # widget call token (runs on customers' sites)
     "/widget/wordpress-plugin.zip",    # plugin download
     "/agent-orb.mp4",                  # widget avatar video
+    "/public/contact",                 # marketing site's "Book a Demo" form (anonymous visitors)
     "/telephony/enablex/inbound-event",  # EnableX inbound webhook (their server calls it)
     "/telephony/enablex/outbound-test-event",  # EnableX outbound/test-call webhook (their server calls it — no session)
 }
