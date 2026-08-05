@@ -119,8 +119,11 @@ const CSS = `
 .av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; }
 .av-orb video, .av-orb img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 .av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 32px; }
-.av-transcript { display: flex; flex-direction: column; gap: 6px; max-height: 168px; overflow-y: auto; padding: 0 16px 12px; scroll-behavior: smooth; scrollbar-width: none; }
-.av-transcript::-webkit-scrollbar { display: none; }
+.av-transcript { display: flex; flex-direction: column; gap: 6px; max-height: 168px; overflow-y: auto; padding: 0 16px 12px; scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: #4a3f70 transparent; }
+.av-transcript::-webkit-scrollbar { width: 4px; }
+.av-transcript::-webkit-scrollbar-track { background: transparent; }
+.av-transcript::-webkit-scrollbar-thumb { background: #4a3f70; border-radius: 999px; }
+.av-transcript::-webkit-scrollbar-thumb:hover { background: #5d4f8f; }
 .av-transcript-empty { font-size: 12px; color: #7d7594; text-align: center; padding: 4px 0 8px; }
 .av-bubble { max-width: 85%; padding: 6px 11px; border-radius: 12px; font-size: 12.5px; line-height: 1.4; word-break: break-word; }
 .av-bubble-local { align-self: flex-end; background: linear-gradient(135deg,#a855f7,#7c3aed); color: #fff; }
@@ -293,7 +296,18 @@ function init(): void {
     transcriptEl.innerHTML = '<p class="av-transcript-empty">Your conversation will appear here.</p>'
   }
 
+  // Only follows new lines automatically while the visitor is already at
+  // (or near) the bottom - otherwise every interim speech-to-text update
+  // (which fires continuously while either side is talking) would yank
+  // the view back down the instant someone scrolls up to reread something,
+  // making the panel feel stuck/unscrollable.
+  const AUTO_SCROLL_THRESHOLD_PX = 24
+  function isNearTranscriptBottom(): boolean {
+    return transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight < AUTO_SCROLL_THRESHOLD_PX
+  }
+
   function upsertTranscriptEntry(id: string, text: string, isLocal: boolean): void {
+    const shouldStickToBottom = isNearTranscriptBottom()
     let bubble = transcriptBubbles.get(id)
     if (!bubble) {
       if (transcriptBubbles.size === 0) transcriptEl.innerHTML = ''
@@ -305,7 +319,7 @@ function init(): void {
     // Set via textContent, never innerHTML - this is live speech-to-text
     // from an open microphone, never trusted as markup.
     bubble.textContent = text
-    transcriptEl.scrollTop = transcriptEl.scrollHeight
+    if (shouldStickToBottom) transcriptEl.scrollTop = transcriptEl.scrollHeight
   }
 
   // Same lk.agent.state values/labels the dashboard's browser-test-call UI
