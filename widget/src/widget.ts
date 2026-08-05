@@ -68,8 +68,6 @@ const END_ICON =
   '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 9c-1.6 0-3.1.3-4.5.8-.4.2-.7.6-.7 1v2.9c0 .4-.2.8-.6 1-.9.5-1.8 1.1-2.5 1.8-.4.4-1 .4-1.4 0L.5 14.8c-.4-.4-.4-1 0-1.4C3.7 10 7.7 8 12 8s8.3 2 11.5 5.4c.4.4.4 1 0 1.4l-1.8 1.7c-.4.4-1 .4-1.4 0-.7-.7-1.6-1.3-2.5-1.8-.4-.2-.6-.6-.6-1v-2.9c0-.4-.3-.8-.7-1C15.1 9.3 13.6 9 12 9z"/></svg>'
 const CLOSE_ICON =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>'
-const CHAT_ICON =
-  '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M4 4h16v12H7.2L4 19.2V4zm2 2v9.2L6.3 14H18V6H6z"/></svg>'
 const SEND_ICON =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 20V4l19 8-19 8zm2-3 11.9-5L5 7v4.2l7 .8-7 .8V17z"/></svg>'
 
@@ -125,7 +123,7 @@ const CSS = `
 .av-submit { margin-top: 2px; background: linear-gradient(135deg,#a855f7,#7c3aed); border: none; border-radius: 10px; color: white; font-weight: 700; font-size: 13.5px; padding: 10px; cursor: pointer; }
 .av-submit:disabled { opacity: .5; cursor: default; }
 
-.av-chat-orb-row { display: flex; justify-content: center; padding: 16px 0 4px; }
+.av-chat-orb-row { display: flex; justify-content: center; padding: 18px 0 14px; }
 .av-chat-orb { position: relative; width: 64px; height: 64px; border-radius: 9999px; overflow: hidden; background: #000; }
 .av-chat-orb video, .av-chat-orb img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 .av-typing-dots { display: inline-flex; gap: 3px; align-items: center; padding: 2px 0; }
@@ -152,7 +150,7 @@ const CSS = `
 .av-bubble { max-width: 85%; padding: 6px 11px; border-radius: 12px; font-size: 12.5px; line-height: 1.4; word-break: break-word; }
 .av-bubble-local { align-self: flex-end; background: linear-gradient(135deg,#a855f7,#7c3aed); color: #fff; }
 .av-bubble-remote { align-self: flex-start; background: #201b3b; border: 1px solid #2a2440; color: #f5f3ff; }
-.av-controls { display: flex; align-items: center; gap: 14px; padding: 0 16px 16px; }
+.av-controls { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px 16px; }
 .av-ctrl-btn { width: 40px; height: 40px; border-radius: 9999px; border: 1px solid #2a2440; background: #201b3b; color: #b8b2cf; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .av-end-btn { width: 48px; height: 48px; border-radius: 9999px; background: #ef4444; color: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 audio { display: none; }
@@ -227,10 +225,9 @@ function widgetHtml(label: string): string {
           <div class="av-controls">
             <button id="av-mute" class="av-ctrl-btn">${MIC_ICON}</button>
             <button id="av-end" class="av-end-btn">${END_ICON}</button>
-            <button id="av-type-toggle" class="av-ctrl-btn" aria-label="Type instead of speaking" style="display:none;">${CHAT_ICON}</button>
           </div>
           <div id="av-type-row" class="av-chat-input-row" style="display:none;">
-            <input id="av-type-input" type="text" placeholder="Type instead of speaking…" autocomplete="off" />
+            <input id="av-type-input" type="text" placeholder="Or type here instead…" autocomplete="off" />
             <button id="av-type-send" class="av-chat-send-btn" aria-label="Send">${SEND_ICON}</button>
           </div>
           <audio id="av-audio" autoplay></audio>
@@ -288,13 +285,9 @@ function init(): void {
   const muteBtn = shadow.getElementById('av-mute') as HTMLButtonElement
   const endBtn = shadow.getElementById('av-end') as HTMLButtonElement
   const audioEl = shadow.getElementById('av-audio') as HTMLAudioElement
-  const typeToggleBtn = shadow.getElementById('av-type-toggle') as HTMLButtonElement
   const typeRow = shadow.getElementById('av-type-row') as HTMLDivElement
   const typeInput = shadow.getElementById('av-type-input') as HTMLInputElement
   const typeSendBtn = shadow.getElementById('av-type-send') as HTMLButtonElement
-  // Voice-only sites never show the fallback - it only makes sense once
-  // typing is actually a real alternative to being on a call at all.
-  if (widgetMode === 'both') typeToggleBtn.style.display = 'flex'
   // Set via textContent, never interpolated into the HTML template string -
   // this value can come from a customer's own dashboard/WordPress settings,
   // so it must never be trusted as markup.
@@ -564,6 +557,7 @@ function init(): void {
     stopVolumeReactivity?.()
     stopVolumeReactivity = null
     stopCountdown()
+    stopPresencePing()
     room = null
     micEnabled = true
     muteBtn.innerHTML = MIC_ICON
@@ -612,10 +606,30 @@ function init(): void {
     muteBtn.innerHTML = micEnabled ? MIC_ICON : MIC_OFF_ICON
   }
 
-  function toggleTypeRow(): void {
-    const showing = typeRow.style.display === 'flex'
-    typeRow.style.display = showing ? 'none' : 'flex'
-    if (!showing) typeInput.focus()
+  // The agent worker's own "away"/silence check-in only ever watches for
+  // VOICE activity - a visitor who's deliberately typing produces zero
+  // audio, so without this it independently decides they've gone silent
+  // and interrupts with a generic "are you still there?" while they're
+  // mid-message. This reply-free keep-alive (agent/main.py's
+  // _on_data_received, topic "typing-presence") tells it otherwise.
+  const PRESENCE_PING_MS = 4000
+  let presencePingInterval: number | null = null
+
+  function startPresencePing(): void {
+    stopPresencePing()
+    presencePingInterval = window.setInterval(() => {
+      if (!room) return
+      room.localParticipant
+        .publishData(new TextEncoder().encode(''), { reliable: false, topic: 'typing-presence' })
+        .catch(() => {})
+    }, PRESENCE_PING_MS)
+  }
+
+  function stopPresencePing(): void {
+    if (presencePingInterval !== null) {
+      window.clearInterval(presencePingInterval)
+      presencePingInterval = null
+    }
   }
 
   // 'both' mode's noisy-environment fallback: send what the visitor typed
@@ -687,6 +701,11 @@ function init(): void {
     intentionalEnd = false
     formEl.style.display = 'none'
     callEl.style.display = 'block'
+    // 'both' mode shows the type-instead box right alongside mic/end-call
+    // from the start of the call - no separate toggle to discover. Typing
+    // is always a visible, equally-valid way to talk to Artha, not a
+    // hidden fallback.
+    if (widgetMode === 'both') typeRow.style.display = 'flex'
     setStatus('Connecting…')
     resetTranscript()
 
@@ -854,11 +873,12 @@ function init(): void {
   })
   endBtn.addEventListener('click', endCall)
   muteBtn.addEventListener('click', toggleMute)
-  typeToggleBtn.addEventListener('click', toggleTypeRow)
   typeSendBtn.addEventListener('click', sendTypedUtterance)
   typeInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') sendTypedUtterance()
   })
+  typeInput.addEventListener('focus', startPresencePing)
+  typeInput.addEventListener('blur', stopPresencePing)
 }
 
 init()

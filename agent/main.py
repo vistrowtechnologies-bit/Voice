@@ -1438,7 +1438,29 @@ async def entrypoint(ctx: JobContext) -> None:
     # been spoken — generate_reply(user_input=...) runs it through the same
     # LLM/tool pipeline as a normal utterance and speaks the reply aloud, so
     # the caller never has to know it arrived as text instead of audio.
+    #
+    # user_away_timeout above only ever watches for VOICE activity — a
+    # visitor who's deliberately typing instead of speaking produces zero
+    # audio, so AgentSession independently decides they've gone silent and
+    # fires its own "are you still there?" check-in (_on_user_state_changed
+    # below) completely unaware that a real conversation is happening via
+    # text. Confirmed live: that generic reminder was winning the race
+    # against the actual grounded reply, making typed messages look
+    # ignored. Both handlers below treat typed activity exactly like real
+    # speech for presence-tracking purposes, resetting the same counters
+    # _on_user_state_changed resets on ev.new_state == "speaking".
+    def _mark_present() -> None:
+        userdata["silence_reminders"] = 0
+        _reset_silence_hangup()
+
     def _on_data_received(data_packet) -> None:
+        if data_packet.topic == "typing-presence":
+            # Lightweight, reply-free keep-alive the widget sends on an
+            # interval while its type-instead row is open (see widget.ts) -
+            # suppresses the away check-in while the visitor is composing a
+            # message, before they've even hit send.
+            _mark_present()
+            return
         if data_packet.topic != "typed-utterance":
             return
         try:
@@ -1448,6 +1470,7 @@ async def entrypoint(ctx: JobContext) -> None:
         if not text:
             return
         logger.info("typed utterance received in room %s: %r", ctx.room.name, text)
+        _mark_present()
         session.generate_reply(user_input=text)
 
     ctx.room.on("data_received", _on_data_received)

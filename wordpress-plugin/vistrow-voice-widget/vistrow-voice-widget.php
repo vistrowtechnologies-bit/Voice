@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.5.0
+ * Version: 1.6.0
  * Author: Vistrow Voice
  */
 
@@ -30,42 +30,51 @@ define('VISTROW_VOICE_DEFAULT_BACKEND_URL', 'https://www.vistrowvoice.com/api');
 // above (that one just serves the embed script + call API).
 define('VISTROW_VOICE_DASHBOARD_URL', 'https://www.vistrowvoice.com');
 
-// Curated avatar catalog - kept in sync by hand with widget_avatars.py on
-// the backend, which is the source of truth (it validates and serves the
-// actual images). Duplicated here rather than fetched live because this
-// settings page has no session to call an authenticated dashboard API with.
-function vistrow_voice_avatar_catalog() {
-    return array(
-        'default' => 'Purple (default)',
-        'blue' => 'Blue',
-        'green' => 'Green',
-        'orange' => 'Orange',
-        'red' => 'Red',
-        'teal' => 'Teal',
-    );
-}
-
 function vistrow_voice_default_settings() {
     return array(
         'site_key' => '',
         'backend_url' => VISTROW_VOICE_DEFAULT_BACKEND_URL,
         'position' => 'bottom-right',
         'label' => 'Talk to Artha',
-        // Empty means "use the widget script's own built-in default copy" -
-        // keeps that default line living in one place (widget.ts).
-        'greeting' => '',
-        'avatar' => 'default',
-        // 'voice' keeps every existing install's exact current behavior -
-        // a call button and nothing else. 'chat' replaces it with a
-        // text-only chatbot (no audio at all); 'both' lets the visitor
-        // pick when they open the widget.
-        'mode' => 'voice',
         // 'all' keeps existing installs behaving exactly as before (widget
         // on every page) — 'selected' is opt-in so nobody's widget silently
         // disappears sitewide just from upgrading the plugin.
         'show_on' => 'all',
         'pages' => array(),
     );
+}
+
+// Avatar color, greeting text, and voice/chat mode are managed from the
+// Vistrow Voice dashboard's Website Widget page, not here - this used to
+// keep its own separate copies in wp_options, which could silently drift
+// out of sync with whatever the dashboard actually said for this site.
+// A short transient cache means most page loads read cached data instead
+// of making a live request; a slow/unreachable backend just falls back to
+// these safe defaults rather than breaking the page.
+function vistrow_voice_remote_config($site_key) {
+    $defaults = array('avatar' => 'default', 'greeting' => '', 'mode' => 'voice');
+    if (empty($site_key)) {
+        return $defaults;
+    }
+    $cache_key = 'vistrow_voice_remote_config_' . md5($site_key);
+    $cached = get_transient($cache_key);
+    if (is_array($cached)) {
+        return array_merge($defaults, $cached);
+    }
+    $response = wp_remote_get(
+        VISTROW_VOICE_DEFAULT_BACKEND_URL . '/widget/site-config?siteKey=' . rawurlencode($site_key),
+        array('timeout' => 3)
+    );
+    if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+        return $defaults;
+    }
+    $body = json_decode(wp_remote_retrieve_body($response), true);
+    if (!is_array($body)) {
+        return $defaults;
+    }
+    $config = array_merge($defaults, $body);
+    set_transient($cache_key, $config, 5 * MINUTE_IN_SECONDS);
+    return $config;
 }
 
 function vistrow_voice_get_settings() {
@@ -113,19 +122,11 @@ add_action('admin_init', function () {
 
 function vistrow_voice_sanitize_settings($input) {
     $defaults = vistrow_voice_default_settings();
-    $avatar_catalog = vistrow_voice_avatar_catalog();
-    $avatar = isset($input['avatar']) ? sanitize_text_field($input['avatar']) : $defaults['avatar'];
-    if (!array_key_exists($avatar, $avatar_catalog)) {
-        $avatar = $defaults['avatar'];
-    }
     return array(
         'site_key' => isset($input['site_key']) ? sanitize_text_field($input['site_key']) : $defaults['site_key'],
         'backend_url' => isset($input['backend_url']) ? esc_url_raw(rtrim($input['backend_url'], '/')) : $defaults['backend_url'],
         'position' => (isset($input['position']) && $input['position'] === 'bottom-left') ? 'bottom-left' : 'bottom-right',
         'label' => isset($input['label']) && $input['label'] !== '' ? sanitize_text_field($input['label']) : $defaults['label'],
-        'greeting' => isset($input['greeting']) ? mb_substr(sanitize_text_field($input['greeting']), 0, 140) : $defaults['greeting'],
-        'avatar' => $avatar,
-        'mode' => in_array($input['mode'] ?? '', array('voice', 'chat', 'both'), true) ? $input['mode'] : $defaults['mode'],
         'show_on' => (isset($input['show_on']) && $input['show_on'] === 'selected') ? 'selected' : 'all',
         'pages' => isset($input['pages']) && is_array($input['pages']) ? array_map('absint', $input['pages']) : array(),
     );
@@ -170,12 +171,6 @@ function vistrow_voice_render_settings_page() {
         .vvw-wrap .button-primary { background: linear-gradient(135deg,#a855f7,#7c3aed) !important; border-color: #7c3aed !important; color: #fff !important; text-shadow: none !important; box-shadow: none !important; }
         .vvw-wrap .button-primary:hover, .vvw-wrap .button-primary:focus { background: linear-gradient(135deg,#9333ea,#6d28d9) !important; border-color: #6d28d9 !important; color: #fff !important; box-shadow: none !important; }
         .vvw-wrap .button-primary:active { background: #6d28d9 !important; border-color: #6d28d9 !important; }
-        .vvw-avatar-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-        .vvw-avatar-swatch { display: block; width: 40px; height: 40px; border-radius: 9999px; overflow: hidden; border: 2px solid transparent; cursor: pointer; }
-        .vvw-avatar-swatch:hover { border-color: #dcdcde; }
-        .vvw-avatar-swatch.is-selected, .vvw-avatar-swatch:has(input:checked) { border-color: #7c3aed; }
-        .vvw-avatar-swatch input { position: absolute; opacity: 0; width: 0; height: 0; }
-        .vvw-avatar-swatch img { display: block; width: 100%; height: 100%; object-fit: cover; }
     </style>
     <div class="wrap vvw-wrap">
         <div class="vvw-header">
@@ -235,55 +230,10 @@ function vistrow_voice_render_settings_page() {
                         </div>
 
                         <div class="vvw-field">
-                            <label class="vvw-label" for="vistrow_greeting">Greeting bubble</label>
-                            <input type="text" id="vistrow_greeting"
-                                name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[greeting]"
-                                value="<?php echo esc_attr($settings['greeting']); ?>"
-                                maxlength="140" class="regular-text"
-                                placeholder="Hi! I'm Artha - ask me anything, no forms." />
                             <p class="vvw-help">
-                                The message that pops up next to the button after a few seconds, inviting a
-                                click. Leave blank to use our default line.
-                            </p>
-                        </div>
-
-                        <div class="vvw-field">
-                            <label class="vvw-label">Avatar color</label>
-                            <div class="vvw-avatar-grid">
-                                <?php foreach (vistrow_voice_avatar_catalog() as $avatar_key => $avatar_label) : ?>
-                                    <label class="vvw-avatar-swatch <?php echo $settings['avatar'] === $avatar_key ? 'is-selected' : ''; ?>"
-                                        title="<?php echo esc_attr($avatar_label); ?>">
-                                        <input type="radio" name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[avatar]"
-                                            value="<?php echo esc_attr($avatar_key); ?>"
-                                            <?php checked($settings['avatar'], $avatar_key); ?> />
-                                        <img src="<?php echo esc_url(rtrim(VISTROW_VOICE_DEFAULT_BACKEND_URL, '/') . '/widget-avatars/' . $avatar_key . '.png'); ?>"
-                                            alt="<?php echo esc_attr($avatar_label); ?>" />
-                                    </label>
-                                <?php endforeach; ?>
-                            </div>
-                            <p class="vvw-help">Pick an accent color for the call button and in-call orb.</p>
-                        </div>
-
-                        <div class="vvw-field">
-                            <label class="vvw-label">Voice call or chat</label>
-                            <label class="vvw-radio-row">
-                                <input type="radio" name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[mode]"
-                                    value="voice" <?php checked($settings['mode'], 'voice'); ?> />
-                                Voice call only
-                            </label>
-                            <label class="vvw-radio-row">
-                                <input type="radio" name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[mode]"
-                                    value="chat" <?php checked($settings['mode'], 'chat'); ?> />
-                                Text chat only (no audio)
-                            </label>
-                            <label class="vvw-radio-row">
-                                <input type="radio" name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[mode]"
-                                    value="both" <?php checked($settings['mode'], 'both'); ?> />
-                                Let the visitor choose
-                            </label>
-                            <p class="vvw-help">
-                                Chat mode answers from the same agent and knowledge base, entirely as text -
-                                good for visitors who can't or don't want to talk out loud.
+                                Avatar color, greeting bubble text, and voice/chat mode are managed from your
+                                <a href="<?php echo esc_url(VISTROW_VOICE_DASHBOARD_URL . '/dashboard/website-widget'); ?>" target="_blank" rel="noopener">Vistrow Voice dashboard</a>
+                                - changes there apply here automatically, no need to duplicate them in two places.
                             </p>
                         </div>
 
@@ -407,18 +357,23 @@ add_action('wp_footer', function () {
     // saved value would keep pointing them at the broken host. The constant is the
     // single source of truth for where the backend lives.
     $backend = VISTROW_VOICE_DEFAULT_BACKEND_URL;
+    // Avatar/greeting/mode come from the dashboard's own site record (see
+    // vistrow_voice_remote_config above), not a locally-stored copy - keeps
+    // this install in sync with whatever the dashboard says without the
+    // admin having to set the same thing twice.
+    $remote_config = vistrow_voice_remote_config($settings['site_key']);
     // 'default' and an empty greeting both mean "let widget.js use its own
     // built-in default" - omitting the attribute entirely (rather than
     // printing data-avatar="default" / data-greeting="") keeps that logic
     // in one place instead of duplicated into every rendered tag.
-    $avatar_attr = ($settings['avatar'] !== 'default')
-        ? sprintf(' data-avatar="%s"', esc_attr($settings['avatar']))
+    $avatar_attr = ($remote_config['avatar'] !== 'default')
+        ? sprintf(' data-avatar="%s"', esc_attr($remote_config['avatar']))
         : '';
-    $greeting_attr = ($settings['greeting'] !== '')
-        ? sprintf(' data-greeting="%s"', esc_attr($settings['greeting']))
+    $greeting_attr = ($remote_config['greeting'] !== '')
+        ? sprintf(' data-greeting="%s"', esc_attr($remote_config['greeting']))
         : '';
-    $mode_attr = ($settings['mode'] !== 'voice')
-        ? sprintf(' data-mode="%s"', esc_attr($settings['mode']))
+    $mode_attr = ($remote_config['mode'] !== 'voice')
+        ? sprintf(' data-mode="%s"', esc_attr($remote_config['mode']))
         : '';
     printf(
         '<script src="%1$s/widget.js" data-site-key="%2$s" data-api-base="%1$s" data-position="%3$s" data-label="%4$s"%5$s%6$s%7$s></script>' . "\n",

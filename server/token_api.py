@@ -58,6 +58,7 @@ _PUBLIC_PATHS = {
     "/widget.js",                      # embedded widget script
     "/widget/token",                   # widget call token (runs on customers' sites)
     "/widget/chat",                    # widget text-chat turn (runs on customers' sites)
+    "/widget/site-config",             # public avatar/greeting/mode lookup by site key
     "/widget/wordpress-plugin.zip",    # plugin download
     "/agent-orb.mp4",                  # widget avatar video
     "/public/contact",                 # marketing site's "Book a Demo" form (anonymous visitors)
@@ -2185,6 +2186,26 @@ def create_site(data: dict = Body(...), user: dict = Depends(current_user)) -> d
 @app.get("/widget/avatar-catalog")
 def widget_avatar_catalog(user: dict = Depends(current_user)) -> dict:
     return {"avatars": [{"key": k, "label": v} for k, v in widget_avatars.WIDGET_AVATAR_CATALOG.items()]}
+
+
+@app.get("/widget/site-config")
+def widget_site_config(siteKey: str) -> dict:
+    """Public, unauthenticated — lets any embed method (WordPress plugin,
+    a hand-pasted snippet) pull a site's current avatar/greeting/mode
+    straight from the dashboard's own record instead of keeping its own
+    separately-editable copy. The dashboard's Website Widget page is the
+    single source of truth for these; the WordPress plugin used to store
+    its own copies in wp_options, which could silently drift out of sync
+    with whatever the dashboard said - this endpoint is what lets it defer
+    to the dashboard instead (see wp_footer's short-lived transient cache)."""
+    site = calls_db.get_site_by_key(siteKey)
+    if site is None:
+        raise HTTPException(404, "Unknown site key")
+    return {
+        "avatar": site["widgetAvatar"],
+        "greeting": site["widgetGreeting"],
+        "mode": site["widgetMode"],
+    }
 
 
 @app.patch("/widget/sites/{site_id}")
