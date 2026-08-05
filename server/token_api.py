@@ -539,9 +539,9 @@ def public_contact(req: ContactRequest) -> dict:
         for label, value in [
             ("Name", name),
             ("Email", email),
-            ("Company", req.company.strip() or "—"),
-            ("Team size", req.team_size.strip() or "—"),
-            ("Use case", req.use_case.strip() or "—"),
+            ("Company", req.company.strip() or "-"),
+            ("Team size", req.team_size.strip() or "-"),
+            ("Use case", req.use_case.strip() or "-"),
         ]
     )
     html = email_sender.render_email(
