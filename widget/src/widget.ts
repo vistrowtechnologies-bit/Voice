@@ -1,5 +1,5 @@
 import { Room, RoomEvent, Track } from 'livekit-client'
-import type { RemoteParticipant, RemoteTrack } from 'livekit-client'
+import type { Participant, RemoteParticipant, RemoteTrack, TranscriptionSegment } from 'livekit-client'
 
 // Must run synchronously at the top of the script — document.currentScript
 // only reflects the executing <script> tag during that tag's own
@@ -115,10 +115,16 @@ const CSS = `
 .av-submit { margin-top: 2px; background: linear-gradient(135deg,#a855f7,#7c3aed); border: none; border-radius: 10px; color: white; font-weight: 700; font-size: 13.5px; padding: 10px; cursor: pointer; }
 .av-submit:disabled { opacity: .5; cursor: default; }
 
-.av-body { padding: 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.av-body { padding: 20px 16px 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; }
 .av-orb video, .av-orb img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 .av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 32px; }
+.av-transcript { display: flex; flex-direction: column; gap: 6px; max-height: 168px; overflow-y: auto; padding: 0 16px 12px; scroll-behavior: smooth; scrollbar-width: none; }
+.av-transcript::-webkit-scrollbar { display: none; }
+.av-transcript-empty { font-size: 12px; color: #7d7594; text-align: center; padding: 4px 0 8px; }
+.av-bubble { max-width: 85%; padding: 6px 11px; border-radius: 12px; font-size: 12.5px; line-height: 1.4; word-break: break-word; }
+.av-bubble-local { align-self: flex-end; background: linear-gradient(135deg,#a855f7,#7c3aed); color: #fff; }
+.av-bubble-remote { align-self: flex-start; background: #201b3b; border: 1px solid #2a2440; color: #f5f3ff; }
 .av-controls { display: flex; align-items: center; gap: 14px; padding: 0 16px 16px; }
 .av-ctrl-btn { width: 40px; height: 40px; border-radius: 9999px; border: 1px solid #2a2440; background: #201b3b; color: #b8b2cf; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .av-end-btn { width: 48px; height: 48px; border-radius: 9999px; background: #ef4444; color: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -175,6 +181,9 @@ function widgetHtml(label: string): string {
             </div>
             <p id="av-status" class="av-status">Connecting…</p>
           </div>
+          <div id="av-transcript" class="av-transcript">
+            <p class="av-transcript-empty">Your conversation will appear here.</p>
+          </div>
           <div class="av-controls">
             <button id="av-mute" class="av-ctrl-btn">${MIC_ICON}</button>
             <button id="av-end" class="av-end-btn">${END_ICON}</button>
@@ -219,6 +228,7 @@ function init(): void {
 
   const callEl = shadow.getElementById('av-call') as HTMLDivElement
   const statusEl = shadow.getElementById('av-status') as HTMLParagraphElement
+  const transcriptEl = shadow.getElementById('av-transcript') as HTMLDivElement
   // 'av-orb-video' is a real <video> only when avatarKey is 'default' - a
   // color-variant catalog pick renders it as a plain <img> instead (see
   // avatarTag()), which has no playbackRate to animate.
@@ -269,6 +279,33 @@ function init(): void {
 
   function setStatus(text: string): void {
     statusEl.textContent = text
+  }
+
+  // Keyed by LiveKit's own segment id, which stays stable as an utterance
+  // goes interim -> final - so a partial transcript is replaced in place
+  // instead of appending a duplicate line once it finalizes. Both sides
+  // (visitor + agent) render into the same scrolling area, matching the
+  // dashboard's ActiveCallUI.tsx transcript panel.
+  const transcriptBubbles = new Map<string, HTMLDivElement>()
+
+  function resetTranscript(): void {
+    transcriptBubbles.clear()
+    transcriptEl.innerHTML = '<p class="av-transcript-empty">Your conversation will appear here.</p>'
+  }
+
+  function upsertTranscriptEntry(id: string, text: string, isLocal: boolean): void {
+    let bubble = transcriptBubbles.get(id)
+    if (!bubble) {
+      if (transcriptBubbles.size === 0) transcriptEl.innerHTML = ''
+      bubble = document.createElement('div')
+      bubble.className = `av-bubble ${isLocal ? 'av-bubble-local' : 'av-bubble-remote'}`
+      transcriptEl.appendChild(bubble)
+      transcriptBubbles.set(id, bubble)
+    }
+    // Set via textContent, never innerHTML - this is live speech-to-text
+    // from an open microphone, never trusted as markup.
+    bubble.textContent = text
+    transcriptEl.scrollTop = transcriptEl.scrollHeight
   }
 
   // Same lk.agent.state values/labels the dashboard's browser-test-call UI
@@ -456,6 +493,7 @@ function init(): void {
     formEl.style.display = 'none'
     callEl.style.display = 'block'
     setStatus('Connecting…')
+    resetTranscript()
 
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -506,6 +544,12 @@ function init(): void {
       })
       room.on(RoomEvent.ParticipantAttributesChanged, (changed: Record<string, string>) => {
         if ('lk.agent.state' in changed) applyAgentState(changed['lk.agent.state'])
+      })
+      room.on(RoomEvent.TranscriptionReceived, (segments: TranscriptionSegment[], participant?: Participant) => {
+        const isLocal = participant?.identity === room?.localParticipant.identity
+        for (const seg of segments) {
+          upsertTranscriptEntry(seg.id, seg.text, isLocal)
+        }
       })
       room.on(RoomEvent.Disconnected, () => {
         if (suppressDisconnect) {
