@@ -742,6 +742,10 @@ def init_tables() -> None:
             conn.execute(f"ALTER TABLE contacts ADD COLUMN IF NOT EXISTS updated_at TEXT DEFAULT {_NOW}")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS company TEXT DEFAULT ''")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS custom_fields TEXT DEFAULT '{}'")
+            # Curated avatar color + custom greeting bubble, added after the
+            # widget shipped with a hardcoded orb video and greeting line.
+            conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_avatar TEXT DEFAULT 'default'")
+            conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_greeting TEXT DEFAULT ''")
             # "Premium+" (ElevenLabs v3) was folded into Premium (Flash v2.5) on
             # 2026-07-14 — v3's realtime endpoint 403s in production, so it was
             # never a good tier to keep selling (see voice_catalog.py's CATALOG
