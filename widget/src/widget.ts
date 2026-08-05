@@ -145,7 +145,8 @@ const CSS = `
 .av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; }
 .av-orb video, .av-orb img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 .av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 32px; }
-.av-transcript { display: flex; flex-direction: column; gap: 6px; max-height: 168px; overflow-y: auto; padding: 0 16px 12px; scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: #4a3f70 transparent; }
+.av-transcript { display: flex; flex-direction: column; gap: 6px; max-height: 168px; overflow-y: auto; margin: 2px 16px 12px; padding: 12px 12px 8px; scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: #4a3f70 transparent; position: relative; border-radius: 12px; border: 1px solid rgba(168,85,247,.28); background: rgba(168,85,247,.04); }
+.av-transcript::before { content: ''; position: absolute; top: -1px; left: 10%; right: 10%; height: 1px; background: linear-gradient(90deg, transparent, #c084fc, transparent); box-shadow: 0 0 8px 1px rgba(192,132,252,.9); }
 .av-transcript::-webkit-scrollbar { width: 4px; }
 .av-transcript::-webkit-scrollbar-track { background: transparent; }
 .av-transcript::-webkit-scrollbar-thumb { background: #4a3f70; border-radius: 999px; }
