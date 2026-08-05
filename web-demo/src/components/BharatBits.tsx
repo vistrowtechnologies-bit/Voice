@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { Icon } from './Icon'
 import { LANGUAGES } from '../lib/marketingContent'
 
-// Cultural identity here comes from the product itself — the actual scripts
-// Artha speaks — rather than from decorative "Indian" motifs. It's the
+// Cultural identity here comes from the product itself - the actual scripts
+// Artha speaks - rather than from decorative "Indian" motifs. It's the
 // honest version (every glyph shown is a language the product really
 // supports) and the more distinctive one: no competitor can copy it without
 // building the same language coverage.
@@ -40,7 +40,7 @@ export function RotatingGreeting({ className = '' }: { className?: string }) {
 }
 
 /** Seamless marquee of every greeting + language name. Sits where the old
- * unsubstantiated "trusted by" strip used to be — same visual slot, but
+ * unsubstantiated "trusted by" strip used to be - same visual slot, but
  * saying something true. */
 export function ScriptMarquee() {
   // Rendered twice back-to-back; the keyframe travels exactly -50% so the
@@ -76,10 +76,10 @@ export function ScriptMarquee() {
 }
 
 /** The auth-page illustration: all ten scripts arranged in a ring around a
- * pulsing voice orb, mandala-style — deliberately NOT a map of India.
+ * pulsing voice orb, mandala-style - deliberately NOT a map of India.
  * National borders are legally and politically fraught to render (Kashmir,
  * Aksai Chin), so a map was never really an option; this sidesteps that
- * entirely while still being unmistakably Bharat — the geometry echoes a
+ * entirely while still being unmistakably Bharat - the geometry echoes a
  * rangoli/mandala, and every glyph on the ring is a language the product
  * actually speaks, not decoration. Pure CSS positioning (trig computed once
  * per render, ten items, cheap) rather than SVG so each script renders with
@@ -92,7 +92,7 @@ export function BharatOrbit({ className = '' }: { className?: string }) {
       <div className="absolute inset-[12%] rounded-full border border-border/40" />
       <div className="absolute inset-[24%] rounded-full border border-dashed border-cyan/25" />
 
-      {/* Center voice orb — same visual language as the demo widget's orb.
+      {/* Center voice orb - same visual language as the demo widget's orb.
           Sits outside the rotating ring below so it stays put while the
           languages orbit it. */}
       <div className="absolute left-1/2 top-1/2 z-10 h-16 w-16 -translate-x-1/2 -translate-y-1/2">
@@ -103,10 +103,10 @@ export function BharatOrbit({ className = '' }: { className?: string }) {
       </div>
 
       {/* The ten scripts, evenly spaced around the ring and slowly orbiting
-          it — auth-orbit-ring rotates this whole group; each label
+          it - auth-orbit-ring rotates this whole group; each label
           counter-rotates at the same rate (auth-orbit-label) so the text
           itself never tips over, only its position sweeps around. Hover
-          brightens a node — the one bit of this that's genuinely
+          brightens a node - the one bit of this that's genuinely
           interactive rather than ambient. */}
       <div className="auth-orbit-ring absolute inset-0">
         {LANGUAGES.map((lang, i) => {
@@ -140,15 +140,15 @@ export function BharatOrbit({ className = '' }: { className?: string }) {
   )
 }
 
-/** A very faint, oversized echo of BharatOrbit's motif — orbit rings and a
- * couple of scripts, barely visible — used as ambient texture behind the
+/** A very faint, oversized echo of BharatOrbit's motif - orbit rings and a
+ * couple of scripts, barely visible - used as ambient texture behind the
  * form panel so the right half of the auth screen isn't just dead space.
  * Deliberately not the same size/prominence as the real illustration on the
  * left: this is background, not a second illustration competing for
  * attention. Purely decorative (aria-hidden), and inherits the same orbit
  * animation so it isn't just another static shape. */
 export function BharatBackdrop({ className = '', opacity = 0.06 }: { className?: string; opacity?: number }) {
-  const picks = [LANGUAGES[2], LANGUAGES[5], LANGUAGES[8]] // Tamil, Bengali, Punjabi — spread across scripts, not adjacent on the wheel
+  const picks = [LANGUAGES[2], LANGUAGES[5], LANGUAGES[8]] // Tamil, Bengali, Punjabi - spread across scripts, not adjacent on the wheel
   return (
     <div
       aria-hidden="true"

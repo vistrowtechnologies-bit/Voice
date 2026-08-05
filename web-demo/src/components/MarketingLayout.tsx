@@ -8,20 +8,20 @@ import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import vistrowMark from '../assets/vistrow-mark.png'
 
-// The official logo mark — used everywhere the brand appears (marketing
+// The official logo mark - used everywhere the brand appears (marketing
 // site, dashboard, auth pages) for one consistent visual identity.
 function OrbMark() {
   return <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
 }
 
 // Every nav/footer/CTA link in this file must go through here instead of a
-// bare <Link> — three cases:
+// bare <Link> - three cases:
 //   1. Already absolute (Docs & Help → docs.vistrowvoice.com): real <a>,
 //      opened in a new tab since it's a distinct site from the visitor's
 //      point of view.
 //   2. A relative path whose bucket (app/docs/marketing) differs from the
 //      CURRENT hostname's bucket: also a real <a>, because a React Router
-//      <Link> only swaps components client-side — it never re-hits
+//      <Link> only swaps components client-side - it never re-hits
 //      middleware.ts, so a plain <Link to="/login"> clicked while sitting on
 //      docs.vistrowvoice.com would render the login page *under the docs
 //      subdomain* instead of jumping to app.vistrowvoice.com/login. Forcing
@@ -109,7 +109,7 @@ function DesktopNav() {
 }
 
 function MobileNav({ onClose }: { onClose: () => void }) {
-  // Closed by default — every group's items used to render fully expanded,
+  // Closed by default - every group's items used to render fully expanded,
   // so the drawer was one long undifferentiated scroll (30+ links) instead
   // of a menu you could actually scan. One at a time, accordion-style,
   // matches how the desktop header's own dropdowns behave (only one open).
@@ -203,7 +203,7 @@ function MobileNav({ onClose }: { onClose: () => void }) {
 
 /** Light/dark switch for the marketing header. Shares lib/theme.ts with the
  * dashboard's own switcher, so a visitor who picks light mode here stays in
- * light mode after signing in — one preference, one storage key. */
+ * light mode after signing in - one preference, one storage key. */
 function MarketingThemeSwitcher({ className }: { className?: string }) {
   const theme = useTheme()
   const next = theme === 'dark' ? 'light' : 'dark'
@@ -317,8 +317,8 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
   // The marketing site used to be dark-only by design; it now honours the
   // same stored preference the dashboard uses. Applied on mount (persist=
   // false, so re-entering a marketing route doesn't replay the fade), and
-  // cleared on unmount so pages outside either layout — auth screens, the
-  // standalone call UI — keep the fixed dark look they're designed for.
+  // cleared on unmount so pages outside either layout - auth screens, the
+  // standalone call UI - keep the fixed dark look they're designed for.
   useEffect(() => {
     applyTheme(getStoredTheme(), false)
     return () => document.documentElement.removeAttribute('data-theme')

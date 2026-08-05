@@ -15,22 +15,22 @@ const ICONS: Record<string, string> = {
 }
 
 // Integrations that connect with a pasted URL (delivery targets). arthaleads
-// connects with just a token — its endpoint is fixed.
+// connects with just a token - its endpoint is fixed.
 const CONNECTABLE = new Set(['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets'])
 
-// The API returns integrations in undefined DB row order — pin a deliberate
+// The API returns integrations in undefined DB row order - pin a deliberate
 // display order instead (ArthaLeads first, since it's the flagship CRM)
 // rather than leaving card position to chance.
 const DISPLAY_ORDER = ['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets']
 const sortIntegrations = (list: Integration[]) =>
   [...list].sort((a, b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key))
 
-// Lead-delivery integrations — a qualified lead is POSTed to each connected
+// Lead-delivery integrations - a qualified lead is POSTed to each connected
 // one when a call captures it (agent/tools.py fan-out) and they support a
 // "Send test" from here.
 const DELIVERY = new Set(['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets'])
 
-// arthaleads has no URL field — its endpoint is fixed server-side, so it's
+// arthaleads has no URL field - its endpoint is fixed server-side, so it's
 // intentionally absent here (see the token-only form below).
 const URL_PLACEHOLDER: Record<string, string> = {
   webhook: 'https://your-crm.example.com/webhook',
@@ -40,9 +40,9 @@ const URL_PLACEHOLDER: Record<string, string> = {
 }
 
 const CONNECT_HINT: Record<string, string> = {
-  arthaleads: 'Paste your ArthaLeads API token — the endpoint is already wired up. Every qualified lead posts straight into ArthaLeads with the full call transcript.',
+  arthaleads: 'Paste your ArthaLeads API token - the endpoint is already wired up. Every qualified lead posts straight into ArthaLeads with the full call transcript.',
   webhook: 'Every qualified lead POSTs to this URL as JSON in real time.',
-  slack: 'Paste a Slack Incoming Webhook URL — you’ll get a message per qualified lead.',
+  slack: 'Paste a Slack Incoming Webhook URL - you’ll get a message per qualified lead.',
   whatsapp: 'Your provider’s send endpoint receives { to, message } per lead.',
   sheets: 'Paste a Google Apps Script web-app URL that appends the lead JSON as a row.',
 }
@@ -159,9 +159,9 @@ export function Integrations() {
                 {integration.key === 'arthaleads' ? (
                   <InfoRow label="Endpoint" value="api.arthaleads.com" />
                 ) : (
-                  <InfoRow label="Endpoint" value={integration.config.url ? integration.config.url.slice(0, 40) : '—'} />
+                  <InfoRow label="Endpoint" value={integration.config.url ? integration.config.url.slice(0, 40) : '-'} />
                 )}
-                <InfoRow label="Last Sync" value={integration.lastSync ? formatRelativeTime(integration.lastSync) : '—'} />
+                <InfoRow label="Last Sync" value={integration.lastSync ? formatRelativeTime(integration.lastSync) : '-'} />
               </dl>
 
               {testResult[integration.key] && (
@@ -183,7 +183,7 @@ export function Integrations() {
                     <input
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="Display name (e.g. ArthaLeads CRM) — defaults to “CRM / Webhook”"
+                      placeholder="Display name (e.g. ArthaLeads CRM) - defaults to “CRM / Webhook”"
                       className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
                     />
                   )}
@@ -199,7 +199,7 @@ export function Integrations() {
                     <input
                       value={token}
                       onChange={(e) => setToken(e.target.value)}
-                      placeholder={integration.key === 'arthaleads' ? 'Account Token (e.g. AW-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)' : 'Auth token (optional — sent as a token field in the JSON body)'}
+                      placeholder={integration.key === 'arthaleads' ? 'Account Token (e.g. AW-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)' : 'Auth token (optional - sent as a token field in the JSON body)'}
                       className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
                     />
                   )}

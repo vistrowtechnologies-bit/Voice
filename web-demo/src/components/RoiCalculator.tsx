@@ -6,7 +6,7 @@ import { PLANS } from '../lib/plans'
 // result depends on is a field the visitor can change, and the phone
 // credit multiplier + plan prices come from the same PLANS source the
 // pricing page quotes. Nothing is hardcoded to flatter the outcome, and
-// the footnote states plainly that this is an estimate — a calculator
+// the footnote states plainly that this is an estimate - a calculator
 // that quietly assumes a flattering baseline is worse than none.
 
 /** Phone calls draw 1.5 credits per minute; browser/widget calls draw 1.
@@ -58,7 +58,7 @@ function Field({
 }
 
 export function RoiCalculator() {
-  // Defaults land inside the largest plan's credit allowance on purpose —
+  // Defaults land inside the largest plan's credit allowance on purpose -
   // a first-load state that immediately trips the "you'd need a custom
   // plan" caveat makes the calculator feel broken rather than careful.
   const [callsPerMonth, setCallsPerMonth] = useState(500)
@@ -103,7 +103,7 @@ export function RoiCalculator() {
         <div>
           <h3 className="font-display text-xl font-bold">Your numbers</h3>
           <p className="mt-1.5 text-sm text-text-muted">
-            Change anything here — the estimate updates as you type.
+            Change anything here - the estimate updates as you type.
           </p>
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Calls per month" value={callsPerMonth} onChange={setCallsPerMonth} />
@@ -159,7 +159,7 @@ export function RoiCalculator() {
                 </p>
                 <p className="mt-1 font-display text-2xl font-bold">Your team is already cheaper</p>
                 <p className="mt-1 text-sm text-text-muted">
-                  Vistrow still adds 24/7 coverage and logs every call — but we won’t pretend the
+                  Vistrow still adds 24/7 coverage and logs every call - but we won’t pretend the
                   monthly cost is lower at these numbers.
                 </p>
               </>
@@ -174,7 +174,7 @@ export function RoiCalculator() {
               <>
                 {' '}
                 That’s above the {result.plan.name} allowance of{' '}
-                {result.planCredits.toLocaleString('en-IN')} — at this volume you’d be on a custom
+                {result.planCredits.toLocaleString('en-IN')} - at this volume you’d be on a custom
                 plan, so treat the figure above as a floor, not a quote.
               </>
             )}
@@ -184,7 +184,7 @@ export function RoiCalculator() {
 
       <p className="mt-6 border-t border-border pt-5 text-xs leading-relaxed text-text-muted">
         An estimate, not a quote. It compares plan price against the staffing cost you entered and
-        ignores things that vary too much per business to guess — telecom charges, recruitment and
+        ignores things that vary too much per business to guess - telecom charges, recruitment and
         training, attrition, and the revenue value of calls that currently go unanswered.
       </p>
     </div>

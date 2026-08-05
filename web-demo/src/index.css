@@ -22,7 +22,7 @@
 
 /* Light mode: flip the design tokens and every bg-surface / text-cyan /
    border-border utility across the dashboard re-themes automatically.
-   Accent hues are darkened so text keeps AA contrast on white — the dark
+   Accent hues are darkened so text keeps AA contrast on white - the dark
    theme's neons (#22d3ee cyan, #fbbf24 amber) are unreadable on a light
    ground. Toggled by the switcher in the dashboard header. */
 :root[data-theme="light"] {
@@ -71,7 +71,7 @@ html.theme-transition * {
   }
 }
 
-/* Sun/moon icon on the ThemeSwitcher button — replays on every toggle via a
+/* Sun/moon icon on the ThemeSwitcher button - replays on every toggle via a
    `key={theme}` remount in DashboardLayout/AdminLayout. */
 @keyframes theme-icon-pop {
   from {
@@ -191,7 +191,7 @@ html.theme-transition * {
 }
 
 /* Scroll-triggered reveal. Starts hidden and is switched on by the
-   IntersectionObserver in components/Reveal.tsx — which also adds .vv-in
+   IntersectionObserver in components/Reveal.tsx - which also adds .vv-in
    immediately when reduced motion is requested, so nothing can get stuck
    invisible if the observer never fires. */
 .vv-reveal {
@@ -232,7 +232,7 @@ html.theme-transition * {
 }
 .auth-panel-in { animation: auth-panel-in 480ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 
-/* Retriggered by AuthShell's useShake() whenever a submit fails — a quick
+/* Retriggered by AuthShell's useShake() whenever a submit fails - a quick
    horizontal shake reads as "rejected" far more immediately than a static
    error banner alone. */
 @keyframes auth-shake {
@@ -245,7 +245,7 @@ html.theme-transition * {
 
 /* BharatOrbit: the ring of language nodes slowly orbits the center voice
    orb, and each node counter-rotates at the same rate so its own script
-   stays upright instead of tumbling around with the ring — same trick as a
+   stays upright instead of tumbling around with the ring - same trick as a
    satellite diagram. Slow (110s) on purpose: this sits behind a login form
    people are actually trying to use, so it should read as ambient, not
    distracting. */

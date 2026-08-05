@@ -13,7 +13,7 @@ export function ForgotPassword() {
     e.preventDefault()
     setBusy(true)
     try {
-      // Always resolves — the endpoint never reveals whether the email exists.
+      // Always resolves - the endpoint never reveals whether the email exists.
       await apiRequestPasswordReset(email)
     } catch {
       // Ignore; we show the same neutral confirmation either way.

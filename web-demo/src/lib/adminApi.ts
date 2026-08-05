@@ -7,7 +7,7 @@ function onUnauthorized() {
 }
 
 // no-store on every call: an admin adjusting credits/plan/status must see it
-// reflected on the very next fetch — never a browser-cached GET, since the
+// reflected on the very next fetch - never a browser-cached GET, since the
 // account detail and list views are read right after a mutation.
 async function aget<T>(path: string): Promise<T> {
   const res = await fetch(`/api/admin${path}`, { credentials: 'include', cache: 'no-store' })

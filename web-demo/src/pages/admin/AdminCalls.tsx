@@ -31,7 +31,7 @@ export function AdminCalls() {
 
   return (
     <>
-      <PageHeader title="All Calls" subtitle={`Every call across the platform — ${total.toLocaleString()} total. Click any call to read the transcript.`} />
+      <PageHeader title="All Calls" subtitle={`Every call across the platform - ${total.toLocaleString()} total. Click any call to read the transcript.`} />
       <AdminCard className="mb-4 p-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by lead, phone, or room…" />
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -72,7 +72,7 @@ export function AdminCalls() {
                   className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high"
                 >
                   <td className="px-4 py-3 text-text-muted">{timeAgo(c.started_at)}</td>
-                  <td className="px-4 py-3 font-semibold">{c.account_name || '—'}</td>
+                  <td className="px-4 py-3 font-semibold">{c.account_name || '-'}</td>
                   <td className="px-4 py-3 capitalize">{c.call_type}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtDuration(c.duration_seconds)}</td>
                   <td className="px-4 py-3">
@@ -163,7 +163,7 @@ function Field({ label, value, mono }: { label: string; value: string | null; mo
   return (
     <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-2 last:border-0">
       <dt className="text-text-muted">{label}</dt>
-      <dd className={`text-right ${mono ? 'font-mono text-xs' : 'font-medium'}`}>{value || '—'}</dd>
+      <dd className={`text-right ${mono ? 'font-mono text-xs' : 'font-medium'}`}>{value || '-'}</dd>
     </div>
   )
 }

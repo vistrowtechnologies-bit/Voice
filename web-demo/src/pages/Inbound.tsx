@@ -62,7 +62,7 @@ export function Inbound() {
             <div>
               <h2 className="text-sm font-semibold">Inbound Campaign</h2>
               <p className="text-xs text-text-muted">
-                Link a phone number to an AI agent — all calls to that number will be handled automatically.
+                Link a phone number to an AI agent - all calls to that number will be handled automatically.
               </p>
             </div>
           </div>
@@ -90,7 +90,7 @@ export function Inbound() {
                     No numbers
                   </div>
                   <p className="mt-1 text-[11px] text-destructive">
-                    No phone numbers —{' '}
+                    No phone numbers -{' '}
                     <Link to="/dashboard/numbers" className="underline">
                       connect EnableX &amp; add a number first
                     </Link>

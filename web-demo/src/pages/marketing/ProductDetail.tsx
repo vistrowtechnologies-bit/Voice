@@ -29,8 +29,8 @@ export function ProductDetail() {
 
   return (
     <MarketingLayout>
-      <Seo title={`${page.headline} — Vistrow Voice`} description={page.subhead} path={route} jsonLd={faqJsonLd} />
-      {/* Live demo widget is homepage-only now — see PageHero's heroless-of-
+      <Seo title={`${page.headline} - Vistrow Voice`} description={page.subhead} path={route} jsonLd={faqJsonLd} />
+      {/* Live demo widget is homepage-only now - see PageHero's heroless-of-
           children branch for how this renders without it. */}
       <PageHero eyebrow={page.eyebrow} title={page.headline} subhead={page.subhead} />
 

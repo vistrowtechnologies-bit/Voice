@@ -14,11 +14,11 @@ const PREVIEW_LANGS = [
 
 const GENDER_ICON: Record<string, string> = { male: 'man', female: 'woman', neutral: 'graphic_eq' }
 
-// Generated per-voice avatars — a soft two-tone gradient orb (same idea as
+// Generated per-voice avatars - a soft two-tone gradient orb (same idea as
 // ElevenLabs' own voice-library avatars) so each voice reads as a distinct
 // character at a glance instead of every card in a tier sharing one identical
 // icon. Colors are the app's existing CSS custom properties (not Tailwind
-// utility classes, since a gradient string needs raw color refs) — using
+// utility classes, since a gradient string needs raw color refs) - using
 // var(--color-*) rather than hardcoded hex means the orb stays correct in
 // both themes automatically. Which two colors and where they sit is a
 // deterministic hash of the voice's own value, not its tier, so orbs stay
@@ -33,7 +33,7 @@ const AVATAR_LAYOUTS = [
   ['25% 80%', '85% 70%', '55% 15%'],
 ] as const
 
-// djb2 — spreads short strings (voice names/ids are only a few characters)
+// djb2 - spreads short strings (voice names/ids are only a few characters)
 // far more evenly than a plain multiply-add hash, which visibly clustered
 // several voices onto the same hue pair/position (reported as "identical
 // avatars"). Two independent hashes (name and value) feed different parts
@@ -122,7 +122,7 @@ function VoiceCard({
           <div className="relative shrink-0">
             <div className="relative h-11 w-11 overflow-hidden rounded-full">
               {/* Inner layer is oversized and slowly spinning inside the
-                  clipped circle — the off-center blobs sweep past each other,
+                  clipped circle - the off-center blobs sweep past each other,
                   giving the orb the same "alive" look as ElevenLabs' voice
                   avatars instead of a static gradient. -inset-1/4 keeps the
                   square's corners always covering the circle at every

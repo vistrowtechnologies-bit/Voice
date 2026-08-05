@@ -9,15 +9,15 @@ import { SOLUTIONS } from '../../lib/marketingContent'
 const FAQ = [
   {
     q: 'Which industries does Vistrow Voice support?',
-    a: 'Real Estate, Healthcare & Clinics, E-commerce & D2C, Finance & Collections, and Support & Helpdesk — each with its own tuned agent behavior.',
+    a: 'Real Estate, Healthcare & Clinics, E-commerce & D2C, Finance & Collections, and Support & Helpdesk - each with its own tuned agent behavior.',
   },
   {
     q: 'Is the agent pre-built for my industry, or do I configure it?',
-    a: 'Each solution page shows the pains and features a typical setup covers — you configure the actual agent, prompt, and knowledge base to match your business.',
+    a: 'Each solution page shows the pains and features a typical setup covers - you configure the actual agent, prompt, and knowledge base to match your business.',
   },
   {
     q: 'Can one account run agents for more than one industry use case?',
-    a: 'Yes — build as many agents as you need on one account, each with its own persona, prompt, and knowledge base.',
+    a: 'Yes - build as many agents as you need on one account, each with its own persona, prompt, and knowledge base.',
   },
 ]
 
@@ -39,8 +39,8 @@ export function SolutionsOverview() {
   return (
     <MarketingLayout>
       <Seo
-        title="Solutions by Industry — Vistrow Voice"
-        description="Voice AI tuned to how your business takes calls — Real Estate, Healthcare, E-commerce, Finance & Collections, and Support & Helpdesk."
+        title="Solutions by Industry - Vistrow Voice"
+        description="Voice AI tuned to how your business takes calls - Real Estate, Healthcare, E-commerce, Finance & Collections, and Support & Helpdesk."
         path="/solutions"
         jsonLd={FAQ_JSONLD}
       />
@@ -50,7 +50,7 @@ export function SolutionsOverview() {
           Voice AI for your industry.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          One platform, tuned to how your business actually takes calls — from real-estate
+          One platform, tuned to how your business actually takes calls - from real-estate
           enquiries to collections reminders.
         </p>
       </section>

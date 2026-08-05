@@ -8,7 +8,7 @@ import { BRAND } from '../../lib/brand'
 
 // Every claim on this page maps to a control that actually exists in the
 // product today (compliance settings, tenant scoping, retention purge,
-// consent capture). Nothing aspirational is stated as fact — the
+// consent capture). Nothing aspirational is stated as fact - the
 // "Working towards" section at the bottom exists precisely so this page
 // never has to overstate, and so a security reviewer gets a straight
 // answer instead of discovering the gap themselves.
@@ -17,7 +17,7 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
   {
     icon: 'lock',
     title: 'Workspace isolation',
-    body: 'Every record — calls, contacts, agents, recordings, knowledge bases — is scoped to your workspace at the query layer. One tenant’s data is never reachable from another tenant’s session.',
+    body: 'Every record - calls, contacts, agents, recordings, knowledge bases - is scoped to your workspace at the query layer. One tenant’s data is never reachable from another tenant’s session.',
   },
   {
     icon: 'password',
@@ -32,12 +32,12 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
   {
     icon: 'record_voice_over',
     title: 'Spoken consent capture',
-    body: 'Agents can be required to open every call with a consent line, with the caller’s reply captured in the transcript — so consent is evidenced, not assumed.',
+    body: 'Agents can be required to open every call with a consent line, with the caller’s reply captured in the transcript - so consent is evidenced, not assumed.',
   },
   {
     icon: 'block',
     title: 'Do-Not-Call enforcement',
-    body: 'Your DNC registry is a hard block checked before any outbound dial leaves the platform. A blocked number is never dialled — a call can’t be un-rung, so the gate runs first.',
+    body: 'Your DNC registry is a hard block checked before any outbound dial leaves the platform. A blocked number is never dialled - a call can’t be un-rung, so the gate runs first.',
   },
   {
     icon: 'schedule',
@@ -47,7 +47,7 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
   {
     icon: 'auto_delete',
     title: 'Configurable retention',
-    body: 'Set a retention period and call records older than it are purged automatically — data minimisation under the DPDP Act rather than keeping everything forever by default.',
+    body: 'Set a retention period and call records older than it are purged automatically - data minimisation under the DPDP Act rather than keeping everything forever by default.',
   },
   {
     icon: 'link',
@@ -57,7 +57,7 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
   {
     icon: 'visibility_off',
     title: 'No vendor surface',
-    body: 'Our agents are built to decline questions about the underlying models and speech stack. Your callers — and your competitors — can’t extract our architecture from a conversation.',
+    body: 'Our agents are built to decline questions about the underlying models and speech stack. Your callers - and your competitors - can’t extract our architecture from a conversation.',
   },
   {
     icon: 'credit_card',
@@ -67,8 +67,8 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
 ]
 
 const ROADMAP = [
-  'A formal SOC 2 Type II audit — not yet started; we will publish the report when it exists rather than implying it now.',
-  'India-region data residency — call data is currently processed and stored outside India. If in-country residency is a requirement for you, tell us before you sign so we can be straight about timelines.',
+  'A formal SOC 2 Type II audit - not yet started; we will publish the report when it exists rather than implying it now.',
+  'India-region data residency - call data is currently processed and stored outside India. If in-country residency is a requirement for you, tell us before you sign so we can be straight about timelines.',
   'A published third-party penetration-test summary.',
 ]
 
@@ -76,7 +76,7 @@ export function Security() {
   return (
     <MarketingLayout>
       <Seo
-        title="Security & Trust — Vistrow Voice"
+        title="Security & Trust - Vistrow Voice"
         description="How Vistrow Voice protects call recordings, transcripts, and customer data: workspace isolation, consent capture, DNC enforcement, configurable retention, and what we don't yet claim."
         path="/security"
       />
@@ -88,7 +88,7 @@ export function Security() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
           {BRAND.name} handles recordings, transcripts, and personal details captured on live calls.
-          This page lists the controls that exist today — and, at the bottom, the ones that don’t yet.
+          This page lists the controls that exist today - and, at the bottom, the ones that don’t yet.
         </p>
       </section>
 
@@ -110,7 +110,7 @@ export function Security() {
         </div>
       </section>
 
-      {/* Who controls what — the question every serious buyer actually asks */}
+      {/* Who controls what - the question every serious buyer actually asks */}
       <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
         <div className="rounded-3xl border border-border bg-surface p-8 sm:p-10">
           <SectionEyebrow>Who controls what</SectionEyebrow>
@@ -132,7 +132,7 @@ export function Security() {
                 We are the processor
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                We process that data to run the service you configured — nothing else. We don’t sell it,
+                We process that data to run the service you configured - nothing else. We don’t sell it,
                 and we don’t use your call content to train models for other customers.
               </p>
             </div>
@@ -145,7 +145,7 @@ export function Security() {
         </div>
       </section>
 
-      {/* Honesty section — deliberately load-bearing, not a disclaimer */}
+      {/* Honesty section - deliberately load-bearing, not a disclaimer */}
       <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">
         <div className="rounded-3xl border border-amber/40 bg-amber/[0.06] p-8 sm:p-10">
           <SectionEyebrow>What we don’t claim yet</SectionEyebrow>

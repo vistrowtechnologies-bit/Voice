@@ -4,7 +4,7 @@ import { Card } from './Card'
 interface SectionCardProps {
   title: string
   subtitle?: ReactNode
-  /** Right-aligned header content — a badge, a range toggle, a count. */
+  /** Right-aligned header content - a badge, a range toggle, a count. */
   action?: ReactNode
   children: ReactNode
   footer?: ReactNode

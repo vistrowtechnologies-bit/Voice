@@ -42,7 +42,7 @@ const RANGE_OPTIONS = [
 ]
 
 // Chart grid/tick/segment-border colors come from the live CSS tokens so
-// they follow the light/dark switch — read at render, recomputed whenever
+// they follow the light/dark switch - read at render, recomputed whenever
 // useTheme() re-renders the Dashboard on a toggle.
 function chartTokens() {
   const s = getComputedStyle(document.documentElement)
@@ -141,7 +141,7 @@ export function Dashboard() {
             </div>
 
             {/* Hero: live calls when any are in progress, otherwise the most
-                recent calls — this is a voice platform, so the front page
+                recent calls - this is a voice platform, so the front page
                 leads with actual calls, not abstract numbers. */}
             <SectionCard
               title={showingLive ? 'Live calls' : 'Recent calls'}
@@ -203,7 +203,7 @@ export function Dashboard() {
                     ? (
                       <EmptyState
                         icon="call"
-                        text="No calls yet — every call your agent takes lands here automatically."
+                        text="No calls yet - every call your agent takes lands here automatically."
                       />
                     )
                     : recentCalls.map((call) => (
@@ -236,7 +236,7 @@ export function Dashboard() {
               </div>
             </SectionCard>
 
-            {/* Secondary KPI strip — compact, not the page's hero. */}
+            {/* Secondary KPI strip - compact, not the page's hero. */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <StatTile compact label="Minutes" value={String(summary?.totalMinutes ?? 0)} icon="timer" tone="cyan" />
               <StatTile compact label="Active Agents" value={String(summary?.activeAgents ?? 0)} icon="smart_toy" tone="primary" />
@@ -287,7 +287,7 @@ export function Dashboard() {
                       }}
                     />
                   ) : (
-                    <EmptyState icon="show_chart" text="No calls yet in this range — every call the agent takes lands here automatically." />
+                    <EmptyState icon="show_chart" text="No calls yet in this range - every call the agent takes lands here automatically." />
                   )}
                 </div>
               </Card>
@@ -346,7 +346,7 @@ export function Dashboard() {
                 <div className="flex flex-col gap-5">
                   <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                     <IntelStat label="Calls analyzed" value={String(intel.analyzed)} />
-                    <IntelStat label="Avg agent QA" value={intel.avgQaScore != null ? `${intel.avgQaScore}/100` : '—'} tone="text-primary" />
+                    <IntelStat label="Avg agent QA" value={intel.avgQaScore != null ? `${intel.avgQaScore}/100` : '-'} tone="text-primary" />
                     <IntelStat label="Positive" value={String(intel.sentiment.positive)} tone="text-success" />
                     <IntelStat label="Negative" value={String(intel.sentiment.negative)} tone="text-destructive" />
                   </div>
@@ -407,7 +407,7 @@ export function Dashboard() {
                     }}
                   />
                 ) : (
-                  <EmptyState icon="bar_chart" text="Channel split appears after the first calls — Web, Website Widget, and Phone." />
+                  <EmptyState icon="bar_chart" text="Channel split appears after the first calls - Web, Website Widget, and Phone." />
                 )}
               </div>
             </Card>
@@ -458,7 +458,7 @@ export function Dashboard() {
             </Card>
 
             <Card>
-              <h3 className="mb-4 text-sm font-semibold">Average call duration — last 14 days</h3>
+              <h3 className="mb-4 text-sm font-semibold">Average call duration - last 14 days</h3>
               <div className="h-[200px]">
                 {analytics && analytics.durationTrend.length > 0 ? (
                   <Line

@@ -12,7 +12,7 @@ export function Reveal({
   className = '',
 }: {
   children: ReactNode
-  /** Stagger within a group — keep under ~250ms so nothing feels sluggish. */
+  /** Stagger within a group - keep under ~250ms so nothing feels sluggish. */
   delayMs?: number
   className?: string
 }) {

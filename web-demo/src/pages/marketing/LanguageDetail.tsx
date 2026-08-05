@@ -6,7 +6,7 @@ import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
 import { LANGUAGES, SOLUTIONS } from '../../lib/marketingContent'
 
-// One template renders all ten language pages, keyed by :slug — same
+// One template renders all ten language pages, keyed by :slug - same
 // approach as ProductDetail/SolutionDetail. These exist for long-tail
 // search ("AI voice agent in Tamil"), which is why each one carries its
 // own FAQPage JSON-LD rather than sharing the overview's.
@@ -19,7 +19,7 @@ export function LanguageDetail() {
   const faqs = [
     {
       q: `Can the AI agent handle a full call in ${lang.name}?`,
-      a: `Yes — Artha answers, qualifies, and books entirely in ${lang.name}, including numbers, dates, and Indian names. It isn't a translation layer bolted onto an English agent.`,
+      a: `Yes - Artha answers, qualifies, and books entirely in ${lang.name}, including numbers, dates, and Indian names. It isn't a translation layer bolted onto an English agent.`,
     },
     {
       q: `What if the caller mixes ${lang.name} and English?`,
@@ -27,7 +27,7 @@ export function LanguageDetail() {
     },
     {
       q: `Can I use ${lang.name} for outbound campaigns too?`,
-      a: `Yes — reminder, follow-up, and collection campaigns all run in ${lang.name}, personalised per contact, with every call recorded and logged.`,
+      a: `Yes - reminder, follow-up, and collection campaigns all run in ${lang.name}, personalised per contact, with every call recorded and logged.`,
     },
     {
       q: `Do I need a separate agent for each language?`,
@@ -48,13 +48,13 @@ export function LanguageDetail() {
   return (
     <MarketingLayout>
       <Seo
-        title={`AI Voice Agent in ${lang.name} — Vistrow Voice`}
+        title={`AI Voice Agent in ${lang.name} - Vistrow Voice`}
         description={`Answer, qualify, and book customer calls in ${lang.name}, 24/7. ${lang.blurb}`}
         path={`/languages/${lang.slug}`}
         jsonLd={faqJsonLd}
       />
 
-      {/* Live demo widget is homepage-only now — see PageHero's heroless-of-
+      {/* Live demo widget is homepage-only now - see PageHero's heroless-of-
           children branch for how this renders without it. */}
       <PageHero
         eyebrow={`Languages · ${lang.name}`}

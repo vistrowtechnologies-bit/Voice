@@ -30,7 +30,7 @@ const STATE_STYLES: Record<string, { label: string }> = {
 }
 const WAITING_STYLE = { label: 'Waiting for agent to join…' }
 // How long to wait before adding a "this is slow" hint under the plain
-// waiting label — a worker restart (crash, redeploy, LiveKit Cloud
+// waiting label - a worker restart (crash, redeploy, LiveKit Cloud
 // recycling the node) can take 10-15s to cold-boot and pick up the job, and
 // without this the screen looks identical whether it's about to recover or
 // genuinely stuck, which is exactly what prompted "is it dead?" questions.
@@ -44,11 +44,11 @@ function formatDuration(ms: number): string {
 }
 
 // The video's own ring animation plays at this rate while the agent is
-// actively speaking, vs. 1x (its authored speed) the rest of the time — the
+// actively speaking, vs. 1x (its authored speed) the rest of the time - the
 // ring is designed to visibly spin faster as a "talking" cue.
 const SPEAKING_PLAYBACK_RATE = 2.2
 
-// Looping abstract orb animation used as the agent's visual — its scale
+// Looping abstract orb animation used as the agent's visual - its scale
 // reacts in real time to the agent's mic track volume, so it reads as
 // "alive" rather than a static clip. scale-150 crops in tighter on the
 // source video's bright ring/core, since the raw footage has a lot of black
@@ -84,7 +84,7 @@ function OrbVideo({ volume, dimmed, speaking }: { volume: number; dimmed?: boole
 
 // useParticipantAttribute throws if it's ever called with no participant
 // available (via useEnsureParticipant), so this can only be mounted once an
-// agent participant actually exists — see the conditional render below.
+// agent participant actually exists - see the conditional render below.
 function AgentOrb({ agentParticipant }: { agentParticipant: RemoteParticipant }) {
   const agentStateRaw = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
   const agentState = (agentStateRaw || 'initializing') as AgentState
@@ -201,7 +201,7 @@ export function ActiveCallUI({
               </p>
               {slowJoin && connectionState === ConnectionState.Connected && (
                 <p className="max-w-[220px] text-xs text-text-muted">
-                  Taking longer than usual — the agent worker may be restarting. You can keep waiting or end the call and try again shortly.
+                  Taking longer than usual - the agent worker may be restarting. You can keep waiting or end the call and try again shortly.
                 </p>
               )}
             </div>

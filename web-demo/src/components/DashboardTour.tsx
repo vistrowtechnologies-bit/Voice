@@ -8,7 +8,7 @@ interface TourStep {
 }
 
 // Targets data-tour attributes on DashboardLayout's sidebar links + the
-// HelpChatWidget FAB — same selectors, so if either component's markup
+// HelpChatWidget FAB - same selectors, so if either component's markup
 // changes, this silently stops finding a target and the step is skipped
 // rather than floating a tooltip nowhere (see the rect.width === 0 guard).
 const STEPS: TourStep[] = [
@@ -30,7 +30,7 @@ const STEPS: TourStep[] = [
   {
     selector: '[data-tour="nav-integrations"]',
     title: 'Connect your tools',
-    body: 'Google Calendar, Slack, WhatsApp, and more — all from here.',
+    body: 'Google Calendar, Slack, WhatsApp, and more - all from here.',
   },
   {
     selector: '[data-tour="nav-settings"]',
@@ -53,7 +53,7 @@ interface Rect {
 
 /** First-run guided tour, shown once per user right after the onboarding
  * modal closes (see DashboardLayout: user.onboarded && !user.tourCompleted).
- * Spotlights real sidebar nav items via the box-shadow "cutout" trick — no
+ * Spotlights real sidebar nav items via the box-shadow "cutout" trick - no
  * SVG mask, no new dependency. Silently renders nothing if a step's target
  * isn't in the layout (e.g. sidebar hidden below the lg breakpoint) rather
  * than floating a tooltip at the wrong spot. */
@@ -81,7 +81,7 @@ export function DashboardTour() {
       setUser(updated)
     } catch {
       // Same reasoning as OnboardingModal: don't trap the user behind a
-      // failed network call — worst case the tour reappears next session.
+      // failed network call - worst case the tour reappears next session.
       setUser({ ...user, tourCompleted: true })
     }
   }

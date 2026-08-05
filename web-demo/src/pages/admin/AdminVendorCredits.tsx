@@ -18,7 +18,7 @@ function statusLabel(v: AdminVendorCredit): string {
 }
 
 function fmtBalance(v: AdminVendorCredit): string {
-  if (v.balance === null) return '—'
+  if (v.balance === null) return '-'
   const n = v.balance >= 1000 ? v.balance.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : v.balance.toLocaleString('en-IN', { maximumFractionDigits: 2 })
   return v.unit ? `${n} ${v.unit}` : n
 }
@@ -42,7 +42,7 @@ export function AdminVendorCredits() {
     <>
       <PageHeader
         title="Vendor Credits"
-        subtitle="Balances on Vistrow's own upstream vendor accounts — top these up before a live call breaks, not after."
+        subtitle="Balances on Vistrow's own upstream vendor accounts - top these up before a live call breaks, not after."
         action={
           lowCount > 0 ? (
             <Pill tone="suspended">
@@ -140,7 +140,7 @@ function EditRow({
         </div>
         {vendor.mode === 'live' && (
           <span className="flex items-center gap-1 text-[11px] text-text-muted">
-            <Icon name="bolt" className="text-[13px] text-cyan" /> Live-checked — balance/unit refresh automatically; edit threshold/notes here
+            <Icon name="bolt" className="text-[13px] text-cyan" /> Live-checked - balance/unit refresh automatically; edit threshold/notes here
           </span>
         )}
       </div>

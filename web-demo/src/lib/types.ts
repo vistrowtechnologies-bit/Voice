@@ -65,7 +65,7 @@ export interface CallRecord {
     key_points: string[]
     action_items: string[]
   } | null
-  // Per-call ArthaLeads delivery outcome — null means never attempted (the
+  // Per-call ArthaLeads delivery outcome - null means never attempted (the
   // call wasn't marked qualified, or nothing was connected at call time),
   // not the same as "failed". Separate from the integration's own
   // last_sync/last_error, which only reflect the most recent attempt
@@ -73,11 +73,11 @@ export interface CallRecord {
   arthaleadsStatus: 'sent' | 'failed' | null
   arthaleadsSyncedAt: string | null
   arthaleadsError: string | null
-  // Never the raw storage key — just whether a recording exists. Fetch a
+  // Never the raw storage key - just whether a recording exists. Fetch a
   // playback URL on demand via fetchCallRecordingUrl.
   hasRecording: boolean
   // Operator-defined fields (agent.postCallFields) the post-call LLM pass
-  // pulled from this specific call's transcript — the generic, per-business
+  // pulled from this specific call's transcript - the generic, per-business
   // extraction system underneath the fixed budget/location/timeline and
   // company/useCase/teamSize fields above. {} when the agent has no custom
   // fields configured, or extraction found nothing.
@@ -86,7 +86,7 @@ export interface CallRecord {
 
 export type Lead = CallRecord
 
-// Native appointment/booking system — replaces Google Calendar/Cal.com.
+// Native appointment/booking system - replaces Google Calendar/Cal.com.
 export type AppointmentStatus = 'confirmed' | 'cancelled' | 'rescheduled' | 'completed' | 'no_show'
 
 export interface Appointment {
@@ -292,7 +292,7 @@ export interface KbQaPair {
   answer: string
 }
 
-// A draft pair from auto-extract — not saved yet, no id.
+// A draft pair from auto-extract - not saved yet, no id.
 export interface QaDraft {
   question: string
   answer: string
@@ -431,7 +431,7 @@ export interface ApiKey {
 
 export type VoiceTier = 'premium' | 'standard' | 'lite'
 
-// One voice as returned by the /voices API — a catalog entry annotated for the
+// One voice as returned by the /voices API - a catalog entry annotated for the
 // current account (whether it's in their menu, addable on their plan, etc.).
 export interface VoiceEntry {
   value: string

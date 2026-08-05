@@ -4,8 +4,8 @@ import { useAuth } from '../lib/auth'
 import { AdminLayout } from './AdminLayout'
 
 /** Gate around every /admin/* route. Only the platform owner (accounts
- * .is_platform_owner) reaches it; everyone else — including logged-in tenants
- * poking at the URL — is redirected to their own dashboard. The backend also
+ * .is_platform_owner) reaches it; everyone else - including logged-in tenants
+ * poking at the URL - is redirected to their own dashboard. The backend also
  * 404s /admin/* for non-owners, so this is defense-in-depth, not the only lock.
  * Wraps the page in the AdminLayout shell so every admin route shares the
  * red-bar + sidebar chrome. */

@@ -6,7 +6,7 @@ import { trackQualifyLead } from '../lib/analytics'
 import { AuthInput, AuthShell, PasswordVisibilityToggle, SocialButtons, useShake } from './AuthShell'
 
 // Cheap client-side password strength: length + character-class variety.
-// Purely for the meter/feedback — the server enforces the 8-char minimum.
+// Purely for the meter/feedback - the server enforces the 8-char minimum.
 function passwordStrength(pw: string): { score: number; label: string } {
   if (!pw) return { score: 0, label: '' }
   let score = 0
@@ -21,7 +21,7 @@ function passwordStrength(pw: string): { score: number; label: string } {
 
 const STRENGTH_COLORS = ['bg-border', 'bg-destructive', 'bg-amber', 'bg-cyan', 'bg-success']
 
-// Pure marketing attribution, but required — matches the competitor field
+// Pure marketing attribution, but required - matches the competitor field
 // set + validation this was modeled on.
 const REFERRAL_SOURCES = [
   'Google Ad',
@@ -36,7 +36,7 @@ const REFERRAL_SOURCES = [
 ]
 
 // Common dial codes, India first since that's this product's core market.
-// Phone is plain data collection only — email is the verified identity here,
+// Phone is plain data collection only - email is the verified identity here,
 // so there's no OTP flow attached to this field.
 const DIAL_CODES = [
   { code: 'IN', dial: '+91' },
@@ -95,7 +95,7 @@ export function Signup() {
       await signup({ ...rest, phone: phoneNumber ? `${dialCode} ${phoneNumber}` : '' })
       trackQualifyLead('signup')
       // DashboardLayout shows the onboarding modal automatically for any
-      // account that hasn't completed it yet — no special-case route here.
+      // account that hasn't completed it yet - no special-case route here.
       navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create your account')
@@ -107,7 +107,7 @@ export function Signup() {
   return (
     <AuthShell
       title="Create your account"
-      subtitle="Start your free trial — no credit card required."
+      subtitle="Start your free trial - no credit card required."
       headline={
         <>
           Intelligence in the <span className="text-primary">Dark.</span>

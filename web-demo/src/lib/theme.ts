@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 // localStorage and is applied as data-theme on <html>, which index.css's
 // :root[data-theme="light"] token overrides pick up. A first-time visitor
 // (nothing in localStorage yet) sees light mode by default; once they pick
-// a theme — anywhere, marketing site or dashboard — that choice is what
+// a theme - anywhere, marketing site or dashboard - that choice is what
 // they see everywhere afterward, one preference, one storage key.
 
 export type Theme = 'dark' | 'light'
@@ -23,7 +23,7 @@ export function getStoredTheme(): Theme {
 let transitionTimer: ReturnType<typeof setTimeout> | undefined
 
 // Briefly tags <html> with a class that index.css uses to transition
-// background/text/border colors — so flipping the toggle fades between
+// background/text/border colors - so flipping the toggle fades between
 // themes instead of snapping instantly. Only active for the switch itself
 // (see TRANSITION_MS), so normal hover/focus states stay instant.
 const TRANSITION_MS = 320
@@ -31,7 +31,7 @@ const TRANSITION_MS = 320
 export function applyTheme(theme: Theme, persist = true) {
   const root = document.documentElement
   // persist=false means a layout is just reapplying the already-stored theme
-  // on mount/route-change (DashboardLayout/AdminLayout) — not a real switch,
+  // on mount/route-change (DashboardLayout/AdminLayout) - not a real switch,
   // so it shouldn't fade. Only an actual toggle click (persist=true) animates.
   if (persist) {
     root.classList.add('theme-transition')
@@ -44,13 +44,13 @@ export function applyTheme(theme: Theme, persist = true) {
     try {
       localStorage.setItem(STORAGE_KEY, theme)
     } catch {
-      // Private browsing — the toggle still works for this visit.
+      // Private browsing - the toggle still works for this visit.
     }
   }
   window.dispatchEvent(new CustomEvent<Theme>(EVENT, { detail: theme }))
 }
 
-/** Current theme as React state — re-renders subscribers (e.g. the chart
+/** Current theme as React state - re-renders subscribers (e.g. the chart
  * colors on the Dashboard) whenever the header toggle flips it. */
 export function useTheme(): Theme {
   const [theme, setTheme] = useState<Theme>(getStoredTheme)

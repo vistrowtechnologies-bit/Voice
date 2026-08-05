@@ -19,7 +19,7 @@ import { isE164 } from '../lib/phone'
 import type { AgentConfig, PhoneNumber, TelephonyStatus } from '../lib/types'
 
 const PROVIDERS = [
-  { key: 'enablex', name: 'EnableX', icon: 'bolt', note: 'Indian & global voice — our telephony provider', live: true },
+  { key: 'enablex', name: 'EnableX', icon: 'bolt', note: 'Indian & global voice - our telephony provider', live: true },
   { key: 'twilio', name: 'Twilio', icon: 'public', note: 'Global coverage', live: false },
   { key: 'exotel', name: 'Exotel', icon: 'call', note: 'Indian telephony', live: false },
   { key: 'plivo', name: 'Plivo', icon: 'sip', note: 'Competitive rates', live: false },
@@ -228,7 +228,7 @@ function EnableXPanel() {
 
           <SectionCard title={`Your numbers (${numbers.length})`}>
             {numbers.length === 0 ? (
-              <EmptyState icon="dialpad" text="No numbers yet — add a provisioned EnableX virtual number above." />
+              <EmptyState icon="dialpad" text="No numbers yet - add a provisioned EnableX virtual number above." />
             ) : (
               <div className="divide-y divide-border">
                 {numbers.map((n) => (
@@ -273,9 +273,9 @@ function NumberRow({
     setResult(null)
     try {
       const res = await placeTestCall(number.number, to)
-      setResult(res.ok ? '✓ EnableX accepted the call — the destination should ring shortly.' : `✕ ${res.error}`)
+      setResult(res.ok ? '✓ EnableX accepted the call - the destination should ring shortly.' : `✕ ${res.error}`)
     } catch {
-      setResult('✕ Request failed — is the backend running?')
+      setResult('✕ Request failed - is the backend running?')
     } finally {
       setTesting(false)
     }
@@ -349,7 +349,7 @@ function ComingSoonPanel({ name, note, icon }: { name: string; note: string; ico
       <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border">
         <Icon name={icon} className="text-[24px]" />
       </div>
-      <p className="text-sm font-bold">{name} — coming soon</p>
+      <p className="text-sm font-bold">{name} - coming soon</p>
       <p className="max-w-sm text-xs">
         {note}. We're standardising on EnableX first; ask us to prioritise {name} if you need it.
       </p>

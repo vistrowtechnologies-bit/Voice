@@ -5,9 +5,9 @@ import { voicePreviewUrl } from '../lib/api'
 type State = 'idle' | 'loading' | 'playing' | 'error'
 
 // Only one preview across the whole app may play at once. A plain module-
-// level EventTarget (not React state) so every mounted VoicePreviewButton —
+// level EventTarget (not React state) so every mounted VoicePreviewButton -
 // across the Voices page's whole list, or a single instance in the Agents
-// editor — can hear "something else started" and stop itself, without
+// editor - can hear "something else started" and stop itself, without
 // threading shared state through props/context.
 const PREVIEW_BUS = new EventTarget()
 const STARTED = 'preview-started'
@@ -101,7 +101,7 @@ export function VoicePreviewButton({
       onClick={toggle}
       disabled={state === 'loading'}
       aria-label={state === 'playing' ? 'Stop preview' : 'Play preview'}
-      title={state === 'error' ? 'Preview unavailable — try again' : 'Listen to this voice'}
+      title={state === 'error' ? 'Preview unavailable - try again' : 'Listen to this voice'}
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface-high text-text transition-colors hover:border-primary hover:text-primary disabled:opacity-60 ${
         state === 'error' ? 'text-destructive' : ''
       } ${className}`}

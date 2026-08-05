@@ -13,7 +13,7 @@ const FAQ = [
   },
   {
     q: 'Which languages are supported?',
-    a: 'Artha speaks 11 Indian languages including Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi, Odia and more — switching mid-call to match the caller.',
+    a: 'Artha speaks 11 Indian languages including Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi, Odia and more - switching mid-call to match the caller.',
   },
   {
     q: 'Can I bring my own phone number?',
@@ -21,7 +21,7 @@ const FAQ = [
   },
   {
     q: 'Is there a free way to try it?',
-    a: 'Yes — talk to Artha live in your browser right now, no signup or credit card required.',
+    a: 'Yes - talk to Artha live in your browser right now, no signup or credit card required.',
   },
 ]
 
@@ -50,8 +50,8 @@ export function Pricing() {
   return (
     <MarketingLayout>
       <Seo
-        title="Pricing — Vistrow Voice"
-        description="Simple, credit-based plans for AI voice agents. Every plan includes the web call widget, call history, and analytics — scale up as your call volume grows."
+        title="Pricing - Vistrow Voice"
+        description="Simple, credit-based plans for AI voice agents. Every plan includes the web call widget, call history, and analytics - scale up as your call volume grows."
         path="/pricing"
         jsonLd={FAQ_JSONLD}
       />
@@ -103,7 +103,7 @@ export function Pricing() {
                 <span className="text-base font-normal text-text-muted">/mo</span>
               </p>
               <p className="mt-1 text-sm text-text-muted">{plan.credits}</p>
-              {annual && <p className="mt-1 text-xs font-semibold text-cyan">Billed annually — 15% off</p>}
+              {annual && <p className="mt-1 text-xs font-semibold text-cyan">Billed annually - 15% off</p>}
               <ul className="mt-6 flex flex-1 flex-col gap-2.5">
                 {plan.features.map((feat) => (
                   <li key={feat} className="flex items-start gap-2 text-sm text-text-muted">
@@ -169,7 +169,7 @@ export function Pricing() {
         <div className="rounded-3xl border border-border bg-surface p-10 text-center">
           <h2 className="font-display text-2xl font-bold">Need something custom?</h2>
           <p className="mx-auto mt-2 max-w-md text-text-muted">
-            High call volumes, on-prem, or a dedicated success manager — let’s talk.
+            High call volumes, on-prem, or a dedicated success manager - let’s talk.
           </p>
           <NavLink
             to="/contact"

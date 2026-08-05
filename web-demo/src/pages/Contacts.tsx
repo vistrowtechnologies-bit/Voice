@@ -79,7 +79,7 @@ export function Contacts() {
     const text = await file.text()
     const preview = await previewContactsImport(text)
     // Best-effort auto-guess so the operator usually just confirms rather
-    // than mapping every column by hand — exact matches on common header
+    // than mapping every column by hand - exact matches on common header
     // spellings only; anything unrecognized defaults to "Skip".
     const guesses: Record<string, string> = {
       name: 'name', 'full name': 'name', fullname: 'name',
@@ -208,7 +208,7 @@ export function Contacts() {
       header: 'Contact Info',
       render: (c) => (
         <div className="text-sm text-text-muted">
-          <p>{c.phone || '—'}</p>
+          <p>{c.phone || '-'}</p>
           {c.email && <p className="text-[11px]">{c.email}</p>}
         </div>
       ),
@@ -227,7 +227,7 @@ export function Contacts() {
       header: 'Tags',
       render: (c) => (
         <div className="flex flex-wrap gap-1">
-          {c.tags.length === 0 && <span className="text-sm text-text-muted">—</span>}
+          {c.tags.length === 0 && <span className="text-sm text-text-muted">-</span>}
           {c.tags.map((t) => (
             <span key={t} className="rounded bg-surface-high px-1.5 py-0.5 text-[11px] text-text-muted">
               {t}
@@ -262,7 +262,7 @@ export function Contacts() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Contacts" subtitle="Global contact list — auto-synced from every qualified call" />
+      <PageHeader title="Contacts" subtitle="Global contact list - auto-synced from every qualified call" />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <Card padding="sm" className="flex flex-wrap items-center gap-3">
@@ -369,7 +369,7 @@ export function Contacts() {
             <div>
               <p className="text-sm font-bold">Map your columns</p>
               <p className="text-xs text-text-muted">
-                Tell us what each column in your file means — anything not mapped to a field below is saved as a
+                Tell us what each column in your file means - anything not mapped to a field below is saved as a
                 custom field, so a campaign call can reference it (e.g. an "appointment_date" column becomes{' '}
                 <code className="rounded bg-surface-high px-1 py-0.5">{'{{custom.appointment_date}}'}</code>).
               </p>
@@ -388,7 +388,7 @@ export function Contacts() {
                     <tr key={header} className="border-b border-border/60">
                       <td className="py-2 pr-3 font-semibold">{header}</td>
                       <td className="py-2 pr-3 text-text-muted">
-                        {importPreview.sampleRows.map((r) => r[i]).filter(Boolean).slice(0, 2).join(', ') || '—'}
+                        {importPreview.sampleRows.map((r) => r[i]).filter(Boolean).slice(0, 2).join(', ') || '-'}
                       </td>
                       <td className="py-2">
                         <div className="flex flex-wrap items-center gap-2">

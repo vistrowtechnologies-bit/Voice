@@ -9,15 +9,15 @@ import { PRODUCT_PAGES, HOW_IT_WORKS } from '../../lib/marketingContent'
 const FAQ = [
   {
     q: 'What does the Vistrow Voice platform include?',
-    a: 'Voice Agents, Inbound Calling, Outbound Campaigns, a Knowledge Base, a Website Call Widget, and Integrations — all in one dashboard.',
+    a: 'Voice Agents, Inbound Calling, Outbound Campaigns, a Knowledge Base, a Website Call Widget, and Integrations - all in one dashboard.',
   },
   {
     q: 'Do I need separate tools for inbound and outbound calling?',
-    a: 'No — one agent and one dashboard cover inbound, outbound, and web calls, sharing the same knowledge base and analytics.',
+    a: 'No - one agent and one dashboard cover inbound, outbound, and web calls, sharing the same knowledge base and analytics.',
   },
   {
     q: 'Can I try the platform before I build anything?',
-    a: 'Yes — talk to Artha live in your browser right now on this page, no signup or credit card required.',
+    a: 'Yes - talk to Artha live in your browser right now on this page, no signup or credit card required.',
   },
 ]
 
@@ -39,8 +39,8 @@ export function ProductOverview() {
   return (
     <MarketingLayout>
       <Seo
-        title="Product Overview — Vistrow Voice"
-        description="Voice Agents, Inbound Calling, Outbound Campaigns, Knowledge Base, Website Call Widget, and Integrations — one platform for every AI voice conversation."
+        title="Product Overview - Vistrow Voice"
+        description="Voice Agents, Inbound Calling, Outbound Campaigns, Knowledge Base, Website Call Widget, and Integrations - one platform for every AI voice conversation."
         path="/product"
         jsonLd={FAQ_JSONLD}
       />
@@ -50,7 +50,7 @@ export function ProductOverview() {
           One platform for every voice conversation.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          Inbound, outbound, and web calls — built, grounded, and analyzed in one place.
+          Inbound, outbound, and web calls - built, grounded, and analyzed in one place.
           Everything you need to put an AI agent on every call.
         </p>
       </section>

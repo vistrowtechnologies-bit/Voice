@@ -289,7 +289,7 @@ export function Compliance() {
                         value={bulkText}
                         onChange={(e) => setBulkText(e.target.value)}
                         rows={4}
-                        placeholder="Paste numbers — one per line or comma-separated"
+                        placeholder="Paste numbers - one per line or comma-separated"
                         className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
                       />
                       <button

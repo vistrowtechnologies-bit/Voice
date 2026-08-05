@@ -1,5 +1,5 @@
 // Single source of truth for the vistrowvoice.com/app.vistrowvoice.com/
-// docs.vistrowvoice.com host split — imported by both middleware.ts (runs
+// docs.vistrowvoice.com host split - imported by both middleware.ts (runs
 // server-side on every request) and MarketingLayout.tsx (runs client-side,
 // so an in-app <Link> click that crosses a bucket boundary still forces a
 // real cross-host navigation instead of silently rendering the wrong

@@ -80,7 +80,7 @@ export function AdminDashboard() {
             icon="person_off"
             count={data.needsAttention.zeroCallSignups}
             label="signups with zero calls"
-            hint="Activation risk — follow up"
+            hint="Activation risk - follow up"
             onClick={() => navigate('/admin/accounts?activity=idle')}
           />
           <AttentionCard
@@ -120,7 +120,7 @@ export function AdminDashboard() {
                     className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high"
                   >
                     <td className="px-5 py-3 font-semibold">{s.name}</td>
-                    <td className="px-5 py-3 text-text-muted">{s.owner_email || '—'}</td>
+                    <td className="px-5 py-3 text-text-muted">{s.owner_email || '-'}</td>
                     <td className="px-5 py-3">
                       <PlanPill plan={s.plan} />
                     </td>

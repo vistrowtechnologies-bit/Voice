@@ -22,7 +22,7 @@ interface DataTableProps<T> {
 }
 
 // Responsive table: a real <table> at md: and above, the same rows as
-// stacked info-cards below md: — replaces the raw <table> + overflow-x-auto
+// stacked info-cards below md: - replaces the raw <table> + overflow-x-auto
 // pattern (CallsHistory.tsx, Contacts.tsx), which just scrolled sideways on
 // narrow screens instead of actually adapting.
 export function DataTable<T>({ columns, rows, rowKey, emptyMessage, footer }: DataTableProps<T>) {

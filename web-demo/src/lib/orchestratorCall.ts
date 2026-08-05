@@ -3,7 +3,7 @@ import { fetchOrchestratorBrowserToken } from './api'
 import type { TranscriptEntry } from './types'
 
 // Public, unauthenticated fallback used by the marketing site's live demo
-// when LiveKit's demo worker doesn't pick up — deliberately a raw fetch
+// when LiveKit's demo worker doesn't pick up - deliberately a raw fetch
 // (no credentials, no api.ts `send()`) since send() dispatches a
 // 'vv-unauthorized' event on a 401 that redirects to /login, which is
 // wrong for an anonymous visitor and this route needs no auth anyway.
@@ -38,11 +38,11 @@ function floatTo16BitPCM(float32: Float32Array): Int16Array {
 }
 
 /** Drives a browser call against the orchestrator's /browser/stream
- * WebSocket — the non-LiveKit equivalent of LiveKitRoom + ActiveCallUI's
+ * WebSocket - the non-LiveKit equivalent of LiveKitRoom + ActiveCallUI's
  * hooks. Owns mic capture, playback (with an AnalyserNode so the orb still
  * reacts to the agent's voice like useTrackVolume did), and the
  * thinking/speaking/listening state the orb displays. */
-// agentId: undefined means the public marketing-demo fallback — resolves
+// agentId: undefined means the public marketing-demo fallback - resolves
 // the platform-demo agent server-side instead of a specific operator agent.
 export function useOrchestratorCall(agentId?: number): UseOrchestratorCallResult {
   const [phase, setPhase] = useState<OrchestratorCallPhase>('connecting')
@@ -178,7 +178,7 @@ export function useOrchestratorCall(agentId?: number): UseOrchestratorCallResult
         captureCtxRef.current = captureCtx
         // Chrome can create a context in 'suspended' state when it isn't
         // directly inside a synchronous user-gesture handler (several
-        // awaits removed from the click that opened this modal) — if so,
+        // awaits removed from the click that opened this modal) - if so,
         // the ScriptProcessorNode below never fires onaudioprocess at all,
         // silently sending zero mic frames with no error anywhere.
         if (captureCtx.state === 'suspended') await captureCtx.resume()
@@ -221,7 +221,7 @@ export function useOrchestratorCall(agentId?: number): UseOrchestratorCallResult
               const text = String(msg.text ?? '')
               setTranscript((prev) => {
                 // Assistant replies arrive one sentence at a time (in sync
-                // with each sentence's TTS clip) — merge consecutive agent
+                // with each sentence's TTS clip) - merge consecutive agent
                 // sentences into one growing bubble instead of a new one
                 // per sentence. A user turn always starts a fresh bubble.
                 const last = prev[prev.length - 1]

@@ -72,7 +72,7 @@ export const fetchLeads = () => get<CallRecord[]>('/leads')
 
 // Full catalog annotated for this account (selected / addable / slots left).
 export const fetchVoiceCatalog = () => get<VoiceCatalog>('/voices/catalog')
-// The account's curated menu — the only voices the agent picker offers.
+// The account's curated menu - the only voices the agent picker offers.
 export const fetchMyVoices = () => get<VoiceEntry[]>('/voices/mine')
 export const addVoice = (voice: string) =>
   send<{ ok: boolean; voices: VoiceEntry[] }>('POST', '/voices/mine', { voice })
@@ -94,7 +94,7 @@ export async function fetchLead(id: string): Promise<CallRecord | undefined> {
 export const callsExportUrl = '/api/calls/export.csv'
 
 // This one asks the LiveKit server (via /active-calls) which rooms are live
-// right now — the only endpoint not backed by calls.db.
+// right now - the only endpoint not backed by calls.db.
 export const fetchActiveCalls = () => get<ActiveCallInfo[]>('/active-calls')
 
 // ------------------------------------------------------------- dashboard
@@ -331,7 +331,7 @@ export function formatRelativeTime(iso: string): string {
 }
 
 export function formatDuration(seconds: number | null): string {
-  if (!seconds) return '—'
+  if (!seconds) return '-'
   const m = Math.floor(seconds / 60)
   const s = Math.round(seconds % 60)
   return `${m}m ${s}s`
@@ -347,7 +347,7 @@ export function formatDateTime(iso: string): string {
 }
 
 /** Appointment times are stored/passed around as 24h "HH:MM" (matching what
- * the agent computes and what <input type="time"> uses) — this is purely a
+ * the agent computes and what <input type="time"> uses) - this is purely a
  * display formatter for the Appointments UI, not a storage format change. */
 export function formatTime12h(hhmm: string): string {
   const [h, m] = hhmm.split(':').map(Number)

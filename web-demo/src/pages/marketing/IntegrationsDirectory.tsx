@@ -6,7 +6,7 @@ import { Reveal } from '../../components/Reveal'
 import { INTEGRATION_DIRECTORY } from '../../lib/marketingContent'
 
 // The named counterpart to /product/integrations: that page sells the
-// capability, this one answers "is MY tool on the list?" — the actual
+// capability, this one answers "is MY tool on the list?" - the actual
 // question a buyer has. Entries marked viaWebhook are honestly labelled
 // rather than dressed up as native connectors.
 export function IntegrationsDirectory() {
@@ -15,7 +15,7 @@ export function IntegrationsDirectory() {
   return (
     <MarketingLayout>
       <Seo
-        title="Integrations — Vistrow Voice"
+        title="Integrations - Vistrow Voice"
         description="Connect Vistrow Voice to your CRM, Slack, WhatsApp, Google Sheets, Zapier, n8n, Make, or any endpoint that accepts a webhook. Every qualified lead and transcript, delivered automatically."
         path="/integrations"
       />
@@ -26,8 +26,8 @@ export function IntegrationsDirectory() {
           Every lead, in the tools you already use.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          The moment a call qualifies a lead, Vistrow Voice pushes it — with the full transcript and
-          outcome — wherever your team works.
+          The moment a call qualifies a lead, Vistrow Voice pushes it - with the full transcript and
+          outcome - wherever your team works.
         </p>
       </section>
 
@@ -72,7 +72,7 @@ export function IntegrationsDirectory() {
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-text-muted">
                 Anything that accepts an inbound HTTP request works. Point the lead webhook at your
-                endpoint and you’ll receive a structured JSON payload on every completed call — contact
+                endpoint and you’ll receive a structured JSON payload on every completed call - contact
                 details, captured fields, sentiment, duration, channel, and the full transcript.
               </p>
             </div>
@@ -83,7 +83,7 @@ export function IntegrationsDirectory() {
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-text-muted">
                 For two-way sync and custom workflows, the API exposes agents, calls, contacts, and
-                analytics directly — so you can pull data on your own schedule instead of only
+                analytics directly - so you can pull data on your own schedule instead of only
                 receiving pushes.
               </p>
               <NavLink

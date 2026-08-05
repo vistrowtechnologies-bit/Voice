@@ -28,8 +28,8 @@ export function SolutionDetail() {
 
   return (
     <MarketingLayout>
-      <Seo title={`${solution.headline} — Vistrow Voice`} description={solution.subhead} path={solution.to} jsonLd={faqJsonLd} />
-      {/* Live demo widget is homepage-only now — see PageHero's heroless-of-
+      <Seo title={`${solution.headline} - Vistrow Voice`} description={solution.subhead} path={solution.to} jsonLd={faqJsonLd} />
+      {/* Live demo widget is homepage-only now - see PageHero's heroless-of-
           children branch for how this renders without it. */}
       <PageHero
         eyebrow={`Solutions · ${solution.label}`}
@@ -74,7 +74,7 @@ export function SolutionDetail() {
               Hi, I wanted to know more about your services.
             </div>
             <div className="max-w-[85%] self-start rounded-2xl rounded-tl-sm bg-surface-high px-4 py-2.5 text-text">
-              Of course — may I take your name and number so our team can follow up with the right details?
+              Of course - may I take your name and number so our team can follow up with the right details?
             </div>
           </div>
         </div>

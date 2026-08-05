@@ -401,7 +401,7 @@ function InviteForm({ onSent }: { onSent: () => void }) {
       const res = await apiInviteMember({ email: email.trim(), name: name.trim(), role })
       setResult({
         ok: true,
-        text: res.emailSent ? `Invite sent to ${email.trim()}.` : `Email isn't configured — share this link: ${res.inviteLink}`,
+        text: res.emailSent ? `Invite sent to ${email.trim()}.` : `Email isn't configured - share this link: ${res.inviteLink}`,
       })
       setEmail('')
       setName('')
@@ -462,7 +462,7 @@ function ApiKeysCard({ canManage }: { canManage: boolean }) {
   const [name, setName] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // The full secret is returned exactly once, on creation — we hold it in
+  // The full secret is returned exactly once, on creation - we hold it in
   // memory only until the operator dismisses it; it's never fetchable again.
   const [freshKey, setFreshKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -514,7 +514,7 @@ function ApiKeysCard({ canManage }: { canManage: boolean }) {
         <div className="flex flex-col gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
           <p className="flex items-center gap-1.5 text-xs font-bold text-text">
             <Icon name="key" className="text-[15px] text-primary" />
-            Copy this key now — it won't be shown again.
+            Copy this key now - it won't be shown again.
           </p>
           <div className="flex items-center gap-2">
             <code className="flex-1 truncate rounded-md bg-bg px-3 py-2 font-mono text-xs text-cyan">{freshKey}</code>
@@ -605,7 +605,7 @@ const WEEKDAYS: { key: string; label: string }[] = [
 ]
 
 // Fallback for browsers without Intl.supportedValuesOf('timeZone') (Safari <
-// 17, older WebViews) — covers every major region so the picker still works,
+// 17, older WebViews) - covers every major region so the picker still works,
 // just with a shorter list.
 const TIMEZONE_FALLBACK = [
   'UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Dhaka', 'Asia/Bangkok',
@@ -627,7 +627,7 @@ function allTimezones(): string[] {
   return TIMEZONE_FALLBACK
 }
 
-/** Searchable timezone picker — a button showing the current value that
+/** Searchable timezone picker - a button showing the current value that
  * opens a filterable dropdown of every IANA zone, instead of a plain text
  * input where a typo silently produces an invalid timezone. */
 function TimezoneSelect({ value, onChange, disabled }: { value: string; onChange: (tz: string) => void; disabled?: boolean }) {
@@ -754,7 +754,7 @@ function AvailabilityTab({ canManage }: { canManage: boolean }) {
   return (
     <SettingsCard
       title="Availability"
-      subtitle="Business hours, slot length, and timezone your AI agent checks and books appointments against — one set for your whole account."
+      subtitle="Business hours, slot length, and timezone your AI agent checks and books appointments against - one set for your whole account."
     >
       {!canManage && (
         <p className="flex items-center gap-1.5 text-xs text-text-muted">

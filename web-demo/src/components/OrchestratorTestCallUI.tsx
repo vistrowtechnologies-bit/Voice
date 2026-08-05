@@ -50,7 +50,7 @@ function OrbVideo({ volume, dimmed, speaking }: { volume: number; dimmed?: boole
   )
 }
 
-/** Orchestrator/WebSocket equivalent of ActiveCallUI — same visual shell
+/** Orchestrator/WebSocket equivalent of ActiveCallUI - same visual shell
  * (orb, states, transcript, mic/end/transcript-toggle controls) but driven
  * by useOrchestratorCall's local state instead of LiveKit's React hooks,
  * since there's no LiveKitRoom/participant model on this transport. */

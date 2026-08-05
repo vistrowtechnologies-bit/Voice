@@ -83,7 +83,7 @@ export function ContactDetail() {
     ...contact.calls.map((c) => ({
       at: c.startedAt,
       kind: 'call' as const,
-      label: c.durationSeconds > 0 ? `${c.callType} call — ${formatDuration(c.durationSeconds)}` : `${c.callType} call — no answer`,
+      label: c.durationSeconds > 0 ? `${c.callType} call - ${formatDuration(c.durationSeconds)}` : `${c.callType} call - no answer`,
     })),
     ...contact.notes.map((n) => ({ at: n.createdAt, kind: 'note' as const, label: `Note: ${n.body}` })),
   ].sort((a, b) => b.at.localeCompare(a.at))
@@ -103,7 +103,7 @@ export function ContactDetail() {
           Back to Contacts
         </Link>
 
-        {/* Header — avatar, name, status, contact chips */}
+        {/* Header - avatar, name, status, contact chips */}
         <Card padding="sm" className="flex flex-wrap items-center gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/20 text-lg font-bold text-primary">
             {contact.name.slice(0, 2).toUpperCase()}
@@ -148,7 +148,7 @@ export function ContactDetail() {
             <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Contact snapshot</p>
             <div className="grid grid-cols-2 gap-2">
               <SnapshotBox label="Contact ID" value={String(contact.id)} />
-              <SnapshotBox label="Organization" value={contact.company || '—'} />
+              <SnapshotBox label="Organization" value={contact.company || '-'} />
               <SnapshotBox label="Created" value={formatDateTime(contact.createdAt)} />
               <SnapshotBox label="Updated" value={formatDateTime(contact.updatedAt)} />
               <SnapshotBox label="Last called" value={contact.lastCalledAt ? formatDateTime(contact.lastCalledAt) : 'Never'} />
@@ -156,7 +156,7 @@ export function ContactDetail() {
                 label="Custom variables"
                 value={
                   Object.keys(contact.customFields).length === 0
-                    ? '—'
+                    ? '-'
                     : Object.entries(contact.customFields).map(([k, v]) => `${k}: ${v}`).join(', ')
                 }
               />

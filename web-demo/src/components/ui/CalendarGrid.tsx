@@ -18,7 +18,7 @@ function toDateStr(d: Date): string {
 /** Fixed 6x7 grid covering the visible month plus lead/trail days from
  * adjacent months, each cell showing up to MAX_VISIBLE colored appointment
  * chips (sorted by time) plus a "+N more" overflow button. Pure
- * presentational — Appointments.tsx owns all data fetching/state. */
+ * presentational - Appointments.tsx owns all data fetching/state. */
 export function CalendarGrid({
   month,
   appointments,

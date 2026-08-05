@@ -8,7 +8,7 @@ import { Icon } from './Icon'
 
 // Page-specific quick questions, each backed by a real server/help_tools.py
 // function (dashboard_stats, calls_on_date, hottest_leads, billing_snapshot,
-// contacts_stats) — never a question the assistant can't actually answer
+// contacts_stats) - never a question the assistant can't actually answer
 // with real data. Keyed by route prefix, checked longest-first so
 // /dashboard/calls doesn't fall through to the generic /dashboard entry.
 const PAGE_SUGGESTIONS: Record<string, { label: string; questions: string[] }> = {
@@ -37,7 +37,7 @@ function pageSuggestions(pathname: string) {
   return prefix ? PAGE_SUGGESTIONS[prefix] : null
 }
 
-/** Persistent text-only help chatbot, bottom-right on every dashboard page —
+/** Persistent text-only help chatbot, bottom-right on every dashboard page -
  * separate from the voice agent product. Answers are grounded in
  * server/help_content.py, plus live account data via server/help_tools.py,
  * via POST /help/chat. */
@@ -78,7 +78,7 @@ export function HelpChatWidget() {
       const { reply } = await sendHelpChatMessage(trimmed, history, location.pathname)
       setMessages([...next, { role: 'assistant', content: reply }])
     } catch {
-      setError("Couldn't reach the help assistant — try again in a moment.")
+      setError("Couldn't reach the help assistant - try again in a moment.")
     } finally {
       setSending(false)
     }

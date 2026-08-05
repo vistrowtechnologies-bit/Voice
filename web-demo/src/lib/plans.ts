@@ -1,6 +1,6 @@
 // Shared pricing definition. Moved out of Billing.tsx so the dashboard's
 // Billing page and the marketing site's /pricing page quote identical tiers
-// from one source — they must never drift apart.
+// from one source - they must never drift apart.
 
 export interface Plan {
   name: string
@@ -8,7 +8,7 @@ export interface Plan {
   credits: string
   tag: string | null
   features: string[]
-  // Features shown greyed-out with a lock icon instead of a checkmark —
+  // Features shown greyed-out with a lock icon instead of a checkmark -
   // things this plan doesn't include yet, shown so an operator on a lower
   // tier can see what upgrading unlocks (currently just the Premium voice
   // tier, gated to Scale).

@@ -1,4 +1,4 @@
-// Free-call cap for the public marketing-site demo (/demo, /call) — a
+// Free-call cap for the public marketing-site demo (/demo, /call) - a
 // lightweight, client-side deterrent against unlimited anonymous LiveKit
 // usage, not a security boundary. Tracked per-browser via localStorage, on a
 // rolling 24h window so a visitor who exhausts their calls can come back the
@@ -27,7 +27,7 @@ function readWindow(): CallWindow {
         if (Date.now() - parsed.windowStart < WINDOW_MS) return parsed
       }
     } catch {
-      // Pre-existing plain-number format (before the 24h window was added) —
+      // Pre-existing plain-number format (before the 24h window was added) -
       // fall through to a fresh window rather than stranding old visitors.
     }
   }

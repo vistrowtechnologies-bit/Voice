@@ -13,7 +13,7 @@ export function Changelog() {
   return (
     <MarketingLayout>
       <Seo
-        title="Changelog — Vistrow Voice"
+        title="Changelog - Vistrow Voice"
         description="What's new in Vistrow Voice: new voices, faster call connection, native appointment booking, compliance controls, and more."
         path="/changelog"
       />
@@ -24,7 +24,7 @@ export function Changelog() {
           What’s shipped.
         </h1>
         <p className="mt-5 max-w-xl text-lg text-text-muted">
-          Product updates as they go live. Everything here is already running on real calls — we don’t
+          Product updates as they go live. Everything here is already running on real calls - we don’t
           list things that haven’t shipped.
         </p>
       </section>

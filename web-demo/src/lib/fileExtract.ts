@@ -1,5 +1,5 @@
 // Client-side text extraction for knowledge-base source uploads. Runs in the
-// browser (no backend change needed) — addKnowledgeSource already just takes
+// browser (no backend change needed) - addKnowledgeSource already just takes
 // a plain-text `content` string, so any format we can turn into text here
 // slots into the existing prompt-stuffing pipeline unchanged.
 
@@ -11,7 +11,7 @@ export async function extractTextFromFile(file: File): Promise<string> {
   // .doc (legacy binary Word) has no reliable browser-side parser; treating
   // it as plain text would just produce binary garbage, so reject clearly.
   if (name.endsWith('.doc')) {
-    throw new Error('.doc (old Word format) isn\'t supported — please save as .docx and re-upload.')
+    throw new Error('.doc (old Word format) isn\'t supported - please save as .docx and re-upload.')
   }
 
   // .txt, .md, .csv, and anything else we don't have a specific parser for.
@@ -35,7 +35,7 @@ async function extractPdf(file: File): Promise<string> {
   }
   const text = pages.join('\n\n').trim()
   if (!text) {
-    throw new Error('No extractable text found in this PDF — it may be scanned images without a text layer.')
+    throw new Error('No extractable text found in this PDF - it may be scanned images without a text layer.')
   }
   return text
 }

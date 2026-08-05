@@ -5,8 +5,8 @@ import { Seo } from '../../components/Seo'
 import { RoiCalculator } from '../../components/RoiCalculator'
 import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
 
-// Deliberately compares against the incumbent *category* — a phone menu or
-// a human call desk — not against named competitors. That's both the
+// Deliberately compares against the incumbent *category* - a phone menu or
+// a human call desk - not against named competitors. That's both the
 // honest comparison (it's what these buyers are actually replacing) and
 // the durable one: no claims about another company's product that go stale
 // or get disputed.
@@ -15,7 +15,7 @@ const ROWS: { dimension: string; ivr: string; human: string; vistrow: string }[]
   {
     dimension: 'Caller experience',
     ivr: 'Press 1, press 2, press 9 to repeat',
-    human: 'Natural — if someone picks up',
+    human: 'Natural - if someone picks up',
     vistrow: 'Natural conversation, answered on the first ring',
   },
   {
@@ -57,7 +57,7 @@ const ROWS: { dimension: string; ivr: string; human: string; vistrow: string }[]
   {
     dimension: 'Cost as volume grows',
     ivr: 'Flat, but unresolved calls pile up',
-    human: 'Linear — more calls, more people',
+    human: 'Linear - more calls, more people',
     vistrow: 'Per minute of conversation, no new hires',
   },
 ]
@@ -65,11 +65,11 @@ const ROWS: { dimension: string; ivr: string; human: string; vistrow: string }[]
 const FAQ = [
   {
     q: 'Is this just a smarter IVR?',
-    a: 'No. An IVR routes — it collects a keypress and sends the caller somewhere. Artha holds a conversation, answers from your knowledge base, captures details, and books appointments without transferring anyone.',
+    a: 'No. An IVR routes - it collects a keypress and sends the caller somewhere. Artha holds a conversation, answers from your knowledge base, captures details, and books appointments without transferring anyone.',
   },
   {
     q: 'Will it replace my whole call team?',
-    a: 'Usually not, and we don’t recommend framing it that way. It absorbs the repetitive, high-volume calls — status checks, timings, qualification, reminders — so your team spends their day on the calls that genuinely need a person.',
+    a: 'Usually not, and we don’t recommend framing it that way. It absorbs the repetitive, high-volume calls - status checks, timings, qualification, reminders - so your team spends their day on the calls that genuinely need a person.',
   },
   {
     q: 'What happens when the AI can’t help?',
@@ -77,7 +77,7 @@ const FAQ = [
   },
   {
     q: 'Do we have to replace our phone number?',
-    a: 'No — point your existing business number at Vistrow, or get a new one from us. The website call widget needs no phone number at all.',
+    a: 'No - point your existing business number at Vistrow, or get a new one from us. The website call widget needs no phone number at all.',
   },
 ]
 
@@ -97,7 +97,7 @@ export function CompareIvr() {
   return (
     <MarketingLayout>
       <Seo
-        title="AI Voice Agent vs. Traditional IVR — Vistrow Voice"
+        title="AI Voice Agent vs. Traditional IVR - Vistrow Voice"
         description="How an AI voice agent differs from a press-1-press-2 phone menu or a human call desk: availability, languages, answer quality, call records, and cost as volume grows."
         path="/vs-ivr"
         jsonLd={FAQ_JSONLD}
@@ -110,7 +110,7 @@ export function CompareIvr() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
           Most businesses answer calls with a phone menu, a small team, or both. Here’s how an AI voice
-          agent actually differs — including where it doesn’t win.
+          agent actually differs - including where it doesn’t win.
         </p>
         <div className="mt-8 flex justify-center">
           <TalkToArthaButton />
@@ -153,7 +153,7 @@ export function CompareIvr() {
         </div>
       </section>
 
-      {/* Where a human still wins — credibility comes from admitting this */}
+      {/* Where a human still wins - credibility comes from admitting this */}
       <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
         <div className="rounded-3xl border border-amber/40 bg-amber/[0.06] p-8 sm:p-10">
           <SectionEyebrow>Where a person still wins</SectionEyebrow>

@@ -26,7 +26,7 @@ export function AdminUsers() {
 
   return (
     <>
-      <PageHeader title="Users" subtitle={`Every user across all tenants — ${total.toLocaleString()} total. Search by email to support anyone.`} />
+      <PageHeader title="Users" subtitle={`Every user across all tenants - ${total.toLocaleString()} total. Search by email to support anyone.`} />
       <AdminCard className="mb-4 p-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by email or name…" />
       </AdminCard>

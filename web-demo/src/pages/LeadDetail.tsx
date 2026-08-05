@@ -24,7 +24,7 @@ const SENTIMENT_STYLE: Record<string, string> = {
 }
 
 // extractedData keys are operator-authored snake_case ("plot_configuration")
-// — turn that into a readable label the same way the fixed fields above do.
+// - turn that into a readable label the same way the fixed fields above do.
 function titleCase(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
@@ -72,7 +72,7 @@ export function LeadDetail() {
 
   // Every past call from this same phone number, so a repeat caller shows up
   // as one lead's history instead of looking like a fresh, unrelated lead
-  // each time — search already matches on phone (see calls_db.list_calls).
+  // each time - search already matches on phone (see calls_db.list_calls).
   useEffect(() => {
     setHistory(null)
     if (!call?.phone) return
@@ -136,7 +136,7 @@ export function LeadDetail() {
           : c,
       )
     } catch {
-      setPushResult({ ok: false, detail: 'Push failed — please try again.' })
+      setPushResult({ ok: false, detail: 'Push failed - please try again.' })
     } finally {
       setPushing(false)
     }
@@ -238,7 +238,7 @@ export function LeadDetail() {
                   >
                     <div className="min-w-0">
                       {/* The name filled into the pre-call form varies call
-                          to call even for the same phone number — show what
+                          to call even for the same phone number - show what
                           they actually gave that specific time, not just the
                           agent/channel every row already shares. */}
                       <p className="truncate text-sm font-semibold">
@@ -438,7 +438,7 @@ export function LeadDetail() {
               {call.website && <Row label="Website" value={call.website} />}
               <Row label="Agent" value={call.agent} />
               <Row label="Duration" value={formatDuration(call.durationSeconds)} />
-              <Row label="Language" value={call.replyLanguage ? (LANGUAGE_NAMES[call.replyLanguage] ?? call.replyLanguage) : '—'} />
+              <Row label="Language" value={call.replyLanguage ? (LANGUAGE_NAMES[call.replyLanguage] ?? call.replyLanguage) : '-'} />
               <Row label="Time" value={formatDateTime(call.callDate)} />
             </dl>
           </Card>
@@ -449,24 +449,24 @@ export function LeadDetail() {
               {call.email && <Row label="Email" value={call.email} />}
               {call.company || call.useCase || call.teamSize ? (
                 <>
-                  <Row label="Company" value={call.company || '—'} />
-                  <Row label="Use case" value={call.useCase || '—'} />
-                  <Row label="Team size" value={call.teamSize || '—'} />
+                  <Row label="Company" value={call.company || '-'} />
+                  <Row label="Use case" value={call.useCase || '-'} />
+                  <Row label="Team size" value={call.teamSize || '-'} />
                 </>
               ) : (
                 <>
-                  <Row label="Budget" value={call.budget || '—'} />
-                  <Row label="Location" value={call.location || '—'} />
-                  <Row label="Timeline" value={call.timeline || '—'} />
+                  <Row label="Budget" value={call.budget || '-'} />
+                  <Row label="Location" value={call.location || '-'} />
+                  <Row label="Timeline" value={call.timeline || '-'} />
                 </>
               )}
               {/* Whatever this agent's own Post-call fields config
                   (Agents → edit → Post-call fields) asked the LLM to pull
-                  from the transcript — the generic per-business version of
+                  from the transcript - the generic per-business version of
                   the fixed fields above, e.g. a real-estate agent's "plot
                   size interest" or a clinic's "preferred doctor". */}
               {Object.entries(call.extractedData ?? {}).map(([key, value]) => (
-                <Row key={key} label={titleCase(key)} value={String(value) || '—'} />
+                <Row key={key} label={titleCase(key)} value={String(value) || '-'} />
               ))}
             </dl>
             {call.siteVisit && (

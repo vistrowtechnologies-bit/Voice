@@ -18,23 +18,23 @@ import {
 const FAQ = [
   {
     q: 'What is Vistrow Voice?',
-    a: 'An AI voice-agent platform for Indian businesses — Artha answers, qualifies, and books inbound, outbound, and web calls in 11 Indian languages, live 24/7.',
+    a: 'An AI voice-agent platform for Indian businesses - Artha answers, qualifies, and books inbound, outbound, and web calls in 11 Indian languages, live 24/7.',
   },
   {
     q: 'Do I need to write code to set it up?',
-    a: 'No — build an agent with a no-code editor: persona, prompt, voice, and language, then publish. Most teams are live in under an hour.',
+    a: 'No - build an agent with a no-code editor: persona, prompt, voice, and language, then publish. Most teams are live in under an hour.',
   },
   {
     q: 'Which languages does Artha speak?',
-    a: 'Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi, and more — 11 Indian languages in total, switching mid-call to match the caller.',
+    a: 'Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi, and more - 11 Indian languages in total, switching mid-call to match the caller.',
   },
   {
     q: 'Can I try it before signing up?',
-    a: 'Yes — talk to Artha live in your browser right now on this page, no signup or credit card required.',
+    a: 'Yes - talk to Artha live in your browser right now on this page, no signup or credit card required.',
   },
   {
     q: 'Does it work for both inbound and outbound calling?',
-    a: 'Yes — one agent and one dashboard cover inbound calls, outbound campaigns, and web calls, sharing the same knowledge base and analytics.',
+    a: 'Yes - one agent and one dashboard cover inbound calls, outbound campaigns, and web calls, sharing the same knowledge base and analytics.',
   },
 ]
 
@@ -57,7 +57,7 @@ const HOME_JSONLD = [
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
     description:
-      'AI voice agents that answer, qualify, and book customer calls in 11 Indian languages — inbound, outbound, and web calls, live 24/7.',
+      'AI voice agents that answer, qualify, and book customer calls in 11 Indian languages - inbound, outbound, and web calls, live 24/7.',
     offers: {
       '@type': 'Offer',
       price: '2999',
@@ -93,12 +93,12 @@ const BHARAT_POINTS = [
   {
     glyph: '😤',
     title: 'It knows “bakwas” means trouble',
-    body: 'Frustration in an Indian call rarely arrives in textbook English. Artha reads the cues people actually use — bekaar, faltu, bakwas — and softens its tone before the caller escalates.',
+    body: 'Frustration in an Indian call rarely arrives in textbook English. Artha reads the cues people actually use - bekaar, faltu, bakwas - and softens its tone before the caller escalates.',
   },
   {
     glyph: 'अ अ अ',
     title: 'Ten scripts, one agent',
-    body: 'From Punjabi in the north to Malayalam in the south, one agent covers them all — no separate deployment, no per-language rebuild, no region left on an English-only fallback.',
+    body: 'From Punjabi in the north to Malayalam in the south, one agent covers them all - no separate deployment, no per-language rebuild, no region left on an English-only fallback.',
   },
 ]
 
@@ -112,7 +112,7 @@ export function Home() {
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   // Reached via TalkToArthaButton's fallback (navigate('/#live-demo')) when
   // a visitor clicks "Talk to Artha live" on a page with no on-page demo
-  // widget — React Router doesn't scroll to hashes on route change, so we
+  // widget - React Router doesn't scroll to hashes on route change, so we
   // finish the job ourselves once the hero (and its #live-demo orb) mounts.
   useEffect(() => {
     if (window.location.hash === '#live-demo') {
@@ -141,7 +141,7 @@ export function Home() {
           {/* The greeting rotates through all ten scripts Artha speaks. It
               carries the positioning better than any adjective could: the
               claim and the proof are the same object. */}
-          {/* Steps down to 4xl on the smallest screens — at 5xl this headline
+          {/* Steps down to 4xl on the smallest screens - at 5xl this headline
               wrapped to five lines on a 375px viewport and pushed the CTAs
               entirely below the fold. */}
           <h1 className="mt-5 font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl lg:text-6xl">
@@ -153,7 +153,7 @@ export function Home() {
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-relaxed text-text-muted">
             Eleven Indian languages, mid-sentence code-switching, and the Hinglish people actually speak
-            on the phone. Artha answers, qualifies, and books — inbound, outbound, and on your
+            on the phone. Artha answers, qualifies, and books - inbound, outbound, and on your
             website, 24/7.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
@@ -182,7 +182,7 @@ export function Home() {
 
       {/* Sits in the slot the old "Trusted by fast-growing Indian businesses"
           strip occupied. That line was an unsubstantiated claim with no logos
-          behind it; this says something true instead — every script shown is
+          behind it; this says something true instead - every script shown is
           a language the product genuinely speaks. */}
       <ScriptMarquee />
 
@@ -190,12 +190,12 @@ export function Home() {
           Every point here maps to something the product actually does
           (language switching, per-turn gender agreement, Hinglish sentiment
           cues in emotion.py, the ten-script catalog). Kept concrete on
-          purpose — "built for India" as a slogan is worth nothing; the
+          purpose - "built for India" as a slogan is worth nothing; the
           specifics are what a foreign-built agent gets wrong. */}
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
         <Reveal>
           <div className="mb-12 max-w-2xl">
-            {/* Not "Built for Bharat" — that's already the hero kicker, and
+            {/* Not "Built for Bharat" - that's already the hero kicker, and
                 repeating it two screens later reads as a template, not a
                 point of view. */}
             <SectionEyebrow>The difference</SectionEyebrow>
@@ -203,7 +203,7 @@ export function Home() {
               Global voice AI treats India as an edge case.
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-text-muted">
-              We started here. These aren’t features we bolted on for a market — they’re the
+              We started here. These aren’t features we bolted on for a market - they’re the
               assumptions the whole system was built around.
             </p>
           </div>

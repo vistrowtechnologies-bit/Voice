@@ -5,7 +5,7 @@ import { SectionEyebrow } from '../../components/MarketingBits'
 import { BRAND } from '../../lib/brand'
 
 // Add roles here as they open. An empty array is a supported, deliberate
-// state — the page renders an honest "nothing open right now, send us your
+// state - the page renders an honest "nothing open right now, send us your
 // CV anyway" instead of a broken or fake listing. The About page's hiring
 // CTA points here, so this must never look abandoned.
 interface Role {
@@ -23,7 +23,7 @@ const WHY = [
   {
     icon: 'record_voice_over',
     title: 'Voice is unforgiving',
-    body: 'A chatbot can take two seconds to think. A phone call can’t. Everything here is judged on whether it feels natural at real-time latency — that constraint makes the engineering genuinely hard.',
+    body: 'A chatbot can take two seconds to think. A phone call can’t. Everything here is judged on whether it feels natural at real-time latency - that constraint makes the engineering genuinely hard.',
   },
   {
     icon: 'translate',
@@ -33,7 +33,7 @@ const WHY = [
   {
     icon: 'group',
     title: 'Small team, real ownership',
-    body: 'No layers between writing something and seeing it answer a live call. If you ship it, it’s yours — including when it pages you.',
+    body: 'No layers between writing something and seeing it answer a live call. If you ship it, it’s yours - including when it pages you.',
   },
 ]
 
@@ -41,7 +41,7 @@ export function Careers() {
   return (
     <MarketingLayout>
       <Seo
-        title="Careers — Vistrow Voice"
+        title="Careers - Vistrow Voice"
         description={`Work on real-time AI voice agents for Indian languages at ${BRAND.name}. See open roles, or send us your CV.`}
         path="/careers"
       />
@@ -53,7 +53,7 @@ export function Careers() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
           We’re a small team making phone calls answerable by an AI that actually sounds like it’s from
-          here — in eleven Indian languages, in real time.
+          here - in eleven Indian languages, in real time.
         </p>
       </section>
 
@@ -88,7 +88,7 @@ export function Careers() {
                   <p className="mt-2 max-w-md text-sm leading-relaxed text-text-muted">{role.blurb}</p>
                 </div>
                 <a
-                  href={`mailto:${APPLY_EMAIL}?subject=${encodeURIComponent(`Application — ${role.title}`)}`}
+                  href={`mailto:${APPLY_EMAIL}?subject=${encodeURIComponent(`Application - ${role.title}`)}`}
                   className="rounded-full bg-gradient-to-br from-primary to-primary-dark px-5 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90"
                 >
                   Apply
@@ -104,7 +104,7 @@ export function Careers() {
             <h2 className="mt-5 font-display text-2xl font-semibold">No open roles right now.</h2>
             <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-text-muted">
               We hire in bursts, and we do read speculative applications. If you’ve built something in
-              speech, real-time audio, or Indian-language NLP, tell us what you made and how — that’s
+              speech, real-time audio, or Indian-language NLP, tell us what you made and how - that’s
               more useful to us than a CV on its own.
             </p>
             <a

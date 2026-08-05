@@ -20,7 +20,7 @@ export function Billing() {
 
   const usedPct = billing ? Math.min(100, Math.round((billing.creditsUsed / billing.creditsTotal) * 100)) : 0
   // The account's real plan, matched case-insensitively against PLANS for
-  // consistent display capitalization — falls back to the raw stored value
+  // consistent display capitalization - falls back to the raw stored value
   // (e.g. "free"/"trial", which aren't paid tiers in PLANS) or "Starter".
   const currentPlanName =
     PLANS.find((p) => p.name.toLowerCase() === (user?.plan || '').toLowerCase())?.name || user?.plan || 'Starter'
@@ -39,8 +39,8 @@ export function Billing() {
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Credits</p>
                 <p className="text-2xl font-bold">
-                  {billing?.creditsRemaining ?? '—'}
-                  <span className="ml-1 text-sm font-normal text-text-muted">/ {billing?.creditsTotal ?? '—'} available</span>
+                  {billing?.creditsRemaining ?? '-'}
+                  <span className="ml-1 text-sm font-normal text-text-muted">/ {billing?.creditsTotal ?? '-'} available</span>
                 </p>
               </div>
             </div>
@@ -69,7 +69,7 @@ export function Billing() {
         {billing && (
           <SectionCard
             title="Usage by call type"
-            subtitle="Phone calls burn more credits/min than browser or widget calls — they carry a telephony cost the others don't."
+            subtitle="Phone calls burn more credits/min than browser or widget calls - they carry a telephony cost the others don't."
           >
             <div className="divide-y divide-border">
               {(
@@ -103,7 +103,7 @@ export function Billing() {
         {billing && (
           <SectionCard
             title="Usage by voice tier"
-            subtitle="Premium voices burn more credits/min than Standard or Economy — they're pricier to run, but sound more expressive and react live to caller emotion."
+            subtitle="Premium voices burn more credits/min than Standard or Economy - they're pricier to run, but sound more expressive and react live to caller emotion."
           >
             <div className="divide-y divide-border">
               {(
@@ -202,7 +202,7 @@ export function Billing() {
             ))}
           </div>
           <p className="mt-3 text-[11px] text-text-muted">
-            Plans shown are indicative — online checkout isn't wired up yet. Credits and usage above are
+            Plans shown are indicative - online checkout isn't wired up yet. Credits and usage above are
             computed from real call minutes in the call log.
           </p>
         </div>

@@ -6,7 +6,7 @@ import { BRAND } from '../lib/brand'
 import { apiAuthConfig } from '../lib/auth'
 import vistrowMark from '../assets/vistrow-mark.png'
 
-/** Shared frame for the Login / Signup screens — a two-column dark-neon
+/** Shared frame for the Login / Signup screens - a two-column dark-neon
  * layout: a brand/pitch panel on the left (headline, feature checklist, and a
  * soft violet orb glow) and the form on the right. Dark by default (it lives
  * outside the theme-scoped dashboard). */
@@ -25,7 +25,7 @@ export function AuthShell({
 }) {
   return (
     <div className="flex min-h-screen bg-bg text-text">
-      {/* Pitch panel — hidden on small screens */}
+      {/* Pitch panel - hidden on small screens */}
       <div className="relative hidden w-1/2 flex-col items-center justify-between overflow-hidden border-r border-border bg-surface p-10 lg:flex xl:p-14">
         <Link to="/" className="relative z-10 flex items-center gap-2">
           <img src={vistrowMark} alt="" className="h-9 w-9 rounded-lg" />
@@ -33,7 +33,7 @@ export function AuthShell({
         </Link>
 
         <div className="auth-panel-in relative z-10 flex max-w-md flex-col items-center gap-10">
-          {/* The illustration this panel was missing — a mandala of all ten
+          {/* The illustration this panel was missing - a mandala of all ten
               scripts Artha speaks around a pulsing voice orb. Deliberately
               not a map of India (borders are a genuine legal/political
               minefield); this is unmistakably Bharat without touching that
@@ -44,7 +44,7 @@ export function AuthShell({
             <ul className="mt-8 flex flex-col gap-4 text-base text-text-muted">
               {features.map((f, i) => (
                 // Staggered entrance instead of all four items appearing at
-                // once — cheap to add, reads noticeably less static.
+                // once - cheap to add, reads noticeably less static.
                 <li
                   key={f}
                   className="auth-panel-in flex items-center gap-3"
@@ -60,7 +60,7 @@ export function AuthShell({
           </div>
         </div>
 
-        {/* Soft orb glow, lower-left — breathing instead of static, same
+        {/* Soft orb glow, lower-left - breathing instead of static, same
             glow-pulse keyframe the marketing site's demo card uses. */}
         <div
           className="glow-pulse pointer-events-none absolute -bottom-24 left-0 h-[28rem] w-[28rem] rounded-full opacity-40 blur-[120px]"
@@ -71,11 +71,11 @@ export function AuthShell({
         </p>
       </div>
 
-      {/* Form panel — relative/overflow-hidden so BharatBackdrop can sit
+      {/* Form panel - relative/overflow-hidden so BharatBackdrop can sit
           behind the form as ambient texture instead of the right half
           being flat empty space next to the left panel's illustration. The
           form itself is only max-w-sm, so on a wide screen it leaves a wide
-          gutter on both sides of it inside this panel — the backdrop is
+          gutter on both sides of it inside this panel - the backdrop is
           centered on the whole panel (not tucked in a corner) so it actually
           fills that gutter, and the glow mirrors the left panel's so the two
           halves read as one continuous atmosphere instead of "populated" vs
@@ -96,7 +96,7 @@ export function AuthShell({
           </Link>
           {/* Glass card: translucent + blurred so the orbit backdrop and glow
               behind it stay visible through the panel instead of being
-              hidden behind a flat surface — the point of putting ambient
+              hidden behind a flat surface - the point of putting ambient
               texture back there in the first place. Border + inset highlight
               give it an edge to catch light against the dark background;
               shadow lifts it off the page so it doesn't look pasted on. */}
@@ -115,7 +115,7 @@ export function AuthShell({
 }
 
 /** Retriggers a brief horizontal shake whenever `errorMessage` changes to a
- * new non-empty value — applied to the <form> so a failed submit reads as
+ * new non-empty value - applied to the <form> so a failed submit reads as
  * an immediate rejection instead of a error banner quietly appearing. */
 export function useShake(errorMessage: string | null | undefined): boolean {
   const [shaking, setShaking] = useState(false)
@@ -130,7 +130,7 @@ export function useShake(errorMessage: string | null | undefined): boolean {
   return shaking
 }
 
-/** Floating-label text input shared by every auth form — replaces the
+/** Floating-label text input shared by every auth form - replaces the
  * static label-above-input pattern that made every field look identical
  * whether empty, focused, or filled. `topRight` renders a row above the
  * input (e.g. Login's "Forgot password?" link); `trailing` renders inside
@@ -190,7 +190,7 @@ export function AuthInput({
   )
 }
 
-/** The show/hide toggle button every password field uses — extracted once
+/** The show/hide toggle button every password field uses - extracted once
  * both to cut duplication and so AuthInput's `trailing` slot has one
  * consistent thing to hold. */
 export function PasswordVisibilityToggle({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
@@ -208,7 +208,7 @@ export function PasswordVisibilityToggle({ shown, onToggle }: { shown: boolean; 
 }
 
 // Google's brand guidelines call for the original four-color "G" mark and a
-// white/near-white button regardless of host theme — an outlined Material
+// white/near-white button regardless of host theme - an outlined Material
 // icon or a button recolored to match a dark app theme both read as "fake"
 // Google sign-in, which is worse for trust than briefly breaking theme
 // consistency.
@@ -236,7 +236,7 @@ export function GoogleLogo({ className = '' }: { className?: string }) {
 }
 
 // GitHub's own "Sign in with GitHub" guidance is the black Octocat mark on a
-// black/near-black button — which happens to already match this app's dark
+// black/near-black button - which happens to already match this app's dark
 // theme, unlike Google's white-only requirement above.
 function GitHubLogo({ className = '' }: { className?: string }) {
   return (
@@ -246,7 +246,7 @@ function GitHubLogo({ className = '' }: { className?: string }) {
   )
 }
 
-/** "Or continue with" social buttons — only renders providers the server has
+/** "Or continue with" social buttons - only renders providers the server has
  * actually configured (via /auth/config), so there are never dead buttons.
  * Clicking sends the user to the backend OAuth start endpoint. */
 export function SocialButtons() {
@@ -261,7 +261,7 @@ export function SocialButtons() {
   }, [])
 
   // Reserve the same footprint the real content will take so the form
-  // doesn't visibly jump once /auth/config resolves — a bare `return null`
+  // doesn't visibly jump once /auth/config resolves - a bare `return null`
   // while loading left a one-beat pop-in of the divider + buttons.
   if (!loaded) {
     return (

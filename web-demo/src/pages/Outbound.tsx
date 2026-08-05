@@ -35,7 +35,7 @@ const STATUS_STYLE: Record<string, string> = {
 }
 
 // Converts a <input type="datetime-local"> value (the operator's own local
-// time — the browser has no idea what that offset is unless we ask `Date`
+// time - the browser has no idea what that offset is unless we ask `Date`
 // to interpret it) into the UTC "YYYY-MM-DD HH:MM:SS" string
 // promote_due_scheduled_campaigns compares against server-side.
 function toUtcSql(datetimeLocal: string): string {
@@ -84,7 +84,7 @@ export function Outbound() {
   const [form, setForm] = useState(blank)
   const [segmentCount, setSegmentCount] = useState<number | null>(null)
 
-  // Live "N contacts match" preview as the operator picks a segment/tag —
+  // Live "N contacts match" preview as the operator picks a segment/tag -
   // mirrors what create_campaign will actually load into the queue.
   useEffect(() => {
     if (form.source !== 'tag' || !showNew) return
@@ -169,7 +169,7 @@ export function Outbound() {
     try {
       const created = await createCampaign(payload)
       if (created?.stats?.total === 0) {
-        setError('Campaign created, but no contacts matched — add contacts or check the tag before launching.')
+        setError('Campaign created, but no contacts matched - add contacts or check the tag before launching.')
       }
       setShowNew(false)
       setForm(blank)

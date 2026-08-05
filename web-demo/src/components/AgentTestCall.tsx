@@ -26,7 +26,7 @@ function ModalShell({ title, onClose, children }: { title: string; onClose: () =
 }
 
 /** Places a real outbound call, through this agent's assigned EnableX number,
- * to a number the operator types in — reuses the same placeTestCall flow
+ * to a number the operator types in - reuses the same placeTestCall flow
  * already on the Phone Numbers page. */
 export function DialTestModal({
   agent,
@@ -52,16 +52,16 @@ export function DialTestModal({
     setResult(null)
     try {
       const res = await placeTestCall(fromNumber, target)
-      setResult(res.ok ? '✓ EnableX accepted the call — the destination should ring shortly.' : `✕ ${res.error}`)
+      setResult(res.ok ? '✓ EnableX accepted the call - the destination should ring shortly.' : `✕ ${res.error}`)
     } catch {
-      setResult('✕ Request failed — is the backend running?')
+      setResult('✕ Request failed - is the backend running?')
     } finally {
       setPlacing(false)
     }
   }
 
   return (
-    <ModalShell title={`Call test — ${agent.name}`} onClose={onClose}>
+    <ModalShell title={`Call test - ${agent.name}`} onClose={onClose}>
       {!fromNumber ? (
         <div className="flex flex-col gap-3 text-sm text-text-muted">
           <p>No phone number is assigned to {agent.name} yet, so there's nothing to call from.</p>
@@ -96,7 +96,7 @@ export function DialTestModal({
   )
 }
 
-/** Embedded, in-dashboard version of the public browser-call demo — talks to
+/** Embedded, in-dashboard version of the public browser-call demo - talks to
  * THIS specific agent (via the token endpoint's agentId → room metadata),
  * not just whichever agent is first/live. */
 export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClose: () => void }) {
@@ -121,7 +121,7 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
     let cancelled = false
     ;(async () => {
       // Accounts on the orchestrator pipeline (Phase 3 of the LiveKit-
-      // removal plan) get routed there instead — everyone else falls
+      // removal plan) get routed there instead - everyone else falls
       // through to the existing LiveKit room flow below unchanged.
       if (!forceLiveKit) {
         try {
@@ -171,7 +171,7 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
 
   if (phase === 'error') {
     return (
-      <ModalShell title={`Browser test — ${agent.name}`} onClose={onClose}>
+      <ModalShell title={`Browser test - ${agent.name}`} onClose={onClose}>
         <p className="text-sm text-destructive">{error ?? 'Could not connect.'}</p>
       </ModalShell>
     )
@@ -179,7 +179,7 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
 
   if (phase === 'checking' || phase === 'connecting') {
     return (
-      <ModalShell title={`Browser test — ${agent.name}`} onClose={onClose}>
+      <ModalShell title={`Browser test - ${agent.name}`} onClose={onClose}>
         <div className="flex items-center gap-3 py-2 text-sm text-cyan">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan border-t-transparent" />
           Connecting…

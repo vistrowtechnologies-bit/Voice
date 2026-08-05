@@ -1,18 +1,18 @@
 // Per-route social-preview prerendering, without a real browser.
 //
-// This is a Vite SPA with no SSR — Seo.tsx sets <title>/meta tags via a
+// This is a Vite SPA with no SSR - Seo.tsx sets <title>/meta tags via a
 // useEffect, which link-preview crawlers (LinkedIn, WhatsApp, Slack,
 // iMessage) never execute, so every route showed the homepage's static
 // index.html card. A prior version of this script drove a real headless
 // Chromium (Playwright) to render each route and capture the resulting
-// HTML — but Vercel's build container is missing shared libs Chromium
+// HTML - but Vercel's build container is missing shared libs Chromium
 // needs (libnspr4.so etc), so every build failed outright.
 //
 // Instead: mirror the small set of tags Seo.tsx upserts (title, meta
 // description, canonical, og:*, twitter:*) directly against the same
 // content data each page's <Seo> props are built from, and string-replace
 // them into a copy of the built index.html per route. No browser, no
-// native deps — just Node.
+// native deps - just Node.
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -22,17 +22,17 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url)) + '/..'
 
 const { PRODUCT_DETAIL, SOLUTIONS, LANGUAGES } = await import('../src/lib/marketingContent.ts')
 
-const SUFFIX = ' — Vistrow Voice'
+const SUFFIX = ' - Vistrow Voice'
 
 // Static pages: {path, title, description} exactly matching each page's own <Seo> props.
 const STATIC_PAGES = [
   { path: '/', title: "Vistrow Voice - The AI Agent That Actually Speaks Your Customer's Language", description: 'Not another robotic IVR. Artha holds real conversations in 11 Indian languages - mid-sentence code-switching included - answering, qualifying, and booking calls around the clock.' },
-  { path: '/product', title: `Product Overview${SUFFIX}`, description: 'Voice Agents, Inbound Calling, Outbound Campaigns, Knowledge Base, Website Call Widget, and Integrations — one platform for every AI voice conversation.' },
-  { path: '/solutions', title: `Solutions by Industry${SUFFIX}`, description: 'Voice AI tuned to how your business takes calls — Real Estate, Healthcare, E-commerce, Finance & Collections, and Support & Helpdesk.' },
-  { path: '/pricing', title: `Pricing${SUFFIX}`, description: 'Simple, credit-based plans for AI voice agents. Every plan includes the web call widget, call history, and analytics — scale up as your call volume grows.' },
-  { path: '/about', title: `About${SUFFIX}`, description: "Vistrow Voice puts a capable AI agent on every call — in your customers' own language, at any hour. Voice AI, built for Bharat." },
+  { path: '/product', title: `Product Overview${SUFFIX}`, description: 'Voice Agents, Inbound Calling, Outbound Campaigns, Knowledge Base, Website Call Widget, and Integrations - one platform for every AI voice conversation.' },
+  { path: '/solutions', title: `Solutions by Industry${SUFFIX}`, description: 'Voice AI tuned to how your business takes calls - Real Estate, Healthcare, E-commerce, Finance & Collections, and Support & Helpdesk.' },
+  { path: '/pricing', title: `Pricing${SUFFIX}`, description: 'Simple, credit-based plans for AI voice agents. Every plan includes the web call widget, call history, and analytics - scale up as your call volume grows.' },
+  { path: '/about', title: `About${SUFFIX}`, description: "Vistrow Voice puts a capable AI agent on every call - in your customers' own language, at any hour. Voice AI, built for Bharat." },
   { path: '/contact', title: `Book a Demo${SUFFIX}`, description: 'See Vistrow Voice on a live call. Get a walkthrough tuned to your use case, watch Artha qualify a call in your language, and get a pricing and rollout plan.' },
-  { path: '/languages', title: `AI Voice Agents in 11 Indian Languages${SUFFIX}`, description: 'Artha answers calls in Hindi, English, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, and Odia — switching mid-call to match whichever language the caller uses.' },
+  { path: '/languages', title: `AI Voice Agents in 11 Indian Languages${SUFFIX}`, description: 'Artha answers calls in Hindi, English, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, and Odia - switching mid-call to match whichever language the caller uses.' },
   { path: '/integrations', title: `Integrations${SUFFIX}`, description: 'Connect Vistrow Voice to your CRM, Slack, WhatsApp, Google Sheets, Zapier, n8n, Make, or any endpoint that accepts a webhook. Every qualified lead and transcript, delivered automatically.' },
   { path: '/vs-ivr', title: `AI Voice Agent vs. Traditional IVR${SUFFIX}`, description: 'How an AI voice agent differs from a press-1-press-2 phone menu or a human call desk: availability, languages, answer quality, call records, and cost as volume grows.' },
   { path: '/security', title: `Security & Trust${SUFFIX}`, description: "How Vistrow Voice protects call recordings, transcripts, and customer data: workspace isolation, consent capture, DNC enforcement, configurable retention, and what we don't yet claim." },

@@ -126,7 +126,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      {/* Admin status bar — the one place red appears, signalling you are NOT in a tenant view. */}
+      {/* Admin status bar - the one place red appears, signalling you are NOT in a tenant view. */}
       <div className="fixed inset-x-0 top-0 z-50 flex h-8 items-center justify-between bg-destructive px-4 text-white">
         <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest">
           <Icon name="grid_view" className="text-[14px]" />

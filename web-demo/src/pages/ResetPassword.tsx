@@ -40,7 +40,7 @@ export function ResetPassword() {
   return (
     <AuthShell
       title="Choose a new password"
-      subtitle="Almost done — set a new password for your account."
+      subtitle="Almost done - set a new password for your account."
       headline={
         <>
           A fresh <span className="text-primary">start.</span>

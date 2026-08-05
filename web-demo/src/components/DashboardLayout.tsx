@@ -269,7 +269,7 @@ function ImpersonationBanner({ accountName }: { accountName: string }) {
     <div className="fixed inset-x-0 top-0 z-50 flex h-9 items-center justify-between bg-destructive px-4 text-white">
       <span className="flex items-center gap-2 text-xs font-semibold">
         <Icon name="visibility" className="text-[16px]" />
-        Support session — viewing <strong>{accountName}</strong>. Actions are logged.
+        Support session - viewing <strong>{accountName}</strong>. Actions are logged.
       </span>
       <button onClick={exit} className="flex items-center gap-1 text-xs font-bold hover:underline">
         <Icon name="logout" className="text-[15px]" /> Exit
@@ -282,7 +282,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
-  // Theme is a dashboard-only preference — apply the stored choice on mount
+  // Theme is a dashboard-only preference - apply the stored choice on mount
   // and revert to the designed dark look on unmount so the public
   // landing/call pages are never affected by it.
   useEffect(() => {

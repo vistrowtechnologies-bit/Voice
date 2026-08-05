@@ -7,7 +7,7 @@ import { AuthInput, AuthShell, PasswordVisibilityToggle, SocialButtons, useShake
 
 const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   oauth_failed: "Something went wrong signing you in with Google. Please try again.",
-  oauth_unverified_email: "That Google account's email isn't verified — verify it with Google first.",
+  oauth_unverified_email: "That Google account's email isn't verified - verify it with Google first.",
 }
 
 export function Login() {

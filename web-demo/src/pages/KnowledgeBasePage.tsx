@@ -22,13 +22,13 @@ import {
 import { extractTextFromFile } from '../lib/fileExtract'
 import type { KbQaPair, KnowledgeBase, QaDraft } from '../lib/types'
 
-// Must match agent/db.py get_kb_content's max_chars — everything past this
+// Must match agent/db.py get_kb_content's max_chars - everything past this
 // is silently trimmed from the agent's prompt, so the budget bar warns the
 // operator before that happens. Q&A pairs are emitted first and always fit.
 const PROMPT_BUDGET_CHARS = 8000
 
 // Prices and key numbers get an amber highlight inside answers so a wrong
-// digit jumps out during review — ₹-amounts, lakh/crore/cr amounts, and
+// digit jumps out during review - ₹-amounts, lakh/crore/cr amounts, and
 // percentages.
 const PRICE_RE = /(₹\s?[\d,]+(?:\.\d+)?\s*(?:lakh|lakhs|crore|crores|cr|k)?\*?|\b[\d,]+(?:\.\d+)?\s*(?:lakh|lakhs|crore|crores)\*?|\b\d+(?:\.\d+)?\s*%)/gi
 
@@ -104,7 +104,7 @@ export function KnowledgeBasePage() {
   )
 
   // Auto-extract review state: drafts stay client-side until the operator
-  // accepts them — a misread price must never reach a live agent unreviewed.
+  // accepts them - a misread price must never reach a live agent unreviewed.
   const [extractingSource, setExtractingSource] = useState<number | null>(null)
   const [extractError, setExtractError] = useState<string | null>(null)
   const [review, setReview] = useState<{ kbId: number; sourceName: string; drafts: QaDraft[] } | null>(null)
@@ -117,7 +117,7 @@ export function KnowledgeBasePage() {
   const [newQ, setNewQ] = useState('')
   const [newA, setNewA] = useState('')
 
-  // Inline source editing — a source's full text isn't in the list
+  // Inline source editing - a source's full text isn't in the list
   // response (only its length), so opening the editor fetches it first.
   const [editingSource, setEditingSource] = useState<number | null>(null)
   const [editSourceName, setEditSourceName] = useState('')
@@ -193,7 +193,7 @@ export function KnowledgeBasePage() {
       setImportResult(result)
       reload()
     } catch (err) {
-      setScanError(err instanceof Error ? err.message : 'Import failed — try again.')
+      setScanError(err instanceof Error ? err.message : 'Import failed - try again.')
     } finally {
       setImporting(false)
     }
@@ -214,7 +214,7 @@ export function KnowledgeBasePage() {
   }
 
   const handleStrict = async (kb: KnowledgeBase, strict: boolean) => {
-    // Optimistic — the toggle should feel instant.
+    // Optimistic - the toggle should feel instant.
     setKbs((prev) => prev.map((k) => (k.id === kb.id ? { ...k, strict } : k)))
     try {
       await setKnowledgeBaseStrict(kb.id, strict)
@@ -230,7 +230,7 @@ export function KnowledgeBasePage() {
       const { pairs } = await extractQaFromSource(sourceId)
       setReview({ kbId, sourceName: name, drafts: pairs })
     } catch (err) {
-      setExtractError(err instanceof Error ? err.message : 'Extraction failed — try again.')
+      setExtractError(err instanceof Error ? err.message : 'Extraction failed - try again.')
     } finally {
       setExtractingSource(null)
     }
@@ -318,7 +318,7 @@ export function KnowledgeBasePage() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            placeholder="New knowledge base name (e.g. Treetopia — Pune)"
+            placeholder="New knowledge base name (e.g. Treetopia - Pune)"
             className="min-w-[240px] flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
           />
           <button
@@ -383,7 +383,7 @@ export function KnowledgeBasePage() {
                   </div>
                   <p className={`mt-1.5 text-[11px] ${over ? 'font-semibold text-destructive' : 'text-text-muted'}`}>
                     {(used / 1000).toFixed(1)}k / {PROMPT_BUDGET_CHARS / 1000}k characters used
-                    {over && ' — over budget: Q&A pairs always reach the agent first; source text past the cap is trimmed'}
+                    {over && ' - over budget: Q&A pairs always reach the agent first; source text past the cap is trimmed'}
                   </p>
                 </div>
 
@@ -543,13 +543,13 @@ export function KnowledgeBasePage() {
                     <input
                       value={newQ}
                       onChange={(e) => setNewQ(e.target.value)}
-                      placeholder="Question — the way a caller would ask it"
+                      placeholder="Question - the way a caller would ask it"
                       className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
                     />
                     <textarea
                       value={newA}
                       onChange={(e) => setNewA(e.target.value)}
-                      placeholder="Answer — 1-2 short spoken-style sentences with exact prices/numbers"
+                      placeholder="Answer - 1-2 short spoken-style sentences with exact prices/numbers"
                       className="h-20 resize-none rounded-lg border border-border bg-surface-high p-2 text-sm outline-none focus:border-primary"
                     />
                     <div className="flex justify-end gap-2">
@@ -611,7 +611,7 @@ export function KnowledgeBasePage() {
                         <input
                           value={sourceName}
                           onChange={(e) => setSourceName(e.target.value)}
-                          placeholder="Source name (e.g. Price sheet — Tower A)"
+                          placeholder="Source name (e.g. Price sheet - Tower A)"
                           className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
                         />
                         <textarea
@@ -764,7 +764,7 @@ export function KnowledgeBasePage() {
         </div>
       </section>
 
-      {/* Auto-extract review overlay — drafts are editable and nothing is
+      {/* Auto-extract review overlay - drafts are editable and nothing is
           saved until "Add to knowledge base" is pressed. */}
       {review && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm">
@@ -772,11 +772,11 @@ export function KnowledgeBasePage() {
             <div className="border-b border-border px-5 py-4">
               <p className="flex items-center gap-2 text-sm font-bold">
                 <span className="text-primary">✦</span>
-                Review extracted Q&A — {review.sourceName}
+                Review extracted Q&A - {review.sourceName}
               </p>
               <p className="mt-1 text-xs text-text-muted">
                 {review.drafts.length} drafts. Check every <span className="font-semibold text-amber">highlighted price</span> against
-                the document — nothing is saved until you accept, and the agent only ever quotes what you approve here.
+                the document - nothing is saved until you accept, and the agent only ever quotes what you approve here.
               </p>
             </div>
             <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-5">
@@ -816,7 +816,7 @@ export function KnowledgeBasePage() {
                 </div>
               ))}
               {review.drafts.length === 0 && (
-                <p className="py-8 text-center text-sm text-text-muted">All drafts discarded — nothing to add.</p>
+                <p className="py-8 text-center text-sm text-text-muted">All drafts discarded - nothing to add.</p>
               )}
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-4">

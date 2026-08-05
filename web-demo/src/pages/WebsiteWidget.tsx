@@ -66,7 +66,7 @@ export function WebsiteWidget() {
           <div className="flex items-start gap-2 rounded-xl border border-amber/30 bg-amber/5 p-4 text-xs text-amber">
             <Icon name="warning" className="text-[16px]" />
             <p>
-              This backend has no public URL configured (RAILWAY_PUBLIC_DOMAIN / PUBLIC_BASE_URL) — embed snippets
+              This backend has no public URL configured (RAILWAY_PUBLIC_DOMAIN / PUBLIC_BASE_URL) - embed snippets
               below won't work for a real external site until it does. This is expected in local dev.
             </p>
           </div>
@@ -79,7 +79,7 @@ export function WebsiteWidget() {
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Acme Corp — Homepage"
+                placeholder="Acme Corp - Homepage"
                 className="w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
               />
             </Field>
@@ -133,14 +133,14 @@ export function WebsiteWidget() {
             </button>
           </div>
           <p className="mt-2 text-[11px] text-text-muted">
-            Every site gets its own key and its own call history, filterable on the Calls page — the domain field is
+            Every site gets its own key and its own call history, filterable on the Calls page - the domain field is
             just a label for now, not yet enforced.
           </p>
         </Card>
 
         <SectionCard title={`Your sites (${sites.length})`}>
           {sites.length === 0 ? (
-            <EmptyState icon="widgets" text="No sites yet — add one above to get an embeddable call widget." />
+            <EmptyState icon="widgets" text="No sites yet - add one above to get an embeddable call widget." />
           ) : (
             <div className="divide-y divide-border">
               {sites.map((site) => (
@@ -164,7 +164,7 @@ export function WebsiteWidget() {
             <div>
               <p className="font-semibold">WordPress plugin</p>
               <p className="text-xs text-text-muted">
-                Install it and paste in the site key above — that's the only thing it needs, no coding required.
+                Install it and paste in the site key above - that's the only thing it needs, no coding required.
               </p>
             </div>
             <a
@@ -323,7 +323,7 @@ function SiteRow({
           <div className="flex flex-col gap-2">
             <p className="text-xs text-text-muted">
               Install the plugin, paste the site key above into its settings page, and save. It adds the
-              widget to the site automatically — nothing to paste into your code.
+              widget to the site automatically - nothing to paste into your code.
             </p>
             <a
               href={wordpressPluginUrl}

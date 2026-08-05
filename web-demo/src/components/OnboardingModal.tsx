@@ -16,7 +16,7 @@ const NEXT_STEPS = [
 ]
 
 /** One-time first-run modal, shown once per account right after signup
- * (password or OAuth) until dismissed — DashboardLayout only mounts this
+ * (password or OAuth) until dismissed - DashboardLayout only mounts this
  * while user.onboarded is false, and finishing calls /onboarding/complete
  * so it never shows again. */
 export function OnboardingModal() {
@@ -44,7 +44,7 @@ export function OnboardingModal() {
       }
       setStep('try-agent')
     } catch {
-      // Workspace rename failing shouldn't block onboarding — worth fixing
+      // Workspace rename failing shouldn't block onboarding - worth fixing
       // later from Settings, not worth stalling a first-run flow over.
       setStep('try-agent')
     } finally {
@@ -59,7 +59,7 @@ export function OnboardingModal() {
       setUser(updated)
     } catch {
       // Even if the dismiss call fails, don't trap the user behind the
-      // modal — they can always re-trigger it by reloading, and every
+      // modal - they can always re-trigger it by reloading, and every
       // action underneath (agents, numbers, KB) already works standalone.
       setUser({ ...user, onboarded: true })
     } finally {
@@ -84,7 +84,7 @@ export function OnboardingModal() {
             <div>
               <h2 className="font-display text-xl font-semibold">Welcome to Vistrow Voice</h2>
               <p className="mt-1 text-sm text-text-muted">
-                Let's get your workspace set up — this takes about a minute.
+                Let's get your workspace set up - this takes about a minute.
               </p>
             </div>
             <label className="flex flex-col gap-1.5">
@@ -95,7 +95,7 @@ export function OnboardingModal() {
                 placeholder="Acme Realty"
                 className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
               />
-              <span className="text-[10px] text-text-muted">Shown across your dashboard — change it anytime in Settings.</span>
+              <span className="text-[10px] text-text-muted">Shown across your dashboard - change it anytime in Settings.</span>
             </label>
             <button
               onClick={finishWelcome}
@@ -112,7 +112,7 @@ export function OnboardingModal() {
             <div>
               <h2 className="font-display text-xl font-semibold">Meet {agent?.name || 'your agent'}</h2>
               <p className="mt-1 text-sm text-text-muted">
-                Every new workspace starts with one ready-to-call agent. Try it right now in your browser —
+                Every new workspace starts with one ready-to-call agent. Try it right now in your browser -
                 no phone number needed yet.
               </p>
             </div>

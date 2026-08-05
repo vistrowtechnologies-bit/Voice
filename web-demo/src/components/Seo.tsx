@@ -2,14 +2,14 @@ import { useEffect } from 'react'
 
 // This is a Vite SPA with no server-side rendering, so there's no
 // react-helmet-style provider that flushes tags before the crawler sees
-// them — we just mutate <head> directly. Every tag is upserted by a stable
+// them - we just mutate <head> directly. Every tag is upserted by a stable
 // id/rel/property attribute (not appended fresh each render), so navigating
 // between marketing pages updates the existing tags in place instead of
 // piling up duplicates.
 interface SeoProps {
   title: string
   description: string
-  /** Path only, e.g. "/product/agents" — always resolved against the canonical marketing origin. */
+  /** Path only, e.g. "/product/agents" - always resolved against the canonical marketing origin. */
   path: string
   /** Absolute image URL for social previews. Defaults to the site's OG banner. */
   image?: string
@@ -59,7 +59,7 @@ export function Seo({ title, description, path, image = DEFAULT_IMAGE, noindex, 
     upsertMeta('property', 'og:url', url)
     upsertMeta('property', 'og:image', image)
     // og-image.png is currently the 180x180 app-icon badge, not a proper
-    // 1200x630 banner — without explicit dimensions, unfurlers assume a
+    // 1200x630 banner - without explicit dimensions, unfurlers assume a
     // wide banner and stretch/pad the square icon, which reads as a
     // stale/wrong logo in link previews.
     upsertMeta('property', 'og:image:width', image === DEFAULT_IMAGE ? '180' : '')

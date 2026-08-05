@@ -100,7 +100,7 @@ export function AdminAccounts() {
                       {a.is_platform_owner ? <span className="text-[10px] text-cyan">★</span> : null}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-text-muted">{a.owner_email || '—'}</td>
+                  <td className="px-4 py-3 text-text-muted">{a.owner_email || '-'}</td>
                   <td className="px-4 py-3">
                     <PlanPill plan={a.plan} />
                   </td>

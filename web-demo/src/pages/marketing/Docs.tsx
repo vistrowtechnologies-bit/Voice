@@ -3,7 +3,7 @@ import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
 
-// Replaces the old "Docs — coming soon" stub. A dead docs link reads as an
+// Replaces the old "Docs - coming soon" stub. A dead docs link reads as an
 // unfinished *product*, not just unfinished marketing, so this is
 // deliberately a real, complete single-page guide rather than a shell for
 // a docs site that doesn't exist yet. Every step here describes something
@@ -19,7 +19,7 @@ const QUICKSTART: Step[] = [
   {
     n: '01',
     title: 'Create your agent',
-    body: 'Dashboard → Agents → New Agent. Give it a name, pick a voice and a default language, and write the persona — who it is, what business it represents, and what it should try to achieve on a call.',
+    body: 'Dashboard → Agents → New Agent. Give it a name, pick a voice and a default language, and write the persona - who it is, what business it represents, and what it should try to achieve on a call.',
   },
   {
     n: '02',
@@ -29,7 +29,7 @@ const QUICKSTART: Step[] = [
   {
     n: '03',
     title: 'Test it in the browser',
-    body: 'Hit the mic button on the agent card to talk to it immediately — same prompt, same voice, same knowledge base it will use on real calls. No phone number needed.',
+    body: 'Hit the mic button on the agent card to talk to it immediately - same prompt, same voice, same knowledge base it will use on real calls. No phone number needed.',
   },
   {
     n: '04',
@@ -46,7 +46,7 @@ const QUICKSTART: Step[] = [
 const CONCEPTS: { term: string; def: string }[] = [
   {
     term: 'Agent',
-    def: 'One configured personality: persona, prompt, voice, language, knowledge base, and tools. An agent is what actually takes a call. You can run several — one per brand, location, or campaign.',
+    def: 'One configured personality: persona, prompt, voice, language, knowledge base, and tools. An agent is what actually takes a call. You can run several - one per brand, location, or campaign.',
   },
   {
     term: 'Credit',
@@ -62,7 +62,7 @@ const CONCEPTS: { term: string; def: string }[] = [
   },
   {
     term: 'Campaign',
-    def: 'A list of contacts the agent dials through automatically — reminders, follow-ups, collections. Supports {{variables}} for per-contact personalisation and scheduled start times.',
+    def: 'A list of contacts the agent dials through automatically - reminders, follow-ups, collections. Supports {{variables}} for per-contact personalisation and scheduled start times.',
   },
   {
     term: 'Compliance gate',
@@ -74,7 +74,7 @@ const HOWTO: { icon: string; title: string; body: string }[] = [
   {
     icon: 'dialpad',
     title: 'Use your existing phone number',
-    body: 'Add the number under Phone Numbers and route it to an agent. You keep the number your customers already know — no porting, no new line to advertise.',
+    body: 'Add the number under Phone Numbers and route it to an agent. You keep the number your customers already know - no porting, no new line to advertise.',
   },
   {
     icon: 'code',
@@ -84,7 +84,7 @@ const HOWTO: { icon: string; title: string; body: string }[] = [
   {
     icon: 'event',
     title: 'Let the agent book appointments',
-    body: 'Set your availability under Settings → Availability. The agent then checks real free slots during the call and books directly — no double-booking, no callback needed.',
+    body: 'Set your availability under Settings → Availability. The agent then checks real free slots during the call and books directly - no double-booking, no callback needed.',
   },
   {
     icon: 'webhook',
@@ -94,7 +94,7 @@ const HOWTO: { icon: string; title: string; body: string }[] = [
   {
     icon: 'key',
     title: 'Use the API',
-    body: 'Generate a key under Settings → API Keys. Keys are shown once and stored hashed — copy it immediately, and revoke it from the same screen if it’s ever exposed.',
+    body: 'Generate a key under Settings → API Keys. Keys are shown once and stored hashed - copy it immediately, and revoke it from the same screen if it’s ever exposed.',
   },
   {
     icon: 'swap_calls',
@@ -107,7 +107,7 @@ export function Docs() {
   return (
     <MarketingLayout>
       <Seo
-        title="Docs & Help — Vistrow Voice"
+        title="Docs & Help - Vistrow Voice"
         description="Set up a Vistrow Voice AI agent: create an agent, add a knowledge base, connect a phone number or website widget, book appointments, and push leads to your CRM."
         path="/resources/docs"
       />
@@ -178,8 +178,8 @@ export function Docs() {
           </span>
           <h2 className="mt-5 font-display text-xl font-bold">Still stuck?</h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-text-muted">
-            There’s a help assistant inside the dashboard that knows your actual workspace — your
-            agents, your call history, your settings — so it can answer specifics this page can’t.
+            There’s a help assistant inside the dashboard that knows your actual workspace - your
+            agents, your call history, your settings - so it can answer specifics this page can’t.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <NavLink

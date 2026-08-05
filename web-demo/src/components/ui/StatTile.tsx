@@ -23,7 +23,7 @@ interface StatTileProps {
   icon?: string
   pulse?: boolean
   tone?: StatTone
-  /** Compact drops the hint line and tightens padding — used for slim secondary strips. */
+  /** Compact drops the hint line and tightens padding - used for slim secondary strips. */
   compact?: boolean
 }
 

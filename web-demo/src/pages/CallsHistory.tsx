@@ -10,7 +10,7 @@ import type { ActiveCallInfo, CallRecord, Sentiment } from '../lib/types'
 
 // Must match the exact channel labels calls_db.py's _CHANNEL_LABELS produces
 // ("Web" for dashboard browser calls/demo, "Website Widget" for embedded
-// widget calls, "Phone" for real EnableX calls) — these tabs used to say
+// widget calls, "Phone" for real EnableX calls) - these tabs used to say
 // "Inbound"/"Outbound", which never matched any real call.channel value and
 // silently showed zero results forever, and had no tab for widget calls at
 // all (only visible under "All").
@@ -23,7 +23,7 @@ const SENTIMENT_STYLES: Record<Sentiment, string> = {
 }
 
 // Same caller identity used to group repeat calls into one row: phone first
-// (normalized — digits only, so "+91 706-688-0808" and "917066880808" match),
+// (normalized - digits only, so "+91 706-688-0808" and "917066880808" match),
 // then email, then name. A call with none of those (an anonymous "Unknown
 // caller" row) gets a unique per-call key instead of grouping with every
 // other unidentified caller, which would wrongly merge unrelated people.
@@ -47,7 +47,7 @@ function groupByCaller(rows: CallRecord[]): GroupedCall[] {
   }
   return Array.from(groups.values()).map((group) => {
     // The most recent call represents the group regardless of the table's
-    // current sort direction — its own detail page's History tab (see
+    // current sort direction - its own detail page's History tab (see
     // LeadDetail.tsx) is where every other call in the group is reachable.
     const [latest] = [...group].sort((a, b) => b.callDate.localeCompare(a.callDate))
     return { ...latest, callCount: group.length }
@@ -122,7 +122,7 @@ export function CallsHistory() {
       ),
     },
     { key: 'channel', header: 'Channel', render: (call) => <span className="text-sm text-text-muted">{call.channel}</span> },
-    { key: 'website', header: 'Website', render: (call) => <span className="text-sm text-text-muted">{call.website || '—'}</span> },
+    { key: 'website', header: 'Website', render: (call) => <span className="text-sm text-text-muted">{call.website || '-'}</span> },
     { key: 'duration', header: 'Duration', render: (call) => <span className="text-sm">{formatDuration(call.durationSeconds)}</span> },
     {
       key: 'recording',
@@ -133,7 +133,7 @@ export function CallsHistory() {
             <Icon name="mic" className="text-[15px]" /> Yes
           </span>
         ) : (
-          <span className="text-sm text-text-muted">—</span>
+          <span className="text-sm text-text-muted">-</span>
         ),
     },
     {
@@ -151,9 +151,9 @@ export function CallsHistory() {
 
   const emptyMessage =
     channel === 'Phone'
-      ? 'No phone calls yet — phone calling needs a connected number (see Phone Numbers).'
+      ? 'No phone calls yet - phone calling needs a connected number (see Phone Numbers).'
       : channel === 'Website Widget'
-        ? 'No widget calls yet — embed the call button on a client site (see Website Widget).'
+        ? 'No widget calls yet - embed the call button on a client site (see Website Widget).'
         : 'No calls found. Every call the agent takes is logged here automatically.'
 
   return (

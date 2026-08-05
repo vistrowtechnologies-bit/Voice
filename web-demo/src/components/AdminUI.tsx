@@ -1,4 +1,4 @@
-// Shared building blocks for the super-admin screens — the "Mission Control"
+// Shared building blocks for the super-admin screens - the "Mission Control"
 // component vocabulary (stat cards, pills, tables, cards) rendered in the app's
 // own design tokens (violet primary, surface/border) rather than a separate
 // palette, so it stays consistent with the tenant dashboard.
@@ -166,7 +166,7 @@ export function TimeRange({ value, onChange }: { value: number; onChange: (d: nu
 
 /** Relative "2m ago" / "3d ago" from an ISO/pg timestamp string. */
 export function timeAgo(ts: string | null): string {
-  if (!ts) return '—'
+  if (!ts) return '-'
   const then = new Date(ts.replace(' ', 'T') + (ts.includes('Z') || ts.includes('+') ? '' : 'Z')).getTime()
   const diff = Date.now() - then
   if (Number.isNaN(diff)) return ts
@@ -181,7 +181,7 @@ export function timeAgo(ts: string | null): string {
 }
 
 export function fmtDate(ts: string | null): string {
-  if (!ts) return '—'
+  if (!ts) return '-'
   const d = new Date(ts.replace(' ', 'T') + (ts.includes('Z') || ts.includes('+') ? '' : 'Z'))
   return Number.isNaN(d.getTime()) ? ts : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }

@@ -4,10 +4,10 @@ import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
 
 const VALUES = [
-  { icon: 'translate', title: 'Bharat-first', body: 'We build for the languages and accents India actually speaks — not an afterthought translation.' },
+  { icon: 'translate', title: 'Bharat-first', body: 'We build for the languages and accents India actually speaks - not an afterthought translation.' },
   { icon: 'bolt', title: 'Real-time', body: 'Low-latency, natural back-and-forth. A conversation should feel like a conversation, never a delay.' },
   { icon: 'shield', title: 'Grounded & honest', body: 'Answers tied to your knowledge base. No hallucinations, every call logged.' },
-  { icon: 'diversity_3', title: 'For every business', body: 'From a single clinic to an enterprise call centre — the same platform scales with you.' },
+  { icon: 'diversity_3', title: 'For every business', body: 'From a single clinic to an enterprise call centre - the same platform scales with you.' },
 ]
 
 const STATS = [
@@ -21,8 +21,8 @@ export function About() {
   return (
     <MarketingLayout>
       <Seo
-        title="About — Vistrow Voice"
-        description="Vistrow Voice puts a capable AI agent on every call — in your customers' own language, at any hour. Voice AI, built for Bharat."
+        title="About - Vistrow Voice"
+        description="Vistrow Voice puts a capable AI agent on every call - in your customers' own language, at any hour. Voice AI, built for Bharat."
         path="/about"
       />
       <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-24">
@@ -31,7 +31,7 @@ export function About() {
           Voice AI, built for Bharat.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          Every business should be reachable by phone — in its customers’ own language, at any hour.
+          Every business should be reachable by phone - in its customers’ own language, at any hour.
           Vistrow Voice puts a capable AI agent on every call so no enquiry, booking, or follow-up
           is ever missed again.
         </p>
@@ -66,7 +66,7 @@ export function About() {
         </div>
       </section>
 
-      {/* Points at the real Careers page — this used to be a generic CTA band
+      {/* Points at the real Careers page - this used to be a generic CTA band
           claiming "we're hiring" with nowhere to actually apply. */}
       <section className="mx-auto max-w-7xl px-5 pb-20 md:px-8">
         <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-surface to-surface-high p-10 text-center sm:p-16">

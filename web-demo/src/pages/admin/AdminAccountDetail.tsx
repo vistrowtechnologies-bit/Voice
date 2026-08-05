@@ -92,7 +92,7 @@ export function AdminAccountDetail() {
       )}
 
       <div className="grid gap-3 md:grid-cols-4">
-        <MetaCard label="Account owner" value={d.owner?.email || '—'} />
+        <MetaCard label="Account owner" value={d.owner?.email || '-'} />
         <MetaCard label="Onboarded" value={fmtDate(a.created_at)} />
         <MetaCard label="Capacity" value={`${d.users.length} users · ${d.agents.length} agents`} />
         <AdminCard className="p-4">
@@ -140,7 +140,7 @@ export function AdminAccountDetail() {
         <ReasonModal
           title="Adjust credits"
           field={{ label: 'New credit total', type: 'number', initial: String(Math.round(d.billing.creditsTotal)) }}
-          helperText={`Currently ${Math.round(d.billing.creditsUsed).toLocaleString()} used of ${Math.round(d.billing.creditsTotal).toLocaleString()} — the field above is the new total, not an amount to add. Use a quick-add button below, or type total = used + however many credits you want remaining.`}
+          helperText={`Currently ${Math.round(d.billing.creditsUsed).toLocaleString()} used of ${Math.round(d.billing.creditsTotal).toLocaleString()} - the field above is the new total, not an amount to add. Use a quick-add button below, or type total = used + however many credits you want remaining.`}
           presets={[100, 500, 1000, 5000]}
           confirmLabel="Update credits"
           onClose={() => setModal(null)}
@@ -281,8 +281,8 @@ function CallsTab({ d, navigate }: { d: Detail; navigate: (p: string) => void })
           <td className="px-4 py-3 text-text-muted">{timeAgo(c.started_at)}</td>
           <td className="px-4 py-3 capitalize">{c.call_type}</td>
           <td className="px-4 py-3 tabular-nums">{fmtDuration(c.duration_seconds)}</td>
-          <td className="px-4 py-3">{c.lead_name || <span className="text-text-muted">—</span>}</td>
-          <td className="px-4 py-3 text-text-muted">{c.reply_language || '—'}</td>
+          <td className="px-4 py-3">{c.lead_name || <span className="text-text-muted">-</span>}</td>
+          <td className="px-4 py-3 text-text-muted">{c.reply_language || '-'}</td>
         </tr>
       ))}
     </TabTable>
@@ -309,7 +309,7 @@ function NumbersTab({ d }: { d: Detail }) {
       {d.numbers.map((n) => (
         <tr key={n.id} className="border-b border-border/60 last:border-0">
           <td className="px-4 py-3 font-mono">{n.number}</td>
-          <td className="px-4 py-3 text-text-muted">{n.label || '—'}</td>
+          <td className="px-4 py-3 text-text-muted">{n.label || '-'}</td>
           <td className="px-4 py-3">
             <Pill tone={n.status === 'active' ? 'active' : 'neutral'}>{n.status}</Pill>
           </td>
@@ -347,7 +347,7 @@ function NotesTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Administrative notes about this account — only visible to platform admins."
+          placeholder="Administrative notes about this account - only visible to platform admins."
           className="min-h-[140px] w-full resize-y rounded-lg border border-border bg-surface-high p-3 text-sm outline-none focus:border-primary"
         />
         <div className="mt-2 flex justify-end">
@@ -373,7 +373,7 @@ function NotesTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
             {d.audit.map((e, i) => (
               <div key={i} className="border-l-2 border-primary/40 pl-3">
                 <div className="text-sm">
-                  <span className="font-semibold capitalize">{e.action.replace(/_/g, ' ')}</span> — {e.detail}
+                  <span className="font-semibold capitalize">{e.action.replace(/_/g, ' ')}</span> - {e.detail}
                 </div>
                 <div className="text-[11px] text-text-muted">
                   {e.actor_email} · {timeAgo(e.created_at)}
@@ -403,10 +403,10 @@ function ReasonModal({
   field?: { label: string; type: 'number' | 'select'; initial: string; options?: string[] }
   confirmLabel: string
   danger?: boolean
-  // Context shown under the field — e.g. current usage, so an admin setting
+  // Context shown under the field - e.g. current usage, so an admin setting
   // an absolute total doesn't have to go look that number up elsewhere.
   helperText?: string
-  // Quick "add N" buttons for numeric fields — the field itself is always an
+  // Quick "add N" buttons for numeric fields - the field itself is always an
   // absolute total (that's what the backend takes), so a preset just fills
   // in field's current numeric value + the preset amount rather than
   // requiring the admin to do that math themselves.
@@ -487,7 +487,7 @@ function ReasonModal({
               {busy ? 'Working…' : confirmLabel}
             </button>
           </div>
-          {!reason.trim() && <p className="text-[11px] text-text-muted">A reason is required — every action is audit-logged.</p>}
+          {!reason.trim() && <p className="text-[11px] text-text-muted">A reason is required - every action is audit-logged.</p>}
         </div>
       </AdminCard>
     </div>
@@ -532,7 +532,7 @@ function ResetModal({ accountId, ownerEmail, onClose, onDone }: { accountId: num
         ) : (
           <>
             <p className="mb-2 text-sm">
-              {emailSent ? 'Reset email sent. You can also copy the link:' : 'Email is not configured — copy this link and send it to the user:'}
+              {emailSent ? 'Reset email sent. You can also copy the link:' : 'Email is not configured - copy this link and send it to the user:'}
             </p>
             <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-high p-2">
               <input readOnly value={link} className="flex-1 bg-transparent text-xs outline-none" />

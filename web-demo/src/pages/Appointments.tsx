@@ -126,7 +126,7 @@ export function Appointments() {
       ),
     },
     { key: 'when', header: 'When', render: (a) => <span className="text-sm">{a.date} · {formatTime12h(a.time)}</span> },
-    { key: 'purpose', header: 'Purpose', render: (a) => <span className="text-sm text-text-muted">{a.purpose || '—'}</span> },
+    { key: 'purpose', header: 'Purpose', render: (a) => <span className="text-sm text-text-muted">{a.purpose || '-'}</span> },
     {
       key: 'status',
       header: 'Status',
@@ -141,7 +141,7 @@ export function Appointments() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Appointments" subtitle="Meetings and site visits your AI agent — or your team — has booked">
+      <PageHeader title="Appointments" subtitle="Meetings and site visits your AI agent - or your team - has booked">
         <button
           onClick={() => setShowAdd((v) => !v)}
           className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90"

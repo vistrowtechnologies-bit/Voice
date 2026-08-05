@@ -21,7 +21,7 @@ export function Terms() {
         <ul>
           <li>You must provide accurate information when signing up and keep your login credentials secure.</li>
           <li>You're responsible for activity under your account, including actions taken by teammates you invite.</li>
-          <li>Account roles (Owner, Admin, Member, Viewer) determine what a teammate can do — set them appropriately.</li>
+          <li>Account roles (Owner, Admin, Member, Viewer) determine what a teammate can do - set them appropriately.</li>
         </ul>
       </LegalSection>
 
@@ -29,7 +29,7 @@ export function Terms() {
         <p>You agree not to use {BRAND.name} to:</p>
         <ul>
           <li>Place calls in violation of applicable telecom regulations, including TRAI's Do-Not-Disturb/commercial-communication rules in India or equivalent rules elsewhere.</li>
-          <li>Call numbers on a Do-Not-Call registry, including any list you've configured in your own Compliance settings — you are responsible for honoring it.</li>
+          <li>Call numbers on a Do-Not-Call registry, including any list you've configured in your own Compliance settings - you are responsible for honoring it.</li>
           <li>Impersonate a person or business, or use the platform for fraud, harassment, or deceptive robocalling.</li>
           <li>Attempt to break, reverse-engineer, or overload the platform's infrastructure.</li>
           <li>Upload unlawful content to a knowledge base, or configure an agent to give unlawful, harmful, or deliberately false information to callers.</li>
@@ -39,8 +39,8 @@ export function Terms() {
 
       <LegalSection title="4. Compliance is your responsibility">
         <p>
-          {BRAND.name} provides tools — a Do-Not-Call registry, calling-window enforcement, consent
-          and recording toggles — to help you run outbound calling legally. Using these tools does
+          {BRAND.name} provides tools - a Do-Not-Call registry, calling-window enforcement, consent
+          and recording toggles - to help you run outbound calling legally. Using these tools does
           not, by itself, guarantee legal compliance in your jurisdiction or industry. You remain
           responsible for obtaining any consent required before calling someone, disclosing AI
           use where required by law, and complying with telecom, data-protection, and
@@ -72,7 +72,7 @@ export function Terms() {
       </LegalSection>
 
       <LegalSection title="9. Disclaimers">
-        <p>{BRAND.name} is provided "as is." AI-generated responses can be wrong — we do not guarantee an agent's answers are error-free, and you should not rely on it for advice where a mistake would cause serious harm (e.g. medical, legal, or financial advice) without human review. We don't guarantee uninterrupted or error-free service.</p>
+        <p>{BRAND.name} is provided "as is." AI-generated responses can be wrong - we do not guarantee an agent's answers are error-free, and you should not rely on it for advice where a mistake would cause serious harm (e.g. medical, legal, or financial advice) without human review. We don't guarantee uninterrupted or error-free service.</p>
       </LegalSection>
 
       <LegalSection title="10. Limitation of liability">

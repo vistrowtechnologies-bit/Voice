@@ -5,13 +5,13 @@ import { Seo } from '../../components/Seo'
 import { TalkToArthaButton } from '../../components/MarketingBits'
 
 // Placeholder for nav destinations that aren't built yet (Blog, Docs, Case
-// Studies) — keeps the nav free of dead links. noindex: there's no real
+// Studies) - keeps the nav free of dead links. noindex: there's no real
 // content here yet for a search/answer engine to rank or quote.
 export function ComingSoon({ title = 'Coming soon' }: { title?: string }) {
   const { pathname } = useLocation()
   return (
     <MarketingLayout>
-      <Seo title={`${title.replace(/ — coming soon$/i, '')} — Vistrow Voice`} description={title} path={pathname} noindex />
+      <Seo title={`${title.replace(/ - coming soon$/i, '')} - Vistrow Voice`} description={title} path={pathname} noindex />
       <section className="mx-auto flex max-w-2xl flex-col items-center px-5 py-32 text-center md:px-8">
         <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
           <Icon name="construction" className="text-[32px]" />

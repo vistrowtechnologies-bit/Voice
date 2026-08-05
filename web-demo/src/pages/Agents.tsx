@@ -25,17 +25,17 @@ import type {
   VoiceEntry,
 } from '../lib/types'
 
-// Curated down to one male (shubh) and one female (priya) voice — the full
+// Curated down to one male (shubh) and one female (priya) voice - the full
 // bulbul:v3 roster was overwhelming with no real differentiation for most
 // operators. The voice picked here is exactly what agent/main.py passes to
 // sarvam.TTS; an agent already saved with a different (now-hidden) speaker
 // keeps working, it just won't be selectable again from this dropdown.
 const VOICES = ['shubh', 'priya', 'aditya', 'ritu', 'rohan', 'simran', 'kavya', 'amit', 'pooja']
 // bulbul:v3 is ~94% of Sarvam spend by character count. These bulbul:v2
-// speakers — cheaper per Sarvam's pricing — are offered so an operator can
+// speakers - cheaper per Sarvam's pricing - are offered so an operator can
 // compare quality against v3 before switching a live agent over. Matches
 // agent/main.py's _SARVAM_V2_SPEAKERS exactly; the raw speaker name (no
-// prefix) is what's stored as the agent's `voice` field, same as VOICES —
+// prefix) is what's stored as the agent's `voice` field, same as VOICES -
 // _build_tts picks the right Sarvam model per speaker automatically.
 const SARVAM_V2_VOICES = [
   { value: 'abhilash', label: 'Abhilash (v2)' },
@@ -50,14 +50,14 @@ const SARVAM_V2_VOICES = [
 // automatic outage fallback. The "google:" prefix is how agent/main.py's
 // _build_tts tells these apart from a Sarvam speaker name; only takes
 // effect once GOOGLE_APPLICATION_CREDENTIALS_JSON is configured on the
-// agent service — selecting one before that just falls back to Sarvam
+// agent service - selecting one before that just falls back to Sarvam
 // "shubh" silently.
 const GOOGLE_VOICES = [
-  // Gemini's multilingual voice personas — not locked to one locale, this
+  // Gemini's multilingual voice personas - not locked to one locale, this
   // same voice speaks whatever language the conversation is actually in
   // (matches _build_tts's _GOOGLE_MULTILINGUAL_VOICES set exactly).
-  { value: 'google:charon', label: 'Arin — Multilingual Male' },
-  { value: 'google:kore', label: 'Mira — Multilingual Female' },
+  { value: 'google:charon', label: 'Arin - Multilingual Male' },
+  { value: 'google:kore', label: 'Mira - Multilingual Female' },
   // Locale-specific, native Indian-language voices for operators who want
   // a fixed regional voice rather than the multilingual Gemini persona.
   { value: 'google:en-IN-Standard-D', label: 'English (India), Female' },
@@ -81,17 +81,17 @@ const GOOGLE_VOICES = [
   { value: 'google:pa-IN-Standard-A', label: 'Punjabi, Female' },
   { value: 'google:pa-IN-Standard-B', label: 'Punjabi, Male' },
 ] as const
-// Two premium voices from the operator's own ElevenLabs account —
+// Two premium voices from the operator's own ElevenLabs account -
 // multilingual by model (eleven_flash_v2_5 in agent/main.py), not by voice,
 // so either can speak every language this platform supports. The
 // "elevenlabs:" prefix is how _build_tts tells these apart from a Sarvam
 // speaker name; only takes effect once ELEVEN_API_KEY is configured on the
-// agent service — selecting one before that just falls back to Sarvam
+// agent service - selecting one before that just falls back to Sarvam
 // "shubh" silently, same as an unconfigured Google voice above. Vendor name
-// stays out of the label — same "operator sees a Vistrow tier, not which
+// stays out of the label - same "operator sees a Vistrow tier, not which
 // vendor model powers it" convention as MODEL_OPTIONS below.
 // "Premium+" (ElevenLabs v3, [audio tag] support) was folded back into
-// Premium on 2026-07-14 — v3's realtime endpoint 403s in production, so it
+// Premium on 2026-07-14 - v3's realtime endpoint 403s in production, so it
 // was never usable for live calls without a choppy non-streaming workaround.
 // Every voice below runs on Flash v2.5 now; Abhi/Monika/Saavi are the three
 // that used to be v3-only. server/calls_db.py's init_tables() rewrites any
@@ -118,7 +118,7 @@ const voiceLabel = (voice: string) =>
   SARVAM_V2_VOICES.find((v) => v.value === voice)?.label ??
   (VOICES.includes(voice) ? voice : undefined) ??
   voice
-// Tier display order in the picker's optgroups — premium tiers first.
+// Tier display order in the picker's optgroups - premium tiers first.
 const VOICE_TIER_ORDER = ['premium', 'standard', 'lite'] as const
 
 // Lite voices share the same 0.5x billing tier, but the picker keeps Sarvam
@@ -151,7 +151,7 @@ const voicePickerGroups = (voices: VoiceEntry[]) => [
   },
 ]
 // Vistrow tier name + quality tag is the primary label (see
-// platform_assistant.py — the vendor never gets named to a prospect on a
+// platform_assistant.py - the vendor never gets named to a prospect on a
 // live call), but the dashboard's own model picker shows the raw model
 // value in parentheses too, since an operator picking between tiers needs
 // to know which is actually the newer/faster one, not just a marketing
@@ -164,33 +164,33 @@ const MODEL_OPTIONS = [
   { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite', tag: 'Lowest cost' },
 ] as const
 const modelLabel = (value: string) => MODEL_OPTIONS.find((m) => m.value === value)?.label ?? value
-// Presets for Sarvam bulbul:v3's own pace/temperature/pitch — controls how
+// Presets for Sarvam bulbul:v3's own pace/temperature/pitch - controls how
 // the voice is actually delivered (speed + prosodic variation), separate
 // from the LLM's wording. Must mirror agent/main.py's TONE_PRESETS exactly.
 const TONES = [
   {
     value: 'professional',
     label: 'Professional',
-    description: 'Measured and steady — slower pace, low variation. Good for formal or informational agents.',
+    description: 'Measured and steady - slower pace, low variation. Good for formal or informational agents.',
   },
   {
     value: 'balanced',
     label: 'Balanced',
-    description: "The platform's natural conversational default — a good starting point for most agents.",
+    description: "The platform's natural conversational default - a good starting point for most agents.",
   },
   {
     value: 'casual',
     label: 'Casual',
-    description: 'Faster and more expressive — livelier pitch/pace variation. Fixes a flat or robotic-sounding voice.',
+    description: 'Faster and more expressive - livelier pitch/pace variation. Fixes a flat or robotic-sounding voice.',
   },
 ] as const
 // How strongly the live per-turn caller-emotion detection (agent/emotion.py)
-// shows up in delivery — voice_settings on ElevenLabs, pace/pitch on
+// shows up in delivery - voice_settings on ElevenLabs, pace/pitch on
 // Sarvam. Matches agent/main.py's _EMOTION_INTENSITY_MULTIPLIERS exactly.
 const EMOTION_INTENSITIES = [
-  { value: 'off', label: 'Off', description: 'Flat delivery — ignores detected caller emotion entirely.' },
+  { value: 'off', label: 'Off', description: 'Flat delivery - ignores detected caller emotion entirely.' },
   { value: 'subtle', label: 'Subtle', description: 'A light shift in delivery when the caller sounds frustrated, confused, or excited.' },
-  { value: 'strong', label: 'Strong', description: 'Full reactivity — the default. Noticeably warmer or calmer depending on the caller.' },
+  { value: 'strong', label: 'Strong', description: 'Full reactivity - the default. Noticeably warmer or calmer depending on the caller.' },
 ] as const
 const LANGUAGES = [
   ['hi-IN', 'Hindi'],
@@ -254,7 +254,7 @@ export function Agents() {
         <div className="rounded-lg border border-border bg-surface px-4 py-3 text-xs text-text-muted">
           <Icon name="info" className="mr-1.5 align-[-3px] text-[15px] text-cyan" />
           The first live agent takes all web calls. Changes here (prompt, voice, model, knowledge base,
-          pause) apply from the very next call — no redeploy needed.
+          pause) apply from the very next call - no redeploy needed.
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -329,7 +329,7 @@ export function Agents() {
                 <button
                   onClick={() => setDialTestAgent(agent)}
                   className="flex items-center justify-center rounded-lg border border-cyan/40 px-3 text-cyan hover:bg-cyan/10"
-                  aria-label={`Call test — ${agent.name}`}
+                  aria-label={`Call test - ${agent.name}`}
                   title="Place a real phone call to test this agent"
                 >
                   <Icon name="call" className="text-[16px]" />
@@ -337,7 +337,7 @@ export function Agents() {
                 <button
                   onClick={() => setBrowserTestAgent(agent)}
                   className="flex items-center justify-center rounded-lg border border-primary/40 px-3 text-primary hover:bg-primary/10"
-                  aria-label={`Browser test — ${agent.name}`}
+                  aria-label={`Browser test - ${agent.name}`}
                   title="Test this agent in-browser with your mic"
                 >
                   <Icon name="mic" className="text-[16px]" />
@@ -431,7 +431,7 @@ function AgentEditor({
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  // The account's curated voice menu — the only voices this picker offers.
+  // The account's curated voice menu - the only voices this picker offers.
   const [myVoices, setMyVoices] = useState<VoiceEntry[]>([])
   useEffect(() => {
     fetchMyVoices().then(setMyVoices).catch(() => setMyVoices([]))
@@ -442,7 +442,7 @@ function AgentEditor({
 
   // enabledFunctions is a comma list of the OPTIONAL built-ins that are on;
   // empty string means "all default on". end_call and web_search are toggled
-  // here — transfer_call is governed by whether a transfer number is set.
+  // here - transfer_call is governed by whether a transfer number is set.
   const OPTIONAL_FUNCTIONS = ['end_call', 'transfer_call', 'web_search']
   const enabledSet = (name: string) =>
     form.enabledFunctions.trim() === '' ||
@@ -483,7 +483,7 @@ function AgentEditor({
   return (
     <div className="rounded-xl border border-primary/40 bg-surface p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Edit agent — {agent.name}</h3>
+        <h3 className="text-sm font-semibold">Edit agent - {agent.name}</h3>
         <button onClick={onClose} aria-label="Close editor" className="text-text-muted hover:text-text">
           <Icon name="close" className="text-[20px]" />
         </button>
@@ -507,7 +507,7 @@ function AgentEditor({
             <select value={form.model} onChange={(e) => set('model', e.target.value)} className={inputCls}>
               {MODEL_OPTIONS.map((m) => (
                 <option key={m.value} value={m.value}>
-                  {m.label} ({m.value}) — {m.tag}
+                  {m.label} ({m.value}) - {m.tag}
                 </option>
               ))}
             </select>
@@ -516,7 +516,7 @@ function AgentEditor({
             <div className="flex items-center gap-2">
               <select value={form.voice} onChange={(e) => set('voice', e.target.value)} className={inputCls}>
                 {/* Current voice isn't in this account's menu (a legacy voice, or
-                    one removed from the menu since it was set) — surface it so the
+                    one removed from the menu since it was set) - surface it so the
                     browser doesn't silently show a different option as selected and
                     re-persist the wrong voice on Save. */}
                 {!myVoices.some((v) => v.value === form.voice) && (
@@ -525,11 +525,11 @@ function AgentEditor({
                 {voicePickerGroups(myVoices).map((group) => {
                   if (group.voices.length === 0) return null
                   return (
-                    <optgroup key={group.key} label={`${group.label} — ${group.note}`}>
+                    <optgroup key={group.key} label={`${group.label} - ${group.note}`}>
                       {group.voices.map((v) => (
                         <option key={v.value} value={v.value}>
                           {v.name}
-                          {v.note ? ` — ${v.note}` : ''}
+                          {v.note ? ` - ${v.note}` : ''}
                         </option>
                       ))}
                     </optgroup>
@@ -573,7 +573,7 @@ function AgentEditor({
             <select value={form.tone} onChange={(e) => set('tone', e.target.value as AgentForm['tone'])} className={inputCls}>
               {TONES.map((t) => (
                 <option key={t.value} value={t.value}>
-                  {t.label} — {t.description.split('—')[0].trim()}
+                  {t.label} - {t.description.split('-')[0].trim()}
                 </option>
               ))}
             </select>
@@ -586,7 +586,7 @@ function AgentEditor({
             >
               {EMOTION_INTENSITIES.map((i) => (
                 <option key={i.value} value={i.value}>
-                  {i.label} — {i.description}
+                  {i.label} - {i.description}
                 </option>
               ))}
             </select>
@@ -610,7 +610,7 @@ function AgentEditor({
               <input
                 value={form.welcomeMessage}
                 onChange={(e) => set('welcomeMessage', e.target.value)}
-                placeholder="e.g. Hi, thanks for calling Acme — how can I help?"
+                placeholder="e.g. Hi, thanks for calling Acme - how can I help?"
                 className={inputCls}
               />
             </Field>
@@ -645,7 +645,7 @@ function AgentEditor({
             <span className="text-xs leading-relaxed text-text-muted">
               <span className="font-bold text-text">Use as public website demo agent.</span> Powers the "talk
               to Artha live" demo on the Vistrow Voice marketing site. Only one agent platform-wide can hold
-              this — enabling it here turns it off on any other agent.
+              this - enabling it here turns it off on any other agent.
             </span>
           </label>
         )}
@@ -663,9 +663,9 @@ function AgentEditor({
               checked={webSearchEnabled}
               onChange={setWebSearch}
               label="Let the agent search the web"
-              hint="Looks up current facts, prices, or news outside the knowledge base via Tavily. Requires TAVILY_API_KEY to be set on the agent worker — otherwise this has no effect."
+              hint="Looks up current facts, prices, or news outside the knowledge base via Tavily. Requires TAVILY_API_KEY to be set on the agent worker - otherwise this has no effect."
             />
-            <Field label="Transfer to a human — number to dial (blank = disabled)">
+            <Field label="Transfer to a human - number to dial (blank = disabled)">
               <input
                 value={form.transferPhone}
                 onChange={(e) => set('transferPhone', e.target.value)}
@@ -704,7 +704,7 @@ function AgentEditor({
 
         <Panel icon="graphic_eq" title="Speech settings" subtitle="Turn-taking and silence handling">
           <div className="flex flex-col gap-4">
-            <Field label={`Interruption sensitivity — ${Math.round(form.interruptionSensitivity * 100)}%`}>
+            <Field label={`Interruption sensitivity - ${Math.round(form.interruptionSensitivity * 100)}%`}>
               <input
                 type="range"
                 min={0}
@@ -778,7 +778,7 @@ function AgentEditor({
             checked={form.memoryEnabled}
             onChange={(v) => set('memoryEnabled', v)}
             label="Remember returning callers"
-            hint="The agent recalls past conversations with the same caller (matched by phone). Phone and widget calls only — not the anonymous web demo."
+            hint="The agent recalls past conversations with the same caller (matched by phone). Phone and widget calls only - not the anonymous web demo."
           />
         </Panel>
       </div>
@@ -1020,7 +1020,7 @@ function PostCallFieldsEditor({
   return (
     <div className="flex flex-col gap-2">
       <p className="text-[11px] text-text-muted">
-        After each call, the agent reads the transcript and fills these fields — shown on the call record.
+        After each call, the agent reads the transcript and fills these fields - shown on the call record.
       </p>
       {value.map((f, i) => (
         <div key={i} className="flex items-center gap-1.5">

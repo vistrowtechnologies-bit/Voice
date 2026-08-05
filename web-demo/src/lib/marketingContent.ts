@@ -1,6 +1,6 @@
 // Single source of truth for the marketing site's navigation and page content.
 // The header dropdowns, footer columns, product/solution detail pages, and the
-// homepage previews all read from here — so adding a product or industry is one
+// homepage previews all read from here - so adding a product or industry is one
 // edit, never a grep across a dozen near-duplicate page files. Pricing lives in
 // plans.ts (shared with the dashboard's Billing page); brand strings in brand.ts.
 
@@ -27,7 +27,7 @@ export interface FeatureRow {
   body: string
 }
 
-/** A single Q&A pair — rendered as an accordion and mirrored into FAQPage JSON-LD for AEO/GEO. */
+/** A single Q&A pair - rendered as an accordion and mirrored into FAQPage JSON-LD for AEO/GEO. */
 export interface Faq {
   q: string
   a: string
@@ -40,7 +40,7 @@ export const PRODUCT_PAGES: NavLink[] = [
     label: 'Voice Agents',
     to: '/product/agents',
     icon: 'smart_toy',
-    desc: 'Build a no-code AI agent — persona, prompt, voice, language.',
+    desc: 'Build a no-code AI agent - persona, prompt, voice, language.',
   },
   {
     label: 'Inbound Calling',
@@ -64,7 +64,7 @@ export const PRODUCT_PAGES: NavLink[] = [
     label: 'Website Call Widget',
     to: '/product/widget',
     icon: 'graphic_eq',
-    desc: 'A one-tap browser call button for any website — no phone number.',
+    desc: 'A one-tap browser call button for any website - no phone number.',
   },
   {
     label: 'Integrations',
@@ -83,7 +83,7 @@ export const PRODUCT_DETAIL: Record<
     eyebrow: 'Product · Voice Agents',
     headline: 'Build a voice agent in minutes.',
     subhead:
-      'A no-code builder for real-time AI phone agents. Set the persona, prompt, voice and language — publish, and Artha starts taking calls.',
+      'A no-code builder for real-time AI phone agents. Set the persona, prompt, voice and language - publish, and Artha starts taking calls.',
     features: [
       { icon: 'translate', title: 'Multilingual', body: 'Speaks 11 Indian languages and Hinglish natively, switching mid-call to match the caller.' },
       { icon: 'menu_book', title: 'Grounded answers', body: 'Ties responses to your knowledge base with strict-mode RAG, so the agent never makes things up.' },
@@ -91,26 +91,26 @@ export const PRODUCT_DETAIL: Record<
       { icon: 'analytics', title: 'Analytics & transcripts', body: 'Every call is transcribed, scored, and searchable across channels and agents.' },
     ],
     faqs: [
-      { q: 'Do I need to write code to build an agent?', a: 'No — the builder is entirely no-code. Set the persona, prompt, voice, and language, then publish.' },
+      { q: 'Do I need to write code to build an agent?', a: 'No - the builder is entirely no-code. Set the persona, prompt, voice, and language, then publish.' },
       { q: 'Which voices can my agent use?', a: 'A curated set of Sarvam and ElevenLabs voices across Indian languages and English, previewable before you publish.' },
-      { q: 'Can I test the agent before it goes live?', a: 'Yes — talk to any agent in the browser instantly, with the exact prompt and voice it will use on real calls.' },
+      { q: 'Can I test the agent before it goes live?', a: 'Yes - talk to any agent in the browser instantly, with the exact prompt and voice it will use on real calls.' },
     ],
   },
   '/product/inbound': {
     eyebrow: 'Product · Inbound Calling',
     headline: 'Answer every call, day or night.',
     subhead:
-      'Point your number at Vistrow and Artha picks up on the first ring — qualifying, answering, and routing without hold music.',
+      'Point your number at Vistrow and Artha picks up on the first ring - qualifying, answering, and routing without hold music.',
     features: [
-      { icon: 'schedule', title: '24/7 pickup', body: 'No missed calls, no voicemail — every caller reaches a helpful agent instantly.' },
+      { icon: 'schedule', title: '24/7 pickup', body: 'No missed calls, no voicemail - every caller reaches a helpful agent instantly.' },
       { icon: 'fact_check', title: 'Auto-qualification', body: 'Captures intent, budget, and contact details, then scores the lead automatically.' },
       { icon: 'route', title: 'Smart routing', body: 'Sends the right calls to the right team or agent based on what the caller needs.' },
       { icon: 'sync', title: 'Instant CRM sync', body: 'Pushes every qualified lead to your CRM the moment the call ends.' },
     ],
     faqs: [
-      { q: 'Do I need a new phone number?', a: 'No — point your existing business number at Vistrow, or get a new one from us if you prefer.' },
-      { q: 'What happens if the agent can’t help a caller?', a: 'It hands off to a human with full context, or takes a message — never a dead end or hold music.' },
-      { q: 'Is every call recorded and transcribed?', a: 'Yes — every inbound call is transcribed, scored, and searchable in your dashboard by default.' },
+      { q: 'Do I need a new phone number?', a: 'No - point your existing business number at Vistrow, or get a new one from us if you prefer.' },
+      { q: 'What happens if the agent can’t help a caller?', a: 'It hands off to a human with full context, or takes a message - never a dead end or hold music.' },
+      { q: 'Is every call recorded and transcribed?', a: 'Yes - every inbound call is transcribed, scored, and searchable in your dashboard by default.' },
     ],
   },
   '/product/outbound': {
@@ -119,15 +119,15 @@ export const PRODUCT_DETAIL: Record<
     subhead:
       'Launch reminder, follow-up, and collection campaigns that run consistent, polite, fully-logged calls to thousands of contacts.',
     features: [
-      { icon: 'groups', title: 'Bulk campaigns', body: 'Upload a contact list and let Artha work through it — no manual dialing.' },
+      { icon: 'groups', title: 'Bulk campaigns', body: 'Upload a contact list and let Artha work through it - no manual dialing.' },
       { icon: 'event_repeat', title: 'Reminders & follow-ups', body: 'Appointment reminders, renewals, and nudges that never slip through the cracks.' },
       { icon: 'volunteer_activism', title: 'Polite collections', body: 'Consistent, compliant reminder calls with every conversation recorded.' },
       { icon: 'monitoring', title: 'Live campaign metrics', body: 'Track pickup, completion, and outcome rates as the campaign runs.' },
     ],
     faqs: [
-      { q: 'How large a contact list can I run?', a: 'Campaigns scale from a handful of contacts to thousands — upload a CSV and Artha works through the whole list.' },
-      { q: 'Can each call be personalized?', a: 'Yes — use {{variables}} like name or due date so every call sounds tailored, not scripted.' },
-      { q: 'Can I schedule a campaign for later?', a: 'Yes — set a start time and Artha runs the calls automatically, with live pickup and outcome metrics as it goes.' },
+      { q: 'How large a contact list can I run?', a: 'Campaigns scale from a handful of contacts to thousands - upload a CSV and Artha works through the whole list.' },
+      { q: 'Can each call be personalized?', a: 'Yes - use {{variables}} like name or due date so every call sounds tailored, not scripted.' },
+      { q: 'Can I schedule a campaign for later?', a: 'Yes - set a start time and Artha runs the calls automatically, with live pickup and outcome metrics as it goes.' },
     ],
   },
   '/product/knowledge-base': {
@@ -136,39 +136,39 @@ export const PRODUCT_DETAIL: Record<
     subhead:
       'Upload your PDFs, manuals, and docs. Artha retrieves the right facts on every call and can be locked to strict mode so it only answers from your material.',
     features: [
-      { icon: 'upload_file', title: 'Upload anything', body: 'PDFs, docs, or a website URL — we extract and index it into clean Q&A automatically.' },
-      { icon: 'lock', title: 'Strict mode', body: 'Restrict the agent to only answer from your knowledge base — no hallucinations.' },
+      { icon: 'upload_file', title: 'Upload anything', body: 'PDFs, docs, or a website URL - we extract and index it into clean Q&A automatically.' },
+      { icon: 'lock', title: 'Strict mode', body: 'Restrict the agent to only answer from your knowledge base - no hallucinations.' },
       { icon: 'search', title: 'Retrieval-grounded', body: 'Every answer is backed by a retrieved source, so responses stay accurate and on-brand.' },
       { icon: 'update', title: 'Always current', body: 'Update a document and the agent uses the new information on the very next call.' },
     ],
     faqs: [
-      { q: 'What file types can I upload?', a: 'PDFs and documents today — we auto-extract them into clean Q&A pairs your agent can retrieve from.' },
+      { q: 'What file types can I upload?', a: 'PDFs and documents today - we auto-extract them into clean Q&A pairs your agent can retrieve from.' },
       { q: 'What is strict mode?', a: 'It restricts the agent to only answer from your uploaded knowledge base, so it never invents information.' },
-      { q: 'How fast do updates take effect?', a: 'Immediately — update a document and the agent uses the new answer on its very next call.' },
+      { q: 'How fast do updates take effect?', a: 'Immediately - update a document and the agent uses the new answer on its very next call.' },
     ],
   },
   '/product/widget': {
     eyebrow: 'Product · Website Call Widget',
     headline: 'A call button for any website.',
     subhead:
-      'Drop a one-tap voice button on your site — visitors talk to Artha in the browser, no phone number and no app. Install with one line or the WordPress plugin.',
+      'Drop a one-tap voice button on your site - visitors talk to Artha in the browser, no phone number and no app. Install with one line or the WordPress plugin.',
     features: [
-      { icon: 'code', title: 'One-line embed', body: 'Paste a single script tag, or use our WordPress plugin — no coding required.' },
+      { icon: 'code', title: 'One-line embed', body: 'Paste a single script tag, or use our WordPress plugin - no coding required.' },
       { icon: 'mic', title: 'Browser calls', body: 'Real-time voice right in the page. Visitors just tap and talk.' },
       { icon: 'badge', title: 'Lead capture gate', body: 'Collects name and phone before the call so every conversation is a real lead.' },
-      { icon: 'palette', title: 'On-brand', body: 'Position, label, and colours match your site — it feels native, not bolted on.' },
+      { icon: 'palette', title: 'On-brand', body: 'Position, label, and colours match your site - it feels native, not bolted on.' },
     ],
     faqs: [
-      { q: 'Do visitors need to download anything?', a: 'No — it’s a real-time browser call. Visitors just tap the button and talk, nothing to install.' },
-      { q: 'How do I install it on WordPress?', a: 'Use our WordPress plugin — activate it, paste your site key, and the call button appears automatically.' },
-      { q: 'Does it work on mobile browsers?', a: 'Yes — the widget is fully responsive and works on mobile and desktop browsers alike.' },
+      { q: 'Do visitors need to download anything?', a: 'No - it’s a real-time browser call. Visitors just tap the button and talk, nothing to install.' },
+      { q: 'How do I install it on WordPress?', a: 'Use our WordPress plugin - activate it, paste your site key, and the call button appears automatically.' },
+      { q: 'Does it work on mobile browsers?', a: 'Yes - the widget is fully responsive and works on mobile and desktop browsers alike.' },
     ],
   },
   '/product/integrations': {
     eyebrow: 'Product · Integrations',
     headline: 'Every lead, in your stack.',
     subhead:
-      'Vistrow pushes leads, transcripts, and outcomes to your CRM and tools over webhooks — so your team works where they already are.',
+      'Vistrow pushes leads, transcripts, and outcomes to your CRM and tools over webhooks - so your team works where they already are.',
     features: [
       { icon: 'webhook', title: 'Webhooks', body: 'Fire a structured payload to any endpoint the moment a call completes.' },
       { icon: 'contacts', title: 'CRM sync', body: 'Create and update contacts and leads automatically in your CRM.' },
@@ -176,9 +176,9 @@ export const PRODUCT_DETAIL: Record<
       { icon: 'api', title: 'Full API', body: 'Programmatic access to agents, calls, and analytics for custom workflows.' },
     ],
     faqs: [
-      { q: 'Which CRMs can I connect?', a: 'Any CRM or tool that accepts a webhook, plus a dedicated ArthaLeads integration — no code required to set up.' },
-      { q: 'Is there a public API?', a: 'Yes — a full API for agents, calls, and analytics, so you can build custom workflows on top of Vistrow.' },
-      { q: 'How fast does a lead reach my CRM?', a: 'Instantly — the moment a qualified call ends, its data fires to every connected integration.' },
+      { q: 'Which CRMs can I connect?', a: 'Any CRM or tool that accepts a webhook, plus a dedicated ArthaLeads integration - no code required to set up.' },
+      { q: 'Is there a public API?', a: 'Yes - a full API for agents, calls, and analytics, so you can build custom workflows on top of Vistrow.' },
+      { q: 'How fast does a lead reach my CRM?', a: 'Instantly - the moment a qualified call ends, its data fires to every connected integration.' },
     ],
   },
 }
@@ -198,20 +198,20 @@ export const SOLUTIONS: Solution[] = [
     label: 'Real Estate',
     to: '/solutions/real-estate',
     icon: 'apartment',
-    desc: 'Qualify buyers and book site visits — 24/7, in any language.',
+    desc: 'Qualify buyers and book site visits - 24/7, in any language.',
     headline: 'Never miss a buyer enquiry again.',
     subhead:
-      'Artha answers every call, qualifies budget, location and timeline, and books site visits — round the clock, in Hindi or English.',
+      'Artha answers every call, qualifies budget, location and timeline, and books site visits - round the clock, in Hindi or English.',
     pains: [
       { icon: 'phone_missed', title: 'Missed calls', body: 'After-hours enquiries go to voicemail and buyers move on. Artha picks up every time.' },
-      { icon: 'fact_check', title: 'Manual qualification', body: 'No more re-asking budget and location — Artha captures and scores it automatically.' },
+      { icon: 'fact_check', title: 'Manual qualification', body: 'No more re-asking budget and location - Artha captures and scores it automatically.' },
       { icon: 'schedule', title: 'Slow follow-up', body: 'Every qualified lead syncs to your CRM instantly, so agents follow up while it’s hot.' },
     ],
     features: ['Budget & location qualification', 'Site-visit booking', 'WhatsApp / CRM webhook', '24/7 multilingual pickup'],
     faqs: [
-      { q: 'Can Artha book site visits automatically?', a: 'Yes — it checks real availability and books a site visit directly on the call, no back-and-forth needed.' },
-      { q: 'Does it qualify budget and location before booking?', a: 'Yes — it captures budget, preferred location, and timeline, and scores the lead before handing it to your team.' },
-      { q: 'Does it handle Hindi-speaking callers?', a: 'Yes — Artha speaks Hindi natively, including everyday Hinglish code-switching, plus 10 other Indian languages, switching mid-call to match the caller.' },
+      { q: 'Can Artha book site visits automatically?', a: 'Yes - it checks real availability and books a site visit directly on the call, no back-and-forth needed.' },
+      { q: 'Does it qualify budget and location before booking?', a: 'Yes - it captures budget, preferred location, and timeline, and scores the lead before handing it to your team.' },
+      { q: 'Does it handle Hindi-speaking callers?', a: 'Yes - Artha speaks Hindi natively, including everyday Hinglish code-switching, plus 10 other Indian languages, switching mid-call to match the caller.' },
     ],
   },
   {
@@ -221,17 +221,17 @@ export const SOLUTIONS: Solution[] = [
     desc: 'Book appointments and answer patient FAQs without hold music.',
     headline: 'A front desk that never sleeps.',
     subhead:
-      'Artha books appointments, answers common patient questions, and triages calls — freeing your staff for in-person care.',
+      'Artha books appointments, answers common patient questions, and triages calls - freeing your staff for in-person care.',
     pains: [
       { icon: 'phone_missed', title: 'Overloaded reception', body: 'Staff can’t answer every call during clinic hours. Artha handles the overflow.' },
       { icon: 'event', title: 'No-shows', body: 'Automated reminder calls cut no-shows and keep the schedule full.' },
-      { icon: 'quiz', title: 'Repetitive FAQs', body: 'Timings, location, prep instructions — answered instantly, grounded in your info.' },
+      { icon: 'quiz', title: 'Repetitive FAQs', body: 'Timings, location, prep instructions - answered instantly, grounded in your info.' },
     ],
     features: ['Appointment booking', 'Reminder calls', 'FAQ answering', 'Call triage'],
     faqs: [
-      { q: 'Can it send appointment reminder calls?', a: 'Yes — automated reminder calls run ahead of each appointment, cutting no-shows without staff having to dial out.' },
-      { q: 'Is patient information kept confidential?', a: 'Yes — call data is tenant-isolated to your clinic account and only accessible to your team.' },
-      { q: 'Can one agent handle multiple clinic locations?', a: 'Yes — build a separate agent per location, or one agent that routes based on what the caller needs.' },
+      { q: 'Can it send appointment reminder calls?', a: 'Yes - automated reminder calls run ahead of each appointment, cutting no-shows without staff having to dial out.' },
+      { q: 'Is patient information kept confidential?', a: 'Yes - call data is tenant-isolated to your clinic account and only accessible to your team.' },
+      { q: 'Can one agent handle multiple clinic locations?', a: 'Yes - build a separate agent per location, or one agent that routes based on what the caller needs.' },
     ],
   },
   {
@@ -241,7 +241,7 @@ export const SOLUTIONS: Solution[] = [
     desc: 'Handle order status, returns, and WISMO calls automatically.',
     headline: 'Support that scales with every sale.',
     subhead:
-      'Artha handles “where is my order”, returns, and product questions instantly — in the language your customer shops in.',
+      'Artha handles “where is my order”, returns, and product questions instantly - in the language your customer shops in.',
     pains: [
       { icon: 'local_shipping', title: 'WISMO overload', body: '“Where is my order” calls flood support. Artha answers them from your order data.' },
       { icon: 'assignment_return', title: 'Returns friction', body: 'Guides customers through returns and exchanges without a human agent.' },
@@ -249,8 +249,8 @@ export const SOLUTIONS: Solution[] = [
     ],
     features: ['Order status', 'Returns & exchanges', 'Product Q&A', 'Multilingual support'],
     faqs: [
-      { q: 'Can it check real order status?', a: 'Yes — grounded in your order data, Artha answers “where is my order” calls with the actual current status.' },
-      { q: 'Can it handle returns without a human agent?', a: 'Yes — it guides customers through your returns and exchange policy end-to-end on the call.' },
+      { q: 'Can it check real order status?', a: 'Yes - grounded in your order data, Artha answers “where is my order” calls with the actual current status.' },
+      { q: 'Can it handle returns without a human agent?', a: 'Yes - it guides customers through your returns and exchange policy end-to-end on the call.' },
       { q: 'What languages can it support customers in?', a: 'Artha speaks 11 Indian languages, including Hindi and Hinglish, matching whichever language the customer calls in.' },
     ],
   },
@@ -261,7 +261,7 @@ export const SOLUTIONS: Solution[] = [
     desc: 'Run polite, compliant reminder and collection calls at scale.',
     headline: 'Collections calls, done right.',
     subhead:
-      'Artha runs polite, consistent, fully-logged reminder and collection calls at scale — with every conversation recorded and searchable.',
+      'Artha runs polite, consistent, fully-logged reminder and collection calls at scale - with every conversation recorded and searchable.',
     pains: [
       { icon: 'currency_rupee', title: 'Manual dialing', body: 'Agents burn hours on repetitive reminder calls. Artha runs them at scale.' },
       { icon: 'gavel', title: 'Compliance risk', body: 'Consistent, scripted, recorded conversations keep every call compliant.' },
@@ -270,8 +270,8 @@ export const SOLUTIONS: Solution[] = [
     features: ['Payment reminders', 'Promise-to-pay capture', 'Full call recording', 'Outcome analytics'],
     faqs: [
       { q: 'Is this compliant with collection call regulations?', a: 'Every call runs a consistent, scripted flow with full recording and logging, built for compliant collections outreach.' },
-      { q: 'Can it capture a promise-to-pay commitment?', a: 'Yes — Artha captures promise-to-pay commitments on the call and logs them to your outcome analytics.' },
-      { q: 'Are all calls recorded for audit?', a: 'Yes — every reminder and collection call is recorded and searchable, so it’s fully auditable.' },
+      { q: 'Can it capture a promise-to-pay commitment?', a: 'Yes - Artha captures promise-to-pay commitments on the call and logs them to your outcome analytics.' },
+      { q: 'Are all calls recorded for audit?', a: 'Yes - every reminder and collection call is recorded and searchable, so it’s fully auditable.' },
     ],
   },
   {
@@ -289,9 +289,9 @@ export const SOLUTIONS: Solution[] = [
     ],
     features: ['Tier-1 resolution', 'Knowledge-grounded answers', 'Context-rich handoff', 'Transcript logging'],
     faqs: [
-      { q: 'What kind of tickets can it resolve without a human?', a: 'Routine, repetitive questions grounded in your knowledge base — timings, policies, status checks, and the like.' },
+      { q: 'What kind of tickets can it resolve without a human?', a: 'Routine, repetitive questions grounded in your knowledge base - timings, policies, status checks, and the like.' },
       { q: 'How does escalation to a human work?', a: 'Artha hands off with the full transcript and context attached, so your team never has to ask the caller to repeat themselves.' },
-      { q: 'Can it be grounded in our existing help docs?', a: 'Yes — upload your docs and Artha answers only from that material when strict mode is on.' },
+      { q: 'Can it be grounded in our existing help docs?', a: 'Yes - upload your docs and Artha answers only from that material when strict mode is on.' },
     ],
   },
 ]
@@ -303,7 +303,7 @@ export const HOME_FEATURES: NavLink[] = PRODUCT_PAGES
 export const HOW_IT_WORKS: FeatureRow[] = [
   { icon: 'dialpad', title: 'Connect a number', body: 'Bring your own number or get one from us. Point inbound calls at Vistrow in minutes.' },
   { icon: 'menu_book', title: 'Train on your knowledge', body: 'Upload PDFs and docs. Artha learns your business logic instantly with retrieval-grounded RAG.' },
-  { icon: 'rocket_launch', title: 'Go live', body: 'Publish your agent and it starts answering, qualifying, and booking — in 11 Indian languages.' },
+  { icon: 'rocket_launch', title: 'Go live', body: 'Publish your agent and it starts answering, qualifying, and booking - in 11 Indian languages.' },
 ]
 
 // ---- Header navigation structure ----
@@ -391,13 +391,13 @@ export const CONTACT_PHONE = '+91 80801 97945'
 export const HERO_STATS = [
   { value: '11', label: 'Indian languages' },
   { value: '24/7', label: 'Always answering' },
-  { value: '3', label: 'Channels — phone, web, widget' },
+  { value: '3', label: 'Channels - phone, web, widget' },
 ]
 
 /** Tools shown in "works with" strips.
  *
  * Deliberately the tools a CUSTOMER connects, never the LLM/STT/TTS vendors
- * powering the product — naming those publicly is exactly what the agent
+ * powering the product - naming those publicly is exactly what the agent
  * prompts are written to deflect (so a competitor can't lift the stack from
  * a demo call), and a marketing page that lists them defeats that entirely.
  * It's also the more useful answer: a buyer is asking "does this fit my
@@ -406,10 +406,10 @@ export const WORKS_WITH = ['Slack', 'WhatsApp', 'Google Sheets', 'Zapier', 'Any 
 
 // ---- Languages (feed /languages overview + per-language landing pages) ----
 //
-// Mirrors LANGUAGE_NAMES in lib/api.ts exactly — that map is what the agent
+// Mirrors LANGUAGE_NAMES in lib/api.ts exactly - that map is what the agent
 // builder actually offers, so this list must never claim a language the
 // product can't be configured to speak. Ten regional languages here, plus
-// English (supported too but doesn't get a landing page — no search wedge
+// English (supported too but doesn't get a landing page - no search wedge
 // there) = the 11 languages counted in marketing copy site-wide.
 
 export interface LanguagePage {
@@ -421,10 +421,10 @@ export interface LanguagePage {
   native: string
   /** BCP-47-ish code used by the agent builder. */
   code: string
-  /** Where this language actually concentrates — grounds the copy. */
+  /** Where this language actually concentrates - grounds the copy. */
   region: string
   /** How a caller is actually greeted in this language, in its own script.
-   * Used by the homepage's rotating hero greeting and the script marquee —
+   * Used by the homepage's rotating hero greeting and the script marquee -
    * the most honest way to show what the product does is to show it doing
    * it, rather than decorating the page with generic "Indian" motifs. */
   greeting: string
@@ -433,21 +433,21 @@ export interface LanguagePage {
 }
 
 export const LANGUAGES: LanguagePage[] = [
-  { slug: 'hindi', name: 'Hindi', native: 'हिन्दी', code: 'hi-IN', region: 'North & Central India', greeting: 'नमस्ते', blurb: 'The default for most Indian call flows — including the everyday Hinglish your customers actually speak, not textbook Hindi.' },
+  { slug: 'hindi', name: 'Hindi', native: 'हिन्दी', code: 'hi-IN', region: 'North & Central India', greeting: 'नमस्ते', blurb: 'The default for most Indian call flows - including the everyday Hinglish your customers actually speak, not textbook Hindi.' },
   { slug: 'marathi', name: 'Marathi', native: 'मराठी', code: 'mr-IN', region: 'Maharashtra', greeting: 'नमस्कार', blurb: 'Answer Pune and Mumbai callers in Marathi instead of defaulting them into Hindi or English.' },
   { slug: 'tamil', name: 'Tamil', native: 'தமிழ்', code: 'ta-IN', region: 'Tamil Nadu', greeting: 'வணக்கம்', blurb: 'Tamil callers rarely accept a Hindi-first IVR. Give them an agent that opens in their own language.' },
   { slug: 'telugu', name: 'Telugu', native: 'తెలుగు', code: 'te-IN', region: 'Andhra Pradesh & Telangana', greeting: 'నమస్కారం', blurb: 'Handle Hyderabad and coastal Andhra call volume in Telugu, around the clock.' },
   { slug: 'kannada', name: 'Kannada', native: 'ಕನ್ನಡ', code: 'kn-IN', region: 'Karnataka', greeting: 'ನಮಸ್ಕಾರ', blurb: 'Serve Bengaluru and wider Karnataka in Kannada, with English code-switching where it feels natural.' },
   { slug: 'bengali', name: 'Bengali', native: 'বাংলা', code: 'bn-IN', region: 'West Bengal', greeting: 'নমস্কার', blurb: 'Kolkata and West Bengal callers, answered in Bengali on the first ring.' },
-  { slug: 'gujarati', name: 'Gujarati', native: 'ગુજરાતી', code: 'gu-IN', region: 'Gujarat', greeting: 'નમસ્તે', blurb: 'Built for Gujarat’s business-heavy call patterns — enquiries, follow-ups, and payment reminders in Gujarati.' },
+  { slug: 'gujarati', name: 'Gujarati', native: 'ગુજરાતી', code: 'gu-IN', region: 'Gujarat', greeting: 'નમસ્તે', blurb: 'Built for Gujarat’s business-heavy call patterns - enquiries, follow-ups, and payment reminders in Gujarati.' },
   { slug: 'malayalam', name: 'Malayalam', native: 'മലയാളം', code: 'ml-IN', region: 'Kerala', greeting: 'നമസ്കാരം', blurb: 'Answer Kerala enquiries in Malayalam instead of routing them to an English-only queue.' },
-  { slug: 'punjabi', name: 'Punjabi', native: 'ਪੰਜਾਬੀ', code: 'pa-IN', region: 'Punjab', greeting: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ', blurb: 'Punjabi-speaking customers, handled in Punjabi — including mixed Punjabi-Hindi speech.' },
+  { slug: 'punjabi', name: 'Punjabi', native: 'ਪੰਜਾਬੀ', code: 'pa-IN', region: 'Punjab', greeting: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ', blurb: 'Punjabi-speaking customers, handled in Punjabi - including mixed Punjabi-Hindi speech.' },
   { slug: 'odia', name: 'Odia', native: 'ଓଡ଼ିଆ', code: 'od-IN', region: 'Odisha', greeting: 'ନମସ୍କାର', blurb: 'Odia coverage, so Odisha callers aren’t the ones who always get the English fallback.' },
 ]
 
 // ---- Integrations directory (feeds /integrations) ----
 //
-// Grounded in _SEED_INTEGRATIONS in server/calls_db.py — every entry here
+// Grounded in _SEED_INTEGRATIONS in server/calls_db.py - every entry here
 // is a connection an operator can actually configure in the dashboard
 // today. `viaWebhook` entries aren't bespoke integrations; they're things
 // the generic webhook reaches, and are labelled as such rather than
@@ -462,14 +462,14 @@ export interface IntegrationEntry {
 }
 
 export const INTEGRATION_DIRECTORY: IntegrationEntry[] = [
-  { name: 'ArthaLeads CRM', category: 'CRM', desc: 'Native connector. Every qualified lead, with the full transcript, pushed on call end — paste a token, no URL setup.' },
+  { name: 'ArthaLeads CRM', category: 'CRM', desc: 'Native connector. Every qualified lead, with the full transcript, pushed on call end - paste a token, no URL setup.' },
   { name: 'Slack', category: 'Notifications', desc: 'Native connector. A Slack message the moment a call qualifies a lead. Paste an Incoming Webhook URL.' },
   { name: 'WhatsApp', category: 'Messaging', desc: 'Native connector. Fire a WhatsApp follow-up after a call through your provider’s send webhook.' },
-  { name: 'Google Sheets', category: 'Reporting', desc: 'Native connector. Appends every qualified lead as a row via an Apps Script web-app URL — no OAuth dance.' },
+  { name: 'Google Sheets', category: 'Reporting', desc: 'Native connector. Appends every qualified lead as a row via an Apps Script web-app URL - no OAuth dance.' },
   { name: 'Zapier', category: 'Automation', desc: 'Point the lead webhook at a Zapier catch hook to reach 6,000+ downstream apps.', viaWebhook: true },
-  { name: 'n8n', category: 'Automation', desc: 'Self-hosted automation — same JSON payload, your own infrastructure.', viaWebhook: true },
+  { name: 'n8n', category: 'Automation', desc: 'Self-hosted automation - same JSON payload, your own infrastructure.', viaWebhook: true },
   { name: 'Make', category: 'Automation', desc: 'Route call outcomes into Make scenarios for multi-step workflows.', viaWebhook: true },
-  { name: 'Salesforce, HubSpot, Zoho', category: 'CRM', desc: 'Any CRM that accepts an inbound webhook — or use the full API for a deeper two-way sync.', viaWebhook: true },
+  { name: 'Salesforce, HubSpot, Zoho', category: 'CRM', desc: 'Any CRM that accepts an inbound webhook - or use the full API for a deeper two-way sync.', viaWebhook: true },
 ]
 
 // ---- Changelog (feeds /changelog) ----
@@ -477,7 +477,7 @@ export const INTEGRATION_DIRECTORY: IntegrationEntry[] = [
 // Curated from real shipped work, newest first. Keep it honest: only list
 // things that actually went out, and describe them in customer terms
 // (what changed for them), never in commit-message terms. Never name the
-// underlying AI vendors here — same reason as WORKS_WITH above.
+// underlying AI vendors here - same reason as WORKS_WITH above.
 
 export interface ChangelogEntry {
   date: string
@@ -488,11 +488,11 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   { date: '29 July 2026', tag: 'Improved', title: 'Faster first hello on phone calls', body: 'The agent’s opening line is now prepared while the call is still connecting, so callers hear it the moment they pick up instead of a few seconds of silence.' },
-  { date: '28 July 2026', tag: 'New', title: 'New voices: Tara and Bunty', body: 'Two more voices added to the catalog — one female, one male — both previewable in the agent builder before you publish.' },
+  { date: '28 July 2026', tag: 'New', title: 'New voices: Tara and Bunty', body: 'Two more voices added to the catalog - one female, one male - both previewable in the agent builder before you publish.' },
   { date: '28 July 2026', tag: 'Improved', title: 'Steadier language switching mid-call', body: 'The agent now waits for a clearer signal before switching languages, so a single ambiguous word no longer flips the whole conversation.' },
   { date: '27 July 2026', tag: 'Improved', title: 'Better gender agreement in Indian languages', body: 'Hindi, Marathi, Gujarati, and Punjabi replies now consistently match the grammatical gender of the selected voice, turn after turn.' },
-  { date: '25 July 2026', tag: 'New', title: 'Native appointment booking', body: 'Agents check real availability and book appointments directly on the call, with your own availability rules — no external calendar account needed.' },
+  { date: '25 July 2026', tag: 'New', title: 'Native appointment booking', body: 'Agents check real availability and book appointments directly on the call, with your own availability rules - no external calendar account needed.' },
   { date: '23 July 2026', tag: 'New', title: 'Personalised campaign calls', body: 'Outbound campaigns can use {{variables}} like a contact’s name or due date, so every call sounds tailored rather than scripted.' },
   { date: '20 July 2026', tag: 'New', title: 'Call recordings on every call', body: 'Every call is recorded, stored, and playable from the call detail page, alongside the full combined transcript.' },
-  { date: '19 July 2026', tag: 'New', title: 'Compliance controls', body: 'A Do-Not-Call registry, enforced calling windows, spoken-consent capture, and configurable data retention — all per workspace.' },
+  { date: '19 July 2026', tag: 'New', title: 'Compliance controls', body: 'A Do-Not-Call registry, enforced calling windows, spoken-consent capture, and configurable data retention - all per workspace.' },
 ]

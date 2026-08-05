@@ -30,7 +30,7 @@ function formatDuration(ms: number): string {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
 }
 
-// The recurring "LIVE DEMO" card — tapping the orb starts the call right
+// The recurring "LIVE DEMO" card - tapping the orb starts the call right
 // here (no separate confirmation page/route): mic permission is the
 // browser's own native prompt, then the same card shows live call state
 // (status, timer, mute/end controls) in place of the idle "Tap to talk"
@@ -71,7 +71,7 @@ export function DemoOrbCard() {
   }, [])
 
   // Ending the call just returns the card to its idle "Tap to talk" state,
-  // right here — no separate summary page or route to send the visitor to.
+  // right here - no separate summary page or route to send the visitor to.
   const handleDisconnected = useCallback(() => {
     setToken(null)
     setServerUrl(null)
@@ -79,10 +79,10 @@ export function DemoOrbCard() {
   }, [])
 
   // The browser connected to the room but no AI agent ever joined (worker
-  // cold-start/crash/restart — LiveKit Cloud's own agent worker, unrelated
+  // cold-start/crash/restart - LiveKit Cloud's own agent worker, unrelated
   // to the orchestrator). Instead of just erroring, fall back to the
   // Railway-native orchestrator pipeline for this one call, same visitor
-  // experience either way — only errors out if THAT also fails.
+  // experience either way - only errors out if THAT also fails.
   const handleAgentUnavailable = useCallback(() => {
     setToken(null)
     setServerUrl(null)
@@ -90,7 +90,7 @@ export function DemoOrbCard() {
   }, [])
 
   const handleOrchestratorFailed = useCallback(() => {
-    setErrorMessage('Artha didn’t pick up just now — please try again.')
+    setErrorMessage('Artha didn’t pick up just now - please try again.')
     setPhase('unreachable')
   }, [])
 
@@ -103,7 +103,7 @@ export function DemoOrbCard() {
       {/* inset-x-0, not -inset-10: a negative horizontal inset made this box
           80px wider than the card, which overflowed the viewport on small
           screens and gave the whole page a horizontal scrollbar. The blur
-          still paints well outside the box, so the glow looks identical —
+          still paints well outside the box, so the glow looks identical -
           it just no longer contributes that width to layout. */}
       <div className="pointer-events-none absolute inset-x-0 -inset-y-10 rounded-full bg-primary/20 blur-[100px]" />
       <div className="relative flex w-full flex-col items-center rounded-[28px] border border-border bg-surface/80 p-8 text-center backdrop-blur-xl sm:p-10">
@@ -191,7 +191,7 @@ export function DemoOrbCard() {
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Native support</p>
                 {/* Hindi + 10 others = the 11 Indian languages in LANGUAGE_NAMES.
-                    Hinglish isn't counted as a 12th — it's Hindi/English
+                    Hinglish isn't counted as a 12th - it's Hindi/English
                     code-switching, and listing it as a separate language is
                     what made the count drift across pages before. */}
                 <p className="mt-1 text-xs text-text">Hindi · Tamil +9 more</p>
@@ -208,10 +208,10 @@ export function DemoOrbCard() {
   )
 }
 
-// Rendered inside <LiveKitRoom> once connected — same card, same footprint,
+// Rendered inside <LiveKitRoom> once connected - same card, same footprint,
 // swapped from the idle "Tap to talk" content to live call state: a running
 // timer and mute/end-call controls. No "Listening…/Thinking…/Speaking…"
-// status text — it read as distracting chatter rather than useful signal.
+// status text - it read as distracting chatter rather than useful signal.
 function InlineCallBody({ onAgentUnavailable }: { onAgentUnavailable: () => void }) {
   const room = useRoomContext()
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant()
@@ -219,7 +219,7 @@ function InlineCallBody({ onAgentUnavailable }: { onAgentUnavailable: () => void
   const agentParticipant = remoteParticipants[0]
   const agentJoined = !!agentParticipant
   // Timer starts when the AGENT joins, not when the browser connects to the
-  // room — otherwise a call that never got an agent still showed a ticking
+  // room - otherwise a call that never got an agent still showed a ticking
   // "live" timer against silence, which read as a broken/dead agent.
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
@@ -234,7 +234,7 @@ function InlineCallBody({ onAgentUnavailable }: { onAgentUnavailable: () => void
     return () => clearInterval(interval)
   }, [startedAt])
 
-  // If no agent joins within the timeout, the demo worker is unavailable —
+  // If no agent joins within the timeout, the demo worker is unavailable -
   // bail out to an explicit retry instead of holding the visitor on a silent
   // dead call.
   useEffect(() => {
@@ -289,7 +289,7 @@ function InlineCallBody({ onAgentUnavailable }: { onAgentUnavailable: () => void
 }
 
 // Same card, same footprint as InlineCallBody, but driven by
-// useOrchestratorCall's local state instead of LiveKit's room hooks — used
+// useOrchestratorCall's local state instead of LiveKit's room hooks - used
 // when LiveKit's demo worker didn't pick up and DemoOrbCard fell back to
 // the orchestrator (agentId omitted -> resolves the platform-demo agent).
 function InlineOrchestratorCallBody({ onEnded, onFailed }: { onEnded: () => void; onFailed: () => void }) {
@@ -368,9 +368,9 @@ function InlineOrchestratorVisual({ volume, speaking }: { volume: number; speaki
 
 // useParticipantAttribute throws if called before an agent participant
 // exists, so these only ever mount once InlineCallBody has confirmed
-// agentParticipant is defined — mirrors ActiveCallUI's AgentOrb pattern.
+// agentParticipant is defined - mirrors ActiveCallUI's AgentOrb pattern.
 // Video's ring animation spins at this rate while the agent is actively
-// speaking (vs. 1x its authored speed the rest of the time) — matches
+// speaking (vs. 1x its authored speed the rest of the time) - matches
 // ActiveCallUI.tsx's SPEAKING_PLAYBACK_RATE.
 const SPEAKING_PLAYBACK_RATE = 2.2
 

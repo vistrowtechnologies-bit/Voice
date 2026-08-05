@@ -60,12 +60,12 @@ import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { trackPageView } from './lib/analytics'
 
-// Wrap every dashboard route in the auth gate — one helper keeps App.tsx
+// Wrap every dashboard route in the auth gate - one helper keeps App.tsx
 // readable instead of nesting <RequireAuth> around each element.
 const guard = (el: ReactNode) => <RequireAuth>{el}</RequireAuth>
 
 // docs.vistrowvoice.com's root should look like its own clean landing page
-// (no /resources/docs in the address bar), not a redirect target — so "/"
+// (no /resources/docs in the address bar), not a redirect target - so "/"
 // renders different content purely based on which subdomain asked for it.
 // middleware.ts deliberately leaves docs' root alone for exactly this reason.
 function HomeOrDocsRoot() {
@@ -76,7 +76,7 @@ function HomeOrDocsRoot() {
 }
 
 // GA4's page_view is disabled in index.html (see the comment there) since
-// this is a client-side-routed SPA — this is what fires it instead, on the
+// this is a client-side-routed SPA - this is what fires it instead, on the
 // initial load and every navigation after. The 0ms deferral lets whichever
 // page just mounted finish its own <Seo> effect first, so page_title
 // reflects the new page rather than the previous one.
@@ -94,7 +94,7 @@ function App() {
     <AuthProvider>
       <AnalyticsListener />
       <Routes>
-        {/* Public — marketing site */}
+        {/* Public - marketing site */}
         <Route path="/" element={<HomeOrDocsRoot />} />
         <Route path="/product" element={<ProductOverview />} />
         <Route path="/product/:slug" element={<ProductDetail />} />
@@ -110,7 +110,7 @@ function App() {
         <Route path="/security" element={<Security />} />
         <Route path="/careers" element={<Careers />} />
         <Route path="/changelog" element={<Changelog />} />
-        <Route path="/resources/blog" element={<ComingSoon title="Blog — coming soon" />} />
+        <Route path="/resources/blog" element={<ComingSoon title="Blog - coming soon" />} />
         <Route path="/resources/docs" element={<Docs />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
@@ -139,7 +139,7 @@ function App() {
         <Route path="/dashboard/website-widget" element={guard(<WebsiteWidget />)} />
         <Route path="/dashboard/billing" element={guard(<Billing />)} />
         <Route path="/dashboard/settings" element={guard(<Settings />)} />
-        {/* Old bookmark path — same detail page as /dashboard/calls/:id */}
+        {/* Old bookmark path - same detail page as /dashboard/calls/:id */}
         <Route path="/dashboard/leads/:id" element={guard(<LeadDetail />)} />
 
         {/* Platform-owner-only super-admin panel (RequireOwner wraps each in AdminLayout) */}

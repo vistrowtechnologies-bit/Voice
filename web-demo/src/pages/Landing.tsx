@@ -37,11 +37,11 @@ export function Landing() {
         <div>
           <span className="text-xs font-bold uppercase tracking-widest text-cyan">AI voice agent</span>
           <h1 className="mt-3 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-            Find your next home — just by talking to us.
+            Find your next home - just by talking to us.
           </h1>
           <p className="mt-4 max-w-md text-base text-text-muted">
             Our AI agent understands Hindi, English, and everything in between. Ask about
-            budget, location, or book a site visit — right now, out loud.
+            budget, location, or book a site visit - right now, out loud.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link

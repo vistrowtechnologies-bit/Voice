@@ -19,12 +19,12 @@ export function Contact() {
   return (
     <MarketingLayout>
       <Seo
-        title="Book a Demo — Vistrow Voice"
+        title="Book a Demo - Vistrow Voice"
         description="See Vistrow Voice on a live call. Get a walkthrough tuned to your use case, watch Artha qualify a call in your language, and get a pricing and rollout plan."
         path="/contact"
       />
       <section className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-5 py-16 md:px-8 lg:grid-cols-2 lg:py-20">
-        {/* Left — pitch + demo card */}
+        {/* Left - pitch + demo card */}
         <div>
           <SectionEyebrow>Book a demo</SectionEyebrow>
           <h1 className="mt-4 font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
@@ -40,8 +40,8 @@ export function Contact() {
           </ul>
         </div>
 
-        {/* Right — form */}
-        {/* w-full, not justify-self-end — same grid trap as PageHero: an
+        {/* Right - form */}
+        {/* w-full, not justify-self-end - same grid trap as PageHero: an
             end-justified item sizes to its content, so the form column
             narrowed to whatever the fields happened to measure instead of
             filling its half of the grid. */}
@@ -52,7 +52,7 @@ export function Contact() {
                 <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success/15 text-success">
                   <Icon name="check" className="text-[28px]" />
                 </span>
-                <h2 className="mt-5 font-display text-2xl font-semibold">Thanks — we’ll be in touch.</h2>
+                <h2 className="mt-5 font-display text-2xl font-semibold">Thanks - we’ll be in touch.</h2>
                 <p className="mt-2 max-w-xs text-sm text-text-muted">
                   Our team will reach out shortly to set up your walkthrough.
                 </p>
@@ -80,7 +80,7 @@ export function Contact() {
                     trackQualifyLead('contact_form')
                     setSent(true)
                   } catch {
-                    setError('Something went wrong — please try again, or email us directly.')
+                    setError('Something went wrong - please try again, or email us directly.')
                   } finally {
                     setBusy(false)
                   }

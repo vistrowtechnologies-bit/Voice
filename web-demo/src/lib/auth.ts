@@ -88,7 +88,7 @@ export const apiResetPassword = (token: string, password: string) =>
 
 // --- team & invites ---------------------------------------------------
 
-// Mirrors calls_db.ROLE_RANK — the single client-side source of truth for
+// Mirrors calls_db.ROLE_RANK - the single client-side source of truth for
 // "can this role do that" UI gating (hide/disable, not the real enforcement,
 // which is server-side via require_role).
 export const ROLE_RANK: Record<string, number> = { viewer: 0, member: 1, admin: 2, owner: 3 }
