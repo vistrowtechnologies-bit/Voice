@@ -132,17 +132,24 @@ const CSS = `
 .av-typing-dots span:nth-child(2) { animation-delay: .15s; }
 .av-typing-dots span:nth-child(3) { animation-delay: .3s; }
 @keyframes av-typing-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-4px); opacity: 1; } }
-.av-chat-input-row { display: flex; align-items: center; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid #2a2440; }
+.av-chat-input-row { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid #2a2440; }
 .av-chat-input-row input { flex: 1; min-width: 0; background: #201b3b; border: 1px solid #2a2440; border-radius: 10px; color: #f5f3ff; padding: 9px 11px; font-size: 13.5px; outline: none; font-family: inherit; }
 .av-chat-input-row input:focus { border-color: #a855f7; }
 .av-chat-send-btn { flex-shrink: 0; width: 36px; height: 36px; border-radius: 9999px; background: linear-gradient(135deg,#a855f7,#7c3aed); border: none; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .av-chat-send-btn:disabled { opacity: .5; cursor: default; }
 
-.av-body { padding: 20px 16px 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+/* Both views are fixed to the same total height (measured from the voice
+   call's natural content height, header/branding excluded - those two are
+   shared siblings) so a chat-only site's widget never renders shorter or
+   taller than a voice site's. The transcript/messages area is the one
+   flexible piece in both, growing to fill whatever room the rest of the
+   view (orb+status, or just the input row) doesn't need. */
+#av-call, #av-chat { display: flex; flex-direction: column; height: 447px; }
+.av-body { flex-shrink: 0; padding: 20px 16px 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; }
 .av-orb video, .av-orb img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 .av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 32px; }
-.av-transcript { display: flex; flex-direction: column; gap: 6px; max-height: 168px; overflow-y: auto; margin: 2px 16px 12px; padding: 12px 12px 8px; scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: #4a3f70 transparent; position: relative; border-radius: 12px; border: 1px solid rgba(168,85,247,.28); background: rgba(168,85,247,.04); }
+.av-transcript { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 2px 16px 12px; padding: 12px 12px 8px; scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: #4a3f70 transparent; position: relative; border-radius: 12px; border: 1px solid rgba(168,85,247,.28); background: rgba(168,85,247,.04); }
 .av-transcript::before { content: ''; position: absolute; top: -1px; left: 10%; right: 10%; height: 1px; background: linear-gradient(90deg, transparent, #c084fc, transparent); box-shadow: 0 0 8px 1px rgba(192,132,252,.9); }
 .av-transcript::-webkit-scrollbar { width: 4px; }
 .av-transcript::-webkit-scrollbar-track { background: transparent; }
@@ -152,7 +159,7 @@ const CSS = `
 .av-bubble { max-width: 85%; padding: 6px 11px; border-radius: 12px; font-size: 12.5px; line-height: 1.4; word-break: break-word; }
 .av-bubble-local { align-self: flex-end; background: linear-gradient(135deg,#a855f7,#7c3aed); color: #fff; }
 .av-bubble-remote { align-self: flex-start; background: #201b3b; border: 1px solid #2a2440; color: #f5f3ff; }
-.av-controls { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px 16px; }
+.av-controls { flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px 16px; }
 .av-ctrl-btn { width: 40px; height: 40px; border-radius: 9999px; border: 1px solid #2a2440; background: #201b3b; color: #b8b2cf; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .av-end-btn { width: 48px; height: 48px; border-radius: 9999px; background: #ef4444; color: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .av-branding { display: block; text-align: center; padding: 7px 0; font-size: 10px; font-weight: 600; letter-spacing: .02em; color: #6b6383; text-decoration: none; border-top: 1px solid #241f38; background: #140f1c; }
@@ -204,7 +211,7 @@ function widgetHtml(label: string): string {
         </div>
 
         <div id="av-chat" style="display:none;">
-          <div id="av-chat-messages" class="av-transcript" style="max-height:340px;">
+          <div id="av-chat-messages" class="av-transcript">
             <p class="av-transcript-empty">Ask anything - no call, just type.</p>
           </div>
           <div class="av-chat-input-row">
@@ -479,7 +486,7 @@ function init(): void {
   function showChat(name = '', phone = '', email = ''): void {
     hideAllPanelViews()
     openPanel()
-    chatEl.style.display = 'block'
+    chatEl.style.display = 'flex'
     chatInput.focus()
     // Opens with a greeting bubble from Artha's side instead of a blank
     // history - only the first time per visit, so re-opening after closing
@@ -741,7 +748,7 @@ function init(): void {
   async function startCall(name: string, phone: string, email: string, attempt = 0): Promise<void> {
     intentionalEnd = false
     formEl.style.display = 'none'
-    callEl.style.display = 'block'
+    callEl.style.display = 'flex'
     // Every call shows the type-instead box right alongside mic/end-call
     // from the start - no toggle to discover, no separate "chat mode" to
     // choose ahead of time. Typing is always a visible, equally-valid way

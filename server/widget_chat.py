@@ -91,12 +91,11 @@ def answer_widget_chat(message: str, history: list[dict], agent: dict, kb_conten
         {"role": "user", "content": text},
     ]
 
-    # Falls back to the mini model for any voice-only model name OpenAI's
-    # chat completions endpoint wouldn't recognize, rather than 500ing a
-    # visitor's chat over a model mismatch.
-    model = agent.get("model") or DEFAULT_CHAT_MODEL
-
-    payload = _post_chat(api_key, {"model": model, "temperature": 0.4, "messages": messages})
+    # Always the cheapest OpenAI chat model, deliberately ignoring the
+    # agent's own configured voice model (which may be gpt-4.1/gpt-4o) -
+    # chat-only mode exists specifically to cut cost, so it shouldn't
+    # inherit an expensive model choice made for voice quality.
+    payload = _post_chat(api_key, {"model": DEFAULT_CHAT_MODEL, "temperature": 0.4, "messages": messages})
 
     try:
         choice_message = payload["choices"][0]["message"]
