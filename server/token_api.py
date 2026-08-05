@@ -2479,6 +2479,16 @@ class WidgetChatRequest(BaseModel):
     siteKey: str
     message: str
     history: list[dict] = []
+    # Billing only - lets a chat-only session bill the same per-minute
+    # credit rate as a voice call (calls_db.upsert_widget_chat_call) even
+    # though no LiveKit room/agent ever runs for it. sessionId is a
+    # client-generated id for the whole chat, stable across every turn;
+    # startedAt is set once when the chat panel opens.
+    sessionId: str | None = None
+    startedAt: str | None = None
+    name: str | None = None
+    phone: str | None = None
+    email: str | None = None
 
 
 @app.post("/widget/chat")
@@ -2516,4 +2526,17 @@ def widget_chat_route(req: WidgetChatRequest) -> dict:
     except RuntimeError as exc:
         logger.error("widget chat failed for site=%s: %s", site["name"], exc)
         raise HTTPException(502, "Could not reach the chat assistant — please try again shortly")
+
+    if req.sessionId and req.startedAt:
+        transcript = [
+            *req.history,
+            {"role": "user", "content": req.message},
+            {"role": "assistant", "content": reply},
+        ]
+        lead = {"name": req.name, "phone": req.phone, "email": req.email}
+        try:
+            calls_db.upsert_widget_chat_call(site, agent, req.sessionId, req.startedAt, transcript, lead)
+        except Exception:
+            logger.exception("failed to log widget chat call for site=%s", site["name"])
+
     return {"reply": reply}

@@ -127,9 +127,6 @@ const CSS = `
 .av-submit { margin-top: 2px; background: linear-gradient(135deg,#a855f7,#7c3aed); border: none; border-radius: 10px; color: white; font-weight: 700; font-size: 13.5px; padding: 10px; cursor: pointer; }
 .av-submit:disabled { opacity: .5; cursor: default; }
 
-.av-chat-orb-row { display: flex; justify-content: center; padding: 18px 0 14px; }
-.av-chat-orb { position: relative; width: 64px; height: 64px; border-radius: 9999px; overflow: hidden; background: #000; }
-.av-chat-orb video, .av-chat-orb img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 .av-typing-dots { display: inline-flex; gap: 3px; align-items: center; padding: 2px 0; }
 .av-typing-dots span { width: 6px; height: 6px; border-radius: 9999px; background: #9089b0; animation: av-typing-bounce 1.2s infinite ease-in-out; }
 .av-typing-dots span:nth-child(2) { animation-delay: .15s; }
@@ -207,10 +204,7 @@ function widgetHtml(label: string): string {
         </div>
 
         <div id="av-chat" style="display:none;">
-          <div class="av-chat-orb-row">
-            <div class="av-chat-orb">${avatarTag()}</div>
-          </div>
-          <div id="av-chat-messages" class="av-transcript" style="max-height:240px;">
+          <div id="av-chat-messages" class="av-transcript" style="max-height:340px;">
             <p class="av-transcript-empty">Ask anything - no call, just type.</p>
           </div>
           <div class="av-chat-input-row">
@@ -475,7 +469,14 @@ function init(): void {
   }
 
   let chatOpened = false
-  function showChat(): void {
+  let chatSessionId: string | null = null
+  let chatStartedAt: string | null = null
+  const chatLead = { name: '', phone: '', email: '' }
+  function generateId(): string {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  }
+  function showChat(name = '', phone = '', email = ''): void {
     hideAllPanelViews()
     openPanel()
     chatEl.style.display = 'block'
@@ -485,6 +486,11 @@ function init(): void {
     // resumes the conversation instead of re-greeting.
     if (!chatOpened) {
       chatOpened = true
+      chatSessionId = generateId()
+      chatStartedAt = new Date().toISOString()
+      chatLead.name = name
+      chatLead.phone = phone
+      chatLead.email = email
       const opener = customGreeting || DEFAULT_CHAT_OPENER
       appendChatBubble(opener, 'assistant')
       chatHistory.push({ role: 'assistant', content: opener })
@@ -545,7 +551,16 @@ function init(): void {
       const res = await fetch(`${apiBase}/widget/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteKey, message: text, history: priorHistory }),
+        body: JSON.stringify({
+          siteKey,
+          message: text,
+          history: priorHistory,
+          sessionId: chatSessionId,
+          startedAt: chatStartedAt,
+          name: chatLead.name,
+          phone: chatLead.phone,
+          email: chatLead.email,
+        }),
       })
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
       const data = (await res.json()) as { reply: string }
@@ -868,7 +883,7 @@ function init(): void {
     }
     formError.textContent = ''
     if (widgetMode === 'chat') {
-      showChat()
+      showChat(name, phone, email)
     } else {
       // 'voice' and 'both' both start the call directly - 'both' adds an
       // in-call "type instead" fallback (see the av-controls wiring below)

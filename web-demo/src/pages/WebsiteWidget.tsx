@@ -27,7 +27,8 @@ function escapeHtmlAttr(s: string): string {
 function snippetFor(site: Site, backendUrl: string): string {
   const avatarAttr = site.widgetAvatar && site.widgetAvatar !== 'default' ? ` data-avatar="${site.widgetAvatar}"` : ''
   const greetingAttr = site.widgetGreeting ? ` data-greeting="${escapeHtmlAttr(site.widgetGreeting)}"` : ''
-  return `<script src="${backendUrl}/widget.js" data-site-key="${site.siteKey}" data-api-base="${backendUrl}" data-position="${site.widgetPosition}" data-label="${site.widgetLabel}"${avatarAttr}${greetingAttr}></script>`
+  const modeAttr = site.widgetMode === 'chat' ? ` data-mode="chat"` : ''
+  return `<script src="${backendUrl}/widget.js" data-site-key="${site.siteKey}" data-api-base="${backendUrl}" data-position="${site.widgetPosition}" data-label="${site.widgetLabel}"${avatarAttr}${greetingAttr}${modeAttr}></script>`
 }
 
 export function WebsiteWidget() {
@@ -235,15 +236,20 @@ function SiteRow({
   const [labelDraft, setLabelDraft] = useState(site.widgetLabel)
   const [greetingDraft, setGreetingDraft] = useState(site.widgetGreeting)
   const [avatarDraft, setAvatarDraft] = useState(site.widgetAvatar)
+  const [modeDraft, setModeDraft] = useState<Site['widgetMode']>(site.widgetMode)
   const [installMode, setInstallMode] = useState<'wordpress' | 'manual'>('wordpress')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   useEffect(() => setLabelDraft(site.widgetLabel), [site.widgetLabel])
   useEffect(() => setGreetingDraft(site.widgetGreeting), [site.widgetGreeting])
   useEffect(() => setAvatarDraft(site.widgetAvatar), [site.widgetAvatar])
+  useEffect(() => setModeDraft(site.widgetMode), [site.widgetMode])
 
   const isDirty =
-    labelDraft.trim() !== site.widgetLabel || greetingDraft.trim() !== site.widgetGreeting || avatarDraft !== site.widgetAvatar
+    labelDraft.trim() !== site.widgetLabel ||
+    greetingDraft.trim() !== site.widgetGreeting ||
+    avatarDraft !== site.widgetAvatar ||
+    modeDraft !== site.widgetMode
 
   const snippet = backendUrl ? snippetFor(site, backendUrl) : null
 
@@ -283,6 +289,7 @@ function SiteRow({
       widgetLabel: labelDraft.trim(),
       widgetGreeting: greetingDraft.trim(),
       widgetAvatar: avatarDraft,
+      widgetMode: modeDraft,
     }).finally(() => {
       setSaving(false)
       setSaved(true)
@@ -368,6 +375,21 @@ function SiteRow({
           placeholder="Hi! I'm Artha - ask me anything, no forms."
           className="w-full max-w-md rounded-lg border border-border bg-surface-high px-2 py-1 text-xs outline-none focus:border-primary"
         />
+      </div>
+
+      <div className="flex items-center gap-2 text-xs">
+        <span className="shrink-0 text-text-muted">Widget type</span>
+        <select
+          value={modeDraft === 'chat' ? 'chat' : 'voice'}
+          onChange={(e) => setModeDraft(e.target.value as Site['widgetMode'])}
+          className="rounded-lg border border-border bg-surface-high px-2 py-1 text-xs outline-none focus:border-primary"
+        >
+          <option value="voice">Voice call (speaks, can also type)</option>
+          <option value="chat">Chat only (text, no voice)</option>
+        </select>
+        <span className="text-[11px] text-text-muted">
+          {modeDraft === 'chat' ? 'Visitors type, no voice call' : 'Visitors can speak or type'}
+        </span>
       </div>
 
       {avatarCatalog.length > 0 && (

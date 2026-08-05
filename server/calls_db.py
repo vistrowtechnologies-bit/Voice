@@ -3280,6 +3280,12 @@ def _new_site_key() -> str:
 def _site_dict(r: dict) -> dict:
     return {
         "id": r["id"],
+        # Not returned by any route that serializes a site to the browser
+        # (dashboard routes are already account-scoped and don't need it;
+        # the public widget routes hand-build their own response shape) -
+        # only used server-side to attribute a chat-only session's billing
+        # row to the right tenant.
+        "accountId": r["account_id"],
         "name": r["name"],
         "siteKey": r["site_key"],
         "allowedDomain": r["allowed_domain"],
@@ -3335,6 +3341,69 @@ def get_agent_by_id_unscoped(agent_id: int) -> dict | None:
     try:
         row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
         return _agent_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def upsert_widget_chat_call(
+    site: dict,
+    agent: dict | None,
+    session_id: str,
+    started_at_iso: str,
+    transcript: list[dict],
+    lead: dict | None = None,
+) -> None:
+    """Logs a chat-only widget session as a billable call, re-running on
+    every turn of that same session so duration/transcript stay current
+    without needing a separate "session ended" signal the visitor might
+    never send (closing the tab, navigating away). call_type='widget' with
+    voice=NULL bills at the same credit_rate_widget per-minute rate as a
+    real voice call (voice_tier(None) below returns "standard") - a
+    chat-only site costs us no LiveKit/STT/TTS at all, so this is straight
+    margin, not a discount we need to model separately."""
+    room_name = f"widget-chat-{session_id}"
+    try:
+        started_at = datetime.datetime.fromisoformat(started_at_iso.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        started_at = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    duration_seconds = max(1.0, (now - started_at).total_seconds())
+    transcript_json = json.dumps(transcript)
+    lead = lead or {}
+
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                "UPDATE calls SET ended_at = ?, duration_seconds = ?, transcript_json = ? "
+                "WHERE room_name = ? AND call_type = 'widget'",
+                (now.isoformat(), duration_seconds, transcript_json, room_name),
+            )
+            if cur.rowcount:
+                return
+            conn.execute(
+                """
+                INSERT INTO calls (
+                    room_name, visitor_identity, started_at, ended_at, duration_seconds,
+                    lead_name, lead_phone, lead_email, transcript_json, call_type,
+                    site_id, agent_id, account_id, voice
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'widget', ?, ?, ?, NULL)
+                """,
+                (
+                    room_name,
+                    lead.get("name"),
+                    started_at.isoformat(),
+                    now.isoformat(),
+                    duration_seconds,
+                    lead.get("name"),
+                    lead.get("phone"),
+                    lead.get("email"),
+                    transcript_json,
+                    site["id"],
+                    agent["id"] if agent else None,
+                    site.get("accountId"),
+                ),
+            )
     finally:
         conn.close()
 
