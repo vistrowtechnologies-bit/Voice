@@ -158,6 +158,8 @@ const CSS = `
 .av-controls { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px 16px; }
 .av-ctrl-btn { width: 40px; height: 40px; border-radius: 9999px; border: 1px solid #2a2440; background: #201b3b; color: #b8b2cf; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .av-end-btn { width: 48px; height: 48px; border-radius: 9999px; background: #ef4444; color: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.av-branding { display: block; text-align: center; padding: 7px 0; font-size: 10px; font-weight: 600; letter-spacing: .02em; color: #6b6383; text-decoration: none; border-top: 1px solid #241f38; background: #140f1c; }
+.av-branding:hover { color: #a78bda; }
 audio { display: none; }
 `
 
@@ -238,6 +240,8 @@ function widgetHtml(label: string): string {
           </div>
           <audio id="av-audio" autoplay></audio>
         </div>
+
+        <a class="av-branding" href="https://www.vistrowvoice.com" target="_blank" rel="noopener">Powered by Vistrow Voice</a>
       </div>
 
       <button id="av-button" class="av-button" aria-label="${label}">
