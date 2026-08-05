@@ -123,8 +123,8 @@ export function Home() {
   return (
     <MarketingLayout>
       <Seo
-        title="Vistrow Voice — AI Voice Agents for Every Customer Call"
-        description="Answer, qualify, and book — in your customers' language. Vistrow Voice runs AI voice agents for inbound, outbound, and web calls in 11 Indian languages, live 24/7."
+        title="Vistrow Voice - The AI Agent That Actually Speaks Your Customer's Language"
+        description="Not another robotic IVR. Artha holds real conversations in 11 Indian languages - mid-sentence code-switching included - answering, qualifying, and booking calls around the clock."
         path="/"
         jsonLd={HOME_JSONLD}
       />

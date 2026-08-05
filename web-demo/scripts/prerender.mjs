@@ -26,7 +26,7 @@ const SUFFIX = ' — Vistrow Voice'
 
 // Static pages: {path, title, description} exactly matching each page's own <Seo> props.
 const STATIC_PAGES = [
-  { path: '/', title: 'Vistrow Voice — AI Voice Agents for Every Customer Call', description: "Answer, qualify, and book — in your customers' language. Vistrow Voice runs AI voice agents for inbound, outbound, and web calls in 11 Indian languages, live 24/7." },
+  { path: '/', title: "Vistrow Voice - The AI Agent That Actually Speaks Your Customer's Language", description: 'Not another robotic IVR. Artha holds real conversations in 11 Indian languages - mid-sentence code-switching included - answering, qualifying, and booking calls around the clock.' },
   { path: '/product', title: `Product Overview${SUFFIX}`, description: 'Voice Agents, Inbound Calling, Outbound Campaigns, Knowledge Base, Website Call Widget, and Integrations — one platform for every AI voice conversation.' },
   { path: '/solutions', title: `Solutions by Industry${SUFFIX}`, description: 'Voice AI tuned to how your business takes calls — Real Estate, Healthcare, E-commerce, Finance & Collections, and Support & Helpdesk.' },
   { path: '/pricing', title: `Pricing${SUFFIX}`, description: 'Simple, credit-based plans for AI voice agents. Every plan includes the web call widget, call history, and analytics — scale up as your call volume grows.' },
