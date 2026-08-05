@@ -70,6 +70,10 @@ const CLOSE_ICON =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>'
 const SEND_ICON =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 20V4l19 8-19 8zm2-3 11.9-5L5 7v4.2l7 .8-7 .8V17z"/></svg>'
+const SPEAKER_ICON =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4zm11.5 3a3.5 3.5 0 0 0-2-3.15v6.3A3.5 3.5 0 0 0 15.5 12z"/></svg>'
+const SPEAKER_OFF_ICON =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4zm14.7-1.3-1.4-1.4-2.3 2.3-2.3-2.3-1.4 1.4 2.3 2.3-2.3 2.3 1.4 1.4 2.3-2.3 2.3 2.3 1.4-1.4-2.3-2.3z"/></svg>'
 
 const CSS = `
 :host { all: initial; }
@@ -225,6 +229,7 @@ function widgetHtml(label: string): string {
           <div class="av-controls">
             <button id="av-mute" class="av-ctrl-btn">${MIC_ICON}</button>
             <button id="av-end" class="av-end-btn">${END_ICON}</button>
+            <button id="av-speaker" class="av-ctrl-btn" aria-label="Mute Artha's voice">${SPEAKER_ICON}</button>
           </div>
           <div id="av-type-row" class="av-chat-input-row" style="display:none;">
             <input id="av-type-input" type="text" placeholder="Or type here instead…" autocomplete="off" />
@@ -284,6 +289,7 @@ function init(): void {
   const timerEl = shadow.getElementById('av-timer') as HTMLSpanElement
   const muteBtn = shadow.getElementById('av-mute') as HTMLButtonElement
   const endBtn = shadow.getElementById('av-end') as HTMLButtonElement
+  const speakerBtn = shadow.getElementById('av-speaker') as HTMLButtonElement
   const audioEl = shadow.getElementById('av-audio') as HTMLAudioElement
   const typeRow = shadow.getElementById('av-type-row') as HTMLDivElement
   const typeInput = shadow.getElementById('av-type-input') as HTMLInputElement
@@ -561,6 +567,9 @@ function init(): void {
     room = null
     micEnabled = true
     muteBtn.innerHTML = MIC_ICON
+    speakerMuted = false
+    audioEl.muted = false
+    speakerBtn.innerHTML = SPEAKER_ICON
     typeRow.style.display = 'none'
     typeInput.value = ''
     panel.style.display = 'none'
@@ -604,6 +613,18 @@ function init(): void {
     micEnabled = !micEnabled
     room.localParticipant.setMicrophoneEnabled(micEnabled)
     muteBtn.innerHTML = micEnabled ? MIC_ICON : MIC_OFF_ICON
+  }
+
+  // Mutes Artha's spoken audio only - the visitor's own mic keeps working
+  // (or they can use the type box) and the transcript keeps showing every
+  // reply as text either way, so muting the speaker never loses anything,
+  // just silences it for someone who can't have audio playing right now.
+  let speakerMuted = false
+  function toggleSpeaker(): void {
+    speakerMuted = !speakerMuted
+    audioEl.muted = speakerMuted
+    speakerBtn.innerHTML = speakerMuted ? SPEAKER_OFF_ICON : SPEAKER_ICON
+    speakerBtn.setAttribute('aria-label', speakerMuted ? "Unmute Artha's voice" : "Mute Artha's voice")
   }
 
   // The agent worker's own "away"/silence check-in only ever watches for
@@ -701,11 +722,11 @@ function init(): void {
     intentionalEnd = false
     formEl.style.display = 'none'
     callEl.style.display = 'block'
-    // 'both' mode shows the type-instead box right alongside mic/end-call
-    // from the start of the call - no separate toggle to discover. Typing
-    // is always a visible, equally-valid way to talk to Artha, not a
-    // hidden fallback.
-    if (widgetMode === 'both') typeRow.style.display = 'flex'
+    // Every call shows the type-instead box right alongside mic/end-call
+    // from the start - no toggle to discover, no separate "chat mode" to
+    // choose ahead of time. Typing is always a visible, equally-valid way
+    // to talk to Artha, right there in the same call.
+    typeRow.style.display = 'flex'
     setStatus('Connecting…')
     resetTranscript()
 
@@ -873,6 +894,7 @@ function init(): void {
   })
   endBtn.addEventListener('click', endCall)
   muteBtn.addEventListener('click', toggleMute)
+  speakerBtn.addEventListener('click', toggleSpeaker)
   typeSendBtn.addEventListener('click', sendTypedUtterance)
   typeInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') sendTypedUtterance()
