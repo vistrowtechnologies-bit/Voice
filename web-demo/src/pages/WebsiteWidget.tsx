@@ -234,10 +234,16 @@ function SiteRow({
   const [showKey, setShowKey] = useState(false)
   const [labelDraft, setLabelDraft] = useState(site.widgetLabel)
   const [greetingDraft, setGreetingDraft] = useState(site.widgetGreeting)
+  const [avatarDraft, setAvatarDraft] = useState(site.widgetAvatar)
   const [installMode, setInstallMode] = useState<'wordpress' | 'manual'>('wordpress')
-  const [avatarSaved, setAvatarSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   useEffect(() => setLabelDraft(site.widgetLabel), [site.widgetLabel])
   useEffect(() => setGreetingDraft(site.widgetGreeting), [site.widgetGreeting])
+  useEffect(() => setAvatarDraft(site.widgetAvatar), [site.widgetAvatar])
+
+  const isDirty =
+    labelDraft.trim() !== site.widgetLabel || greetingDraft.trim() !== site.widgetGreeting || avatarDraft !== site.widgetAvatar
 
   const snippet = backendUrl ? snippetFor(site, backendUrl) : null
 
@@ -270,6 +276,19 @@ function SiteRow({
       widgetMode: site.widgetMode,
       ...partial,
     }).then(onChange)
+
+  const saveChanges = () => {
+    setSaving(true)
+    patchSite({
+      widgetLabel: labelDraft.trim(),
+      widgetGreeting: greetingDraft.trim(),
+      widgetAvatar: avatarDraft,
+    }).finally(() => {
+      setSaving(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    })
+  }
 
   return (
     <div className="flex flex-col gap-3 px-5 py-4">
@@ -337,7 +356,6 @@ function SiteRow({
         <input
           value={labelDraft}
           onChange={(e) => setLabelDraft(e.target.value)}
-          onBlur={() => labelDraft.trim() && labelDraft !== site.widgetLabel && patchSite({ widgetLabel: labelDraft.trim() })}
           className="rounded-lg border border-border bg-surface-high px-2 py-1 text-xs outline-none focus:border-primary"
         />
       </div>
@@ -347,7 +365,6 @@ function SiteRow({
         <input
           value={greetingDraft}
           onChange={(e) => setGreetingDraft(e.target.value.slice(0, 140))}
-          onBlur={() => greetingDraft !== site.widgetGreeting && patchSite({ widgetGreeting: greetingDraft.trim() })}
           placeholder="Hi! I'm Artha - ask me anything, no forms."
           className="w-full max-w-md rounded-lg border border-border bg-surface-high px-2 py-1 text-xs outline-none focus:border-primary"
         />
@@ -356,25 +373,26 @@ function SiteRow({
       {avatarCatalog.length > 0 && (
         <div className="flex items-center gap-2 text-xs">
           <span className="shrink-0 text-text-muted">Avatar color</span>
-          <AvatarPicker
-            catalog={avatarCatalog}
-            backendUrl={backendUrl}
-            value={site.widgetAvatar}
-            onChange={(key) => {
-              patchSite({ widgetAvatar: key }).then(() => {
-                setAvatarSaved(true)
-                setTimeout(() => setAvatarSaved(false), 1500)
-              })
-            }}
-          />
-          {avatarSaved && (
-            <span className="flex items-center gap-1 text-[11px] font-semibold text-green-500">
-              <Icon name="check" className="text-[13px]" />
-              Saved - live on WordPress sites within a minute
-            </span>
-          )}
+          <AvatarPicker catalog={avatarCatalog} backendUrl={backendUrl} value={avatarDraft} onChange={setAvatarDraft} />
         </div>
       )}
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={saveChanges}
+          disabled={!isDirty || saving}
+          className="flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-bold text-bg disabled:cursor-default disabled:opacity-40"
+        >
+          <Icon name={saving ? 'progress_activity' : 'save'} className={`text-[15px] ${saving ? 'animate-spin' : ''}`} />
+          {saving ? 'Saving...' : 'Save changes'}
+        </button>
+        {saved && (
+          <span className="flex items-center gap-1 text-[11px] font-semibold text-green-500">
+            <Icon name="check" className="text-[13px]" />
+            Saved - live on WordPress sites within a minute
+          </span>
+        )}
+      </div>
 
       <div className="rounded-lg border border-border bg-surface-high/40 p-3">
         <div className="mb-2 flex gap-1 rounded-lg bg-surface p-1 text-xs">

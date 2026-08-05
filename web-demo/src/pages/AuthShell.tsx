@@ -83,7 +83,7 @@ export function AuthShell({
       <div className="relative flex w-full flex-col items-center justify-center overflow-hidden p-6 lg:w-1/2">
         <div
           className="glow-pulse pointer-events-none absolute -right-24 -top-24 h-[26rem] w-[26rem] rounded-full opacity-30 blur-[120px]"
-          style={{ background: 'radial-gradient(circle, #22d3ee, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, #a855f7, transparent 70%)' }}
         />
         <BharatBackdrop
           className="left-1/2 top-1/2 w-[80%] max-w-[620px] -translate-x-1/2 -translate-y-1/2"
