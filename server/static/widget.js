@@ -106,10 +106,10 @@ a=extmap-allow-mixed`)!==-1){let n=t.sdp.split(`
    flexible piece in both, growing to fill whatever room the rest of the
    view (orb+status, or just the input row) doesn't need. */
 #av-call, #av-chat { display: flex; flex-direction: column; height: 447px; }
-.av-body { flex-shrink: 0; padding: 20px 16px 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.av-body { flex-shrink: 0; padding: 18px 16px 2px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; }
 .av-orb video, .av-orb img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
-.av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 32px; }
+.av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 18px; }
 .av-transcript { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 2px 16px 12px; padding: 12px 12px 8px; scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: #4a3f70 transparent; position: relative; border-radius: 12px; border: 1px solid rgba(168,85,247,.28); background: rgba(168,85,247,.04); }
 .av-transcript::before { content: ''; position: absolute; top: -1px; left: 10%; right: 10%; height: 1px; background: linear-gradient(90deg, transparent, #c084fc, transparent); box-shadow: 0 0 8px 1px rgba(192,132,252,.9); }
 .av-transcript::-webkit-scrollbar { width: 4px; }
