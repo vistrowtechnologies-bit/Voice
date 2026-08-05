@@ -235,6 +235,7 @@ function SiteRow({
   const [labelDraft, setLabelDraft] = useState(site.widgetLabel)
   const [greetingDraft, setGreetingDraft] = useState(site.widgetGreeting)
   const [installMode, setInstallMode] = useState<'wordpress' | 'manual'>('wordpress')
+  const [avatarSaved, setAvatarSaved] = useState(false)
   useEffect(() => setLabelDraft(site.widgetLabel), [site.widgetLabel])
   useEffect(() => setGreetingDraft(site.widgetGreeting), [site.widgetGreeting])
 
@@ -359,8 +360,19 @@ function SiteRow({
             catalog={avatarCatalog}
             backendUrl={backendUrl}
             value={site.widgetAvatar}
-            onChange={(key) => patchSite({ widgetAvatar: key })}
+            onChange={(key) => {
+              patchSite({ widgetAvatar: key }).then(() => {
+                setAvatarSaved(true)
+                setTimeout(() => setAvatarSaved(false), 1500)
+              })
+            }}
           />
+          {avatarSaved && (
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-green-500">
+              <Icon name="check" className="text-[13px]" />
+              Saved - live on WordPress sites within a minute
+            </span>
+          )}
         </div>
       )}
 

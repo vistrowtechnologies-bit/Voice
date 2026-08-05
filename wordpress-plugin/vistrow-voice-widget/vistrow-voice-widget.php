@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.6.1
+ * Version: 1.6.2
  * Author: Vistrow Voice
  */
 
@@ -73,7 +73,7 @@ function vistrow_voice_remote_config($site_key) {
         return $defaults;
     }
     $config = array_merge($defaults, $body);
-    set_transient($cache_key, $config, 5 * MINUTE_IN_SECONDS);
+    set_transient($cache_key, $config, 60);
     return $config;
 }
 
@@ -122,8 +122,20 @@ add_action('admin_init', function () {
 
 function vistrow_voice_sanitize_settings($input) {
     $defaults = vistrow_voice_default_settings();
+    $site_key = isset($input['site_key']) ? sanitize_text_field($input['site_key']) : $defaults['site_key'];
+    // Clear the remote-config cache for both the old and new site key on
+    // every settings save, so hitting "Save Settings" always picks up the
+    // latest avatar/greeting/mode from the dashboard immediately instead of
+    // waiting out the 60s cache window.
+    $existing = vistrow_voice_get_settings();
+    if (!empty($existing['site_key'])) {
+        delete_transient('vistrow_voice_remote_config_' . md5($existing['site_key']));
+    }
+    if (!empty($site_key)) {
+        delete_transient('vistrow_voice_remote_config_' . md5($site_key));
+    }
     return array(
-        'site_key' => isset($input['site_key']) ? sanitize_text_field($input['site_key']) : $defaults['site_key'],
+        'site_key' => $site_key,
         'backend_url' => isset($input['backend_url']) ? esc_url_raw(rtrim($input['backend_url'], '/')) : $defaults['backend_url'],
         'position' => (isset($input['position']) && $input['position'] === 'bottom-left') ? 'bottom-left' : 'bottom-right',
         'label' => isset($input['label']) && $input['label'] !== '' ? sanitize_text_field($input['label']) : $defaults['label'],
