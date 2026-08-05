@@ -7,7 +7,7 @@ customer pick a color that fits their own site instead of Vistrow purple.
 """
 
 WIDGET_AVATAR_CATALOG = {
-    "default": "Purple (default)",
+    "default": "Orb (default)",
     "blue": "Blue",
     "green": "Green",
     "orange": "Orange",

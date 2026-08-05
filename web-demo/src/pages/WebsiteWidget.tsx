@@ -84,7 +84,7 @@ export function WebsiteWidget() {
     <DashboardLayout>
       <PageHeader
         title="Website Widget"
-        subtitle="Embed a real-time AI call button on any client's website"
+        subtitle="Embed a real-time AI call button on your website"
       />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
@@ -99,7 +99,7 @@ export function WebsiteWidget() {
         )}
 
         <Card>
-          <h3 className="mb-3 text-sm font-semibold">Add a client website</h3>
+          <h3 className="mb-3 text-sm font-semibold">Add your website</h3>
           <div className="flex flex-wrap items-end gap-3">
             <Field label="Site name">
               <input
@@ -163,18 +163,12 @@ export function WebsiteWidget() {
               className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40"
             >
               <Icon name="add" className="text-[18px]" />
-              Generate embed code
+              Add website
             </button>
           </div>
-          {avatarCatalog.length > 0 && (
-            <div className="mt-3">
-              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-text-muted">Avatar color</p>
-              <AvatarPicker catalog={avatarCatalog} backendUrl={backendUrl} value={newAvatar} onChange={setNewAvatar} />
-            </div>
-          )}
           <p className="mt-2 text-[11px] text-text-muted">
-            Every site gets its own key and its own call history, filterable on the Calls page - the domain field is
-            just a label for now, not yet enforced.
+            Every website gets its own key and its own call history, filterable on the Calls page - pick an avatar
+            color and other options after adding it below.
           </p>
         </Card>
 
@@ -409,7 +403,7 @@ function SiteRow({
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-text-muted">
-                  Paste before &lt;/body&gt; on the client's site
+                  Paste before &lt;/body&gt; on your site
                 </span>
                 <button
                   onClick={copySnippet}

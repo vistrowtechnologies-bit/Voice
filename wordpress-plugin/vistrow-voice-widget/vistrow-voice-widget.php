@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.6.0
+ * Version: 1.6.1
  * Author: Vistrow Voice
  */
 
@@ -171,6 +171,9 @@ function vistrow_voice_render_settings_page() {
         .vvw-wrap .button-primary { background: linear-gradient(135deg,#a855f7,#7c3aed) !important; border-color: #7c3aed !important; color: #fff !important; text-shadow: none !important; box-shadow: none !important; }
         .vvw-wrap .button-primary:hover, .vvw-wrap .button-primary:focus { background: linear-gradient(135deg,#9333ea,#6d28d9) !important; border-color: #6d28d9 !important; color: #fff !important; box-shadow: none !important; }
         .vvw-wrap .button-primary:active { background: #6d28d9 !important; border-color: #6d28d9 !important; }
+        .vvw-saved-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: linear-gradient(135deg,#a855f7,#7c3aed); color: #fff; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 600; }
+        .vvw-saved-notice .vvw-saved-dismiss { background: none; border: none; color: #fff; opacity: .8; cursor: pointer; padding: 0; line-height: 1; font-size: 18px; }
+        .vvw-saved-notice .vvw-saved-dismiss:hover { opacity: 1; }
     </style>
     <div class="wrap vvw-wrap">
         <div class="vvw-header">
@@ -185,14 +188,19 @@ function vistrow_voice_render_settings_page() {
         </div>
 
         <?php
-        // WordPress only auto-prints the "Settings saved." box on pages nested
-        // under the default Settings menu — a top-level page (like this one)
-        // has to render it itself, or a real save silently shows nothing.
-        if (isset($_GET['settings-updated'])) {
-            add_settings_error('vistrow_voice_messages', 'vvw_saved', 'Settings saved.', 'success');
-        }
-        settings_errors('vistrow_voice_messages');
+        // Deliberately NOT using add_settings_error()/settings_errors() here:
+        // WP core's common.js relocates any .notice/.updated/.error element to
+        // sit right after the page's first <h1>, and our <h1> lives inside the
+        // purple .vvw-header box above — so the "Settings saved" banner would
+        // get yanked into the middle of that header instead of staying here.
+        // A plain div with no WP notice classes is immune to that relocation.
+        if (isset($_GET['settings-updated'])) :
         ?>
+            <div class="vvw-saved-notice" id="vvw-saved-notice">
+                <span>Settings saved.</span>
+                <button type="button" class="vvw-saved-dismiss" aria-label="Dismiss" onclick="document.getElementById('vvw-saved-notice').style.display='none';">&times;</button>
+            </div>
+        <?php endif; ?>
 
         <div class="vvw-grid">
             <div>
