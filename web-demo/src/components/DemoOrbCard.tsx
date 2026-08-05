@@ -43,11 +43,24 @@ export function DemoOrbCard() {
 
   const remaining = getRemainingDemoCalls()
 
+  // Only counts against the free-call cap once a call actually connects to
+  // an agent - a visitor whose call fails end-to-end (LiveKit never joins
+  // AND the orchestrator fallback also fails) shouldn't lose a credit for
+  // an outage that wasn't their fault. The ref guards against a mid-call
+  // provider fallback (LiveKit -> orchestrator) double-charging one attempt.
+  const creditChargedRef = useRef(false)
+  const chargeDemoCall = useCallback(() => {
+    if (creditChargedRef.current) return
+    creditChargedRef.current = true
+    recordDemoCall()
+  }, [])
+
   const handleStart = useCallback(async () => {
     if (!hasDemoCallsRemaining()) {
       setPhase('capped')
       return
     }
+    creditChargedRef.current = false
     setPhase('connecting')
     setErrorMessage(null)
     try {
@@ -55,7 +68,6 @@ export function DemoOrbCard() {
       const identity = randomId('visitor')
       const room = randomId('voice-agent-demo')
       const { token: newToken, url } = await fetchLiveKitToken(identity, room)
-      recordDemoCall()
       trackQualifyLead('demo_call')
       setToken(newToken)
       setServerUrl(url)
@@ -118,10 +130,10 @@ export function DemoOrbCard() {
         {isCallLive && token && serverUrl ? (
           <LiveKitRoom serverUrl={serverUrl} token={token} connect audio onDisconnected={handleDisconnected}>
             <RoomAudioRenderer />
-            <InlineCallBody onAgentUnavailable={handleAgentUnavailable} />
+            <InlineCallBody onAgentUnavailable={handleAgentUnavailable} onConnected={chargeDemoCall} />
           </LiveKitRoom>
         ) : isCallLiveOrchestrator ? (
-          <InlineOrchestratorCallBody onEnded={handleDisconnected} onFailed={handleOrchestratorFailed} />
+          <InlineOrchestratorCallBody onEnded={handleDisconnected} onFailed={handleOrchestratorFailed} onConnected={chargeDemoCall} />
         ) : (
           <>
             <button
@@ -212,12 +224,16 @@ export function DemoOrbCard() {
 // swapped from the idle "Tap to talk" content to live call state: a running
 // timer and mute/end-call controls. No "Listening…/Thinking…/Speaking…"
 // status text - it read as distracting chatter rather than useful signal.
-function InlineCallBody({ onAgentUnavailable }: { onAgentUnavailable: () => void }) {
+function InlineCallBody({ onAgentUnavailable, onConnected }: { onAgentUnavailable: () => void; onConnected: () => void }) {
   const room = useRoomContext()
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant()
   const remoteParticipants = useRemoteParticipants()
   const agentParticipant = remoteParticipants[0]
   const agentJoined = !!agentParticipant
+
+  useEffect(() => {
+    if (agentJoined) onConnected()
+  }, [agentJoined, onConnected])
   // Timer starts when the AGENT joins, not when the browser connects to the
   // room - otherwise a call that never got an agent still showed a ticking
   // "live" timer against silence, which read as a broken/dead agent.
@@ -292,7 +308,15 @@ function InlineCallBody({ onAgentUnavailable }: { onAgentUnavailable: () => void
 // useOrchestratorCall's local state instead of LiveKit's room hooks - used
 // when LiveKit's demo worker didn't pick up and DemoOrbCard fell back to
 // the orchestrator (agentId omitted -> resolves the platform-demo agent).
-function InlineOrchestratorCallBody({ onEnded, onFailed }: { onEnded: () => void; onFailed: () => void }) {
+function InlineOrchestratorCallBody({
+  onEnded,
+  onFailed,
+  onConnected,
+}: {
+  onEnded: () => void
+  onFailed: () => void
+  onConnected: () => void
+}) {
   const { phase, agentState, agentVolume, micEnabled, toggleMic, endCall, elapsedMs } = useOrchestratorCall()
 
   useEffect(() => {
@@ -301,6 +325,10 @@ function InlineOrchestratorCallBody({ onEnded, onFailed }: { onEnded: () => void
   }, [phase, onFailed, onEnded])
 
   const connected = phase === 'active'
+
+  useEffect(() => {
+    if (connected) onConnected()
+  }, [connected, onConnected])
   const speaking = agentState === 'speaking'
 
   return (
