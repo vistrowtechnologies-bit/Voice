@@ -27,7 +27,8 @@ function escapeHtmlAttr(s: string): string {
 function snippetFor(site: Site, backendUrl: string): string {
   const avatarAttr = site.widgetAvatar && site.widgetAvatar !== 'default' ? ` data-avatar="${site.widgetAvatar}"` : ''
   const greetingAttr = site.widgetGreeting ? ` data-greeting="${escapeHtmlAttr(site.widgetGreeting)}"` : ''
-  return `<script src="${backendUrl}/widget.js" data-site-key="${site.siteKey}" data-api-base="${backendUrl}" data-position="${site.widgetPosition}" data-label="${site.widgetLabel}"${avatarAttr}${greetingAttr}></script>`
+  const modeAttr = site.widgetMode && site.widgetMode !== 'voice' ? ` data-mode="${site.widgetMode}"` : ''
+  return `<script src="${backendUrl}/widget.js" data-site-key="${site.siteKey}" data-api-base="${backendUrl}" data-position="${site.widgetPosition}" data-label="${site.widgetLabel}"${avatarAttr}${greetingAttr}${modeAttr}></script>`
 }
 
 export function WebsiteWidget() {
@@ -44,6 +45,7 @@ export function WebsiteWidget() {
   const [newLabel, setNewLabel] = useState('Talk to us')
   const [newAvatar, setNewAvatar] = useState('default')
   const [newGreeting, setNewGreeting] = useState('')
+  const [newMode, setNewMode] = useState<Site['widgetMode']>('voice')
 
   const reloadSites = () => fetchSites().then(setSites).catch(() => setSites([]))
 
@@ -69,6 +71,7 @@ export function WebsiteWidget() {
       newLabel.trim() || 'Talk to us',
       newAvatar,
       newGreeting.trim(),
+      newMode,
     )
     setNewName('')
     setNewDomain('')
@@ -77,6 +80,7 @@ export function WebsiteWidget() {
     setNewLabel('Talk to us')
     setNewAvatar('default')
     setNewGreeting('')
+    setNewMode('voice')
     reloadSites()
   }
 
@@ -156,6 +160,17 @@ export function WebsiteWidget() {
                 placeholder="Hi! I'm Artha - ask me anything, no forms."
                 className="w-full min-w-[240px] rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
               />
+            </Field>
+            <Field label="Voice or chat">
+              <select
+                value={newMode}
+                onChange={(e) => setNewMode(e.target.value as Site['widgetMode'])}
+                className="w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm"
+              >
+                <option value="voice">Voice call only</option>
+                <option value="chat">Text chat only (no audio)</option>
+                <option value="both">Voice, with type-instead fallback</option>
+              </select>
             </Field>
             <button
               onClick={handleCreate}
@@ -272,6 +287,7 @@ function SiteRow({
       widgetLabel: site.widgetLabel,
       widgetAvatar: site.widgetAvatar,
       widgetGreeting: site.widgetGreeting,
+      widgetMode: site.widgetMode,
       ...partial,
     }).then(onChange)
 
@@ -368,6 +384,19 @@ function SiteRow({
           />
         </div>
       )}
+
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-text-muted">Voice or chat</span>
+        <select
+          value={site.widgetMode}
+          onChange={(e) => patchSite({ widgetMode: e.target.value as Site['widgetMode'] })}
+          className="rounded-lg border border-border bg-surface-high px-2.5 py-1.5 text-xs"
+        >
+          <option value="voice">Voice call only</option>
+          <option value="chat">Text chat only (no audio)</option>
+          <option value="both">Voice, with type-instead fallback</option>
+        </select>
+      </div>
 
       <div className="rounded-lg border border-border bg-surface-high/40 p-3">
         <div className="mb-2 flex gap-1 rounded-lg bg-surface p-1 text-xs">

@@ -81,6 +81,9 @@ CREATE TABLE IF NOT EXISTS sites (
     -- keeps that default text living in one place (widget.ts) instead of
     -- duplicated into every existing row.
     widget_greeting TEXT DEFAULT '',
+    -- 'voice' (default, matches every install before chat mode shipped),
+    -- 'chat' (text-only, no call button at all), or 'both' (visitor picks).
+    widget_mode TEXT DEFAULT 'voice',
     created_at TEXT DEFAULT {_NOW}
 );
 
@@ -746,6 +749,10 @@ def init_tables() -> None:
             # widget shipped with a hardcoded orb video and greeting line.
             conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_avatar TEXT DEFAULT 'default'")
             conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_greeting TEXT DEFAULT ''")
+            # Voice/chat/both mode toggle, added after the widget shipped
+            # voice-call-only. 'voice' default preserves every existing
+            # install's exact current behavior.
+            conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_mode TEXT DEFAULT 'voice'")
             # "Premium+" (ElevenLabs v3) was folded into Premium (Flash v2.5) on
             # 2026-07-14 — v3's realtime endpoint 403s in production, so it was
             # never a good tier to keep selling (see voice_catalog.py's CATALOG
@@ -3282,6 +3289,7 @@ def _site_dict(r: dict) -> dict:
         "widgetLabel": r["widget_label"] or "Talk to us",
         "widgetAvatar": r["widget_avatar"] or "default",
         "widgetGreeting": r["widget_greeting"] or "",
+        "widgetMode": r["widget_mode"] or "voice",
         "createdAt": r["created_at"],
     }
 
@@ -3318,6 +3326,56 @@ def get_site_by_key(site_key: str) -> dict | None:
         conn.close()
 
 
+def get_agent_by_id_unscoped(agent_id: int) -> dict | None:
+    """Unscoped by design, same reasoning as get_site_by_key above — called
+    from the public /widget/chat endpoint after a site_key has already
+    proven the caller is allowed to talk to whichever agent that site
+    names. No account_id available at that point (no dashboard session)."""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
+        return _agent_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_kb_content_for_prompt(kb_id: int, max_chars: int = 8000) -> str:
+    """Knowledge-base text to append to a system prompt - duplicated from
+    agent/db.py's get_kb_content (same reasoning as this file's own module
+    docstring: agent/ and server/ deploy separately, so shared logic is
+    copied rather than imported across the boundary). Curated Q&A pairs
+    come first so they survive the char cap, then raw sources with
+    whatever budget remains."""
+    conn = _connect()
+    try:
+        parts: list[str] = []
+        qa_rows = conn.execute(
+            "SELECT question, answer FROM kb_qa WHERE kb_id = ? ORDER BY position, id",
+            (kb_id,),
+        ).fetchall()
+        if qa_rows:
+            faq = "\n\n".join(f"Q: {r['question']}\nA: {r['answer']}" for r in qa_rows)
+            parts.append("## Approved answers (quote these when the question matches)\n" + faq)
+        rows = conn.execute(
+            "SELECT name, content FROM knowledge_sources WHERE kb_id = ? ORDER BY id",
+            (kb_id,),
+        ).fetchall()
+        parts.extend(f"## {r['name']}\n{r['content']}" for r in rows)
+        return "\n\n".join(parts)[:max_chars]
+    finally:
+        conn.close()
+
+
+def is_kb_strict_for_prompt(kb_id: int) -> bool:
+    """Whether the operator turned strict mode on for this KB (default yes) - duplicated from agent/db.py's is_kb_strict."""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT strict FROM knowledge_bases WHERE id = ?", (kb_id,)).fetchone()
+        return bool(row["strict"]) if row is not None else True
+    finally:
+        conn.close()
+
+
 def create_site(
     name: str,
     agent_id: int | None,
@@ -3327,18 +3385,21 @@ def create_site(
     widget_label: str = "Talk to us",
     widget_avatar: str = "default",
     widget_greeting: str = "",
+    widget_mode: str = "voice",
 ) -> dict:
     if widget_position not in ("bottom-right", "bottom-left"):
         widget_position = "bottom-right"
     if not is_valid_avatar_key(widget_avatar):
         widget_avatar = "default"
     widget_greeting = widget_greeting.strip()[:140]
+    if widget_mode not in ("voice", "chat", "both"):
+        widget_mode = "voice"
     conn = _connect()
     try:
         with conn:
             cur = conn.execute(
-                "INSERT INTO sites (account_id, name, site_key, allowed_domain, agent_id, widget_position, widget_label, widget_avatar, widget_greeting) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "INSERT INTO sites (account_id, name, site_key, allowed_domain, agent_id, widget_position, widget_label, widget_avatar, widget_greeting, widget_mode) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                 (
                     account_id,
                     name,
@@ -3349,6 +3410,7 @@ def create_site(
                     widget_label or "Talk to us",
                     widget_avatar,
                     widget_greeting,
+                    widget_mode,
                 ),
             )
         row = conn.execute("SELECT * FROM sites WHERE id = ?", (cur.lastrowid,)).fetchone()
@@ -3365,12 +3427,15 @@ def update_site(site_id: int, data: dict, account_id: int) -> dict | None:
     if not is_valid_avatar_key(widget_avatar):
         widget_avatar = "default"
     widget_greeting = (data.get("widgetGreeting") or "").strip()[:140]
+    widget_mode = data.get("widgetMode", "voice")
+    if widget_mode not in ("voice", "chat", "both"):
+        widget_mode = "voice"
     conn = _connect()
     try:
         with conn:
             conn.execute(
                 "UPDATE sites SET name = ?, allowed_domain = ?, agent_id = ?, status = ?, "
-                "widget_position = ?, widget_label = ?, widget_avatar = ?, widget_greeting = ? WHERE id = ? AND account_id = ?",
+                "widget_position = ?, widget_label = ?, widget_avatar = ?, widget_greeting = ?, widget_mode = ? WHERE id = ? AND account_id = ?",
                 (
                     data.get("name"),
                     data.get("allowedDomain", ""),
@@ -3380,6 +3445,7 @@ def update_site(site_id: int, data: dict, account_id: int) -> dict | None:
                     data.get("widgetLabel") or "Talk to us",
                     widget_avatar,
                     widget_greeting,
+                    widget_mode,
                     site_id,
                     account_id,
                 ),

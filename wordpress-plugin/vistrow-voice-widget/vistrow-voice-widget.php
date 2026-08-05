@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.4.0
+ * Version: 1.5.0
  * Author: Vistrow Voice
  */
 
@@ -55,6 +55,11 @@ function vistrow_voice_default_settings() {
         // keeps that default line living in one place (widget.ts).
         'greeting' => '',
         'avatar' => 'default',
+        // 'voice' keeps every existing install's exact current behavior -
+        // a call button and nothing else. 'chat' replaces it with a
+        // text-only chatbot (no audio at all); 'both' lets the visitor
+        // pick when they open the widget.
+        'mode' => 'voice',
         // 'all' keeps existing installs behaving exactly as before (widget
         // on every page) — 'selected' is opt-in so nobody's widget silently
         // disappears sitewide just from upgrading the plugin.
@@ -120,6 +125,7 @@ function vistrow_voice_sanitize_settings($input) {
         'label' => isset($input['label']) && $input['label'] !== '' ? sanitize_text_field($input['label']) : $defaults['label'],
         'greeting' => isset($input['greeting']) ? mb_substr(sanitize_text_field($input['greeting']), 0, 140) : $defaults['greeting'],
         'avatar' => $avatar,
+        'mode' => in_array($input['mode'] ?? '', array('voice', 'chat', 'both'), true) ? $input['mode'] : $defaults['mode'],
         'show_on' => (isset($input['show_on']) && $input['show_on'] === 'selected') ? 'selected' : 'all',
         'pages' => isset($input['pages']) && is_array($input['pages']) ? array_map('absint', $input['pages']) : array(),
     );
@@ -259,6 +265,29 @@ function vistrow_voice_render_settings_page() {
                         </div>
 
                         <div class="vvw-field">
+                            <label class="vvw-label">Voice call or chat</label>
+                            <label class="vvw-radio-row">
+                                <input type="radio" name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[mode]"
+                                    value="voice" <?php checked($settings['mode'], 'voice'); ?> />
+                                Voice call only
+                            </label>
+                            <label class="vvw-radio-row">
+                                <input type="radio" name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[mode]"
+                                    value="chat" <?php checked($settings['mode'], 'chat'); ?> />
+                                Text chat only (no audio)
+                            </label>
+                            <label class="vvw-radio-row">
+                                <input type="radio" name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[mode]"
+                                    value="both" <?php checked($settings['mode'], 'both'); ?> />
+                                Let the visitor choose
+                            </label>
+                            <p class="vvw-help">
+                                Chat mode answers from the same agent and knowledge base, entirely as text -
+                                good for visitors who can't or don't want to talk out loud.
+                            </p>
+                        </div>
+
+                        <div class="vvw-field">
                             <label class="vvw-label">Position</label>
                             <select name="<?php echo esc_attr(VISTROW_VOICE_OPTION); ?>[position]">
                                 <option value="bottom-right" <?php selected($settings['position'], 'bottom-right'); ?>>Bottom right</option>
@@ -388,13 +417,17 @@ add_action('wp_footer', function () {
     $greeting_attr = ($settings['greeting'] !== '')
         ? sprintf(' data-greeting="%s"', esc_attr($settings['greeting']))
         : '';
+    $mode_attr = ($settings['mode'] !== 'voice')
+        ? sprintf(' data-mode="%s"', esc_attr($settings['mode']))
+        : '';
     printf(
-        '<script src="%1$s/widget.js" data-site-key="%2$s" data-api-base="%1$s" data-position="%3$s" data-label="%4$s"%5$s%6$s></script>' . "\n",
+        '<script src="%1$s/widget.js" data-site-key="%2$s" data-api-base="%1$s" data-position="%3$s" data-label="%4$s"%5$s%6$s%7$s></script>' . "\n",
         esc_url($backend),
         esc_attr($settings['site_key']),
         esc_attr($settings['position']),
         esc_attr($settings['label']),
         $avatar_attr,
-        $greeting_attr
+        $greeting_attr,
+        $mode_attr
     );
 });

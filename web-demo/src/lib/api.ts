@@ -308,6 +308,7 @@ export const createSite = (
   widgetLabel: string = 'Talk to us',
   widgetAvatar: string = 'default',
   widgetGreeting: string = '',
+  widgetMode: Site['widgetMode'] = 'voice',
 ) =>
   send<Site>('POST', '/widget/sites', {
     name,
@@ -317,6 +318,7 @@ export const createSite = (
     widgetLabel,
     widgetAvatar,
     widgetGreeting,
+    widgetMode,
   })
 export const updateSite = (id: number, data: Partial<Site>) => send<Site>('PATCH', `/widget/sites/${id}`, data)
 export const deleteSite = (id: number) => send('DELETE', `/widget/sites/${id}`)

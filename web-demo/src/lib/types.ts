@@ -410,6 +410,7 @@ export interface Site {
   widgetLabel: string
   widgetAvatar: string
   widgetGreeting: string
+  widgetMode: 'voice' | 'chat' | 'both'
   createdAt: string
 }
 

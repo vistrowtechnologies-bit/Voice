@@ -1433,6 +1433,25 @@ async def entrypoint(ctx: JobContext) -> None:
     noise_filter = (
         noise_cancellation.BVCTelephony() if call_context["call_type"] == "phone" else noise_cancellation.BVC()
     )
+    # Lets the widget's in-call "type instead" fallback (a noisy-environment
+    # visitor who can't reliably be heard by STT) inject a turn as if it had
+    # been spoken — generate_reply(user_input=...) runs it through the same
+    # LLM/tool pipeline as a normal utterance and speaks the reply aloud, so
+    # the caller never has to know it arrived as text instead of audio.
+    def _on_data_received(data_packet) -> None:
+        if data_packet.topic != "typed-utterance":
+            return
+        try:
+            text = data_packet.data.decode("utf-8").strip()[:500]
+        except UnicodeDecodeError:
+            return
+        if not text:
+            return
+        logger.info("typed utterance received in room %s: %r", ctx.room.name, text)
+        session.generate_reply(user_input=text)
+
+    ctx.room.on("data_received", _on_data_received)
+
     await session.start(
         agent=agent,
         room=ctx.room,

@@ -19,6 +19,7 @@ import kb_crawl
 import kb_extract
 import livekit_sip
 import widget_avatars
+import widget_chat
 from help_content import FAQS
 from dotenv import load_dotenv
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
@@ -56,6 +57,7 @@ _PUBLIC_PATHS = {
     "/token",                          # LiveKit token for the public demo + browser test
     "/widget.js",                      # embedded widget script
     "/widget/token",                   # widget call token (runs on customers' sites)
+    "/widget/chat",                    # widget text-chat turn (runs on customers' sites)
     "/widget/wordpress-plugin.zip",    # plugin download
     "/agent-orb.mp4",                  # widget avatar video
     "/public/contact",                 # marketing site's "Book a Demo" form (anonymous visitors)
@@ -2176,6 +2178,7 @@ def create_site(data: dict = Body(...), user: dict = Depends(current_user)) -> d
         data.get("widgetLabel", "Talk to us"),
         data.get("widgetAvatar", "default"),
         data.get("widgetGreeting", ""),
+        data.get("widgetMode", "voice"),
     )
 
 
@@ -2431,3 +2434,65 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
         .to_jwt()
     )
     return {"token": token, "url": livekit_url, "room": room}
+
+
+# Looser than /widget/token's cap since a chat exchange is far cheaper than
+# a live voice call (one text completion vs. STT+LLM+TTS for a whole
+# call) - a normal back-and-forth conversation needs many requests.
+_WIDGET_CHAT_WINDOW_SECONDS = 60
+_WIDGET_CHAT_MAX_PER_WINDOW = 40
+_widget_chat_calls: dict[str, list[float]] = {}
+
+
+def _widget_chat_rate_limited(site_key: str) -> bool:
+    import time
+
+    now = time.monotonic()
+    calls = [t for t in _widget_chat_calls.get(site_key, []) if now - t < _WIDGET_CHAT_WINDOW_SECONDS]
+    calls.append(now)
+    _widget_chat_calls[site_key] = calls
+    return len(calls) > _WIDGET_CHAT_MAX_PER_WINDOW
+
+
+class WidgetChatRequest(BaseModel):
+    siteKey: str
+    message: str
+    history: list[dict] = []
+
+
+@app.post("/widget/chat")
+def widget_chat_route(req: WidgetChatRequest) -> dict:
+    """Public, unauthenticated text-chat turn for a site in 'chat' or
+    'both' widget mode — same site_key-is-the-auth model as /widget/token,
+    but answers with a plain OpenAI chat completion grounded in the site's
+    agent config instead of placing a LiveKit call. Stateless: the widget
+    resends the full conversation history every turn (see widget_chat.py)."""
+    masked_key = req.siteKey[:12] + "…" if len(req.siteKey) > 12 else req.siteKey
+    site = calls_db.get_site_by_key(req.siteKey)
+    if site is None:
+        logger.warning("widget chat rejected: unknown site_key=%s", masked_key)
+        raise HTTPException(404, "Unknown site key")
+    if site["status"] == "paused":
+        raise HTTPException(403, "This site's widget is currently paused")
+    if site["widgetMode"] not in ("chat", "both"):
+        raise HTTPException(403, "Chat is not enabled for this site")
+    if _widget_chat_rate_limited(req.siteKey):
+        raise HTTPException(429, "Too many messages right now — try again shortly")
+
+    if not site["agentId"]:
+        raise HTTPException(400, "This site has no agent assigned yet")
+    agent = calls_db.get_agent_by_id_unscoped(site["agentId"])
+    if agent is None:
+        raise HTTPException(400, "This site's agent no longer exists")
+
+    kb_content, kb_strict = "", True
+    if agent.get("kbId"):
+        kb_content = calls_db.get_kb_content_for_prompt(agent["kbId"])
+        kb_strict = calls_db.is_kb_strict_for_prompt(agent["kbId"])
+
+    try:
+        reply = widget_chat.answer_widget_chat(req.message, req.history, agent, kb_content, kb_strict)
+    except RuntimeError as exc:
+        logger.error("widget chat failed for site=%s: %s", site["name"], exc)
+        raise HTTPException(502, "Could not reach the chat assistant — please try again shortly")
+    return {"reply": reply}
