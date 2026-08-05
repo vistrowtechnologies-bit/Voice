@@ -737,7 +737,7 @@ function AgentEditor({
                 label="End call after silence (sec)"
                 value={form.endCallOnSilenceMs / 1000}
                 onChange={(n) => set('endCallOnSilenceMs', Math.round(n * 1000))}
-                hint="0 = never"
+                hint="0 = default (12s)"
                 inputCls={inputCls}
               />
             </div>

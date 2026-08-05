@@ -1229,7 +1229,14 @@ async def entrypoint(ctx: JobContext) -> None:
     silence_reminder_ms = int(cfg.get("silence_reminder_ms") or 0)
     away_timeout = silence_reminder_ms / 1000 if silence_reminder_ms > 0 else 6.5
     silence_reminder_max = int(cfg.get("silence_reminder_max") or 1)
-    end_call_on_silence_ms = int(cfg.get("end_call_on_silence_ms") or 0)
+    # Platform default: 12s of total silence (no voice, no typed activity)
+    # ends the call rather than leaving it open indefinitely burning
+    # credits with nobody there. An operator can still override this to a
+    # different value from the agent's Advanced settings; there's no way to
+    # fully disable it from the dashboard, and that's deliberate - past
+    # behavior (end_call_on_silence_ms=0 meaning "never hang up") let a
+    # forgotten/idle call run until LiveKit's own room timeout.
+    end_call_on_silence_ms = int(cfg.get("end_call_on_silence_ms") or 0) or 12_000
     max_call_duration_s = int(cfg.get("max_call_duration_s") or 0)
 
     session = AgentSession(
@@ -1280,8 +1287,20 @@ async def entrypoint(ctx: JobContext) -> None:
         async def _watch() -> None:
             try:
                 await asyncio.sleep(end_call_on_silence_ms / 1000)
-                logger.info("hanging up room %s after %dms of silence", ctx.room.name, end_call_on_silence_ms)
-                await _hang_up(ctx.room.name)
+                logger.info("ending room %s after %dms of silence", ctx.room.name, end_call_on_silence_ms)
+                # Same "speak the goodbye, then hang up once it finishes
+                # playing" pattern as the end_call tool (see
+                # _on_agent_state_changed below) - a caller should always
+                # hear why the call ended, never just get cut off.
+                userdata["ending_call"] = True
+                session.generate_reply(
+                    instructions=(
+                        "We haven't heard anything from the caller in a while, by voice or by text. "
+                        "Say one short, warm line explaining you didn't get a response so you're "
+                        "ending the call now, and that they're welcome to reach out again anytime. "
+                        "Then stop - don't ask another question."
+                    )
+                )
             except asyncio.CancelledError:
                 pass
 
@@ -1471,7 +1490,19 @@ async def entrypoint(ctx: JobContext) -> None:
             return
         logger.info("typed utterance received in room %s: %r", ctx.room.name, text)
         _mark_present()
-        session.generate_reply(user_input=text)
+
+        async def _reply_to_typed_text() -> None:
+            # generate_reply() alone does NOT stop audio already playing -
+            # confirmed live: typing while the agent was mid-sentence just
+            # queued a second reply behind the first, so the agent kept
+            # talking right through the interruption instead of stopping to
+            # address what was just typed. interrupt() has to be awaited
+            # first so the barge-in is fully processed (chat context
+            # updated) before the new reply starts, or the two can race.
+            await session.interrupt(force=True)
+            session.generate_reply(user_input=text)
+
+        asyncio.create_task(_reply_to_typed_text())
 
     ctx.room.on("data_received", _on_data_received)
 
