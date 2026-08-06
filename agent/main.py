@@ -761,11 +761,22 @@ class RealEstateAgent(Agent):
         # Post-call structured extraction fields (parsed from the agent's JSON).
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
 
+    def _mark_greeting_played(self) -> None:
+        self.session.userdata["greeting_played"] = True
+        # The end-call-on-silence watchdog (agent/main.py's entrypoint) is
+        # deliberately not armed until this fires — arming it at session
+        # start let the greeting's own playback time eat into the caller's
+        # silence budget, hanging up on someone who was never actually
+        # silent, just listening to the opening line.
+        reset_silence_hangup = self.session.userdata.get("reset_silence_hangup")
+        if reset_silence_hangup:
+            reset_silence_hangup()
+
     async def on_enter(self) -> None:
         # first_speaker == 'user' means wait silently for the caller to open —
         # no greeting is ever queued, so away-tracking is valid immediately.
         if self._first_speaker == "user":
-            self.session.userdata["greeting_played"] = True
+            self._mark_greeting_played()
             return
         try:
             if self._welcome_message:
@@ -800,7 +811,7 @@ class RealEstateAgent(Agent):
             # the greeting is still being synthesized and gets queued right
             # behind it, so the caller hears the opener immediately followed
             # by "are you still there?" before they've had a chance to speak.
-            self.session.userdata["greeting_played"] = True
+            self._mark_greeting_played()
 
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
@@ -1306,6 +1317,13 @@ async def entrypoint(ctx: JobContext) -> None:
 
         silence_task["handle"] = asyncio.create_task(_watch())
 
+    # RealEstateAgent.on_enter reaches this through userdata (not a closure
+    # capture — it's a different object, constructed before this function
+    # exists) to arm the watchdog for the first time only once the opening
+    # greeting has actually finished playing. See the call-site comment
+    # below for why arming it any earlier is a real bug, not just early.
+    userdata["reset_silence_hangup"] = _reset_silence_hangup
+
     def _on_user_state_changed(ev) -> None:
         if ev.new_state == "speaking":
             # Caller is talking again — reset both the reminder count and the
@@ -1439,9 +1457,14 @@ async def entrypoint(ctx: JobContext) -> None:
                 pass
 
         asyncio.create_task(_max_duration_guard())
-    # Arm the end-call-on-silence watchdog for the opening stretch (no-ops if
-    # end_call_on_silence_ms is 0); it re-arms whenever the caller speaks.
-    _reset_silence_hangup()
+    # Deliberately NOT armed here. The greeting itself (a few seconds of
+    # TTS the caller hasn't had any chance to respond to yet) was counting
+    # against this same 12s window when it was armed at session start -
+    # confirmed live: a demo call was hung up mid-greeting-or-just-after
+    # with "ending room ... after 12000ms of silence" in the logs, cutting
+    # off a caller who was never actually silent, just listening.
+    # RealEstateAgent.on_enter arms it for the first time once greeting_played
+    # actually flips true (see userdata["reset_silence_hangup"] above).
 
     # Strips steady background noise (traffic, crowd chatter, AC hum) from
     # the caller's mic before it ever reaches STT — Krisp's model via
