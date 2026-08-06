@@ -598,6 +598,26 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
         if sess.ending_call:
             await websocket.close()
 
+    async def _keepalive() -> None:
+        # No ping/pong at all on this connection before this - a slow
+        # STT/LLM/TTS turn (or just a long conversational pause) can sit
+        # with nothing sent either direction for tens of seconds, which is
+        # exactly the profile an idle-connection proxy timeout kills
+        # silently: the server sees a clean disconnect and tears the
+        # session down in the `finally` below, but the browser's
+        # WebSocket object never fires onclose, so the client is left
+        # showing "Thinking..." forever with no way to know the call is
+        # actually already gone. A small ping every 20s keeps the
+        # connection looking active to any intermediary.
+        try:
+            while True:
+                await asyncio.sleep(20)
+                await websocket.send_json({"event": "ping"})
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    keepalive_task = asyncio.create_task(_keepalive())
+
     try:
         # Speak first, like the phone path's greeting — otherwise the
         # visitor sits in silence waiting for the mic to pick something up.
@@ -686,6 +706,7 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         logger.info("browser stream disconnected for session_id=%s", session_id)
     finally:
+        keepalive_task.cancel()
         if speaking_task and not speaking_task.done():
             speaking_task.cancel()
         wav_path = recorder.stop()

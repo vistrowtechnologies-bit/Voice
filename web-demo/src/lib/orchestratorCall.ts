@@ -205,14 +205,41 @@ export function useOrchestratorCall(agentId?: number): UseOrchestratorCallResult
         ws.binaryType = 'arraybuffer'
         wsRef.current = ws
 
+        // Some idle-connection proxy between the browser and the
+        // orchestrator can kill this socket during a long silent stretch
+        // (a slow reply, or just a pause in conversation) without ever
+        // delivering a close frame back to the browser - the server sees
+        // a clean disconnect and tears the session down, but this
+        // WebSocket object sits there looking "open" forever, leaving the
+        // UI stuck showing whatever state it was last in (usually
+        // "Thinking..."). The server now pings every 20s specifically so
+        // this has something to check for; if nothing at all has arrived
+        // in twice that window, treat the connection as dead rather than
+        // hang indefinitely.
+        let lastActivityAt = Date.now()
+        const watchdog = window.setInterval(() => {
+          if (Date.now() - lastActivityAt > 45_000) {
+            window.clearInterval(watchdog)
+            try {
+              ws.close()
+            } catch {
+              // already closed
+            }
+            if (!cancelled) setPhase('error')
+          }
+        }, 5_000)
+        cleanupFns.push(() => window.clearInterval(watchdog))
+
         ws.onopen = () => {
           ws.send(JSON.stringify({ event: 'start', sampleRate: captureCtx.sampleRate }))
           startedAtRef.current = Date.now()
           if (!cancelled) setPhase('active')
         }
         ws.onmessage = (evt) => {
+          lastActivityAt = Date.now()
           if (typeof evt.data === 'string') {
             const msg = JSON.parse(evt.data) as Record<string, unknown>
+            if (msg.event === 'ping') return
             if (msg.event === 'clear_audio') stopPlayback()
             else if (msg.event === 'state' && msg.state === 'thinking') setAgentState('thinking')
             else if (msg.event === 'transcript') {
