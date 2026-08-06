@@ -222,25 +222,42 @@ export function DemoOrbCard() {
               </Link>
             )}
 
-            <div className="mt-6 grid w-full grid-cols-2 gap-4 border-t border-border pt-5 text-left">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Native support</p>
-                {/* Hindi + 10 others = the 11 Indian languages in LANGUAGE_NAMES.
-                    Hinglish isn't counted as a 12th - it's Hindi/English
-                    code-switching, and listing it as a separate language is
-                    what made the count drift across pages before. */}
-                <p className="mt-1 text-xs text-text">Hindi · Tamil +9 more</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Low latency</p>
-                <p className="mt-1 text-xs text-text">Real-time · emotion-aware</p>
-              </div>
-            </div>
+            <DemoCardFooter />
           </>
         )}
       </div>
     </div>
   )
+}
+
+// Shared with the idle state so the card is the same height and never looks
+// half-empty once a call is live - see InlineCallBody/InlineOrchestratorCallBody.
+function DemoCardFooter() {
+  return (
+    <div className="mt-6 grid w-full grid-cols-2 gap-4 border-t border-border pt-5 text-left">
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Native support</p>
+        {/* Hindi + 10 others = the 11 Indian languages in LANGUAGE_NAMES.
+            Hinglish isn't counted as a 12th - it's Hindi/English
+            code-switching, and listing it as a separate language is
+            what made the count drift across pages before. */}
+        <p className="mt-1 text-xs text-text">Hindi · Tamil +9 more</p>
+      </div>
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Low latency</p>
+        <p className="mt-1 text-xs text-text">Real-time · emotion-aware</p>
+      </div>
+    </div>
+  )
+}
+
+// Agent's live turn state, mirrors ActiveCallUI.tsx's STATE_STYLES labels -
+// fills what used to be the empty gap below the orb during an active call,
+// and doubles as the same "is it stuck?" signal the dashboard test call has.
+const STATE_LABELS: Record<string, string> = {
+  listening: 'Listening…',
+  thinking: 'Thinking…',
+  speaking: 'Agent is speaking…',
 }
 
 // Rendered inside <LiveKitRoom> once connected - same card, same footprint,
@@ -304,7 +321,11 @@ function InlineCallBody({ onAgentUnavailable, onConnected }: { onAgentUnavailabl
         )}
       </div>
 
-      {!agentJoined && <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>}
+      {agentJoined ? (
+        <AgentStateLabel agentParticipant={agentParticipant} />
+      ) : (
+        <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>
+      )}
 
       <div className="mt-6 flex w-full items-center justify-center gap-4 border-t border-border pt-5">
         <button
@@ -322,6 +343,8 @@ function InlineCallBody({ onAgentUnavailable, onConnected }: { onAgentUnavailabl
           <Icon name="call_end" className="text-[24px]" />
         </button>
       </div>
+
+      <DemoCardFooter />
     </>
   )
 }
@@ -375,7 +398,11 @@ function InlineOrchestratorCallBody({
         )}
       </div>
 
-      {!connected && <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>}
+      {connected ? (
+        <p className="mt-5 text-sm text-text-muted">{STATE_LABELS[agentState ?? ''] ?? 'Listening…'}</p>
+      ) : (
+        <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>
+      )}
 
       <div className="mt-6 flex w-full items-center justify-center gap-4 border-t border-border pt-5">
         <button
@@ -393,6 +420,8 @@ function InlineOrchestratorCallBody({
           <Icon name="call_end" className="text-[24px]" />
         </button>
       </div>
+
+      <DemoCardFooter />
     </>
   )
 }
@@ -444,5 +473,13 @@ function AgentVisual({ agentParticipant }: { agentParticipant: RemoteParticipant
       <video ref={videoRef} src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
     </span>
   )
+}
+
+// Separate component (not folded into AgentVisual) purely so InlineCallBody
+// can place it below the mic/end-call row's divider instead of right under
+// the orb - same gating rule applies: only mount once agentParticipant exists.
+function AgentStateLabel({ agentParticipant }: { agentParticipant: RemoteParticipant }) {
+  const agentState = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
+  return <p className="mt-5 text-sm text-text-muted">{STATE_LABELS[agentState ?? ''] ?? 'Listening…'}</p>
 }
 
