@@ -23,12 +23,12 @@ type Phase = 'idle' | 'connecting' | 'active' | 'active-orchestrator' | 'denied'
 // instead of leaving the visitor staring at a ticking timer over dead air.
 const AGENT_JOIN_TIMEOUT_MS = 20_000
 
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-}
+// Same hard cap the embeddable widget enforces (widget/src/widget.ts) - every
+// minute of every call costs real STT/LLM/TTS spend. The marketing demo cuts
+// it silently instead of showing a countdown: this card is a first
+// impression, not a tool a visitor is relying on, so a visible timer just
+// makes an unlimited-feeling product look metered.
+const MAX_CALL_MS = 5 * 60 * 1000
 
 // The recurring "LIVE DEMO" card - tapping the orb starts the call right
 // here (no separate confirmation page/route): mic permission is the
@@ -259,6 +259,11 @@ function InlineCallBody({ onAgentUnavailable, onConnected }: { onAgentUnavailabl
     return () => clearTimeout(timer)
   }, [agentJoined, onAgentUnavailable])
 
+  // Hard cap enforced silently - no visible countdown, see MAX_CALL_MS.
+  useEffect(() => {
+    if (elapsedMs >= MAX_CALL_MS) room.disconnect()
+  }, [elapsedMs, room])
+
   return (
     <>
       <div className="relative my-6 flex h-48 w-48 items-center justify-center">
@@ -276,13 +281,7 @@ function InlineCallBody({ onAgentUnavailable, onConnected }: { onAgentUnavailabl
         )}
       </div>
 
-      {agentJoined ? (
-        <div className="mt-5 rounded-xl border border-border bg-bg px-4 py-2 font-mono text-sm text-cyan">
-          {formatDuration(elapsedMs)}
-        </div>
-      ) : (
-        <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>
-      )}
+      {!agentJoined && <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>}
 
       <div className="mt-6 flex w-full items-center justify-center gap-4 border-t border-border pt-5">
         <button
@@ -331,6 +330,11 @@ function InlineOrchestratorCallBody({
   }, [connected, onConnected])
   const speaking = agentState === 'speaking'
 
+  // Hard cap enforced silently - no visible countdown, see MAX_CALL_MS.
+  useEffect(() => {
+    if (elapsedMs >= MAX_CALL_MS) endCall()
+  }, [elapsedMs, endCall])
+
   return (
     <>
       <div className="relative my-6 flex h-48 w-48 items-center justify-center">
@@ -348,13 +352,7 @@ function InlineOrchestratorCallBody({
         )}
       </div>
 
-      {connected ? (
-        <div className="mt-5 rounded-xl border border-border bg-bg px-4 py-2 font-mono text-sm text-cyan">
-          {formatDuration(elapsedMs)}
-        </div>
-      ) : (
-        <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>
-      )}
+      {!connected && <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>}
 
       <div className="mt-6 flex w-full items-center justify-center gap-4 border-t border-border pt-5">
         <button
