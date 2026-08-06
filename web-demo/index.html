@@ -59,11 +59,25 @@
          key in the dashboard's Website Widget page), dogfooded on
          vistrowvoice.com itself alongside the homepage hero's inline
          DemoOrbCard - a separate, bottom-right floating "Talk to us"
-         button available on every page, not just the homepage. -->
+         button available on every page, not just the homepage.
+
+         Routed through Vercel's existing /api/* rewrite (vercel.json,
+         already proxying to this same Railway backend for the dashboard)
+         instead of hitting voice-production-2950.up.railway.app directly -
+         confirmed live that requesting the Railway domain directly, as a
+         cross-origin <script src> FROM vistrowvoice.com specifically,
+         returns 503 at Railway's edge (other customers' embeds work fine;
+         a direct top-level navigation to the same URL also works fine -
+         it's specific to that cross-origin subresource pattern from this
+         referrer). Same-origin via /api sidesteps whatever that edge rule
+         is entirely; confirmed working (200, full bundle) before shipping.
+         Third-party embed snippets from the dashboard still point
+         customers directly at the Railway URL, since they don't have this
+         proxy - this fix is only relevant for our own site. -->
     <script
-      src="https://voice-production-2950.up.railway.app/widget.js"
+      src="/api/widget.js"
       data-site-key="av_live_K3WlEka3sKGHgFA-xwQrijJsTO8XfqhK"
-      data-api-base="https://voice-production-2950.up.railway.app"
+      data-api-base="/api"
       data-position="bottom-right"
       data-label="Talk to us"
     ></script>
