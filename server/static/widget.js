@@ -60,14 +60,7 @@ a=extmap-allow-mixed`)!==-1){let n=t.sdp.split(`
 .av-button:hover { transform: scale(1.06); }
 .av-button video, .av-button img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 
-/* max-width is capped relative to the viewport, not just a flat 220px -
-   on a ~375-430px phone a fixed 220px bubble anchored 78px in from the
-   OPPOSITE edge's own 20px offset reaches far enough across the screen to
-   land on top of whatever else a site anchors in the other bottom corner
-   (a WhatsApp chat button, in the case that surfaced this) instead of
-   stopping with real clearance from it. */
-.av-greeting { position: absolute; bottom: 8px; ${lf===`bottom-left`?`left: 78px;`:`right: 78px;`} display: flex; align-items: center; gap: 8px; width: min(168px, calc(100vw - 148px)); background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
-.av-greeting span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.av-greeting { position: absolute; bottom: 8px; ${lf===`bottom-left`?`left: 78px;`:`right: 78px;`} display: flex; align-items: center; gap: 8px; width: max-content; max-width: 220px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
 .av-greeting span { flex: 1 1 auto; min-width: 0; }
 .av-greeting button { background: none; border: none; color: #7d7594; cursor: pointer; padding: 2px; display: flex; flex-shrink: 0; }
 @keyframes av-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }

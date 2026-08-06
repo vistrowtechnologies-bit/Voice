@@ -761,22 +761,11 @@ class RealEstateAgent(Agent):
         # Post-call structured extraction fields (parsed from the agent's JSON).
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
 
-    def _mark_greeting_played(self) -> None:
-        self.session.userdata["greeting_played"] = True
-        # The end-call-on-silence watchdog (agent/main.py's entrypoint) is
-        # deliberately not armed until this fires — arming it at session
-        # start let the greeting's own playback time eat into the caller's
-        # silence budget, hanging up on someone who was never actually
-        # silent, just listening to the opening line.
-        reset_silence_hangup = self.session.userdata.get("reset_silence_hangup")
-        if reset_silence_hangup:
-            reset_silence_hangup()
-
     async def on_enter(self) -> None:
         # first_speaker == 'user' means wait silently for the caller to open —
         # no greeting is ever queued, so away-tracking is valid immediately.
         if self._first_speaker == "user":
-            self._mark_greeting_played()
+            self.session.userdata["greeting_played"] = True
             return
         try:
             if self._welcome_message:
@@ -811,7 +800,7 @@ class RealEstateAgent(Agent):
             # the greeting is still being synthesized and gets queued right
             # behind it, so the caller hears the opener immediately followed
             # by "are you still there?" before they've had a chance to speak.
-            self._mark_greeting_played()
+            self.session.userdata["greeting_played"] = True
 
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
@@ -1240,14 +1229,7 @@ async def entrypoint(ctx: JobContext) -> None:
     silence_reminder_ms = int(cfg.get("silence_reminder_ms") or 0)
     away_timeout = silence_reminder_ms / 1000 if silence_reminder_ms > 0 else 6.5
     silence_reminder_max = int(cfg.get("silence_reminder_max") or 1)
-    # Platform default: 12s of total silence (no voice, no typed activity)
-    # ends the call rather than leaving it open indefinitely burning
-    # credits with nobody there. An operator can still override this to a
-    # different value from the agent's Advanced settings; there's no way to
-    # fully disable it from the dashboard, and that's deliberate - past
-    # behavior (end_call_on_silence_ms=0 meaning "never hang up") let a
-    # forgotten/idle call run until LiveKit's own room timeout.
-    end_call_on_silence_ms = int(cfg.get("end_call_on_silence_ms") or 0) or 12_000
+    end_call_on_silence_ms = int(cfg.get("end_call_on_silence_ms") or 0)
     max_call_duration_s = int(cfg.get("max_call_duration_s") or 0)
 
     session = AgentSession(
@@ -1298,31 +1280,12 @@ async def entrypoint(ctx: JobContext) -> None:
         async def _watch() -> None:
             try:
                 await asyncio.sleep(end_call_on_silence_ms / 1000)
-                logger.info("ending room %s after %dms of silence", ctx.room.name, end_call_on_silence_ms)
-                # Same "speak the goodbye, then hang up once it finishes
-                # playing" pattern as the end_call tool (see
-                # _on_agent_state_changed below) - a caller should always
-                # hear why the call ended, never just get cut off.
-                userdata["ending_call"] = True
-                session.generate_reply(
-                    instructions=(
-                        "We haven't heard anything from the caller in a while, by voice or by text. "
-                        "Say one short, warm line explaining you didn't get a response so you're "
-                        "ending the call now, and that they're welcome to reach out again anytime. "
-                        "Then stop - don't ask another question."
-                    )
-                )
+                logger.info("hanging up room %s after %dms of silence", ctx.room.name, end_call_on_silence_ms)
+                await _hang_up(ctx.room.name)
             except asyncio.CancelledError:
                 pass
 
         silence_task["handle"] = asyncio.create_task(_watch())
-
-    # RealEstateAgent.on_enter reaches this through userdata (not a closure
-    # capture — it's a different object, constructed before this function
-    # exists) to arm the watchdog for the first time only once the opening
-    # greeting has actually finished playing. See the call-site comment
-    # below for why arming it any earlier is a real bug, not just early.
-    userdata["reset_silence_hangup"] = _reset_silence_hangup
 
     def _on_user_state_changed(ev) -> None:
         if ev.new_state == "speaking":
@@ -1457,14 +1420,9 @@ async def entrypoint(ctx: JobContext) -> None:
                 pass
 
         asyncio.create_task(_max_duration_guard())
-    # Deliberately NOT armed here. The greeting itself (a few seconds of
-    # TTS the caller hasn't had any chance to respond to yet) was counting
-    # against this same 12s window when it was armed at session start -
-    # confirmed live: a demo call was hung up mid-greeting-or-just-after
-    # with "ending room ... after 12000ms of silence" in the logs, cutting
-    # off a caller who was never actually silent, just listening.
-    # RealEstateAgent.on_enter arms it for the first time once greeting_played
-    # actually flips true (see userdata["reset_silence_hangup"] above).
+    # Arm the end-call-on-silence watchdog for the opening stretch (no-ops if
+    # end_call_on_silence_ms is 0); it re-arms whenever the caller speaks.
+    _reset_silence_hangup()
 
     # Strips steady background noise (traffic, crowd chatter, AC hum) from
     # the caller's mic before it ever reaches STT — Krisp's model via
@@ -1513,19 +1471,7 @@ async def entrypoint(ctx: JobContext) -> None:
             return
         logger.info("typed utterance received in room %s: %r", ctx.room.name, text)
         _mark_present()
-
-        async def _reply_to_typed_text() -> None:
-            # generate_reply() alone does NOT stop audio already playing -
-            # confirmed live: typing while the agent was mid-sentence just
-            # queued a second reply behind the first, so the agent kept
-            # talking right through the interruption instead of stopping to
-            # address what was just typed. interrupt() has to be awaited
-            # first so the barge-in is fully processed (chat context
-            # updated) before the new reply starts, or the two can race.
-            await session.interrupt(force=True)
-            session.generate_reply(user_input=text)
-
-        asyncio.create_task(_reply_to_typed_text())
+        session.generate_reply(user_input=text)
 
     ctx.room.on("data_received", _on_data_received)
 

@@ -159,14 +159,14 @@ def _update_reply_language(session: Session, caller_text: str) -> None:
 _TEMPLATE_VAR_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
 
 
-def _substitute_template_vars(session: Session, text: str) -> str:
+def _substitute_template_vars(session: Session) -> str:
     """Ported from agent/main.py's _substitute_template_vars — fills
     {{first_name}}/{{last_name}}/{{name}}/{{phone}}/{{company}}/
-    {{custom.KEY}} tokens (in an operator-authored custom_system_prompt from
-    a campaign dial's CSV import, or a welcome_message set on the agent)
-    with this call's contact data. An unmatched token is left blank rather
-    than as literal braces, since a stray "{{whatever}}" read aloud by the
-    TTS is far more jarring than a silently-dropped clause."""
+    {{custom.KEY}} tokens in an operator-authored custom_system_prompt
+    (from a campaign dial's CSV import) with this call's contact data. An
+    unmatched token is left blank rather than as literal braces, since a
+    stray "{{whatever}}" read aloud by the TTS is far more jarring than a
+    silently-dropped clause."""
     name_parts = session.visitor_name.split(None, 1) if session.visitor_name else []
     values = {
         "first_name": name_parts[0] if name_parts else "",
@@ -183,15 +183,7 @@ def _substitute_template_vars(session: Session, text: str) -> str:
             return str(values["custom"].get(key[7:], ""))
         return str(values.get(key, ""))
 
-    # A blank value (e.g. no visitor name on a test call) still leaves the
-    # token's surrounding punctuation/spacing behind - "नमस्कार {{name}}!"
-    # becomes "नमस्कार !", a stray space before the "!" that reads as
-    # broken. Collapse whitespace runs and drop any space directly before
-    # punctuation so a skipped variable disappears cleanly.
-    filled = _TEMPLATE_VAR_RE.sub(repl, text)
-    filled = re.sub(r"[ \t]{2,}", " ", filled)
-    filled = re.sub(r" +([!?.,।])", r"\1", filled)
-    return filled.strip()
+    return _TEMPLATE_VAR_RE.sub(repl, session.custom_system_prompt)
 
 
 def build_system_prompt(session: Session) -> str:
@@ -199,9 +191,7 @@ def build_system_prompt(session: Session) -> str:
     module docstring re: fidelity vs. agent/main.py's full prompt assembly."""
     if session.custom_system_prompt:
         persona = (
-            _substitute_template_vars(session, session.custom_system_prompt)
-            if "{{" in session.custom_system_prompt
-            else session.custom_system_prompt
+            _substitute_template_vars(session) if "{{" in session.custom_system_prompt else session.custom_system_prompt
         )
     else:
         persona = build_generic_assistant_prompt(session.agent_name, session.business_name)
@@ -345,21 +335,8 @@ async def build_greeting_audio(session: Session) -> tuple[bytes, str] | None:
     the same opt-out agent/main.py supports."""
     if session.first_speaker == "user":
         return None
-    # Must run before the greeting appends its own assistant message below -
-    # handle_utterance[_streaming] only seed the system prompt when
-    # session.messages is still empty, so a greeting spoken first (the
-    # normal case) was silently skipping it forever: the whole call ran
-    # with no persona, no KB, nothing but bare chat history, which is why
-    # the model would confidently invent facts instead of using the real
-    # knowledge base or even its assigned persona.
-    if not session.messages:
-        session.messages.append({"role": "system", "content": build_system_prompt(session)})
     if session.welcome_message:
-        text = (
-            _substitute_template_vars(session, session.welcome_message)
-            if "{{" in session.welcome_message
-            else session.welcome_message
-        )
+        text = session.welcome_message
     else:
         greeting = f"Hi {session.visitor_name.split()[0]}," if session.visitor_name else "Hi,"
         template = _DEFAULT_OPENERS.get(session.reply_language, _DEFAULT_OPENER_EN)
