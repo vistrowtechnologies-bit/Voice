@@ -13,11 +13,18 @@ const label = scriptEl?.dataset.label || 'Talk to us'
 // 'default' (or the attribute missing entirely) keeps today's animated
 // orb video exactly as-is - every other catalog key is a static color
 // variant (widget_avatars.py) rendered as a plain <img> instead.
-const avatarKey = scriptEl?.dataset.avatar || 'default'
+// let, not const - refreshed against the live dashboard value shortly
+// after load (see _refreshSiteConfig below), so a plain HTML/"any other
+// website" embed (a script tag pasted once, never touched again) still
+// picks up a later avatar/greeting change instead of only ever showing
+// whatever was baked in at copy-paste time. The WordPress plugin already
+// did this server-side on every page load; this brings the same
+// dashboard-is-source-of-truth behavior to every other embed method too.
+let avatarKey = scriptEl?.dataset.avatar || 'default'
 // Empty means "use the copy baked into this file" - keeps the actual
 // default string in one place instead of duplicated into the dashboard,
 // the WordPress plugin, and every existing site's stored settings.
-const customGreeting = scriptEl?.dataset.greeting || ''
+let customGreeting = scriptEl?.dataset.greeting || ''
 const DEFAULT_GREETING = "👋 Hi! I'm Artha - tap to get started."
 const DEFAULT_CHAT_OPENER = "Hi, I'm Artha! What can I help you with today?"
 // 'voice' (missing attribute defaults here too) is every existing install's
@@ -297,7 +304,7 @@ function init(): void {
   // 'av-orb-video' is a real <video> only when avatarKey is 'default' - a
   // color-variant catalog pick renders it as a plain <img> instead (see
   // avatarTag()), which has no playbackRate to animate.
-  const orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement | HTMLImageElement | null
+  let orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement | HTMLImageElement | null
   const orbEl = orbVideoEl?.parentElement as HTMLDivElement
   const timerEl = shadow.getElementById('av-timer') as HTMLSpanElement
   const muteBtn = shadow.getElementById('av-mute') as HTMLButtonElement
@@ -312,6 +319,33 @@ function init(): void {
   // so it must never be trusted as markup.
   const greetingText = shadow.getElementById('av-greeting-text') as HTMLSpanElement
   greetingText.textContent = customGreeting || DEFAULT_GREETING
+
+  // Best-effort, fire-and-forget - a slow/failed fetch just means this
+  // load keeps whatever was baked into the script tag, same as before
+  // this existed. Only avatar/greeting self-heal this way, not mode:
+  // mode drives which panel views get built into the DOM at all (see
+  // widgetHtml() above), so changing it after the fact would need a much
+  // bigger rebuild than swapping an icon and a text node.
+  fetch(`${apiBase}/widget/site-config?siteKey=${encodeURIComponent(siteKey)}`)
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data: { avatar?: string; greeting?: string } | null) => {
+      if (!data) return
+      if (data.avatar && data.avatar !== avatarKey) {
+        avatarKey = data.avatar
+        button.innerHTML = avatarTag()
+        if (orbEl) {
+          orbEl.innerHTML = avatarTag('av-orb-video')
+          orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement | HTMLImageElement | null
+        }
+      }
+      if (typeof data.greeting === 'string' && data.greeting !== customGreeting) {
+        customGreeting = data.greeting
+        greetingText.textContent = customGreeting || DEFAULT_GREETING
+      }
+    })
+    .catch((err) => {
+      console.warn('[Vistrow Voice widget] site-config refresh failed:', err)
+    })
 
   let room: Room | null = null
   let micEnabled = true
