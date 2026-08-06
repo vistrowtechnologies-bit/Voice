@@ -151,7 +151,22 @@ export function DemoOrbCard() {
         </div>
 
         {isCallLive && token && serverUrl ? (
-          <LiveKitRoom serverUrl={serverUrl} token={token} connect audio onDisconnected={handleDisconnected}>
+          {/* className="contents" - LiveKitRoom renders its own wrapping
+              <div> with no flex styling, which broke the card's `flex
+              flex-col items-center` centering for InlineCallBody's
+              fixed-width w-48 orb (w-full children like the footer/button
+              row still looked fine since they just stretch to fill it).
+              display:contents removes that wrapper from layout entirely so
+              InlineCallBody's children are centered as if they were direct
+              children of the card again. */}
+          <LiveKitRoom
+            className="contents"
+            serverUrl={serverUrl}
+            token={token}
+            connect
+            audio
+            onDisconnected={handleDisconnected}
+          >
             <RoomAudioRenderer />
             <InlineCallBody onAgentUnavailable={handleAgentUnavailable} onConnected={chargeDemoCall} />
           </LiveKitRoom>
@@ -327,7 +342,7 @@ function InlineCallBody({ onAgentUnavailable, onConnected }: { onAgentUnavailabl
         <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>
       )}
 
-      <div className="mt-6 flex w-full items-center justify-center gap-4 border-t border-border pt-5">
+      <div className="mt-6 flex w-full items-center justify-center gap-4">
         <button
           aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
           onClick={() => localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
@@ -404,7 +419,7 @@ function InlineOrchestratorCallBody({
         <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>
       )}
 
-      <div className="mt-6 flex w-full items-center justify-center gap-4 border-t border-border pt-5">
+      <div className="mt-6 flex w-full items-center justify-center gap-4">
         <button
           aria-label={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
           onClick={toggleMic}
