@@ -11,6 +11,17 @@ from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES
 
 logger = logging.getLogger("real-estate-tools")
 
+# Spoken via RunContext.with_filler() while a tool's webhook/integration
+# fan-out is in flight (log_lead, book_appointment, capture_platform_lead) -
+# that sequence of awaited network calls was measured live at ~1.8s, long
+# enough that the caller was sitting in dead air waiting for the actual
+# reply. delay=0.6 at each call site means this only fires if the tool is
+# genuinely still running past that point, not on a fast/cached response.
+# One short, code-switch-friendly line rather than a per-language dict -
+# "one second" is said in English mid-sentence across every Indian language
+# this product speaks, so it doesn't need translating to sound natural.
+_TOOL_FILLER_TEXT = "One second..."
+
 _NAME_TO_LANGUAGE_CODE = {name.lower(): code for code, name in LANGUAGE_NAMES.items()}
 
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
@@ -334,18 +345,19 @@ async def book_appointment(
         # read — an "appointment" key here would silently vanish, saved
         # nowhere and shown nowhere.
         lead_data["site_visit"] = {"date": date, "time": time, "purpose": purpose}
-    result = await _calendar_book(context, date, time, duration_minutes, name, phone, purpose)
-    event = {
-        "type": "appointment_booked",
-        "date": date,
-        "time": time,
-        "purpose": purpose,
-        "name": name,
-        "phone": phone,
-    }
-    await _publish_event(context, event)
-    await _post_webhook(event)
-    await _fan_out_integrations(context, event)
+    async with context.with_filler(_TOOL_FILLER_TEXT, delay=0.6):
+        result = await _calendar_book(context, date, time, duration_minutes, name, phone, purpose)
+        event = {
+            "type": "appointment_booked",
+            "date": date,
+            "time": time,
+            "purpose": purpose,
+            "name": name,
+            "phone": phone,
+        }
+        await _publish_event(context, event)
+        await _post_webhook(event)
+        await _fan_out_integrations(context, event)
     if result is None:
         # Recorded on the lead + pushed to integrations, but the native
         # calendar DB call failed — be honest rather than claim a slot exists.
@@ -398,9 +410,10 @@ async def log_lead(
         "location": location,
         "timeline": timeline,
     }
-    await _publish_event(context, event)
-    await _post_webhook(event)
-    await _fan_out_integrations(context, event)
+    async with context.with_filler(_TOOL_FILLER_TEXT, delay=0.6):
+        await _publish_event(context, event)
+        await _post_webhook(event)
+        await _fan_out_integrations(context, event)
     return "Lead details recorded."
 
 
@@ -440,9 +453,10 @@ async def capture_platform_lead(
         "use_case": use_case,
         "team_size": team_size,
     }
-    await _publish_event(context, event)
-    await _post_webhook(event)
-    await _fan_out_integrations(context, event)
+    async with context.with_filler(_TOOL_FILLER_TEXT, delay=0.6):
+        await _publish_event(context, event)
+        await _post_webhook(event)
+        await _fan_out_integrations(context, event)
     return "Lead details recorded."
 
 
