@@ -33,6 +33,7 @@ import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
 # dbconn.py is duplicated into agent/. Used here only to resolve a voice's
 # gender so the LLM self-refers with the right grammatical gender.
+from google_tts_streaming_patch import PatchedGeminiTTS
 from emotion import ELEVENLABS_EMOTION_DELTAS, EMOTION_TONE_DELTAS, detect_caller_emotion
 from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
@@ -400,16 +401,28 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         # full text. An operator who explicitly picked a Google voice still
         # gets it as primary; TtsFallbackAdapter catches that failure and
         # finishes the utterance on Sarvam instead of the call going silent.
+        # The fallback speaker matches the chosen Google voice's gender
+        # (confirmed live: Gemini's Odia support times out — google_tts_
+        # streaming_patch's guarded stream still surfaces the real
+        # APITimeoutError — and the call fell over to a hardcoded "shubh",
+        # so a caller mid-conversation with Mira suddenly heard a male
+        # voice) rather than always defaulting to "shubh".
+        _safety_net_speaker = "ritu" if (voice_catalog.get_voice(speaker) or {}).get("gender") == "female" else "shubh"
         sarvam_safety_net = sarvam.TTS(
-            target_language_code=reply_language, model="bulbul:v3", speaker="shubh", **tone
+            target_language_code=reply_language, model="bulbul:v3", speaker=_safety_net_speaker, **tone
         )
         if voice_name.lower() in _GOOGLE_MULTILINGUAL_VOICES:
-            google_tts = google.TTS(
+            # TEST AGENT ONLY as of 2026-08-06 — see google_tts_streaming_patch.py.
+            # Real streaming (default use_streaming=True, PCM encoding — the
+            # opposite of _GOOGLE_TTS_KWARGS below) restored for just these two
+            # Gemini personas via a subclass that guards the specific
+            # cancel-time aclose() race that originally forced non-streaming
+            # here. Not yet applied to the google-native branch below.
+            google_tts = PatchedGeminiTTS(
                 language=reply_language,
                 voice_name=voice_name.capitalize(),
                 model_name="gemini-2.5-flash-tts",
                 credentials_info=_GOOGLE_CREDENTIALS,
-                **_GOOGLE_TTS_KWARGS,
             )
             return TtsFallbackAdapter([google_tts, sarvam_safety_net]), "google-multilingual"
         voice_language = "-".join(voice_name.split("-")[:2])
