@@ -73,13 +73,23 @@
          is entirely; confirmed working (200, full bundle) before shipping.
          Third-party embed snippets from the dashboard still point
          customers directly at the Railway URL, since they don't have this
-         proxy - this fix is only relevant for our own site. -->
-    <script
-      src="/api/widget.js"
-      data-site-key="av_live_K3WlEka3sKGHgFA-xwQrijJsTO8XfqhK"
-      data-api-base="/api"
-      data-position="bottom-right"
-      data-label="Talk to us"
-    ></script>
+         proxy - this fix is only relevant for our own site.
+
+         This one index.html serves both vistrowvoice.com (marketing) and
+         app.vistrowvoice.com (the dashboard app itself, see hostBuckets.ts)
+         - a plain <script> tag here would load on both, so the floating
+         button showed up while using the dashboard too. Gated behind a
+         hostname check so it only ever loads on the marketing site. -->
+    <script>
+      if (location.hostname.indexOf('app.') !== 0) {
+        var vistrowWidgetScript = document.createElement('script')
+        vistrowWidgetScript.src = '/api/widget.js'
+        vistrowWidgetScript.setAttribute('data-site-key', 'av_live_K3WlEka3sKGHgFA-xwQrijJsTO8XfqhK')
+        vistrowWidgetScript.setAttribute('data-api-base', '/api')
+        vistrowWidgetScript.setAttribute('data-position', 'bottom-right')
+        vistrowWidgetScript.setAttribute('data-label', 'Talk to us')
+        document.body.appendChild(vistrowWidgetScript)
+      }
+    </script>
   </body>
 </html>
