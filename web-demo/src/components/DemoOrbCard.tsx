@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LiveKitRoom, RoomAudioRenderer, useLocalParticipant, useParticipantAttribute, useRemoteParticipants, useRoomContext, useTrackVolume, useTracks } from '@livekit/components-react'
 import { Track } from 'livekit-client'
@@ -109,6 +109,25 @@ export function DemoOrbCard() {
   const exhausted = phase === 'capped'
   const isCallLive = phase === 'active'
   const isCallLiveOrchestrator = phase === 'active-orchestrator'
+  const isIdleLike = !isCallLive && !isCallLiveOrchestrator
+
+  // The idle/capped content includes a "Native support / Low latency"
+  // footer the live-call states don't need, so swapping to InlineCallBody
+  // used to visibly shrink the card mid-page - a jarring layout shift right
+  // when a visitor taps to talk. Locking min-height to whatever the
+  // idle/capped content actually measures (re-checked on resize, since text
+  // wrapping changes across breakpoints) keeps every phase the same
+  // footprint without duplicating that footer into the call UI itself.
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [cardMinHeight, setCardMinHeight] = useState<number | undefined>(undefined)
+
+  useLayoutEffect(() => {
+    if (!isIdleLike) return
+    const measure = () => setCardMinHeight(cardRef.current?.offsetHeight)
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [isIdleLike, exhausted, phase])
 
   return (
     <div id="live-demo" className="relative mx-auto w-full max-w-[420px] lg:mx-0 lg:ml-auto">
@@ -118,7 +137,11 @@ export function DemoOrbCard() {
           still paints well outside the box, so the glow looks identical -
           it just no longer contributes that width to layout. */}
       <div className="pointer-events-none absolute inset-x-0 -inset-y-10 rounded-full bg-primary/20 blur-[100px]" />
-      <div className="relative flex w-full flex-col items-center rounded-[28px] border border-border bg-surface/80 p-8 text-center backdrop-blur-xl sm:p-10">
+      <div
+        ref={cardRef}
+        style={cardMinHeight ? { minHeight: cardMinHeight } : undefined}
+        className="relative flex w-full flex-col items-center rounded-[28px] border border-border bg-surface/80 p-8 text-center backdrop-blur-xl sm:p-10"
+      >
         <div className="absolute right-5 top-5 flex items-center gap-1.5 rounded-full border border-border bg-surface-high px-3 py-1">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan opacity-75" />
