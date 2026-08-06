@@ -411,6 +411,8 @@ export interface Site {
   widgetAvatar: string
   widgetGreeting: string
   widgetMode: 'voice' | 'chat' | 'both'
+  widgetAskName: boolean
+  widgetAskPhone: boolean
   createdAt: string
 }
 

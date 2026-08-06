@@ -31,6 +31,15 @@ const DEFAULT_CHAT_OPENER = "Hi, I'm Artha! What can I help you with today?"
 // exact current behavior, completely unchanged. 'chat' skips the call UI
 // entirely; 'both' lets the visitor pick per attempt.
 const widgetMode = scriptEl?.dataset.mode === 'chat' || scriptEl?.dataset.mode === 'both' ? scriptEl.dataset.mode : 'voice'
+// Both default true (every install's behavior before this existed) - only
+// an explicit "false" turns one off, so a missing attribute or any other
+// value is never mistaken for opting out. Baked into the initial HTML
+// string below (same reasoning as widgetMode's own comment elsewhere in
+// this file) rather than live-refreshed, since it decides whether the
+// name/phone fields exist in the DOM at all, not just their content.
+const askName = scriptEl?.dataset.askName !== 'false'
+const askPhone = scriptEl?.dataset.askPhone !== 'false'
+const skipPreCallForm = !askName && !askPhone
 
 function randomId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
@@ -128,6 +137,9 @@ const CSS = `
 .av-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #2a2440; }
 .av-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .av-dot { width: 8px; height: 8px; border-radius: 9999px; background: #a855f7; }
+.av-title-avatar { width: 22px; height: 22px; border-radius: 9999px; overflow: hidden; flex-shrink: 0; }
+.av-title-avatar video, .av-title-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.av-title-avatar video { transform: scale(1.5); }
 .av-header-right { display: flex; align-items: center; gap: 10px; }
 .av-timer { display: none; font-size: 12px; font-variant-numeric: tabular-nums; color: #b8b2cf; }
 .av-timer.av-timer-warn { color: #f87171; font-weight: 700; }
@@ -209,7 +221,7 @@ function widgetHtml(label: string): string {
 
       <div id="av-panel" class="av-panel">
         <div class="av-header">
-          <div class="av-title"><span class="av-dot"></span>${label}</div>
+          <div class="av-title"><span class="av-title-avatar" id="av-title-avatar">${avatarTag()}</span>${label}</div>
           <div class="av-header-right">
             <span id="av-timer" class="av-timer">5:00</span>
             <button id="av-close" class="av-close">${CLOSE_ICON}</button>
@@ -218,12 +230,16 @@ function widgetHtml(label: string): string {
 
         <div id="av-form" class="av-form" style="display:none;">
           <p>${widgetMode === 'chat' ? "Tell us who you are so the assistant can greet you properly." : "Tell us who's calling so the assistant can greet you properly."}</p>
-          <label for="av-name">Name</label>
-          <input id="av-name" type="text" autocomplete="name" placeholder="Your name" />
-          <label for="av-phone">Phone number</label>
-          <div class="av-phone-wrap">
-            <span class="av-phone-prefix">+91</span>
-            <input id="av-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="98765 43210" maxlength="10" />
+          <div style="display:${askName ? 'flex' : 'none'};flex-direction:column;gap:10px;">
+            <label for="av-name">Name</label>
+            <input id="av-name" type="text" autocomplete="name" placeholder="Your name" />
+          </div>
+          <div style="display:${askPhone ? 'flex' : 'none'};flex-direction:column;gap:10px;">
+            <label for="av-phone">Phone number</label>
+            <div class="av-phone-wrap">
+              <span class="av-phone-prefix">+91</span>
+              <input id="av-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="98765 43210" maxlength="10" />
+            </div>
           </div>
           <label for="av-email">Email (optional)</label>
           <input id="av-email" type="email" autocomplete="email" placeholder="you@example.com" />
@@ -288,6 +304,7 @@ function init(): void {
   shadow.innerHTML = `<style>${CSS}</style>${widgetHtml(label)}`
 
   const button = shadow.getElementById('av-button') as HTMLButtonElement
+  const titleAvatarEl = shadow.getElementById('av-title-avatar') as HTMLSpanElement
   const greeting = shadow.getElementById('av-greeting') as HTMLDivElement
   const greetingClose = shadow.getElementById('av-greeting-close') as HTMLButtonElement
   const panel = shadow.getElementById('av-panel') as HTMLDivElement
@@ -340,6 +357,7 @@ function init(): void {
       if (data.avatar && data.avatar !== avatarKey) {
         avatarKey = data.avatar
         button.innerHTML = avatarTag()
+        titleAvatarEl.innerHTML = avatarTag()
         if (orbEl) {
           orbEl.innerHTML = avatarTag('av-orb-video')
           orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement | HTMLImageElement | null
@@ -558,6 +576,18 @@ function init(): void {
   // the chat, 'both' asks which one now that name/phone are already in
   // hand.
   function handleButtonClick(): void {
+    if (skipPreCallForm) {
+      // Neither name nor phone is configured to be asked for - skip the
+      // form entirely instead of showing one with nothing left to fill in.
+      hideGreeting()
+      openPanel()
+      if (widgetMode === 'chat') {
+        showChat()
+      } else {
+        void startCall('', '', '')
+      }
+      return
+    }
     showForm()
   }
 
@@ -932,11 +962,11 @@ function init(): void {
     const name = nameInput.value.trim()
     const phone = toE164Phone(phoneInput.value)
     const email = emailInput.value.trim()
-    if (!name) {
+    if (askName && !name) {
       formError.textContent = 'Please enter your name.'
       return
     }
-    if (!isValidPhone(phone)) {
+    if (askPhone && !isValidPhone(phone)) {
       formError.textContent = 'Enter a valid 10-digit phone number.'
       return
     }

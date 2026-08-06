@@ -84,6 +84,12 @@ CREATE TABLE IF NOT EXISTS sites (
     -- 'voice' (default, matches every install before chat mode shipped),
     -- 'chat' (text-only, no call button at all), or 'both' (visitor picks).
     widget_mode TEXT DEFAULT 'voice',
+    -- Whether the pre-call form asks for the visitor's name/phone before
+    -- starting. Both default true (today's only behavior, before this
+    -- existed); an operator can drop either or both to let visitors start
+    -- anonymously - see widget.ts's widgetHtml().
+    widget_ask_name INTEGER DEFAULT 1,
+    widget_ask_phone INTEGER DEFAULT 1,
     created_at TEXT DEFAULT {_NOW}
 );
 
@@ -753,6 +759,11 @@ def init_tables() -> None:
             # voice-call-only. 'voice' default preserves every existing
             # install's exact current behavior.
             conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_mode TEXT DEFAULT 'voice'")
+            # Pre-call form field toggles, added after every install always
+            # asked for name+phone. Default true backfills existing rows to
+            # today's exact current behavior.
+            conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_ask_name INTEGER DEFAULT 1")
+            conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_ask_phone INTEGER DEFAULT 1")
             # "Premium+" (ElevenLabs v3) was folded into Premium (Flash v2.5) on
             # 2026-07-14 — v3's realtime endpoint 403s in production, so it was
             # never a good tier to keep selling (see voice_catalog.py's CATALOG
@@ -3296,6 +3307,8 @@ def _site_dict(r: dict) -> dict:
         "widgetAvatar": r["widget_avatar"] or "default",
         "widgetGreeting": r["widget_greeting"] or "",
         "widgetMode": r["widget_mode"] or "voice",
+        "widgetAskName": bool(r["widget_ask_name"]) if r["widget_ask_name"] is not None else True,
+        "widgetAskPhone": bool(r["widget_ask_phone"]) if r["widget_ask_phone"] is not None else True,
         "createdAt": r["created_at"],
     }
 
@@ -3455,6 +3468,8 @@ def create_site(
     widget_avatar: str = "default",
     widget_greeting: str = "",
     widget_mode: str = "voice",
+    widget_ask_name: bool = True,
+    widget_ask_phone: bool = True,
 ) -> dict:
     if widget_position not in ("bottom-right", "bottom-left"):
         widget_position = "bottom-right"
@@ -3467,8 +3482,8 @@ def create_site(
     try:
         with conn:
             cur = conn.execute(
-                "INSERT INTO sites (account_id, name, site_key, allowed_domain, agent_id, widget_position, widget_label, widget_avatar, widget_greeting, widget_mode) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "INSERT INTO sites (account_id, name, site_key, allowed_domain, agent_id, widget_position, widget_label, widget_avatar, widget_greeting, widget_mode, widget_ask_name, widget_ask_phone) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                 (
                     account_id,
                     name,
@@ -3480,6 +3495,8 @@ def create_site(
                     widget_avatar,
                     widget_greeting,
                     widget_mode,
+                    widget_ask_name,
+                    widget_ask_phone,
                 ),
             )
         row = conn.execute("SELECT * FROM sites WHERE id = ?", (cur.lastrowid,)).fetchone()
@@ -3499,12 +3516,15 @@ def update_site(site_id: int, data: dict, account_id: int) -> dict | None:
     widget_mode = data.get("widgetMode", "voice")
     if widget_mode not in ("voice", "chat", "both"):
         widget_mode = "voice"
+    widget_ask_name = bool(data.get("widgetAskName", True))
+    widget_ask_phone = bool(data.get("widgetAskPhone", True))
     conn = _connect()
     try:
         with conn:
             conn.execute(
                 "UPDATE sites SET name = ?, allowed_domain = ?, agent_id = ?, status = ?, "
-                "widget_position = ?, widget_label = ?, widget_avatar = ?, widget_greeting = ?, widget_mode = ? WHERE id = ? AND account_id = ?",
+                "widget_position = ?, widget_label = ?, widget_avatar = ?, widget_greeting = ?, widget_mode = ?, "
+                "widget_ask_name = ?, widget_ask_phone = ? WHERE id = ? AND account_id = ?",
                 (
                     data.get("name"),
                     data.get("allowedDomain", ""),
@@ -3515,6 +3535,8 @@ def update_site(site_id: int, data: dict, account_id: int) -> dict | None:
                     widget_avatar,
                     widget_greeting,
                     widget_mode,
+                    widget_ask_name,
+                    widget_ask_phone,
                     site_id,
                     account_id,
                 ),

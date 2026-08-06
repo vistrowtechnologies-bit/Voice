@@ -52,7 +52,7 @@ function vistrow_voice_default_settings() {
 // of making a live request; a slow/unreachable backend just falls back to
 // these safe defaults rather than breaking the page.
 function vistrow_voice_remote_config($site_key) {
-    $defaults = array('avatar' => 'default', 'greeting' => '', 'mode' => 'voice');
+    $defaults = array('avatar' => 'default', 'greeting' => '', 'mode' => 'voice', 'askName' => true, 'askPhone' => true);
     if (empty($site_key)) {
         return $defaults;
     }
@@ -395,14 +395,26 @@ add_action('wp_footer', function () {
     $mode_attr = ($remote_config['mode'] !== 'voice')
         ? sprintf(' data-mode="%s"', esc_attr($remote_config['mode']))
         : '';
+    // Pre-call form field toggles - both default true (omit the attribute,
+    // same "only print when it differs from widget.js's own default" rule
+    // as above), so an install predating this only prints data-ask-name/
+    // data-ask-phone once an operator actually turns one off.
+    $ask_name_attr = (empty($remote_config['askName']))
+        ? ' data-ask-name="false"'
+        : '';
+    $ask_phone_attr = (empty($remote_config['askPhone']))
+        ? ' data-ask-phone="false"'
+        : '';
     printf(
-        '<script src="%1$s/widget.js" data-site-key="%2$s" data-api-base="%1$s" data-position="%3$s" data-label="%4$s"%5$s%6$s%7$s></script>' . "\n",
+        '<script src="%1$s/widget.js" data-site-key="%2$s" data-api-base="%1$s" data-position="%3$s" data-label="%4$s"%5$s%6$s%7$s%8$s%9$s></script>' . "\n",
         esc_url($backend),
         esc_attr($settings['site_key']),
         esc_attr($settings['position']),
         esc_attr($settings['label']),
         $avatar_attr,
         $greeting_attr,
-        $mode_attr
+        $mode_attr,
+        $ask_name_attr,
+        $ask_phone_attr
     );
 });

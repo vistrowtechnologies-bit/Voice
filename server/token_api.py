@@ -2180,6 +2180,8 @@ def create_site(data: dict = Body(...), user: dict = Depends(current_user)) -> d
         data.get("widgetAvatar", "default"),
         data.get("widgetGreeting", ""),
         data.get("widgetMode", "voice"),
+        data.get("widgetAskName", True),
+        data.get("widgetAskPhone", True),
     )
 
 
@@ -2205,6 +2207,8 @@ def widget_site_config(siteKey: str) -> dict:
         "avatar": site["widgetAvatar"],
         "greeting": site["widgetGreeting"],
         "mode": site["widgetMode"],
+        "askName": site["widgetAskName"],
+        "askPhone": site["widgetAskPhone"],
     }
 
 
@@ -2382,22 +2386,30 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
     their own metadata shape.
     """
     masked_key = req.siteKey[:12] + "…" if len(req.siteKey) > 12 else req.siteKey
-    name = req.name.strip()
-    if not name:
-        logger.warning("widget token rejected: empty name (site_key=%s)", masked_key)
-        raise HTTPException(400, "Name is required")
-    if not _looks_like_real_phone(req.phone):
-        logger.warning("widget token rejected: invalid phone %r (site_key=%s)", req.phone, masked_key)
-        raise HTTPException(400, "Enter a valid phone number in international format, e.g. +919812345678")
-    email = req.email.strip()
-    if not email or "@" not in email:
-        logger.warning("widget token rejected: invalid email (site_key=%s)", masked_key)
-        raise HTTPException(400, "Enter a valid email address")
-
     site = calls_db.get_site_by_key(req.siteKey)
     if site is None:
         logger.warning("widget token rejected: unknown site_key=%s", masked_key)
         raise HTTPException(404, "Unknown site key")
+
+    # Name/phone are only required when this site's pre-call form actually
+    # asks for them (widgetAskName/widgetAskPhone — see the dashboard's
+    # Website Widget page) - a site configured to skip the form entirely
+    # submits both blank, which used to be rejected outright. Email has
+    # always been labeled "(optional)" in the widget's own form; only
+    # validate its format when something was actually typed, never require it.
+    name = req.name.strip()
+    if site["widgetAskName"] and not name:
+        logger.warning("widget token rejected: empty name (site_key=%s)", masked_key)
+        raise HTTPException(400, "Name is required")
+    name = name or "Website visitor"
+    if site["widgetAskPhone"] and not _looks_like_real_phone(req.phone):
+        logger.warning("widget token rejected: invalid phone %r (site_key=%s)", req.phone, masked_key)
+        raise HTTPException(400, "Enter a valid phone number in international format, e.g. +919812345678")
+    email = req.email.strip()
+    if email and "@" not in email:
+        logger.warning("widget token rejected: invalid email (site_key=%s)", masked_key)
+        raise HTTPException(400, "Enter a valid email address")
+
     if site["status"] == "paused":
         logger.warning("widget token rejected: site %s is paused", site["name"])
         raise HTTPException(403, "This site's widget is currently paused")

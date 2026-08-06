@@ -28,7 +28,9 @@ function snippetFor(site: Site, backendUrl: string): string {
   const avatarAttr = site.widgetAvatar && site.widgetAvatar !== 'default' ? ` data-avatar="${site.widgetAvatar}"` : ''
   const greetingAttr = site.widgetGreeting ? ` data-greeting="${escapeHtmlAttr(site.widgetGreeting)}"` : ''
   const modeAttr = site.widgetMode === 'chat' ? ` data-mode="chat"` : ''
-  return `<script src="${backendUrl}/widget.js" data-site-key="${site.siteKey}" data-api-base="${backendUrl}" data-position="${site.widgetPosition}" data-label="${site.widgetLabel}"${avatarAttr}${greetingAttr}${modeAttr}></script>`
+  const askNameAttr = site.widgetAskName === false ? ` data-ask-name="false"` : ''
+  const askPhoneAttr = site.widgetAskPhone === false ? ` data-ask-phone="false"` : ''
+  return `<script src="${backendUrl}/widget.js" data-site-key="${site.siteKey}" data-api-base="${backendUrl}" data-position="${site.widgetPosition}" data-label="${site.widgetLabel}"${avatarAttr}${greetingAttr}${modeAttr}${askNameAttr}${askPhoneAttr}></script>`
 }
 
 export function WebsiteWidget() {
@@ -237,6 +239,8 @@ function SiteRow({
   const [greetingDraft, setGreetingDraft] = useState(site.widgetGreeting)
   const [avatarDraft, setAvatarDraft] = useState(site.widgetAvatar)
   const [modeDraft, setModeDraft] = useState<Site['widgetMode']>(site.widgetMode)
+  const [askNameDraft, setAskNameDraft] = useState(site.widgetAskName)
+  const [askPhoneDraft, setAskPhoneDraft] = useState(site.widgetAskPhone)
   const [installMode, setInstallMode] = useState<'wordpress' | 'manual'>('wordpress')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -244,12 +248,16 @@ function SiteRow({
   useEffect(() => setGreetingDraft(site.widgetGreeting), [site.widgetGreeting])
   useEffect(() => setAvatarDraft(site.widgetAvatar), [site.widgetAvatar])
   useEffect(() => setModeDraft(site.widgetMode), [site.widgetMode])
+  useEffect(() => setAskNameDraft(site.widgetAskName), [site.widgetAskName])
+  useEffect(() => setAskPhoneDraft(site.widgetAskPhone), [site.widgetAskPhone])
 
   const isDirty =
     labelDraft.trim() !== site.widgetLabel ||
     greetingDraft.trim() !== site.widgetGreeting ||
     avatarDraft !== site.widgetAvatar ||
-    modeDraft !== site.widgetMode
+    modeDraft !== site.widgetMode ||
+    askNameDraft !== site.widgetAskName ||
+    askPhoneDraft !== site.widgetAskPhone
 
   const snippet = backendUrl ? snippetFor(site, backendUrl) : null
 
@@ -280,6 +288,8 @@ function SiteRow({
       widgetAvatar: site.widgetAvatar,
       widgetGreeting: site.widgetGreeting,
       widgetMode: site.widgetMode,
+      widgetAskName: site.widgetAskName,
+      widgetAskPhone: site.widgetAskPhone,
       ...partial,
     }).then(onChange)
 
@@ -290,6 +300,8 @@ function SiteRow({
       widgetGreeting: greetingDraft.trim(),
       widgetAvatar: avatarDraft,
       widgetMode: modeDraft,
+      widgetAskName: askNameDraft,
+      widgetAskPhone: askPhoneDraft,
     }).finally(() => {
       setSaving(false)
       setSaved(true)
@@ -390,6 +402,21 @@ function SiteRow({
         <span className="text-[11px] text-text-muted">
           {modeDraft === 'chat' ? 'Visitors type, no voice call' : 'Visitors can speak or type'}
         </span>
+      </div>
+
+      <div className="flex items-center gap-4 text-xs">
+        <span className="shrink-0 text-text-muted">Before starting, ask for</span>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={askNameDraft} onChange={(e) => setAskNameDraft(e.target.checked)} />
+          Name
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={askPhoneDraft} onChange={(e) => setAskPhoneDraft(e.target.checked)} />
+          Phone number
+        </label>
+        {!askNameDraft && !askPhoneDraft && (
+          <span className="text-[11px] text-text-muted">No form - starts immediately on tap</span>
+        )}
       </div>
 
       {avatarCatalog.length > 0 && (
