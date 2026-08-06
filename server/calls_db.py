@@ -3495,8 +3495,11 @@ def create_site(
                     widget_avatar,
                     widget_greeting,
                     widget_mode,
-                    widget_ask_name,
-                    widget_ask_phone,
+                    # Postgres has no boolean->integer cast, and these columns
+                    # are INTEGER - a raw Python bool fails the INSERT outright
+                    # rather than coercing (same pattern as _AGENT_BOOL_FIELDS).
+                    1 if widget_ask_name else 0,
+                    1 if widget_ask_phone else 0,
                 ),
             )
         row = conn.execute("SELECT * FROM sites WHERE id = ?", (cur.lastrowid,)).fetchone()
@@ -3516,8 +3519,13 @@ def update_site(site_id: int, data: dict, account_id: int) -> dict | None:
     widget_mode = data.get("widgetMode", "voice")
     if widget_mode not in ("voice", "chat", "both"):
         widget_mode = "voice"
-    widget_ask_name = bool(data.get("widgetAskName", True))
-    widget_ask_phone = bool(data.get("widgetAskPhone", True))
+    # Postgres has no boolean->integer cast, and these columns are INTEGER -
+    # a raw Python bool fails the UPDATE outright rather than coercing (same
+    # pattern as _AGENT_BOOL_FIELDS) - confirmed live: unticking either
+    # checkbox showed "Saved" (the frontend's .finally() ran regardless) but
+    # the UPDATE had actually errored, so a refresh showed it still ticked.
+    widget_ask_name = 1 if data.get("widgetAskName", True) else 0
+    widget_ask_phone = 1 if data.get("widgetAskPhone", True) else 0
     conn = _connect()
     try:
         with conn:

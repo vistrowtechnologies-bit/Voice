@@ -244,6 +244,7 @@ function SiteRow({
   const [installMode, setInstallMode] = useState<'wordpress' | 'manual'>('wordpress')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState(false)
   useEffect(() => setLabelDraft(site.widgetLabel), [site.widgetLabel])
   useEffect(() => setGreetingDraft(site.widgetGreeting), [site.widgetGreeting])
   useEffect(() => setAvatarDraft(site.widgetAvatar), [site.widgetAvatar])
@@ -295,6 +296,7 @@ function SiteRow({
 
   const saveChanges = () => {
     setSaving(true)
+    setSaveError(false)
     patchSite({
       widgetLabel: labelDraft.trim(),
       widgetGreeting: greetingDraft.trim(),
@@ -302,11 +304,13 @@ function SiteRow({
       widgetMode: modeDraft,
       widgetAskName: askNameDraft,
       widgetAskPhone: askPhoneDraft,
-    }).finally(() => {
-      setSaving(false)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
     })
+      .then(() => {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2500)
+      })
+      .catch(() => setSaveError(true))
+      .finally(() => setSaving(false))
   }
 
   return (
@@ -439,6 +443,12 @@ function SiteRow({
           <span className="flex items-center gap-1 text-[11px] font-semibold text-green-500">
             <Icon name="check" className="text-[13px]" />
             Saved - live on WordPress sites within a minute
+          </span>
+        )}
+        {saveError && (
+          <span className="flex items-center gap-1 text-[11px] font-semibold text-destructive">
+            <Icon name="error" className="text-[13px]" />
+            Couldn't save - please try again
           </span>
         )}
       </div>
