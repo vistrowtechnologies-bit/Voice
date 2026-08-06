@@ -24,13 +24,61 @@ function escapeHtmlAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+// Each pre-call field (name/phone/email) is really one three-way choice -
+// don't ask at all, ask but let the visitor skip it, or make it mandatory -
+// even though it's stored as two independent booleans (ask/require) to
+// keep the sites table's columns simple and match how the backend already
+// validates each field. This is the only place that couples them into one
+// dropdown; everywhere else keeps reading/writing the two flags directly.
+type FieldMode = 'off' | 'optional' | 'required'
+function fieldModeOf(ask: boolean, require: boolean): FieldMode {
+  return !ask ? 'off' : require ? 'required' : 'optional'
+}
+function fieldModeFlags(mode: FieldMode): { ask: boolean; require: boolean } {
+  if (mode === 'off') return { ask: false, require: false }
+  if (mode === 'required') return { ask: true, require: true }
+  return { ask: true, require: false }
+}
+
 function snippetFor(site: Site, backendUrl: string): string {
   const avatarAttr = site.widgetAvatar && site.widgetAvatar !== 'default' ? ` data-avatar="${site.widgetAvatar}"` : ''
   const greetingAttr = site.widgetGreeting ? ` data-greeting="${escapeHtmlAttr(site.widgetGreeting)}"` : ''
   const modeAttr = site.widgetMode === 'chat' ? ` data-mode="chat"` : ''
   const askNameAttr = site.widgetAskName === false ? ` data-ask-name="false"` : ''
+  const requireNameAttr = site.widgetAskName && site.widgetRequireName === false ? ` data-require-name="false"` : ''
   const askPhoneAttr = site.widgetAskPhone === false ? ` data-ask-phone="false"` : ''
-  return `<script src="${backendUrl}/widget.js" data-site-key="${site.siteKey}" data-api-base="${backendUrl}" data-position="${site.widgetPosition}" data-label="${site.widgetLabel}"${avatarAttr}${greetingAttr}${modeAttr}${askNameAttr}${askPhoneAttr}></script>`
+  const requirePhoneAttr = site.widgetAskPhone && site.widgetRequirePhone === false ? ` data-require-phone="false"` : ''
+  const askEmailAttr = site.widgetAskEmail === false ? ` data-ask-email="false"` : ''
+  const requireEmailAttr = site.widgetAskEmail && site.widgetRequireEmail === true ? ` data-require-email="true"` : ''
+  return `<script src="${backendUrl}/widget.js" data-site-key="${site.siteKey}" data-api-base="${backendUrl}" data-position="${site.widgetPosition}" data-label="${site.widgetLabel}"${avatarAttr}${greetingAttr}${modeAttr}${askNameAttr}${requireNameAttr}${askPhoneAttr}${requirePhoneAttr}${askEmailAttr}${requireEmailAttr}></script>`
+}
+
+// Matches the app's other inline <select> controls (e.g. the widget-type
+// picker below) rather than a raw checkbox, which read as an unstyled
+// browser default next to everything else on this page.
+function FieldModeSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: FieldMode
+  onChange: (mode: FieldMode) => void
+}) {
+  return (
+    <label className="flex items-center gap-1.5">
+      <span className="text-text-muted">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as FieldMode)}
+        className="rounded-lg border border-border bg-surface-high px-2 py-1 text-xs outline-none focus:border-primary"
+      >
+        <option value="off">Don't ask</option>
+        <option value="optional">Optional</option>
+        <option value="required">Required</option>
+      </select>
+    </label>
+  )
 }
 
 export function WebsiteWidget() {
@@ -239,8 +287,9 @@ function SiteRow({
   const [greetingDraft, setGreetingDraft] = useState(site.widgetGreeting)
   const [avatarDraft, setAvatarDraft] = useState(site.widgetAvatar)
   const [modeDraft, setModeDraft] = useState<Site['widgetMode']>(site.widgetMode)
-  const [askNameDraft, setAskNameDraft] = useState(site.widgetAskName)
-  const [askPhoneDraft, setAskPhoneDraft] = useState(site.widgetAskPhone)
+  const [nameModeDraft, setNameModeDraft] = useState<FieldMode>(fieldModeOf(site.widgetAskName, site.widgetRequireName))
+  const [phoneModeDraft, setPhoneModeDraft] = useState<FieldMode>(fieldModeOf(site.widgetAskPhone, site.widgetRequirePhone))
+  const [emailModeDraft, setEmailModeDraft] = useState<FieldMode>(fieldModeOf(site.widgetAskEmail, site.widgetRequireEmail))
   const [installMode, setInstallMode] = useState<'wordpress' | 'manual'>('wordpress')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -249,16 +298,27 @@ function SiteRow({
   useEffect(() => setGreetingDraft(site.widgetGreeting), [site.widgetGreeting])
   useEffect(() => setAvatarDraft(site.widgetAvatar), [site.widgetAvatar])
   useEffect(() => setModeDraft(site.widgetMode), [site.widgetMode])
-  useEffect(() => setAskNameDraft(site.widgetAskName), [site.widgetAskName])
-  useEffect(() => setAskPhoneDraft(site.widgetAskPhone), [site.widgetAskPhone])
+  useEffect(
+    () => setNameModeDraft(fieldModeOf(site.widgetAskName, site.widgetRequireName)),
+    [site.widgetAskName, site.widgetRequireName],
+  )
+  useEffect(
+    () => setPhoneModeDraft(fieldModeOf(site.widgetAskPhone, site.widgetRequirePhone)),
+    [site.widgetAskPhone, site.widgetRequirePhone],
+  )
+  useEffect(
+    () => setEmailModeDraft(fieldModeOf(site.widgetAskEmail, site.widgetRequireEmail)),
+    [site.widgetAskEmail, site.widgetRequireEmail],
+  )
 
   const isDirty =
     labelDraft.trim() !== site.widgetLabel ||
     greetingDraft.trim() !== site.widgetGreeting ||
     avatarDraft !== site.widgetAvatar ||
     modeDraft !== site.widgetMode ||
-    askNameDraft !== site.widgetAskName ||
-    askPhoneDraft !== site.widgetAskPhone
+    nameModeDraft !== fieldModeOf(site.widgetAskName, site.widgetRequireName) ||
+    phoneModeDraft !== fieldModeOf(site.widgetAskPhone, site.widgetRequirePhone) ||
+    emailModeDraft !== fieldModeOf(site.widgetAskEmail, site.widgetRequireEmail)
 
   const snippet = backendUrl ? snippetFor(site, backendUrl) : null
 
@@ -290,20 +350,31 @@ function SiteRow({
       widgetGreeting: site.widgetGreeting,
       widgetMode: site.widgetMode,
       widgetAskName: site.widgetAskName,
+      widgetRequireName: site.widgetRequireName,
       widgetAskPhone: site.widgetAskPhone,
+      widgetRequirePhone: site.widgetRequirePhone,
+      widgetAskEmail: site.widgetAskEmail,
+      widgetRequireEmail: site.widgetRequireEmail,
       ...partial,
     }).then(onChange)
 
   const saveChanges = () => {
     setSaving(true)
     setSaveError(false)
+    const nameFlags = fieldModeFlags(nameModeDraft)
+    const phoneFlags = fieldModeFlags(phoneModeDraft)
+    const emailFlags = fieldModeFlags(emailModeDraft)
     patchSite({
       widgetLabel: labelDraft.trim(),
       widgetGreeting: greetingDraft.trim(),
       widgetAvatar: avatarDraft,
       widgetMode: modeDraft,
-      widgetAskName: askNameDraft,
-      widgetAskPhone: askPhoneDraft,
+      widgetAskName: nameFlags.ask,
+      widgetRequireName: nameFlags.require,
+      widgetAskPhone: phoneFlags.ask,
+      widgetRequirePhone: phoneFlags.require,
+      widgetAskEmail: emailFlags.ask,
+      widgetRequireEmail: emailFlags.require,
     })
       .then(() => {
         setSaved(true)
@@ -408,17 +479,12 @@ function SiteRow({
         </span>
       </div>
 
-      <div className="flex items-center gap-4 text-xs">
+      <div className="flex flex-wrap items-center gap-3 text-xs">
         <span className="shrink-0 text-text-muted">Before starting, ask for</span>
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" checked={askNameDraft} onChange={(e) => setAskNameDraft(e.target.checked)} />
-          Name
-        </label>
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" checked={askPhoneDraft} onChange={(e) => setAskPhoneDraft(e.target.checked)} />
-          Phone number
-        </label>
-        {!askNameDraft && !askPhoneDraft && (
+        <FieldModeSelect label="Name" value={nameModeDraft} onChange={setNameModeDraft} />
+        <FieldModeSelect label="Phone number" value={phoneModeDraft} onChange={setPhoneModeDraft} />
+        <FieldModeSelect label="Email" value={emailModeDraft} onChange={setEmailModeDraft} />
+        {nameModeDraft === 'off' && phoneModeDraft === 'off' && emailModeDraft === 'off' && (
           <span className="text-[11px] text-text-muted">No form - starts immediately on tap</span>
         )}
       </div>

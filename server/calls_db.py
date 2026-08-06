@@ -84,12 +84,21 @@ CREATE TABLE IF NOT EXISTS sites (
     -- 'voice' (default, matches every install before chat mode shipped),
     -- 'chat' (text-only, no call button at all), or 'both' (visitor picks).
     widget_mode TEXT DEFAULT 'voice',
-    -- Whether the pre-call form asks for the visitor's name/phone before
-    -- starting. Both default true (today's only behavior, before this
-    -- existed); an operator can drop either or both to let visitors start
-    -- anonymously - see widget.ts's widgetHtml().
+    -- Per-field pre-call form config: "ask" controls whether the field is
+    -- shown at all, "require" (only meaningful when ask=true) controls
+    -- whether it must be filled in to proceed vs. skippable. Name/phone
+    -- default ask=1/require=1 (today's only behavior before this existed -
+    -- both were always shown and always mandatory). Email defaults
+    -- ask=1/require=0 (always shown, never mandatory, also matching prior
+    -- behavior - see widget.ts's widgetHtml()). All are independent, so an
+    -- operator can turn off any subset of fields, or downgrade any shown
+    -- field from required to optional, per site.
     widget_ask_name INTEGER DEFAULT 1,
+    widget_require_name INTEGER DEFAULT 1,
     widget_ask_phone INTEGER DEFAULT 1,
+    widget_require_phone INTEGER DEFAULT 1,
+    widget_ask_email INTEGER DEFAULT 1,
+    widget_require_email INTEGER DEFAULT 0,
     created_at TEXT DEFAULT {_NOW}
 );
 
@@ -764,6 +773,16 @@ def init_tables() -> None:
             # today's exact current behavior.
             conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_ask_name INTEGER DEFAULT 1")
             conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_ask_phone INTEGER DEFAULT 1")
+            # Per-field required/optional (only meaningful when the field is
+            # asked at all) plus the email field getting its own ask toggle
+            # for the first time - previously always shown, never required,
+            # with no way to change either. Defaults backfill every existing
+            # row to that exact prior behavior: name/phone required (they
+            # always were), email shown but optional (it always was).
+            conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_require_name INTEGER DEFAULT 1")
+            conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_require_phone INTEGER DEFAULT 1")
+            conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_ask_email INTEGER DEFAULT 1")
+            conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_require_email INTEGER DEFAULT 0")
             # "Premium+" (ElevenLabs v3) was folded into Premium (Flash v2.5) on
             # 2026-07-14 — v3's realtime endpoint 403s in production, so it was
             # never a good tier to keep selling (see voice_catalog.py's CATALOG
@@ -3308,7 +3327,11 @@ def _site_dict(r: dict) -> dict:
         "widgetGreeting": r["widget_greeting"] or "",
         "widgetMode": r["widget_mode"] or "voice",
         "widgetAskName": bool(r["widget_ask_name"]) if r["widget_ask_name"] is not None else True,
+        "widgetRequireName": bool(r["widget_require_name"]) if r["widget_require_name"] is not None else True,
         "widgetAskPhone": bool(r["widget_ask_phone"]) if r["widget_ask_phone"] is not None else True,
+        "widgetRequirePhone": bool(r["widget_require_phone"]) if r["widget_require_phone"] is not None else True,
+        "widgetAskEmail": bool(r["widget_ask_email"]) if r["widget_ask_email"] is not None else True,
+        "widgetRequireEmail": bool(r["widget_require_email"]) if r["widget_require_email"] is not None else False,
         "createdAt": r["created_at"],
     }
 
@@ -3525,14 +3548,19 @@ def update_site(site_id: int, data: dict, account_id: int) -> dict | None:
     # checkbox showed "Saved" (the frontend's .finally() ran regardless) but
     # the UPDATE had actually errored, so a refresh showed it still ticked.
     widget_ask_name = 1 if data.get("widgetAskName", True) else 0
+    widget_require_name = 1 if data.get("widgetRequireName", True) else 0
     widget_ask_phone = 1 if data.get("widgetAskPhone", True) else 0
+    widget_require_phone = 1 if data.get("widgetRequirePhone", True) else 0
+    widget_ask_email = 1 if data.get("widgetAskEmail", True) else 0
+    widget_require_email = 1 if data.get("widgetRequireEmail", False) else 0
     conn = _connect()
     try:
         with conn:
             conn.execute(
                 "UPDATE sites SET name = ?, allowed_domain = ?, agent_id = ?, status = ?, "
                 "widget_position = ?, widget_label = ?, widget_avatar = ?, widget_greeting = ?, widget_mode = ?, "
-                "widget_ask_name = ?, widget_ask_phone = ? WHERE id = ? AND account_id = ?",
+                "widget_ask_name = ?, widget_require_name = ?, widget_ask_phone = ?, widget_require_phone = ?, "
+                "widget_ask_email = ?, widget_require_email = ? WHERE id = ? AND account_id = ?",
                 (
                     data.get("name"),
                     data.get("allowedDomain", ""),
@@ -3544,7 +3572,11 @@ def update_site(site_id: int, data: dict, account_id: int) -> dict | None:
                     widget_greeting,
                     widget_mode,
                     widget_ask_name,
+                    widget_require_name,
                     widget_ask_phone,
+                    widget_require_phone,
+                    widget_ask_email,
+                    widget_require_email,
                     site_id,
                     account_id,
                 ),

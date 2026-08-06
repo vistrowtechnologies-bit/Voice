@@ -2208,7 +2208,11 @@ def widget_site_config(siteKey: str) -> dict:
         "greeting": site["widgetGreeting"],
         "mode": site["widgetMode"],
         "askName": site["widgetAskName"],
+        "requireName": site["widgetRequireName"],
         "askPhone": site["widgetAskPhone"],
+        "requirePhone": site["widgetRequirePhone"],
+        "askEmail": site["widgetAskEmail"],
+        "requireEmail": site["widgetRequireEmail"],
     }
 
 
@@ -2391,21 +2395,29 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
         logger.warning("widget token rejected: unknown site_key=%s", masked_key)
         raise HTTPException(404, "Unknown site key")
 
-    # Name/phone are only required when this site's pre-call form actually
-    # asks for them (widgetAskName/widgetAskPhone — see the dashboard's
-    # Website Widget page) - a site configured to skip the form entirely
-    # submits both blank, which used to be rejected outright. Email has
-    # always been labeled "(optional)" in the widget's own form; only
-    # validate its format when something was actually typed, never require it.
+    # Each field is only validated when this site's pre-call form actually
+    # asks for it at all (widgetAskName/widgetAskPhone/widgetAskEmail — see
+    # the dashboard's Website Widget page); a site configured to skip a
+    # field entirely submits it blank, which used to be rejected outright
+    # for name/phone. Beyond that, "require" decides whether a shown field
+    # is mandatory — but even an optional field still gets its format
+    # checked the moment the visitor actually typed something into it, so a
+    # garbled phone/email never silently reaches the agent.
     name = req.name.strip()
-    if site["widgetAskName"] and not name:
+    if site["widgetAskName"] and site["widgetRequireName"] and not name:
         logger.warning("widget token rejected: empty name (site_key=%s)", masked_key)
         raise HTTPException(400, "Name is required")
     name = name or "Website visitor"
-    if site["widgetAskPhone"] and not _looks_like_real_phone(req.phone):
+
+    phone_typed = req.phone.strip() != ""
+    if site["widgetAskPhone"] and (site["widgetRequirePhone"] or phone_typed) and not _looks_like_real_phone(req.phone):
         logger.warning("widget token rejected: invalid phone %r (site_key=%s)", req.phone, masked_key)
         raise HTTPException(400, "Enter a valid phone number in international format, e.g. +919812345678")
+
     email = req.email.strip()
+    if site["widgetAskEmail"] and site["widgetRequireEmail"] and not email:
+        logger.warning("widget token rejected: empty email (site_key=%s)", masked_key)
+        raise HTTPException(400, "Email is required")
     if email and "@" not in email:
         logger.warning("widget token rejected: invalid email (site_key=%s)", masked_key)
         raise HTTPException(400, "Enter a valid email address")

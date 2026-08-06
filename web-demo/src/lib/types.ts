@@ -412,7 +412,11 @@ export interface Site {
   widgetGreeting: string
   widgetMode: 'voice' | 'chat' | 'both'
   widgetAskName: boolean
+  widgetRequireName: boolean
   widgetAskPhone: boolean
+  widgetRequirePhone: boolean
+  widgetAskEmail: boolean
+  widgetRequireEmail: boolean
   createdAt: string
 }
 

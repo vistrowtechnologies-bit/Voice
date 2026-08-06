@@ -31,15 +31,21 @@ const DEFAULT_CHAT_OPENER = "Hi, I'm Artha! What can I help you with today?"
 // exact current behavior, completely unchanged. 'chat' skips the call UI
 // entirely; 'both' lets the visitor pick per attempt.
 const widgetMode = scriptEl?.dataset.mode === 'chat' || scriptEl?.dataset.mode === 'both' ? scriptEl.dataset.mode : 'voice'
-// Both default true (every install's behavior before this existed) - only
-// an explicit "false" turns one off, so a missing attribute or any other
-// value is never mistaken for opting out. Baked into the initial HTML
-// string below (same reasoning as widgetMode's own comment elsewhere in
-// this file) rather than live-refreshed, since it decides whether the
-// name/phone fields exist in the DOM at all, not just their content.
+// ask* default true, require* default true too except email (matches every
+// install's behavior before any of this existed: name/phone always shown
+// and mandatory, email always shown and optional) - only an explicit
+// "false"/"true" flips one, so a missing attribute is never mistaken for
+// opting out. require is meaningless once ask is false. Baked into the
+// initial HTML string below (same reasoning as widgetMode's own comment
+// elsewhere in this file) rather than live-refreshed, since it decides
+// whether these fields exist in the DOM at all, not just their content.
 const askName = scriptEl?.dataset.askName !== 'false'
+const requireName = askName && scriptEl?.dataset.requireName !== 'false'
 const askPhone = scriptEl?.dataset.askPhone !== 'false'
-const skipPreCallForm = !askName && !askPhone
+const requirePhone = askPhone && scriptEl?.dataset.requirePhone !== 'false'
+const askEmail = scriptEl?.dataset.askEmail !== 'false'
+const requireEmail = askEmail && scriptEl?.dataset.requireEmail === 'true'
+const skipPreCallForm = !askName && !askPhone && !askEmail
 
 function randomId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
@@ -231,18 +237,20 @@ function widgetHtml(label: string): string {
         <div id="av-form" class="av-form" style="display:none;">
           <p>${widgetMode === 'chat' ? "Tell us who you are so the assistant can greet you properly." : "Tell us who's calling so the assistant can greet you properly."}</p>
           <div style="display:${askName ? 'flex' : 'none'};flex-direction:column;gap:10px;">
-            <label for="av-name">Name</label>
+            <label for="av-name">Name${requireName ? '' : ' (optional)'}</label>
             <input id="av-name" type="text" autocomplete="name" placeholder="Your name" />
           </div>
           <div style="display:${askPhone ? 'flex' : 'none'};flex-direction:column;gap:10px;">
-            <label for="av-phone">Phone number</label>
+            <label for="av-phone">Phone number${requirePhone ? '' : ' (optional)'}</label>
             <div class="av-phone-wrap">
               <span class="av-phone-prefix">+91</span>
               <input id="av-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="98765 43210" maxlength="10" />
             </div>
           </div>
-          <label for="av-email">Email (optional)</label>
-          <input id="av-email" type="email" autocomplete="email" placeholder="you@example.com" />
+          <div style="display:${askEmail ? 'flex' : 'none'};flex-direction:column;gap:10px;">
+            <label for="av-email">Email${requireEmail ? '' : ' (optional)'}</label>
+            <input id="av-email" type="email" autocomplete="email" placeholder="you@example.com" />
+          </div>
           <p id="av-form-error" class="av-error"></p>
           <button id="av-submit" class="av-submit">${widgetMode === 'chat' ? 'Chat with my AI agent' : 'Talk to my AI agent'}</button>
         </div>
@@ -962,18 +970,23 @@ function init(): void {
     const name = nameInput.value.trim()
     const phone = toE164Phone(phoneInput.value)
     const email = emailInput.value.trim()
-    if (askName && !name) {
+    if (askName && requireName && !name) {
       formError.textContent = 'Please enter your name.'
       return
     }
-    if (askPhone && !isValidPhone(phone)) {
-      formError.textContent = 'Enter a valid 10-digit phone number.'
+    // An optional phone still gets format-checked the moment something was
+    // actually typed into it - same "checked if provided, required only if
+    // requirePhone" rule server/token_api.py's create_widget_token enforces.
+    if (askPhone && (requirePhone || phoneInput.value.trim()) && !isValidPhone(phone)) {
+      formError.textContent = requirePhone
+        ? 'Enter a valid 10-digit phone number.'
+        : 'Enter a valid 10-digit phone number, or leave it blank.'
       return
     }
-    // Optional - only rejected if something was typed and it doesn't look
-    // like an email, never required. Requiring it up front was costing
-    // completed submissions for no benefit visitors who just want to
-    // talk or type actually care about.
+    if (askEmail && requireEmail && !email) {
+      formError.textContent = 'Please enter your email.'
+      return
+    }
     if (email && !isValidEmail(email)) {
       formError.textContent = 'Enter a valid email address, or leave it blank.'
       return
