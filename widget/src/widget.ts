@@ -104,7 +104,13 @@ const CSS = `
 }
 .av-button { width: 68px; height: 68px; border-radius: 9999px; background: #000; border: none; padding: 0; overflow: hidden; cursor: pointer; animation: av-pulse-ring 2.6s ease-out infinite, av-attention-pop 1.1s ease-in-out 1; transition: transform .15s ease; }
 .av-button:hover { transform: scale(1.06); }
-.av-button video, .av-button img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
+/* The 1.5x zoom exists only for the orb video (agent-orb.mp4 has a lot of
+   dark padding baked into the frame around the actual visual ring, so it
+   needs cropping in to fill the circle) - a photo avatar is already a
+   full-bleed square headshot and doesn't need it, so applying the same
+   scale there was cropping straight through faces. */
+.av-button video { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
+.av-button img { width: 100%; height: 100%; object-fit: cover; }
 
 /* max-width is capped relative to the viewport, not just a flat 220px -
    on a ~375-430px phone a fixed 220px bubble anchored 78px in from the
@@ -161,7 +167,8 @@ const CSS = `
 #av-call, #av-chat { display: flex; flex-direction: column; height: 447px; }
 .av-body { flex-shrink: 0; padding: 18px 16px 2px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; }
-.av-orb video, .av-orb img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
+.av-orb video { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
+.av-orb img { width: 100%; height: 100%; object-fit: cover; }
 .av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 18px; }
 .av-transcript { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 2px 16px 12px; padding: 12px 12px 8px; scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: #4a3f70 transparent; position: relative; border-radius: 12px; border: 1px solid rgba(168,85,247,.28); background: rgba(168,85,247,.04); }
 .av-transcript::before { content: ''; position: absolute; top: -1px; left: 10%; right: 10%; height: 1px; background: linear-gradient(90deg, transparent, #c084fc, transparent); box-shadow: 0 0 8px 1px rgba(192,132,252,.9); }
