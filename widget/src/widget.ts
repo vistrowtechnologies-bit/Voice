@@ -1,4 +1,4 @@
-import { Room, RoomEvent, Track } from 'livekit-client'
+import { DisconnectReason, Room, RoomEvent, Track } from 'livekit-client'
 import type { Participant, RemoteParticipant, RemoteTrack, TranscriptionSegment } from 'livekit-client'
 
 // Must run synchronously at the top of the script — document.currentScript
@@ -661,6 +661,16 @@ function init(): void {
     window.setTimeout(resetToIdle, 4000)
   }
 
+  // Same "leave the message visible for a beat" shape as failCall, but for a
+  // normal agent-initiated goodbye - room.delete_room() (agent/main.py's
+  // _hang_up) disconnects the visitor with DisconnectReason.ROOM_DELETED,
+  // which used to be indistinguishable from a real dropped connection and
+  // showed a scary "ended unexpectedly" error after every clean call.
+  function endCallGracefully(message: string): void {
+    setStatus(message)
+    window.setTimeout(resetToIdle, 3000)
+  }
+
   let intentionalEnd = false
   // Suppresses the Disconnected handler for exactly one teardown — used by
   // the agent-join watchdog below when it abandons a dead room to retry
@@ -861,15 +871,17 @@ function init(): void {
           upsertTranscriptEntry(seg.id, seg.text, isLocal)
         }
       })
-      room.on(RoomEvent.Disconnected, () => {
+      room.on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
         if (suppressDisconnect) {
           suppressDisconnect = false
           return
         }
         if (intentionalEnd) {
           resetToIdle()
+        } else if (reason === DisconnectReason.ROOM_DELETED) {
+          endCallGracefully('Call ended — thanks for chatting!')
         } else {
-          console.warn('[Vistrow Voice widget] room disconnected unexpectedly')
+          console.warn('[Vistrow Voice widget] room disconnected unexpectedly:', reason)
           failCall('The call ended unexpectedly — please try again.')
         }
       })
