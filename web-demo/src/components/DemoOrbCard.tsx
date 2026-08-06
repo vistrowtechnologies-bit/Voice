@@ -151,14 +151,14 @@ export function DemoOrbCard() {
         </div>
 
         {isCallLive && token && serverUrl ? (
-          {/* className="contents" - LiveKitRoom renders its own wrapping
-              <div> with no flex styling, which broke the card's `flex
-              flex-col items-center` centering for InlineCallBody's
-              fixed-width w-48 orb (w-full children like the footer/button
-              row still looked fine since they just stretch to fill it).
-              display:contents removes that wrapper from layout entirely so
-              InlineCallBody's children are centered as if they were direct
-              children of the card again. */}
+          // className="contents" - LiveKitRoom renders its own wrapping div
+          // with no flex styling, which broke the card's `flex flex-col
+          // items-center` centering for InlineCallBody's fixed-width w-48
+          // orb (w-full children like the footer/button row still looked
+          // fine since they just stretch to fill it). display:contents
+          // removes that wrapper from layout entirely so InlineCallBody's
+          // children are centered as if they were direct children of the
+          // card again.
           <LiveKitRoom
             className="contents"
             serverUrl={serverUrl}
