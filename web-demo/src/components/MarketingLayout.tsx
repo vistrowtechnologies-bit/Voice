@@ -27,28 +27,42 @@ function OrbMark() {
 //      subdomain* instead of jumping to app.vistrowvoice.com/login. Forcing
 //      a real navigation here is what keeps the address bar honest.
 //   3. Same bucket as the current host: an ordinary client-side <Link>.
-export function NavLink({ to, className, onClick, children }: { to: string; className?: string; onClick?: () => void; children: ReactNode }) {
+export function NavLink({
+  to,
+  className,
+  onClick,
+  children,
+  target,
+  rel,
+}: {
+  to: string
+  className?: string
+  onClick?: () => void
+  children: ReactNode
+  target?: string
+  rel?: string
+}) {
   if (/^https?:\/\//.test(to)) {
     return (
-      <a href={to} className={className} onClick={onClick} target="_blank" rel="noopener noreferrer">
+      <a href={to} className={className} onClick={onClick} target={target ?? '_blank'} rel={rel ?? 'noopener noreferrer'}>
         {children}
       </a>
     )
   }
   if (typeof window !== 'undefined') {
     const current = hostBucket(window.location.hostname)
-    const target = pathBucket(to)
-    if (target !== current) {
-      const path = target === 'docs' ? '/' : to
+    const bucketTarget = pathBucket(to)
+    if (bucketTarget !== current) {
+      const path = bucketTarget === 'docs' ? '/' : to
       return (
-        <a href={`https://${BUCKET_HOST[target]}${path}`} className={className} onClick={onClick}>
+        <a href={`https://${BUCKET_HOST[bucketTarget]}${path}`} className={className} onClick={onClick} target={target} rel={rel}>
           {children}
         </a>
       )
     }
   }
   return (
-    <Link to={to} className={className} onClick={onClick}>
+    <Link to={to} className={className} onClick={onClick} target={target} rel={rel}>
       {children}
     </Link>
   )
@@ -183,6 +197,8 @@ function MobileNav({ onClose }: { onClose: () => void }) {
         <div className="mt-8 flex flex-col gap-3">
           <NavLink
             to="/login"
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={onClose}
             className="rounded-full border border-border px-5 py-2.5 text-center text-sm font-semibold text-text"
           >
@@ -247,6 +263,8 @@ function Header() {
             <MarketingThemeSwitcher />
             <NavLink
               to="/login"
+              target="_blank"
+              rel="noopener noreferrer"
               className="hidden rounded-full px-4 py-2 text-sm font-semibold text-text-muted transition-colors hover:text-text sm:block"
             >
               Sign in
