@@ -35,17 +35,23 @@ const widgetMode = scriptEl?.dataset.mode === 'chat' || scriptEl?.dataset.mode =
 // install's behavior before any of this existed: name/phone always shown
 // and mandatory, email always shown and optional) - only an explicit
 // "false"/"true" flips one, so a missing attribute is never mistaken for
-// opting out. require is meaningless once ask is false. Baked into the
-// initial HTML string below (same reasoning as widgetMode's own comment
-// elsewhere in this file) rather than live-refreshed, since it decides
-// whether these fields exist in the DOM at all, not just their content.
-const askName = scriptEl?.dataset.askName !== 'false'
-const requireName = askName && scriptEl?.dataset.requireName !== 'false'
-const askPhone = scriptEl?.dataset.askPhone !== 'false'
-const requirePhone = askPhone && scriptEl?.dataset.requirePhone !== 'false'
-const askEmail = scriptEl?.dataset.askEmail !== 'false'
-const requireEmail = askEmail && scriptEl?.dataset.requireEmail === 'true'
-const skipPreCallForm = !askName && !askPhone && !askEmail
+// opting out. require is meaningless once ask is false. Seeded from the
+// script tag's own attributes for the very first render, then kept live by
+// the site-config self-refresh below (unlike widgetMode, these don't
+// decide which whole panel *views* exist - just show/hide within the
+// already-rendered form - so updating them after the fact is a handful of
+// style/label writes, not a rebuild) - a manually-pasted snippet (or, as
+// shipped once, this codebase's own marketing site) that's never been
+// updated since should still reflect whatever the dashboard says now.
+let askName = scriptEl?.dataset.askName !== 'false'
+let requireName = askName && scriptEl?.dataset.requireName !== 'false'
+let askPhone = scriptEl?.dataset.askPhone !== 'false'
+let requirePhone = askPhone && scriptEl?.dataset.requirePhone !== 'false'
+let askEmail = scriptEl?.dataset.askEmail !== 'false'
+let requireEmail = askEmail && scriptEl?.dataset.requireEmail === 'true'
+function skipPreCallForm(): boolean {
+  return !askName && !askPhone && !askEmail
+}
 
 function randomId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
@@ -236,18 +242,18 @@ function widgetHtml(label: string): string {
 
         <div id="av-form" class="av-form" style="display:none;">
           <p>${widgetMode === 'chat' ? "Tell us who you are so the assistant can greet you properly." : "Tell us who's calling so the assistant can greet you properly."}</p>
-          <div style="display:${askName ? 'flex' : 'none'};flex-direction:column;gap:10px;">
+          <div id="av-name-field" style="display:${askName ? 'flex' : 'none'};flex-direction:column;gap:10px;">
             <label for="av-name">Name${requireName ? '' : ' (optional)'}</label>
             <input id="av-name" type="text" autocomplete="name" placeholder="Your name" />
           </div>
-          <div style="display:${askPhone ? 'flex' : 'none'};flex-direction:column;gap:10px;">
+          <div id="av-phone-field" style="display:${askPhone ? 'flex' : 'none'};flex-direction:column;gap:10px;">
             <label for="av-phone">Phone number${requirePhone ? '' : ' (optional)'}</label>
             <div class="av-phone-wrap">
               <span class="av-phone-prefix">+91</span>
               <input id="av-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="98765 43210" maxlength="10" />
             </div>
           </div>
-          <div style="display:${askEmail ? 'flex' : 'none'};flex-direction:column;gap:10px;">
+          <div id="av-email-field" style="display:${askEmail ? 'flex' : 'none'};flex-direction:column;gap:10px;">
             <label for="av-email">Email${requireEmail ? '' : ' (optional)'}</label>
             <input id="av-email" type="email" autocomplete="email" placeholder="you@example.com" />
           </div>
@@ -319,9 +325,15 @@ function init(): void {
   const closeBtn = shadow.getElementById('av-close') as HTMLButtonElement
 
   const formEl = shadow.getElementById('av-form') as HTMLDivElement
+  const nameFieldEl = shadow.getElementById('av-name-field') as HTMLDivElement
   const nameInput = shadow.getElementById('av-name') as HTMLInputElement
+  const nameLabelEl = shadow.querySelector('label[for="av-name"]') as HTMLLabelElement
+  const phoneFieldEl = shadow.getElementById('av-phone-field') as HTMLDivElement
   const phoneInput = shadow.getElementById('av-phone') as HTMLInputElement
+  const phoneLabelEl = shadow.querySelector('label[for="av-phone"]') as HTMLLabelElement
+  const emailFieldEl = shadow.getElementById('av-email-field') as HTMLDivElement
   const emailInput = shadow.getElementById('av-email') as HTMLInputElement
+  const emailLabelEl = shadow.querySelector('label[for="av-email"]') as HTMLLabelElement
   const formError = shadow.getElementById('av-form-error') as HTMLParagraphElement
   const submitBtn = shadow.getElementById('av-submit') as HTMLButtonElement
 
@@ -352,30 +364,67 @@ function init(): void {
   const greetingText = shadow.getElementById('av-greeting-text') as HTMLSpanElement
   greetingText.textContent = customGreeting || DEFAULT_GREETING
 
+  // Re-applies one pre-call field's live ask/require state to its wrapper
+  // div (show/hide) and label text (the "(optional)" suffix) - not mode,
+  // which decides which whole panel *views* get built into the DOM at all
+  // (see widgetHtml() above) and would need a much bigger rebuild than
+  // this. Reads back correctly on the very next form open/submit since
+  // askX/requireX are the same module-level bindings submitForm() and
+  // handleButtonClick() already check live.
+  function applyFieldConfig(
+    fieldEl: HTMLDivElement,
+    labelEl: HTMLLabelElement,
+    baseLabel: string,
+    ask: boolean,
+    require: boolean,
+  ): void {
+    fieldEl.style.display = ask ? 'flex' : 'none'
+    labelEl.textContent = require ? baseLabel : `${baseLabel} (optional)`
+  }
+
   // Best-effort, fire-and-forget - a slow/failed fetch just means this
   // load keeps whatever was baked into the script tag, same as before
-  // this existed. Only avatar/greeting self-heal this way, not mode:
-  // mode drives which panel views get built into the DOM at all (see
-  // widgetHtml() above), so changing it after the fact would need a much
-  // bigger rebuild than swapping an icon and a text node.
+  // this existed.
   fetch(`${apiBase}/widget/site-config?siteKey=${encodeURIComponent(siteKey)}`)
     .then((res) => (res.ok ? res.json() : null))
-    .then((data: { avatar?: string; greeting?: string } | null) => {
-      if (!data) return
-      if (data.avatar && data.avatar !== avatarKey) {
-        avatarKey = data.avatar
-        button.innerHTML = avatarTag()
-        titleAvatarEl.innerHTML = avatarTag()
-        if (orbEl) {
-          orbEl.innerHTML = avatarTag('av-orb-video')
-          orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement | HTMLImageElement | null
+    .then(
+      (
+        data: {
+          avatar?: string
+          greeting?: string
+          askName?: boolean
+          requireName?: boolean
+          askPhone?: boolean
+          requirePhone?: boolean
+          askEmail?: boolean
+          requireEmail?: boolean
+        } | null,
+      ) => {
+        if (!data) return
+        if (data.avatar && data.avatar !== avatarKey) {
+          avatarKey = data.avatar
+          button.innerHTML = avatarTag()
+          titleAvatarEl.innerHTML = avatarTag()
+          if (orbEl) {
+            orbEl.innerHTML = avatarTag('av-orb-video')
+            orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement | HTMLImageElement | null
+          }
         }
-      }
-      if (typeof data.greeting === 'string' && data.greeting !== customGreeting) {
-        customGreeting = data.greeting
-        greetingText.textContent = customGreeting || DEFAULT_GREETING
-      }
-    })
+        if (typeof data.greeting === 'string' && data.greeting !== customGreeting) {
+          customGreeting = data.greeting
+          greetingText.textContent = customGreeting || DEFAULT_GREETING
+        }
+        if (typeof data.askName === 'boolean') askName = data.askName
+        if (typeof data.requireName === 'boolean') requireName = askName && data.requireName
+        applyFieldConfig(nameFieldEl, nameLabelEl, 'Name', askName, requireName)
+        if (typeof data.askPhone === 'boolean') askPhone = data.askPhone
+        if (typeof data.requirePhone === 'boolean') requirePhone = askPhone && data.requirePhone
+        applyFieldConfig(phoneFieldEl, phoneLabelEl, 'Phone number', askPhone, requirePhone)
+        if (typeof data.askEmail === 'boolean') askEmail = data.askEmail
+        if (typeof data.requireEmail === 'boolean') requireEmail = askEmail && data.requireEmail
+        applyFieldConfig(emailFieldEl, emailLabelEl, 'Email', askEmail, requireEmail)
+      },
+    )
     .catch((err) => {
       console.warn('[Vistrow Voice widget] site-config refresh failed:', err)
     })
@@ -584,7 +633,7 @@ function init(): void {
   // the chat, 'both' asks which one now that name/phone are already in
   // hand.
   function handleButtonClick(): void {
-    if (skipPreCallForm) {
+    if (skipPreCallForm()) {
       // Neither name nor phone is configured to be asked for - skip the
       // form entirely instead of showing one with nothing left to fill in.
       hideGreeting()
