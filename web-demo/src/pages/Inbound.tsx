@@ -4,7 +4,7 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { SectionCard } from '../components/ui/SectionCard'
-import { createInboundRoute, fetchAgents, fetchInboundRoutes, fetchPhoneNumbers } from '../lib/api'
+import { createInboundRoute, deleteInboundRoute, fetchAgents, fetchInboundRoutes, fetchPhoneNumbers } from '../lib/api'
 import type { AgentConfig, InboundRoute, PhoneNumber } from '../lib/types'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -46,6 +46,12 @@ export function Inbound() {
       windowEnd: windowEnd || null,
       activeDays,
     })
+    reload()
+  }
+
+  const handleDelete = async (routeId: number) => {
+    if (!confirm('Delete this inbound route? Calls to this number will stop routing to its agent immediately.')) return
+    await deleteInboundRoute(routeId)
     reload()
   }
 
@@ -203,6 +209,13 @@ export function Inbound() {
                   <span className={`ml-auto rounded border px-2 py-0.5 text-[11px] font-semibold ${r.phone_number ? 'border-cyan/30 bg-cyan/10 text-cyan' : 'border-amber/30 bg-amber/10 text-amber'}`}>
                     {r.phone_number ? 'active' : 'waiting for number'}
                   </span>
+                  <button
+                    onClick={() => handleDelete(r.id)}
+                    aria-label="Delete route"
+                    className="text-text-muted hover:text-destructive"
+                  >
+                    <Icon name="delete" className="text-[18px]" />
+                  </button>
                 </div>
               ))}
             </div>

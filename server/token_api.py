@@ -1545,6 +1545,12 @@ def create_inbound_route(data: dict = Body(...), user: dict = Depends(current_us
     return {"ok": True}
 
 
+@app.delete("/inbound-routes/{route_id}")
+def delete_inbound_route(route_id: int, user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_inbound_route(route_id, user["account_id"])
+    return {"ok": True}
+
+
 @app.get("/campaigns")
 def list_campaigns(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_campaigns_with_stats(user["account_id"])

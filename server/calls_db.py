@@ -2876,6 +2876,17 @@ def create_inbound_route(data: dict, account_id: int) -> None:
         conn.close()
 
 
+def delete_inbound_route(route_id: int, account_id: int) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "DELETE FROM inbound_routes WHERE id = ? AND account_id = ?", (route_id, account_id)
+            )
+    finally:
+        conn.close()
+
+
 def list_campaigns(account_id: int) -> list[dict]:
     conn = _connect()
     try:

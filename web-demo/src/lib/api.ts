@@ -202,6 +202,7 @@ export const extractQaFromSource = (sourceId: number) =>
 export const fetchInboundRoutes = () => get<InboundRoute[]>('/inbound-routes')
 export const createInboundRoute = (data: Record<string, unknown>) =>
   send('POST', '/inbound-routes', data)
+export const deleteInboundRoute = (id: number) => send('DELETE', `/inbound-routes/${id}`)
 export const fetchCampaigns = () => get<Campaign[]>('/campaigns')
 export const fetchCampaign = (id: number) => get<Campaign>(`/campaigns/${id}`)
 export const createCampaign = (data: Record<string, unknown>) => send<Campaign>('POST', '/campaigns', data)
