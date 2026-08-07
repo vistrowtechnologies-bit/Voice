@@ -90,6 +90,17 @@ _BARGE_IN_FRAMES = 4
 # slowing down a genuine interruption.
 _PHONE_BARGE_IN_FRAMES = 15  # 300ms
 _PHONE_BARGE_IN_ENERGY_MULTIPLIER = 2.5
+# Disabled outright (2026-08-07): even at 2.5x/300ms, a live test call still
+# had every single reply barged-in on and cancelled by its own echo — 3/3
+# turns in one call ended with no assistant reply ever recorded (the
+# transcript append only happens after a reply finishes; see
+# session.handle_utterance_streaming) and nothing but the "ji bataiye"
+# listening cue on a loop. Without real acoustic echo cancellation on this
+# leg, no energy/duration threshold reliably tells the agent's own voice
+# apart from a genuine interruption, so replies now always play to
+# completion on phone calls — no mid-sentence interruption, but a real
+# answer every time, which is the higher priority until real AEC exists.
+_PHONE_BARGE_IN_ENABLED = False
 # Suppress barge-in detection for this long after a reply starts sending.
 # TTS synthesis takes a second or two; the caller's audio backs up
 # unprocessed during that wait and arrives all at once the moment we
@@ -425,6 +436,12 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                 recorder.append_caller_audio(audioop.ulaw2lin(ulaw_frame, 2))
 
                 if speaking_task and not speaking_task.done():
+                    if not _PHONE_BARGE_IN_ENABLED:
+                        # See _PHONE_BARGE_IN_ENABLED above — no reliable way
+                        # to tell the agent's own echoed voice apart from a
+                        # real interruption on this leg yet, so let the
+                        # reply finish instead of self-cancelling it.
+                        continue
                     # Grace period right after starting to speak: TTS
                     # synthesis takes a second or two, during which the
                     # caller's real-time audio backs up unprocessed. The
