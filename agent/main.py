@@ -168,6 +168,21 @@ def _clamp(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
 
 
+# Deliberately narrow and low-ambiguity — a false positive here just adds a
+# harmless system nudge the model can ignore, but a word like "बस" ("enough"/
+# "just") shows up constantly in ordinary sentences and would nudge on
+# nearly every turn, so it's left out.
+_FAREWELL_WORDS = (
+    "bye", "goodbye", "good bye", "bye bye",
+    "बाय", "अलविदा",
+)
+
+
+def _looks_like_farewell(text: str) -> bool:
+    lowered = (text or "").lower()
+    return any(word in lowered for word in _FAREWELL_WORDS)
+
+
 def _build_llm(model: str):
     """Picks the LLM plugin by model-name prefix, so an operator can switch
     an agent between OpenAI and Gemini from the dashboard's model dropdown
@@ -819,6 +834,26 @@ class RealEstateAgent(Agent):
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
         text = new_message.text_content
+
+        if _looks_like_farewell(text):
+            # Belt-and-suspenders for end_call (tools.py): relying on the
+            # model to both say goodbye AND remember to invoke the tool in
+            # the same turn is unreliable in practice - observed live on a
+            # real call where the agent spoke a full goodbye line but never
+            # called end_call, so the room stayed open and the agent kept
+            # talking (asked "are you still there?" a few turns later).
+            # This doesn't force the hang-up itself - it just makes the
+            # model's own end_call call far more likely to actually happen
+            # on the turn where the caller said goodbye, instead of leaving
+            # it to chance.
+            turn_ctx.add_message(
+                role="system",
+                content=(
+                    f"The caller's last message ({text!r}) sounds like a goodbye. If the "
+                    "conversation is genuinely over, call the end_call tool THIS turn - don't just "
+                    "reply with a goodbye in plain text without calling it."
+                ),
+            )
 
         if self._voice_gender in ("male", "female"):
             _woman = self._voice_gender == "female"
