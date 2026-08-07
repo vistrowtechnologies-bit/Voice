@@ -2207,6 +2207,7 @@ def widget_site_config(siteKey: str) -> dict:
         "avatar": site["widgetAvatar"],
         "greeting": site["widgetGreeting"],
         "mode": site["widgetMode"],
+        "position": site["widgetPosition"],
         "askName": site["widgetAskName"],
         "requireName": site["widgetRequireName"],
         "askPhone": site["widgetAskPhone"],

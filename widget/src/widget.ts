@@ -8,7 +8,13 @@ import type { Participant, RemoteParticipant, RemoteTrack, TranscriptionSegment 
 const scriptEl = document.currentScript as HTMLScriptElement | null
 const siteKey = scriptEl?.dataset.siteKey
 const apiBase = scriptEl?.dataset.apiBase?.replace(/\/$/, '')
-const position = scriptEl?.dataset.position === 'bottom-left' ? 'bottom-left' : 'bottom-right'
+// let, not const - refreshed live via site-config below (see host.dataset.side
+// writes), the same self-refresh treatment as avatar/greeting/ask-fields.
+// Baked into a :host([data-side]) attribute selector rather than interpolated
+// into the CSS string directly, since that string is only ever injected once
+// at init - an attribute on the host element is what a later JS write can
+// actually still affect.
+let position = scriptEl?.dataset.position === 'bottom-left' ? 'bottom-left' : 'bottom-right'
 const label = scriptEl?.dataset.label || 'Talk to us'
 // 'default' (or the attribute missing entirely) keeps today's animated
 // orb video exactly as-is - every other catalog key is a static color
@@ -105,7 +111,8 @@ const SPEAKER_OFF_ICON =
 
 const CSS = `
 :host { all: initial; }
-.av-root { position: fixed; ${position === 'bottom-left' ? 'left: 20px;' : 'right: 20px;'} bottom: 20px; z-index: 2147483000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.av-root { position: fixed; right: 20px; bottom: 20px; z-index: 2147483000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+:host([data-side="left"]) .av-root { left: 20px; right: auto; }
 
 @keyframes av-pulse-ring {
   0% { box-shadow: 0 0 0 0 rgba(168,85,247,.55); }
@@ -139,13 +146,15 @@ const CSS = `
    land on top of whatever else a site anchors in the other bottom corner
    (a WhatsApp chat button, in the case that surfaced this) instead of
    stopping with real clearance from it. */
-.av-greeting { position: absolute; bottom: 8px; ${position === 'bottom-left' ? 'left: 78px;' : 'right: 78px;'} display: flex; align-items: center; gap: 8px; width: min(168px, calc(100vw - 148px)); background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
+.av-greeting { position: absolute; bottom: 8px; right: 78px; display: flex; align-items: center; gap: 8px; width: min(168px, calc(100vw - 148px)); background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
+:host([data-side="left"]) .av-greeting { left: 78px; right: auto; }
 .av-greeting span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .av-greeting span { flex: 1 1 auto; min-width: 0; }
 .av-greeting button { background: none; border: none; color: #7d7594; cursor: pointer; padding: 2px; display: flex; flex-shrink: 0; }
 @keyframes av-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
-.av-panel { display: none; flex-direction: column; width: 300px; border-radius: 16px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.5); position: absolute; bottom: 78px; ${position === 'bottom-left' ? 'left: 0;' : 'right: 0;'} }
+.av-panel { display: none; flex-direction: column; width: 300px; border-radius: 16px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.5); position: absolute; bottom: 78px; right: 0; }
+:host([data-side="left"]) .av-panel { left: 0; right: auto; }
 .av-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #2a2440; }
 .av-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .av-dot { width: 8px; height: 8px; border-radius: 9999px; background: #a855f7; }
@@ -313,6 +322,7 @@ function init(): void {
 
   const host = document.createElement('div')
   host.id = 'vistrow-voice-widget-host'
+  if (position === 'bottom-left') host.dataset.side = 'left'
   document.body.appendChild(host)
   const shadow = host.attachShadow({ mode: 'open' })
   shadow.innerHTML = `<style>${CSS}</style>${widgetHtml(label)}`
@@ -392,6 +402,7 @@ function init(): void {
         data: {
           avatar?: string
           greeting?: string
+          position?: string
           askName?: boolean
           requireName?: boolean
           askPhone?: boolean
@@ -413,6 +424,11 @@ function init(): void {
         if (typeof data.greeting === 'string' && data.greeting !== customGreeting) {
           customGreeting = data.greeting
           greetingText.textContent = customGreeting || DEFAULT_GREETING
+        }
+        if ((data.position === 'bottom-left' || data.position === 'bottom-right') && data.position !== position) {
+          position = data.position
+          if (position === 'bottom-left') host.dataset.side = 'left'
+          else delete host.dataset.side
         }
         if (typeof data.askName === 'boolean') askName = data.askName
         if (typeof data.requireName === 'boolean') requireName = askName && data.requireName
