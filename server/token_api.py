@@ -1916,7 +1916,7 @@ _ENABLEX_TERMINAL_STATES = {
 
 
 @app.post("/telephony/enablex/inbound-event")
-async def enablex_inbound_event(event: dict = Body(...)) -> dict:
+async def enablex_inbound_event(request: Request) -> dict:
     """Webhook EnableX calls for inbound-call lifecycle events.
 
     Set this URL (…/telephony/enablex/inbound-event) as the webhook on your
@@ -1936,7 +1936,33 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     'incomingcall' state (for the LiveKit path). (Encrypted webhook payloads
     aren't handled yet — configure the portal webhook without encryption for
     now.)
+
+    Takes the raw Request rather than a typed `dict = Body(...)` — a real
+    'incomingcall' event from EnableX was observed hitting this route with a
+    422 before ever reaching this function (FastAPI's own body-parsing
+    rejected it, so not even our own logging line ran), meaning it isn't a
+    plain `application/json` object body the old signature required. Parsed
+    manually here, with every shape falling back to a 200 + logged raw body
+    instead of ever 422ing again — a webhook that can 422 a call it can't
+    parse is worse than one that just logs and moves on.
     """
+    raw_body = await request.body()
+    content_type = request.headers.get("content-type", "")
+    event: dict = {}
+    if raw_body:
+        try:
+            parsed = json.loads(raw_body)
+            if isinstance(parsed, dict):
+                event = parsed
+        except ValueError:
+            if "form" in content_type:
+                event = dict((await request.form()))
+    if not event:
+        logger.info(
+            "EnableX inbound event: unparsed body (content-type=%s): %r", content_type, raw_body[:2000]
+        )
+        return {"ok": True}
+
     state = event.get("state")
     voice_id = event.get("voice_id")
     dialed_number = event.get("to")
