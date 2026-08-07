@@ -127,16 +127,45 @@ _PENDING_ACCOUNT_BY_VOICE_ID: dict[str, int] = {}
 _PENDING_GREETING_BY_VOICE_ID: dict[str, tuple[session_module.Session, asyncio.Task]] = {}
 
 
-def _build_session_for_test_call(call_type: str = "phone") -> session_module.Session:
+def _build_session_for_test_call(
+    call_type: str = "phone",
+    contact_name: str = "",
+    contact_phone: str = "",
+    contact_company: str = "",
+    contact_custom_fields: str = "{}",
+) -> session_module.Session:
     """Loads TEST_AGENT_ID's dashboard config into a fresh Session — same
     per-call config lookup agent/main.py did via db.get_agent_config."""
-    return _build_session(TEST_ACCOUNT_ID, TEST_AGENT_ID, call_type)
+    return _build_session(
+        TEST_ACCOUNT_ID, TEST_AGENT_ID, call_type, contact_name, contact_phone, contact_company, contact_custom_fields
+    )
 
 
-def _build_session(account_id: int, agent_id: int, call_type: str) -> session_module.Session:
+def _build_session(
+    account_id: int,
+    agent_id: int,
+    call_type: str,
+    contact_name: str = "",
+    contact_phone: str = "",
+    contact_company: str = "",
+    contact_custom_fields: str = "{}",
+) -> session_module.Session:
     """Loads agent_id's dashboard config into a fresh Session — same
-    per-call config lookup agent/main.py did via db.get_agent_config."""
+    per-call config lookup agent/main.py did via db.get_agent_config.
+
+    contact_* let a campaign dial (or any outbound call placed on someone
+    else's behalf) personalize the greeting/system prompt the same way
+    calls_db.place_test_call's contact_name/contact_company params always
+    did on the old LiveKit path - without these an orchestrator-routed
+    campaign call greets every contact identically, no name, no context.
+    """
     cfg = db.get_agent_config(agent_id) or {}
+    try:
+        custom_fields = json.loads(contact_custom_fields) if contact_custom_fields else {}
+        if not isinstance(custom_fields, dict):
+            custom_fields = {}
+    except (ValueError, TypeError):
+        custom_fields = {}
     sess = session_module.Session(
         account_id=account_id or None,
         agent_id=agent_id or None,
@@ -152,6 +181,10 @@ def _build_session(account_id: int, agent_id: int, call_type: str) -> session_mo
         transfer_phone=cfg.get("transfer_phone") or "",
         first_speaker=(cfg.get("first_speaker") or "agent").lower(),
         welcome_message=cfg.get("welcome_message") or "",
+        visitor_name=contact_name,
+        visitor_phone=contact_phone,
+        company=contact_company,
+        custom_fields=custom_fields,
     )
     session_module.build_tools_for_session(sess, cfg.get("custom_functions"))
     return sess
@@ -162,8 +195,18 @@ async def enablex_outbound_test_call(body: dict = Body(...)) -> dict:
     """Places an outbound call from TEST_PHONE_NUMBER to `to` using the
     same feature-flagged test account/agent as the inbound path. Streaming
     starts on the `connected` webhook event, same as inbound — see
-    enablex.place_outbound_call's docstring."""
+    enablex.place_outbound_call's docstring.
+
+    Also the endpoint server/campaign_dialer.py proxies to for any campaign
+    whose account is on this pipeline (ORCHESTRATOR_TEST_ACCOUNT_ID) instead
+    of calling calls_db.place_test_call's LiveKit-bridge path directly - the
+    optional contact* fields are what let a campaign call personalize the
+    greeting the same way that path always did.
+    """
     to_number = body.get("to")
+    contact_name = (body.get("contactName") or "").strip()
+    contact_company = (body.get("contactCompany") or "").strip()
+    contact_custom_fields = body.get("contactCustomFields") or "{}"
     if not to_number:
         return {"ok": False, "error": "Missing 'to' in request body."}
     if not TEST_ACCOUNT_ID or not TEST_PHONE_NUMBER:
@@ -185,7 +228,12 @@ async def enablex_outbound_test_call(body: dict = Body(...)) -> dict:
         # "connected" fired, so the callee's ring time was pure dead air on
         # top of it instead of hidden behind it. The "connected" handler
         # below reuses this instead of rebuilding when it's already here.
-        sess = _build_session_for_test_call()
+        sess = _build_session_for_test_call(
+            contact_name=contact_name,
+            contact_phone=to_number,
+            contact_company=contact_company,
+            contact_custom_fields=contact_custom_fields,
+        )
         _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
             sess,
             asyncio.create_task(session_module.build_greeting_audio(sess)),

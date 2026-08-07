@@ -19,13 +19,25 @@ Deliberately conservative: a campaign only dials while an operator has it in
 open work it auto-completes.
 """
 
+import json
 import logging
+import os
 import threading
 import time
+import urllib.error
+import urllib.request
 
 import calls_db
 
 logger = logging.getLogger("vistrow-dialer")
+
+# Accounts on the Railway-native orchestrator pipeline (see
+# server/token_api.py's identical ORCHESTRATOR_TEST_ACCOUNT_ID gate on
+# /telephony/test-call and the inbound-event proxy) get their campaign dials
+# placed there too, instead of calls_db.place_test_call's LiveKit-SIP-bridge
+# path - discovered live when a campaign showed every contact as "Done" but
+# the calls that actually rang were dead air: "Done" only ever meant EnableX
+# accepted the dial request, never that the LiveKit bridge behind it worked.
 
 # How often the dialer wakes to place due calls. 15s keeps pacing gentle
 # (well under any sane per-minute dial rate) while still feeling responsive
@@ -34,6 +46,35 @@ _TICK_SECONDS = 15
 
 _started = False
 _lock = threading.Lock()
+
+
+def _on_orchestrator_pipeline(account_id: int) -> bool:
+    orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
+    orchestrator_test_account_id = os.environ.get("ORCHESTRATOR_TEST_ACCOUNT_ID")
+    return bool(orchestrator_url and orchestrator_test_account_id and str(account_id) == orchestrator_test_account_id)
+
+
+def _place_via_orchestrator(to_number: str, contact: dict) -> dict:
+    """Same shape of result as calls_db.place_test_call ({"ok": bool, ...})
+    so _dial_one doesn't need to know which pipeline placed the call."""
+    orchestrator_url = os.environ.get("ORCHESTRATOR_URL", "").rstrip("/")
+    body = json.dumps({
+        "to": to_number,
+        "contactName": contact.get("name", ""),
+        "contactCompany": contact.get("company", ""),
+        "contactCustomFields": contact.get("custom_fields", "{}"),
+    }).encode()
+    request = urllib.request.Request(
+        f"{orchestrator_url}/telephony/enablex/outbound-test-call",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.URLError as e:
+        return {"ok": False, "error": f"Could not reach orchestrator: {e}"}
 
 
 def _dial_one(campaign: dict) -> None:
@@ -62,14 +103,22 @@ def _dial_one(campaign: dict) -> None:
         if contact is None:
             break
         try:
-            result = calls_db.place_test_call(
-                from_number,
-                contact["phone"],
-                account_id,
-                contact.get("name", ""),
-                contact.get("company", ""),
-                contact.get("custom_fields", "{}"),
-            )
+            if _on_orchestrator_pipeline(account_id):
+                # The orchestrator's outbound endpoint always dials from its
+                # own TEST_PHONE_NUMBER (single feature-flagged test number,
+                # not per-tenant routing yet - see orchestrator/server.py) -
+                # campaign.from_number is only actually used on the
+                # calls_db.place_test_call branch below.
+                result = _place_via_orchestrator(contact["phone"], contact)
+            else:
+                result = calls_db.place_test_call(
+                    from_number,
+                    contact["phone"],
+                    account_id,
+                    contact.get("name", ""),
+                    contact.get("company", ""),
+                    contact.get("custom_fields", "{}"),
+                )
         except Exception:
             logger.exception("dial failed for contact %s", contact["id"])
             calls_db.record_campaign_dial_result(contact["id"], cid, "failed")
