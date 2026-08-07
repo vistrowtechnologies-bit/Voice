@@ -167,7 +167,15 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     )
 
     if state == "incomingcall":
-        if not TEST_PHONE_NUMBER or dialed_number != TEST_PHONE_NUMBER:
+        # Digit-only comparison — EnableX's own docs/examples are inconsistent
+        # about whether "to" carries a leading "+" (the LiveKit-path SIP gate
+        # this replaced turned out to be "+"-agnostic too, see livekit_sip.py),
+        # so a strict string match risks silently ignoring every real inbound
+        # call the moment EnableX sends one format and TEST_PHONE_NUMBER is
+        # configured in the other.
+        dialed_digits = "".join(c for c in (dialed_number or "") if c.isdigit())
+        test_digits = "".join(c for c in TEST_PHONE_NUMBER if c.isdigit())
+        if not test_digits or dialed_digits != test_digits:
             logger.info("ignoring call to %s — not the flagged Phase 2 test number", dialed_number)
             return {"ok": True}
         if not TEST_ACCOUNT_ID:
