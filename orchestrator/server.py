@@ -73,7 +73,23 @@ TEST_PHONE_NUMBER = os.environ.get("TEST_PHONE_NUMBER", "")
 # count as the caller genuinely interrupting (not a single noise blip) —
 # 4 frames = 80ms, well under the 300ms min_speech_ms a full utterance
 # needs, so an interruption is caught fast without being trigger-happy.
+# Only safe for the browser path, where this check runs behind the client's
+# own speaking_start/speaking_end (real client-side VAD with acoustic echo
+# cancellation) — see the `client_speaking` gate below.
 _BARGE_IN_FRAMES = 4
+# The phone (EnableX) leg has no acoustic echo cancellation at all — nothing
+# stops the agent's own voice, reflected back by the caller's handset/line,
+# from arriving as "caller audio" the instant the agent starts talking. At
+# the browser's 4-frame/plain-energy-threshold settings that reads as an
+# immediate barge-in on every single reply: cancel the reply, play the
+# listening cue, repeat forever — reported live as the agent answering every
+# real phone call with nothing but "ji bataiye" on a loop. Real speech is
+# both louder and more sustained than a line-echo reflection of our own
+# (already volume-limited for the 20ms-frame-paced ulaw send) TTS output, so
+# demanding more of both cuts the false-positive rate without meaningfully
+# slowing down a genuine interruption.
+_PHONE_BARGE_IN_FRAMES = 15  # 300ms
+_PHONE_BARGE_IN_ENERGY_MULTIPLIER = 2.5
 # Suppress barge-in detection for this long after a reply starts sending.
 # TTS synthesis takes a second or two; the caller's audio backs up
 # unprocessed during that wait and arrives all at once the moment we
@@ -152,6 +168,17 @@ async def enablex_outbound_test_call(body: dict = Body(...)) -> dict:
     voice_id = (result.get("response") or {}).get("voice_id")
     if voice_id:
         _PENDING_ACCOUNT_BY_VOICE_ID[voice_id] = TEST_ACCOUNT_ID
+        # Build the session (incl. the DB round-trip for agent config) and
+        # kick off greeting TTS right now, overlapping with the destination
+        # phone actually ringing — previously this only started once
+        # "connected" fired, so the callee's ring time was pure dead air on
+        # top of it instead of hidden behind it. The "connected" handler
+        # below reuses this instead of rebuilding when it's already here.
+        sess = _build_session_for_test_call()
+        _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
+            sess,
+            asyncio.create_task(session_module.build_greeting_audio(sess)),
+        )
     logger.info("outbound test call placed: voice_id=%s to=%s", voice_id, to_number)
     return {"ok": True, "voice_id": voice_id}
 
@@ -195,11 +222,14 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
         if not wss_base:
             logger.warning("PUBLIC_BASE_URL/WSS_PUBLIC_HOST not set — cannot start streaming")
             return {"ok": True}
-        sess = _build_session_for_test_call()
-        _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
-            sess,
-            asyncio.create_task(session_module.build_greeting_audio(sess)),
-        )
+        if voice_id not in _PENDING_GREETING_BY_VOICE_ID:
+            # Inbound calls (or an outbound call whose pre-build above never
+            # ran) don't have a session yet — build it now same as before.
+            sess = _build_session_for_test_call()
+            _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
+                sess,
+                asyncio.create_task(session_module.build_greeting_audio(sess)),
+            )
         token = ws_security.issue_stream_token(voice_id, account_id)
         wss_url = f"{wss_base}/stream?token={token}"
         result = await enablex.start_stream(voice_id, wss_url, account_id)
@@ -406,12 +436,16 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                         loud_streak = 0
                         continue
                     # Agent is talking — only track sustained loudness for
-                    # barge-in, don't run full utterance detection yet.
-                    if audio.frame_energy(ulaw_frame) >= vad.energy_threshold:
+                    # barge-in, don't run full utterance detection yet. Uses
+                    # a higher bar than the browser path (see
+                    # _PHONE_BARGE_IN_* above) since this leg has no acoustic
+                    # echo cancellation to filter out the agent's own voice
+                    # reflecting back as "caller" audio.
+                    if audio.frame_energy(ulaw_frame) >= vad.energy_threshold * _PHONE_BARGE_IN_ENERGY_MULTIPLIER:
                         loud_streak += 1
                     else:
                         loud_streak = 0
-                    if loud_streak >= _BARGE_IN_FRAMES:
+                    if loud_streak >= _PHONE_BARGE_IN_FRAMES:
                         loud_streak = 0
                         await _barge_in()
                         vad.push_ulaw_frame(ulaw_frame)
