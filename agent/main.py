@@ -1506,16 +1506,15 @@ async def entrypoint(ctx: JobContext) -> None:
 
 if __name__ == "__main__":
     # num_idle_processes = how many warm subprocesses sit ready before a job
-    # ever arrives — with only 1 (the prior value), any call that lands while
-    # the single idle slot is already claimed by another call gets a fully
-    # cold subprocess: Python interpreter start + importing livekit-agents
-    # plus the openai/google/elevenlabs/sarvam plugin stack, which is a real
-    # multi-second cost on its own, on top of the greeting latency fixed
-    # above. That value was set low (see git history) to avoid the OS
-    # OOM-killer on a memory-constrained Railway trial container — this
-    # worker now runs on LiveKit Cloud with a dedicated 2 CPU / 4GB replica
-    # (see agent/livekit.toml), which has real headroom for more than one
-    # warm process. 2 is a conservative step up from 1, not livekit-agents'
-    # own default of 4 — watch `lk agent status`/logs after deploy and raise
-    # further if memory stays comfortable under real concurrent-call load.
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, num_idle_processes=2))
+    # ever arrives — a call landing when every idle slot is already claimed
+    # gets a fully cold subprocess: Python interpreter start + importing
+    # livekit-agents plus the openai/google/elevenlabs/sarvam plugin stack,
+    # a real multi-second cost on top of the greeting latency fixed above.
+    # Raised from 2 to 4 after moving to LiveKit Cloud's Ship plan (confirmed
+    # via the project dashboard: no fixed per-replica CPU/memory cap anymore,
+    # fully-managed autoscaling, average load sitting at ~2% with real
+    # headroom) — still livekit-agents' own default, not a stretch. Watch
+    # `lk agent status`/the dashboard's join-latency and load graphs after
+    # deploy and raise further if load stays comfortable under real
+    # concurrent-call volume.
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, num_idle_processes=4))
