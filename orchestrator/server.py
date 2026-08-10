@@ -131,7 +131,7 @@ _PENDING_AGENT_BY_VOICE_ID: dict[str, int] = {}
 _PENDING_GREETING_BY_VOICE_ID: dict[str, tuple[session_module.Session, asyncio.Task]] = {}
 
 
-def _build_session_for_test_call(
+async def _build_session_for_test_call(
     call_type: str = "phone",
     account_id: int | None = None,
     agent_id: int | None = None,
@@ -145,7 +145,7 @@ def _build_session_for_test_call(
     (inbound number lookup, or an explicit outbound-call request) doesn't
     supply real ones — keeps the original single-test-account behavior
     working unchanged for callers that never pass these."""
-    return _build_session(
+    return await _build_session(
         account_id or TEST_ACCOUNT_ID,
         agent_id or TEST_AGENT_ID,
         call_type,
@@ -156,7 +156,7 @@ def _build_session_for_test_call(
     )
 
 
-def _build_session(
+async def _build_session(
     account_id: int,
     agent_id: int,
     call_type: str,
@@ -173,8 +173,13 @@ def _build_session(
     calls_db.place_test_call's contact_name/contact_company params always
     did on the old LiveKit path - without these an orchestrator-routed
     campaign call greets every contact identically, no name, no context.
+
+    async, wrapping db.get_agent_config in asyncio.to_thread - see
+    session.build_system_prompt's docstring for why a blocking DB call
+    here would otherwise freeze every other concurrent call, not just
+    this one.
     """
-    cfg = db.get_agent_config(agent_id) or {}
+    cfg = await asyncio.to_thread(db.get_agent_config, agent_id) or {}
     try:
         custom_fields = json.loads(contact_custom_fields) if contact_custom_fields else {}
         if not isinstance(custom_fields, dict):
@@ -230,7 +235,7 @@ async def enablex_outbound_test_call(body: dict = Body(...)) -> dict:
         # virtual number to dial from but not necessarily which dashboard
         # agent owns it — resolve it the same way a real inbound call would,
         # instead of requiring every outbound caller to look this up itself.
-        number_row = db.get_phone_number_by_number(from_number)
+        number_row = await asyncio.to_thread(db.get_phone_number_by_number, from_number)
         if number_row:
             agent_id = number_row.get("agent_id")
     agent_id = agent_id or TEST_AGENT_ID
@@ -259,7 +264,7 @@ async def enablex_outbound_test_call(body: dict = Body(...)) -> dict:
         # "connected" fired, so the callee's ring time was pure dead air on
         # top of it instead of hidden behind it. The "connected" handler
         # below reuses this instead of rebuilding when it's already here.
-        sess = _build_session_for_test_call(
+        sess = await _build_session_for_test_call(
             account_id=account_id,
             agent_id=agent_id,
             contact_name=contact_name,
@@ -294,7 +299,7 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
         # if it isn't found in phone_numbers at all, so the original
         # Phase 2 test account keeps working even before it's ever been
         # registered as a real phone_numbers row.
-        number_row = db.get_phone_number_by_number(dialed_number or "")
+        number_row = await asyncio.to_thread(db.get_phone_number_by_number, dialed_number or "")
         if number_row is None:
             dialed_digits = "".join(c for c in (dialed_number or "") if c.isdigit())
             test_digits = "".join(c for c in TEST_PHONE_NUMBER if c.isdigit())
@@ -307,7 +312,7 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
         if not account_id:
             logger.warning("no account_id resolved for call to %s — cannot accept", dialed_number)
             return {"ok": True}
-        if not db.is_on_orchestrator_pipeline(account_id) and account_id != TEST_ACCOUNT_ID:
+        if not await asyncio.to_thread(db.is_on_orchestrator_pipeline, account_id) and account_id != TEST_ACCOUNT_ID:
             logger.info("account %s not on orchestrator pipeline — ignoring call to %s", account_id, dialed_number)
             return {"ok": True}
         _PENDING_ACCOUNT_BY_VOICE_ID[voice_id] = account_id
@@ -323,7 +328,7 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
         # (~6-8s measured), previously only ever kicked off once `connected`
         # already fired. The `connected` handler below reuses this instead
         # of rebuilding when it's already here.
-        sess = _build_session_for_test_call(account_id=account_id, agent_id=agent_id)
+        sess = await _build_session_for_test_call(account_id=account_id, agent_id=agent_id)
         _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
             sess,
             asyncio.create_task(session_module.build_greeting_audio(sess)),
@@ -347,7 +352,7 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
             # ran) don't have a session yet — build it now, for the actual
             # resolved tenant/agent rather than always the test account.
             agent_id = _PENDING_AGENT_BY_VOICE_ID.get(voice_id)
-            sess = _build_session_for_test_call(account_id=account_id, agent_id=agent_id)
+            sess = await _build_session_for_test_call(account_id=account_id, agent_id=agent_id)
             _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
                 sess,
                 asyncio.create_task(session_module.build_greeting_audio(sess)),
@@ -407,7 +412,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         # entry (e.g. a service restart between the `connected` webhook and
         # this WebSocket connecting) — same session build as before, just
         # without the head start.
-        sess = _build_session_for_test_call()
+        sess = await _build_session_for_test_call()
         greeting_task = None
     recorder = recording.CallRecorder()
     vad = audio.UtteranceVAD()
@@ -602,7 +607,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         if wav_path:
             key = recording.upload_recording(wav_path, sess.account_id, call_id)
             if key:
-                db.set_call_recording(call_id, key)
+                await asyncio.to_thread(db.set_call_recording, call_id, key)
         _PENDING_ACCOUNT_BY_VOICE_ID.pop(voice_id, None)
         _PENDING_AGENT_BY_VOICE_ID.pop(voice_id, None)
         logger.info("call finalized: voice_id=%s call_id=%s", voice_id, call_id)
@@ -651,7 +656,7 @@ async def browser_token_platform_demo() -> dict:
     for an unrouted browser call: db.get_agent_config(None) prefers
     whichever agent is flagged is_platform_demo, reading the same `agents`
     table — no separate config needed here."""
-    cfg = db.get_agent_config(None) or {}
+    cfg = await asyncio.to_thread(db.get_agent_config, None) or {}
     account_id = cfg.get("account_id")
     agent_id = cfg.get("id")
     if not account_id or not agent_id:
@@ -678,7 +683,7 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     session_id = payload["voice_id"]
     account_id = payload.get("account_id") or TEST_ACCOUNT_ID
     agent_id = payload.get("agent_id") or TEST_AGENT_ID
-    sess = _build_session(account_id, agent_id, call_type="browser")
+    sess = await _build_session(account_id, agent_id, call_type="browser")
     # UtteranceVAD's default energy_threshold=400 was tuned against
     # mu-law-decoded 8kHz phone audio, which runs much hotter than a raw
     # browser mic capture — real sessions here logged a median frame energy
@@ -865,5 +870,5 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
         if wav_path:
             key = recording.upload_recording(wav_path, sess.account_id, call_id)
             if key:
-                db.set_call_recording(call_id, key)
+                await asyncio.to_thread(db.set_call_recording, call_id, key)
         logger.info("browser call finalized: session_id=%s call_id=%s", session_id, call_id)

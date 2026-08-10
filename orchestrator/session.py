@@ -194,9 +194,18 @@ def _substitute_template_vars(session: Session, text: str) -> str:
     return filled.strip()
 
 
-def build_system_prompt(session: Session) -> str:
+async def build_system_prompt(session: Session) -> str:
     """Assembles the system prompt: persona + KB + voice-style rules. See
-    module docstring re: fidelity vs. agent/main.py's full prompt assembly."""
+    module docstring re: fidelity vs. agent/main.py's full prompt assembly.
+
+    async (and its db.* calls wrapped in asyncio.to_thread) because
+    orchestrator/db.py's connection pool is synchronous/blocking - called
+    directly, one slow or newly-establishing DB connection freezes the
+    WHOLE event loop, stalling every other concurrent call, not just this
+    one. Confirmed live: a region migration that put this process further
+    from Postgres turned an unrelated call's start_stream into a ~20s
+    stall, entirely because something else in the same process was
+    blocked on a synchronous DB call at that moment."""
     if session.custom_system_prompt:
         persona = (
             _substitute_template_vars(session, session.custom_system_prompt)
@@ -208,9 +217,9 @@ def build_system_prompt(session: Session) -> str:
 
     parts = [persona]
     if session.kb_id is not None:
-        kb_text = db.get_kb_content(session.kb_id)
+        kb_text = await asyncio.to_thread(db.get_kb_content, session.kb_id)
         if kb_text:
-            if db.is_kb_strict(session.kb_id):
+            if await asyncio.to_thread(db.is_kb_strict, session.kb_id):
                 # Ported from agent/main.py's equivalent block (same
                 # strict-mode wording, proven in production) — the KB is the
                 # only permitted source for concrete facts, which is what
@@ -248,7 +257,11 @@ def build_system_prompt(session: Session) -> str:
         "warmly acknowledge them, then steer the conversation back to how you can help them here."
     )
 
-    memory = db.get_caller_memory(session.agent_id, session.visitor_phone) if session.agent_id else ""
+    memory = (
+        await asyncio.to_thread(db.get_caller_memory, session.agent_id, session.visitor_phone)
+        if session.agent_id
+        else ""
+    )
     if memory:
         parts.append(f"## What you remember about this caller from before\n{memory}")
 
@@ -353,7 +366,7 @@ async def build_greeting_audio(session: Session) -> tuple[bytes, str] | None:
     # the model would confidently invent facts instead of using the real
     # knowledge base or even its assigned persona.
     if not session.messages:
-        session.messages.append({"role": "system", "content": build_system_prompt(session)})
+        session.messages.append({"role": "system", "content": await build_system_prompt(session)})
     if session.welcome_message:
         text = (
             _substitute_template_vars(session, session.welcome_message)
@@ -431,7 +444,7 @@ async def handle_utterance(session: Session, caller_wav_bytes: bytes) -> tuple[s
     degrade (e.g. a filler "sorry, could you repeat that?").
     """
     if not session.messages:
-        session.messages.append({"role": "system", "content": build_system_prompt(session)})
+        session.messages.append({"role": "system", "content": await build_system_prompt(session)})
 
     caller_text = await stt.transcribe(caller_wav_bytes)
     if not caller_text:
@@ -567,7 +580,7 @@ async def handle_utterance_streaming(
     for it and leaves this None.
     """
     if not session.messages:
-        session.messages.append({"role": "system", "content": build_system_prompt(session)})
+        session.messages.append({"role": "system", "content": await build_system_prompt(session)})
 
     caller_text = await stt.transcribe(caller_wav_bytes)
     if not caller_text:
@@ -679,7 +692,7 @@ async def finalize_call(session: Session, room_name: str) -> int | None:
     per-agent webhook — same call-end contract as agent/main.py's log_call.
     """
     record = build_save_call_record(session, room_name)
-    call_id = db.save_call(record)
+    call_id = await asyncio.to_thread(db.save_call, record)
     event = {
         "type": "call_completed",
         "name": session.lead_data.get("name") or session.visitor_name,
@@ -698,6 +711,8 @@ async def finalize_call(session: Session, room_name: str) -> int | None:
     if session.memory_enabled and session.visitor_phone and session.agent_id:
         summary = await _post_call_summary(session.transcript)
         if summary:
-            db.save_caller_memory(session.account_id, session.agent_id, session.visitor_phone, summary)
+            await asyncio.to_thread(
+                db.save_caller_memory, session.account_id, session.agent_id, session.visitor_phone, summary
+            )
 
     return call_id
