@@ -124,7 +124,7 @@ export function Home() {
     <MarketingLayout>
       <Seo
         title="Multilingual AI Voice Agents | Vistrow Voice"
-        description="Artha answers, qualifies, and books calls in 10 Indian languages plus English, across inbound, outbound, and web conversations - 24/7."
+        description="Artha answers, qualifies, and books appointments in 10 Indian languages plus English, across inbound, outbound, and web conversations - 24/7."
         path="/"
         jsonLd={HOME_JSONLD}
       />
@@ -151,10 +151,9 @@ export function Home() {
               your customer’s language.
             </span>
           </h1>
-          <p className="mt-6 max-w-lg text-lg leading-relaxed text-text-muted">
-            Ten Indian languages plus English, mid-sentence code-switching, and the Hinglish people actually speak
-            on the phone. Artha answers, qualifies, and books - inbound, outbound, and on your
-            website, 24/7.
+          <p className="mt-5 max-w-lg text-base leading-7 text-text-muted sm:mt-6 sm:text-lg sm:leading-relaxed">
+            Artha answers, qualifies, and books appointments in 10 Indian languages plus English—including
+            natural Hinglish and mid-conversation code-switching. Inbound, outbound, and on your website, 24/7.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <TalkToArthaButton />
