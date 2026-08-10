@@ -228,9 +228,13 @@ const CSS = `
    view (orb+status, or just the input row) doesn't need. */
 #av-call, #av-chat { display: flex; flex-direction: column; height: min(470px, calc(100vh - 180px)); }
 .av-body { flex-shrink: 0; padding: 18px 16px 2px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; box-shadow:0 0 0 7px rgba(168,85,247,.08),0 0 34px rgba(168,85,247,.22); }
+.av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out, box-shadow .2s ease; box-shadow:0 0 0 7px rgba(168,85,247,.08),0 0 34px rgba(168,85,247,.22); }
 .av-orb video { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 .av-orb img { width: 100%; height: 100%; object-fit: cover; }
+.av-orb[data-state="listening"] { box-shadow:0 0 0 7px rgba(34,197,94,.12),0 0 30px rgba(34,197,94,.18); }
+.av-orb[data-state="thinking"] { box-shadow:0 0 0 7px rgba(168,85,247,.13),0 0 38px rgba(168,85,247,.32); }
+.av-orb[data-state="speaking"] { animation:av-avatar-live 1.05s ease-in-out infinite; }
+@keyframes av-avatar-live { 50% { box-shadow:0 0 0 10px rgba(168,85,247,.2),0 0 48px rgba(192,132,252,.48); } }
 .av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 18px; display:flex;align-items:center;gap:7px; }
 .av-status::before { content:''; width:7px;height:7px;border-radius:99px;background:#a855f7;animation:av-status-pulse 1.3s ease-in-out infinite; }
 @keyframes av-status-pulse { 50% { opacity:.35;transform:scale(.72); } }
@@ -297,11 +301,11 @@ function avatarTag(id?: string): string {
   return `<img${idAttr} src="${apiBase}/widget-avatars/${avatarKey}.png" alt="" />`
 }
 
-// The portrait is the assistant's identity before and around the call; the
-// animated Vistrow orb is the activity indicator once a live conversation
-// begins. Keeping those jobs separate makes the state change instantly clear.
+// Keep the same configured assistant identity inside the live call. The
+// surrounding ring/state animation provides activity feedback without
+// replacing Artha with an unrelated abstract visual.
 function activityOrbTag(): string {
-  return `<video id="av-orb-video" src="${apiBase}/agent-orb.mp4" autoplay loop muted playsinline></video>`
+  return avatarTag('av-orb-video')
 }
 
 function widgetHtml(label: string): string {
@@ -533,6 +537,8 @@ function init(): void {
           button.innerHTML = avatarTag()
           titleAvatarEl.innerHTML = avatarTag()
           welcomeAvatarEl.innerHTML = avatarTag()
+          orbEl.innerHTML = activityOrbTag()
+          orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement | HTMLImageElement | null
         }
         if (typeof data.greeting === 'string' && data.greeting !== customGreeting) {
           customGreeting = data.greeting
@@ -666,6 +672,7 @@ function init(): void {
 
   function applyAgentState(state: string | undefined): void {
     if (state && STATE_LABELS[state]) setStatus(STATE_LABELS[state])
+    orbEl.dataset.state = state || ''
     if (orbVideoEl instanceof HTMLVideoElement) {
       orbVideoEl.playbackRate = state === 'speaking' ? SPEAKING_PLAYBACK_RATE : 1
     }
