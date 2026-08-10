@@ -1,6 +1,6 @@
 # Vistrow Voice
 
-> AI voice agents that answer, qualify, and book customer calls in 10 Indian languages — inbound, outbound, and web calls, live 24/7. Built by Vistrow.
+> AI voice agents that answer, qualify, and book customer calls in 10 Indian languages plus English — inbound, outbound, and web calls, live 24/7. Built by Vistrow.
 
 Vistrow Voice lets businesses put a real-time AI voice agent on every phone call and website visit. The agent answers inbound calls, runs outbound campaigns, answers questions grounded in a business's own knowledge base, and books appointments — in Hindi, Hinglish, and other Indian languages, switching mid-call to match the caller.
 
@@ -16,25 +16,25 @@ Vistrow Voice lets businesses put a real-time AI voice agent on every phone call
 Real Estate (buyer qualification, site-visit booking), Healthcare & Clinics (appointment booking, patient FAQs), E-commerce & D2C (order status, returns), Finance & Collections (compliant reminder calls), Support & Helpdesk (tier-1 resolution).
 
 ## Pricing
-Credit-based monthly plans starting at ₹2,999/mo. Full details: https://vistrowvoice.com/pricing
+Credit-based monthly plans starting at ₹2,999/mo. Full details: https://www.vistrowvoice.com/pricing
 
 ## Languages
-Artha speaks ten Indian languages — Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, and Odia — plus English, and switches mid-call to match the caller. It handles everyday code-switching (e.g. Hinglish) and keeps grammatical gender agreement consistent in Hindi, Marathi, Gujarati, and Punjabi. Per-language detail: https://vistrowvoice.com/languages
+Artha speaks ten Indian languages — Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, and Odia — plus English, and switches mid-call to match the caller. It handles everyday code-switching (e.g. Hinglish) and keeps grammatical gender agreement consistent in Hindi, Marathi, Gujarati, and Punjabi. Per-language detail: https://www.vistrowvoice.com/languages
 
 ## Key pages
-- Homepage: https://vistrowvoice.com/
-- Product overview: https://vistrowvoice.com/product
-- Solutions overview: https://vistrowvoice.com/solutions
-- Languages: https://vistrowvoice.com/languages
-- Pricing: https://vistrowvoice.com/pricing
-- Docs & setup guide: https://vistrowvoice.com/resources/docs
-- Integrations: https://vistrowvoice.com/integrations
-- vs. traditional IVR: https://vistrowvoice.com/vs-ivr
-- Security & trust: https://vistrowvoice.com/security
-- Changelog: https://vistrowvoice.com/changelog
-- Careers: https://vistrowvoice.com/careers
-- About: https://vistrowvoice.com/about
-- Contact / demo: https://vistrowvoice.com/contact
+- Homepage: https://www.vistrowvoice.com/
+- Product overview: https://www.vistrowvoice.com/product
+- Solutions overview: https://www.vistrowvoice.com/solutions
+- Languages: https://www.vistrowvoice.com/languages
+- Pricing: https://www.vistrowvoice.com/pricing
+- Docs & setup guide: https://www.vistrowvoice.com/resources/docs
+- Integrations: https://www.vistrowvoice.com/integrations
+- vs. traditional IVR: https://www.vistrowvoice.com/vs-ivr
+- Security & trust: https://www.vistrowvoice.com/security
+- Changelog: https://www.vistrowvoice.com/changelog
+- Careers: https://www.vistrowvoice.com/careers
+- About: https://www.vistrowvoice.com/about
+- Contact / demo: https://www.vistrowvoice.com/contact
 
 ## Company
 Vistrow Voice is a product of Vistrow (https://vistrow.com/).

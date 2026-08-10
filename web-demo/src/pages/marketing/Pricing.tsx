@@ -9,11 +9,11 @@ import { PLANS } from '../../lib/plans'
 const FAQ = [
   {
     q: 'What is a credit?',
-    a: 'One credit covers roughly one minute of AI conversation. Browser (web widget) calls and phone calls draw from the same monthly credit pool.',
+    a: 'At the default rate, browser calls use 1 credit per minute and phone calls use 1.5 credits per minute. Economy, standard, and premium voice tiers apply 0.5×, 1×, and 2× multipliers. Both channels draw from the same monthly pool.',
   },
   {
     q: 'Which languages are supported?',
-    a: 'Artha speaks 11 Indian languages including Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi, Odia and more - switching mid-call to match the caller.',
+    a: 'Artha speaks 10 Indian languages plus English, including Hindi, Tamil, Telugu, Bengali, Marathi, and Odia - switching mid-call to match the caller.',
   },
   {
     q: 'Can I bring my own phone number?',
@@ -62,6 +62,9 @@ export function Pricing() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
           Every plan includes the web call widget, call history, and analytics. Scale up as your call volume grows.
+        </p>
+        <p className="mx-auto mt-3 max-w-xl text-sm text-text-muted">
+          Public-testing pricing is indicative; activation and upgrades are handled with our team while online checkout is being prepared.
         </p>
         <div className="mt-8 inline-flex items-center gap-3 rounded-full border border-border bg-surface p-1 text-sm">
           <button
@@ -126,7 +129,7 @@ export function Pricing() {
           ))}
         </div>
         <p className="mt-6 text-center text-sm text-text-muted">
-          A credit ≈ one minute of conversation. Web and phone calls share the same pool.
+          Default usage: web calls start at 1 credit/min and phone calls at 1.5 credits/min. Voice-tier multipliers apply; both share one pool.
         </p>
       </section>
 

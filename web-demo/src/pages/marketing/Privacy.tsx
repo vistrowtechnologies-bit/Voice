@@ -9,8 +9,9 @@ export function Privacy() {
     <LegalLayout
       eyebrow="Legal"
       title="Privacy Policy"
-      updated="17 July 2026"
+      updated="10 August 2026"
       path="/privacy"
+      description="How Vistrow Voice collects, uses, shares, retains, and protects account, call, and integration data."
       intro={`${BRAND.name} ("we", "us", "${BRAND.short}") builds AI voice agents that businesses use to answer and place phone calls. This policy explains what we collect, why, and the choices you have - whether you're a business running ${BRAND.name} or someone who spoke with an AI agent powered by it.`}
     >
       <LegalSection title="1. Who this policy covers">
@@ -33,7 +34,7 @@ export function Privacy() {
         <p><b>Call data</b> - audio, live transcripts, call metadata (duration, timestamps, channel), and any structured fields your AI agent is configured to extract (e.g. name, budget, appointment time).</p>
         <p><b>Connected-integration data</b> - if you connect Google Calendar, Slack, WhatsApp, or a CRM webhook, we store the minimum needed to operate that connection (an OAuth token, a webhook URL) and the data your agent sends through it (e.g. a calendar event, a lead notification).</p>
         <p><b>Usage data</b> - pages visited in the dashboard, API requests, and error logs, used to keep the product working and secure.</p>
-        <p><b>Payment data</b> - handled by our payment processor; we do not store full card numbers.</p>
+        <p><b>Payment data</b> - online checkout is not enabled during public testing, so the platform does not collect or store card numbers.</p>
       </LegalSection>
 
       <LegalSection title="3. How we use Google user data">
@@ -77,7 +78,7 @@ export function Privacy() {
       <LegalSection title="5. Who we share data with">
         <p>We share data only with service providers who process it on our behalf, under contract, to run the platform:</p>
         <ul>
-          <li><b>Speech &amp; language models</b> - OpenAI (conversation intelligence, extraction) and Sarvam AI (Indian-language speech-to-text/text-to-speech).</li>
+          <li><b>Speech &amp; language models</b> - OpenAI, Google Cloud/Google AI, Sarvam AI, and ElevenLabs, used for conversation intelligence, speech recognition, and voice generation according to the agent configuration.</li>
           <li><b>Call infrastructure</b> - LiveKit (real-time voice transport) and EnableX (telephony/SIP).</li>
           <li><b>Hosting &amp; database</b> - Railway (application servers, Postgres database) and Vercel (web app).</li>
           <li><b>Email delivery</b> - Resend, to send account and notification emails.</li>

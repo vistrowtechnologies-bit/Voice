@@ -1,10 +1,9 @@
 import { next } from '@vercel/functions'
 import { pathBucket, hostBucket, BUCKET_HOST } from './src/lib/hostBuckets'
 
-// Splits one SPA build across three hostnames without a second deployment:
-// app.vistrowvoice.com is the authenticated dashboard, docs.vistrowvoice.com
-// is the docs section, vistrowvoice.com is everything else (marketing). All
-// three are the same Vercel project/build; this just bounces a request to
+// Splits one SPA build across the authenticated app and public marketing
+// hosts. The former docs subdomain is retained only as a permanent redirect.
+// Both hosts use the same Vercel project/build; this just bounces a request to
 // the "right" host before it ever reaches index.html, since React Router
 // alone can't see the hostname the browser actually asked for.
 //
@@ -24,30 +23,24 @@ export default function middleware(request: Request) {
   const host = request.headers.get('host') || ''
   const current = hostBucket(host)
 
+  if (current === 'docs') {
+    return Response.redirect(`https://${BUCKET_HOST.marketing}/resources/docs`, 308)
+  }
+
   // Root of the app subdomain has no marketing-bucket landing page of its
   // own, so send it straight to the dashboard.
   if (url.pathname === '/' && current === 'app') {
     return Response.redirect(`https://${host}/dashboard`, 308)
   }
 
-  // Every subdomain's own root is "owned" locally and must never bounce
-  // elsewhere: marketing's "/" really is Home, and docs' "/" is handled by
-  // App.tsx rendering docs content directly based on hostname (see
-  // HomeOrDocsRoot) rather than by carrying /resources/docs across in a
-  // redirect. Without this, pathBucket('/') defaults to 'marketing' and the
-  // generic mismatch check below would incorrectly redirect
-  // docs.vistrowvoice.com/ to vistrowvoice.com/.
+  // Marketing's root is owned locally.
   if (url.pathname === '/') {
     return next()
   }
 
   const target = pathBucket(url.pathname)
   if (target !== current) {
-    // Only one docs page exists today, so any docs-bucket path collapses to
-    // the docs subdomain's clean root rather than carrying /resources/docs
-    // across.
-    const path = target === 'docs' ? '/' : `${url.pathname}${url.search}`
-    return Response.redirect(`https://${BUCKET_HOST[target]}${path}`, 308)
+    return Response.redirect(`https://${BUCKET_HOST[target]}${url.pathname}${url.search}`, 308)
   }
 
   return next()

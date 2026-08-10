@@ -7,8 +7,8 @@ import { Reveal } from '../../components/Reveal'
 import { BRAND } from '../../lib/brand'
 
 // Every claim on this page maps to a control that actually exists in the
-// product today (compliance settings, tenant scoping, retention purge,
-// consent capture). Nothing aspirational is stated as fact - the
+// product today (compliance settings, tenant scoping, retention purge).
+// Nothing aspirational is stated as fact - the
 // "Working towards" section at the bottom exists precisely so this page
 // never has to overstate, and so a security reviewer gets a straight
 // answer instead of discovering the gap themselves.
@@ -17,7 +17,7 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
   {
     icon: 'lock',
     title: 'Workspace isolation',
-    body: 'Every record - calls, contacts, agents, recordings, knowledge bases - is scoped to your workspace at the query layer. One tenant’s data is never reachable from another tenant’s session.',
+    body: 'Dashboard queries for calls, contacts, agents, recordings, and knowledge bases are scoped to the authenticated workspace. Access-control defects are treated as security incidents and investigated promptly.',
   },
   {
     icon: 'password',
@@ -28,11 +28,6 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
     icon: 'badge',
     title: 'Role-based access',
     body: 'Team members are invited into your workspace with a role. Only owners can change billing, compliance settings, and destructive configuration.',
-  },
-  {
-    icon: 'record_voice_over',
-    title: 'Spoken consent capture',
-    body: 'Agents can be required to open every call with a consent line, with the caller’s reply captured in the transcript - so consent is evidenced, not assumed.',
   },
   {
     icon: 'block',
@@ -62,7 +57,7 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
   {
     icon: 'credit_card',
     title: 'No card data',
-    body: 'Payments are handled by our payment processor. Full card numbers never reach, and are never stored on, Vistrow Voice infrastructure.',
+    body: 'Online checkout is not enabled during public testing. The platform therefore does not collect or store full card numbers.',
   },
 ]
 
@@ -77,7 +72,7 @@ export function Security() {
     <MarketingLayout>
       <Seo
         title="Security & Trust - Vistrow Voice"
-        description="How Vistrow Voice protects call recordings, transcripts, and customer data: workspace isolation, consent capture, DNC enforcement, configurable retention, and what we don't yet claim."
+        description="How Vistrow Voice protects call data with workspace scoping, DNC enforcement, access controls, configurable retention, and clearly stated security limits."
         path="/security"
       />
 

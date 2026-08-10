@@ -18,7 +18,7 @@ import {
 const FAQ = [
   {
     q: 'What is Vistrow Voice?',
-    a: 'An AI voice-agent platform for Indian businesses - Artha answers, qualifies, and books inbound, outbound, and web calls in 11 Indian languages, live 24/7.',
+    a: 'An AI voice-agent platform for Indian businesses - Artha answers, qualifies, and books inbound, outbound, and web calls in 10 Indian languages plus English, live 24/7.',
   },
   {
     q: 'Do I need to write code to set it up?',
@@ -26,7 +26,7 @@ const FAQ = [
   },
   {
     q: 'Which languages does Artha speak?',
-    a: 'Hindi, Hinglish, Tamil, Telugu, Bengali, Marathi, and more - 11 Indian languages in total, switching mid-call to match the caller.',
+    a: 'Hindi, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, and Odia - plus English and everyday code-switching such as Hinglish.',
   },
   {
     q: 'Can I try it before signing up?',
@@ -46,8 +46,8 @@ const HOME_JSONLD = [
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: 'Vistrow Voice',
-    url: 'https://vistrowvoice.com/',
-    logo: 'https://vistrowvoice.com/apple-touch-icon.png',
+    url: 'https://www.vistrowvoice.com/',
+    logo: 'https://www.vistrowvoice.com/apple-touch-icon.png',
     sameAs: ['https://vistrow.com/'],
   },
   {
@@ -57,7 +57,7 @@ const HOME_JSONLD = [
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
     description:
-      'AI voice agents that answer, qualify, and book customer calls in 11 Indian languages - inbound, outbound, and web calls, live 24/7.',
+      'AI voice agents that answer, qualify, and book customer calls in 10 Indian languages plus English - inbound, outbound, and web calls, live 24/7.',
     offers: {
       '@type': 'Offer',
       price: '2999',
@@ -87,7 +87,7 @@ const BHARAT_POINTS = [
   },
   {
     glyph: 'ने / नी',
-    title: 'Gender agreement that holds all call',
+    title: 'Gender agreement throughout the call',
     body: 'Hindi, Marathi, Gujarati, and Punjabi verbs agree with the speaker’s gender. Most models get the first line right and drift after that. Artha stays consistent with its own voice, every turn.',
   },
   {
@@ -97,7 +97,7 @@ const BHARAT_POINTS = [
   },
   {
     glyph: 'अ अ अ',
-    title: 'Ten scripts, one agent',
+    title: 'Ten Indian languages, one agent',
     body: 'From Punjabi in the north to Malayalam in the south, one agent covers them all - no separate deployment, no per-language rebuild, no region left on an English-only fallback.',
   },
 ]
@@ -123,8 +123,8 @@ export function Home() {
   return (
     <MarketingLayout>
       <Seo
-        title="Vistrow Voice - The AI Agent That Actually Speaks Your Customer's Language"
-        description="Not another robotic IVR. Artha holds real conversations in 11 Indian languages - mid-sentence code-switching included - answering, qualifying, and booking calls around the clock."
+        title="Multilingual AI Voice Agents | Vistrow Voice"
+        description="Artha answers, qualifies, and books calls in 10 Indian languages plus English, across inbound, outbound, and web conversations - 24/7."
         path="/"
         jsonLd={HOME_JSONLD}
       />
@@ -152,7 +152,7 @@ export function Home() {
             </span>
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-relaxed text-text-muted">
-            Eleven Indian languages, mid-sentence code-switching, and the Hinglish people actually speak
+            Ten Indian languages plus English, mid-sentence code-switching, and the Hinglish people actually speak
             on the phone. Artha answers, qualifies, and books - inbound, outbound, and on your
             website, 24/7.
           </p>

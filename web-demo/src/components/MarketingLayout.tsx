@@ -16,15 +16,15 @@ function OrbMark() {
 
 // Every nav/footer/CTA link in this file must go through here instead of a
 // bare <Link> - three cases:
-//   1. Already absolute (Docs & Help → docs.vistrowvoice.com): real <a>,
+//   1. Already absolute: real <a>,
 //      opened in a new tab since it's a distinct site from the visitor's
 //      point of view.
 //   2. A relative path whose bucket (app/docs/marketing) differs from the
 //      CURRENT hostname's bucket: also a real <a>, because a React Router
 //      <Link> only swaps components client-side - it never re-hits
-//      middleware.ts, so a plain <Link to="/login"> clicked while sitting on
-//      docs.vistrowvoice.com would render the login page *under the docs
-//      subdomain* instead of jumping to app.vistrowvoice.com/login. Forcing
+//      middleware.ts, so a plain <Link to="/login"> clicked on the marketing
+//      host would render the login page there instead of jumping to
+//      app.vistrowvoice.com/login. Forcing
 //      a real navigation here is what keeps the address bar honest.
 //   3. Same bucket as the current host: an ordinary client-side <Link>.
 export function NavLink({
@@ -244,7 +244,7 @@ function Header() {
   return (
     <>
       <div className="border-b border-border bg-primary/10 px-4 py-2 text-center text-xs text-text-muted">
-        <span className="text-cyan">New</span> · {BRAND.name} now speaks 11 Indian languages{' '}
+        <span className="text-cyan">New</span> · {BRAND.name} now speaks 10 Indian languages + English{' '}
         <NavLink to="/product" className="font-semibold text-text hover:underline">
           →
         </NavLink>

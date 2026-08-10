@@ -294,7 +294,7 @@ function DemoCardFooter() {
     <div className="mt-6 grid w-full grid-cols-2 gap-4 border-t border-border pt-5 text-left">
       <div>
         <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Native support</p>
-        {/* Hindi + 10 others = the 11 Indian languages in LANGUAGE_NAMES.
+        {/* Ten Indian languages plus English = the 11 languages in LANGUAGE_NAMES.
             Hinglish isn't counted as a 12th - it's Hindi/English
             code-switching, and listing it as a separate language is
             what made the count drift across pages before. */}
@@ -539,4 +539,3 @@ function AgentStateLabel({ agentParticipant }: { agentParticipant: RemotePartici
   const agentState = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
   return <p className="mt-5 text-sm text-text-muted">{STATE_LABELS[agentState ?? ''] ?? 'Listening…'}</p>
 }
-

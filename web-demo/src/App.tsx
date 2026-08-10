@@ -33,6 +33,7 @@ import { LanguageDetail } from './pages/marketing/LanguageDetail'
 import { CompareIvr } from './pages/marketing/CompareIvr'
 import { Privacy } from './pages/marketing/Privacy'
 import { Terms } from './pages/marketing/Terms'
+import { NotFound } from './pages/marketing/NotFound'
 import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
 import { ForgotPassword } from './pages/ForgotPassword'
@@ -55,7 +56,6 @@ import { Compliance } from './pages/Compliance'
 import { LeadDetail } from './pages/LeadDetail'
 import { WebsiteWidget } from './pages/WebsiteWidget'
 import { Settings } from './pages/Settings'
-import { hostBucket } from './lib/hostBuckets'
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { trackPageView } from './lib/analytics'
@@ -63,17 +63,6 @@ import { trackPageView } from './lib/analytics'
 // Wrap every dashboard route in the auth gate - one helper keeps App.tsx
 // readable instead of nesting <RequireAuth> around each element.
 const guard = (el: ReactNode) => <RequireAuth>{el}</RequireAuth>
-
-// docs.vistrowvoice.com's root should look like its own clean landing page
-// (no /resources/docs in the address bar), not a redirect target - so "/"
-// renders different content purely based on which subdomain asked for it.
-// middleware.ts deliberately leaves docs' root alone for exactly this reason.
-function HomeOrDocsRoot() {
-  if (hostBucket(window.location.hostname) === 'docs') {
-    return <Docs />
-  }
-  return <Home />
-}
 
 // GA4's page_view is disabled in index.html (see the comment there) since
 // this is a client-side-routed SPA - this is what fires it instead, on the
@@ -95,7 +84,7 @@ function App() {
       <AnalyticsListener />
       <Routes>
         {/* Public - marketing site */}
-        <Route path="/" element={<HomeOrDocsRoot />} />
+        <Route path="/" element={<Home />} />
         <Route path="/product" element={<ProductOverview />} />
         <Route path="/product/:slug" element={<ProductDetail />} />
         <Route path="/solutions" element={<SolutionsOverview />} />
@@ -155,6 +144,7 @@ function App() {
         <Route path="/admin/health" element={<RequireOwner><AdminHealth /></RequireOwner>} />
         <Route path="/admin/vendor-credits" element={<RequireOwner><AdminVendorCredits /></RequireOwner>} />
         <Route path="/admin/settings" element={<RequireOwner><AdminSettings /></RequireOwner>} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </AuthProvider>
   )

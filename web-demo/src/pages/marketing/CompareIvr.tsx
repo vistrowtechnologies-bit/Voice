@@ -28,7 +28,7 @@ const ROWS: { dimension: string; ivr: string; human: string; vistrow: string }[]
     dimension: 'Languages',
     ivr: 'Usually two, chosen up front',
     human: 'Whatever that person speaks',
-    vistrow: '11 Indian languages, switching mid-call',
+    vistrow: '10 Indian languages + English, switching mid-call',
   },
   {
     dimension: 'Peak load',

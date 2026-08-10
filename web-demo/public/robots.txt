@@ -8,4 +8,4 @@ Disallow: /forgot-password
 Disallow: /reset-password
 Disallow: /invite
 
-Sitemap: https://vistrowvoice.com/sitemap.xml
+Sitemap: https://www.vistrowvoice.com/sitemap.xml

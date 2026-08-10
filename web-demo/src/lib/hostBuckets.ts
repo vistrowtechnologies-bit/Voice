@@ -1,5 +1,5 @@
-// Single source of truth for the vistrowvoice.com/app.vistrowvoice.com/
-// docs.vistrowvoice.com host split - imported by both middleware.ts (runs
+// Single source of truth for the www.vistrowvoice.com/app.vistrowvoice.com
+// host split - imported by both middleware.ts (runs
 // server-side on every request) and MarketingLayout.tsx (runs client-side,
 // so an in-app <Link> click that crosses a bucket boundary still forces a
 // real cross-host navigation instead of silently rendering the wrong
@@ -17,7 +17,9 @@ export const APP_PREFIXES = [
   '/invite',
 ]
 
-export const DOCS_PREFIXES = ['/resources/docs']
+// Docs are part of the marketing site so crawlers and visitors share one
+// canonical URL. The legacy docs subdomain redirects to this route.
+export const DOCS_PREFIXES: string[] = []
 
 export function pathBucket(pathname: string): Bucket {
   if (APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 'app'
@@ -33,6 +35,6 @@ export function hostBucket(hostname: string): Bucket {
 
 export const BUCKET_HOST: Record<Bucket, string> = {
   app: 'app.vistrowvoice.com',
-  docs: 'docs.vistrowvoice.com',
-  marketing: 'vistrowvoice.com',
+  docs: 'www.vistrowvoice.com',
+  marketing: 'www.vistrowvoice.com',
 }

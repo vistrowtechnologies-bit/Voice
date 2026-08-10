@@ -135,7 +135,7 @@ export function BharatOrbit({ className = '' }: { className?: string }) {
       {/* The visible ring is decorative; the languages are already listed as
           text elsewhere on the page (feature list / marquee), so this whole
           illustration is redundant for screen readers rather than useful. */}
-      <span className="sr-only">Speaks 11 Indian languages</span>
+      <span className="sr-only">Speaks 10 Indian languages plus English</span>
     </div>
   )
 }

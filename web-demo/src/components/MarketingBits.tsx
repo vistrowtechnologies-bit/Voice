@@ -11,10 +11,9 @@ export function SectionEyebrow({ children }: { children: string }) {
 // if one's already on the page (Home/ProductDetail/SolutionDetail all embed
 // <DemoOrbCard id="live-demo">), otherwise get to Home and let its own
 // hash-scroll effect (see Home.tsx) finish the job once it mounts. That
-// widget only ever lives on the marketing host - clicked from
-// app./docs.vistrowvoice.com (e.g. the Docs coming-soon page), a plain
-// client-side navigate('/') would just re-render THAT subdomain's own root
-// (app → dashboard redirect, docs → itself), never reaching Home. Force a
+// widget only ever lives on the marketing host - clicked from the app
+// subdomain, a plain client-side navigate('/') would just re-render that
+// subdomain's own root (which redirects to the dashboard), never reaching Home. Force a
 // real cross-host navigation whenever we're not already on marketing.
 export function TalkToArthaButton({ className }: { className?: string }) {
   const navigate = useNavigate()
@@ -27,13 +26,13 @@ export function TalkToArthaButton({ className }: { className?: string }) {
     } else if (hostBucket(window.location.hostname) === 'marketing') {
       navigate('/#live-demo')
     } else {
-      window.location.href = 'https://vistrowvoice.com/#live-demo'
+      window.location.href = 'https://www.vistrowvoice.com/#live-demo'
     }
   }
 
   return (
     <a
-      href="#live-demo"
+      href="https://www.vistrowvoice.com/#live-demo"
       onClick={handleClick}
       className={
         className ??

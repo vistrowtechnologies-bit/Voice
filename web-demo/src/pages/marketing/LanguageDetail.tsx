@@ -49,7 +49,7 @@ export function LanguageDetail() {
     <MarketingLayout>
       <Seo
         title={`AI Voice Agent in ${lang.name} - Vistrow Voice`}
-        description={`Answer, qualify, and book customer calls in ${lang.name}, 24/7. ${lang.blurb}`}
+        description={`AI voice agents for ${lang.name} customer calls, with natural code-switching, qualification, and appointment booking - available 24/7.`}
         path={`/languages/${lang.slug}`}
         jsonLd={faqJsonLd}
       />

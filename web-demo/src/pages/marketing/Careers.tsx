@@ -53,7 +53,7 @@ export function Careers() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
           We’re a small team making phone calls answerable by an AI that actually sounds like it’s from
-          here - in eleven Indian languages, in real time.
+          here - in 10 Indian languages plus English, in real time.
         </p>
       </section>
 

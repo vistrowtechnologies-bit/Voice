@@ -9,12 +9,13 @@ export function Terms() {
     <LegalLayout
       eyebrow="Legal"
       title="Terms of Service"
-      updated="13 July 2026"
+      updated="10 August 2026"
       path="/terms"
+      description="The terms that govern business use of Vistrow Voice, including acceptable use, billing, data, and compliance responsibilities."
       intro={`These terms govern your use of ${BRAND.name}, the AI voice-agent platform operated by Vistrow Technologies ("we", "us"). By creating an account or using the service, you agree to them.`}
     >
       <LegalSection title="1. The service">
-        <p>{BRAND.name} lets businesses ("Customers") build AI voice agents that answer inbound calls, place outbound calls, and take calls from a website widget, in 11 Indian languages. Customers configure agents, connect phone numbers and integrations, and manage calls through the dashboard.</p>
+        <p>{BRAND.name} lets businesses ("Customers") build AI voice agents that answer inbound calls, place outbound calls, and take calls from a website widget, in 10 Indian languages plus English. Customers configure agents, connect phone numbers and integrations, and manage calls through the dashboard.</p>
       </LegalSection>
 
       <LegalSection title="2. Accounts">
@@ -39,8 +40,8 @@ export function Terms() {
 
       <LegalSection title="4. Compliance is your responsibility">
         <p>
-          {BRAND.name} provides tools - a Do-Not-Call registry, calling-window enforcement, consent
-          and recording toggles - to help you run outbound calling legally. Using these tools does
+          {BRAND.name} provides tools - including a Do-Not-Call registry and calling-window
+          enforcement - to help you run outbound calling legally. Using these tools does
           not, by itself, guarantee legal compliance in your jurisdiction or industry. You remain
           responsible for obtaining any consent required before calling someone, disclosing AI
           use where required by law, and complying with telecom, data-protection, and
@@ -80,7 +81,7 @@ export function Terms() {
       </LegalSection>
 
       <LegalSection title="11. Termination">
-        <p>You may cancel your account at any time from Settings. We may suspend or terminate accounts for violating these terms, non-payment, or extended inactivity. On termination, your data is retained per our <Link to="/privacy">Privacy Policy</Link> and then deleted or anonymized, except where we're required to keep it longer by law.</p>
+        <p>You may request cancellation or account deletion by emailing <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. We may suspend or terminate accounts for violating these terms, non-payment, or extended inactivity. On termination, your data is retained per our <Link to="/privacy">Privacy Policy</Link> and then deleted or anonymized, except where we're required to keep it longer by law.</p>
       </LegalSection>
 
       <LegalSection title="12. Governing law">

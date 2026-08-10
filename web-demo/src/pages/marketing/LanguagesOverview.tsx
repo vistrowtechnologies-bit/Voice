@@ -10,8 +10,8 @@ export function LanguagesOverview() {
   return (
     <MarketingLayout>
       <Seo
-        title="AI Voice Agents in 11 Indian Languages - Vistrow Voice"
-        description="Artha answers calls in Hindi, English, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, and Odia - switching mid-call to match whichever language the caller uses."
+        title="AI Voice Agents in 10 Indian Languages + English | Vistrow Voice"
+        description="Artha answers in Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, Odia, and English - switching mid-call with the caller."
         path="/languages"
       />
 
@@ -21,7 +21,7 @@ export function LanguagesOverview() {
           Your customer shouldn’t have to switch languages to be understood.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          Artha speaks 11 Indian languages, and switches mid-call when the caller does - including
+          Artha speaks 10 Indian languages plus English, and switches mid-call when the caller does - including
           the everyday mixed speech most people actually use on the phone.
         </p>
       </section>

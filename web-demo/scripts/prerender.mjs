@@ -26,19 +26,22 @@ const SUFFIX = ' - Vistrow Voice'
 
 // Static pages: {path, title, description} exactly matching each page's own <Seo> props.
 const STATIC_PAGES = [
-  { path: '/', title: "Vistrow Voice - The AI Agent That Actually Speaks Your Customer's Language", description: 'Not another robotic IVR. Artha holds real conversations in 11 Indian languages - mid-sentence code-switching included - answering, qualifying, and booking calls around the clock.' },
+  { path: '/', title: 'Multilingual AI Voice Agents | Vistrow Voice', description: 'Artha answers, qualifies, and books calls in 10 Indian languages plus English, across inbound, outbound, and web conversations - 24/7.' },
   { path: '/product', title: `Product Overview${SUFFIX}`, description: 'Voice Agents, Inbound Calling, Outbound Campaigns, Knowledge Base, Website Call Widget, and Integrations - one platform for every AI voice conversation.' },
   { path: '/solutions', title: `Solutions by Industry${SUFFIX}`, description: 'Voice AI tuned to how your business takes calls - Real Estate, Healthcare, E-commerce, Finance & Collections, and Support & Helpdesk.' },
   { path: '/pricing', title: `Pricing${SUFFIX}`, description: 'Simple, credit-based plans for AI voice agents. Every plan includes the web call widget, call history, and analytics - scale up as your call volume grows.' },
   { path: '/about', title: `About${SUFFIX}`, description: "Vistrow Voice puts a capable AI agent on every call - in your customers' own language, at any hour. Voice AI, built for Bharat." },
   { path: '/contact', title: `Book a Demo${SUFFIX}`, description: 'See Vistrow Voice on a live call. Get a walkthrough tuned to your use case, watch Artha qualify a call in your language, and get a pricing and rollout plan.' },
-  { path: '/languages', title: `AI Voice Agents in 11 Indian Languages${SUFFIX}`, description: 'Artha answers calls in Hindi, English, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, and Odia - switching mid-call to match whichever language the caller uses.' },
-  { path: '/integrations', title: `Integrations${SUFFIX}`, description: 'Connect Vistrow Voice to your CRM, Slack, WhatsApp, Google Sheets, Zapier, n8n, Make, or any endpoint that accepts a webhook. Every qualified lead and transcript, delivered automatically.' },
-  { path: '/vs-ivr', title: `AI Voice Agent vs. Traditional IVR${SUFFIX}`, description: 'How an AI voice agent differs from a press-1-press-2 phone menu or a human call desk: availability, languages, answer quality, call records, and cost as volume grows.' },
-  { path: '/security', title: `Security & Trust${SUFFIX}`, description: "How Vistrow Voice protects call recordings, transcripts, and customer data: workspace isolation, consent capture, DNC enforcement, configurable retention, and what we don't yet claim." },
+  { path: '/languages', title: `AI Voice Agents in 10 Indian Languages + English${SUFFIX}`, description: 'Artha answers in Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, Odia, and English - switching mid-call with the caller.' },
+  { path: '/integrations', title: `Integrations${SUFFIX}`, description: 'Connect Vistrow Voice to your CRM, Slack, WhatsApp, Google Sheets, Zapier, n8n, Make, or any webhook endpoint.' },
+  { path: '/vs-ivr', title: `AI Voice Agent vs. Traditional IVR${SUFFIX}`, description: 'Compare AI voice agents with phone menus and call desks across availability, languages, answer quality, records, and cost.' },
+  { path: '/security', title: `Security & Trust${SUFFIX}`, description: 'How Vistrow Voice protects call data with workspace scoping, DNC enforcement, access controls, configurable retention, and clearly stated security limits.' },
   { path: '/careers', title: `Careers${SUFFIX}`, description: 'Work on real-time AI voice agents for Indian languages at Vistrow Voice. See open roles, or send us your CV.' },
   { path: '/changelog', title: `Changelog${SUFFIX}`, description: "What's new in Vistrow Voice: new voices, faster call connection, native appointment booking, compliance controls, and more." },
   { path: '/resources/docs', title: `Docs & Help${SUFFIX}`, description: 'Set up a Vistrow Voice AI agent: create an agent, add a knowledge base, connect a phone number or website widget, book appointments, and push leads to your CRM.' },
+  { path: '/resources/blog', title: `Blog - Coming Soon${SUFFIX}`, description: 'Articles and practical guides from Vistrow Voice are coming soon.', noindex: true },
+  { path: '/privacy', title: `Privacy Policy${SUFFIX}`, description: 'How Vistrow Voice collects, uses, shares, retains, and protects account, call, and integration data.' },
+  { path: '/terms', title: `Terms of Service${SUFFIX}`, description: 'The terms that govern business use of Vistrow Voice, including acceptable use, billing, data, and compliance responsibilities.' },
 ]
 
 const PRODUCT_ROUTES = Object.entries(PRODUCT_DETAIL).map(([route, page]) => ({
@@ -56,12 +59,12 @@ const SOLUTION_ROUTES = SOLUTIONS.map((s) => ({
 const LANGUAGE_ROUTES = LANGUAGES.map((lang) => ({
   path: `/languages/${lang.slug}`,
   title: `AI Voice Agent in ${lang.name}${SUFFIX}`,
-  description: `Answer, qualify, and book customer calls in ${lang.name}, 24/7. ${lang.blurb}`,
+  description: `AI voice agents for ${lang.name} customer calls, with natural code-switching, qualification, and appointment booking - available 24/7.`,
 }))
 
 const PAGES = [...STATIC_PAGES, ...PRODUCT_ROUTES, ...SOLUTION_ROUTES, ...LANGUAGE_ROUTES]
 
-const CANONICAL_ORIGIN = 'https://vistrowvoice.com'
+const CANONICAL_ORIGIN = 'https://www.vistrowvoice.com'
 
 function escapeHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -79,6 +82,7 @@ function applyPage(template, page) {
   return template
     .replace(/<title>.*?<\/title>/, `<title>${title}</title>`)
     .replace(/(<meta\s+name="description"\s+content=")[^"]*(")/, `$1${description}$2`)
+    .replace(/(<meta\s+name="robots"\s+content=")[^"]*(")/, `$1${page.noindex ? 'noindex, follow' : 'index, follow'}$2`)
     .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${url}$2`)
     .replace(/(<meta property="og:title" content=")[^"]*(")/, `$1${title}$2`)
     .replace(/(<meta\s*\n?\s*property="og:description"\s*\n?\s*content=")[^"]*(")/, `$1${description}$2`)

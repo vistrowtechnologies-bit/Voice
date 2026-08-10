@@ -19,7 +19,7 @@ interface SeoProps {
   jsonLd?: object | object[]
 }
 
-const CANONICAL_ORIGIN = 'https://vistrowvoice.com'
+const CANONICAL_ORIGIN = 'https://www.vistrowvoice.com'
 const DEFAULT_IMAGE = `${CANONICAL_ORIGIN}/og-image.png`
 const JSONLD_SCRIPT_ID = 'seo-page-jsonld'
 
@@ -53,22 +53,21 @@ export function Seo({ title, description, path, image = DEFAULT_IMAGE, noindex, 
     upsertLink('canonical', url)
 
     upsertMeta('property', 'og:type', 'website')
+    upsertMeta('property', 'og:locale', 'en_IN')
     upsertMeta('property', 'og:site_name', 'Vistrow Voice')
     upsertMeta('property', 'og:title', title)
     upsertMeta('property', 'og:description', description)
     upsertMeta('property', 'og:url', url)
     upsertMeta('property', 'og:image', image)
-    // og-image.png is currently the 180x180 app-icon badge, not a proper
-    // 1200x630 banner - without explicit dimensions, unfurlers assume a
-    // wide banner and stretch/pad the square icon, which reads as a
-    // stale/wrong logo in link previews.
-    upsertMeta('property', 'og:image:width', image === DEFAULT_IMAGE ? '180' : '')
-    upsertMeta('property', 'og:image:height', image === DEFAULT_IMAGE ? '180' : '')
+    upsertMeta('property', 'og:image:width', image === DEFAULT_IMAGE ? '1200' : '')
+    upsertMeta('property', 'og:image:height', image === DEFAULT_IMAGE ? '630' : '')
+    upsertMeta('property', 'og:image:alt', 'Vistrow Voice - multilingual AI voice agents for India')
 
     upsertMeta('name', 'twitter:card', 'summary_large_image')
     upsertMeta('name', 'twitter:title', title)
     upsertMeta('name', 'twitter:description', description)
     upsertMeta('name', 'twitter:image', image)
+    upsertMeta('name', 'twitter:image:alt', 'Vistrow Voice - multilingual AI voice agents for India')
 
     const existingScript = document.getElementById(JSONLD_SCRIPT_ID)
     if (existingScript) existingScript.remove()
