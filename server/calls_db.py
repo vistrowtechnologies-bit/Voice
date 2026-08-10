@@ -2859,6 +2859,25 @@ def list_inbound_routes(account_id: int) -> list[dict]:
         conn.close()
 
 
+def inbound_route_exists_for_number(phone_number: str, account_id: int, exclude_route_id: int | None = None) -> bool:
+    """Whether this account already has a saved route for this exact
+    number - a number routing to two different agents at once is exactly
+    the bug reported live (one number, two active routes, only one agent
+    ever actually answering). exclude_route_id lets an update check without
+    tripping over the route's own existing row."""
+    if not phone_number:
+        return False
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM inbound_routes WHERE account_id = ? AND phone_number = ? AND id != ?",
+            (account_id, phone_number, exclude_route_id or 0),
+        ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
 def create_inbound_route(data: dict, account_id: int) -> None:
     conn = _connect()
     try:
@@ -2881,6 +2900,35 @@ def create_inbound_route(data: dict, account_id: int) -> None:
                     data.get("windowStart"),
                     data.get("windowEnd"),
                     ",".join(data.get("activeDays", [])) if isinstance(data.get("activeDays"), list) else data.get("activeDays", ""),
+                ),
+            )
+    finally:
+        conn.close()
+
+
+def update_inbound_route(route_id: int, data: dict, account_id: int) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                """
+                UPDATE inbound_routes
+                SET phone_number = ?, agent_id = ?, timezone = ?, max_concurrent = ?, start_date = ?,
+                    end_date = ?, window_start = ?, window_end = ?, active_days = ?
+                WHERE id = ? AND account_id = ?
+                """,
+                (
+                    data.get("phoneNumber"),
+                    data.get("agentId"),
+                    data.get("timezone", "Asia/Kolkata"),
+                    data.get("maxConcurrent", 1),
+                    data.get("startDate"),
+                    data.get("endDate"),
+                    data.get("windowStart"),
+                    data.get("windowEnd"),
+                    ",".join(data.get("activeDays", [])) if isinstance(data.get("activeDays"), list) else data.get("activeDays", ""),
+                    route_id,
+                    account_id,
                 ),
             )
     finally:

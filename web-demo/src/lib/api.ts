@@ -52,7 +52,18 @@ async function send<T = unknown>(method: string, path: string, body?: unknown): 
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   if (res.status === 401) onUnauthorized()
-  if (!res.ok) throw new Error(`${method} ${path} failed (${res.status})`)
+  if (!res.ok) {
+    // Surface FastAPI's HTTPException detail text (e.g. "This number
+    // already has an active route") instead of a generic status-code
+    // message, so callers can show the caller *why* a request was
+    // rejected, not just that it was.
+    const detail = await res
+      .clone()
+      .json()
+      .then((j) => (typeof j?.detail === 'string' ? j.detail : null))
+      .catch(() => null)
+    throw new Error(detail || `${method} ${path} failed (${res.status})`)
+  }
   return res.json()
 }
 
@@ -202,6 +213,8 @@ export const extractQaFromSource = (sourceId: number) =>
 export const fetchInboundRoutes = () => get<InboundRoute[]>('/inbound-routes')
 export const createInboundRoute = (data: Record<string, unknown>) =>
   send('POST', '/inbound-routes', data)
+export const updateInboundRoute = (id: number, data: Record<string, unknown>) =>
+  send('PATCH', `/inbound-routes/${id}`, data)
 export const deleteInboundRoute = (id: number) => send('DELETE', `/inbound-routes/${id}`)
 export const fetchCampaigns = () => get<Campaign[]>('/campaigns')
 export const fetchCampaign = (id: number) => get<Campaign>(`/campaigns/${id}`)

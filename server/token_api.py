@@ -1546,7 +1546,19 @@ def list_inbound_routes(user: dict = Depends(current_user)) -> list[dict]:
 
 @app.post("/inbound-routes")
 def create_inbound_route(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    phone_number = data.get("phoneNumber")
+    if phone_number and calls_db.inbound_route_exists_for_number(phone_number, user["account_id"]):
+        raise HTTPException(400, "This number already has an active route. Edit the existing one instead.")
     calls_db.create_inbound_route(data, user["account_id"])
+    return {"ok": True}
+
+
+@app.patch("/inbound-routes/{route_id}")
+def update_inbound_route(route_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    phone_number = data.get("phoneNumber")
+    if phone_number and calls_db.inbound_route_exists_for_number(phone_number, user["account_id"], exclude_route_id=route_id):
+        raise HTTPException(400, "This number already has a different active route.")
+    calls_db.update_inbound_route(route_id, data, user["account_id"])
     return {"ok": True}
 
 
