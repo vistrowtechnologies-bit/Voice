@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vistrow Voice social card</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+    body {
+      font-family: Manrope, Arial, sans-serif;
+      color: #10101c;
+      background:
+        radial-gradient(circle at 82% 49%, rgba(151, 70, 255, .18), transparent 32%),
+        radial-gradient(circle at 10% 105%, rgba(255, 255, 255, .9), transparent 38%),
+        linear-gradient(120deg, #fffdfb 0%, #fbf8ff 52%, #f7f0ff 100%);
+      position: relative;
+    }
+    body::after {
+      content: '';
+      position: absolute;
+      left: 280px;
+      right: -100px;
+      bottom: -330px;
+      height: 520px;
+      border-radius: 50%;
+      border: 1px solid rgba(153, 91, 255, .20);
+      box-shadow: 0 -18px 0 -17px rgba(153,91,255,.13), 0 -38px 0 -37px rgba(153,91,255,.11), 0 -60px 0 -59px rgba(153,91,255,.09);
+      transform: rotate(-4deg);
+    }
+    .left { position: absolute; z-index: 2; left: 68px; top: 54px; width: 630px; }
+    .brand { display: flex; align-items: center; gap: 18px; }
+    .brand img { width: 70px; height: 70px; border-radius: 17px; box-shadow: 0 10px 28px rgba(107,33,255,.18); }
+    .brand-name { font-family: 'Space Grotesk', sans-serif; font-size: 45px; line-height: 1; font-weight: 700; letter-spacing: -1.6px; }
+    h1 { margin: 46px 0 34px; font-family: 'Space Grotesk', sans-serif; font-size: 59px; line-height: 1.06; letter-spacing: -2.7px; font-weight: 600; }
+    .fact { width: 455px; display: flex; align-items: center; gap: 17px; padding: 13px 0; border-bottom: 1px solid #dfd7ee; font-size: 25px; line-height: 1.1; font-weight: 500; white-space: nowrap; }
+    .fact svg { flex: 0 0 auto; width: 35px; height: 35px; stroke: #7c34ea; }
+    .dots { color: #dc28d8; font-weight: 800; }
+    .cta { display: inline-flex; margin-top: 23px; padding: 16px 34px 17px; border-radius: 15px; background: linear-gradient(115deg,#5721d6,#d628dd); color: white; font-size: 26px; font-weight: 800; box-shadow: 0 14px 30px rgba(182,38,224,.25); }
+    .orb-wrap { position: absolute; z-index: 1; right: 31px; top: 41px; width: 502px; height: 502px; display: grid; place-items: center; }
+    .orb-wrap::before, .orb-wrap::after { content: ''; position: absolute; border-radius: 50%; border: 1px solid rgba(149, 75, 255, .20); }
+    .orb-wrap::before { inset: -18px; box-shadow: 0 0 70px rgba(150,78,255,.25); }
+    .orb-wrap::after { inset: -48px; border-color: rgba(149, 75, 255, .10); box-shadow: 0 0 0 18px rgba(149,75,255,.035), 0 0 0 39px rgba(149,75,255,.025); }
+    .orb { width: 440px; height: 440px; overflow: hidden; border-radius: 50%; background: #030308; box-shadow: 0 22px 60px rgba(65,25,133,.38); }
+    .orb video { width: 100%; height: 100%; display: block; object-fit: cover; transform: scale(1.48); }
+    .brand-note { position: absolute; right: 75px; bottom: 38px; color: #796e8e; font-size: 14px; font-weight: 700; letter-spacing: 2.6px; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <main class="left">
+    <div class="brand">
+      <img src="/web-demo/src/assets/vistrow-mark.png" alt="" />
+      <div class="brand-name">Vistrow Voice</div>
+    </div>
+    <h1>Voice AI that speaks<br />your customer’s language.</h1>
+    <div class="fact">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 4.2 6 4.2 9S15 18 12 21c-3-3-4.2-6-4.2-9S9 6 12 3Z"/></svg>
+      <span>10 Indian languages + English</span>
+    </div>
+    <div class="fact">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 13v-2a8 8 0 0 1 16 0v2M4 13H2v5h4v-5H4Zm16 0h2v5h-4v-5h2Z"/><path d="M18 18c0 2-1.5 3-4 3"/></svg>
+      <span>Inbound <span class="dots">·</span> Outbound <span class="dots">·</span> Web</span>
+    </div>
+    <div class="cta">Try Artha live</div>
+  </main>
+  <div class="orb-wrap"><div class="orb"><video src="/web-demo/public/agent-orb.mp4" autoplay loop muted playsinline></video></div></div>
+  <div class="brand-note">Built for Bharat</div>
+</body>
+</html>
