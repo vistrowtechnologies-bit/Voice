@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useLocation } from 'react-router-dom'
 import arthaAvatar from '../assets/artha-avatar.png'
 import { fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
@@ -43,6 +43,7 @@ function pageSuggestions(pathname: string) {
  * via POST /help/chat. */
 export function HelpChatWidget() {
   const [open, setOpen] = useState(false)
+  const [showHint, setShowHint] = useState(false)
   const [faqs, setFaqs] = useState<HelpFaq[]>([])
   const [showFaqs, setShowFaqs] = useState(false)
   const [messages, setMessages] = useState<HelpChatMessage[]>([])
@@ -65,6 +66,33 @@ export function HelpChatWidget() {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, sending])
 
+  useEffect(() => {
+    if (open) {
+      setShowHint(false)
+      return
+    }
+    const showTimer = window.setTimeout(() => setShowHint(true), 1200)
+    const hideTimer = window.setTimeout(() => setShowHint(false), 7500)
+    return () => {
+      window.clearTimeout(showTimer)
+      window.clearTimeout(hideTimer)
+    }
+  }, [open])
+
+  const tiltAvatar = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType === 'touch') return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 12
+    const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * -12
+    event.currentTarget.style.setProperty('--help-tilt-x', `${y.toFixed(1)}deg`)
+    event.currentTarget.style.setProperty('--help-tilt-y', `${x.toFixed(1)}deg`)
+  }
+
+  const resetAvatarTilt = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.currentTarget.style.setProperty('--help-tilt-x', '0deg')
+    event.currentTarget.style.setProperty('--help-tilt-y', '0deg')
+  }
+
   const send = async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || sending) return
@@ -85,14 +113,18 @@ export function HelpChatWidget() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+    <div className="fixed bottom-3 right-3 z-50 flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
       {open && (
-        <div className="flex h-[480px] w-[360px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
+        <div className="help-chat-panel-in flex h-[min(520px,calc(100dvh-6rem))] w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl sm:w-[380px]">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <div className="relative h-8 w-8 shrink-0">
-                <img src={arthaAvatar} alt="Artha" className="h-8 w-8 rounded-full object-cover" />
-                <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-surface bg-green-500" />
+                <img
+                  src={arthaAvatar}
+                  alt="Artha"
+                  className={`h-8 w-8 rounded-full object-cover ${sending ? 'help-avatar-thinking' : ''}`}
+                />
+                <span className="pulse-dot absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-surface bg-green-500" />
               </div>
               <div>
                 <div className="text-sm font-semibold">Artha</div>
@@ -222,25 +254,48 @@ export function HelpChatWidget() {
       )}
 
       <div className="relative">
+        {!open && showHint && (
+          <button
+            type="button"
+            onClick={() => {
+              setShowHint(false)
+              setOpen(true)
+            }}
+            className="help-chat-hint absolute bottom-2 right-[calc(100%+0.75rem)] whitespace-nowrap rounded-xl border border-primary/25 bg-surface px-3 py-2 text-xs font-medium text-text shadow-xl transition-colors hover:border-primary/60 hover:bg-surface-high"
+          >
+            Hi! Need help?
+          </button>
+        )}
         {!open && (
           <span
             aria-hidden="true"
-            className="glow-pulse pointer-events-none absolute inset-0 -z-10 rounded-full bg-primary blur-xl"
+            className="glow-pulse pointer-events-none absolute -inset-1 -z-10 rounded-full bg-primary blur-xl"
           />
         )}
         <button
           data-tour="help-chat"
-          onClick={() => setOpen((v) => !v)}
-          className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-[0_0_24px_-4px_rgba(168,85,247,0.8)] transition-all duration-200 hover:scale-105 hover:shadow-[0_0_32px_-2px_rgba(168,85,247,0.95)] active:scale-95"
+          onClick={() => {
+            setShowHint(false)
+            setOpen((v) => !v)
+          }}
+          onPointerMove={tiltAvatar}
+          onPointerLeave={resetAvatarTilt}
+          className={`help-avatar-button group relative flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-[0_0_24px_-4px_rgba(168,85,247,0.8)] transition-all duration-200 hover:shadow-[0_0_34px_-2px_rgba(168,85,247,0.95)] active:scale-95 sm:h-16 sm:w-16 ${open ? 'help-avatar-button-open' : ''}`}
           aria-label={open ? 'Close help chat' : 'Open help chat'}
         >
           {open ? (
-            <Icon name="close" className="text-[22px] text-bg" />
+            <Icon name="close" className="help-close-pop text-[24px] text-bg" />
           ) : (
-            <>
-              <img src={arthaAvatar} alt="Artha" className="h-full w-full rounded-full object-cover" />
-              <span className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full border-2 border-bg bg-green-500" />
-            </>
+            <span className="help-avatar-tilt relative block h-full w-full rounded-full">
+              <span className="help-avatar-float block h-full w-full rounded-full">
+                <img
+                  src={arthaAvatar}
+                  alt="Artha"
+                  className="h-full w-full rounded-full object-cover transition-transform duration-300 group-hover:scale-[1.06]"
+                />
+              </span>
+              <span className="pulse-dot absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full border-2 border-bg bg-green-500 sm:h-3.5 sm:w-3.5" />
+            </span>
           )}
         </button>
       </div>
