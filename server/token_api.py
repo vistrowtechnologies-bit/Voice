@@ -1544,22 +1544,43 @@ def list_inbound_routes(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_inbound_routes(user["account_id"])
 
 
+async def _sync_inbound_route_agent(phone_number: str | None, agent_id: int | None, account_id: int) -> str | None:
+    """The Inbound Calls page's routes (schedule/window/max-concurrent) are
+    a separate table from phone_numbers, but real call routing (both
+    LiveKit's dispatch-rule metadata and the orchestrator's
+    get_phone_number_by_number lookup) only ever reads phone_numbers.agent_id
+    - confirmed live as the cause of a route saying one agent while a
+    completely different one actually answered. Keeps that field in sync
+    with whatever agent a route assigns, so the two pages can't silently
+    disagree about who answers a number. Returns an error string on a
+    LiveKit sync failure (best-effort, doesn't block saving the route)."""
+    if not phone_number or not agent_id:
+        return None
+    number_row = calls_db.get_phone_number_by_number(phone_number)
+    if number_row is None or number_row["accountId"] != account_id:
+        return None
+    calls_db.assign_phone_number(number_row["id"], agent_id, account_id)
+    return await _sync_dispatch_rule(number_row["id"], account_id)
+
+
 @app.post("/inbound-routes")
-def create_inbound_route(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+async def create_inbound_route(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     phone_number = data.get("phoneNumber")
     if phone_number and calls_db.inbound_route_exists_for_number(phone_number, user["account_id"]):
         raise HTTPException(400, "This number already has an active route. Edit the existing one instead.")
     calls_db.create_inbound_route(data, user["account_id"])
-    return {"ok": True}
+    lk_sync_error = await _sync_inbound_route_agent(phone_number, data.get("agentId"), user["account_id"])
+    return {"ok": True, "lkSyncError": lk_sync_error}
 
 
 @app.patch("/inbound-routes/{route_id}")
-def update_inbound_route(route_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+async def update_inbound_route(route_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     phone_number = data.get("phoneNumber")
     if phone_number and calls_db.inbound_route_exists_for_number(phone_number, user["account_id"], exclude_route_id=route_id):
         raise HTTPException(400, "This number already has a different active route.")
     calls_db.update_inbound_route(route_id, data, user["account_id"])
-    return {"ok": True}
+    lk_sync_error = await _sync_inbound_route_agent(phone_number, data.get("agentId"), user["account_id"])
+    return {"ok": True, "lkSyncError": lk_sync_error}
 
 
 @app.delete("/inbound-routes/{route_id}")
