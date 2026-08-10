@@ -174,6 +174,8 @@ const CSS = `
 .av-header-right { display: flex; align-items: center; gap: 10px; }
 .av-timer { display: none; font-size: 12px; font-variant-numeric: tabular-nums; color: #b8b2cf; }
 .av-timer.av-timer-warn { color: #f87171; font-weight: 700; }
+.av-end-chat { display:none; border:1px solid #4a3f62; background:#251e35; color:#d9d3e8; border-radius:999px; padding:5px 9px; font-family:inherit;font-size:10.5px;font-weight:600; cursor:pointer; }
+.av-end-chat:hover,.av-end-chat:focus-visible { border-color:#a855f7;color:#fff; }
 .av-close { background: none; border: none; color: #9089b0; cursor: pointer; padding: 7px; border-radius: 8px; display: flex; }
 .av-close:hover, .av-close:focus-visible { background:#251e35; color:#fff; }
 
@@ -242,6 +244,13 @@ const CSS = `
 .av-bubble { max-width: 85%; padding: 8px 11px; border-radius: 12px; font-size: 12.5px; line-height: 1.4; word-break: break-word; }
 .av-bubble-local { align-self: flex-end; background: linear-gradient(135deg,#a855f7,#7c3aed); color: #fff; }
 .av-bubble-remote { align-self: flex-start; background: #201b3b; border: 1px solid #2a2440; color: #f5f3ff; }
+.av-assistant-row { width:100%; display:flex; align-items:flex-end; gap:7px; }
+.av-assistant-row .av-bubble { max-width:calc(85% - 28px); }
+.av-message-avatar { width:25px;height:25px;border-radius:999px;overflow:hidden;flex:0 0 25px;border:1.5px solid #8b5cf6;box-shadow:0 0 0 3px rgba(168,85,247,.1);position:relative; }
+.av-message-avatar img,.av-message-avatar video { width:100%;height:100%;object-fit:cover;display:block; }
+.av-message-avatar video { transform:scale(1.5); }
+.av-assistant-row.av-typing .av-message-avatar { animation:av-avatar-speaking 1.2s ease-in-out infinite; }
+@keyframes av-avatar-speaking { 50% { box-shadow:0 0 0 5px rgba(168,85,247,.22);transform:scale(1.04); } }
 .av-controls { flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px 16px; }
 .av-ctrl-btn { width: 40px; height: 40px; border-radius: 9999px; border: 1px solid #2a2440; background: #201b3b; color: #b8b2cf; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .av-end-btn { width: 48px; height: 48px; border-radius: 9999px; background: #ef4444; color: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -308,6 +317,7 @@ function widgetHtml(label: string): string {
           <div class="av-title"><span class="av-title-avatar" id="av-title-avatar">${avatarTag()}</span>${label}</div>
           <div class="av-header-right">
             <span id="av-timer" class="av-timer">5:00</span>
+            <button id="av-end-chat" class="av-end-chat">End chat</button>
             <button id="av-close" class="av-close" aria-label="Close assistant">${CLOSE_ICON}</button>
           </div>
         </div>
@@ -425,6 +435,7 @@ function init(): void {
   const greetingClose = shadow.getElementById('av-greeting-close') as HTMLButtonElement
   const panel = shadow.getElementById('av-panel') as HTMLDivElement
   const closeBtn = shadow.getElementById('av-close') as HTMLButtonElement
+  const endChatBtn = shadow.getElementById('av-end-chat') as HTMLButtonElement
   const welcomeEl = shadow.getElementById('av-welcome') as HTMLDivElement
   const welcomeAvatarEl = shadow.getElementById('av-welcome-avatar') as HTMLDivElement
   const chooseVoiceBtn = shadow.getElementById('av-choose-voice') as HTMLButtonElement
@@ -712,6 +723,7 @@ function init(): void {
   // toggled via inline display - this just hides the other two before
   // whichever show*() function reveals its own.
   function hideAllPanelViews(): void {
+    endChatBtn.style.display = 'none'
     welcomeEl.style.display = 'none'
     formEl.style.display = 'none'
     chatEl.style.display = 'none'
@@ -771,6 +783,7 @@ function init(): void {
     hideAllPanelViews()
     openPanel()
     chatEl.style.display = 'flex'
+    endChatBtn.style.display = 'inline-flex'
     chatInput.focus()
     trackEvent('chat_opened')
     // Opens with a greeting bubble from Artha's side instead of a blank
@@ -811,7 +824,18 @@ function init(): void {
     // textContent only - this is user-typed input and a model's reply,
     // never trusted as markup.
     bubble.textContent = text
-    chatMessagesEl.appendChild(bubble)
+    if (role === 'assistant') {
+      const row = document.createElement('div')
+      row.className = 'av-assistant-row'
+      const avatar = document.createElement('span')
+      avatar.className = 'av-message-avatar'
+      avatar.setAttribute('aria-hidden', 'true')
+      avatar.innerHTML = avatarTag()
+      row.append(avatar, bubble)
+      chatMessagesEl.appendChild(row)
+    } else {
+      chatMessagesEl.appendChild(bubble)
+    }
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight
     return bubble
   }
@@ -819,12 +843,19 @@ function init(): void {
   // Static, hardcoded markup (not user data) - safe to set via innerHTML,
   // same as the icon constants used throughout this file.
   function appendTypingBubble(): HTMLDivElement {
+    const row = document.createElement('div')
+    row.className = 'av-assistant-row av-typing'
+    const avatar = document.createElement('span')
+    avatar.className = 'av-message-avatar'
+    avatar.setAttribute('aria-hidden', 'true')
+    avatar.innerHTML = avatarTag()
     const bubble = document.createElement('div')
     bubble.className = 'av-bubble av-bubble-remote'
     bubble.innerHTML = '<span class="av-typing-dots"><span></span><span></span><span></span></span>'
-    chatMessagesEl.appendChild(bubble)
+    row.append(avatar, bubble)
+    chatMessagesEl.appendChild(row)
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight
-    return bubble
+    return row
   }
 
   async function sendChatMessage(): Promise<void> {
@@ -1108,7 +1139,10 @@ function init(): void {
     intentionalEnd = false
     callCompleted = false
     if (attempt === 0) callStartedAt = Date.now()
-    formEl.style.display = 'none'
+    // Voice can start directly from the welcome screen when no lead fields
+    // are enabled. Hide every sibling view first so welcome + call can never
+    // stack in the panel while the LiveKit room is active.
+    hideAllPanelViews()
     callEl.style.display = 'flex'
     // Every call shows the type-instead box right alongside mic/end-call
     // from the start - no toggle to discover, no separate "chat mode" to
@@ -1290,6 +1324,10 @@ function init(): void {
     if (room) endCall()
     else if (chatHistory.length > 1) showComplete(`Thanks for chatting with ${agentName}.`, true)
     else resetToIdle()
+  })
+  endChatBtn.addEventListener('click', () => {
+    trackEvent('chat_ended')
+    showComplete(`Thanks for chatting with ${agentName}.`, true)
   })
   submitBtn.addEventListener('click', submitForm)
   phoneInput.addEventListener('keydown', (e) => {
