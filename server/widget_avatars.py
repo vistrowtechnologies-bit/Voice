@@ -11,6 +11,7 @@ before removing those keys/images).
 
 WIDGET_AVATAR_CATALOG = {
     "default": "Orb (default)",
+    "artha": "Artha",
     "female1": "Priya",
     "female2": "Ananya",
     "female3": "Meera",

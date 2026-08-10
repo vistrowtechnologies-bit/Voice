@@ -91,6 +91,10 @@
         vistrowWidgetScript.setAttribute('data-api-base', '/api')
         vistrowWidgetScript.setAttribute('data-position', 'bottom-right')
         vistrowWidgetScript.setAttribute('data-label', 'Talk to us')
+        // Use the same Artha identity as the dashboard help assistant. The
+        // widget's live site config refresh keeps this value in sync with
+        // the Website Widget settings after the first render.
+        vistrowWidgetScript.setAttribute('data-avatar', 'artha')
         document.body.appendChild(vistrowWidgetScript)
       }
     </script>
