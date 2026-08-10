@@ -312,9 +312,26 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
             return {"ok": True}
         _PENDING_ACCOUNT_BY_VOICE_ID[voice_id] = account_id
         _PENDING_AGENT_BY_VOICE_ID[voice_id] = agent_id
+        # Start building the session and synthesizing the greeting right
+        # now, overlapping with accept_call's round trip and the gap before
+        # `connected` fires - not just after. Inbound has no earlier "call
+        # placed" moment to hide this behind the way outbound does (ringing
+        # time absorbs it there); `incomingcall` is the earliest point we
+        # have, and skipping this head start was reported live as a
+        # 10-11s gap between the call connecting and the agent's voice
+        # actually starting - almost entirely the greeting TTS call itself
+        # (~6-8s measured), previously only ever kicked off once `connected`
+        # already fired. The `connected` handler below reuses this instead
+        # of rebuilding when it's already here.
+        sess = _build_session_for_test_call(account_id=account_id, agent_id=agent_id)
+        _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
+            sess,
+            asyncio.create_task(session_module.build_greeting_audio(sess)),
+        )
         result = await enablex.accept_call(voice_id, account_id)
         if not result.get("ok"):
             logger.warning("accept_call failed: %s", result.get("error"))
+            _pop_pending_greeting(voice_id)
         return {"ok": True}
 
     if state == "connected":
