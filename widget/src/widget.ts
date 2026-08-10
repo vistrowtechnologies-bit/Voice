@@ -16,6 +16,9 @@ const apiBase = scriptEl?.dataset.apiBase?.replace(/\/$/, '')
 // actually still affect.
 let position = scriptEl?.dataset.position === 'bottom-left' ? 'bottom-left' : 'bottom-right'
 const label = scriptEl?.dataset.label || 'Talk to us'
+const agentName = scriptEl?.dataset.agentName || 'Artha'
+const ctaLabel = scriptEl?.dataset.ctaLabel || ''
+const ctaUrl = scriptEl?.dataset.ctaUrl || ''
 // 'default' (or the attribute missing entirely) keeps today's animated
 // orb video exactly as-is - every other catalog key is a static color
 // variant (widget_avatars.py) rendered as a plain <img> instead.
@@ -33,10 +36,10 @@ let avatarKey = scriptEl?.dataset.avatar || 'default'
 let customGreeting = scriptEl?.dataset.greeting || ''
 const DEFAULT_GREETING = "👋 Hi! I'm Artha - tap to get started."
 const DEFAULT_CHAT_OPENER = "Hi, I'm Artha! What can I help you with today?"
-// 'voice' (missing attribute defaults here too) is every existing install's
-// exact current behavior, completely unchanged. 'chat' skips the call UI
-// entirely; 'both' lets the visitor pick per attempt.
-const widgetMode = scriptEl?.dataset.mode === 'chat' || scriptEl?.dataset.mode === 'both' ? scriptEl.dataset.mode : 'voice'
+// 'voice' is the backwards-compatible default; 'chat' skips LiveKit and
+// 'both' lets the visitor choose on the welcome screen.
+let widgetMode: 'voice' | 'chat' | 'both' =
+  scriptEl?.dataset.mode === 'chat' || scriptEl?.dataset.mode === 'both' ? scriptEl.dataset.mode : 'voice'
 // ask* default true, require* default true too except email (matches every
 // install's behavior before any of this existed: name/phone always shown
 // and mandatory, email always shown and optional) - only an explicit
@@ -108,6 +111,12 @@ const SPEAKER_ICON =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4zm11.5 3a3.5 3.5 0 0 0-2-3.15v6.3A3.5 3.5 0 0 0 15.5 12z"/></svg>'
 const SPEAKER_OFF_ICON =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4zm14.7-1.3-1.4-1.4-2.3 2.3-2.3-2.3-1.4 1.4 2.3 2.3-2.3 2.3 1.4 1.4 2.3-2.3 2.3 2.3 1.4-1.4-2.3-2.3z"/></svg>'
+const CHAT_ICON =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>'
+const COPY_ICON =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>'
+const ARROW_ICON =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
 
 const CSS = `
 :host { all: initial; }
@@ -146,15 +155,16 @@ const CSS = `
    land on top of whatever else a site anchors in the other bottom corner
    (a WhatsApp chat button, in the case that surfaced this) instead of
    stopping with real clearance from it. */
-.av-greeting { position: absolute; bottom: 8px; right: 78px; display: flex; align-items: center; gap: 8px; width: min(168px, calc(100vw - 148px)); background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
-:host([data-side="left"]) .av-greeting { left: 78px; right: auto; }
+.av-greeting { position: absolute; bottom: 80px; right: 0; display: flex; align-items: center; gap: 8px; width: min(250px, calc(100vw - 40px)); background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 11px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
+:host([data-side="left"]) .av-greeting { left: 0; right: auto; }
 .av-greeting span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .av-greeting span { flex: 1 1 auto; min-width: 0; }
 .av-greeting button { background: none; border: none; color: #7d7594; cursor: pointer; padding: 2px; display: flex; flex-shrink: 0; }
 @keyframes av-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
-.av-panel { display: none; flex-direction: column; width: 300px; border-radius: 16px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.5); position: absolute; bottom: 78px; right: 0; }
+.av-panel { display: none; flex-direction: column; width: 336px; max-height: min(660px, calc(100vh - 118px)); border-radius: 20px; background: #17121f; border: 1px solid #2f2744; color: #f5f3ff; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,.56), 0 0 0 1px rgba(168,85,247,.08); position: absolute; bottom: 78px; right: 0; animation: av-panel-in .24s cubic-bezier(.2,.8,.2,1); }
 :host([data-side="left"]) .av-panel { left: 0; right: auto; }
+@keyframes av-panel-in { from { opacity:0; transform:translateY(10px) scale(.98); } to { opacity:1; transform:none; } }
 .av-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #2a2440; }
 .av-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .av-dot { width: 8px; height: 8px; border-radius: 9999px; background: #a855f7; }
@@ -164,7 +174,24 @@ const CSS = `
 .av-header-right { display: flex; align-items: center; gap: 10px; }
 .av-timer { display: none; font-size: 12px; font-variant-numeric: tabular-nums; color: #b8b2cf; }
 .av-timer.av-timer-warn { color: #f87171; font-weight: 700; }
-.av-close { background: none; border: none; color: #9089b0; cursor: pointer; padding: 4px; display: flex; }
+.av-close { background: none; border: none; color: #9089b0; cursor: pointer; padding: 7px; border-radius: 8px; display: flex; }
+.av-close:hover, .av-close:focus-visible { background:#251e35; color:#fff; }
+
+.av-welcome { padding: 24px 20px 22px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:10px; }
+.av-welcome-avatar { width:88px; height:88px; border-radius:999px; overflow:hidden; border:3px solid #8b5cf6; box-shadow:0 0 0 7px rgba(168,85,247,.12), 0 14px 38px rgba(88,28,135,.35); }
+.av-welcome-avatar img,.av-welcome-avatar video { width:100%;height:100%;object-fit:cover; }
+.av-welcome-avatar video { transform:scale(1.5); }
+.av-welcome h2 { margin:8px 0 0; font-size:21px; line-height:1.2; }
+.av-welcome p { margin:0; color:#b8b2cf; font-size:13px; line-height:1.5; }
+.av-presence { display:inline-flex; align-items:center; gap:6px; color:#8ee8be !important; font-size:11px !important; font-weight:700; }
+.av-presence::before { content:''; width:7px;height:7px;border-radius:99px;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.16); }
+.av-choice { width:100%; margin-top:10px; display:flex; flex-direction:column; gap:9px; }
+.av-primary,.av-secondary,.av-complete-action { width:100%; min-height:44px; border-radius:12px; font:700 13.5px inherit; cursor:pointer; display:flex;align-items:center;justify-content:center;gap:9px; }
+.av-primary { border:0; color:#fff; background:linear-gradient(135deg,#a855f7,#7c3aed); box-shadow:0 8px 24px rgba(126,58,237,.28); }
+.av-primary:hover { filter:brightness(1.08); transform:translateY(-1px); }
+.av-secondary { border:1px solid #39304e; color:#e9e5f6; background:#211a2e; }
+.av-secondary:hover { border-color:#7657a5; background:#282037; }
+.av-trust { display:flex;align-items:center;justify-content:center;gap:5px;margin-top:3px;color:#7f7897;font-size:10.5px; }
 
 
 .av-form { padding: 18px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
@@ -197,12 +224,14 @@ const CSS = `
    taller than a voice site's. The transcript/messages area is the one
    flexible piece in both, growing to fill whatever room the rest of the
    view (orb+status, or just the input row) doesn't need. */
-#av-call, #av-chat { display: flex; flex-direction: column; height: 447px; }
+#av-call, #av-chat { display: flex; flex-direction: column; height: min(470px, calc(100vh - 180px)); }
 .av-body { flex-shrink: 0; padding: 18px 16px 2px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; }
+.av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out; box-shadow:0 0 0 7px rgba(168,85,247,.08),0 0 34px rgba(168,85,247,.22); }
 .av-orb video { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
 .av-orb img { width: 100%; height: 100%; object-fit: cover; }
-.av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 18px; }
+.av-status { font-size: 12.5px; color: #b8b2cf; text-align: center; min-height: 18px; display:flex;align-items:center;gap:7px; }
+.av-status::before { content:''; width:7px;height:7px;border-radius:99px;background:#a855f7;animation:av-status-pulse 1.3s ease-in-out infinite; }
+@keyframes av-status-pulse { 50% { opacity:.35;transform:scale(.72); } }
 .av-transcript { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 2px 16px 12px; padding: 12px 12px 8px; scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: #4a3f70 transparent; position: relative; border-radius: 12px; border: 1px solid rgba(168,85,247,.28); background: rgba(168,85,247,.04); }
 .av-transcript::before { content: ''; position: absolute; top: -1px; left: 10%; right: 10%; height: 1px; background: linear-gradient(90deg, transparent, #c084fc, transparent); box-shadow: 0 0 8px 1px rgba(192,132,252,.9); }
 .av-transcript::-webkit-scrollbar { width: 4px; }
@@ -210,15 +239,42 @@ const CSS = `
 .av-transcript::-webkit-scrollbar-thumb { background: #4a3f70; border-radius: 999px; }
 .av-transcript::-webkit-scrollbar-thumb:hover { background: #5d4f8f; }
 .av-transcript-empty { font-size: 12px; color: #7d7594; text-align: center; padding: 4px 0 8px; }
-.av-bubble { max-width: 85%; padding: 6px 11px; border-radius: 12px; font-size: 12.5px; line-height: 1.4; word-break: break-word; }
+.av-bubble { max-width: 85%; padding: 8px 11px; border-radius: 12px; font-size: 12.5px; line-height: 1.4; word-break: break-word; }
 .av-bubble-local { align-self: flex-end; background: linear-gradient(135deg,#a855f7,#7c3aed); color: #fff; }
 .av-bubble-remote { align-self: flex-start; background: #201b3b; border: 1px solid #2a2440; color: #f5f3ff; }
 .av-controls { flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px 16px; }
 .av-ctrl-btn { width: 40px; height: 40px; border-radius: 9999px; border: 1px solid #2a2440; background: #201b3b; color: #b8b2cf; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .av-end-btn { width: 48px; height: 48px; border-radius: 9999px; background: #ef4444; color: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.av-ctrl-btn:hover,.av-ctrl-btn:focus-visible { border-color:#7c3aed;color:#fff; }
+.av-end-btn:hover,.av-end-btn:focus-visible { background:#dc2626;transform:scale(1.04); }
+.av-complete { padding:25px 20px 22px; text-align:center; display:flex;flex-direction:column;align-items:center;gap:11px; }
+.av-complete-icon { width:54px;height:54px;border-radius:99px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#6ee7a5;display:flex;align-items:center;justify-content:center;font-size:25px; }
+.av-complete h2 { margin:2px 0 0;font-size:20px; }
+.av-complete p { margin:0;color:#a9a2bd;font-size:12.5px;line-height:1.5; }
+.av-feedback { display:flex;align-items:center;justify-content:center;gap:10px;margin:4px 0; }
+.av-feedback button { width:40px;height:40px;border:1px solid #39304e;border-radius:99px;background:#211a2e;color:#fff;cursor:pointer;font-size:18px; }
+.av-feedback button:hover,.av-feedback button[aria-pressed="true"] { background:#3a2457;border-color:#a855f7;transform:scale(1.06); }
+.av-complete-actions { width:100%;display:flex;flex-direction:column;gap:8px; }
+.av-complete-action { border:1px solid #39304e;color:#e9e5f6;background:#211a2e; }
+.av-complete-action:hover { border-color:#7657a5; }
+.av-complete-action.av-cta { color:#fff;border:0;background:linear-gradient(135deg,#a855f7,#7c3aed);text-decoration:none;box-sizing:border-box; }
+.av-visually-hidden { position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important; }
+.av-button:focus-visible,.av-primary:focus-visible,.av-secondary:focus-visible,.av-submit:focus-visible,.av-chat-send-btn:focus-visible,.av-complete-action:focus-visible { outline:3px solid rgba(192,132,252,.72);outline-offset:3px; }
 .av-branding { display: block; text-align: center; padding: 7px 0; font-size: 10px; font-weight: 600; letter-spacing: .02em; color: #6b6383; text-decoration: none; border-top: 1px solid #241f38; background: #140f1c; }
 .av-branding:hover { color: #a78bda; }
 audio { display: none; }
+@media (max-width:520px) {
+  .av-root { right:16px;bottom:16px; }
+  :host([data-side="left"]) .av-root { left:16px; }
+  .av-panel,:host([data-side="left"]) .av-panel { position:fixed;left:10px;right:10px;bottom:10px;width:auto;max-height:calc(100dvh - 20px);border-radius:22px; }
+  .av-greeting,:host([data-side="left"]) .av-greeting { left:auto;right:0;bottom:78px;width:min(260px,calc(100vw - 32px)); }
+  #av-call,#av-chat { height:min(500px,calc(100dvh - 110px)); }
+  .av-welcome { padding:25px 22px 23px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .av-button,.av-panel,.av-greeting,.av-status::before,.av-typing-dots span { animation:none!important; }
+  * { scroll-behavior:auto!important;transition-duration:.01ms!important; }
+}
 `
 
 // 'default' keeps the animated video orb exactly as before; any other
@@ -232,6 +288,13 @@ function avatarTag(id?: string): string {
   return `<img${idAttr} src="${apiBase}/widget-avatars/${avatarKey}.png" alt="" />`
 }
 
+// The portrait is the assistant's identity before and around the call; the
+// animated Vistrow orb is the activity indicator once a live conversation
+// begins. Keeping those jobs separate makes the state change instantly clear.
+function activityOrbTag(): string {
+  return `<video id="av-orb-video" src="${apiBase}/agent-orb.mp4" autoplay loop muted playsinline></video>`
+}
+
 function widgetHtml(label: string): string {
   return `
     <div class="av-root">
@@ -240,13 +303,25 @@ function widgetHtml(label: string): string {
         <button id="av-greeting-close" aria-label="Dismiss">${CLOSE_ICON}</button>
       </div>
 
-      <div id="av-panel" class="av-panel">
+      <div id="av-panel" class="av-panel" role="dialog" aria-modal="false" aria-label="Talk to ${agentName}">
         <div class="av-header">
           <div class="av-title"><span class="av-title-avatar" id="av-title-avatar">${avatarTag()}</span>${label}</div>
           <div class="av-header-right">
             <span id="av-timer" class="av-timer">5:00</span>
-            <button id="av-close" class="av-close">${CLOSE_ICON}</button>
+            <button id="av-close" class="av-close" aria-label="Close assistant">${CLOSE_ICON}</button>
           </div>
+        </div>
+
+        <div id="av-welcome" class="av-welcome" style="display:none;">
+          <div id="av-welcome-avatar" class="av-welcome-avatar">${avatarTag()}</div>
+          <p class="av-presence">Online now</p>
+          <h2>Hi, I’m ${agentName}</h2>
+          <p>Choose how you’d like to connect. You can switch to typing during a voice call anytime.</p>
+          <div class="av-choice">
+            <button id="av-choose-voice" class="av-primary">${MIC_ICON} Start a voice conversation</button>
+            <button id="av-choose-chat" class="av-secondary">${CHAT_ICON} Chat instead</button>
+          </div>
+          <span class="av-trust">🔒 Your conversation is private</span>
         </div>
 
         <div id="av-form" class="av-form" style="display:none;">
@@ -283,16 +358,16 @@ function widgetHtml(label: string): string {
         <div id="av-call" style="display:none;">
           <div class="av-body">
             <div class="av-orb">
-              ${avatarTag('av-orb-video')}
+              ${activityOrbTag()}
             </div>
-            <p id="av-status" class="av-status">Connecting…</p>
+            <p id="av-status" class="av-status" role="status" aria-live="polite">Connecting…</p>
           </div>
           <div id="av-transcript" class="av-transcript">
             <p class="av-transcript-empty">Your conversation will appear here.</p>
           </div>
           <div class="av-controls">
-            <button id="av-mute" class="av-ctrl-btn">${MIC_ICON}</button>
-            <button id="av-end" class="av-end-btn">${END_ICON}</button>
+            <button id="av-mute" class="av-ctrl-btn" aria-label="Mute microphone">${MIC_ICON}</button>
+            <button id="av-end" class="av-end-btn" aria-label="End call">${END_ICON}</button>
             <button id="av-speaker" class="av-ctrl-btn" aria-label="Mute Artha's voice">${SPEAKER_ICON}</button>
           </div>
           <div id="av-type-row" class="av-chat-input-row" style="display:none;">
@@ -302,10 +377,27 @@ function widgetHtml(label: string): string {
           <audio id="av-audio" autoplay></audio>
         </div>
 
+        <div id="av-complete" class="av-complete" style="display:none;">
+          <div class="av-complete-icon" aria-hidden="true">✓</div>
+          <h2 id="av-complete-title">Conversation complete</h2>
+          <p id="av-complete-summary">Thanks for speaking with ${agentName}.</p>
+          <p>Was this helpful?</p>
+          <div class="av-feedback" role="group" aria-label="Rate this conversation">
+            <button id="av-feedback-up" aria-label="Helpful" aria-pressed="false">👍</button>
+            <button id="av-feedback-down" aria-label="Not helpful" aria-pressed="false">👎</button>
+          </div>
+          <div class="av-complete-actions">
+            <button id="av-copy-transcript" class="av-complete-action">${COPY_ICON} Copy transcript</button>
+            ${ctaLabel && ctaUrl ? `<a id="av-post-cta" class="av-complete-action av-cta" href="${ctaUrl}" target="_blank" rel="noopener">${ctaLabel} ${ARROW_ICON}</a>` : ''}
+            <button id="av-new-conversation" class="av-complete-action">Start another conversation</button>
+          </div>
+          <span id="av-copy-status" class="av-visually-hidden" role="status" aria-live="polite"></span>
+        </div>
+
         <a class="av-branding" href="https://www.vistrowvoice.com" target="_blank" rel="noopener">Powered by Vistrow Voice</a>
       </div>
 
-      <button id="av-button" class="av-button" aria-label="${label}">
+      <button id="av-button" class="av-button" aria-label="${label}" aria-haspopup="dialog" aria-expanded="false">
         ${avatarTag()}
       </button>
     </div>
@@ -333,6 +425,10 @@ function init(): void {
   const greetingClose = shadow.getElementById('av-greeting-close') as HTMLButtonElement
   const panel = shadow.getElementById('av-panel') as HTMLDivElement
   const closeBtn = shadow.getElementById('av-close') as HTMLButtonElement
+  const welcomeEl = shadow.getElementById('av-welcome') as HTMLDivElement
+  const welcomeAvatarEl = shadow.getElementById('av-welcome-avatar') as HTMLDivElement
+  const chooseVoiceBtn = shadow.getElementById('av-choose-voice') as HTMLButtonElement
+  const chooseChatBtn = shadow.getElementById('av-choose-chat') as HTMLButtonElement
 
   const formEl = shadow.getElementById('av-form') as HTMLDivElement
   const nameFieldEl = shadow.getElementById('av-name-field') as HTMLDivElement
@@ -368,6 +464,14 @@ function init(): void {
   const typeRow = shadow.getElementById('av-type-row') as HTMLDivElement
   const typeInput = shadow.getElementById('av-type-input') as HTMLInputElement
   const typeSendBtn = shadow.getElementById('av-type-send') as HTMLButtonElement
+  const completeEl = shadow.getElementById('av-complete') as HTMLDivElement
+  const completeTitleEl = shadow.getElementById('av-complete-title') as HTMLHeadingElement
+  const completeSummaryEl = shadow.getElementById('av-complete-summary') as HTMLParagraphElement
+  const feedbackUpBtn = shadow.getElementById('av-feedback-up') as HTMLButtonElement
+  const feedbackDownBtn = shadow.getElementById('av-feedback-down') as HTMLButtonElement
+  const copyTranscriptBtn = shadow.getElementById('av-copy-transcript') as HTMLButtonElement
+  const copyStatusEl = shadow.getElementById('av-copy-status') as HTMLSpanElement
+  const newConversationBtn = shadow.getElementById('av-new-conversation') as HTMLButtonElement
   // Set via textContent, never interpolated into the HTML template string -
   // this value can come from a customer's own dashboard/WordPress settings,
   // so it must never be trusted as markup.
@@ -403,6 +507,7 @@ function init(): void {
           avatar?: string
           greeting?: string
           position?: string
+          mode?: string
           askName?: boolean
           requireName?: boolean
           askPhone?: boolean
@@ -416,10 +521,7 @@ function init(): void {
           avatarKey = data.avatar
           button.innerHTML = avatarTag()
           titleAvatarEl.innerHTML = avatarTag()
-          if (orbEl) {
-            orbEl.innerHTML = avatarTag('av-orb-video')
-            orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement | HTMLImageElement | null
-          }
+          welcomeAvatarEl.innerHTML = avatarTag()
         }
         if (typeof data.greeting === 'string' && data.greeting !== customGreeting) {
           customGreeting = data.greeting
@@ -429,6 +531,10 @@ function init(): void {
           position = data.position
           if (position === 'bottom-left') host.dataset.side = 'left'
           else delete host.dataset.side
+        }
+        if (data.mode === 'voice' || data.mode === 'chat' || data.mode === 'both') {
+          widgetMode = data.mode
+          if (widgetMode === 'chat') selectedExperience = 'chat'
         }
         if (typeof data.askName === 'boolean') askName = data.askName
         if (typeof data.requireName === 'boolean') requireName = askName && data.requireName
@@ -455,6 +561,9 @@ function init(): void {
   // instead of creating a fresh one, shaving the agent's cold-start wait off
   // the time the visitor spends filling in name/phone/email.
   let warmRoom: string | null = null
+  let selectedExperience: 'voice' | 'chat' = widgetMode === 'chat' ? 'chat' : 'voice'
+  let callStartedAt = 0
+  let callCompleted = false
 
   // Hard cap on call length — every minute of every call costs real STT/LLM/
   // TTS spend, so an unattended or forgotten tab shouldn't run indefinitely.
@@ -464,9 +573,19 @@ function init(): void {
 
   // A quiet greeting bubble after a few seconds does more to earn a click
   // than a button alone — dismissible, and only shown once per page load.
+  const greetingStorageKey = `vistrow-widget-greeting-${siteKey}`
+  function greetingWasDismissed(): boolean {
+    try { return sessionStorage.getItem(greetingStorageKey) === 'dismissed' } catch { return false }
+  }
+  function rememberGreetingDismissal(): void {
+    try { sessionStorage.setItem(greetingStorageKey, 'dismissed') } catch { /* storage may be blocked */ }
+  }
   const greetingTimer = window.setTimeout(() => {
-    greeting.style.display = 'flex'
-  }, 4000)
+    if (!greetingWasDismissed()) {
+      greeting.style.display = 'flex'
+      trackEvent('greeting_shown')
+    }
+  }, 2800)
 
   function hideGreeting(): void {
     window.clearTimeout(greetingTimer)
@@ -593,15 +712,41 @@ function init(): void {
   // toggled via inline display - this just hides the other two before
   // whichever show*() function reveals its own.
   function hideAllPanelViews(): void {
+    welcomeEl.style.display = 'none'
     formEl.style.display = 'none'
     chatEl.style.display = 'none'
     callEl.style.display = 'none'
+    completeEl.style.display = 'none'
   }
 
   function openPanel(): void {
     hideGreeting()
     panel.style.display = 'flex'
     button.style.display = 'none'
+    button.setAttribute('aria-expanded', 'true')
+  }
+
+  function showWelcome(): void {
+    hideAllPanelViews()
+    openPanel()
+    welcomeEl.style.display = 'flex'
+    chooseVoiceBtn.style.display = widgetMode === 'chat' ? 'none' : 'flex'
+    chooseChatBtn.style.display = widgetMode === 'voice' ? 'none' : 'flex'
+    trackEvent('open')
+    if (widgetMode !== 'chat') warmAgent()
+    window.setTimeout(() => (widgetMode === 'chat' ? chooseChatBtn : chooseVoiceBtn).focus(), 0)
+  }
+
+  function continueWith(experience: 'voice' | 'chat'): void {
+    selectedExperience = experience
+    trackEvent('experience_selected', { experience })
+    if (skipPreCallForm()) {
+      if (experience === 'chat') showChat()
+      else void startCall('', '', '')
+      return
+    }
+    showForm()
+    submitBtn.textContent = experience === 'chat' ? `Chat with ${agentName}` : `Talk to ${agentName}`
   }
 
   function showForm(): void {
@@ -627,6 +772,7 @@ function init(): void {
     openPanel()
     chatEl.style.display = 'flex'
     chatInput.focus()
+    trackEvent('chat_opened')
     // Opens with a greeting bubble from Artha's side instead of a blank
     // history - only the first time per visit, so re-opening after closing
     // resumes the conversation instead of re-greeting.
@@ -643,25 +789,11 @@ function init(): void {
     }
   }
 
-  // The pre-call form always comes first, for every mode - it's the one
-  // lead-capture moment this widget gets, chat included. What happens
-  // after depends on widgetMode: 'voice' starts the call, 'chat' opens
-  // the chat, 'both' asks which one now that name/phone are already in
-  // hand.
+  // The launcher opens a low-friction welcome screen first. The configured
+  // lead form, when enabled, follows only after the visitor chooses voice
+  // or chat so the microphone is never requested as a surprise.
   function handleButtonClick(): void {
-    if (skipPreCallForm()) {
-      // Neither name nor phone is configured to be asked for - skip the
-      // form entirely instead of showing one with nothing left to fill in.
-      hideGreeting()
-      openPanel()
-      if (widgetMode === 'chat') {
-        showChat()
-      } else {
-        void startCall('', '', '')
-      }
-      return
-    }
-    showForm()
+    showWelcome()
   }
 
   interface ChatTurn {
@@ -699,6 +831,7 @@ function init(): void {
     const text = chatInput.value.trim()
     if (!text || chatSending) return
     chatInput.value = ''
+    trackEvent('chat_message_sent')
     appendChatBubble(text, 'user')
     const priorHistory = [...chatHistory]
     chatHistory.push({ role: 'user', content: text })
@@ -752,6 +885,53 @@ function init(): void {
     typeInput.value = ''
     panel.style.display = 'none'
     button.style.display = 'flex'
+    button.setAttribute('aria-expanded', 'false')
+    button.focus()
+  }
+
+  function cleanupCallState(): void {
+    clearAgentJoinWatchdog()
+    if (room) {
+      suppressDisconnect = true
+      room.disconnect()
+    }
+    stopVolumeReactivity?.()
+    stopVolumeReactivity = null
+    stopCountdown()
+    stopPresencePing()
+    room = null
+    micEnabled = true
+    muteBtn.innerHTML = MIC_ICON
+    speakerMuted = false
+    audioEl.muted = false
+    speakerBtn.innerHTML = SPEAKER_ICON
+    typeRow.style.display = 'none'
+    typeInput.value = ''
+  }
+
+  function transcriptText(): string {
+    if (selectedExperience === 'chat') {
+      return chatHistory.map((turn) => `${turn.role === 'user' ? 'You' : agentName}: ${turn.content}`).join('\n')
+    }
+    return Array.from(transcriptEl.querySelectorAll<HTMLDivElement>('.av-bubble'))
+      .map((bubble) => `${bubble.classList.contains('av-bubble-local') ? 'You' : agentName}: ${bubble.textContent || ''}`)
+      .join('\n')
+  }
+
+  function showComplete(message = `Thanks for speaking with ${agentName}.`, successful = true): void {
+    cleanupCallState()
+    hideAllPanelViews()
+    openPanel()
+    completeEl.style.display = 'flex'
+    completeTitleEl.textContent = successful ? 'Conversation complete' : 'Couldn’t connect'
+    const seconds = callStartedAt ? Math.max(1, Math.round((Date.now() - callStartedAt) / 1000)) : 0
+    completeSummaryEl.textContent = successful && seconds ? `${message} Your conversation lasted ${seconds < 60 ? `${seconds} seconds` : `${Math.floor(seconds / 60)} min ${seconds % 60} sec`}.` : message
+    const hasTranscript = transcriptText().length > 0
+    copyTranscriptBtn.style.display = hasTranscript ? 'flex' : 'none'
+    feedbackUpBtn.parentElement!.style.display = successful ? 'flex' : 'none'
+    feedbackUpBtn.parentElement!.previousElementSibling?.setAttribute('style', successful ? '' : 'display:none')
+    trackEvent(successful ? 'conversation_completed' : 'call_failed', { duration_seconds: seconds, has_transcript: hasTranscript })
+    window.setTimeout(() => newConversationBtn.focus(), 0)
   }
 
   // Shows the error in the call panel and leaves it open for a few seconds
@@ -760,8 +940,7 @@ function init(): void {
   // shuts down instantly, never says anything," with zero chance to read
   // why. The visitor can still close it early via the X.
   function failCall(message: string): void {
-    setStatus(message)
-    window.setTimeout(resetToIdle, 4000)
+    showComplete(message, false)
   }
 
   // Same "leave the message visible for a beat" shape as failCall, but for a
@@ -770,8 +949,8 @@ function init(): void {
   // which used to be indistinguishable from a real dropped connection and
   // showed a scary "ended unexpectedly" error after every clean call.
   function endCallGracefully(message: string): void {
-    setStatus(message)
-    window.setTimeout(resetToIdle, 3000)
+    callCompleted = true
+    showComplete(message, true)
   }
 
   let intentionalEnd = false
@@ -792,8 +971,12 @@ function init(): void {
   function endCall(): void {
     intentionalEnd = true
     clearAgentJoinWatchdog()
+    suppressDisconnect = true
     room?.disconnect()
-    resetToIdle()
+    if (!callCompleted) {
+      callCompleted = true
+      showComplete(`Thanks for speaking with ${agentName}.`, true)
+    }
   }
 
   function toggleMute(): void {
@@ -891,7 +1074,22 @@ function init(): void {
   // script initializes). Lets the host site's own Tag Manager container
   // fire a Google Ads conversion tag off a Custom Event trigger without any
   // code changes on their side.
-  function pushGtmEvent(name: string, phone: string, email: string): void {
+  function trackEvent(action: string, details: Record<string, string | number | boolean> = {}): void {
+    try {
+      const w = window as unknown as { dataLayer?: unknown[] }
+      w.dataLayer = w.dataLayer || []
+      w.dataLayer.push({
+        event: 'vistrow_widget_event',
+        vistrow_widget_action: action,
+        vistrow_widget_mode: selectedExperience,
+        ...details,
+      })
+    } catch (err) {
+      console.warn('[Vistrow Voice widget] GTM dataLayer push failed:', err)
+    }
+  }
+
+  function pushLeadEvent(name: string, phone: string, email: string): void {
     try {
       const w = window as unknown as { dataLayer?: unknown[] }
       w.dataLayer = w.dataLayer || []
@@ -902,12 +1100,14 @@ function init(): void {
         vistrow_lead_email: email,
       })
     } catch (err) {
-      console.warn('[Vistrow Voice widget] GTM dataLayer push failed:', err)
+      console.warn('[Vistrow Voice widget] lead event push failed:', err)
     }
   }
 
   async function startCall(name: string, phone: string, email: string, attempt = 0): Promise<void> {
     intentionalEnd = false
+    callCompleted = false
+    if (attempt === 0) callStartedAt = Date.now()
     formEl.style.display = 'none'
     callEl.style.display = 'flex'
     // Every call shows the type-instead box right alongside mic/end-call
@@ -919,9 +1119,13 @@ function init(): void {
     resetTranscript()
 
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true })
+      trackEvent('microphone_requested')
+      const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      permissionStream.getTracks().forEach((track) => track.stop())
+      trackEvent('microphone_granted')
     } catch (err) {
       console.error('[Vistrow Voice widget] microphone permission error:', err)
+      trackEvent('microphone_denied')
       failCall('Microphone access was blocked — allow it in your browser and try again.')
       return
     }
@@ -950,7 +1154,10 @@ function init(): void {
     // invalid or incomplete submit. This is the real "form submission
     // succeeded" moment for ads conversion tracking. Skipped on the
     // watchdog's automatic retry so one visitor never counts twice.
-    if (attempt === 0) pushGtmEvent(name, phone, email)
+    if (attempt === 0) {
+      pushLeadEvent(name, phone, email)
+      trackEvent('call_started')
+    }
 
     try {
       room = new Room()
@@ -963,6 +1170,7 @@ function init(): void {
       room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
         clearAgentJoinWatchdog()
         setStatus('Agent joined — say hello!')
+        trackEvent('agent_joined')
         applyAgentState(participant.attributes?.['lk.agent.state'])
       })
       room.on(RoomEvent.ParticipantAttributesChanged, (changed: Record<string, string>) => {
@@ -990,6 +1198,7 @@ function init(): void {
       })
 
       await room.connect(url, token)
+      trackEvent('call_connected')
       await room.localParticipant.setMicrophoneEnabled(true)
       // The agent usually joins the pre-created room BEFORE the visitor's
       // browser finishes connecting — ParticipantConnected never fires for
@@ -997,6 +1206,7 @@ function init(): void {
       // stayed stuck on "Waiting for the agent to join…" for the whole call.
       if (room.remoteParticipants.size > 0) {
         setStatus('Agent joined — say hello!')
+        trackEvent('agent_joined')
         room.remoteParticipants.forEach((p: RemoteParticipant) => {
           applyAgentState(p.attributes?.['lk.agent.state'])
         })
@@ -1057,24 +1267,29 @@ function init(): void {
       return
     }
     formError.textContent = ''
-    if (widgetMode === 'chat') {
+    if (selectedExperience === 'chat') {
       showChat(name, phone, email)
     } else {
-      // 'voice' and 'both' both start the call directly - 'both' adds an
-      // in-call "type instead" fallback (see the av-controls wiring below)
-      // rather than asking the visitor to choose a mode up front.
+      // Voice also keeps the in-call "type instead" fallback visible, so a
+      // noisy room or accessibility need never forces the visitor to restart.
       void startCall(name, phone, email)
     }
   }
 
   button.addEventListener('click', handleButtonClick)
   greeting.addEventListener('click', handleButtonClick)
+  chooseVoiceBtn.addEventListener('click', () => continueWith('voice'))
+  chooseChatBtn.addEventListener('click', () => continueWith('chat'))
   greetingClose.addEventListener('click', (e) => {
     e.stopPropagation()
+    rememberGreetingDismissal()
+    trackEvent('greeting_dismissed')
     hideGreeting()
   })
   closeBtn.addEventListener('click', () => {
-    room ? endCall() : resetToIdle()
+    if (room) endCall()
+    else if (chatHistory.length > 1) showComplete(`Thanks for chatting with ${agentName}.`, true)
+    else resetToIdle()
   })
   submitBtn.addEventListener('click', submitForm)
   phoneInput.addEventListener('keydown', (e) => {
@@ -1096,6 +1311,48 @@ function init(): void {
   })
   typeInput.addEventListener('focus', startPresencePing)
   typeInput.addEventListener('blur', stopPresencePing)
+  feedbackUpBtn.addEventListener('click', () => {
+    feedbackUpBtn.setAttribute('aria-pressed', 'true')
+    feedbackDownBtn.setAttribute('aria-pressed', 'false')
+    trackEvent('feedback_submitted', { rating: 'helpful' })
+  })
+  feedbackDownBtn.addEventListener('click', () => {
+    feedbackDownBtn.setAttribute('aria-pressed', 'true')
+    feedbackUpBtn.setAttribute('aria-pressed', 'false')
+    trackEvent('feedback_submitted', { rating: 'not_helpful' })
+  })
+  copyTranscriptBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(transcriptText())
+      copyTranscriptBtn.textContent = 'Transcript copied'
+      copyStatusEl.textContent = 'Transcript copied to clipboard'
+      trackEvent('transcript_copied')
+      window.setTimeout(() => {
+        copyTranscriptBtn.innerHTML = `${COPY_ICON} Copy transcript`
+      }, 1800)
+    } catch {
+      copyStatusEl.textContent = 'Could not copy the transcript'
+    }
+  })
+  newConversationBtn.addEventListener('click', () => {
+    feedbackUpBtn.setAttribute('aria-pressed', 'false')
+    feedbackDownBtn.setAttribute('aria-pressed', 'false')
+    callStartedAt = 0
+    if (selectedExperience === 'chat') {
+      chatHistory.splice(0)
+      chatMessagesEl.innerHTML = '<p class="av-transcript-empty">Ask anything - no call, just type.</p>'
+      chatOpened = false
+      chatSessionId = null
+      chatStartedAt = null
+    }
+    showWelcome()
+  })
+  shadow.getElementById('av-post-cta')?.addEventListener('click', () => trackEvent('post_call_cta_clicked'))
+  shadow.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !room) resetToIdle()
+  })
+  window.addEventListener('scroll', hideGreeting, { once: true, passive: true })
+  trackEvent('loaded')
 }
 
 init()
