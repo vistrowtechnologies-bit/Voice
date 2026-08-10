@@ -933,6 +933,17 @@ def create_account_with_owner(
                     provision_account_defaults(conn, account_id)
             else:
                 provision_account_defaults(conn, account_id)
+                # New tenants default onto the Railway-native orchestrator
+                # pipeline for phone calls rather than LiveKit's SIP bridge
+                # - account_id == 1 (above) is Vistrow's own legacy/first
+                # account and is migrated onto it explicitly instead, not
+                # defaulted here, since it already has real phone numbers
+                # and campaigns depending on today's behavior.
+                conn.execute(
+                    "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
+                    "ON CONFLICT (account_id, key) DO NOTHING",
+                    (account_id, _ORCHESTRATOR_PIPELINE_KEY, "1"),
+                )
             return {"account_id": account_id, "user_id": user_id}
     finally:
         conn.close()
@@ -4105,6 +4116,23 @@ def set_setting(key: str, value: str, account_id: int) -> None:
             )
     finally:
         conn.close()
+
+
+_ORCHESTRATOR_PIPELINE_KEY = "orchestrator_pipeline"
+
+
+def is_on_orchestrator_pipeline(account_id: int) -> bool:
+    """Whether this account's phone calls (inbound events, outbound test
+    calls, campaign dials) route through the Railway-native orchestrator
+    instead of the LiveKit SIP bridge. Replaces the old single-account
+    ORCHESTRATOR_TEST_ACCOUNT_ID env var gate — orchestrator/db.py has the
+    identical function reading the same settings key, since both services
+    share one Postgres database."""
+    return get_setting(_ORCHESTRATOR_PIPELINE_KEY, account_id) == "1"
+
+
+def set_orchestrator_pipeline(account_id: int, enabled: bool) -> None:
+    set_setting(_ORCHESTRATOR_PIPELINE_KEY, "1" if enabled else "0", account_id)
 
 
 # ------------------------------------------------------------- compliance

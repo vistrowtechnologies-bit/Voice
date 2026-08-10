@@ -1859,16 +1859,14 @@ def telephony_test_call(data: dict = Body(...), user: dict = Depends(current_use
         raise HTTPException(400, "Both a from (virtual) number and a to number are required")
 
     orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
-    orchestrator_test_account_id = os.environ.get("ORCHESTRATOR_TEST_ACCOUNT_ID")
-    if orchestrator_url and orchestrator_test_account_id and str(user["account_id"]) == orchestrator_test_account_id:
+    if orchestrator_url and calls_db.is_on_orchestrator_pipeline(user["account_id"]):
         # This account is on the Railway-native pipeline (orchestrator/) —
         # EnableX WebSocket streaming, no LiveKit SIP bridge involved. Every
-        # other account still goes through place_test_call() below until the
-        # full multi-tenant cutover (Phase 4 of the LiveKit-removal plan).
+        # other account still goes through place_test_call() below.
         try:
             request = urllib.request.Request(
                 f"{orchestrator_url.rstrip('/')}/telephony/enablex/outbound-test-call",
-                data=json.dumps({"to": to_number}).encode(),
+                data=json.dumps({"to": to_number, "fromNumber": from_number, "accountId": user["account_id"]}).encode(),
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
@@ -1886,16 +1884,15 @@ def orchestrator_browser_token(data: dict = Body(...), user: dict = Depends(curr
     """Mints a browser-streaming token for the dashboard's own agent-test
     mic button (AgentTestCall.tsx's BrowserTestModal) against the
     Railway-native orchestrator, instead of a LiveKit room token. Gated to
-    the same one proven account as /telephony/test-call above — this isn't
-    a general multi-tenant route yet, just the one account currently on the
-    orchestrator pipeline (Phase 3 of the LiveKit-removal plan)."""
+    whichever accounts are actually on the orchestrator pipeline (see
+    calls_db.is_on_orchestrator_pipeline) — every other account falls
+    through to the LiveKit room flow in BrowserTestModal instead."""
     agent_id = data.get("agentId")
     if not agent_id:
         raise HTTPException(400, "agentId is required")
 
     orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
-    orchestrator_test_account_id = os.environ.get("ORCHESTRATOR_TEST_ACCOUNT_ID")
-    if not (orchestrator_url and orchestrator_test_account_id and str(user["account_id"]) == orchestrator_test_account_id):
+    if not (orchestrator_url and calls_db.is_on_orchestrator_pipeline(user["account_id"])):
         raise HTTPException(400, "This account isn't on the orchestrator pipeline yet.")
 
     try:
@@ -1935,13 +1932,14 @@ async def enablex_inbound_event(request: Request) -> dict:
     leg and bridge it to LiveKit's SIP host for the dialed number, so the
     same agent that powers browser calls handles the phone call — the
     LiveKit inbound trunk + per-number dispatch rule route it into a room
-    with the right agent auto-dispatched. EXCEPT for the one account on the
-    Railway-native orchestrator pipeline (ORCHESTRATOR_TEST_ACCOUNT_ID, same
-    gate /telephony/test-call uses) — every event for that account's number
-    is proxied to the orchestrator's own inbound-event handler instead,
-    which runs its own accept/connected/stream lifecycle. This keeps ONE
-    stable EnableX portal webhook URL regardless of which pipeline an
-    account is on, rather than requiring a portal change per migration.
+    with the right agent auto-dispatched. EXCEPT for accounts on the
+    Railway-native orchestrator pipeline (calls_db.is_on_orchestrator_pipeline,
+    same gate /telephony/test-call uses) — every event for one of those
+    accounts' numbers is proxied to the orchestrator's own inbound-event
+    handler instead, which runs its own accept/connected/stream lifecycle.
+    This keeps ONE stable EnableX portal webhook URL regardless of which
+    pipeline an account is on, rather than requiring a portal change per
+    migration.
 
     EnableX expects a 200 quickly; we respond immediately and only act on the
     'incomingcall' state (for the LiveKit path). (Encrypted webhook payloads
@@ -1984,12 +1982,7 @@ async def enablex_inbound_event(request: Request) -> dict:
         number_row = calls_db.get_phone_number_by_number(dialed_number)
         if number_row is not None:
             orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
-            orchestrator_test_account_id = os.environ.get("ORCHESTRATOR_TEST_ACCOUNT_ID")
-            if (
-                orchestrator_url
-                and orchestrator_test_account_id
-                and str(number_row["accountId"]) == orchestrator_test_account_id
-            ):
+            if orchestrator_url and calls_db.is_on_orchestrator_pipeline(number_row["accountId"]):
                 try:
                     request = urllib.request.Request(
                         f"{orchestrator_url.rstrip('/')}/telephony/enablex/inbound-event",

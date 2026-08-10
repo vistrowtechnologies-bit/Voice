@@ -111,10 +111,14 @@ _BARGE_IN_GRACE_MS = 500
 # voice_id -> account_id, populated on `incomingcall` so the `connected`
 # event (which doesn't repeat the dialed number reliably enough to re-derive
 # this) knows which tenant's EnableX credentials to use. Single-instance,
-# in-memory — fine for a one-test-number Phase 2 deployment; Phase 4's real
-# multi-tenant routing will need this to be durable (Postgres-backed) since
-# it'll run across multiple replicas.
+# in-memory — fine as long as this service runs as one Railway replica (not
+# horizontally scaled); revisit as Postgres-backed if that ever changes.
 _PENDING_ACCOUNT_BY_VOICE_ID: dict[str, int] = {}
+# voice_id -> agent_id, populated alongside _PENDING_ACCOUNT_BY_VOICE_ID on
+# both the inbound (real phone-number lookup) and outbound (explicit
+# agentId in the request) paths, so the `connected` handler builds the
+# session for the right dashboard agent instead of always TEST_AGENT_ID.
+_PENDING_AGENT_BY_VOICE_ID: dict[str, int] = {}
 
 # voice_id -> (Session, greeting-synthesis Task) — started the moment the
 # `connected` webhook fires, running concurrently with start_stream()'s
@@ -129,15 +133,26 @@ _PENDING_GREETING_BY_VOICE_ID: dict[str, tuple[session_module.Session, asyncio.T
 
 def _build_session_for_test_call(
     call_type: str = "phone",
+    account_id: int | None = None,
+    agent_id: int | None = None,
     contact_name: str = "",
     contact_phone: str = "",
     contact_company: str = "",
     contact_custom_fields: str = "{}",
 ) -> session_module.Session:
-    """Loads TEST_AGENT_ID's dashboard config into a fresh Session — same
-    per-call config lookup agent/main.py did via db.get_agent_config."""
+    """Loads agent_id's dashboard config into a fresh Session, defaulting to
+    the feature-flagged TEST_ACCOUNT_ID/TEST_AGENT_ID when the caller
+    (inbound number lookup, or an explicit outbound-call request) doesn't
+    supply real ones — keeps the original single-test-account behavior
+    working unchanged for callers that never pass these."""
     return _build_session(
-        TEST_ACCOUNT_ID, TEST_AGENT_ID, call_type, contact_name, contact_phone, contact_company, contact_custom_fields
+        account_id or TEST_ACCOUNT_ID,
+        agent_id or TEST_AGENT_ID,
+        call_type,
+        contact_name,
+        contact_phone,
+        contact_company,
+        contact_custom_fields,
     )
 
 
@@ -192,36 +207,52 @@ def _build_session(
 
 @app.post("/telephony/enablex/outbound-test-call")
 async def enablex_outbound_test_call(body: dict = Body(...)) -> dict:
-    """Places an outbound call from TEST_PHONE_NUMBER to `to` using the
-    same feature-flagged test account/agent as the inbound path. Streaming
-    starts on the `connected` webhook event, same as inbound — see
-    enablex.place_outbound_call's docstring.
+    """Places an outbound call from fromNumber/TEST_PHONE_NUMBER to `to`.
+    Streaming starts on the `connected` webhook event, same as inbound —
+    see enablex.place_outbound_call's docstring.
 
     Also the endpoint server/campaign_dialer.py proxies to for any campaign
-    whose account is on this pipeline (ORCHESTRATOR_TEST_ACCOUNT_ID) instead
-    of calling calls_db.place_test_call's LiveKit-bridge path directly - the
-    optional contact* fields are what let a campaign call personalize the
-    greeting the same way that path always did.
+    whose account is on this pipeline (db.is_on_orchestrator_pipeline)
+    instead of calling calls_db.place_test_call's LiveKit-bridge path
+    directly - fromNumber/accountId/agentId let it (and the dashboard's own
+    per-tenant test-call button) dial as a real tenant instead of always
+    the single feature-flagged test account; omitting them keeps the
+    original single-test-account behavior for any caller that doesn't pass
+    them. The optional contact* fields personalize the greeting the same
+    way calls_db.place_test_call's contact_name/contact_company always did.
     """
     to_number = body.get("to")
+    from_number = body.get("fromNumber") or TEST_PHONE_NUMBER
+    account_id = body.get("accountId") or TEST_ACCOUNT_ID
+    agent_id = body.get("agentId")
+    if not agent_id and from_number:
+        # Caller (e.g. the dashboard's own "test call" button) knows which
+        # virtual number to dial from but not necessarily which dashboard
+        # agent owns it — resolve it the same way a real inbound call would,
+        # instead of requiring every outbound caller to look this up itself.
+        number_row = db.get_phone_number_by_number(from_number)
+        if number_row:
+            agent_id = number_row.get("agent_id")
+    agent_id = agent_id or TEST_AGENT_ID
     contact_name = (body.get("contactName") or "").strip()
     contact_company = (body.get("contactCompany") or "").strip()
     contact_custom_fields = body.get("contactCustomFields") or "{}"
     if not to_number:
         return {"ok": False, "error": "Missing 'to' in request body."}
-    if not TEST_ACCOUNT_ID or not TEST_PHONE_NUMBER:
-        return {"ok": False, "error": "TEST_ACCOUNT_ID/TEST_PHONE_NUMBER not configured."}
+    if not account_id or not from_number:
+        return {"ok": False, "error": "accountId/fromNumber not configured."}
     base = enablex.public_base_url()
     if not base:
         return {"ok": False, "error": "PUBLIC_BASE_URL/RAILWAY_PUBLIC_DOMAIN not set."}
     event_url = f"{base}/telephony/enablex/inbound-event"
-    result = await enablex.place_outbound_call(TEST_PHONE_NUMBER, to_number, TEST_ACCOUNT_ID, event_url)
+    result = await enablex.place_outbound_call(from_number, to_number, account_id, event_url)
     if not result.get("ok"):
         logger.warning("place_outbound_call failed: %s", result.get("error"))
         return result
     voice_id = (result.get("response") or {}).get("voice_id")
     if voice_id:
-        _PENDING_ACCOUNT_BY_VOICE_ID[voice_id] = TEST_ACCOUNT_ID
+        _PENDING_ACCOUNT_BY_VOICE_ID[voice_id] = account_id
+        _PENDING_AGENT_BY_VOICE_ID[voice_id] = agent_id
         # Build the session (incl. the DB round-trip for agent config) and
         # kick off greeting TTS right now, overlapping with the destination
         # phone actually ringing — previously this only started once
@@ -229,6 +260,8 @@ async def enablex_outbound_test_call(body: dict = Body(...)) -> dict:
         # top of it instead of hidden behind it. The "connected" handler
         # below reuses this instead of rebuilding when it's already here.
         sess = _build_session_for_test_call(
+            account_id=account_id,
+            agent_id=agent_id,
             contact_name=contact_name,
             contact_phone=to_number,
             contact_company=contact_company,
@@ -253,22 +286,33 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     )
 
     if state == "incomingcall":
-        # Digit-only comparison — EnableX's own docs/examples are inconsistent
-        # about whether "to" carries a leading "+" (the LiveKit-path SIP gate
-        # this replaced turned out to be "+"-agnostic too, see livekit_sip.py),
-        # so a strict string match risks silently ignoring every real inbound
-        # call the moment EnableX sends one format and TEST_PHONE_NUMBER is
-        # configured in the other.
-        dialed_digits = "".join(c for c in (dialed_number or "") if c.isdigit())
-        test_digits = "".join(c for c in TEST_PHONE_NUMBER if c.isdigit())
-        if not test_digits or dialed_digits != test_digits:
-            logger.info("ignoring call to %s — not the flagged Phase 2 test number", dialed_number)
+        # Real per-tenant routing: whichever account registered this exact
+        # number (any digit format - db.get_phone_number_by_number
+        # normalizes the lookup, same fix already applied here once before
+        # for the single-test-number comparison this replaces) owns the
+        # call. Falls back to the single feature-flagged test number only
+        # if it isn't found in phone_numbers at all, so the original
+        # Phase 2 test account keeps working even before it's ever been
+        # registered as a real phone_numbers row.
+        number_row = db.get_phone_number_by_number(dialed_number or "")
+        if number_row is None:
+            dialed_digits = "".join(c for c in (dialed_number or "") if c.isdigit())
+            test_digits = "".join(c for c in TEST_PHONE_NUMBER if c.isdigit())
+            if not test_digits or dialed_digits != test_digits:
+                logger.info("ignoring call to %s — no registered tenant number", dialed_number)
+                return {"ok": True}
+            account_id, agent_id = TEST_ACCOUNT_ID, TEST_AGENT_ID
+        else:
+            account_id, agent_id = number_row["account_id"], number_row["agent_id"]
+        if not account_id:
+            logger.warning("no account_id resolved for call to %s — cannot accept", dialed_number)
             return {"ok": True}
-        if not TEST_ACCOUNT_ID:
-            logger.warning("TEST_ACCOUNT_ID not configured — cannot accept call")
+        if not db.is_on_orchestrator_pipeline(account_id) and account_id != TEST_ACCOUNT_ID:
+            logger.info("account %s not on orchestrator pipeline — ignoring call to %s", account_id, dialed_number)
             return {"ok": True}
-        _PENDING_ACCOUNT_BY_VOICE_ID[voice_id] = TEST_ACCOUNT_ID
-        result = await enablex.accept_call(voice_id, TEST_ACCOUNT_ID)
+        _PENDING_ACCOUNT_BY_VOICE_ID[voice_id] = account_id
+        _PENDING_AGENT_BY_VOICE_ID[voice_id] = agent_id
+        result = await enablex.accept_call(voice_id, account_id)
         if not result.get("ok"):
             logger.warning("accept_call failed: %s", result.get("error"))
         return {"ok": True}
@@ -283,8 +327,10 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
             return {"ok": True}
         if voice_id not in _PENDING_GREETING_BY_VOICE_ID:
             # Inbound calls (or an outbound call whose pre-build above never
-            # ran) don't have a session yet — build it now same as before.
-            sess = _build_session_for_test_call()
+            # ran) don't have a session yet — build it now, for the actual
+            # resolved tenant/agent rather than always the test account.
+            agent_id = _PENDING_AGENT_BY_VOICE_ID.get(voice_id)
+            sess = _build_session_for_test_call(account_id=account_id, agent_id=agent_id)
             _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
                 sess,
                 asyncio.create_task(session_module.build_greeting_audio(sess)),
@@ -299,6 +345,7 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
 
     if state in ("disconnected", "stream_stopped", "stream_failed"):
         _PENDING_ACCOUNT_BY_VOICE_ID.pop(voice_id, None)
+        _PENDING_AGENT_BY_VOICE_ID.pop(voice_id, None)
         _pop_pending_greeting(voice_id)
         return {"ok": True}
 
@@ -540,6 +587,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
             if key:
                 db.set_call_recording(call_id, key)
         _PENDING_ACCOUNT_BY_VOICE_ID.pop(voice_id, None)
+        _PENDING_AGENT_BY_VOICE_ID.pop(voice_id, None)
         logger.info("call finalized: voice_id=%s call_id=%s", voice_id, call_id)
 
 

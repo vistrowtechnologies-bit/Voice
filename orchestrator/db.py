@@ -227,6 +227,61 @@ def get_enablex_credentials(account_id: int) -> tuple[str | None, str | None]:
         conn.close()
 
 
+def _normalize_sip_number(number: str) -> str:
+    """Same canonical form as server/calls_db.py's _normalize_sip_number
+    (phone_numbers.number is stored in this shape by that module - this
+    just needs to match it on lookup, not write it)."""
+    digits = "".join(c for c in (number or "") if c.isdigit())
+    if not digits:
+        return (number or "").strip()
+    if len(digits) == 10:
+        digits = "91" + digits
+    elif digits.startswith("0") and len(digits) == 11:
+        digits = "91" + digits[1:]
+    return "+" + digits
+
+
+def get_phone_number_by_number(number: str) -> dict | None:
+    """account_id + agent_id for a registered inbound number - unscoped by
+    design, same as server/calls_db.py's counterpart, since the dialed
+    number itself is what identifies the tenant on an inbound webhook with
+    no dashboard session. Real multi-tenant routing for the orchestrator
+    pipeline: previously every inbound call was matched against one
+    hardcoded TEST_PHONE_NUMBER env var; this looks up whichever tenant
+    actually owns the dialed number."""
+    conn = dbconn.connect()
+    try:
+        row = conn.execute(
+            "SELECT account_id, agent_id FROM phone_numbers WHERE number = ?",
+            (_normalize_sip_number(number),),
+        ).fetchone()
+        return dict(row) if row else None
+    except psycopg.Error:
+        return None
+    finally:
+        conn.close()
+
+
+def is_on_orchestrator_pipeline(account_id: int) -> bool:
+    """Per-account flag (settings table, key 'orchestrator_pipeline') that
+    replaces the old single-account ORCHESTRATOR_TEST_ACCOUNT_ID env var
+    gate. New signups get this set to '1' at creation (see
+    server/calls_db.py's create_account_with_owner); existing accounts are
+    toggled by an admin. Missing/unreadable defaults to False - an account
+    never silently lands on the orchestrator without this being set."""
+    conn = dbconn.connect()
+    try:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE account_id = ? AND key = 'orchestrator_pipeline'",
+            (account_id,),
+        ).fetchone()
+        return bool(row) and row["value"] == "1"
+    except psycopg.Error:
+        return False
+    finally:
+        conn.close()
+
+
 def get_webhook_url() -> str | None:
     """URL of the connected CRM webhook integration, if any."""
     conn = dbconn.connect()

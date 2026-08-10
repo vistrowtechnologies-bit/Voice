@@ -32,12 +32,13 @@ import calls_db
 logger = logging.getLogger("vistrow-dialer")
 
 # Accounts on the Railway-native orchestrator pipeline (see
-# server/token_api.py's identical ORCHESTRATOR_TEST_ACCOUNT_ID gate on
-# /telephony/test-call and the inbound-event proxy) get their campaign dials
-# placed there too, instead of calls_db.place_test_call's LiveKit-SIP-bridge
-# path - discovered live when a campaign showed every contact as "Done" but
-# the calls that actually rang were dead air: "Done" only ever meant EnableX
-# accepted the dial request, never that the LiveKit bridge behind it worked.
+# calls_db.is_on_orchestrator_pipeline, the same per-account flag
+# server/token_api.py's /telephony/test-call and the inbound-event proxy
+# check) get their campaign dials placed there too, instead of
+# calls_db.place_test_call's LiveKit-SIP-bridge path - discovered live when
+# a campaign showed every contact as "Done" but the calls that actually
+# rang were dead air: "Done" only ever meant EnableX accepted the dial
+# request, never that the LiveKit bridge behind it worked.
 
 # How often the dialer wakes to place due calls. 15s keeps pacing gentle
 # (well under any sane per-minute dial rate) while still feeling responsive
@@ -49,17 +50,18 @@ _lock = threading.Lock()
 
 
 def _on_orchestrator_pipeline(account_id: int) -> bool:
-    orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
-    orchestrator_test_account_id = os.environ.get("ORCHESTRATOR_TEST_ACCOUNT_ID")
-    return bool(orchestrator_url and orchestrator_test_account_id and str(account_id) == orchestrator_test_account_id)
+    return bool(os.environ.get("ORCHESTRATOR_URL")) and calls_db.is_on_orchestrator_pipeline(account_id)
 
 
-def _place_via_orchestrator(to_number: str, contact: dict) -> dict:
+def _place_via_orchestrator(to_number: str, from_number: str, account_id: int, agent_id: int | None, contact: dict) -> dict:
     """Same shape of result as calls_db.place_test_call ({"ok": bool, ...})
     so _dial_one doesn't need to know which pipeline placed the call."""
     orchestrator_url = os.environ.get("ORCHESTRATOR_URL", "").rstrip("/")
     body = json.dumps({
         "to": to_number,
+        "fromNumber": from_number,
+        "accountId": account_id,
+        "agentId": agent_id,
         "contactName": contact.get("name", ""),
         "contactCompany": contact.get("company", ""),
         "contactCustomFields": contact.get("custom_fields", "{}"),
@@ -104,12 +106,9 @@ def _dial_one(campaign: dict) -> None:
             break
         try:
             if _on_orchestrator_pipeline(account_id):
-                # The orchestrator's outbound endpoint always dials from its
-                # own TEST_PHONE_NUMBER (single feature-flagged test number,
-                # not per-tenant routing yet - see orchestrator/server.py) -
-                # campaign.from_number is only actually used on the
-                # calls_db.place_test_call branch below.
-                result = _place_via_orchestrator(contact["phone"], contact)
+                result = _place_via_orchestrator(
+                    contact["phone"], from_number, account_id, campaign.get("agent_id"), contact
+                )
             else:
                 result = calls_db.place_test_call(
                     from_number,
