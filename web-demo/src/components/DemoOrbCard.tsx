@@ -43,6 +43,44 @@ export function DemoOrbCard() {
 
   const remaining = getRemainingDemoCalls()
 
+  // Pre-warms a room + LiveKit token the instant this card mounts, instead
+  // of only fetching them once the visitor actually taps "Tap to talk".
+  // /api/token now pre-creates the room server-side (see token_api.py),
+  // which dispatches the agent immediately - agent/main.py's entrypoint
+  // starts connecting and loading its config in the background while the
+  // visitor is still reading the page, the same head start /widget/warm
+  // already gives the embeddable widget. Without this, every demo call
+  // started the entire dispatch+connect+config-load chain from zero only
+  // after the click, on top of mic-permission and greeting-TTS time.
+  // Discarded (not reused) past PREWARM_MAX_AGE_MS: agent/main.py's
+  // wait_for_participant times out at 90s, so a prewarmed room a visitor
+  // sits on for minutes before clicking would otherwise hand them a token
+  // for a room whose job already gave up and exited.
+  const PREWARM_MAX_AGE_MS = 60_000
+  const prewarmRef = useRef<{ token: string; url: string; identity: string; room: string; at: number } | null>(null)
+  const prewarm = useCallback(() => {
+    if (!hasDemoCallsRemaining()) return
+    const identity = randomId('visitor')
+    const room = randomId('voice-agent-demo')
+    fetchLiveKitToken(identity, room)
+      .then(({ token: newToken, url }) => {
+        prewarmRef.current = { token: newToken, url, identity, room, at: Date.now() }
+      })
+      .catch(() => {
+        // Best-effort - handleStart falls back to fetching its own token
+        // live if this never lands or the room ends up rejected.
+      })
+  }, [])
+  useEffect(() => {
+    prewarm()
+    // Re-warm before the previous room's 90s wait_for_participant timeout
+    // (and this card's own PREWARM_MAX_AGE_MS reuse window) expire, so a
+    // visitor who reads the page for a while before clicking still gets a
+    // fresh, live-dispatched room instead of falling back to a cold fetch.
+    const interval = window.setInterval(prewarm, PREWARM_MAX_AGE_MS - 10_000)
+    return () => window.clearInterval(interval)
+  }, [prewarm])
+
   // Only counts against the free-call cap once a call actually connects to
   // an agent - a visitor whose call fails end-to-end (LiveKit never joins
   // AND the orchestrator fallback also fails) shouldn't lose a credit for
@@ -65,9 +103,12 @@ export function DemoOrbCard() {
     setErrorMessage(null)
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true })
-      const identity = randomId('visitor')
-      const room = randomId('voice-agent-demo')
-      const { token: newToken, url } = await fetchLiveKitToken(identity, room)
+      const warm = prewarmRef.current
+      const isFresh = warm && Date.now() - warm.at < PREWARM_MAX_AGE_MS
+      const { token: newToken, url } = isFresh
+        ? warm
+        : await fetchLiveKitToken(randomId('visitor'), randomId('voice-agent-demo'))
+      prewarmRef.current = null
       trackQualifyLead('demo_call')
       setToken(newToken)
       setServerUrl(url)
@@ -88,7 +129,8 @@ export function DemoOrbCard() {
     setToken(null)
     setServerUrl(null)
     setPhase(hasDemoCallsRemaining() ? 'idle' : 'capped')
-  }, [])
+    prewarm()
+  }, [prewarm])
 
   // The browser connected to the room but no AI agent ever joined (worker
   // cold-start/crash/restart - LiveKit Cloud's own agent worker, unrelated

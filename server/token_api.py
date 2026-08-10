@@ -182,15 +182,20 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
     if not api_key or not api_secret or not livekit_url:
         raise HTTPException(500, "LiveKit credentials are not configured on the server")
 
-    if req.agentId is not None:
-        # Dashboard "test in browser" flow: pre-create the room carrying the
-        # same {"agent_id"} metadata the SIP dispatch rules stamp on phone
-        # calls, so agent/main.py's _agent_id_from_job loads this specific
-        # agent's config instead of falling back to the first live one.
-        async with api.LiveKitAPI() as lkapi:
-            await lkapi.room.create_room(
-                CreateRoomRequest(name=req.room, metadata=json.dumps({"agent_id": req.agentId}))
-            )
+    # Pre-creating the room here (rather than letting the browser's own
+    # WebRTC join implicitly create it) triggers agent dispatch immediately -
+    # the entrypoint starts connecting and loading config in the background
+    # while the caller is still requesting mic access, same head start
+    # /widget/warm already gives widget rooms (see agent/main.py's
+    # entrypoint docstring). Previously only the dashboard "test in browser"
+    # flow (agentId set) got this; the marketing homepage's demo orb called
+    # this same endpoint but skipped it, so every demo call started fully
+    # cold. Metadata is agentId-specific (see _agent_id_from_job) but the
+    # create_room call itself is unconditional and idempotent — a no-op if
+    # DemoOrbCard's prewarm already created this room moments earlier.
+    metadata = json.dumps({"agent_id": req.agentId}) if req.agentId is not None else None
+    async with api.LiveKitAPI() as lkapi:
+        await lkapi.room.create_room(CreateRoomRequest(name=req.room, metadata=metadata))
 
     token = (
         api.AccessToken(api_key, api_secret)
