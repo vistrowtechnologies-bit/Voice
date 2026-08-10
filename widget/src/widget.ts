@@ -34,7 +34,7 @@ let avatarKey = scriptEl?.dataset.avatar || 'default'
 // default string in one place instead of duplicated into the dashboard,
 // the WordPress plugin, and every existing site's stored settings.
 let customGreeting = scriptEl?.dataset.greeting || ''
-const DEFAULT_GREETING = "👋 Hi! I'm Artha - tap to get started."
+const DEFAULT_GREETING = "👋 Hi, I’m Artha. Tap to start."
 const DEFAULT_CHAT_OPENER = "Hi, I'm Artha! What can I help you with today?"
 // 'voice' is the backwards-compatible default; 'chat' skips LiveKit and
 // 'both' lets the visitor choose on the welcome screen.
@@ -155,8 +155,10 @@ const CSS = `
    land on top of whatever else a site anchors in the other bottom corner
    (a WhatsApp chat button, in the case that surfaced this) instead of
    stopping with real clearance from it. */
-.av-greeting { position: absolute; bottom: 80px; right: 0; display: flex; align-items: center; gap: 8px; width: min(250px, calc(100vw - 40px)); background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 11px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
-:host([data-side="left"]) .av-greeting { left: 0; right: auto; }
+.av-greeting { position: absolute; bottom: 6px; right: 80px; display: flex; align-items: center; gap: 8px; width: min(236px, calc(100vw - 128px)); min-height:56px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
+.av-greeting::after { content:'';position:absolute;right:-7px;top:50%;width:12px;height:12px;background:#17121f;border-top:1px solid #2a2440;border-right:1px solid #2a2440;transform:translateY(-50%) rotate(45deg); }
+:host([data-side="left"]) .av-greeting { left: 80px; right: auto; }
+:host([data-side="left"]) .av-greeting::after { left:-7px;right:auto;border:0;border-left:1px solid #2a2440;border-bottom:1px solid #2a2440; }
 .av-greeting span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .av-greeting span { flex: 1 1 auto; min-width: 0; }
 .av-greeting button { background: none; border: none; color: #7d7594; cursor: pointer; padding: 2px; display: flex; flex-shrink: 0; }
@@ -281,6 +283,7 @@ audio { display: none; }
   :host([data-side="left"]) .av-root { left:16px; }
   .av-panel,:host([data-side="left"]) .av-panel { position:fixed;left:10px;right:10px;bottom:10px;width:auto;max-height:calc(100dvh - 20px);border-radius:22px; }
   .av-greeting,:host([data-side="left"]) .av-greeting { left:auto;right:0;bottom:78px;width:min(260px,calc(100vw - 32px)); }
+  .av-greeting::after,:host([data-side="left"]) .av-greeting::after { left:auto;right:25px;top:auto;bottom:-7px;border:0;border-right:1px solid #2a2440;border-bottom:1px solid #2a2440;transform:rotate(45deg); }
   #av-call,#av-chat { height:min(500px,calc(100dvh - 110px)); }
   .av-welcome { padding:25px 22px 23px; }
 }
