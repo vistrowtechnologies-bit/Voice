@@ -427,10 +427,26 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         # Paced at real time (one frame's worth of sleep per frame sent) —
         # sending all chunks back-to-back as fast as the network allows
         # overruns EnableX's playback buffer and comes out as crackling.
+        #
+        # Scheduled against an absolute deadline (start + i*frame_ms) rather
+        # than a fixed `sleep(frame_ms)` after every send - the naive fixed
+        # sleep only accounts for the sleep itself, not however long
+        # websocket.send_json's own network I/O took, so any send slower
+        # than usual pushes every following frame's real send time later by
+        # that same amount, with no way to recover - the delay just keeps
+        # compounding for the rest of the reply. Reported live as crackling
+        # audio after this service's WebSocket media path got longer/less
+        # predictable (a region move). Recomputing the remaining time to
+        # the next deadline on every iteration means a single slow send
+        # only costs that one frame's slack, not a permanent, growing
+        # offset for everything after it.
         reply_ulaw = audio.wav_or_mp3_to_ulaw(reply_audio, content_type)
         recorder.append_agent_audio(audioop.ulaw2lin(reply_ulaw, 2))
         frame_ms = 20
-        for chunk in audio.chunk_ulaw(reply_ulaw, frame_ms=frame_ms):
+        frame_s = frame_ms / 1000
+        loop = asyncio.get_event_loop()
+        start = loop.time()
+        for i, chunk in enumerate(audio.chunk_ulaw(reply_ulaw, frame_ms=frame_ms)):
             await websocket.send_json({
                 "event": "media",
                 "voice_id": stream_ctx.get("voice_id", voice_id),
@@ -442,7 +458,10 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                     "payload": base64.b64encode(chunk).decode(),
                 },
             })
-            await asyncio.sleep(frame_ms / 1000)
+            deadline = start + (i + 1) * frame_s
+            remaining = deadline - loop.time()
+            if remaining > 0:
+                await asyncio.sleep(remaining)
 
     async def _speak(reply_audio: bytes, content_type: str) -> None:
         try:
