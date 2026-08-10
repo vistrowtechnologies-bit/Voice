@@ -131,12 +131,15 @@ export function Home() {
       {/* ---------- Hero ---------- */}
       <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-5 py-14 md:px-8 lg:grid-cols-2 lg:py-24">
         <div>
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold uppercase tracking-[0.28em] text-cyan">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold uppercase tracking-[0.28em]">
             <span className="font-sans normal-case tracking-normal text-sm text-text-muted">
               भारत के लिए
             </span>
             <span className="text-border">/</span>
-            Built for Bharat
+            <span aria-label="Built for Bharat">
+              <span className="text-text-muted">Built for </span>
+              <span className="text-[#ff9933]">BH</span><span className="bharat-white-letter">AR</span><span className="text-[#138808]">AT</span>
+            </span>
           </p>
           {/* The greeting rotates through all ten scripts Artha speaks. It
               carries the positioning better than any adjective could: the

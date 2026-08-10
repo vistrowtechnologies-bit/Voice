@@ -264,6 +264,7 @@ const CSS = `
 .av-end-btn:hover,.av-end-btn:focus-visible { background:#dc2626;transform:scale(1.04); }
 .av-complete { padding:25px 20px 22px; text-align:center; display:flex;flex-direction:column;align-items:center;gap:11px; }
 .av-complete-icon { width:54px;height:54px;border-radius:99px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#6ee7a5;display:flex;align-items:center;justify-content:center;font-size:25px; }
+.av-complete-icon.av-complete-icon-error { background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.38);color:#f87171; }
 .av-complete h2 { margin:2px 0 0;font-size:20px; }
 .av-complete p { margin:0;color:#a9a2bd;font-size:12.5px;line-height:1.5; }
 .av-feedback { display:flex;align-items:center;justify-content:center;gap:10px;margin:4px 0; }
@@ -395,7 +396,7 @@ function widgetHtml(label: string): string {
         </div>
 
         <div id="av-complete" class="av-complete" style="display:none;">
-          <div class="av-complete-icon" aria-hidden="true">✓</div>
+          <div id="av-complete-icon" class="av-complete-icon" aria-hidden="true">✓</div>
           <h2 id="av-complete-title">Conversation complete</h2>
           <p id="av-complete-summary">Thanks for speaking with ${agentName}.</p>
           <p>Was this helpful?</p>
@@ -483,6 +484,7 @@ function init(): void {
   const typeInput = shadow.getElementById('av-type-input') as HTMLInputElement
   const typeSendBtn = shadow.getElementById('av-type-send') as HTMLButtonElement
   const completeEl = shadow.getElementById('av-complete') as HTMLDivElement
+  const completeIconEl = shadow.getElementById('av-complete-icon') as HTMLDivElement
   const completeTitleEl = shadow.getElementById('av-complete-title') as HTMLHeadingElement
   const completeSummaryEl = shadow.getElementById('av-complete-summary') as HTMLParagraphElement
   const feedbackUpBtn = shadow.getElementById('av-feedback-up') as HTMLButtonElement
@@ -964,6 +966,8 @@ function init(): void {
     hideAllPanelViews()
     openPanel()
     completeEl.style.display = 'flex'
+    completeIconEl.textContent = successful ? '✓' : '!'
+    completeIconEl.classList.toggle('av-complete-icon-error', !successful)
     completeTitleEl.textContent = successful ? 'Conversation complete' : 'Couldn’t connect'
     const seconds = callStartedAt ? Math.max(1, Math.round((Date.now() - callStartedAt) / 1000)) : 0
     completeSummaryEl.textContent = successful && seconds ? `${message} Your conversation lasted ${seconds < 60 ? `${seconds} seconds` : `${Math.floor(seconds / 60)} min ${seconds % 60} sec`}.` : message
