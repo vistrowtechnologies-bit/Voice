@@ -183,6 +183,22 @@ def _looks_like_farewell(text: str) -> bool:
     return any(word in lowered for word in _FAREWELL_WORDS)
 
 
+# Explicit self-identification only — deliberately not inferring gender from
+# a name, tone, or anything indirect, since a wrong guess is worse than no
+# guess at all. Covers common phrasing across English/Hindi/Hinglish.
+_MALE_SELF_ID = ("i'm male", "i am male", "main male", "i'm a man", "i am a man", "main ladka", "मैं लड़का", "मैं पुरुष")
+_FEMALE_SELF_ID = ("i'm female", "i am female", "main female", "i'm a woman", "i am a woman", "main ladki", "मैं लड़की", "मैं महिला")
+
+
+def _detect_caller_gender(text: str) -> str | None:
+    lowered = (text or "").lower()
+    if any(phrase in lowered for phrase in _FEMALE_SELF_ID):
+        return "female"
+    if any(phrase in lowered for phrase in _MALE_SELF_ID):
+        return "male"
+    return None
+
+
 def _build_llm(model: str):
     """Picks the LLM plugin by model-name prefix, so an operator can switch
     an agent between OpenAI and Gemini from the dashboard's model dropdown
@@ -719,6 +735,17 @@ class RealEstateAgent(Agent):
         # languages, not just three Hindi examples, measurably helps a model
         # that's fighting a strong statistical prior.
         self._voice_gender = _gender
+        # Separate from the agent's OWN gender above — the caller's gender is
+        # unknown by default and never assumed from the agent's voice. Set
+        # only when the caller states it themselves (see
+        # _detect_caller_gender in on_user_turn_completed), and used only to
+        # correctly conjugate SECOND-PERSON verbs addressed to them (आप
+        # करेंगे/करेंगी, चाहेंगे/चाहेंगी) — reported live as the agent
+        # defaulting every caller to feminine address forms, apparently by
+        # mirroring its own (female) voice gender onto the person it's
+        # talking to, which is a different grammatical agreement than the
+        # first-person self-reference the reminder below already covers.
+        self._caller_gender: str | None = None
         if _gender in ("male", "female"):
             _woman = _gender == "female"
             _f = "feminine" if _woman else "masculine"
@@ -835,6 +862,10 @@ class RealEstateAgent(Agent):
     ) -> None:
         text = new_message.text_content
 
+        detected_gender = _detect_caller_gender(text)
+        if detected_gender:
+            self._caller_gender = detected_gender
+
         if _looks_like_farewell(text):
             # Belt-and-suspenders for end_call (tools.py): relying on the
             # model to both say goodbye AND remember to invoke the tool in
@@ -868,7 +899,20 @@ class RealEstateAgent(Agent):
                        "masculine: बताता/करता/आया/समझता/देख रहा हूँ, मी सांगतो/करतो/आलो, હું આવ્યો, "
                        "ਮੈਂ ਦੱਸਦਾ/ਆਇਆ ਹਾਂ")
                     + f" — the {'masculine' if _woman else 'feminine'} form is wrong every time, "
-                    "with no exceptions, no matter what was said in earlier turns."
+                    "with no exceptions, no matter what was said in earlier turns. "
+                    "This is ONLY about verbs describing YOUR OWN actions (\"मैं बताती हूँ\") — it says "
+                    "NOTHING about the caller's gender, and must never be mirrored onto how you address "
+                    "them. "
+                    + (
+                        f"The caller has told you they are {self._caller_gender} — when a verb addressed "
+                        f"to them needs gender agreement (आप करेंगे/करेंगी, चाहेंगे/चाहेंगी), use the "
+                        f"{'feminine' if self._caller_gender == 'female' else 'masculine'} form for that."
+                        if self._caller_gender
+                        else "The caller's gender is unknown and must never be assumed from your own voice "
+                        "or from their name — when a verb addressed to them needs gender agreement (आप "
+                        "करेंगे/करेंगी, चाहेंगे/चाहेंगी), default to the neutral/masculine-plural form "
+                        "(करेंगे, चाहेंगे) unless they explicitly tell you their own gender."
+                    )
                 ),
             )
 
@@ -1519,6 +1563,14 @@ async def entrypoint(ctx: JobContext) -> None:
             return
         logger.info("typed utterance received in room %s: %r", ctx.room.name, text)
         _mark_present()
+        # generate_reply() alone doesn't stop speech already in flight - real
+        # voice barge-in works because VAD detecting the caller talking
+        # triggers session.interrupt() before the new reply starts, but a
+        # typed message skips that path entirely. Without this, typing while
+        # the agent is mid-sentence just queued a reply behind the current
+        # one instead of actually cutting in, reported live as "text
+        # barge-in doesn't work" on the widget's type-instead fallback.
+        session.interrupt()
         session.generate_reply(user_input=text)
 
     ctx.room.on("data_received", _on_data_received)
