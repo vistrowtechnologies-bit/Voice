@@ -30,6 +30,28 @@ const AGENT_JOIN_TIMEOUT_MS = 20_000
 // makes an unlimited-feeling product look metered.
 const MAX_CALL_MS = 5 * 60 * 1000
 
+// Cross-component call lock, shared with the embeddable widget
+// (widget/src/widget.ts's own CALL_LOCK_KEY) via a plain window global -
+// the only channel these two otherwise fully independent implementations
+// (this is React, the widget ships as its own standalone vanilla-JS bundle)
+// share on the same page. Without it, nothing stopped a visitor from
+// having both the floating "Talk to us" widget AND this orb connected at
+// once - two separate LiveKit rooms, two separate agent sessions, both
+// audible simultaneously, heard live as several different openers
+// overlapping in one garbled voice. This also protects against two
+// DemoOrbCard instances on the same page (this component says it's reused
+// across multiple sections) fighting the same way.
+const CALL_LOCK_KEY = '__vistrowActiveCall'
+function claimCallLock(): boolean {
+  const w = window as unknown as Record<string, boolean>
+  if (w[CALL_LOCK_KEY]) return false
+  w[CALL_LOCK_KEY] = true
+  return true
+}
+function releaseCallLock(): void {
+  ;(window as unknown as Record<string, boolean>)[CALL_LOCK_KEY] = false
+}
+
 // The recurring "LIVE DEMO" card - tapping the orb starts the call right
 // here (no separate confirmation page/route): mic permission is the
 // browser's own native prompt, then the same card shows live call state
@@ -155,6 +177,11 @@ export function DemoOrbCard() {
       return
     }
     if (cooldownUntil !== null && Date.now() < cooldownUntil) return
+    if (!claimCallLock()) {
+      setErrorMessage('A conversation is already active on this page — please finish it first.')
+      setPhase('unreachable')
+      return
+    }
     creditChargedRef.current = false
     setPhase('connecting')
     setErrorMessage(null)
@@ -171,6 +198,7 @@ export function DemoOrbCard() {
       setServerUrl(url)
       setPhase('active')
     } catch (err) {
+      releaseCallLock()
       if (err instanceof DOMException && err.name === 'NotAllowedError') {
         setErrorMessage('Mic access is blocked. Enable it in your browser settings to continue.')
       } else {
@@ -183,6 +211,7 @@ export function DemoOrbCard() {
   // Ending the call just returns the card to its idle "Tap to talk" state,
   // right here - no separate summary page or route to send the visitor to.
   const handleDisconnected = useCallback(() => {
+    releaseCallLock()
     setToken(null)
     setServerUrl(null)
     setPhase(hasDemoCallsRemaining() ? 'idle' : 'capped')
@@ -201,6 +230,10 @@ export function DemoOrbCard() {
   }, [])
 
   const handleOrchestratorFailed = useCallback(() => {
+    // Both providers failed for this attempt - genuinely over, unlike
+    // handleAgentUnavailable above (which is just a mid-attempt handoff
+    // and must NOT release the lock).
+    releaseCallLock()
     // Both providers failed for this attempt - the strongest signal we have
     // that this is real capacity pressure, not a one-off blip. Second+
     // consecutive failure gets an honest "high demand" message plus a

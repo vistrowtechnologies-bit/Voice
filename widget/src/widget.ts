@@ -573,6 +573,26 @@ function init(): void {
       console.warn('[Vistrow Voice widget] site-config refresh failed:', err)
     })
 
+  // Cross-component call lock — this widget and the marketing site's
+  // separate DemoOrbCard ("Tap to talk" orb, a wholly independent React
+  // component with no shared code, since widget.ts ships as its own
+  // standalone bundle) have zero awareness of each other. Nothing stopped
+  // both from connecting their own LiveKit room + agent at once, heard live
+  // as multiple different openers overlapping in one garbled voice. A
+  // window-level flag is the only channel these two otherwise-isolated
+  // surfaces share on the same page - both must set/check/clear it around
+  // their own call lifecycle for this to actually work as a lock.
+  const CALL_LOCK_KEY = '__vistrowActiveCall'
+  function claimCallLock(): boolean {
+    const w = window as unknown as Record<string, boolean>
+    if (w[CALL_LOCK_KEY]) return false
+    w[CALL_LOCK_KEY] = true
+    return true
+  }
+  function releaseCallLock(): void {
+    ;(window as unknown as Record<string, boolean>)[CALL_LOCK_KEY] = false
+  }
+
   let room: Room | null = null
   let micEnabled = true
   let stopVolumeReactivity: (() => void) | null = null
@@ -971,6 +991,7 @@ function init(): void {
 
   function resetToIdle(): void {
     clearAgentJoinWatchdog()
+    releaseCallLock()
     stopVolumeReactivity?.()
     stopVolumeReactivity = null
     stopCountdown()
@@ -991,6 +1012,7 @@ function init(): void {
 
   function cleanupCallState(): void {
     clearAgentJoinWatchdog()
+    releaseCallLock()
     if (room) {
       suppressDisconnect = true
       room.disconnect()
@@ -1084,6 +1106,14 @@ function init(): void {
   function endCall(): void {
     intentionalEnd = true
     clearAgentJoinWatchdog()
+    releaseCallLock()
+    // Without this, a manual hangup left the countdown interval from
+    // startCountdown() silently running in the background (it's a plain
+    // setInterval, not tied to the room's lifecycle) — up to 5 real minutes
+    // later it would still fire, showing "5-minute call limit reached" out
+    // of nowhere long after the caller had already hung up, or misattributed
+    // to whatever the panel happened to be showing by then.
+    stopCountdown()
     suppressDisconnect = true
     room?.disconnect()
     if (!callCompleted) {
@@ -1224,6 +1254,28 @@ function init(): void {
     // continuing, not a new one.
     if (attempt === 0 && callCooldownRemainingMs() > 0) {
       failCall('High demand right now — please wait a moment and try again.', { skipBackoff: true })
+      return
+    }
+    // Defensive: if a call is somehow already active when a fresh attempt
+    // starts (a stray double-trigger of the start button, or a leftover
+    // room from a state the UI didn't fully unwind), the OLD `room` object
+    // was about to get silently overwritten below without ever being
+    // disconnected — orphaned, no longer reachable through any widget
+    // state, but still an open WebRTC connection with its own agent still
+    // talking. Heard live as multiple different openers overlapping in one
+    // garbled voice. Tear down anything already active before proceeding,
+    // every time, rather than trusting this can't happen.
+    if (attempt === 0 && room) {
+      console.warn('[Vistrow Voice widget] starting a new call while one was already active — disconnecting the old one first')
+      cleanupCallState()
+    }
+    // Cross-component: refuses to start if the page's separate DemoOrbCard
+    // ("Tap to talk" orb) already holds the lock — see CALL_LOCK_KEY above.
+    // Only claimed on a genuinely fresh attempt; the internal retry
+    // (attempt=1) is a continuation of a call this same widget already
+    // claimed the lock for.
+    if (attempt === 0 && !claimCallLock()) {
+      failCall('A conversation is already active on this page — please finish it first.', { skipBackoff: true })
       return
     }
     intentionalEnd = false
