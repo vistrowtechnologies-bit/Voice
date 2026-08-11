@@ -12,6 +12,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# ffmpeg — transcodes a call recording from its stored WAV to MP3 on download
+# (see /calls/{id}/recording/download in token_api.py). Nothing else in this
+# image needs it.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install both requirement sets — verified conflict-free together.
 COPY server/requirements.txt ./server/requirements.txt
 COPY agent/requirements.txt ./agent/requirements.txt

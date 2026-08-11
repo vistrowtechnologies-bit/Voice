@@ -417,7 +417,23 @@ export function LeadDetail() {
 
           {call.hasRecording && (
             <Card>
-              <h2 className="mb-3 text-sm font-semibold text-text-muted">Recording</h2>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-text-muted">Recording</h2>
+                {recordingUrl && (
+                  // A plain same-origin link, not a fetch+blob - the session
+                  // cookie rides along automatically (see api.ts's
+                  // credentials:'include' note) and the browser handles the
+                  // download from the Content-Disposition header the server
+                  // sends back, already renamed and transcoded to MP3
+                  // server-side (see /calls/{id}/recording/download).
+                  <a
+                    href={`/api/calls/${call.id}/recording/download`}
+                    className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
+                  >
+                    <Icon name="download" className="text-[14px]" /> Download MP3
+                  </a>
+                )}
+              </div>
               {recordingUrl ? (
                 <audio controls src={recordingUrl} className="w-full" />
               ) : recordingError ? (

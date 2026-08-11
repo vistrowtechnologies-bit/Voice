@@ -1,7 +1,9 @@
 import json
 import logging
 import os
+import re
 import secrets
+import subprocess
 import time
 import urllib.parse
 import urllib.request
@@ -1180,21 +1182,17 @@ def get_call(call_id: int, user: dict = Depends(current_user)) -> dict:
     return call
 
 
-@app.get("/calls/{call_id}/recording")
-def get_call_recording_url(call_id: int, user: dict = Depends(current_user)) -> dict:
-    """A short-lived presigned Backblaze B2 GET URL for this call's
-    recording — never the raw storage key, and never proxied through this
-    server (client downloads directly from B2)."""
-    key = calls_db.get_call_recording_key(call_id, user["account_id"])
-    if not key:
-        raise HTTPException(404, "No recording for this call")
+def _b2_client():
+    """Boto3 S3-compatible client for Backblaze B2, or None if the storage
+    env vars aren't configured — every caller checks for None and raises its
+    own 503, since the exact message differs (recording vs download)."""
     endpoint_url = os.environ.get("B2_ENDPOINT_URL")
     key_id = os.environ.get("B2_KEY_ID")
     application_key = os.environ.get("B2_APPLICATION_KEY")
     bucket = os.environ.get("B2_BUCKET_NAME")
     region = os.environ.get("B2_REGION")
     if not (endpoint_url and key_id and application_key and bucket and region):
-        raise HTTPException(503, "Recording storage not configured")
+        return None, None
     import boto3
 
     client = boto3.client(
@@ -1204,10 +1202,77 @@ def get_call_recording_url(call_id: int, user: dict = Depends(current_user)) -> 
         aws_secret_access_key=application_key,
         region_name=region,
     )
+    return client, bucket
+
+
+@app.get("/calls/{call_id}/recording")
+def get_call_recording_url(call_id: int, user: dict = Depends(current_user)) -> dict:
+    """A short-lived presigned Backblaze B2 GET URL for this call's
+    recording — never the raw storage key, and never proxied through this
+    server (client downloads directly from B2). Used for inline playback;
+    see /recording/download below for the renamed, MP3 download."""
+    key = calls_db.get_call_recording_key(call_id, user["account_id"])
+    if not key:
+        raise HTTPException(404, "No recording for this call")
+    client, bucket = _b2_client()
+    if client is None:
+        raise HTTPException(503, "Recording storage not configured")
     url = client.generate_presigned_url(
         "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=3600
     )
     return {"url": url}
+
+
+@app.get("/calls/{call_id}/recording/download")
+def download_call_recording(call_id: int, user: dict = Depends(current_user)) -> Response:
+    """The recording as an MP3, named after the caller, instead of the raw
+    WAV under an opaque {call_id}.wav key — what an operator actually wants
+    when saving a recording locally rather than just playing it inline.
+    Proxied (not a presigned redirect like /recording above) because the
+    rename + transcode both have to happen server-side."""
+    call = calls_db.get_call(call_id, user["account_id"])
+    if call is None:
+        raise HTTPException(404, "Call not found")
+    key = calls_db.get_call_recording_key(call_id, user["account_id"])
+    if not key:
+        raise HTTPException(404, "No recording for this call")
+    client, bucket = _b2_client()
+    if client is None:
+        raise HTTPException(503, "Recording storage not configured")
+
+    try:
+        wav_bytes = client.get_object(Bucket=bucket, Key=key)["Body"].read()
+    except Exception:
+        logger.exception("recording download: failed to fetch %s from B2", key)
+        raise HTTPException(502, "Could not fetch the recording right now")
+
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-y", "-i", "pipe:0", "-f", "mp3", "-codec:a", "libmp3lame", "-qscale:a", "2", "pipe:1"],
+            input=wav_bytes,
+            capture_output=True,
+            check=True,
+            timeout=60,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        logger.exception("recording download: ffmpeg transcode failed for call=%s", call_id)
+        raise HTTPException(500, "Could not convert the recording to MP3")
+    mp3_bytes = proc.stdout
+
+    # Caller's name + phone, not the account's own agent name — this is what
+    # actually distinguishes one downloaded file from the next when an
+    # operator's saved several. Falls back to the call id if neither is on
+    # file (e.g. a widget visitor who never gave a name/number).
+    safe_name = re.sub(r"[^\w\-]+", "_", (call.get("name") or "").strip()).strip("_")
+    safe_phone = re.sub(r"[^\d+]+", "", call.get("phone") or "")
+    base = "_".join(part for part in (safe_name, safe_phone) if part) or f"call-{call_id}"
+    filename = f"{base}.mp3"
+
+    return Response(
+        content=mp3_bytes,
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post("/calls/{call_id}/analyze")
