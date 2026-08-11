@@ -958,9 +958,15 @@ class RealEstateAgent(Agent):
             f"Reply to THIS turn entirely in {_current_language_name} — every sentence, no "
             "exceptions, regardless of what language any example, filler word, or joke elsewhere "
             "in your instructions happened to be written in. Those are illustrations of a pattern, "
-            f"not a signal to switch languages. Stay in {_current_language_name} unless the caller "
-            "has actually just switched languages themselves this call (see the multilingual/"
-            "switch_reply_language rules above) — absent that, this is not optional."
+            f"not a signal to switch languages. Stay in {_current_language_name} UNLESS EITHER: (a) "
+            "the caller's own words in the message you're replying to are themselves in a different "
+            "language (they've actually switched), OR (b) the caller's message — in any language, any "
+            "phrasing — is a REQUEST to switch, e.g. \"please speak in English\", \"can you do this in "
+            "Hindi\", \"अंग्रेजी में बोलो\". A request counts exactly the same as switching outright — "
+            "do not wait for them to demonstrate the new language before honoring it. In either case, "
+            "call switch_reply_language with the requested/detected language BEFORE writing your reply, "
+            "then write the reply itself in that new language, not this one. Absent (a) or (b), staying "
+            f"in {_current_language_name} is not optional."
         )
         if self._voice_gender in ("male", "female"):
             _woman = self._voice_gender == "female"
