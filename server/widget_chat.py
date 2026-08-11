@@ -21,7 +21,10 @@ import urllib.request
 logger = logging.getLogger("widget-chat")
 
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
-DEFAULT_CHAT_MODEL = "gpt-4.1-mini"
+# gpt-4o-mini over gpt-4.1-mini specifically for this path — first-token
+# latency matters more than anything else here (a website visitor watching
+# a typing indicator), and 4o-mini is the faster of the two at this size.
+DEFAULT_CHAT_MODEL = "gpt-4o-mini"
 MAX_HISTORY_TURNS = 12
 MAX_MESSAGE_CHARS = 2_000
 
@@ -42,6 +45,42 @@ def _post_chat(api_key: str, body: dict) -> dict:
         raise RuntimeError(f"Chat model returned HTTP {exc.code}") from exc
     except urllib.error.URLError as exc:
         logger.error("OpenAI widget-chat call unreachable: %s", exc)
+        raise RuntimeError("Could not reach the chat model") from exc
+
+
+def _stream_chat(api_key: str, body: dict):
+    """Yields text deltas from an OpenAI streaming chat completion as they
+    arrive. urllib's response object is a file-like stream, so this reads it
+    line-by-line rather than buffering the whole body like _post_chat does —
+    that buffering is exactly what streaming is meant to avoid."""
+    request = urllib.request.Request(
+        OPENAI_CHAT_URL,
+        data=json.dumps({**body, "stream": True}).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            for raw_line in response:
+                line = raw_line.decode("utf-8", "replace").strip()
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[len("data:"):].strip()
+                if data == "[DONE]":
+                    return
+                try:
+                    chunk = json.loads(data)
+                except ValueError:
+                    continue
+                delta = chunk.get("choices", [{}])[0].get("delta", {}).get("content")
+                if delta:
+                    yield delta
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:500]
+        logger.error("OpenAI widget-chat stream failed (%s): %s", exc.code, detail)
+        raise RuntimeError(f"Chat model returned HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        logger.error("OpenAI widget-chat stream unreachable: %s", exc)
         raise RuntimeError("Could not reach the chat model") from exc
 
 
@@ -66,14 +105,7 @@ def _build_system_prompt(agent: dict, kb_content: str, kb_strict: bool) -> str:
     return prompt
 
 
-def answer_widget_chat(message: str, history: list[dict], agent: dict, kb_content: str, kb_strict: bool) -> str:
-    """history is [{"role": "user"|"assistant", "content": "..."}, ...] in
-    chronological order. Raises RuntimeError with a human-readable message
-    on any failure so the API route can surface it cleanly."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured on the server")
-
+def _prepare_messages(message: str, history: list[dict], agent: dict, kb_content: str, kb_strict: bool) -> list[dict]:
     text = (message or "").strip()
     if not text:
         raise RuntimeError("Message is empty")
@@ -85,16 +117,27 @@ def answer_widget_chat(message: str, history: list[dict], agent: dict, kb_conten
         if turn.get("role") in ("user", "assistant") and str(turn.get("content", "")).strip()
     ]
 
-    messages: list[dict] = [
+    return [
         {"role": "system", "content": _build_system_prompt(agent, kb_content, kb_strict)},
         *trimmed_history,
         {"role": "user", "content": text},
     ]
 
-    # Always the cheapest OpenAI chat model, deliberately ignoring the
+
+def answer_widget_chat(message: str, history: list[dict], agent: dict, kb_content: str, kb_strict: bool) -> str:
+    """history is [{"role": "user"|"assistant", "content": "..."}, ...] in
+    chronological order. Raises RuntimeError with a human-readable message
+    on any failure so the API route can surface it cleanly."""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured on the server")
+
+    messages = _prepare_messages(message, history, agent, kb_content, kb_strict)
+
+    # Always the cheapest/fastest OpenAI chat model, deliberately ignoring the
     # agent's own configured voice model (which may be gpt-4.1/gpt-4o) -
-    # chat-only mode exists specifically to cut cost, so it shouldn't
-    # inherit an expensive model choice made for voice quality.
+    # chat-only mode exists specifically to cut cost and latency, so it
+    # shouldn't inherit a model choice made for voice quality.
     payload = _post_chat(api_key, {"model": DEFAULT_CHAT_MODEL, "temperature": 0.4, "messages": messages})
 
     try:
@@ -107,3 +150,16 @@ def answer_widget_chat(message: str, history: list[dict], agent: dict, kb_conten
     if not reply:
         raise RuntimeError("Chat model returned an empty reply")
     return reply
+
+
+def stream_widget_chat(message: str, history: list[dict], agent: dict, kb_content: str, kb_strict: bool):
+    """Same as answer_widget_chat, but yields text deltas as they arrive
+    instead of returning the full reply at once — lets the widget render
+    tokens as they're generated rather than waiting for the whole
+    completion, which is most of what "the chat feels slow" actually is."""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured on the server")
+
+    messages = _prepare_messages(message, history, agent, kb_content, kb_strict)
+    yield from _stream_chat(api_key, {"model": DEFAULT_CHAT_MODEL, "temperature": 0.4, "messages": messages})

@@ -110,6 +110,29 @@ _PLATFORM_DEMO_OPENERS: dict[str, list[str]] = {
     ],
 }
 
+# English equivalents of the above, used instead whenever the demo agent's
+# own "Default language" is explicitly set to English (or any non-Hindi
+# language) — previously this branch ignored reply_language entirely and
+# always spoke the Hinglish lines regardless of that setting.
+_PLATFORM_DEMO_OPENERS_EN: dict[str, list[str]] = {
+    "female": [
+        "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. What industry is your business in?",
+        "Hey, you hit 'Talk to Artha,' so I'm officially on duty now. So, what does your business do?",
+        "Hi, I'm Artha, from Vistrow Voice. Give me 30 seconds and I'll show you how natural an AI conversation can sound. What business are you in?",
+        "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. Just tell me — what does your business do?",
+        "Hi, I'm Artha. So, what field is your business in?",
+        "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. Right now, when you miss a call, what happens on your end?",
+    ],
+    "male": [
+        "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. What industry is your business in?",
+        "Hey, you hit 'Talk to Artha,' so I'm officially on duty now. So, what does your business do?",
+        "Hi, I'm Artha, from Vistrow Voice. Give me 30 seconds and I'll show you how natural an AI conversation can sound. What business are you in?",
+        "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. Just tell me — what does your business do?",
+        "Hi, I'm Artha. So, what field is your business in?",
+        "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. Right now, when you miss a call, what happens on your end?",
+    ],
+}
+
 # Same "skip generate_reply(), speak a fixed line instantly" fix as the demo
 # opener above, generalized to every tenant agent that hasn't written its own
 # welcome_message — today, silently falling through to generate_reply() below
@@ -835,7 +858,10 @@ class RealEstateAgent(Agent):
                 # wasn't expecting. Speaking a fixed line via say() skips
                 # straight to TTS. Picked at random per call so repeat
                 # visitors don't hear the same line every time.
-                openers = _PLATFORM_DEMO_OPENERS.get(self._voice_gender) or _PLATFORM_DEMO_OPENERS["female"]
+                opener_set = (
+                    _PLATFORM_DEMO_OPENERS_EN if self._reply_language.startswith("en") else _PLATFORM_DEMO_OPENERS
+                )
+                openers = opener_set.get(self._voice_gender) or opener_set["female"]
                 await self.session.say(random.choice(openers))
                 return
             # Same fix, generalized: every tenant agent without its own

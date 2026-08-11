@@ -24,7 +24,7 @@ from help_content import FAQS
 from dotenv import load_dotenv
 from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from livekit import api
 from livekit.api import CreateRoomRequest, ListParticipantsRequest, ListRoomsRequest, UpdateRoomMetadataRequest
 from pydantic import BaseModel
@@ -2579,13 +2579,23 @@ class WidgetChatRequest(BaseModel):
     email: str | None = None
 
 
+def _sse(data: dict) -> str:
+    return f"data: {json.dumps(data)}\n\n"
+
+
 @app.post("/widget/chat")
-def widget_chat_route(req: WidgetChatRequest) -> dict:
+def widget_chat_route(req: WidgetChatRequest) -> StreamingResponse:
     """Public, unauthenticated text-chat turn for a site in 'chat' or
     'both' widget mode — same site_key-is-the-auth model as /widget/token,
     but answers with a plain OpenAI chat completion grounded in the site's
     agent config instead of placing a LiveKit call. Stateless: the widget
-    resends the full conversation history every turn (see widget_chat.py)."""
+    resends the full conversation history every turn (see widget_chat.py).
+
+    Streams the reply back as Server-Sent Events (one {"delta": "..."} event
+    per token chunk, then {"done": true}) instead of waiting for the full
+    completion — a non-streaming JSON response meant a visitor stared at a
+    typing indicator for the entire generation with nothing to show for it;
+    this way text appears as it's generated, same as a normal chat product."""
     masked_key = req.siteKey[:12] + "…" if len(req.siteKey) > 12 else req.siteKey
     site = calls_db.get_site_by_key(req.siteKey)
     if site is None:
@@ -2609,22 +2619,38 @@ def widget_chat_route(req: WidgetChatRequest) -> dict:
         kb_content = calls_db.get_kb_content_for_prompt(agent["kbId"])
         kb_strict = calls_db.is_kb_strict_for_prompt(agent["kbId"])
 
-    try:
-        reply = widget_chat.answer_widget_chat(req.message, req.history, agent, kb_content, kb_strict)
-    except RuntimeError as exc:
-        logger.error("widget chat failed for site=%s: %s", site["name"], exc)
-        raise HTTPException(502, "Could not reach the chat assistant — please try again shortly")
-
-    if req.sessionId and req.startedAt:
-        transcript = [
-            *req.history,
-            {"role": "user", "content": req.message},
-            {"role": "assistant", "content": reply},
-        ]
-        lead = {"name": req.name, "phone": req.phone, "email": req.email}
+    def event_generator():
+        # A RuntimeError here surfaces only once we start iterating this
+        # generator, which is after the 200 + SSE headers already went out —
+        # too late for HTTPException, so failures mid-stream are reported as
+        # an {"error": ...} event instead and the widget renders that.
+        parts: list[str] = []
         try:
-            calls_db.upsert_widget_chat_call(site, agent, req.sessionId, req.startedAt, transcript, lead)
-        except Exception:
-            logger.exception("failed to log widget chat call for site=%s", site["name"])
+            for delta in widget_chat.stream_widget_chat(req.message, req.history, agent, kb_content, kb_strict):
+                parts.append(delta)
+                yield _sse({"delta": delta})
+        except RuntimeError as exc:
+            logger.error("widget chat stream failed for site=%s: %s", site["name"], exc)
+            yield _sse({"error": "Could not reach the chat assistant — please try again shortly"})
+            return
 
-    return {"reply": reply}
+        reply = "".join(parts).strip()
+        if not reply:
+            logger.error("widget chat stream returned an empty reply for site=%s", site["name"])
+            yield _sse({"error": "Chat model returned an empty reply"})
+            return
+        yield _sse({"done": True})
+
+        if req.sessionId and req.startedAt:
+            transcript = [
+                *req.history,
+                {"role": "user", "content": req.message},
+                {"role": "assistant", "content": reply},
+            ]
+            lead = {"name": req.name, "phone": req.phone, "email": req.email}
+            try:
+                calls_db.upsert_widget_chat_call(site, agent, req.sessionId, req.startedAt, transcript, lead)
+            except Exception:
+                logger.exception("failed to log widget chat call for site=%s", site["name"])
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

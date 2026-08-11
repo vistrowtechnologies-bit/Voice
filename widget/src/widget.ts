@@ -870,6 +870,32 @@ function init(): void {
     return row
   }
 
+  // Turns raw SSE bytes into parsed event objects as they arrive. The
+  // server writes one "data: {...}\n\n" frame per event; a frame can still
+  // arrive split across chunk boundaries, so this buffers until it sees the
+  // blank-line terminator rather than assuming one chunk == one event.
+  async function* parseSseStream(body: ReadableStream<Uint8Array>): AsyncGenerator<Record<string, unknown>> {
+    const reader = body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const frames = buffer.split('\n\n')
+      buffer = frames.pop() ?? ''
+      for (const frame of frames) {
+        const line = frame.split('\n').find((l) => l.startsWith('data:'))
+        if (!line) continue
+        try {
+          yield JSON.parse(line.slice('data:'.length).trim())
+        } catch {
+          // ignore a malformed frame rather than aborting the whole stream
+        }
+      }
+    }
+  }
+
   async function sendChatMessage(): Promise<void> {
     const text = chatInput.value.trim()
     if (!text || chatSending) return
@@ -881,6 +907,8 @@ function init(): void {
     chatSending = true
     chatSendBtn.disabled = true
     const typingBubble = appendTypingBubble()
+    let replyBubble: HTMLDivElement | null = null
+    let replyText = ''
     try {
       const res = await fetch(`${apiBase}/widget/chat`, {
         method: 'POST',
@@ -896,14 +924,29 @@ function init(): void {
           email: chatLead.email,
         }),
       })
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-      const data = (await res.json()) as { reply: string }
-      typingBubble.remove()
-      appendChatBubble(data.reply, 'assistant')
-      chatHistory.push({ role: 'assistant', content: data.reply })
+      if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`)
+
+      for await (const event of parseSseStream(res.body)) {
+        if (typeof event.delta === 'string') {
+          if (!replyBubble) {
+            typingBubble.remove()
+            replyBubble = appendChatBubble('', 'assistant')
+          }
+          replyText += event.delta
+          replyBubble.textContent = replyText
+          chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight
+        } else if (event.error) {
+          throw new Error(String(event.error))
+        } else if (event.done) {
+          break
+        }
+      }
+      if (!replyText.trim()) throw new Error('empty reply')
+      chatHistory.push({ role: 'assistant', content: replyText })
     } catch (err) {
       console.error('[Vistrow Voice widget] chat request failed:', err)
       typingBubble.remove()
+      replyBubble?.remove()
       appendChatBubble('Sorry, something went wrong - please try again.', 'assistant')
     } finally {
       chatSending = false
