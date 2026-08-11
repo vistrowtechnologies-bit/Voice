@@ -1229,7 +1229,15 @@ def _initials(name: str) -> str:
 _CHANNEL_LABELS = {"phone": "Phone", "widget": "Website Widget", "browser": "Web"}
 
 
-def _agent_names_by_id(account_id: int) -> dict[int, str]:
+def _agent_names_by_id(account_id: int, conn=None) -> dict[int, str]:
+    # Reuses a caller-held connection when given one (see get_call/analytics)
+    # instead of checking a second connection out of the pool for what's
+    # otherwise a single fast lookup nested inside an already-open one.
+    if conn is not None:
+        return {
+            r["id"]: r["name"]
+            for r in conn.execute("SELECT id, name FROM agents WHERE account_id = ?", (account_id,)).fetchall()
+        }
     conn = _connect()
     try:
         return {
@@ -1371,11 +1379,11 @@ def get_call(call_id: int, account_id: int) -> dict | None:
         row = conn.execute("SELECT * FROM calls WHERE id = ? AND account_id = ?", (call_id, account_id)).fetchone()
         if not row:
             return None
-        sites_by_id = {s["id"]: s for s in list_sites(account_id)}
+        sites_by_id = {s["id"]: s for s in list_sites(account_id, conn=conn)}
         return _call_dict(
             row,
             sites_by_id=sites_by_id,
-            agent_names=_agent_names_by_id(account_id),
+            agent_names=_agent_names_by_id(account_id, conn=conn),
             visitor_numbers=_visitor_numbers_by_id(conn, account_id),
         )
     finally:
@@ -1641,7 +1649,7 @@ def analytics(account_id: int) -> dict:
                 (account_id,),
             ).fetchall()
         ]
-        agent_names = _agent_names_by_id(account_id)
+        agent_names = _agent_names_by_id(account_id, conn=conn)
         fallback_agent = next(iter(agent_names.values()), "Agent")
         # Merge by display name, not agent_id: legacy rows (agent_id NULL,
         # from before the column existed) resolve to the first agent's name
@@ -2722,14 +2730,14 @@ def update_knowledge_source(
             sets.append("content = ?")
             params.append(content)
         if not sets:
-            return get_knowledge_source_content(source_id, account_id)
+            return get_knowledge_source_content(source_id, account_id, conn=conn)
         with conn:
             conn.execute(
                 f"UPDATE knowledge_sources SET {', '.join(sets)} WHERE id = ? "
                 "AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
                 (*params, source_id, account_id),
             )
-        return get_knowledge_source_content(source_id, account_id)
+        return get_knowledge_source_content(source_id, account_id, conn=conn)
     finally:
         conn.close()
 
@@ -2747,9 +2755,17 @@ def delete_knowledge_source(source_id: int, account_id: int) -> None:
         conn.close()
 
 
-def get_knowledge_source_content(source_id: int, account_id: int) -> dict | None:
+def get_knowledge_source_content(source_id: int, account_id: int, conn=None) -> dict | None:
     """Full text of one source — the auto-extract endpoint feeds this to the
     LLM; the listing endpoint deliberately returns only length(content))."""
+    if conn is not None:
+        row = conn.execute(
+            "SELECT s.id, s.kb_id, s.name, s.content FROM knowledge_sources s "
+            "JOIN knowledge_bases kb ON kb.id = s.kb_id "
+            "WHERE s.id = ? AND kb.account_id = ?",
+            (source_id, account_id),
+        ).fetchone()
+        return dict(row) if row else None
     conn = _connect()
     try:
         row = conn.execute(
@@ -3406,7 +3422,14 @@ def _site_dict(r: dict) -> dict:
     }
 
 
-def list_sites(account_id: int) -> list[dict]:
+def list_sites(account_id: int, conn=None) -> list[dict]:
+    # Same caller-held-connection reuse as _agent_names_by_id — get_call
+    # calls this while its own conn is still checked out.
+    if conn is not None:
+        return [
+            _site_dict(r)
+            for r in conn.execute("SELECT * FROM sites WHERE account_id = ? ORDER BY id DESC", (account_id,)).fetchall()
+        ]
     conn = _connect()
     try:
         return [
@@ -3704,10 +3727,18 @@ _CREDIT_RATE_SETTINGS = {
 }
 
 
-def credit_rates(account_id: int) -> dict:
+def credit_rates(account_id: int, conn=None) -> dict:
     """Per-minute credit-burn multiplier for each call type, e.g.
     {"browser": 1.0, "widget": 1.0, "phone": 1.5} — phone calls burn more
     since they carry an EnableX telephony cost the others don't."""
+    if conn is not None:
+        rates = {}
+        for call_type, setting_key in _CREDIT_RATE_SETTINGS.items():
+            row = conn.execute(
+                "SELECT value FROM settings WHERE account_id = ? AND key = ?", (account_id, setting_key)
+            ).fetchone()
+            rates[call_type] = float(row["value"]) if row else 1.0
+        return rates
     conn = _connect()
     try:
         rates = {}
@@ -3947,7 +3978,7 @@ def billing_summary(account_id: int) -> dict:
             "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total'", (account_id,)
         ).fetchone()
         credits_total = int(total_row["value"]) if total_row else 300
-        rates = credit_rates(account_id)
+        rates = credit_rates(account_id, conn=conn)
 
         by_type: dict[str, float] = {}
         by_voice_tier: dict[str, float] = {}
