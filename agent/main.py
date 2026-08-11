@@ -198,6 +198,11 @@ def _clamp(value: float, lo: float, hi: float) -> float:
 _FAREWELL_WORDS = (
     "bye", "goodbye", "good bye", "bye bye",
     "बाय", "अलविदा",
+    # "Thank you" alone (not mid-sentence gratitude for a specific answer)
+    # is one of the most common real ways a caller actually signals a call
+    # is over — observed live where the agent replied warmly to "Okay,
+    # thank you" and just kept talking instead of ending the call.
+    "thank you", "thanks", "थैंक यू", "धन्यवाद", "शुक्रिया",
 )
 
 
@@ -934,10 +939,14 @@ class RealEstateAgent(Agent):
                         f"to them needs gender agreement (आप करेंगे/करेंगी, चाहेंगे/चाहेंगी), use the "
                         f"{'feminine' if self._caller_gender == 'female' else 'masculine'} form for that."
                         if self._caller_gender
-                        else "The caller's gender is unknown and must never be assumed from your own voice "
-                        "or from their name — when a verb addressed to them needs gender agreement (आप "
-                        "करेंगे/करेंगी, चाहेंगे/चाहेंगी), default to the neutral/masculine-plural form "
-                        "(करेंगे, चाहेंगे) unless they explicitly tell you their own gender."
+                        else "The caller's gender is unknown and must never be assumed from your own voice, "
+                        "from their name, OR from any feminine/masculine verb form THEY happen to use about "
+                        "THEIR OWN actions (e.g. them saying 'मैं ... कर रही हूँ' does NOT mean they are a "
+                        "woman — do not mirror or infer gender from that, it is a common false signal). The "
+                        "ONLY thing that counts as knowing their gender is them explicitly stating it "
+                        "('I'm male', 'मैं महिला हूँ', etc). Until then, when a verb addressed to them needs "
+                        "gender agreement (आप करेंगे/करेंगी, चाहेंगे/चाहेंगी), default to the neutral/"
+                        "masculine-plural form (करेंगे, चाहेंगे) with no exceptions."
                     )
                 ),
             )
