@@ -1500,8 +1500,48 @@ async def entrypoint(ctx: JobContext) -> None:
             userdata["ending_call"] = False
             asyncio.create_task(_hang_up(ctx.room.name))
 
+    # Belt-and-suspenders for the OTHER direction of the same end-call bug:
+    # on_user_turn_completed's _looks_like_farewell nudge only helps when
+    # the CALLER says goodbye first. Observed live on a real tenant call —
+    # the agent generated its OWN closing line ("...अब मैं कॉल समाप्त कर
+    # रही हूँ") without ever calling the end_call tool, so
+    # userdata["ending_call"] was never set, _on_agent_state_changed's
+    # hangup above never fired, and the caller's silence afterward
+    # (naturally — they thought the call had ended) got picked up by the
+    # away-checker instead: the agent then asked "are you still there?"
+    # right after saying goodbye. This inspects the agent's OWN
+    # just-added message for the same closing signal and sets
+    # ending_call directly when the tool call never happened, reusing
+    # _on_agent_state_changed's existing "wait for speech to finish, then
+    # hang up" logic above rather than a separate hangup path.
+    _AGENT_CLOSING_PHRASES = (
+        "समाप्त कर रही हूँ", "समाप्त कर रहा हूँ", "कॉल समाप्त", "कॉल खत्म",
+        "अलविदा", "फिर मिलते हैं", "शुभ दिन",
+        "have a great day", "goodbye", "bye for now", "take care",
+        "i'll end the call", "i'll go ahead and end", "ending the call now",
+    )
+
+    def _on_conversation_item_added(ev) -> None:
+        item = ev.item
+        if getattr(item, "role", None) != "assistant" or userdata.get("ending_call"):
+            return
+        text = (item.text_content or "").lower()
+        if any(phrase.lower() in text for phrase in _AGENT_CLOSING_PHRASES):
+            logger.info("agent's own reply looked like a goodbye without end_call being called — forcing hangup after it finishes")
+            userdata["ending_call"] = True
+            # Safety net: _on_agent_state_changed above only fires ON the
+            # speaking -> not-speaking transition. If that transition
+            # already happened by the time this event fires (this text
+            # finalizes before TTS playback starts/ends), the flag would
+            # otherwise sit unused until some future turn. Catch that case
+            # directly rather than relying on the transition alone.
+            if session.agent_state != "speaking":
+                userdata["ending_call"] = False
+                asyncio.create_task(_hang_up(ctx.room.name))
+
     session.on("user_state_changed", _on_user_state_changed)
     session.on("agent_state_changed", _on_agent_state_changed)
+    session.on("conversation_item_added", _on_conversation_item_added)
 
     # Held in a dict (not read at shutdown time) because by the time the job
     # drains and the shutdown callback runs, the visitor has already left the
