@@ -76,6 +76,13 @@ export function Billing() {
   const usedPct = billing ? Math.min(100, Math.round((billing.creditsUsed / billing.creditsTotal) * 100)) : 0
   const currentPlanKey = billing?.plan || (user?.plan || 'starter').toLowerCase()
   const currentPlanName = PLANS.find((p) => p.key === currentPlanKey)?.name || 'Starter'
+  // Must match server/token_api.py's billing_topup exactly: plan price over
+  // the PLAN's fixed credit count (calls_db.PLAN_PRICING), not this
+  // account's possibly-overridden creditsTotal setting - those two can
+  // differ (e.g. a manually-adjusted trial account), and this is a real
+  // price quote, not just a usage-page estimate.
+  const currentPlanCredits = PLANS.find((p) => p.key === currentPlanKey)?.creditsNum || billing?.creditsTotal || 1
+  const perCreditRate = billing ? billing.planPriceInr / currentPlanCredits : 0
 
   async function handleUpgrade(planKey: 'starter' | 'growth' | 'scale', planName: string) {
     setError('')
@@ -383,8 +390,8 @@ export function Billing() {
                 className="mb-4 w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm"
               />
               <p className="mb-4 text-xs text-text-muted">
-                Billed at your plan's own rate ({(billing ? billing.planPriceInr / billing.creditsTotal : 0).toFixed(2)}
-                /credit) — credits apply to this billing cycle immediately once payment confirms.
+                Billed at your plan's own rate ({perCreditRate.toFixed(2)}/credit) — credits apply to this billing
+                cycle immediately once payment confirms.
               </p>
               <div className="flex gap-2">
                 <button
