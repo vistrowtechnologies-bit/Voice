@@ -50,12 +50,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Indian tricolour wordmark used in the homepage hero. The white centre
-   keeps a subtle outline so it remains legible when the site is in light
-   mode without changing the flag colour. */
-.bharat-white-letter {
+/* Indian tricolour wordmark used in the homepage hero. Its centre is white
+   on the dark theme, then changes to Ashoka Chakra navy on the light theme
+   where white lettering would disappear against the page. */
+.bharat-middle-letter {
   color: #ffffff;
-  text-shadow: 0 0 1px #5d5776, 0 0 2px #5d5776;
+}
+
+:root[data-theme="light"] .bharat-middle-letter {
+  color: #1a3c8b;
 }
 
 /* Applied briefly by lib/theme.ts's applyTheme() during an actual toggle

@@ -138,7 +138,7 @@ export function Home() {
             <span className="text-border">/</span>
             <span aria-label="Built for Bharat">
               <span className="text-text-muted">Built for </span>
-              <span className="text-[#ff9933]">BH</span><span className="bharat-white-letter">AR</span><span className="text-[#138808]">AT</span>
+              <span className="text-[#ff9933]">BH</span><span className="bharat-middle-letter">AR</span><span className="text-[#138808]">AT</span>
             </span>
           </p>
           {/* The greeting rotates through all ten scripts Artha speaks. It
