@@ -385,6 +385,43 @@ export interface BillingSummary {
   creditRates: Partial<Record<'browser' | 'widget' | 'phone', number>>
   minutesByVoiceTier: Partial<Record<'economy' | 'standard' | 'premium', number>>
   voiceTierRates: Partial<Record<'economy' | 'standard' | 'premium', number>>
+  plan: string
+  planPriceInr: number
+  subscriptionStatus: 'inactive' | 'created' | 'active' | 'cancelled' | string
+  billingCycle: 'monthly' | 'annual'
+  currentPeriodStart: string | null
+  currentPeriodEnd: string | null
+  overageCredits: number
+  overageRateInr: number
+  overageAmountInr: number
+  phoneNumberCount: number
+  phoneNumberFeesInr: number
+  estimatedNextInvoiceInr: number
+}
+
+export interface Subscription {
+  account_id: number
+  plan: string
+  billing_cycle: string
+  razorpay_customer_id: string | null
+  razorpay_subscription_id: string | null
+  status: string
+  current_period_start: string | null
+  current_period_end: string | null
+}
+
+export interface Invoice {
+  id: number
+  account_id: number
+  kind: 'subscription' | 'overage' | 'topup' | 'phone_number'
+  amount_inr: number
+  status: string
+  period_start: string | null
+  period_end: string | null
+  credits: number | null
+  notes: string
+  created_at: string
+  paid_at: string | null
 }
 
 export interface TelephonyStatus {

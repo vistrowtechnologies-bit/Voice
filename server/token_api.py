@@ -20,6 +20,7 @@ import integrations_dispatch
 import kb_crawl
 import kb_extract
 import livekit_sip
+import razorpay_client
 import widget_avatars
 import widget_chat
 from help_content import FAQS
@@ -2198,6 +2199,258 @@ def enablex_outbound_test_event(event: dict = Body(...)) -> dict:
 @app.get("/billing/summary")
 def billing(user: dict = Depends(current_user)) -> dict:
     return calls_db.billing_summary(user["account_id"])
+
+
+@app.get("/billing/subscription")
+def billing_subscription(user: dict = Depends(current_user)) -> dict:
+    return {
+        "subscription": calls_db.get_subscription(user["account_id"]),
+        "invoices": calls_db.list_invoices(user["account_id"]),
+        "razorpayConfigured": razorpay_client.is_configured(),
+    }
+
+
+class CheckoutRequest(BaseModel):
+    plan: str
+    billingCycle: str = "monthly"  # "monthly" | "annual"
+
+
+@app.post("/billing/checkout")
+def billing_checkout(req: CheckoutRequest, user: dict = Depends(current_user)) -> dict:
+    """Starts (or switches) a subscription for this account. Returns what the
+    frontend needs to open Razorpay Checkout against — actual activation
+    happens via the subscription.activated/charged webhook below, not here;
+    this route only creates the pending subscription and hands back its id."""
+    if not razorpay_client.is_configured():
+        raise HTTPException(503, "Billing isn't set up on this server yet — contact support.")
+    plan = req.plan.strip().lower()
+    if plan not in calls_db.PLAN_PRICING:
+        raise HTTPException(400, f"Unknown plan: {req.plan}")
+    cycle = req.billingCycle.strip().lower()
+    if cycle not in ("monthly", "annual"):
+        raise HTTPException(400, "billingCycle must be 'monthly' or 'annual'")
+
+    try:
+        plan_id = razorpay_client.plan_id_for(plan, cycle)
+    except razorpay_client.RazorpayNotConfigured as e:
+        raise HTTPException(503, str(e)) from e
+
+    existing = calls_db.get_subscription(user["account_id"])
+    customer_id = existing["razorpay_customer_id"] if existing else None
+    if not customer_id:
+        profile = calls_db.get_user_by_id(user["user_id"])
+        if profile is None:
+            raise HTTPException(401, "Session user no longer exists")
+        try:
+            customer = razorpay_client.create_customer(profile["account_name"] or profile["name"], profile["email"])
+            customer_id = customer["id"]
+        except razorpay_client.RazorpayError as e:
+            raise HTTPException(502, f"Could not start checkout: {e}") from e
+
+    total_count = 10 if cycle == "annual" else 120  # ~"until cancelled" at this product's timescale
+    try:
+        subscription = razorpay_client.create_subscription(
+            plan_id, customer_id, total_count, notes={"account_id": str(user["account_id"]), "plan": plan}
+        )
+    except razorpay_client.RazorpayError as e:
+        raise HTTPException(502, f"Could not start checkout: {e}") from e
+
+    calls_db.upsert_subscription(
+        user["account_id"], plan, cycle, customer_id, subscription["id"],
+        status="created", current_period_start=None, current_period_end=None,
+    )
+    return {
+        "razorpayKeyId": os.environ.get("RAZORPAY_KEY_ID"),
+        "subscriptionId": subscription["id"],
+        "plan": plan,
+        "billingCycle": cycle,
+    }
+
+
+class TopupRequest(BaseModel):
+    credits: int
+
+
+@app.post("/billing/topup")
+def billing_topup(req: TopupRequest, user: dict = Depends(current_user)) -> dict:
+    """One-off credit purchase, priced at the account's own plan rate (not
+    the overage penalty rate — this is buying ahead, not running over)."""
+    if not razorpay_client.is_configured():
+        raise HTTPException(503, "Billing isn't set up on this server yet — contact support.")
+    if req.credits <= 0:
+        raise HTTPException(400, "credits must be positive")
+    summary = calls_db.billing_summary(user["account_id"])
+    plan_pricing = calls_db.PLAN_PRICING.get(summary["plan"], calls_db.PLAN_PRICING["starter"])
+    per_credit_rate = plan_pricing["price_inr"] / plan_pricing["credits"]
+    amount_inr = round(req.credits * per_credit_rate, 2)
+
+    try:
+        order = razorpay_client.create_order(
+            amount_inr, receipt=f"topup-{user['account_id']}-{int(time.time())}",
+            notes={"account_id": str(user["account_id"]), "credits": str(req.credits)},
+        )
+    except razorpay_client.RazorpayError as e:
+        raise HTTPException(502, f"Could not start top-up: {e}") from e
+
+    calls_db.record_invoice(
+        user["account_id"], kind="topup", amount_inr=amount_inr, status="created",
+        razorpay_order_id=order["id"], credits=req.credits,
+        notes=f"{req.credits} credits at {per_credit_rate:.2f}/credit",
+    )
+    return {
+        "razorpayKeyId": os.environ.get("RAZORPAY_KEY_ID"),
+        "orderId": order["id"],
+        "amountInr": amount_inr,
+        "credits": req.credits,
+    }
+
+
+class VerifyPaymentRequest(BaseModel):
+    razorpayOrderId: str
+    razorpayPaymentId: str
+    razorpaySignature: str
+
+
+@app.post("/billing/verify-payment")
+def billing_verify_payment(req: VerifyPaymentRequest, user: dict = Depends(current_user)) -> dict:
+    """Confirms a top-up's Checkout callback wasn't forged, then applies the
+    credits immediately. Subscription checkouts don't use this route — those
+    activate via the webhook, since Razorpay's own subscription-checkout
+    signature is keyed differently and the webhook is the authoritative
+    source there anyway."""
+    if not razorpay_client.verify_payment_signature(
+        req.razorpayOrderId, req.razorpayPaymentId, req.razorpaySignature
+    ):
+        raise HTTPException(400, "Payment signature did not verify")
+    invoice = calls_db.mark_invoice_paid(razorpay_order_id=req.razorpayOrderId, razorpay_payment_id=req.razorpayPaymentId)
+    if invoice and invoice["account_id"] == user["account_id"] and invoice["kind"] == "topup" and invoice["credits"]:
+        calls_db.add_topup_credits(user["account_id"], invoice["credits"])
+    return {"ok": True}
+
+
+@app.post("/billing/razorpay/webhook")
+async def billing_razorpay_webhook(request: Request) -> dict:
+    """Source of truth for subscription lifecycle — Razorpay calls this on
+    every event (see https://razorpay.com/docs/webhooks/). Configure this
+    URL (…/billing/razorpay/webhook) as a webhook in the Razorpay dashboard
+    for: subscription.activated, subscription.charged, subscription.cancelled,
+    payment.captured, payment.failed. Always returns 200 once the signature
+    checks out (even for events we don't act on) so Razorpay doesn't retry
+    forever on an event we simply don't need."""
+    raw_body = await request.body()
+    signature = request.headers.get("x-razorpay-signature", "")
+    if not razorpay_client.verify_webhook_signature(raw_body, signature):
+        raise HTTPException(400, "Invalid webhook signature")
+
+    event = json.loads(raw_body)
+    event_type = event.get("event", "")
+    payload = event.get("payload", {})
+    logger.info("razorpay webhook: %s", event_type)
+
+    if event_type in ("subscription.activated", "subscription.authenticated"):
+        sub = payload.get("subscription", {}).get("entity", {})
+        account_id = calls_db.find_account_id_by_razorpay_subscription(sub.get("id", ""))
+        if account_id:
+            plan = (sub.get("notes") or {}).get("plan") or "starter"
+            existing = calls_db.get_subscription(account_id)
+            calls_db.upsert_subscription(
+                account_id, plan, existing["billing_cycle"] if existing else "monthly",
+                sub.get("customer_id"), sub["id"], status="active",
+                current_period_start=_epoch_to_iso(sub.get("current_start")),
+                current_period_end=_epoch_to_iso(sub.get("current_end")),
+            )
+            admin_db.change_plan(account_id, plan)
+
+    elif event_type == "subscription.charged":
+        sub = payload.get("subscription", {}).get("entity", {})
+        payment = payload.get("payment", {}).get("entity", {})
+        account_id = calls_db.find_account_id_by_razorpay_subscription(sub.get("id", ""))
+        if account_id:
+            existing = calls_db.get_subscription(account_id)
+            plan = (sub.get("notes") or {}).get("plan") or (existing["plan"] if existing else "starter")
+            new_period_start = _epoch_to_iso(sub.get("current_start"))
+            new_period_end = _epoch_to_iso(sub.get("current_end"))
+
+            # Record the plan charge itself.
+            calls_db.record_invoice(
+                account_id, kind="subscription",
+                amount_inr=(payment.get("amount") or 0) / 100,
+                status="paid", razorpay_payment_id=payment.get("id"),
+                period_start=new_period_start, period_end=new_period_end,
+                notes=f"{plan} plan renewal",
+            )
+
+            # Bill overage + phone-number fees for the period that JUST
+            # closed (the one before this new one) as a subscription addon —
+            # lands on the FOLLOWING charge, a Razorpay Addon limitation, not
+            # a bug (see razorpay_client.create_subscription_addon).
+            if existing and existing["current_period_start"] and existing["current_period_end"]:
+                overage = calls_db.overage_for_account_period(
+                    account_id, plan, existing["current_period_start"], existing["current_period_end"]
+                )
+                phone_fees = calls_db.active_phone_number_fees(account_id)
+                addon_total = overage["overageAmountInr"] + phone_fees
+                if addon_total > 0:
+                    try:
+                        razorpay_client.create_subscription_addon(
+                            sub["id"], addon_total,
+                            f"Overage ({overage['overageCredits']} credits) + phone number fees for "
+                            f"{existing['current_period_start'][:10]}–{existing['current_period_end'][:10]}",
+                        )
+                        calls_db.record_invoice(
+                            account_id, kind="overage", amount_inr=addon_total, status="pending_next_cycle",
+                            period_start=existing["current_period_start"], period_end=existing["current_period_end"],
+                            credits=int(overage["overageCredits"]),
+                            notes=f"{overage['overageCredits']} credits over plan + {phone_fees} phone number fees",
+                        )
+                    except razorpay_client.RazorpayError:
+                        logger.exception("failed to add overage addon for account %s", account_id)
+
+            calls_db.upsert_subscription(
+                account_id, plan, existing["billing_cycle"] if existing else "monthly",
+                sub.get("customer_id"), sub["id"], status="active",
+                current_period_start=new_period_start, current_period_end=new_period_end,
+            )
+            admin_db.change_plan(account_id, plan)
+
+    elif event_type == "subscription.cancelled":
+        sub = payload.get("subscription", {}).get("entity", {})
+        account_id = calls_db.find_account_id_by_razorpay_subscription(sub.get("id", ""))
+        if account_id:
+            existing = calls_db.get_subscription(account_id)
+            if existing:
+                calls_db.upsert_subscription(
+                    account_id, existing["plan"], existing["billing_cycle"],
+                    existing["razorpay_customer_id"], existing["razorpay_subscription_id"],
+                    status="cancelled",
+                    current_period_start=existing["current_period_start"],
+                    current_period_end=existing["current_period_end"],
+                )
+
+    elif event_type == "payment.captured":
+        # Only relevant for one-off orders (top-ups) — subscription charges
+        # are already handled above, keyed by subscription id, not order id.
+        payment = payload.get("payment", {}).get("entity", {})
+        order_id = payment.get("order_id")
+        if order_id:
+            invoice = calls_db.mark_invoice_paid(razorpay_order_id=order_id, razorpay_payment_id=payment.get("id"))
+            if invoice and invoice["kind"] == "topup" and invoice["credits"]:
+                calls_db.add_topup_credits(invoice["account_id"], invoice["credits"])
+
+    elif event_type == "payment.failed":
+        payment = payload.get("payment", {}).get("entity", {})
+        order_id = payment.get("order_id")
+        if order_id:
+            calls_db.mark_invoice_failed(order_id)
+    return {"ok": True}
+
+
+def _epoch_to_iso(epoch: int | None) -> str | None:
+    if epoch is None:
+        return None
+    import datetime
+
+    return datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc).isoformat()
 
 
 # ---------------------------------------------------------- voices

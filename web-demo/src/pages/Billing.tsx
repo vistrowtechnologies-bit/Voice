@@ -4,45 +4,165 @@ import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
-import { fetchBilling } from '../lib/api'
+import { fetchBilling, fetchSubscription, startCheckout, startTopup, verifyTopupPayment } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { BRAND } from '../lib/brand'
-import { PLANS } from '../lib/plans'
-import type { BillingSummary } from '../lib/types'
+import { ANNUAL_MONTHS_CHARGED, PLANS } from '../lib/plans'
+import type { BillingSummary, Invoice } from '../lib/types'
+
+// Razorpay's Checkout.js attaches itself to window - loaded on demand (only
+// once) rather than globally, so a user who never touches Billing never
+// pulls in a third-party script.
+let razorpayScriptPromise: Promise<void> | null = null
+function loadRazorpayCheckout(): Promise<void> {
+  if (razorpayScriptPromise) return razorpayScriptPromise
+  razorpayScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Could not load Razorpay checkout'))
+    document.body.appendChild(script)
+  })
+  return razorpayScriptPromise
+}
+
+interface RazorpayCheckoutOptions {
+  key: string
+  subscription_id?: string
+  order_id?: string
+  name: string
+  description: string
+  theme?: { color: string }
+  handler: (response: { razorpay_payment_id: string; razorpay_order_id?: string; razorpay_signature?: string }) => void
+  modal?: { ondismiss?: () => void }
+}
+
+declare global {
+  interface Window {
+    Razorpay: new (options: RazorpayCheckoutOptions) => { open: () => void }
+  }
+}
+
+const INVOICE_KIND_LABELS: Record<string, string> = {
+  subscription: 'Plan renewal',
+  overage: 'Overage + phone numbers',
+  topup: 'Credit top-up',
+  phone_number: 'Phone number',
+}
 
 export function Billing() {
   const { user } = useAuth()
   const [billing, setBilling] = useState<BillingSummary | null>(null)
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [razorpayConfigured, setRazorpayConfigured] = useState(true)
+  const [cycle, setCycle] = useState<'monthly' | 'annual'>('monthly')
+  const [busyPlan, setBusyPlan] = useState<string | null>(null)
+  const [topupOpen, setTopupOpen] = useState(false)
+  const [topupCredits, setTopupCredits] = useState(100)
+  const [topupBusy, setTopupBusy] = useState(false)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
+  function refetch() {
     fetchBilling().then(setBilling).catch(() => setBilling(null))
-  }, [])
+    fetchSubscription()
+      .then((r) => {
+        setInvoices(r.invoices)
+        setRazorpayConfigured(r.razorpayConfigured)
+      })
+      .catch(() => {})
+  }
+
+  useEffect(refetch, [])
 
   const usedPct = billing ? Math.min(100, Math.round((billing.creditsUsed / billing.creditsTotal) * 100)) : 0
-  // The account's real plan, matched case-insensitively against PLANS for
-  // consistent display capitalization - falls back to the raw stored value
-  // (e.g. "free"/"trial", which aren't paid tiers in PLANS) or "Starter".
-  const currentPlanName =
-    PLANS.find((p) => p.name.toLowerCase() === (user?.plan || '').toLowerCase())?.name || user?.plan || 'Starter'
+  const currentPlanKey = billing?.plan || (user?.plan || 'starter').toLowerCase()
+  const currentPlanName = PLANS.find((p) => p.key === currentPlanKey)?.name || 'Starter'
+
+  async function handleUpgrade(planKey: 'starter' | 'growth' | 'scale', planName: string) {
+    setError('')
+    setBusyPlan(planKey)
+    try {
+      await loadRazorpayCheckout()
+      const session = await startCheckout(planKey, cycle)
+      const razorpay = new window.Razorpay({
+        key: session.razorpayKeyId,
+        subscription_id: session.subscriptionId,
+        name: 'Vistrow Voice',
+        description: `${planName} plan · ${cycle === 'annual' ? 'annual' : 'monthly'} billing`,
+        theme: { color: '#a855f7' },
+        handler: () => {
+          // The subscription.activated/charged webhook is what actually
+          // flips status to "active" - this refetch just gives immediate
+          // visual feedback that payment went through.
+          refetch()
+        },
+        modal: { ondismiss: () => setBusyPlan(null) },
+      })
+      razorpay.open()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start checkout')
+    } finally {
+      setBusyPlan(null)
+    }
+  }
+
+  async function handleTopup() {
+    setError('')
+    setTopupBusy(true)
+    try {
+      await loadRazorpayCheckout()
+      const session = await startTopup(topupCredits)
+      const razorpay = new window.Razorpay({
+        key: session.razorpayKeyId,
+        order_id: session.orderId,
+        name: 'Vistrow Voice',
+        description: `${session.credits} extra credits`,
+        theme: { color: '#a855f7' },
+        handler: async (response) => {
+          if (response.razorpay_order_id && response.razorpay_signature) {
+            await verifyTopupPayment(response.razorpay_order_id, response.razorpay_payment_id, response.razorpay_signature)
+            refetch()
+          }
+        },
+        modal: { ondismiss: () => setTopupBusy(false) },
+      })
+      razorpay.open()
+      setTopupOpen(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start top-up')
+    } finally {
+      setTopupBusy(false)
+    }
+  }
 
   return (
     <DashboardLayout>
       <PageHeader title="Billing" subtitle="Manage your subscription and usage" />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
+        {error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</p>}
+
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
-            <div className="mb-3 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan/20 text-cyan">
-                <Icon name="toll" className="text-[20px]" />
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan/20 text-cyan">
+                  <Icon name="toll" className="text-[20px]" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Credits this cycle</p>
+                  <p className="text-2xl font-bold">
+                    {billing?.creditsRemaining ?? '-'}
+                    <span className="ml-1 text-sm font-normal text-text-muted">/ {billing?.creditsTotal ?? '-'} available</span>
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Credits</p>
-                <p className="text-2xl font-bold">
-                  {billing?.creditsRemaining ?? '-'}
-                  <span className="ml-1 text-sm font-normal text-text-muted">/ {billing?.creditsTotal ?? '-'} available</span>
-                </p>
-              </div>
+              <button
+                onClick={() => setTopupOpen(true)}
+                disabled={!razorpayConfigured}
+                className="rounded-lg border border-cyan/40 px-3 py-1.5 text-xs font-bold text-cyan hover:bg-cyan/10 disabled:opacity-40"
+              >
+                + Buy credits
+              </button>
             </div>
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-high">
               <div
@@ -53,15 +173,37 @@ export function Billing() {
             <p className="mt-2 text-xs text-text-muted">
               {billing ? `${billing.minutesUsed} call minutes used this cycle (1 credit ≈ 1 minute)` : 'Loading usage…'}
             </p>
+            {billing && billing.overageCredits > 0 && (
+              <p className="mt-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
+                {billing.overageCredits} credits over plan this cycle · ~₹{billing.overageAmountInr} will be added to
+                your next invoice ({billing.overageRateInr}/credit overage rate)
+              </p>
+            )}
+            {billing && billing.phoneNumberCount > 0 && (
+              <p className="mt-1 text-xs text-text-muted">
+                {billing.phoneNumberCount} active phone number{billing.phoneNumberCount === 1 ? '' : 's'} · ₹
+                {billing.phoneNumberFeesInr}/mo
+              </p>
+            )}
           </Card>
 
           <Card variant="flat">
             <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Current plan</p>
             <p className="mt-1 text-xl font-bold">{currentPlanName}</p>
-            <p className="mt-1 text-xs text-text-muted">Billed monthly · next renewal on the 1st</p>
-            <p className="mt-3 flex items-center gap-1.5 text-xs text-cyan">
-              <Icon name="check_circle" className="text-[14px]" />
-              All usage tracked from real call minutes
+            <p className="mt-1 text-xs text-text-muted">
+              Billed {billing?.billingCycle || 'monthly'}
+              {billing?.currentPeriodEnd ? ` · renews ${new Date(billing.currentPeriodEnd).toLocaleDateString()}` : ''}
+            </p>
+            <p className="mt-1 flex items-center gap-1.5 text-xs">
+              <Icon
+                name={billing?.subscriptionStatus === 'active' ? 'check_circle' : 'info'}
+                className={`text-[14px] ${billing?.subscriptionStatus === 'active' ? 'text-cyan' : 'text-text-muted'}`}
+              />
+              {billing?.subscriptionStatus === 'active'
+                ? 'Subscription active'
+                : billing?.subscriptionStatus === 'cancelled'
+                  ? 'Subscription cancelled'
+                  : 'No active subscription yet'}
             </p>
           </Card>
         </div>
@@ -135,80 +277,163 @@ export function Billing() {
         )}
 
         <div>
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold">Available plans</h2>
-            <span className="rounded-full border border-border px-3 py-1 text-[11px] text-text-muted">Region · India</span>
-          </div>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            {PLANS.map((plan) => (
-              <div
-                key={plan.name}
-                className={`flex flex-col rounded-xl border bg-surface p-5 ${
-                  plan.tag === 'Recommended' ? 'border-cyan/50' : plan.tag === 'Most Popular' ? 'border-amber/50' : 'border-border'
-                }`}
-              >
-                {plan.tag && (
-                  <span
-                    className={`mb-2 self-start rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${
-                      plan.tag === 'Recommended' ? 'bg-cyan/15 text-cyan' : 'bg-amber/15 text-amber'
-                    }`}
-                  >
-                    {plan.tag}
-                  </span>
-                )}
-                <h3 className="text-lg font-bold uppercase tracking-wide">{plan.name}</h3>
-                <p className="mt-1 text-2xl font-bold">
-                  {plan.price}
-                  <span className="text-xs font-normal text-text-muted"> /month + GST</span>
-                </p>
-                <p className="mt-1 flex items-center gap-1.5 text-xs text-cyan">
-                  <Icon name="bolt" className="text-[14px]" />
-                  {plan.credits}
-                </p>
-                <ul className="mb-4 mt-3 flex flex-col gap-1.5 text-xs text-text-muted">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-center gap-1.5">
-                      <Icon name="check" className="text-[14px] text-cyan" />
-                      {f}
-                    </li>
-                  ))}
-                  {plan.lockedFeatures?.map((f) => (
-                    <li key={f} className="flex items-center gap-1.5 text-text-muted/50">
-                      <Icon name="lock" className="text-[14px]" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                {plan.name === currentPlanName ? (
-                  <button
-                    disabled
-                    className="mt-auto rounded-lg border border-cyan/40 py-2 text-sm font-bold text-cyan opacity-90"
-                  >
-                    Current plan
-                  </button>
-                ) : (
-                  <a
-                    href={`mailto:sales@vistrow.ai?subject=${encodeURIComponent(
-                      `Upgrade to ${plan.name} plan`,
-                    )}&body=${encodeURIComponent(
-                      `Hi, we'd like to upgrade our ${BRAND.name} subscription to the ${plan.name} plan (${plan.price}/month).`,
-                    )}`}
-                    className="mt-auto rounded-lg bg-primary py-2 text-center text-sm font-bold text-bg hover:opacity-90"
-                  >
-                    Upgrade to {plan.name}
-                  </a>
-                )}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center rounded-full border border-border p-0.5 text-xs font-bold">
+                <button
+                  onClick={() => setCycle('monthly')}
+                  className={`rounded-full px-3 py-1 ${cycle === 'monthly' ? 'bg-primary text-bg' : 'text-text-muted'}`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setCycle('annual')}
+                  className={`rounded-full px-3 py-1 ${cycle === 'annual' ? 'bg-primary text-bg' : 'text-text-muted'}`}
+                >
+                  Annual · save {Math.round((1 - ANNUAL_MONTHS_CHARGED / 12) * 100)}%
+                </button>
               </div>
-            ))}
+              <span className="rounded-full border border-border px-3 py-1 text-[11px] text-text-muted">Region · India</span>
+            </div>
           </div>
-          <p className="mt-3 text-[11px] text-text-muted">
-            Plans shown are indicative - online checkout isn't wired up yet. Credits and usage above are
-            computed from real call minutes in the call log.
-          </p>
+          {!razorpayConfigured && (
+            <p className="mb-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-2 text-xs text-amber">
+              Online checkout isn't configured on this server yet — plans below are informational until Razorpay keys
+              are added.
+            </p>
+          )}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {PLANS.map((plan) => {
+              const isCurrent = plan.key === currentPlanKey && billing?.subscriptionStatus === 'active'
+              const displayPrice =
+                cycle === 'annual' ? `₹${(plan.priceInr * ANNUAL_MONTHS_CHARGED).toLocaleString('en-IN')}` : plan.price
+              return (
+                <div
+                  key={plan.name}
+                  className={`flex flex-col rounded-xl border bg-surface p-5 ${
+                    plan.tag === 'Recommended' ? 'border-cyan/50' : plan.tag === 'Most Popular' ? 'border-amber/50' : 'border-border'
+                  }`}
+                >
+                  {plan.tag && (
+                    <span
+                      className={`mb-2 self-start rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${
+                        plan.tag === 'Recommended' ? 'bg-cyan/15 text-cyan' : 'bg-amber/15 text-amber'
+                      }`}
+                    >
+                      {plan.tag}
+                    </span>
+                  )}
+                  <h3 className="text-lg font-bold uppercase tracking-wide">{plan.name}</h3>
+                  <p className="mt-1 text-2xl font-bold">
+                    {displayPrice}
+                    <span className="text-xs font-normal text-text-muted"> {cycle === 'annual' ? '/year' : '/month'} + GST</span>
+                  </p>
+                  <p className="mt-1 flex items-center gap-1.5 text-xs text-cyan">
+                    <Icon name="bolt" className="text-[14px]" />
+                    {plan.credits}
+                  </p>
+                  <ul className="mb-4 mt-3 flex flex-col gap-1.5 text-xs text-text-muted">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-center gap-1.5">
+                        <Icon name="check" className="text-[14px] text-cyan" />
+                        {f}
+                      </li>
+                    ))}
+                    {plan.lockedFeatures?.map((f) => (
+                      <li key={f} className="flex items-center gap-1.5 text-text-muted/50">
+                        <Icon name="lock" className="text-[14px]" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  {isCurrent ? (
+                    <button
+                      disabled
+                      className="mt-auto rounded-lg border border-cyan/40 py-2 text-sm font-bold text-cyan opacity-90"
+                    >
+                      Current plan
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleUpgrade(plan.key, plan.name)}
+                      disabled={!razorpayConfigured || busyPlan === plan.key}
+                      className="mt-auto rounded-lg bg-primary py-2 text-center text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40"
+                    >
+                      {busyPlan === plan.key ? 'Opening checkout…' : `Upgrade to ${plan.name}`}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
 
+        {topupOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setTopupOpen(false)}>
+            <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-5" onClick={(e) => e.stopPropagation()}>
+              <h3 className="mb-3 text-sm font-bold">Buy extra credits</h3>
+              <label className="mb-1 block text-xs text-text-muted">Credits</label>
+              <input
+                type="number"
+                min={10}
+                step={10}
+                value={topupCredits}
+                onChange={(e) => setTopupCredits(Math.max(10, Number(e.target.value)))}
+                className="mb-4 w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm"
+              />
+              <p className="mb-4 text-xs text-text-muted">
+                Billed at your plan's own rate ({(billing ? billing.planPriceInr / billing.creditsTotal : 0).toFixed(2)}
+                /credit) — credits apply to this billing cycle immediately once payment confirms.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTopupOpen(false)}
+                  className="flex-1 rounded-lg border border-border py-2 text-sm font-bold text-text-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleTopup}
+                  disabled={topupBusy}
+                  className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-bg disabled:opacity-40"
+                >
+                  {topupBusy ? 'Opening…' : 'Continue'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <SectionCard title="Invoices">
-          <EmptyState icon="receipt_long" text="No invoices yet." />
+          {invoices.length === 0 ? (
+            <EmptyState icon="receipt_long" text="No invoices yet." />
+          ) : (
+            <div className="divide-y divide-border">
+              {invoices.map((inv) => (
+                <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm sm:px-5">
+                  <div>
+                    <p>{INVOICE_KIND_LABELS[inv.kind] || inv.kind}</p>
+                    <p className="text-xs text-text-muted">{new Date(inv.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-text-muted">₹{inv.amount_inr}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                        inv.status === 'paid'
+                          ? 'bg-cyan/15 text-cyan'
+                          : inv.status === 'failed'
+                            ? 'bg-destructive/15 text-destructive'
+                            : 'bg-amber/15 text-amber'
+                      }`}
+                    >
+                      {inv.status === 'pending_next_cycle' ? 'next invoice' : inv.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </SectionCard>
       </section>
     </DashboardLayout>

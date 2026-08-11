@@ -17,10 +17,12 @@ import type {
   InboundRoute,
   Integration,
   ApiKey,
+  Invoice,
   KnowledgeBase,
   PhoneNumber,
   QaDraft,
   Site,
+  Subscription,
   TelephonyStatus,
   UsageTrends,
   VoiceCatalog,
@@ -310,6 +312,24 @@ export const fetchOrchestratorBrowserToken = (agentId: number) =>
 // --------------------------------------------------------------- billing
 
 export const fetchBilling = () => get<BillingSummary>('/billing/summary')
+
+export const fetchSubscription = () =>
+  get<{ subscription: Subscription | null; invoices: Invoice[]; razorpayConfigured: boolean }>('/billing/subscription')
+
+export const startCheckout = (plan: string, billingCycle: 'monthly' | 'annual') =>
+  send<{ razorpayKeyId: string; subscriptionId: string; plan: string; billingCycle: string }>(
+    'POST',
+    '/billing/checkout',
+    { plan, billingCycle },
+  )
+
+export const startTopup = (credits: number) =>
+  send<{ razorpayKeyId: string; orderId: string; amountInr: number; credits: number }>('POST', '/billing/topup', {
+    credits,
+  })
+
+export const verifyTopupPayment = (razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string) =>
+  send<{ ok: boolean }>('POST', '/billing/verify-payment', { razorpayOrderId, razorpayPaymentId, razorpaySignature })
 
 // ---------------------------------------------------------- website widget
 
