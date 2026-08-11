@@ -41,6 +41,28 @@ export function DemoOrbCard() {
   const [token, setToken] = useState<string | null>(null)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
 
+  // Backs off "Try Again" after repeated failures instead of letting a
+  // frustrated visitor hammer it - every immediate re-click starts a brand
+  // new agent dispatch, and under real capacity pressure that's exactly
+  // what turns a temporary slowdown into a pile-up of abandoned jobs each
+  // holding a worker slot for up to 90s. Escalates 8s -> 16s -> 30s (capped);
+  // resets to zero on any successful connection.
+  const consecutiveFailuresRef = useRef(0)
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null)
+  const [cooldownRemainingS, setCooldownRemainingS] = useState(0)
+  useEffect(() => {
+    if (cooldownUntil === null) return
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000))
+      setCooldownRemainingS(remaining)
+      if (remaining <= 0) setCooldownUntil(null)
+    }
+    tick()
+    const interval = window.setInterval(tick, 500)
+    return () => window.clearInterval(interval)
+  }, [cooldownUntil])
+  const inCooldown = cooldownUntil !== null && cooldownRemainingS > 0
+
   const remaining = getRemainingDemoCalls()
 
   // Pre-warms a room + LiveKit token the instant this card mounts, instead
@@ -57,9 +79,24 @@ export function DemoOrbCard() {
   // sits on for minutes before clicking would otherwise hand them a token
   // for a room whose job already gave up and exited.
   const PREWARM_MAX_AGE_MS = 60_000
+  // Repeating this forever for as long as the tab is open - the original
+  // behavior - meant every homepage visitor who left the tab open (or
+  // backgrounded) kept re-dispatching a fresh agent job every ~50s,
+  // indefinitely, whether or not they ever clicked. At real traffic (a
+  // few hundred open tabs), that's a sustained, self-regenerating load on
+  // the demo agent's capacity completely independent of actual call
+  // volume - and each abandoned dispatch holds a worker slot for up to 90s
+  // (agent/main.py's wait_for_participant timeout) before it frees up.
+  // Capping the number of re-warms and pausing while the tab isn't visible
+  // keeps the "no cold start on click" benefit for an actually-engaged
+  // visitor without the unbounded background cost.
+  const MAX_PREWARM_CYCLES = 4
+  const prewarmCountRef = useRef(0)
   const prewarmRef = useRef<{ token: string; url: string; identity: string; room: string; at: number } | null>(null)
   const prewarm = useCallback(() => {
     if (!hasDemoCallsRemaining()) return
+    if (document.visibilityState !== 'visible') return
+    prewarmCountRef.current += 1
     const identity = randomId('visitor')
     const room = randomId('voice-agent-demo')
     fetchLiveKitToken(identity, room)
@@ -77,8 +114,26 @@ export function DemoOrbCard() {
     // (and this card's own PREWARM_MAX_AGE_MS reuse window) expire, so a
     // visitor who reads the page for a while before clicking still gets a
     // fresh, live-dispatched room instead of falling back to a cold fetch.
-    const interval = window.setInterval(prewarm, PREWARM_MAX_AGE_MS - 10_000)
-    return () => window.clearInterval(interval)
+    // Stops after MAX_PREWARM_CYCLES (~4 minutes of the tab sitting open
+    // unclicked) - a visitor who's read the page that long without tapping
+    // is unlikely to convert on this exact impression, and handleStart
+    // still works fine without a warm room, it just pays a live fetch
+    // instead of a pre-fetched one.
+    const interval = window.setInterval(() => {
+      if (prewarmCountRef.current >= MAX_PREWARM_CYCLES) {
+        window.clearInterval(interval)
+        return
+      }
+      prewarm()
+    }, PREWARM_MAX_AGE_MS - 10_000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && prewarmCountRef.current < MAX_PREWARM_CYCLES) prewarm()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [prewarm])
 
   // Only counts against the free-call cap once a call actually connects to
@@ -90,6 +145,7 @@ export function DemoOrbCard() {
   const chargeDemoCall = useCallback(() => {
     if (creditChargedRef.current) return
     creditChargedRef.current = true
+    consecutiveFailuresRef.current = 0
     recordDemoCall()
   }, [])
 
@@ -98,6 +154,7 @@ export function DemoOrbCard() {
       setPhase('capped')
       return
     }
+    if (cooldownUntil !== null && Date.now() < cooldownUntil) return
     creditChargedRef.current = false
     setPhase('connecting')
     setErrorMessage(null)
@@ -121,7 +178,7 @@ export function DemoOrbCard() {
       }
       setPhase('denied')
     }
-  }, [])
+  }, [cooldownUntil])
 
   // Ending the call just returns the card to its idle "Tap to talk" state,
   // right here - no separate summary page or route to send the visitor to.
@@ -144,7 +201,20 @@ export function DemoOrbCard() {
   }, [])
 
   const handleOrchestratorFailed = useCallback(() => {
-    setErrorMessage('Artha didn’t pick up just now - please try again.')
+    // Both providers failed for this attempt - the strongest signal we have
+    // that this is real capacity pressure, not a one-off blip. Second+
+    // consecutive failure gets an honest "high demand" message plus a
+    // cooldown instead of a bare "try again" that just invites another
+    // immediate click - escalates 8s/16s/30s(capped) per repeat failure.
+    consecutiveFailuresRef.current += 1
+    const failures = consecutiveFailuresRef.current
+    if (failures >= 2) {
+      const cooldownMs = Math.min(30_000, 8_000 * 2 ** (failures - 2))
+      setCooldownUntil(Date.now() + cooldownMs)
+      setErrorMessage("We're seeing high demand right now — please wait a moment before trying again.")
+    } else {
+      setErrorMessage('Artha didn’t pick up just now - please try again.')
+    }
     setPhase('unreachable')
   }, [])
 
@@ -259,9 +329,10 @@ export function DemoOrbCard() {
               <button
                 type="button"
                 onClick={handleStart}
-                className="mt-5 rounded-full bg-primary px-5 py-2 text-xs font-bold text-bg transition-opacity hover:opacity-90"
+                disabled={inCooldown}
+                className="mt-5 rounded-full bg-primary px-5 py-2 text-xs font-bold text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Try Again
+                {inCooldown ? `Try again in ${cooldownRemainingS}s` : 'Try Again'}
               </button>
             ) : (
               <div className="mt-5 rounded-xl border border-border bg-bg px-4 py-2 text-sm">

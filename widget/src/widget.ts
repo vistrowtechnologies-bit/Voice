@@ -587,6 +587,20 @@ function init(): void {
   let callStartedAt = 0
   let callCompleted = false
 
+  // Backs off repeated call attempts instead of letting an impatient
+  // visitor hammer "Talk to X" after a failure - every fresh attempt
+  // dispatches a brand new agent job, and under real capacity pressure
+  // each failed one sits occupying a worker slot for up to 90s before it
+  // self-abandons. Without a cooldown, rapid re-clicking is exactly what
+  // turns a temporary slowdown into a pile-up. Escalates 8s/16s/30s
+  // (capped) per consecutive failure; resets the moment a call actually
+  // connects to an agent.
+  let consecutiveCallFailures = 0
+  let callCooldownUntil = 0
+  function callCooldownRemainingMs(): number {
+    return Math.max(0, callCooldownUntil - Date.now())
+  }
+
   // Hard cap on call length — every minute of every call costs real STT/LLM/
   // TTS spend, so an unattended or forgotten tab shouldn't run indefinitely.
   // Shown as a live countdown (not a silent cutoff) so it never feels like
@@ -1027,7 +1041,18 @@ function init(): void {
   // behavior) meant a failure looked exactly like "the widget opens and
   // shuts down instantly, never says anything," with zero chance to read
   // why. The visitor can still close it early via the X.
-  function failCall(message: string): void {
+  // skipBackoff: true when this call is itself reporting an already-active
+  // cooldown (see startCall's gate above) — must not count as ANOTHER
+  // failure and extend the cooldown further.
+  function failCall(message: string, opts?: { skipBackoff?: boolean }): void {
+    if (!opts?.skipBackoff) {
+      consecutiveCallFailures += 1
+      if (consecutiveCallFailures >= 2) {
+        const cooldownMs = Math.min(30_000, 8_000 * 2 ** (consecutiveCallFailures - 2))
+        callCooldownUntil = Date.now() + cooldownMs
+        message = "We're seeing high demand right now — please wait a moment before trying again."
+      }
+    }
     showComplete(message, false)
   }
 
@@ -1193,6 +1218,14 @@ function init(): void {
   }
 
   async function startCall(name: string, phone: string, email: string, attempt = 0): Promise<void> {
+    // Only gates a fresh, user-initiated attempt - the internal 15s
+    // agent-join watchdog's own automatic retry (attempt=1) must still run
+    // even if a cooldown started moments ago, since that's the SAME attempt
+    // continuing, not a new one.
+    if (attempt === 0 && callCooldownRemainingMs() > 0) {
+      failCall('High demand right now — please wait a moment and try again.', { skipBackoff: true })
+      return
+    }
     intentionalEnd = false
     callCompleted = false
     if (attempt === 0) callStartedAt = Date.now()
@@ -1262,6 +1295,8 @@ function init(): void {
         clearAgentJoinWatchdog()
         setStatus('Agent joined — say hello!')
         trackEvent('agent_joined')
+        consecutiveCallFailures = 0
+        callCooldownUntil = 0
         applyAgentState(participant.attributes?.['lk.agent.state'])
         // The 5-minute budget is meant to cover actual conversation time,
         // not the wait for the agent to join — starting it any earlier
@@ -1306,6 +1341,8 @@ function init(): void {
       if (room.remoteParticipants.size > 0) {
         setStatus('Agent joined — say hello!')
         trackEvent('agent_joined')
+        consecutiveCallFailures = 0
+        callCooldownUntil = 0
         room.remoteParticipants.forEach((p: RemoteParticipant) => {
           applyAgentState(p.attributes?.['lk.agent.state'])
         })
