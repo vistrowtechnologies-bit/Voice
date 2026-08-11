@@ -1378,7 +1378,13 @@ function init(): void {
     hideGreeting()
   })
   closeBtn.addEventListener('click', () => {
-    if (room) endCall()
+    // Already on the "conversation complete" screen — chatHistory is still
+    // populated at this point (only cleared on a fresh conversation), so
+    // without this check the length check below would re-trigger
+    // showComplete() on every click and X would never actually close the
+    // panel.
+    if (completeEl.style.display === 'flex') resetToIdle()
+    else if (room) endCall()
     else if (chatHistory.length > 1) showComplete(`Thanks for chatting with ${agentName}.`, true)
     else resetToIdle()
   })
