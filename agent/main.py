@@ -967,14 +967,47 @@ class RealEstateAgent(Agent):
                         else "The caller's gender is unknown and must never be assumed from your own voice, "
                         "from their name, OR from any feminine/masculine verb form THEY happen to use about "
                         "THEIR OWN actions (e.g. them saying 'मैं ... कर रही हूँ' does NOT mean they are a "
-                        "woman — do not mirror or infer gender from that, it is a common false signal). The "
-                        "ONLY thing that counts as knowing their gender is them explicitly stating it "
-                        "('I'm male', 'मैं महिला हूँ', etc). Until then, when a verb addressed to them needs "
-                        "gender agreement (आप करेंगे/करेंगी, चाहेंगे/चाहेंगी), default to the neutral/"
-                        "masculine-plural form (करेंगे, चाहेंगे) with no exceptions."
+                        "woman — do not mirror or infer gender from that, it is a common false signal). "
+                        "CONCRETE EXAMPLE of the exact mistake to avoid: if the caller just said something "
+                        "gender-neutral like 'Many calls', a reply of 'बिलकुल! क्या आप बता सकती हैं...' is "
+                        "WRONG — 'सकती' assumes the caller is a woman for no reason, likely by copying your "
+                        "OWN voice's gender onto them. The correct reply is 'बिलकुल! क्या आप बता सकते हैं...' "
+                        "(सकते, not सकती). The ONLY thing that counts as knowing their gender is them "
+                        "explicitly stating it ('I'm male', 'मैं महिला हूँ', etc). Until then, when a verb "
+                        "addressed to them needs gender agreement (आप करेंगे/करेंगी, चाहेंगे/चाहेंगी, "
+                        "सकते/सकती), default to the neutral/masculine-plural form (करेंगे, चाहेंगे, सकते) "
+                        "with no exceptions."
                     )
                 ),
             )
+
+        # Reinforced per-turn for the same reason gender is above: a single
+        # system-prompt mention of the default language ("Default language"
+        # in platform_assistant.py/generic_assistant.py) tends to drift once
+        # the model starts actually generating replies — this persona's own
+        # instructions are themselves full of Hindi/Hinglish example text
+        # (fillers, jokes, reaction examples), which pulls the model back
+        # toward Hindi even on a call explicitly configured for English.
+        # Observed live: caller replied in plain English ("Many calls") on
+        # an en-IN-configured call, detect_reply_language correctly read it
+        # as English (so no switch was ever requested), and the model still
+        # replied in Hindi anyway. This is the same fix shape as the gender
+        # block above: restate the current language as non-negotiable, every
+        # single turn, rather than trusting one mention earlier in the
+        # prompt to hold for the whole call.
+        _current_language_name = LANGUAGE_NAMES.get(self._reply_language, self._reply_language)
+        turn_ctx.add_message(
+            role="system",
+            content=(
+                f"Reply to THIS turn entirely in {_current_language_name} — every sentence, no "
+                "exceptions, regardless of what language any example, filler word, or joke "
+                "elsewhere in your instructions happened to be written in. Those are illustrations "
+                f"of a pattern, not a signal to switch languages. Stay in {_current_language_name} "
+                "unless the caller has actually just switched languages themselves this call (see "
+                "the multilingual/switch_reply_language rules above) — absent that, this is not "
+                "optional."
+            ),
+        )
 
         emotion = detect_caller_emotion(text)
         if emotion != self._current_emotion:
