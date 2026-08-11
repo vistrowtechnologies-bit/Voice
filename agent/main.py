@@ -99,6 +99,16 @@ _PLATFORM_DEMO_OPENERS: dict[str, list[str]] = {
         "ओके, यूज़ुअली यहाँ एआई एक बोरिंग रोबोटिक लाइन बोलता है। मैं वो नहीं करूँगी। सीधा बताइए—आपका बिज़नेस क्या करता है?",
         "हाय, मैं आर्था हूँ। आप इंग्लिश, हिंदी या हिंग्लिश में बात कर सकते हैं—जो कम्फर्टेबल लगे। तो बताइए, आपका बिज़नेस किस फील्ड में है?",
         "हे, मैं आर्था हूँ। सोचिए, आपकी हर कस्टमर कॉल इंस्टेंटली आंसर हो—ईवन आफ्टर ऑफिस आवर्स। अभी जब कॉल मिस होती है, तो आपकी टीम क्या करती है?",
+        # The next five lean on the pre-warmed instant-connect itself as the
+        # hook, rather than another "I'm Artha" self-intro — a visitor who's
+        # used a few AI demos doesn't expect the call to just... already be
+        # live. Kept gender-neutral where possible; "मान लेती हूँ"/"पाई" are
+        # the two that needed an explicit feminine form (male list below).
+        "अरे, आपने अभी क्लिक किया और मैं पहले से ही यहाँ हूँ — कोई लोडिंग नहीं, कोई अजीब सी चुप्पी नहीं। बताइए, ये आपके लिए कितना सरप्राइज़िंग है?",
+        "एक सेकंड रुकिए — इससे पहले कि मैं कुछ बोलूं, आप बताइए: आपने आखिरी बार किसी कंपनी को कॉल किया था और वो असल में हेल्पफुल थी, कब?",
+        "ठीक है, ऑनेस्टली बताऊं? मुझे पता है आप सोच रहे हैं 'ये कितनी देर तक रोबोट जैसा साउंड करेगी।' तो चलिए वही टेस्ट करते हैं — बताइए आपका बिज़नेस क्या है।",
+        "आपने अभी टैप किया, तो मैं मान लेती हूँ आप सीरियस हैं, कैज़ुअली ब्राउज़ नहीं कर रहे। तो सीधा बताइए — आपकी कॉल्स का सबसे बड़ा सिरदर्द क्या है?",
+        "मुझे बीस सेकंड्स दीजिए — अगर मैं आपको कन्विंस ना कर पाई कि ये असली कन्वर्सेशन है, तो आप हँस सकते हैं मुझ पर। डील? पहले बताइए, आप किस इंडस्ट्री में हैं?",
     ],
     "male": [
         "हे, आपने क्लिक किया है, तो अब मुझे प्रूव करना पड़ेगा कि मैं रोबोट जैसी साउंड नहीं करता। मैं आर्था हूँ, विस्ट्रो वॉइस से। आप इंग्लिश, हिंदी या हिंग्लिश में बात कर सकते हैं—बताइए, आपका बिज़नेस किस इंडस्ट्री में है?",
@@ -107,6 +117,11 @@ _PLATFORM_DEMO_OPENERS: dict[str, list[str]] = {
         "ओके, यूज़ुअली यहाँ एआई एक बोरिंग रोबोटिक लाइन बोलता है। मैं वो नहीं करूँगा। सीधा बताइए—आपका बिज़नेस क्या करता है?",
         "हाय, मैं आर्था हूँ। आप इंग्लिश, हिंदी या हिंग्लिश में बात कर सकते हैं—जो कम्फर्टेबल लगे। तो बताइए, आपका बिज़नेस किस फील्ड में है?",
         "हे, मैं आर्था हूँ। सोचिए, आपकी हर कस्टमर कॉल इंस्टेंटली आंसर हो—ईवन आफ्टर ऑफिस आवर्स। अभी जब कॉल मिस होती है, तो आपकी टीम क्या करती है?",
+        "अरे, आपने अभी क्लिक किया और मैं पहले से ही यहाँ हूँ — कोई लोडिंग नहीं, कोई अजीब सी चुप्पी नहीं। बताइए, ये आपके लिए कितना सरप्राइज़िंग है?",
+        "एक सेकंड रुकिए — इससे पहले कि मैं कुछ बोलूं, आप बताइए: आपने आखिरी बार किसी कंपनी को कॉल किया था और वो असल में हेल्पफुल थी, कब?",
+        "ठीक है, ऑनेस्टली बताऊं? मुझे पता है आप सोच रहे हैं 'ये कितनी देर तक रोबोट जैसा साउंड करेगा।' तो चलिए वही टेस्ट करते हैं — बताइए आपका बिज़नेस क्या है।",
+        "आपने अभी टैप किया, तो मैं मान लेता हूँ आप सीरियस हैं, कैज़ुअली ब्राउज़ नहीं कर रहे। तो सीधा बताइए — आपकी कॉल्स का सबसे बड़ा सिरदर्द क्या है?",
+        "मुझे बीस सेकंड्स दीजिए — अगर मैं आपको कन्विंस ना कर पाया कि ये असली कन्वर्सेशन है, तो आप हँस सकते हैं मुझ पर। डील? पहले बताइए, आप किस इंडस्ट्री में हैं?",
     ],
 }
 
@@ -122,6 +137,11 @@ _PLATFORM_DEMO_OPENERS_EN: dict[str, list[str]] = {
         "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. Just tell me — what does your business do?",
         "Hi, I'm Artha. So, what field is your business in?",
         "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. Right now, when you miss a call, what happens on your end?",
+        "Okay, you just clicked and I'm already talking — no loading spinner, no awkward pause. Kind of unsettling, right? What's got you checking this out?",
+        "Hold on, before I say anything — when's the last time you called a business and the person on the other end actually helped, fast?",
+        "Real talk — I know you're waiting to catch me sounding like a robot. Let's just get that test over with. What's your business?",
+        "You actually tapped the button, so I'm going to assume you're serious, not just browsing. Straight up — what's the biggest headache with your calls right now?",
+        "Give me twenty seconds — if I don't convince you this is a real conversation, you get to laugh at me. Deal? What industry are you in?",
     ],
     "male": [
         "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. What industry is your business in?",
@@ -130,6 +150,11 @@ _PLATFORM_DEMO_OPENERS_EN: dict[str, list[str]] = {
         "Okay, usually this is where an AI says some boring robotic line. I'm not going to do that. Just tell me — what does your business do?",
         "Hi, I'm Artha. So, what field is your business in?",
         "Hey, I'm Artha. Imagine every customer call getting answered instantly — even after hours. Right now, when you miss a call, what happens on your end?",
+        "Okay, you just clicked and I'm already talking — no loading spinner, no awkward pause. Kind of unsettling, right? What's got you checking this out?",
+        "Hold on, before I say anything — when's the last time you called a business and the person on the other end actually helped, fast?",
+        "Real talk — I know you're waiting to catch me sounding like a robot. Let's just get that test over with. What's your business?",
+        "You actually tapped the button, so I'm going to assume you're serious, not just browsing. Straight up — what's the biggest headache with your calls right now?",
+        "Give me twenty seconds — if I don't convince you this is a real conversation, you get to laugh at me. Deal? What industry are you in?",
     ],
 }
 
