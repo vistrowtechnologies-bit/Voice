@@ -1263,6 +1263,14 @@ function init(): void {
         setStatus('Agent joined — say hello!')
         trackEvent('agent_joined')
         applyAgentState(participant.attributes?.['lk.agent.state'])
+        // The 5-minute budget is meant to cover actual conversation time,
+        // not the wait for the agent to join — starting it any earlier
+        // silently burns visible call time during "Waiting for the agent
+        // to join…", which reads as the call running out faster than it
+        // should. Only (re)start once armed at all; a second
+        // ParticipantConnected on the same call (shouldn't normally
+        // happen) must never reset an already-running countdown.
+        if (countdownInterval === null) startCountdown()
       })
       room.on(RoomEvent.ParticipantAttributesChanged, (changed: Record<string, string>) => {
         if ('lk.agent.state' in changed) applyAgentState(changed['lk.agent.state'])
@@ -1301,10 +1309,10 @@ function init(): void {
         room.remoteParticipants.forEach((p: RemoteParticipant) => {
           applyAgentState(p.attributes?.['lk.agent.state'])
         })
+        startCountdown()
       } else {
         setStatus('Waiting for the agent to join…')
       }
-      startCountdown()
       // Dispatch loss (a deploy window, a worker hiccup) previously left the
       // visitor waiting forever. One silent retry with a completely fresh
       // room/token covers it; a second failure is shown honestly.
