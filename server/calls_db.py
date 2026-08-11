@@ -3438,6 +3438,21 @@ def get_site_by_key(site_key: str) -> dict | None:
         conn.close()
 
 
+def is_platform_demo_agent(agent_id: int | None) -> bool:
+    """Whether this agent is the seeded platform-demo agent (agents.is_platform_demo)
+    — used to route the marketing site's own demo traffic to its dedicated
+    LiveKit Cloud Agent (see token_api.py's _demo_dispatch_kwargs) instead of
+    the shared pool every tenant's calls run through."""
+    if agent_id is None:
+        return False
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT is_platform_demo FROM agents WHERE id = ?", (agent_id,)).fetchone()
+        return bool(row and row["is_platform_demo"])
+    finally:
+        conn.close()
+
+
 def get_agent_by_id_unscoped(agent_id: int) -> dict | None:
     """Unscoped by design, same reasoning as get_site_by_key above — called
     from the public /widget/chat endpoint after a site_key has already

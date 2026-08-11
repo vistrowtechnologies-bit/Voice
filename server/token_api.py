@@ -26,7 +26,13 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from livekit import api
-from livekit.api import CreateRoomRequest, ListParticipantsRequest, ListRoomsRequest, UpdateRoomMetadataRequest
+from livekit.api import (
+    CreateRoomRequest,
+    ListParticipantsRequest,
+    ListRoomsRequest,
+    RoomAgentDispatch,
+    UpdateRoomMetadataRequest,
+)
 from pydantic import BaseModel
 
 WIDGET_JS_PATH = Path(__file__).resolve().parent / "static" / "widget.js"
@@ -160,6 +166,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Name of the dedicated LiveKit Cloud Agent that serves ONLY the marketing
+# site's own demo (the "try it live" widget and DemoOrbCard) — deployed
+# separately from the shared agent every tenant's calls run through (see
+# agent/main.py's LIVEKIT_AGENT_NAME). Isolating it means demo traffic
+# always lands on its own permanently-warm replica instead of sometimes
+# getting load-balanced onto a replica the shared pool just cold-started to
+# absorb a tenant traffic spike. Must match LIVEKIT_AGENT_NAME on that
+# deployment exactly, or rooms created with this explicit dispatch will
+# never get an agent.
+_PLATFORM_DEMO_AGENT_NAME = "platform-demo"
+
+
+def _demo_dispatch_kwargs(agent_id: int | None, *, default_is_demo: bool = False) -> dict:
+    """kwargs to spread into CreateRoomRequest so this room explicitly
+    dispatches to the dedicated demo agent when agent_id is the platform
+    demo agent — every other room is left on implicit/default dispatch
+    (unchanged behavior) so tenant traffic never touches this at all.
+    default_is_demo covers /token's agentId=None case, which agent/db.py's
+    get_agent_config resolves to the platform-demo agent by default."""
+    is_demo = calls_db.is_platform_demo_agent(agent_id) if agent_id is not None else default_is_demo
+    if not is_demo:
+        return {}
+    return {"agents": [RoomAgentDispatch(agent_name=_PLATFORM_DEMO_AGENT_NAME)]}
+
 
 class TokenRequest(BaseModel):
     identity: str
@@ -195,7 +225,13 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
     # DemoOrbCard's prewarm already created this room moments earlier.
     metadata = json.dumps({"agent_id": req.agentId}) if req.agentId is not None else None
     async with api.LiveKitAPI() as lkapi:
-        await lkapi.room.create_room(CreateRoomRequest(name=req.room, metadata=metadata))
+        await lkapi.room.create_room(
+            CreateRoomRequest(
+                name=req.room,
+                metadata=metadata,
+                **_demo_dispatch_kwargs(req.agentId, default_is_demo=req.agentId is None),
+            )
+        )
 
     token = (
         api.AccessToken(api_key, api_secret)
@@ -2423,6 +2459,7 @@ async def warm_widget_agent(req: WidgetWarmRequest) -> dict:
                 CreateRoomRequest(
                     name=room,
                     metadata=json.dumps({"agent_id": site["agentId"], "site_id": site["id"]}),
+                    **_demo_dispatch_kwargs(site["agentId"]),
                 )
             )
         logger.info("widget warm: pre-created room=%s for site=%s", room, site["name"])
@@ -2529,7 +2566,11 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
                     room = None
             if not room:
                 room = f"widget-{site['id']}-{secrets.token_hex(8)}"
-                await lkapi.room.create_room(CreateRoomRequest(name=room, metadata=metadata))
+                await lkapi.room.create_room(
+                    CreateRoomRequest(
+                        name=room, metadata=metadata, **_demo_dispatch_kwargs(site["agentId"])
+                    )
+                )
         logger.info("widget token issued: site=%s agent_id=%s room=%s", site["name"], site["agentId"], room)
     except Exception:
         logger.exception("widget token failed: could not create LiveKit room for site=%s", site["name"])

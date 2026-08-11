@@ -1639,4 +1639,13 @@ if __name__ == "__main__":
     # `lk agent status`/the dashboard's join-latency and load graphs after
     # deploy and raise further if load stays comfortable under real
     # concurrent-call volume.
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, num_idle_processes=4))
+    # Empty (the default) means implicit/automatic dispatch — this worker
+    # picks up any room nobody explicitly named an agent for, exactly like
+    # today. Set to a specific name (e.g. "platform-demo") to run this same
+    # codebase as a SEPARATE, dedicated LiveKit Cloud Agent that only
+    # receives rooms explicitly dispatched to it by name (see
+    # server/token_api.py's _demo_dispatch_kwargs) — used to give the
+    # marketing site's own demo traffic its own permanently-warm replica,
+    # isolated from autoscaling driven by tenant call volume.
+    agent_name = os.environ.get("LIVEKIT_AGENT_NAME", "")
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, num_idle_processes=4, agent_name=agent_name))
