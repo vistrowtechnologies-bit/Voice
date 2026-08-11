@@ -1269,6 +1269,7 @@ def _call_dict(
     sites_by_id: dict[int, dict] | None = None,
     agent_names: dict[int, str] | None = None,
     visitor_numbers: dict[int, int] | None = None,
+    credit_rates_by_type: dict[str, float] | None = None,
 ) -> dict:
     transcript = json.loads(row["transcript_json"]) if row["transcript_json"] else []
     if row["lead_name"]:
@@ -1319,6 +1320,15 @@ def _call_dict(
         # knows to show a player and fetch a presigned URL on demand.
         "hasRecording": bool(_row_get(row, "recording_key")),
     }
+    if credit_rates_by_type is not None:
+        # Only computed for the single-call detail fetch (get_call) — using
+        # today's rates against a possibly-old call, same simplification
+        # billing_summary already makes (it recomputes every historical call
+        # at current rates rather than freezing the rate at call time).
+        minutes = (row["duration_seconds"] or 0) / 60.0
+        rate = credit_rates_by_type.get(call_type, 1.0)
+        tier = voice_tier(row["voice"])
+        out["creditsUsed"] = round(minutes * rate * _VOICE_TIER_MULTIPLIERS[tier], 2)
     if include_transcript:
         out["transcript"] = [
             {
@@ -1385,6 +1395,7 @@ def get_call(call_id: int, account_id: int) -> dict | None:
             sites_by_id=sites_by_id,
             agent_names=_agent_names_by_id(account_id, conn=conn),
             visitor_numbers=_visitor_numbers_by_id(conn, account_id),
+            credit_rates_by_type=credit_rates(account_id, conn=conn),
         )
     finally:
         conn.close()

@@ -82,6 +82,10 @@ export interface CallRecord {
   // company/useCase/teamSize fields above. {} when the agent has no custom
   // fields configured, or extraction found nothing.
   extractedData: Record<string, string>
+  // Only present on the single-call detail fetch (getCall), not list_calls -
+  // computed from today's credit rates, so it reflects current pricing even
+  // for an old call rather than what was charged at the time.
+  creditsUsed?: number
 }
 
 export type Lead = CallRecord
