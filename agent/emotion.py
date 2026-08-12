@@ -77,3 +77,22 @@ ELEVENLABS_EMOTION_DELTAS: dict[str, dict[str, float]] = {
     # base and read as rushed.
     "excited": {"speed": 0.025, "style": 0.08},
 }
+
+# Gemini-TTS (google:kore/charon) has no pace/pitch knobs like Sarvam or a
+# VoiceSettings struct like ElevenLabs — instead its `prompt` field is a
+# natural-language STYLE instruction the model actually performs (Google's
+# own docs: "Say this in a spooky whisper", etc.), applied fresh to each
+# reply's first chunk. That's a genuinely different (and more expressive)
+# mechanism than the numeric deltas above, so it isn't derived from
+# EMOTION_TONE_DELTAS — it's composed as base-tone sentence + emotion
+# sentence, both plain English, and sent verbatim as the prompt.
+GEMINI_TONE_PROMPTS: dict[str, str] = {
+    "professional": "Speak in a calm, measured, professional tone.",
+    "balanced": "Speak in a natural, warm, conversational tone.",
+    "casual": "Speak in an upbeat, friendly, energetic tone.",
+}
+GEMINI_EMOTION_PROMPT_DELTAS: dict[str, str] = {
+    "frustrated": "The caller sounds frustrated — speak calmly, patiently, and reassuringly to de-escalate.",
+    "confused": "The caller sounds confused — speak slowly and clearly, articulating each word.",
+    "excited": "The caller sounds excited and happy — match their energy with warmth and enthusiasm.",
+}

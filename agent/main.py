@@ -35,7 +35,13 @@ import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # dbconn.py is duplicated into agent/. Used here only to resolve a voice's
 # gender so the LLM self-refers with the right grammatical gender.
 from google_tts_streaming_patch import PatchedGeminiTTS
-from emotion import ELEVENLABS_EMOTION_DELTAS, EMOTION_TONE_DELTAS, detect_caller_emotion
+from emotion import (
+    ELEVENLABS_EMOTION_DELTAS,
+    EMOTION_TONE_DELTAS,
+    GEMINI_EMOTION_PROMPT_DELTAS,
+    GEMINI_TONE_PROMPTS,
+    detect_caller_emotion,
+)
 from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.platform_assistant import build_platform_assistant_prompt
@@ -545,6 +551,10 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 # **tone. Same TONE_PRESETS pace values now apply here too
                 # (professional=0.95, balanced=1.0, casual=1.08).
                 speaking_rate=tone.get("pace", 1.0),
+                # Gemini-TTS' real emotion mechanism — see GEMINI_TONE_PROMPTS
+                # in emotion.py. Reinforced per-turn with the caller's
+                # detected emotion in on_user_turn_completed.
+                prompt=GEMINI_TONE_PROMPTS.get(tone_name, GEMINI_TONE_PROMPTS[DEFAULT_TONE]),
             )
             return _google_fallback_tts(google_tts, sarvam_safety_net), "google-multilingual"
         voice_language = "-".join(voice_name.split("-")[:2])
@@ -894,6 +904,7 @@ class RealEstateAgent(Agent):
         self._base_pace = base_tone.get("pace", 1.0)
         self._base_pitch = base_tone.get("pitch", 0.0)
         self._base_elevenlabs = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
+        self._gemini_base_prompt = GEMINI_TONE_PROMPTS.get(tone_name, GEMINI_TONE_PROMPTS[DEFAULT_TONE])
         # Scales how strongly a detected caller emotion moves delivery away
         # from the base tone above — 0 ("off") always reproduces the base
         # tone regardless of detected emotion, 1.0 ("strong") is today's
@@ -1084,12 +1095,29 @@ class RealEstateAgent(Agent):
                     "caller tone -> %s (no-op: elevenlabs-v3 can't adapt mid-call) from turn: %r",
                     emotion or "neutral", text,
                 )
-            elif self._tts_provider.startswith("google-"):
-                # The Google Cloud plugin does not expose the same pace/pitch
-                # controls as Sarvam. Multilingual language changes are
+            elif self._tts_provider == "google-multilingual":
+                # Gemini-TTS' real emotion lever — see GEMINI_TONE_PROMPTS/
+                # GEMINI_EMOTION_PROMPT_DELTAS in emotion.py. Composed fresh
+                # each turn (base tone sentence + emotion sentence) rather
+                # than a numeric delta, since `prompt` is itself natural-
+                # language style guidance, not a pace/pitch knob. self.tts is
+                # TtsFallbackAdapter-wrapped whenever Google credentials are
+                # configured — FallbackAdapter has no update_options, so
+                # guard the same way every other Google/Sarvam branch here does.
+                emotion_line = GEMINI_EMOTION_PROMPT_DELTAS.get(emotion, "") if emotion else ""
+                new_prompt = f"{self._gemini_base_prompt} {emotion_line}".strip()
+                try:
+                    self.tts.update_options(prompt=new_prompt)
+                    logger.info("caller tone -> %s (prompt: %r) from turn: %r", emotion or "neutral", new_prompt, text)
+                except AttributeError:
+                    logger.warning("caller tone update_options failed (fallback-wrapped TTS)", exc_info=True)
+            elif self._tts_provider == "google-native":
+                # Classic Cloud TTS voices (Neural2/Chirp) don't support
+                # Gemini's style-prompt mechanism — no per-turn emotion lever
+                # exists for this branch. Multilingual language changes are
                 # applied separately below without replacing the persona.
                 logger.info(
-                    "caller tone -> %s (no-op: Google voice uses fixed delivery) from turn: %r",
+                    "caller tone -> %s (no-op: google-native has no style-prompt support) from turn: %r",
                     emotion or "neutral", text,
                 )
             else:
