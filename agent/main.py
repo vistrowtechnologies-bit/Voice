@@ -1167,17 +1167,37 @@ class RealEstateAgent(Agent):
         # humor and warmth. Same fix as the language/gender reinforcement
         # above — restate it fresh, last, every turn, so it isn't drowned
         # out by the structural rules.
-        _personality_instruction = (
-            "This reply must sound like a witty, warm human friend on a call, not a form being "
-            "filled out. Open with a real filler or a genuine reaction to what they just said — "
-            "never the same one you used last turn. If there's a natural opening for a dry aside, "
-            "a light joke, or a playful callback to something they said earlier, take it — don't "
-            "wait for permission, and don't let two turns in a row come out flat and purely "
-            "informational. This matters even when you're also asking a discovery question or "
-            "qualifying them — being warm and being efficient are not in tension."
-            if self._is_platform_demo
-            else ""
-        )
+        if self._is_platform_demo:
+            _last_assistant_text = ""
+            for item in reversed(turn_ctx.items):
+                if getattr(item, "role", None) == "assistant":
+                    _last_assistant_text = getattr(item, "text_content", None) or ""
+                    break
+            _repeat_filler_warning = (
+                "\nYou opened your LAST reply with \"अरे वाह\" — do not use it again this turn, "
+                "pick a different filler or reaction entirely."
+                if "अरे वाह" in _last_assistant_text
+                else ""
+            )
+            _personality_instruction = (
+                "This reply must sound like a witty, warm human friend on a call, not a form being "
+                "filled out. Open with a real filler or a genuine reaction to what they just said — "
+                "never the same one you used last turn. If there's a natural opening for a dry aside, "
+                "a light joke, or a playful callback to something they said earlier, take it — don't "
+                "wait for permission, and don't let two turns in a row come out flat and purely "
+                "informational. This matters even when you're also asking a discovery question or "
+                "qualifying them — being warm and being efficient are not in tension.\n"
+                "An excited/delighted opener like \"अरे वाह\" or \"wow\" is ONLY for when the caller "
+                "said something genuinely positive or surprising — NEVER for a neutral fact, and "
+                "especially never for a pain point or something manual/burdensome about how they work "
+                "today. Confirmed wrong live: caller said \"manual callback karuchi\" (describing "
+                "their current painful workflow) and got \"अरे वाह, मैन्युअल फॉलोअप!\" back — that reads "
+                "as gleeful about their problem, not listening to it. The correct reaction there is "
+                "empathetic acknowledgment (\"अरे, ये तो सच में टाइम खा जाता है\"), not delight."
+                + _repeat_filler_warning
+            )
+        else:
+            _personality_instruction = ""
         # Same reinforcement pattern again for a different failure: the
         # prompt already says "search, don't dodge" for a concrete factual
         # question, but confirmed live — asked to name real hospitals near a
