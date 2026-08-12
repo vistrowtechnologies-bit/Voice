@@ -118,30 +118,6 @@ body {
   border-radius: 28px;
 }
 
-.demo-card-shell::after {
-  position: absolute;
-  z-index: 6;
-  inset: -3px;
-  border-radius: 31px;
-  content: '';
-  pointer-events: none;
-  opacity: 0;
-  background:
-    linear-gradient(90deg, var(--color-primary), var(--color-cyan)) left top / 54px 3px no-repeat,
-    linear-gradient(180deg, var(--color-primary), var(--color-cyan)) left top / 3px 54px no-repeat,
-    linear-gradient(270deg, var(--color-primary), var(--color-cyan)) right top / 54px 3px no-repeat,
-    linear-gradient(180deg, var(--color-primary), var(--color-cyan)) right top / 3px 54px no-repeat,
-    linear-gradient(90deg, var(--color-primary), var(--color-cyan)) left bottom / 54px 3px no-repeat,
-    linear-gradient(0deg, var(--color-primary), var(--color-cyan)) left bottom / 3px 54px no-repeat,
-    linear-gradient(270deg, var(--color-primary), var(--color-cyan)) right bottom / 54px 3px no-repeat,
-    linear-gradient(0deg, var(--color-primary), var(--color-cyan)) right bottom / 3px 54px no-repeat;
-  filter: drop-shadow(0 0 7px rgb(168 85 247 / 55%));
-}
-
-.demo-card-spotlight::after {
-  animation: demo-corners-guide 5.2s ease-out both;
-}
-
 .demo-card-shell::before {
   position: absolute;
   z-index: 7;
@@ -202,13 +178,6 @@ body {
   100% { opacity: 0; transform: translateX(315%); }
 }
 
-@keyframes demo-corners-guide {
-  0% { opacity: 0; transform: scale(0.985); }
-  10%, 72% { opacity: 1; transform: none; }
-  84% { opacity: 0.45; }
-  100% { opacity: 0; transform: scale(1.01); }
-}
-
 @keyframes demo-card-glow {
   0%, 100% { box-shadow: 0 0 0 0 rgb(168 85 247 / 0%); }
   50% { box-shadow: 0 0 42px 8px rgb(168 85 247 / 28%); }
@@ -228,12 +197,10 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .independence-ribbon::after,
   .demo-card-spotlight::before,
-  .demo-card-spotlight::after,
   .demo-card-spotlight > div:nth-of-type(2),
   .demo-card-spotlight .demo-start-target {
     animation: none;
   }
-  .demo-card-spotlight::after,
   .demo-card-spotlight .demo-start-label {
     opacity: 1;
   }
