@@ -11,6 +11,7 @@ from pathlib import Path
 
 import admin_db
 import auth
+import jwt
 import call_intelligence
 import calls_db
 import campaign_dialer
@@ -338,11 +339,19 @@ def auth_config() -> dict:
         providers.append("google")
     if os.environ.get("GITHUB_OAUTH_CLIENT_ID") and os.environ.get("GITHUB_OAUTH_CLIENT_SECRET"):
         providers.append("github")
+    if (
+        os.environ.get("SLACK_OAUTH_CLIENT_ID")
+        and os.environ.get("SLACK_OAUTH_CLIENT_SECRET")
+        and os.environ.get("SLACK_OAUTH_REDIRECT_URI")
+    ):
+        providers.append("slack")
     email_configured = bool(os.environ.get("RESEND_API_KEY") or os.environ.get("SMTP_HOST"))
     return {"oauthProviders": providers, "emailConfigured": email_configured}
 
 
 _OAUTH_STATE_COOKIE = "vv_oauth_state"
+_OAUTH_NONCE_COOKIE = "vv_oauth_nonce"
+_SLACK_JWKS_CLIENT = jwt.PyJWKClient("https://slack.com/openid/connect/keys", cache_keys=True)
 
 
 def _oauth_or_create_user(email: str, name: str, provider: str = "password") -> dict:
@@ -440,6 +449,119 @@ def auth_oauth_google_callback(request: Request, code: str | None = None, state:
     account = _oauth_or_create_user(email, userinfo.get("name", ""), provider="google")
     redirect = RedirectResponse(f"{base_url}/dashboard")
     redirect.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
+    _set_session_cookie(redirect, account["user_id"], account["account_id"])
+    return redirect
+
+
+@app.get("/auth/oauth/slack/start")
+def auth_oauth_slack_start() -> RedirectResponse:
+    client_id = os.environ.get("SLACK_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("SLACK_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("SLACK_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        raise HTTPException(404, "Slack sign-in is not configured on this server")
+    state = secrets.token_urlsafe(24)
+    nonce = secrets.token_urlsafe(24)
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid profile email",
+        "state": state,
+        "nonce": nonce,
+    }
+    redirect = RedirectResponse(f"https://slack.com/openid/connect/authorize?{urllib.parse.urlencode(params)}")
+    cookie = {"max_age": 600, "httponly": True, "secure": _COOKIE_SECURE, "samesite": "lax", "path": "/"}
+    redirect.set_cookie(_OAUTH_STATE_COOKIE, state, **cookie)
+    redirect.set_cookie(_OAUTH_NONCE_COOKIE, nonce, **cookie)
+    return redirect
+
+
+@app.get("/auth/oauth/slack/callback")
+def auth_oauth_slack_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    base_url = _app_base_url(request)
+    expected_state = request.cookies.get(_OAUTH_STATE_COOKIE)
+    expected_nonce = request.cookies.get(_OAUTH_NONCE_COOKIE)
+    if error or not code or not expected_state or not secrets.compare_digest(state or "", expected_state):
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+
+    client_id = os.environ.get("SLACK_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("SLACK_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("SLACK_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri or not expected_nonce:
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+
+    token_body = urllib.parse.urlencode(
+        {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+    ).encode()
+    try:
+        token_req = urllib.request.Request(
+            "https://slack.com/api/openid.connect.token",
+            data=token_body,
+            method="POST",
+            headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+        )
+        with urllib.request.urlopen(token_req, timeout=10) as resp:
+            token_data = json.loads(resp.read())
+        access_token = token_data.get("access_token")
+        id_token = token_data.get("id_token", "")
+        if not token_data.get("ok", True) or not access_token or not id_token:
+            logger.error("Slack OIDC token exchange failed: %s", token_data.get("error", "missing token"))
+            return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+        signing_key = _SLACK_JWKS_CLIENT.get_signing_key_from_jwt(id_token)
+        claims = jwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=client_id,
+            issuer="https://slack.com",
+        )
+        if not secrets.compare_digest(str(claims.get("nonce", "")), expected_nonce):
+            logger.error("Slack OIDC nonce validation failed")
+            return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+
+        userinfo_req = urllib.request.Request(
+            "https://slack.com/api/openid.connect.userInfo",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(userinfo_req, timeout=10) as resp:
+            userinfo = json.loads(resp.read())
+        if not userinfo.get("ok", True) or userinfo.get("sub") != claims.get("sub"):
+            logger.error("Slack OIDC userInfo failed: %s", userinfo.get("error", "unknown error"))
+            return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+    except (jwt.PyJWTError, jwt.PyJWKClientError):
+        logger.exception("Slack OIDC signature or claims validation failed")
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode()
+        except Exception:
+            detail = "<no body>"
+        logger.error("Slack OAuth exchange failed: HTTP %s %s — %s", e.code, e.reason, detail)
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+    except Exception:
+        logger.exception("Slack OAuth exchange failed")
+        return RedirectResponse(f"{base_url}/login?error=oauth_failed")
+
+    email = userinfo.get("email")
+    if not email or not userinfo.get("email_verified", False):
+        return RedirectResponse(f"{base_url}/login?error=oauth_unverified_email")
+
+    account = _oauth_or_create_user(email, userinfo.get("name") or userinfo.get("given_name") or "", provider="slack")
+    redirect = RedirectResponse(f"{base_url}/dashboard")
+    redirect.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
+    redirect.delete_cookie(_OAUTH_NONCE_COOKIE, path="/")
     _set_session_cookie(redirect, account["user_id"], account["account_id"])
     return redirect
 
@@ -959,6 +1081,7 @@ _ADMIN_API_KEY_ENVS = {
     "Tavily": "TAVILY_API_KEY",
     "Google OAuth": "GOOGLE_OAUTH_CLIENT_ID",
     "GitHub OAuth": "GITHUB_OAUTH_CLIENT_ID",
+    "Slack OAuth": "SLACK_OAUTH_CLIENT_ID",
     "EnableX": "ENABLEX_APP_ID",
     "LiveKit": "LIVEKIT_API_KEY",
 }

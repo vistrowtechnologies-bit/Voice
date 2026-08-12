@@ -246,6 +246,17 @@ function GitHubLogo({ className = '' }: { className?: string }) {
   )
 }
 
+function SlackLogo({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path fill="#36C5F0" d="M5.04 15.17a2.52 2.52 0 1 1-2.52-2.52h2.52v2.52Zm1.27 0a2.52 2.52 0 1 1 5.04 0v6.31a2.52 2.52 0 1 1-5.04 0v-6.31Z" />
+      <path fill="#2EB67D" d="M8.83 5.04a2.52 2.52 0 1 1 2.52-2.52v2.52H8.83Zm0 1.27a2.52 2.52 0 1 1 0 5.04H2.52a2.52 2.52 0 1 1 0-5.04h6.31Z" />
+      <path fill="#ECB22E" d="M18.96 8.83a2.52 2.52 0 1 1 2.52 2.52h-2.52V8.83Zm-1.27 0a2.52 2.52 0 1 1-5.04 0V2.52a2.52 2.52 0 1 1 5.04 0v6.31Z" />
+      <path fill="#E01E5A" d="M15.17 18.96a2.52 2.52 0 1 1-2.52 2.52v-2.52h2.52Zm0-1.27a2.52 2.52 0 1 1 0-5.04h6.31a2.52 2.52 0 1 1 0 5.04h-6.31Z" />
+    </svg>
+  )
+}
+
 /** "Or continue with" social buttons - only renders providers the server has
  * actually configured (via /auth/config), so there are never dead buttons.
  * Clicking sends the user to the backend OAuth start endpoint. */
@@ -305,6 +316,18 @@ export function SocialButtons() {
               >
                 <GitHubLogo className="h-[18px] w-[18px]" />
                 Continue with GitHub
+              </a>
+            )
+          }
+          if (p === 'slack') {
+            return (
+              <a
+                key={p}
+                href="/api/auth/oauth/slack/start"
+                className="flex items-center justify-center gap-3 rounded-lg border border-[#ddd] bg-white py-2.5 text-sm font-semibold text-[#1d1c1d] shadow-sm transition-colors hover:bg-[#f8f8f8]"
+              >
+                <SlackLogo className="h-5 w-5" />
+                Sign in with Slack
               </a>
             )
           }
