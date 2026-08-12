@@ -971,13 +971,19 @@ class RealEstateAgent(Agent):
         tone_name = config.get("tone") or DEFAULT_TONE
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         tts, tts_provider = _build_tts(reply_language, voice_value, base_tone, tone_name)
+        agent_tools = _build_tools(config)
         super().__init__(
             instructions=instructions,
             stt=_build_stt(),
             llm=_build_llm(config.get("model") or "gpt-4.1"),
             tts=tts,
-            tools=_build_tools(config),
+            tools=agent_tools,
         )
+        # Gates the web_search per-turn reinforcement below — only meaningful
+        # if this agent actually has the tool (TAVILY_API_KEY configured and
+        # not excluded via enabled_functions), same as any tenant agent, not
+        # just the platform demo.
+        self._has_web_search = any(getattr(t, "__name__", None) == "web_search" for t in agent_tools)
         self._reply_language = reply_language
         self._pending_language: str | None = None
         self._pending_language_streak = 0
@@ -1192,7 +1198,7 @@ class RealEstateAgent(Agent):
                 "one. Answering without calling web_search first is fabricating information, which "
                 "actively misleads a real prospect and is explicitly against your instructions."
             )
-            if self._is_platform_demo and _FACT_LOOKUP_PATTERN.search(text)
+            if self._has_web_search and _FACT_LOOKUP_PATTERN.search(text)
             else ""
         )
         turn_ctx.add_message(
