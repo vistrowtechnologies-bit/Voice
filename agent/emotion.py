@@ -2,26 +2,88 @@ import re
 
 # Lightweight, zero-latency keyword/punctuation heuristic — no extra LLM or
 # network round trip per turn, since the TTS pace update has to land before
-# the reply starts speaking. English + Hindi/Hinglish, matching what actual
-# callers say (see the Agni recording transcripts this was modeled on).
-_FRUSTRATED_PATTERNS = re.compile(
-    r"\b(problem|not working|doesn'?t work|angry|frustrat\w*|annoyed|worst|useless|"
-    r"waste of time|so bad|terrible|उल्टा|गलत|परेशान|गुस्सा|समस्या|बकवास|खराब)\b",
-    re.IGNORECASE,
+# the reply starts speaking.
+#
+# English + Hindi/Hinglish were the original coverage (modeled on real Agni
+# recording transcripts). The other 9 languages this product actually
+# supports (see language.py's LANGUAGE_NAMES) had ZERO emotion detection
+# until this pass — a caller speaking pure Marathi or Tamil got no reaction
+# at all, regardless of how frustrated or excited they sounded. These
+# translations haven't been validated against real native-speaker call
+# transcripts the way the original Hindi set was — worth a native-speaker
+# spot-check before fully trusting the non-Hindi coverage.
+#
+# IMPORTANT: `\b` is unreliable across every Indic script here — confirmed
+# empirically, not just Hindi. Python's `\w` (what `\b` boundaries are
+# defined against) excludes combining vowel signs/virama (Unicode category
+# Mn/Mc), which are a normal part of how these scripts spell words, so a
+# `\b`-wrapped word like "समस्या" silently fails to match its own text half
+# the time depending on which character happens to sit at the boundary —
+# this means most non-English matching in this module was quietly broken,
+# not just the newly-added languages. English/Latin-script keywords keep
+# `\b` (it works correctly there); every Indic-script keyword matches as a
+# plain substring instead — these are distinctive enough multi-character
+# words that the false-positive risk from dropping the boundary is low,
+# and a silent false negative (never firing at all) is a worse failure mode
+# than an occasional over-eager match.
+
+
+def _emotion_pattern(english: str, indic: str) -> re.Pattern[str]:
+    return re.compile(rf"\b(?:{english})\b|(?:{indic})", re.IGNORECASE)
+
+
+_FRUSTRATED_PATTERNS = _emotion_pattern(
+    r"problem|not working|doesn'?t work|angry|frustrat\w*|annoyed|worst|useless|"
+    r"waste of time|so bad|terrible",
+    r"उल्टा|गलत|परेशान|गुस्सा|समस्या|बकवास|खराब|"  # Hindi
+    r"राग|वैतागल[ोे]|त्रास|वाईट|"  # Marathi
+    r"સમસ્યા|ગુસ્સો|પરેશાન|ખરાબ|"  # Gujarati
+    r"பிரச்சனை|கோபம்|எரிச்சல்|மோசம்|"  # Tamil
+    r"సమస్య|కోపం|చిరాకు|చెడు|"  # Telugu
+    r"ಸಮಸ್ಯೆ|ಕೋಪ|ರೇಜಿಗೆ|ಕೆಟ್ಟ|"  # Kannada
+    r"പ്രശ്നം|ദേഷ്യം|ബുദ്ധിമുട്ട്|മോശം|"  # Malayalam
+    r"সমস্যা|রাগ|বিরক্ত|খারাপ|"  # Bengali
+    r"ਸਮੱਸਿਆ|ਗੁੱਸਾ|ਪਰੇਸ਼ਾਨ|ਖਰਾਬ|"  # Punjabi
+    r"ସମସ୍ୟା|ରାଗ|ବିରକ୍ତ|ଖରାପ",  # Odia
 )
-_URGENT_PATTERNS = re.compile(
-    r"\b(urgent|asap|right now|immediately|hurry|जल्दी|अभी|फ़ौरन|जल्द से जल्द)\b",
-    re.IGNORECASE,
+_URGENT_PATTERNS = _emotion_pattern(
+    r"urgent|asap|right now|immediately|hurry",
+    r"जल्दी|अभी|फ़ौरन|जल्द से जल्द|"  # Hindi
+    r"लवकर|आत्ता|त्वरित|"  # Marathi
+    r"જલ્દી|હમણાં|તાત્કાલિક|"  # Gujarati
+    r"சீக்கிரம்|இப்போதே|அவசரம்|"  # Tamil
+    r"త్వరగా|ఇప్పుడే|అత్యవసరం|"  # Telugu
+    r"ಬೇಗ|ಈಗಲೇ|ತುರ್ತು|"  # Kannada
+    r"വേഗം|ഇപ്പോൾത്തന്നെ|അടിയന്തിരം|"  # Malayalam
+    r"তাড়াতাড়ি|এখনই|জরুরি|"  # Bengali
+    r"ਜਲਦੀ|ਹੁਣੇ|ਤੁਰੰਤ|"  # Punjabi
+    r"ଶୀଘ୍ର|ଏବେ|ଜରୁରୀ",  # Odia
 )
-_EXCITED_PATTERNS = re.compile(
-    r"\b(great|awesome|perfect|love it|amazing|wonderful|excellent|thank you so much|"
-    r"बढ़िया|बहुत बढ़िया|शानदार|मज़ा आ गया|धन्यवाद|कमाल)\b",
-    re.IGNORECASE,
+_EXCITED_PATTERNS = _emotion_pattern(
+    r"great|awesome|perfect|love it|amazing|wonderful|excellent|thank you so much",
+    r"बढ़िया|बहुत बढ़िया|शानदार|मज़ा आ गया|धन्यवाद|कमाल|"  # Hindi
+    r"छान|बढिया|मस्त|"  # Marathi
+    r"સરસ|મજા આવી|આભાર|"  # Gujarati
+    r"நல்லது|அருமை|சூப்பர்|நன்றி|"  # Tamil
+    r"బాగుంది|అద్భుతం|సూపర్|ధన్యవాదాలు|"  # Telugu
+    r"ಚೆನ್ನಾಗಿದೆ|ಅದ್ಭುತ|ಧನ್ಯವಾದ|"  # Kannada
+    r"നല്ലത്|അതിശയം|നന്ദി|"  # Malayalam
+    r"ভালো|দারুণ|ধন্যবাদ|"  # Bengali
+    r"ਵਧੀਆ|ਸ਼ਾਨਦਾਰ|ਧੰਨਵਾਦ|"  # Punjabi
+    r"ଭଲ|ଅଦ୍ଭୁତ|ଧନ୍ୟବାଦ",  # Odia
 )
-_CONFUSED_PATTERNS = re.compile(
-    r"\b(what do you mean|i don'?t understand|confused|come again|huh\??|"
-    r"समझ नहीं आया|क्या मतलब|दोबारा बताओ)\b",
-    re.IGNORECASE,
+_CONFUSED_PATTERNS = _emotion_pattern(
+    r"what do you mean|i don'?t understand|confused|come again|huh\??",
+    r"समझ नहीं आया|क्या मतलब|दोबारा बताओ|"  # Hindi
+    r"समजल[ें] नाही|गोंधळ|"  # Marathi
+    r"સમજાયું નહીં|મૂંઝવણ|"  # Gujarati
+    r"புரியவில்லை|குழப்பம்|"  # Tamil
+    r"అర్థం కాలేదు|గందరగోళం|"  # Telugu
+    r"ಅರ್ಥವಾಗಲಿಲ್ಲ|ಗೊಂದಲ|"  # Kannada
+    r"മനസ്സിലായില്ല|ആശയക്കുഴപ്പം|"  # Malayalam
+    r"বুঝিনি|বিভ্রান্ত|"  # Bengali
+    r"ਸਮਝ ਨਹੀਂ ਆਇਆ|ਉਲਝਣ|"  # Punjabi
+    r"ବୁଝି ପାରିଲି ନାହିଁ|ଦ୍ୱନ୍ଦ୍ୱ",  # Odia
 )
 
 

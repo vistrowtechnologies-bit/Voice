@@ -1564,6 +1564,19 @@ async def entrypoint(ctx: JobContext) -> None:
         tts_text_transforms=[_make_caller_gender_guard_transform(agent)],
         turn_handling=TurnHandlingOptions(
             interruption={"min_words": min_words},
+            # Preemptive LLM generation (starting on the interim, not-yet-
+            # finalized transcript) is already ON by default in this
+            # livekit-agents version — nothing to change there. What's NOT
+            # on by default is preemptive_tts: normally TTS waits for the
+            # turn to actually be confirmed before starting synthesis, even
+            # though the LLM already ran speculatively. Enabling it overlaps
+            # TTS startup with that same confirmation wait too — shaves off
+            # additional latency at the cost of occasionally synthesizing
+            # (and discarding) audio for a transcript that turns out wrong.
+            # Worth it here: a wrong discard just means a wasted TTS call,
+            # never a wrong thing said aloud — the framework only speaks the
+            # generation tied to the confirmed final transcript.
+            preemptive_generation={"preemptive_tts": True},
             # Sarvam's saaras:v3 can take longer than livekit-agents' 3.0s
             # default max_delay to finalize a transcript on a longer
             # utterance. When that happens the framework commits the user's
