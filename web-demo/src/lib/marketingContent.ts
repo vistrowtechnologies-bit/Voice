@@ -463,7 +463,7 @@ export interface IntegrationEntry {
 
 export const INTEGRATION_DIRECTORY: IntegrationEntry[] = [
   { name: 'ArthaLeads CRM', category: 'CRM', desc: 'Native connector. Every qualified lead, with the full transcript, pushed on call end - paste a token, no URL setup.' },
-  { name: 'Slack', category: 'Notifications', desc: 'Native connector. A Slack message the moment a call qualifies a lead. Paste an Incoming Webhook URL.' },
+  { name: 'Slack', category: 'Notifications', desc: 'Native connector. Choose a Slack channel once, then receive every qualified lead with the transcript.' },
   { name: 'WhatsApp', category: 'Messaging', desc: 'Native connector. Fire a WhatsApp follow-up after a call through your provider’s send webhook.' },
   { name: 'Google Sheets', category: 'Reporting', desc: 'Native connector. Appends every qualified lead as a row via an Apps Script web-app URL - no OAuth dance.' },
   { name: 'Zapier', category: 'Automation', desc: 'Point the lead webhook at a Zapier catch hook to reach 6,000+ downstream apps.', viaWebhook: true },

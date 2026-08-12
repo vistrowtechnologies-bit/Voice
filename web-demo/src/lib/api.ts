@@ -264,14 +264,6 @@ export const bulkAddDnc = (numbers: string) =>
   send<{ ok: boolean; added: number; total: number }>('POST', '/compliance/dnc/bulk', { numbers })
 export const removeDnc = (id: number) => send('DELETE', `/compliance/dnc/${id}`)
 
-// ---------------------------------------------------------- integrations
-
-export const fetchIntegrations = () => get<Integration[]>('/integrations')
-export const updateIntegration = (key: string, status: string, config: Record<string, string>, name?: string) =>
-  send('PATCH', `/integrations/${key}`, { status, config, name })
-export const testIntegration = (key: string) =>
-  send<{ ok: boolean; detail: string }>('POST', `/integrations/${key}/test`)
-
 // ------------------------------------------------------------ appointments
 
 export function fetchAppointments(params?: { start?: string; end?: string; status?: string; search?: string }) {
@@ -312,6 +304,15 @@ export const placeTestCall = (from: string, to: string) =>
   send<{ ok: boolean; error?: string; response?: unknown }>('POST', '/telephony/test-call', { from, to })
 export const fetchOrchestratorBrowserToken = (agentId: number) =>
   send<{ ok: boolean; error?: string; wssUrl?: string }>('POST', '/orchestrator/browser-token', { agentId })
+
+// ---------------------------------------------------------- integrations
+
+export const fetchIntegrations = () => get<Integration[]>('/integrations')
+export const updateIntegration = (key: string, status: string, config: Record<string, string>, name?: string) =>
+  send('PATCH', `/integrations/${key}`, { status, config, name })
+export const testIntegration = (key: string) =>
+  send<{ ok: boolean; detail: string }>('POST', `/integrations/${key}/test`)
+export const slackIntegrationStartUrl = '/api/integrations/slack/start'
 
 // --------------------------------------------------------------- billing
 

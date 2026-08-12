@@ -351,6 +351,7 @@ def auth_config() -> dict:
 
 _OAUTH_STATE_COOKIE = "vv_oauth_state"
 _OAUTH_NONCE_COOKIE = "vv_oauth_nonce"
+_SLACK_INTEGRATION_STATE_COOKIE = "vv_slack_integration_state"
 _SLACK_JWKS_CLIENT = jwt.PyJWKClient("https://slack.com/openid/connect/keys", cache_keys=True)
 
 
@@ -564,6 +565,112 @@ def auth_oauth_slack_callback(
     redirect.delete_cookie(_OAUTH_NONCE_COOKIE, path="/")
     _set_session_cookie(redirect, account["user_id"], account["account_id"])
     return redirect
+
+
+@app.get("/integrations/slack/start")
+def integration_slack_start(
+    request: Request,
+    user: dict = Depends(require_role("admin")),
+) -> RedirectResponse:
+    client_id = os.environ.get("SLACK_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("SLACK_OAUTH_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise HTTPException(404, "Slack integration is not configured on this server")
+
+    state = secrets.token_urlsafe(24)
+    callback_uri = f"{_app_base_url(request)}/api/integrations/slack/callback"
+    params = {
+        "client_id": client_id,
+        "redirect_uri": callback_uri,
+        "scope": "incoming-webhook",
+        "state": state,
+    }
+    redirect = RedirectResponse(f"https://slack.com/oauth/v2/authorize?{urllib.parse.urlencode(params)}")
+    redirect.set_cookie(
+        _SLACK_INTEGRATION_STATE_COOKIE,
+        state,
+        max_age=600,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
+    return redirect
+
+
+@app.get("/integrations/slack/callback")
+def integration_slack_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    user: dict = Depends(require_role("admin")),
+) -> RedirectResponse:
+    base_url = _app_base_url(request)
+    expected_state = request.cookies.get(_SLACK_INTEGRATION_STATE_COOKIE)
+    redirect_uri = f"{base_url}/api/integrations/slack/callback"
+
+    def _finish(query: str = "") -> RedirectResponse:
+        response = RedirectResponse(f"{base_url}/dashboard/integrations{query}")
+        response.delete_cookie(_SLACK_INTEGRATION_STATE_COOKIE, path="/")
+        return response
+
+    if error or not code or not expected_state or not secrets.compare_digest(state or "", expected_state):
+        return _finish("?slack=failed")
+
+    client_id = os.environ.get("SLACK_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("SLACK_OAUTH_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return _finish("?slack=failed")
+
+    token_body = urllib.parse.urlencode(
+        {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+        }
+    ).encode()
+    try:
+        token_req = urllib.request.Request(
+            "https://slack.com/api/oauth.v2.access",
+            data=token_body,
+            method="POST",
+            headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+        )
+        with urllib.request.urlopen(token_req, timeout=10) as resp:
+            token_data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode()
+        except Exception:
+            detail = "<no body>"
+        logger.error("Slack integration OAuth failed: HTTP %s %s - %s", e.code, e.reason, detail)
+        return _finish("?slack=failed")
+    except Exception:
+        logger.exception("Slack integration OAuth failed")
+        return _finish("?slack=failed")
+
+    webhook = token_data.get("incoming_webhook") or {}
+    webhook_url = (webhook.get("url") or "").strip()
+    if not token_data.get("ok", False) or not webhook_url:
+        logger.error("Slack integration OAuth returned no webhook: %s", token_data.get("error", "missing incoming_webhook"))
+        return _finish("?slack=failed")
+
+    channel = webhook.get("channel") or webhook.get("channel_name") or "Slack"
+    team = token_data.get("team") or {}
+    calls_db.update_integration(
+        "slack",
+        "connected",
+        {
+            "url": webhook_url,
+            "channel": str(channel),
+            "team": str(team.get("name") or ""),
+            "teamId": str(team.get("id") or ""),
+        },
+        user["account_id"],
+    )
+    return _finish()
 
 
 @app.get("/auth/oauth/github/start")

@@ -2,10 +2,10 @@
 
 When a call qualifies a lead, fan it out to whichever destinations the tenant
 has connected on the Integrations page — CRM/webhook, Slack, WhatsApp, Google
-Sheets, ArthaLeads. Each is just an HTTPS POST with a per-provider body shape,
-so there's no OAuth to maintain: the operator pastes a webhook URL (Slack
-Incoming Webhook, a Google Apps Script web-app URL, a Zapier/Make catch hook,
-their CRM endpoint) and we deliver to it. ArthaLeads is the one exception —
+Sheets, ArthaLeads. Delivery is still just HTTPS POST once configured. Slack
+stores the Incoming Webhook URL returned by its OAuth install flow; generic
+webhooks, WhatsApp providers, and Google Apps Script endpoints are pasted by
+the operator. ArthaLeads is the one exception —
 its endpoint is fixed, so the operator only pastes a token. Same
 stdlib-urllib, best-effort, never-raise philosophy as email_sender — a broken
 integration must never break a call.

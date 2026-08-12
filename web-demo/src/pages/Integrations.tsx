@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
-import { fetchIntegrations, formatRelativeTime, testIntegration, updateIntegration } from '../lib/api'
+import { fetchIntegrations, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateIntegration } from '../lib/api'
 import type { Integration } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import arthaleadsIcon from '../assets/arthaleads-logo.png'
@@ -14,9 +14,9 @@ const ICONS: Record<string, string> = {
   sheets: 'table_chart',
 }
 
-// Integrations that connect with a pasted URL (delivery targets). arthaleads
-// connects with just a token - its endpoint is fixed.
-const CONNECTABLE = new Set(['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets'])
+// Integrations that open a local config form. Slack has its own OAuth install
+// flow so operators can choose a channel without hunting for webhook URLs.
+const CONNECTABLE = new Set(['arthaleads', 'webhook', 'whatsapp', 'sheets'])
 
 // The API returns integrations in undefined DB row order - pin a deliberate
 // display order instead (ArthaLeads first, since it's the flagship CRM)
@@ -34,7 +34,6 @@ const DELIVERY = new Set(['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets'
 // intentionally absent here (see the token-only form below).
 const URL_PLACEHOLDER: Record<string, string> = {
   webhook: 'https://your-crm.example.com/webhook',
-  slack: 'https://hooks.slack.com/services/T000/B000/XXXX',
   whatsapp: 'https://your-provider.example.com/whatsapp/send',
   sheets: 'https://script.google.com/macros/s/…/exec',
 }
@@ -42,7 +41,7 @@ const URL_PLACEHOLDER: Record<string, string> = {
 const CONNECT_HINT: Record<string, string> = {
   arthaleads: 'Paste your ArthaLeads API token - the endpoint is already wired up. Every qualified lead posts straight into ArthaLeads with the full call transcript.',
   webhook: 'Every qualified lead POSTs to this URL as JSON in real time.',
-  slack: 'Paste a Slack Incoming Webhook URL - you’ll get a message per qualified lead.',
+  slack: 'Choose the Slack channel that should receive qualified-lead alerts.',
   whatsapp: 'Your provider’s send endpoint receives { to, message } per lead.',
   sheets: 'Paste a Google Apps Script web-app URL that appends the lead JSON as a row.',
 }
@@ -67,6 +66,10 @@ export function Integrations() {
   const connected = integrations.filter((i) => i.status === 'connected').length
 
   const handleConnect = async (key: string) => {
+    if (key === 'slack') {
+      window.location.href = slackIntegrationStartUrl
+      return
+    }
     if (key === 'arthaleads') {
       if (!token.trim()) return
       await updateIntegration(key, 'connected', { token: token.trim() })
@@ -158,6 +161,8 @@ export function Integrations() {
                 <InfoRow label="Status" value={integration.status === 'connected' ? 'Connected' : 'Not Connected'} />
                 {integration.key === 'arthaleads' ? (
                   <InfoRow label="Endpoint" value="api.arthaleads.com" />
+                ) : integration.key === 'slack' ? (
+                  <InfoRow label="Channel" value={integration.config.channel || '-'} />
                 ) : (
                   <InfoRow label="Endpoint" value={integration.config.url ? integration.config.url.slice(0, 40) : '-'} />
                 )}
@@ -259,6 +264,14 @@ export function Integrations() {
                     Disconnect
                   </button>
                 </div>
+              ) : integration.key === 'slack' ? (
+                <button
+                  onClick={() => handleConnect('slack')}
+                  className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-cyan/40 py-2 text-xs font-bold text-cyan hover:bg-cyan/10"
+                >
+                  <Icon name="link" className="text-[15px]" />
+                  Connect Slack
+                </button>
               ) : CONNECTABLE.has(integration.key) ? (
                 <button
                   onClick={() => setConfiguring(integration.key)}
