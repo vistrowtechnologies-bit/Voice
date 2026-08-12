@@ -77,6 +77,7 @@ export interface CallRecord {
   // playback URL on demand via fetchCallRecordingUrl.
   hasRecording: boolean
   feedback: 'helpful' | 'not_helpful' | null
+  feedbackComment: string | null
   connectLatencyMs: number | null
   agentJoinLatencyMs: number | null
   firstResponseLatencyMs: number | null
@@ -154,6 +155,8 @@ export interface FeedbackSummary {
   notHelpful: number
   total: number
   helpfulPercent: number | null
+  firstResponseP50Ms: number | null
+  firstResponseP95Ms: number | null
 }
 
 export interface UsageTrends {

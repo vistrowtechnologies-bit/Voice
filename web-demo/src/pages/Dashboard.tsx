@@ -287,6 +287,12 @@ export function Dashboard() {
                 <p className="mt-1 text-xs text-text-muted">Open negative-feedback conversations →</p>
               </Link>
             </div>
+            {(feedback?.firstResponseP50Ms != null || feedback?.firstResponseP95Ms != null) && (
+              <div className="rounded-xl border border-border bg-surface px-4 py-3 text-xs text-text-muted">
+                First AI response: <span className="font-semibold text-text">p50 {feedback.firstResponseP50Ms == null ? '—' : `${(feedback.firstResponseP50Ms / 1000).toFixed(1)}s`}</span>
+                {' · '}<span className="font-semibold text-text">p95 {feedback.firstResponseP95Ms == null ? '—' : `${(feedback.firstResponseP95Ms / 1000).toFixed(1)}s`}</span>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <Card className="lg:col-span-2">

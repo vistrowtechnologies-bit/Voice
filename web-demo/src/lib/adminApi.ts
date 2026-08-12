@@ -163,6 +163,7 @@ export interface AdminCallDetail extends AdminCallRow {
   lead_use_case: string | null
   lead_team_size: string | null
   feedback: 'helpful' | 'not_helpful' | null
+  feedback_comment: string | null
   connect_latency_ms: number | null
   agent_join_latency_ms: number | null
   first_response_latency_ms: number | null

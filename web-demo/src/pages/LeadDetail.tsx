@@ -457,6 +457,7 @@ export function LeadDetail() {
               {call.feedback && (
                 <Row label="Visitor feedback" value={call.feedback === 'helpful' ? '👍 Helpful' : '👎 Not helpful'} />
               )}
+              {call.feedbackComment && <Row label="Feedback note" value={call.feedbackComment} />}
               {call.connectLatencyMs != null && <Row label="Connection" value={`${(call.connectLatencyMs / 1000).toFixed(1)}s`} />}
               {call.agentJoinLatencyMs != null && <Row label="Agent joined" value={`${(call.agentJoinLatencyMs / 1000).toFixed(1)}s`} />}
               {call.firstResponseLatencyMs != null && <Row label="First response" value={`${(call.firstResponseLatencyMs / 1000).toFixed(1)}s`} />}

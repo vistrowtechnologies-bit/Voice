@@ -2959,6 +2959,7 @@ class WidgetFeedbackRequest(BaseModel):
     sessionId: str
     mode: str
     rating: str
+    comment: str | None = None
 
 
 class WidgetTelemetryRequest(BaseModel):
@@ -2983,7 +2984,7 @@ def widget_feedback(req: WidgetFeedbackRequest) -> dict:
     if not req.sessionId or len(req.sessionId) > 200:
         raise HTTPException(400, "Invalid conversation session")
     room_name = f"widget-chat-{req.sessionId}" if req.mode == "chat" else req.sessionId
-    if not calls_db.set_widget_feedback(site["id"], room_name, req.rating):
+    if not calls_db.set_widget_feedback(site["id"], room_name, req.rating, (req.comment or "").strip()[:500]):
         # Voice-call persistence can finish just after LiveKit disconnects;
         # the widget retries once when this short race happens.
         raise HTTPException(404, "Conversation is still being saved")

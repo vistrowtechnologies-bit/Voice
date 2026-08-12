@@ -270,6 +270,7 @@ const CSS = `
 .av-feedback { display:flex;align-items:center;justify-content:center;gap:10px;margin:4px 0; }
 .av-feedback button { width:40px;height:40px;border:1px solid #39304e;border-radius:99px;background:#211a2e;color:#fff;cursor:pointer;font-size:18px; }
 .av-feedback button:hover,.av-feedback button[aria-pressed="true"] { background:#3a2457;border-color:#a855f7;transform:scale(1.06); }
+.av-feedback-note { width:100%;box-sizing:border-box;border:1px solid #39304e;border-radius:10px;background:#211a2e;color:#fff;padding:9px 11px;font:inherit;resize:none; }
 .av-complete-actions { width:100%;display:flex;flex-direction:column;gap:8px; }
 .av-complete-action { border:1px solid #39304e;color:#e9e5f6;background:#211a2e; }
 .av-complete-action:hover { border-color:#7657a5; }
@@ -404,6 +405,7 @@ function widgetHtml(label: string): string {
             <button id="av-feedback-up" aria-label="Helpful" aria-pressed="false">👍</button>
             <button id="av-feedback-down" aria-label="Not helpful" aria-pressed="false">👎</button>
           </div>
+          <textarea id="av-feedback-note" class="av-feedback-note" rows="2" maxlength="500" placeholder="What went wrong? (optional)" style="display:none;"></textarea>
           <div class="av-complete-actions">
             <button id="av-copy-transcript" class="av-complete-action">${COPY_ICON} Copy transcript</button>
             ${ctaLabel && ctaUrl ? `<a id="av-post-cta" class="av-complete-action av-cta" href="${ctaUrl}" target="_blank" rel="noopener">${ctaLabel} ${ARROW_ICON}</a>` : ''}
@@ -489,6 +491,7 @@ function init(): void {
   const completeSummaryEl = shadow.getElementById('av-complete-summary') as HTMLParagraphElement
   const feedbackUpBtn = shadow.getElementById('av-feedback-up') as HTMLButtonElement
   const feedbackDownBtn = shadow.getElementById('av-feedback-down') as HTMLButtonElement
+  const feedbackNote = shadow.getElementById('av-feedback-note') as HTMLTextAreaElement
   const copyTranscriptBtn = shadow.getElementById('av-copy-transcript') as HTMLButtonElement
   const copyStatusEl = shadow.getElementById('av-copy-status') as HTMLSpanElement
   const newConversationBtn = shadow.getElementById('av-new-conversation') as HTMLButtonElement
@@ -1534,7 +1537,7 @@ function init(): void {
   async function submitFeedback(rating: 'helpful' | 'not_helpful'): Promise<void> {
     const sessionId = selectedExperience === 'chat' ? chatSessionId : voiceSessionId
     if (!sessionId) return
-    const body = JSON.stringify({ siteKey, sessionId, mode: selectedExperience, rating })
+    const body = JSON.stringify({ siteKey, sessionId, mode: selectedExperience, rating, comment: feedbackNote.value.trim() })
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const response = await fetch(`${apiBase}/widget/feedback`, {
         method: 'POST',
@@ -1571,14 +1574,22 @@ function init(): void {
   feedbackUpBtn.addEventListener('click', () => {
     feedbackUpBtn.setAttribute('aria-pressed', 'true')
     feedbackDownBtn.setAttribute('aria-pressed', 'false')
+    feedbackNote.style.display = 'none'
     trackEvent('feedback_submitted', { rating: 'helpful' })
     void submitFeedback('helpful')
   })
   feedbackDownBtn.addEventListener('click', () => {
     feedbackDownBtn.setAttribute('aria-pressed', 'true')
     feedbackUpBtn.setAttribute('aria-pressed', 'false')
+    feedbackNote.style.display = 'block'
+    feedbackNote.focus()
     trackEvent('feedback_submitted', { rating: 'not_helpful' })
     void submitFeedback('not_helpful')
+  })
+  feedbackNote.addEventListener('blur', () => {
+    if (feedbackDownBtn.getAttribute('aria-pressed') === 'true' && feedbackNote.value.trim()) {
+      void submitFeedback('not_helpful')
+    }
   })
   copyTranscriptBtn.addEventListener('click', async () => {
     try {
@@ -1596,6 +1607,8 @@ function init(): void {
   newConversationBtn.addEventListener('click', () => {
     feedbackUpBtn.setAttribute('aria-pressed', 'false')
     feedbackDownBtn.setAttribute('aria-pressed', 'false')
+    feedbackNote.style.display = 'none'
+    feedbackNote.value = ''
     callStartedAt = 0
     if (selectedExperience === 'chat') {
       chatHistory.splice(0)

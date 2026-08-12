@@ -721,6 +721,7 @@ def init_tables() -> None:
                 ("agent_join_latency_ms", "INTEGER"),
                 ("first_response_latency_ms", "INTEGER"),
                 ("failure_reason", "TEXT"),
+                ("feedback_comment", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
@@ -1377,6 +1378,7 @@ def _call_dict(
         "agentJoinLatencyMs": _row_get(row, "agent_join_latency_ms"),
         "firstResponseLatencyMs": _row_get(row, "first_response_latency_ms"),
         "failureReason": _row_get(row, "failure_reason"),
+        "feedbackComment": _row_get(row, "feedback_comment"),
     }
     if credit_rates_by_type is not None:
         # Only computed for the single-call detail fetch (get_call) — using
@@ -1678,7 +1680,11 @@ def feedback_summary(account_id: int) -> dict:
         ).fetchone()
         helpful, not_helpful = row["helpful"] or 0, row["not_helpful"] or 0
         total = helpful + not_helpful
-        return {"helpful": helpful, "notHelpful": not_helpful, "total": total, "helpfulPercent": round(helpful * 100 / total) if total else None}
+        latency = conn.execute(
+            "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY first_response_latency_ms) p50, percentile_cont(0.95) WITHIN GROUP (ORDER BY first_response_latency_ms) p95 FROM calls WHERE account_id = ? AND first_response_latency_ms IS NOT NULL",
+            (account_id,),
+        ).fetchone()
+        return {"helpful": helpful, "notHelpful": not_helpful, "total": total, "helpfulPercent": round(helpful * 100 / total) if total else None, "firstResponseP50Ms": round(latency["p50"]) if latency["p50"] is not None else None, "firstResponseP95Ms": round(latency["p95"]) if latency["p95"] is not None else None}
     finally:
         conn.close()
 
@@ -3671,14 +3677,14 @@ def upsert_widget_chat_call(
         conn.close()
 
 
-def set_widget_feedback(site_id: int, room_name: str, rating: str) -> bool:
+def set_widget_feedback(site_id: int, room_name: str, rating: str, comment: str = "") -> bool:
     """Attach a widget visitor's rating to the matching tenant call."""
     conn = _connect()
     try:
         with conn:
             cur = conn.execute(
-                "UPDATE calls SET feedback = ? WHERE site_id = ? AND room_name = ? AND call_type = 'widget'",
-                (rating, site_id, room_name),
+                "UPDATE calls SET feedback = ?, feedback_comment = ? WHERE site_id = ? AND room_name = ? AND call_type = 'widget'",
+                (rating, comment or None, site_id, room_name),
             )
             return bool(cur.rowcount)
     finally:
