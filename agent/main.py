@@ -259,6 +259,50 @@ def _detect_caller_gender(text: str) -> str | None:
     return None
 
 
+# Deterministic backstop for a stubborn LLM bias: despite an explicit
+# per-turn instruction (see on_user_turn_completed's gender reinforcement)
+# telling the model this is ONLY about its own self-reference and must never
+# be mirrored onto the caller, it has repeatedly done exactly that anyway —
+# confirmed live across multiple real calls (both Sarvam and Gemini voices)
+# after three separate rounds of prompt tuning failed to fully suppress it.
+# Rather than trust the model to comply a fourth time, this rewrites the
+# caller-directed feminine verb form to the neutral/masculine-plural default
+# in the actual output text, unconditionally, whenever the caller hasn't
+# explicitly told us they're a woman (_caller_gender != "female").
+#
+# Hindi's feminine present-tense marker before a formal/plural auxiliary is a
+# trailing "ी" (सकती, चाहती, करती, बताती, रही, गई…) immediately followed by
+# " हैं"; the masculine-plural/formal equivalent swaps that "ी" for "े"
+# (सकते, चाहते, करते, बताते, रहे, गए). Scoped to text following "आप" (the
+# caller) within the same clause so it doesn't touch a legitimate feminine
+# reference to some OTHER person the reply happens to mention.
+_CALLER_ADDRESSED_FEMININE_VERB = re.compile(r"(आप\b[^।.!?\n]{0,50}?)(\S*)ी(\s+हैं)")
+
+
+def _neutralize_caller_directed_gender(text: str) -> str:
+    return _CALLER_ADDRESSED_FEMININE_VERB.sub(lambda m: f"{m.group(1)}{m.group(2)}े{m.group(3)}", text)
+
+
+def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
+    """AgentSession tts_text_transforms entry — buffers to sentence
+    boundaries (so a verb split across streaming chunks is never missed
+    mid-word) and applies _neutralize_caller_directed_gender to each
+    completed sentence. Reads agent._caller_gender fresh per sentence since
+    it can change mid-call the moment the caller states it."""
+
+    async def _transform(text):
+        buffer = ""
+        async for chunk in text:
+            buffer += chunk
+            *complete, buffer = re.split(r"(?<=[।.!?])", buffer)
+            for sentence in complete:
+                yield sentence if agent._caller_gender == "female" else _neutralize_caller_directed_gender(sentence)
+        if buffer:
+            yield buffer if agent._caller_gender == "female" else _neutralize_caller_directed_gender(buffer)
+
+    return _transform
+
+
 def _build_llm(model: str):
     """Picks the LLM plugin by model-name prefix, so an operator can switch
     an agent between OpenAI and Gemini from the dashboard's model dropdown
@@ -1489,6 +1533,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         userdata=userdata,
+        tts_text_transforms=[_make_caller_gender_guard_transform(agent)],
         turn_handling=TurnHandlingOptions(
             interruption={"min_words": min_words},
             # Sarvam's saaras:v3 can take longer than livekit-agents' 3.0s
