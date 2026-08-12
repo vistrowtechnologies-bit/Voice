@@ -275,15 +275,47 @@ def _detect_caller_gender(text: str) -> str | None:
 #
 # Hindi's feminine present-tense marker before a formal/plural auxiliary is a
 # trailing "ी" (सकती, चाहती, करती, बताती, रही, गई…) immediately followed by
-# " हैं"; the masculine-plural/formal equivalent swaps that "ी" for "े"
-# (सकते, चाहते, करते, बताते, रहे, गए). Scoped to text following "आप" (the
-# caller) within the same clause so it doesn't touch a legitimate feminine
-# reference to some OTHER person the reply happens to mention.
-_CALLER_ADDRESSED_FEMININE_VERB = re.compile(r"(आप\b[^।.!?\n]{0,50}?)(\S*)ी(\s+हैं)")
+# " हैं"/" थीं"; the masculine-plural/formal equivalent swaps that "ी" for "े"
+# (सकते, चाहते, करते, बताते, रहे, गए).
+#
+# v1 of this only fired when "आप" appeared explicitly nearby — missed a real
+# case live: "एकदम फ्रेश नज़र से देख रही हैं!" addresses the caller with no
+# subject pronoun at all, which is completely normal Hindi (pro-drop) but
+# meant the guard let it straight through. Fixed by firing on every such verb
+# UNLESS the nearest preceding subject-like marker in the same sentence is
+# explicitly third-person (वो/वह/वे/उसकी/उसका/उसके/उनकी/उनका/उनके/उस/उन) —
+# a caller-facing call defaults to being about the caller, not some third
+# party, so an unmarked/pro-dropped subject is treated as "आप" too. This can
+# still mis-fire on a subject-less third-party NOUN reference the regex has
+# no way to see ("मेरी दोस्त अच्छी हैं" — my friend is nice) since it isn't a
+# pronoun at all — accepted tradeoff: misgendering the caller is the
+# confirmed, repeat, user-facing failure; occasionally over-correcting a
+# rare third-party mention is a much smaller cost.
+# No \b here — same Devanagari word-boundary bug as emotion.py's keyword
+# patterns (see that file's comment): combining vowel signs like ो/े/ी/ा
+# aren't \w, so \b silently fails to match right after most of these words
+# (e.g. "वो", "उनकी") — confirmed live: an earlier version of this exact
+# regex used \b and let "वो बहुत अच्छी हैं" (a legitimate third-person
+# reference) slip past the "is this third-person" check entirely.
+_THIRD_PERSON_SUBJECT = re.compile(r"(?:वो|वह|वे|उसकी|उसका|उसके|उनकी|उनका|उनके|उस|उन)")
+_APP_SUBJECT = re.compile(r"आप")
+_GENDERED_VERB = re.compile(r"(\S*)ी(\s+(?:हैं|थीं))")
 
 
 def _neutralize_caller_directed_gender(text: str) -> str:
-    return _CALLER_ADDRESSED_FEMININE_VERB.sub(lambda m: f"{m.group(1)}{m.group(2)}े{m.group(3)}", text)
+    def _repl(m: re.Match) -> str:
+        prefix = text[: m.start()]
+        last_third = max((tm.end() for tm in _THIRD_PERSON_SUBJECT.finditer(prefix)), default=None)
+        last_app = max((am.end() for am in _APP_SUBJECT.finditer(prefix)), default=None)
+        # Most recent subject-like marker before this verb is third-person
+        # and more recent than any "आप" — this is almost certainly about
+        # that other person, leave it alone. Otherwise (most recent is
+        # "आप", or no marker at all — pro-dropped) — caller-directed.
+        if last_third is not None and (last_app is None or last_third > last_app):
+            return m.group(0)
+        return f"{m.group(1)}े{m.group(2)}"
+
+    return _GENDERED_VERB.sub(_repl, text)
 
 
 def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
