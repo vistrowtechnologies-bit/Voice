@@ -14,7 +14,9 @@ import {
   fetchAnalytics,
   fetchCalls,
   fetchDashboardSummary,
+  fetchFeedbackSummary,
   fetchIntelligence,
+  fetchLaunchReadiness,
   fetchUsageTrends,
   formatDateTime,
   formatDuration,
@@ -22,7 +24,7 @@ import {
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
-import type { ActiveCallInfo, Analytics, CallRecord, DashboardSummary, UsageTrends } from '../lib/types'
+import type { ActiveCallInfo, Analytics, CallRecord, DashboardSummary, FeedbackSummary, LaunchReadiness, UsageTrends } from '../lib/types'
 
 const AGENT_STATE_STYLES: Record<string, string> = {
   listening: 'bg-cyan/20 text-cyan border-cyan/30',
@@ -72,6 +74,8 @@ export function Dashboard() {
   const [recentCalls, setRecentCalls] = useState<CallRecord[]>([])
   const [rangeDays, setRangeDays] = useState(14)
   const [recentCallsCollapsed, setRecentCallsCollapsed] = useState(false)
+  const [readiness, setReadiness] = useState<LaunchReadiness | null>(null)
+  const [feedback, setFeedback] = useState<FeedbackSummary | null>(null)
 
   const { user } = useAuth()
   // Re-render (and recompute chart colors) when the header toggles the theme.
@@ -86,6 +90,8 @@ export function Dashboard() {
     fetchAnalytics().then(setAnalytics).catch(() => setAnalytics(null))
     fetchIntelligence(30).then(setIntel).catch(() => setIntel(null))
     fetchCalls().then((calls) => setRecentCalls(calls.slice(0, 5))).catch(() => setRecentCalls([]))
+    fetchLaunchReadiness().then(setReadiness).catch(() => setReadiness(null))
+    fetchFeedbackSummary().then(setFeedback).catch(() => setFeedback(null))
   }, [])
 
   useEffect(() => {
@@ -139,6 +145,26 @@ export function Dashboard() {
                 with <span className="font-semibold text-cyan">{successPct}% qualified</span>
               </p>
             </div>
+
+            {readiness && readiness.completed < readiness.total && (
+              <SectionCard
+                title="Launch checklist"
+                action={<span className="text-xs font-bold text-primary">{readiness.completed}/{readiness.total} complete</span>}
+              >
+                <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {readiness.checks.map((check) => (
+                    <Link
+                      key={check.key}
+                      to={check.to}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${check.complete ? 'border-success/30 bg-success/5 text-text-muted' : 'border-border hover:border-primary'}`}
+                    >
+                      <Icon name={check.complete ? 'check_circle' : 'radio_button_unchecked'} className={`text-[18px] ${check.complete ? 'text-success' : 'text-primary'}`} />
+                      <span className={check.complete ? 'line-through' : ''}>{check.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </SectionCard>
+            )}
 
             {/* Hero: live calls when any are in progress, otherwise the most
                 recent calls - this is a voice platform, so the front page
@@ -250,6 +276,16 @@ export function Dashboard() {
                 icon="event_available"
                 tone="primary"
               />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <StatTile compact label="Feedback received" value={String(feedback?.total ?? 0)} icon="reviews" tone="primary" />
+              <StatTile compact label="Helpful" value={feedback?.helpfulPercent == null ? '—' : `${feedback.helpfulPercent}%`} icon="thumb_up" tone="success" />
+              <Link to="/dashboard/calls?feedback=not_helpful" className="rounded-xl border border-border bg-surface p-4 transition-colors hover:border-destructive">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Needs review</p>
+                <p className="mt-1 font-display text-2xl font-bold text-destructive">{feedback?.notHelpful ?? 0}</p>
+                <p className="mt-1 text-xs text-text-muted">Open negative-feedback conversations →</p>
+              </Link>
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

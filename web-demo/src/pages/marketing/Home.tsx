@@ -7,7 +7,6 @@ import { Seo } from '../../components/Seo'
 import { TalkToArthaButton } from '../../components/MarketingBits'
 import { RotatingGreeting, ScriptMarquee } from '../../components/BharatBits'
 import { Reveal } from '../../components/Reveal'
-import { PLANS } from '../../lib/plans'
 import {
   HOME_FEATURES,
   HOW_IT_WORKS,
@@ -123,6 +122,14 @@ export function Home() {
         path="/"
         jsonLd={HOME_JSONLD}
       />
+      <Link
+        to="#live-demo"
+        className="flex items-center justify-center gap-2 border-b border-primary/20 bg-gradient-to-r from-[#ff9933]/10 via-surface to-[#138808]/10 px-4 py-2.5 text-center text-xs font-semibold text-text transition-colors hover:bg-primary/10 sm:text-sm"
+      >
+        <span aria-hidden="true">🇮🇳</span>
+        Public feedback opens 15 August — try Artha and help us build voice AI for Bharat
+        <Icon name="arrow_forward" className="text-[16px]" />
+      </Link>
       {/* ---------- Hero ---------- */}
       <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-5 py-14 md:px-8 lg:grid-cols-2 lg:py-24">
         <div>
@@ -144,14 +151,14 @@ export function Home() {
               entirely below the fold. */}
           <h1 className="mt-5 font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl lg:text-6xl">
             <RotatingGreeting className="block min-h-[1.1em]" />
-            <span className="mt-1 block">Voice AI that speaks</span>
+            <span className="mt-1 block">Voice AI built for</span>
             <span className="block bg-gradient-to-r from-primary to-magenta bg-clip-text text-transparent">
-              your customer’s language.
+              how India actually speaks.
             </span>
           </h1>
           <p className="mt-5 max-w-lg text-base leading-7 text-text-muted sm:mt-6 sm:text-lg sm:leading-relaxed">
-            Artha answers, qualifies, and books appointments in 10 Indian languages plus English—including
-            natural Hinglish and mid-conversation code-switching. Inbound, outbound, and on your website, 24/7.
+            Answer, qualify, and book customers across phone and web in 10 Indian languages plus English—with
+            natural Hinglish and mid-sentence language switching.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <TalkToArthaButton />
@@ -182,6 +189,28 @@ export function Home() {
           behind it; this says something true instead - every script shown is
           a language the product genuinely speaks. */}
       <ScriptMarquee />
+
+      <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
+        <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="rounded-2xl border border-border bg-surface p-7">
+            <SectionEyebrow>Hear the difference</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Language switching without restarting the call.</h2>
+            <p className="mt-3 text-sm leading-relaxed text-text-muted">Artha follows the caller naturally instead of forcing a language menu or a separate agent.</p>
+            <a href="#live-demo" className="mt-5 inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline">Try it live <Icon name="arrow_forward" className="text-[16px]" /></a>
+          </div>
+          <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 to-surface p-7" aria-label="Example multilingual conversation">
+            <div className="flex gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-high text-xs font-bold">You</span>
+              <p className="rounded-2xl rounded-tl-sm bg-surface-high px-4 py-3 text-sm">Mujhe pricing samajhni hai, but please explain in English.</p>
+            </div>
+            <div className="mt-4 flex justify-end gap-3">
+              <p className="rounded-2xl rounded-tr-sm bg-primary px-4 py-3 text-sm text-white">Of course. I’ll explain the plans in English and help you choose based on your call volume.</p>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">A</span>
+            </div>
+            <p className="mt-4 text-right text-[11px] font-semibold uppercase tracking-wider text-text-muted">Hindi → English · same voice · same conversation</p>
+          </div>
+        </div>
+      </section>
 
       {/* ---------- Built for Bharat ----------
           Every point here maps to something the product actually does
@@ -313,45 +342,29 @@ export function Home() {
         </div>
       </section>
 
-      {/* ---------- Pricing teaser ---------- */}
+      {/* ---------- Public beta access ---------- */}
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
         <div className="mb-12 text-center">
-          <SectionEyebrow>Pricing</SectionEyebrow>
-          <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Simple, credit-based plans.</h2>
+          <SectionEyebrow>Public beta</SectionEyebrow>
+          <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Try the product before pricing is finalized.</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-text-muted">Public testers get access to the complete multilingual voice platform and help shape the introductory plans.</p>
         </div>
-        <div className="grid gap-5 lg:grid-cols-3">
-          {PLANS.map((plan) => (
-            <div
-              key={plan.name}
-              className={`rounded-2xl border bg-surface p-7 ${
-                plan.tag === 'Recommended' ? 'border-primary shadow-[0_0_40px_-10px_rgba(168,85,247,0.5)]' : 'border-border'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="font-display text-lg font-semibold">{plan.name}</h3>
-                {plan.tag && (
-                  <span className="rounded-full bg-primary/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
-                    {plan.tag}
-                  </span>
-                )}
-              </div>
-              <p className="mt-4 font-display text-xl font-bold text-text-muted">Pricing coming soon</p>
-              <p className="mt-1 text-sm text-text-muted">{plan.credits}</p>
-              <ul className="mt-5 flex flex-col gap-2.5">
-                {plan.features.map((feat) => (
-                  <li key={feat} className="flex items-start gap-2 text-sm text-text-muted">
-                    <Icon name="check_circle" className="mt-0.5 text-[16px] text-cyan" />
-                    {feat}
-                  </li>
-                ))}
-              </ul>
+        <div className="grid gap-5 md:grid-cols-3">
+          {[
+            ['mic', 'Live voice and chat', 'Test real conversations in the browser, by phone, or through your website.'],
+            ['translate', '10 Indian languages + English', 'One agent handles natural code-switching without separate language deployments.'],
+            ['analytics', 'Calls, transcripts and feedback', 'Review outcomes, recordings, ratings, and operational analytics in one dashboard.'],
+          ].map(([icon, title, body]) => (
+            <div key={title} className="rounded-2xl border border-border bg-surface p-7">
+              <Icon name={icon} className="text-[24px] text-primary" />
+              <h3 className="mt-4 font-display text-lg font-semibold">{title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-text-muted">{body}</p>
             </div>
           ))}
         </div>
-        <div className="mt-8 text-center">
-          <Link to="/pricing" className="text-sm font-semibold text-primary hover:underline">
-            See full pricing →
-          </Link>
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <Link to="/signup" className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-white hover:opacity-90">Join public beta</Link>
+          <Link to="/contact" className="rounded-full border border-border px-6 py-3 text-sm font-bold hover:border-primary">Talk to us about volume</Link>
         </div>
       </section>
 

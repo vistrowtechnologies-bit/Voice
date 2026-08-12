@@ -150,6 +150,11 @@ export function AdminCallDetailPage() {
             <Field label="Use case" value={c.lead_use_case} />
             <Field label="Team size" value={c.lead_team_size} />
             <Field label="Language" value={c.reply_language} />
+            <Field label="Feedback" value={c.feedback === 'helpful' ? '👍 Helpful' : c.feedback === 'not_helpful' ? '👎 Needs review' : null} />
+            <Field label="Connection" value={c.connect_latency_ms == null ? null : `${(c.connect_latency_ms / 1000).toFixed(1)}s`} />
+            <Field label="Agent joined" value={c.agent_join_latency_ms == null ? null : `${(c.agent_join_latency_ms / 1000).toFixed(1)}s`} />
+            <Field label="First response" value={c.first_response_latency_ms == null ? null : `${(c.first_response_latency_ms / 1000).toFixed(1)}s`} />
+            <Field label="Failure reason" value={c.failure_reason} />
             <Field label="Credits" value={String(c.credits)} />
             <Field label="Room" value={c.room_name} mono />
           </dl>

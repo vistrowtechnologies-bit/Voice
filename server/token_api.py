@@ -68,6 +68,7 @@ _PUBLIC_PATHS = {
     "/widget/token",                   # widget call token (runs on customers' sites)
     "/widget/chat",                    # widget text-chat turn (runs on customers' sites)
     "/widget/feedback",                # widget post-conversation rating
+    "/widget/telemetry",               # widget latency/failure diagnostics
     "/widget/site-config",             # public avatar/greeting/mode lookup by site key
     "/widget/wordpress-plugin.zip",    # plugin download
     "/agent-orb.mp4",                  # widget avatar video
@@ -1336,6 +1337,16 @@ def dashboard_usage_trends(days: int = 14, user: dict = Depends(current_user)) -
 @app.get("/dashboard/analytics")
 def dashboard_analytics(user: dict = Depends(current_user)) -> dict:
     return calls_db.analytics(user["account_id"])
+
+
+@app.get("/dashboard/launch-readiness")
+def dashboard_launch_readiness(user: dict = Depends(current_user)) -> dict:
+    return calls_db.launch_readiness(user["account_id"])
+
+
+@app.get("/dashboard/feedback")
+def dashboard_feedback(user: dict = Depends(current_user)) -> dict:
+    return calls_db.feedback_summary(user["account_id"])
 
 
 # -------------------------------------------------------------- agents
@@ -2950,6 +2961,16 @@ class WidgetFeedbackRequest(BaseModel):
     rating: str
 
 
+class WidgetTelemetryRequest(BaseModel):
+    siteKey: str
+    sessionId: str
+    mode: str
+    connectLatencyMs: int | None = None
+    agentJoinLatencyMs: int | None = None
+    firstResponseLatencyMs: int | None = None
+    failureReason: str | None = None
+
+
 @app.post("/widget/feedback")
 def widget_feedback(req: WidgetFeedbackRequest) -> dict:
     site = calls_db.get_site_by_key(req.siteKey)
@@ -2967,6 +2988,26 @@ def widget_feedback(req: WidgetFeedbackRequest) -> dict:
         # the widget retries once when this short race happens.
         raise HTTPException(404, "Conversation is still being saved")
     return {"ok": True}
+
+
+@app.post("/widget/telemetry")
+def widget_telemetry(req: WidgetTelemetryRequest) -> dict:
+    site = calls_db.get_site_by_key(req.siteKey)
+    if site is None:
+        raise HTTPException(404, "Unknown site key")
+    if req.mode not in ("chat", "voice") or not req.sessionId or len(req.sessionId) > 200:
+        raise HTTPException(400, "Invalid conversation session")
+    values = [req.connectLatencyMs, req.agentJoinLatencyMs, req.firstResponseLatencyMs]
+    if any(v is not None and (v < 0 or v > 300_000) for v in values):
+        raise HTTPException(400, "Invalid timing value")
+    room_name = f"widget-chat-{req.sessionId}" if req.mode == "chat" else req.sessionId
+    saved = calls_db.set_widget_telemetry(site["id"], room_name, {
+        "connectLatencyMs": req.connectLatencyMs,
+        "agentJoinLatencyMs": req.agentJoinLatencyMs,
+        "firstResponseLatencyMs": req.firstResponseLatencyMs,
+        "failureReason": (req.failureReason or "")[:120] or None,
+    })
+    return {"ok": True, "saved": saved}
 
 
 def _sse(data: dict) -> str:

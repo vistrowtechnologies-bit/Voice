@@ -717,6 +717,10 @@ def init_tables() -> None:
                 ("recording_key", "TEXT"),
                 # Optional rating submitted from the widget completion UI.
                 ("feedback", "TEXT"),
+                ("connect_latency_ms", "INTEGER"),
+                ("agent_join_latency_ms", "INTEGER"),
+                ("first_response_latency_ms", "INTEGER"),
+                ("failure_reason", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
@@ -1369,6 +1373,10 @@ def _call_dict(
         # knows to show a player and fetch a presigned URL on demand.
         "hasRecording": bool(_row_get(row, "recording_key")),
         "feedback": _row_get(row, "feedback"),
+        "connectLatencyMs": _row_get(row, "connect_latency_ms"),
+        "agentJoinLatencyMs": _row_get(row, "agent_join_latency_ms"),
+        "firstResponseLatencyMs": _row_get(row, "first_response_latency_ms"),
+        "failureReason": _row_get(row, "failure_reason"),
     }
     if credit_rates_by_type is not None:
         # Only computed for the single-call detail fetch (get_call) — using
@@ -1623,6 +1631,54 @@ def summary(account_id: int) -> dict:
             "avgDurationSeconds": row["avg_seconds"] or 0.0,
             "activeAgents": agents_live,
         }
+    finally:
+        conn.close()
+
+
+def launch_readiness(account_id: int) -> dict:
+    """One cheap, read-only snapshot that powers first-run and launch QA."""
+    conn = _connect()
+    try:
+        agents = conn.execute(
+            "SELECT id, name, status, voice, model, kb_id, system_prompt, welcome_message FROM agents WHERE account_id = ? ORDER BY id",
+            (account_id,),
+        ).fetchall()
+        live_agents = [r for r in agents if r["status"] == "live"]
+        checks = [
+            {"key": "agent", "label": "Create and activate an agent", "complete": bool(live_agents), "to": "/dashboard/agents"},
+            {"key": "voice", "label": "Choose a voice and model", "complete": any(r["voice"] and r["model"] for r in live_agents), "to": "/dashboard/agents"},
+            {"key": "knowledge", "label": "Add business knowledge", "complete": bool(conn.execute("SELECT 1 FROM knowledge_bases WHERE account_id = ? LIMIT 1", (account_id,)).fetchone()), "to": "/dashboard/knowledge"},
+            {"key": "widget", "label": "Install a website widget", "complete": bool(conn.execute("SELECT 1 FROM sites WHERE account_id = ? AND status = 'active' LIMIT 1", (account_id,)).fetchone()), "to": "/dashboard/website-widget"},
+            {"key": "phone", "label": "Connect a phone number", "complete": bool(conn.execute("SELECT 1 FROM phone_numbers WHERE account_id = ? AND status = 'active' LIMIT 1", (account_id,)).fetchone()), "to": "/dashboard/numbers"},
+            {"key": "test", "label": "Complete a test or customer conversation", "complete": bool(conn.execute("SELECT 1 FROM calls WHERE account_id = ? LIMIT 1", (account_id,)).fetchone()), "to": "/dashboard/agents"},
+        ]
+        agent_readiness = []
+        for row in agents:
+            items = {
+                "active": row["status"] == "live",
+                "voice": bool(row["voice"]),
+                "model": bool(row["model"]),
+                "knowledge": bool(row["kb_id"]),
+                "persona": bool((row["system_prompt"] or "").strip() or (row["welcome_message"] or "").strip()),
+                "channel": bool(conn.execute("SELECT 1 FROM sites WHERE account_id = ? AND agent_id = ? LIMIT 1", (account_id, row["id"])).fetchone() or conn.execute("SELECT 1 FROM phone_numbers WHERE account_id = ? AND agent_id = ? LIMIT 1", (account_id, row["id"])).fetchone()),
+            }
+            agent_readiness.append({"id": row["id"], "name": row["name"], "checks": items, "ready": all(items.values())})
+        completed = sum(1 for c in checks if c["complete"])
+        return {"checks": checks, "completed": completed, "total": len(checks), "agents": agent_readiness}
+    finally:
+        conn.close()
+
+
+def feedback_summary(account_id: int) -> dict:
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) FILTER (WHERE feedback = 'helpful') helpful, COUNT(*) FILTER (WHERE feedback = 'not_helpful') not_helpful FROM calls WHERE account_id = ?",
+            (account_id,),
+        ).fetchone()
+        helpful, not_helpful = row["helpful"] or 0, row["not_helpful"] or 0
+        total = helpful + not_helpful
+        return {"helpful": helpful, "notHelpful": not_helpful, "total": total, "helpfulPercent": round(helpful * 100 / total) if total else None}
     finally:
         conn.close()
 
@@ -3623,6 +3679,19 @@ def set_widget_feedback(site_id: int, room_name: str, rating: str) -> bool:
             cur = conn.execute(
                 "UPDATE calls SET feedback = ? WHERE site_id = ? AND room_name = ? AND call_type = 'widget'",
                 (rating, site_id, room_name),
+            )
+            return bool(cur.rowcount)
+    finally:
+        conn.close()
+
+
+def set_widget_telemetry(site_id: int, room_name: str, data: dict) -> bool:
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                "UPDATE calls SET connect_latency_ms = ?, agent_join_latency_ms = ?, first_response_latency_ms = ?, failure_reason = ? WHERE site_id = ? AND room_name = ? AND call_type = 'widget'",
+                (data.get("connectLatencyMs"), data.get("agentJoinLatencyMs"), data.get("firstResponseLatencyMs"), data.get("failureReason"), site_id, room_name),
             )
             return bool(cur.rowcount)
     finally:

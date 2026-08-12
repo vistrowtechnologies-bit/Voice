@@ -457,6 +457,10 @@ export function LeadDetail() {
               {call.feedback && (
                 <Row label="Visitor feedback" value={call.feedback === 'helpful' ? '👍 Helpful' : '👎 Not helpful'} />
               )}
+              {call.connectLatencyMs != null && <Row label="Connection" value={`${(call.connectLatencyMs / 1000).toFixed(1)}s`} />}
+              {call.agentJoinLatencyMs != null && <Row label="Agent joined" value={`${(call.agentJoinLatencyMs / 1000).toFixed(1)}s`} />}
+              {call.firstResponseLatencyMs != null && <Row label="First response" value={`${(call.firstResponseLatencyMs / 1000).toFixed(1)}s`} />}
+              {call.failureReason && <Row label="Failure reason" value={call.failureReason} />}
               {call.creditsUsed != null && <Row label="Credits used" value={String(call.creditsUsed)} />}
               <Row label="Language" value={call.replyLanguage ? (LANGUAGE_NAMES[call.replyLanguage] ?? call.replyLanguage) : '-'} />
               <Row label="Time" value={formatDateTime(call.callDate)} />

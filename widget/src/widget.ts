@@ -821,6 +821,11 @@ function init(): void {
   let chatSessionId: string | null = null
   let chatStartedAt: string | null = null
   let voiceSessionId: string | null = null
+  let voiceAttemptStartedAt = 0
+  let connectLatencyMs: number | null = null
+  let agentJoinLatencyMs: number | null = null
+  let firstResponseLatencyMs: number | null = null
+  let telemetrySent = false
   const chatLead = { name: '', phone: '', email: '' }
   function generateId(): string {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
@@ -1042,6 +1047,7 @@ function init(): void {
   }
 
   function showComplete(message = `Thanks for speaking with ${agentName}.`, successful = true): void {
+    if (selectedExperience === 'voice') void submitTelemetry(successful ? null : message)
     cleanupCallState()
     hideAllPanelViews()
     openPanel()
@@ -1281,7 +1287,14 @@ function init(): void {
     }
     intentionalEnd = false
     callCompleted = false
-    if (attempt === 0) callStartedAt = Date.now()
+    if (attempt === 0) {
+      callStartedAt = Date.now()
+      voiceAttemptStartedAt = performance.now()
+      connectLatencyMs = null
+      agentJoinLatencyMs = null
+      firstResponseLatencyMs = null
+      telemetrySent = false
+    }
     // Voice can start directly from the welcome screen when no lead fields
     // are enabled. Hide every sibling view first so welcome + call can never
     // stack in the panel while the LiveKit room is active.
@@ -1353,6 +1366,7 @@ function init(): void {
         consecutiveCallFailures = 0
         callCooldownUntil = 0
         applyAgentState(participant.attributes?.['lk.agent.state'])
+        agentJoinLatencyMs ??= Math.round(performance.now() - voiceAttemptStartedAt)
         // The 5-minute budget is meant to cover actual conversation time,
         // not the wait for the agent to join — starting it any earlier
         // silently burns visible call time during "Waiting for the agent
@@ -1367,6 +1381,9 @@ function init(): void {
       })
       room.on(RoomEvent.TranscriptionReceived, (segments: TranscriptionSegment[], participant?: Participant) => {
         const isLocal = participant?.identity === room?.localParticipant.identity
+        if (!isLocal && firstResponseLatencyMs === null && segments.some((segment) => segment.text.trim())) {
+          firstResponseLatencyMs = Math.round(performance.now() - voiceAttemptStartedAt)
+        }
         for (const seg of segments) {
           upsertTranscriptEntry(seg.id, seg.text, isLocal)
         }
@@ -1387,6 +1404,7 @@ function init(): void {
       })
 
       await room.connect(url, token)
+      connectLatencyMs = Math.round(performance.now() - voiceAttemptStartedAt)
       trackEvent('call_connected')
       await room.localParticipant.setMicrophoneEnabled(true)
       // The agent usually joins the pre-created room BEFORE the visitor's
@@ -1398,6 +1416,7 @@ function init(): void {
         trackEvent('agent_joined')
         consecutiveCallFailures = 0
         callCooldownUntil = 0
+        agentJoinLatencyMs ??= Math.round(performance.now() - voiceAttemptStartedAt)
         room.remoteParticipants.forEach((p: RemoteParticipant) => {
           applyAgentState(p.attributes?.['lk.agent.state'])
         })
@@ -1531,6 +1550,24 @@ function init(): void {
     copyStatusEl.textContent = 'Could not save feedback. Please try again.'
   }
 
+  async function submitTelemetry(failureReason: string | null): Promise<void> {
+    if (telemetrySent || !voiceSessionId) return
+    telemetrySent = true
+    await fetch(`${apiBase}/widget/telemetry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        siteKey,
+        sessionId: voiceSessionId,
+        mode: 'voice',
+        connectLatencyMs,
+        agentJoinLatencyMs,
+        firstResponseLatencyMs,
+        failureReason,
+      }),
+    }).catch(() => null)
+  }
+
   feedbackUpBtn.addEventListener('click', () => {
     feedbackUpBtn.setAttribute('aria-pressed', 'true')
     feedbackDownBtn.setAttribute('aria-pressed', 'false')
@@ -1568,6 +1605,7 @@ function init(): void {
       chatStartedAt = null
     }
     voiceSessionId = null
+    telemetrySent = false
     showWelcome()
   })
   shadow.getElementById('av-post-cta')?.addEventListener('click', () => trackEvent('post_call_cta_clicked'))

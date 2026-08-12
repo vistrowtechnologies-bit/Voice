@@ -77,6 +77,10 @@ export interface CallRecord {
   // playback URL on demand via fetchCallRecordingUrl.
   hasRecording: boolean
   feedback: 'helpful' | 'not_helpful' | null
+  connectLatencyMs: number | null
+  agentJoinLatencyMs: number | null
+  firstResponseLatencyMs: number | null
+  failureReason: string | null
   // Operator-defined fields (agent.postCallFields) the post-call LLM pass
   // pulled from this specific call's transcript - the generic, per-business
   // extraction system underneath the fixed budget/location/timeline and
@@ -136,6 +140,20 @@ export interface DashboardSummary {
   totalMinutes: number
   avgDurationSeconds: number
   activeAgents: number
+}
+
+export interface LaunchReadiness {
+  checks: { key: string; label: string; complete: boolean; to: string }[]
+  completed: number
+  total: number
+  agents: { id: number; name: string; ready: boolean; checks: Record<string, boolean> }[]
+}
+
+export interface FeedbackSummary {
+  helpful: number
+  notHelpful: number
+  total: number
+  helpfulPercent: number | null
 }
 
 export interface UsageTrends {

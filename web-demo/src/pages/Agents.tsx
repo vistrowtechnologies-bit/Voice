@@ -11,6 +11,7 @@ import {
   deleteAgent,
   fetchAgents,
   fetchKnowledgeBases,
+  fetchLaunchReadiness,
   fetchMyVoices,
   fetchPhoneNumbers,
   formatDateTime,
@@ -23,6 +24,7 @@ import type {
   PhoneNumber,
   PostCallField,
   VoiceEntry,
+  LaunchReadiness,
 } from '../lib/types'
 
 // Curated down to one male (shubh) and one female (priya) voice - the full
@@ -214,6 +216,7 @@ export function Agents() {
   const [editing, setEditing] = useState<AgentConfig | null>(null)
   const [dialTestAgent, setDialTestAgent] = useState<AgentConfig | null>(null)
   const [browserTestAgent, setBrowserTestAgent] = useState<AgentConfig | null>(null)
+  const [readiness, setReadiness] = useState<LaunchReadiness | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const reload = () => fetchAgents().then(setAgents).catch(() => setAgents([]))
@@ -222,6 +225,7 @@ export function Agents() {
     reload()
     fetchKnowledgeBases().then(setKbs).catch(() => setKbs([]))
     fetchPhoneNumbers().then(setNumbers).catch(() => setNumbers([]))
+    fetchLaunchReadiness().then(setReadiness).catch(() => setReadiness(null))
   }, [])
 
   useEffect(() => {
@@ -310,6 +314,32 @@ export function Agents() {
                 <InfoRow icon="menu_book" label="Knowledge" value={kbs.find((k) => k.id === agent.kbId)?.name ?? 'none'} />
                 <InfoRow icon="update" label="Updated" value={formatDateTime(agent.updatedAt)} />
               </dl>
+
+              {(() => {
+                const serverChecks = readiness?.agents.find((item) => item.id === agent.id)?.checks
+                const checks = serverChecks ? Object.values(serverChecks) : [
+                  agent.status === 'live', Boolean(agent.voice && agent.model),
+                  Boolean(agent.systemPrompt.trim() || agent.welcomeMessage.trim()), Boolean(agent.kbId),
+                  numbers.some((n) => n.agentId === agent.id),
+                ]
+                const score = checks.filter(Boolean).length
+                return (
+                  <div className={`mb-4 rounded-lg border px-3 py-2 text-xs ${score === checks.length ? 'border-success/30 bg-success/5' : 'border-amber/30 bg-amber/5'}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Agent readiness</span>
+                      <span className={score === checks.length ? 'text-success' : 'text-amber'}>{score}/{checks.length}</span>
+                    </div>
+                    {score < checks.length && (
+                      <p className="mt-1 text-text-muted">
+                        {!agent.systemPrompt.trim() && !agent.welcomeMessage.trim() ? 'Add a persona or welcome message. ' : ''}
+                        {!agent.kbId ? 'Attach knowledge. ' : ''}
+                        {serverChecks ? (!serverChecks.channel ? 'Assign a phone number or website. ' : '') : (!numbers.some((n) => n.agentId === agent.id) ? 'Assign a phone number or website. ' : '')}
+                        {serverChecks && !serverChecks.active ? 'Activate the agent.' : ''}
+                      </p>
+                    )}
+                  </div>
+                )
+              })()}
 
               <div className="mt-auto flex gap-2">
                 <button

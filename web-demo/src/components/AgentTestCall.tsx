@@ -106,6 +106,8 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
   const [serverUrl, setServerUrl] = useState<string | null>(null)
   const [useOrchestrator, setUseOrchestrator] = useState(false)
   const [forceLiveKit, setForceLiveKit] = useState(false)
+  const [status, setStatus] = useState('Checking the fastest available call route')
+  const diagnosticId = useState(() => `VV-${Date.now().toString(36).toUpperCase().slice(-6)}`)[0]
 
   const handleOrchestratorConnectionError = useCallback(() => {
     // The orchestrator token endpoint can be reachable server-to-server
@@ -114,6 +116,7 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
     // instead of leaving the test call on a generic connection error.
     setUseOrchestrator(false)
     setPhase('connecting')
+    setStatus('Primary route unavailable — switching safely to LiveKit')
     setForceLiveKit(true)
   }, [])
 
@@ -124,10 +127,12 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
       // removal plan) get routed there instead - everyone else falls
       // through to the existing LiveKit room flow below unchanged.
       if (!forceLiveKit) {
+        setStatus('Checking the fastest available call route')
         try {
           const orch = await fetchOrchestratorBrowserToken(agent.id)
           if (cancelled) return
           if (orch.ok) {
+            setStatus('Connected')
             setUseOrchestrator(true)
             setPhase('active')
             return
@@ -139,17 +144,26 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
       if (cancelled) return
       setPhase('connecting')
       try {
+        setStatus('Requesting microphone access')
         await navigator.mediaDevices.getUserMedia({ audio: true })
+        setStatus('Preparing agent and secure call room')
         const identity = randomId('operator')
         const room = randomId(`test-agent-${agent.id}`)
         const { token: newToken, url } = await fetchLiveKitToken(identity, room, agent.id)
         if (cancelled) return
         setToken(newToken)
         setServerUrl(url)
+        setStatus('Agent prepared — joining call')
         setPhase('active')
       } catch (err) {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Could not connect.')
+        const raw = err instanceof Error ? err.message : ''
+        const message = /NotAllowed|Permission|denied/i.test(raw)
+          ? 'Microphone access is blocked. Allow microphone access in your browser, then retry.'
+          : /network|fetch|failed/i.test(raw)
+            ? 'The call service could not be reached. Check your connection and retry.'
+            : 'The agent could not start this test call. Retry once, then share the reference below with support.'
+        setError(message)
         setPhase('error')
       }
     })()
@@ -172,7 +186,14 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
   if (phase === 'error') {
     return (
       <ModalShell title={`Browser test - ${agent.name}`} onClose={onClose}>
-        <p className="text-sm text-destructive">{error ?? 'Could not connect.'}</p>
+        <div className="flex flex-col gap-3">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+            <p className="text-sm font-semibold text-destructive">Couldn’t start the conversation</p>
+            <p className="mt-1 text-xs leading-relaxed text-text-muted">{error ?? 'Could not connect.'}</p>
+            <p className="mt-2 font-mono text-[10px] text-text-muted">Reference: {diagnosticId}</p>
+          </div>
+          <button onClick={() => { setError(null); setPhase('checking'); setForceLiveKit((v) => !v) }} className="rounded-lg bg-primary py-2 text-sm font-bold text-bg">Retry test</button>
+        </div>
       </ModalShell>
     )
   }
@@ -182,7 +203,7 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
       <ModalShell title={`Browser test - ${agent.name}`} onClose={onClose}>
         <div className="flex items-center gap-3 py-2 text-sm text-cyan">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan border-t-transparent" />
-          Connecting…
+          <span><span className="block font-semibold">{status}</span><span className="mt-0.5 block text-[11px] text-text-muted">This usually takes a few seconds.</span></span>
         </div>
       </ModalShell>
     )

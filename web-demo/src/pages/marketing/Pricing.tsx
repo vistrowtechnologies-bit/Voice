@@ -2,7 +2,6 @@ import { Icon } from '../../components/Icon'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
-import { PLANS } from '../../lib/plans'
 import { useState } from 'react'
 
 const FAQ = [
@@ -50,62 +49,33 @@ export function Pricing() {
       />
       <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-20">
         <SectionEyebrow>Pricing</SectionEyebrow>
-        <h1 className="mt-4 font-display text-5xl font-bold leading-[1.05] tracking-tight">
-          Simple, credit-based plans.
+        <h1 className="mt-4 font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl">
+          Public beta access is open.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          Every plan includes the web call widget, call history, and analytics. Scale up as your call volume grows.
+          Test the complete voice platform, share feedback, and help shape the introductory plans before launch.
         </p>
         <p className="mx-auto mt-3 max-w-xl text-sm text-text-muted">
-          We're finalizing introductory pricing ahead of public beta — talk to us for early access and rates.
+          No public price is being advertised until the introductory rates are finalized.
         </p>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
         <div className="grid gap-5 lg:grid-cols-3">
-          {PLANS.map((plan) => (
-            <div
-              key={plan.name}
-              className={`flex flex-col rounded-2xl border bg-surface p-7 ${
-                plan.tag === 'Recommended'
-                  ? 'border-primary shadow-[0_0_40px_-10px_rgba(168,85,247,0.5)]'
-                  : 'border-border'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="font-display text-lg font-semibold">{plan.name}</h3>
-                {plan.tag && (
-                  <span className="rounded-full bg-primary/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
-                    {plan.tag}
-                  </span>
-                )}
-              </div>
-              <p className="mt-4 font-display text-2xl font-bold text-text-muted">Pricing coming soon</p>
-              <p className="mt-1 text-sm text-text-muted">{plan.credits}</p>
+          {[
+            ['Voice + chat', ['Inbound and outbound calling', 'Embeddable website widget', 'Natural language switching']],
+            ['Operate confidently', ['Call history and transcripts', 'Visitor feedback and analytics', 'Agent and provider readiness']],
+            ['Scale when ready', ['Shared credit usage', 'CRM and webhook integrations', 'Volume planning with our team']],
+          ].map(([title, features]) => (
+            <div key={title as string} className="flex flex-col rounded-2xl border border-border bg-surface p-7">
+              <h3 className="font-display text-lg font-semibold">{title as string}</h3>
               <ul className="mt-6 flex flex-1 flex-col gap-2.5">
-                {plan.features.map((feat) => (
-                  <li key={feat} className="flex items-start gap-2 text-sm text-text-muted">
-                    <Icon name="check_circle" className="mt-0.5 text-[16px] text-cyan" />
-                    {feat}
-                  </li>
-                ))}
+                {(features as string[]).map((feat) => <li key={feat} className="flex items-start gap-2 text-sm text-text-muted"><Icon name="check_circle" className="mt-0.5 text-[16px] text-cyan" />{feat}</li>)}
               </ul>
-              <NavLink
-                to="/signup"
-                className={`mt-7 rounded-full px-5 py-2.5 text-center text-sm font-bold transition-opacity hover:opacity-90 ${
-                  plan.tag === 'Recommended'
-                    ? 'bg-gradient-to-br from-primary to-primary-dark text-white'
-                    : 'border border-border text-text'
-                }`}
-              >
-                Start free
-              </NavLink>
             </div>
           ))}
         </div>
-        <p className="mt-6 text-center text-sm text-text-muted">
-          Default usage: web calls start at 1 credit/min and phone calls at 1.5 credits/min. Voice-tier multipliers apply; both share one pool.
-        </p>
+        <div className="mt-8 flex flex-wrap justify-center gap-3"><NavLink to="/signup" className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-white">Join public beta</NavLink><NavLink to="/contact" className="rounded-full border border-border px-6 py-3 text-sm font-bold">Discuss call volume</NavLink></div>
       </section>
 
       {/* FAQ */}

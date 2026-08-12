@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { DataTable } from '../components/ui/DataTable'
@@ -55,11 +55,13 @@ function groupByCaller(rows: CallRecord[]): GroupedCall[] {
 }
 
 export function CallsHistory() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [calls, setCalls] = useState<CallRecord[]>([])
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
   const [channel, setChannel] = useState('All')
   const [search, setSearch] = useState('')
   const [sortDesc, setSortDesc] = useState(true)
+  const [feedbackFilter, setFeedbackFilter] = useState(searchParams.get('feedback') || 'all')
 
   useEffect(() => {
     fetchCalls().then(setCalls).catch(() => setCalls([]))
@@ -69,6 +71,7 @@ export function CallsHistory() {
   const filtered = useMemo(() => {
     let rows = calls
     if (channel !== 'All') rows = rows.filter((c) => c.channel === channel)
+    if (feedbackFilter !== 'all') rows = rows.filter((c) => c.feedback === feedbackFilter)
     if (search) {
       const s = search.toLowerCase()
       rows = rows.filter((c) => c.name.toLowerCase().includes(s) || c.phone.includes(s))
@@ -77,7 +80,7 @@ export function CallsHistory() {
     return grouped.sort((a, b) =>
       sortDesc ? b.callDate.localeCompare(a.callDate) : a.callDate.localeCompare(b.callDate),
     )
-  }, [calls, channel, search, sortDesc])
+  }, [calls, channel, feedbackFilter, search, sortDesc])
 
   const completed = calls.filter((c) => c.callStatus === 'completed').length
   const failed = calls.filter((c) => c.callStatus === 'failed').length
@@ -124,6 +127,11 @@ export function CallsHistory() {
     { key: 'channel', header: 'Channel', render: (call) => <span className="text-sm text-text-muted">{call.channel}</span> },
     { key: 'website', header: 'Website', render: (call) => <span className="text-sm text-text-muted">{call.website || '-'}</span> },
     { key: 'duration', header: 'Duration', render: (call) => <span className="text-sm">{formatDuration(call.durationSeconds)}</span> },
+    {
+      key: 'feedback',
+      header: 'Feedback',
+      render: (call) => <span className="text-sm">{call.feedback === 'helpful' ? '👍' : call.feedback === 'not_helpful' ? '👎' : '—'}</span>,
+    },
     {
       key: 'recording',
       header: 'Recording',
@@ -200,6 +208,25 @@ export function CallsHistory() {
               className="w-full rounded-lg border border-border bg-surface py-2 pl-10 pr-3 text-sm outline-none focus:border-primary"
             />
           </div>
+          <select
+            value={feedbackFilter}
+            aria-label="Filter by feedback"
+            onChange={(e) => {
+              const value = e.target.value
+              setFeedbackFilter(value)
+              setSearchParams((current) => {
+                const next = new URLSearchParams(current)
+                if (value === 'all') next.delete('feedback')
+                else next.set('feedback', value)
+                return next
+              })
+            }}
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-muted outline-none focus:border-primary"
+          >
+            <option value="all">All feedback</option>
+            <option value="helpful">👍 Helpful</option>
+            <option value="not_helpful">👎 Needs review</option>
+          </select>
           <button
             onClick={() => setSortDesc((v) => !v)}
             className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-bold text-text-muted hover:border-primary"
