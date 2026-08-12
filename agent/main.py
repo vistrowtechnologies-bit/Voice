@@ -24,7 +24,8 @@ from livekit.agents import (
 from livekit.agents.tts import StreamAdapter
 from livekit.agents.stt import FallbackAdapter as SttFallbackAdapter
 from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
-from livekit.agents.types import NOT_GIVEN
+from livekit.agents.types import NOT_GIVEN, APIConnectOptions
+from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarvam
 
 import db
@@ -1483,6 +1484,15 @@ async def entrypoint(ctx: JobContext) -> None:
             endpointing=EndpointingOptions(max_delay=4.0),
         ),
         user_away_timeout=away_timeout,
+        # Google's Gemini TTS backend (gemini-2.5-flash-tts) genuinely times
+        # out under the framework's 10s default often enough to matter —
+        # confirmed via Cloud Monitoring: ~12% of requests over 24h hit a
+        # real 504 gateway timeout, not a client-cancelled 499. Each one
+        # trips TtsFallbackAdapter into switching the caller's voice to
+        # Sarvam for the rest of the call (see _google_fallback_tts). 20s
+        # gives a genuinely-slow-but-alive response room to finish instead
+        # of being cut off and treated as dead.
+        conn_options=SessionConnectOptions(tts_conn_options=APIConnectOptions(timeout=20.0)),
     )
 
     # --- End-call-on-silence watchdog ---------------------------------------
