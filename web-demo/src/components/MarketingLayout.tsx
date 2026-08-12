@@ -243,12 +243,6 @@ function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
   return (
     <>
-      <div className="border-b border-border bg-primary/10 px-4 py-2 text-center text-xs text-text-muted">
-        <span className="text-cyan">New</span> · {BRAND.name} now speaks 10 Indian languages + English{' '}
-        <NavLink to="/product" className="font-semibold text-text hover:underline">
-          →
-        </NavLink>
-      </div>
       <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3.5 md:px-8">
           <NavLink to="/" className="flex items-center gap-2">
