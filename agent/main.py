@@ -252,6 +252,20 @@ def _looks_like_farewell(text: str) -> bool:
 _MALE_SELF_ID = ("i'm male", "i am male", "main male", "i'm a man", "i am a man", "main ladka", "मैं लड़का", "मैं पुरुष")
 _FEMALE_SELF_ID = ("i'm female", "i am female", "main female", "i'm a woman", "i am a woman", "main ladki", "मैं लड़की", "मैं महिला")
 
+# Deliberately narrow, same bar as detect_caller_emotion — a false negative
+# here just means the static "search, don't dodge" prompt instruction is the
+# only thing carrying that turn (today's status quo), not a regression. No
+# \b on the Devanagari terms — see emotion.py's comment for why \b silently
+# fails on combining vowel signs in these scripts.
+_FACT_LOOKUP_PATTERN = re.compile(
+    r"\b(hospital|school|college|nearby|near by|how far|distance|closest|nearest|"
+    r"which (?:project|company|bank|branch|hospital|school)|current price|latest|"
+    r"address of|located)\b|"
+    r"अस्पताल|स्कूल|कॉलेज|नज़दीक|नजदीक|पास में|कितनी दूर|नज़दीकी|नजदीकी|कौन सा|कौनसा|"
+    r"कहाँ है|कहां है|पता|कीमत",
+    re.IGNORECASE,
+)
+
 
 def _detect_caller_gender(text: str) -> str | None:
     lowered = (text or "").lower()
@@ -1158,11 +1172,35 @@ class RealEstateAgent(Agent):
             if self._is_platform_demo
             else ""
         )
+        # Same reinforcement pattern again for a different failure: the
+        # prompt already says "search, don't dodge" for a concrete factual
+        # question, but confirmed live — asked to name real hospitals near a
+        # real Pimpri project (mid a roleplay the caller explicitly asked
+        # for), it invented two plausible-sounding but wrong hospital names
+        # and a geographically-inconsistent answer instead of calling
+        # web_search, with zero hedging. The static instruction isn't
+        # landing reliably any more than language/gender/personality did
+        # before their own per-turn nudges — so it gets one too, fired only
+        # when this turn's text actually looks like it's asking for a
+        # verifiable real-world fact.
+        _search_instruction = (
+            (
+                "The caller's last message asks about a concrete, real-world fact you cannot "
+                "possibly know from memory alone (a specific place, hospital, school, distance, "
+                "price, or similar named detail). You MUST call web_search before answering this "
+                "— do not guess, estimate, or invent a name or detail, even a plausible-sounding "
+                "one. Answering without calling web_search first is fabricating information, which "
+                "actively misleads a real prospect and is explicitly against your instructions."
+            )
+            if self._is_platform_demo and _FACT_LOOKUP_PATTERN.search(text)
+            else ""
+        )
         turn_ctx.add_message(
             role="system",
             content=_language_instruction
             + ("\n\n" + _gender_instruction if _gender_instruction else "")
-            + ("\n\n" + _personality_instruction if _personality_instruction else ""),
+            + ("\n\n" + _personality_instruction if _personality_instruction else "")
+            + ("\n\n" + _search_instruction if _search_instruction else ""),
         )
 
         emotion = detect_caller_emotion(text)
