@@ -248,7 +248,7 @@ export function Agents() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Agents" subtitle={`${agents.length} total agents`} />
+      <PageHeader title="Agents" subtitle={`${agents.length} total ${agents.length === 1 ? 'agent' : 'agents'}`} />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="rounded-lg border border-border bg-surface px-4 py-3 text-xs text-text-muted">

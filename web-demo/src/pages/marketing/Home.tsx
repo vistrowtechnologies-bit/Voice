@@ -58,11 +58,6 @@ const HOME_JSONLD = [
     operatingSystem: 'Web',
     description:
       'AI voice agents that answer, qualify, and book customer calls in 10 Indian languages plus English - inbound, outbound, and web calls, live 24/7.',
-    offers: {
-      '@type': 'Offer',
-      price: '2999',
-      priceCurrency: 'INR',
-    },
   },
   {
     '@context': 'https://schema.org',

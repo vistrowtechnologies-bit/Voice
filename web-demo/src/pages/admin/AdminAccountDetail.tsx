@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import {
@@ -37,10 +37,13 @@ export function AdminAccountDetail() {
   const [modal, setModal] = useState<null | 'credits' | 'plan' | 'status' | 'reset'>(null)
   const [banner, setBanner] = useState<string | null>(null)
 
-  const load = () => adminAccountDetail(accountId).then(setD).catch(() => setError(true))
-  useEffect(() => {
-    load()
+  const load = useCallback(() => {
+    setError(false)
+    return adminAccountDetail(accountId).then(setD).catch(() => setError(true))
   }, [accountId])
+  useEffect(() => {
+    void load()
+  }, [load])
 
   if (error) return <EmptyState icon="error" message="Account not found." />
   if (!d) return <div className="h-40 animate-pulse rounded-xl border border-border bg-surface" />

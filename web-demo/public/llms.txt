@@ -16,7 +16,7 @@ Vistrow Voice lets businesses put a real-time AI voice agent on every phone call
 Real Estate (buyer qualification, site-visit booking), Healthcare & Clinics (appointment booking, patient FAQs), E-commerce & D2C (order status, returns), Finance & Collections (compliant reminder calls), Support & Helpdesk (tier-1 resolution).
 
 ## Pricing
-Credit-based monthly plans starting at ₹2,999/mo. Full details: https://www.vistrowvoice.com/pricing
+Credit-based plans are being finalized for the public beta. Current details: https://www.vistrowvoice.com/pricing
 
 ## Languages
 Artha speaks ten Indian languages — Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, and Odia — plus English, and switches mid-call to match the caller. It handles everyday code-switching (e.g. Hinglish) and keeps grammatical gender agreement consistent in Hindi, Marathi, Gujarati, and Punjabi. Per-language detail: https://www.vistrowvoice.com/languages

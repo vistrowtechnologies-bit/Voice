@@ -67,6 +67,7 @@ _PUBLIC_PATHS = {
     "/widget.js",                      # embedded widget script
     "/widget/token",                   # widget call token (runs on customers' sites)
     "/widget/chat",                    # widget text-chat turn (runs on customers' sites)
+    "/widget/feedback",                # widget post-conversation rating
     "/widget/site-config",             # public avatar/greeting/mode lookup by site key
     "/widget/wordpress-plugin.zip",    # plugin download
     "/agent-orb.mp4",                  # widget avatar video
@@ -2940,6 +2941,32 @@ class WidgetChatRequest(BaseModel):
     name: str | None = None
     phone: str | None = None
     email: str | None = None
+
+
+class WidgetFeedbackRequest(BaseModel):
+    siteKey: str
+    sessionId: str
+    mode: str
+    rating: str
+
+
+@app.post("/widget/feedback")
+def widget_feedback(req: WidgetFeedbackRequest) -> dict:
+    site = calls_db.get_site_by_key(req.siteKey)
+    if site is None:
+        raise HTTPException(404, "Unknown site key")
+    if req.rating not in ("helpful", "not_helpful"):
+        raise HTTPException(400, "Invalid feedback rating")
+    if req.mode not in ("chat", "voice"):
+        raise HTTPException(400, "Invalid conversation mode")
+    if not req.sessionId or len(req.sessionId) > 200:
+        raise HTTPException(400, "Invalid conversation session")
+    room_name = f"widget-chat-{req.sessionId}" if req.mode == "chat" else req.sessionId
+    if not calls_db.set_widget_feedback(site["id"], room_name, req.rating):
+        # Voice-call persistence can finish just after LiveKit disconnects;
+        # the widget retries once when this short race happens.
+        raise HTTPException(404, "Conversation is still being saved")
+    return {"ok": True}
 
 
 def _sse(data: dict) -> str:

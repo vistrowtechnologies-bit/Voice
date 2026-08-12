@@ -392,11 +392,11 @@ function SiteRow({
           <p className="text-sm font-semibold">{site.name}</p>
           {site.allowedDomain && <p className="text-[11px] text-text-muted">{site.allowedDomain}</p>}
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:justify-end">
           <select
             value={site.agentId ?? ''}
             onChange={(e) => patchSite({ agentId: e.target.value ? Number(e.target.value) : null })}
-            className="rounded-lg border border-border bg-surface-high px-2.5 py-1.5 text-xs"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-surface-high px-2.5 py-1.5 text-xs sm:flex-none"
           >
             <option value="">Unassigned</option>
             {agents.map((a) => (
@@ -409,7 +409,7 @@ function SiteRow({
             value={site.widgetPosition}
             onChange={(e) => patchSite({ widgetPosition: e.target.value as Site['widgetPosition'] })}
             aria-label="Widget corner"
-            className="rounded-lg border border-border bg-surface-high px-2.5 py-1.5 text-xs"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-surface-high px-2.5 py-1.5 text-xs sm:flex-none"
           >
             <option value="bottom-right">Bottom right</option>
             <option value="bottom-left">Bottom left</option>

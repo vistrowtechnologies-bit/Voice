@@ -301,7 +301,7 @@ export function KnowledgeBasePage() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Knowledge Base" subtitle={`${kbs.length} knowledge bases`} />
+      <PageHeader title="Knowledge Base" subtitle={`${kbs.length} knowledge ${kbs.length === 1 ? 'base' : 'bases'}`} />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="rounded-lg border border-border bg-surface px-4 py-3 text-xs text-text-muted">

@@ -715,6 +715,8 @@ def init_tables() -> None:
                 # directly — _call_dict below exposes only a hasRecording
                 # bool; playback goes through a presigned-URL route instead.
                 ("recording_key", "TEXT"),
+                # Optional rating submitted from the widget completion UI.
+                ("feedback", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
@@ -1366,6 +1368,7 @@ def _call_dict(
         # Never the raw R2 key — just whether one exists, so the frontend
         # knows to show a player and fetch a presigned URL on demand.
         "hasRecording": bool(_row_get(row, "recording_key")),
+        "feedback": _row_get(row, "feedback"),
     }
     if credit_rates_by_type is not None:
         # Only computed for the single-call detail fetch (get_call) — using
@@ -1380,7 +1383,9 @@ def _call_dict(
         out["transcript"] = [
             {
                 "speaker": "agent" if t.get("role") == "assistant" else "visitor",
-                "text": t.get("text", ""),
+                # LiveKit transcripts use `text`; text-chat sessions use the
+                # OpenAI-compatible `content` field.
+                "text": t.get("text") or t.get("content", ""),
             }
             for t in transcript
         ]
@@ -3606,6 +3611,20 @@ def upsert_widget_chat_call(
                     site.get("accountId"),
                 ),
             )
+    finally:
+        conn.close()
+
+
+def set_widget_feedback(site_id: int, room_name: str, rating: str) -> bool:
+    """Attach a widget visitor's rating to the matching tenant call."""
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                "UPDATE calls SET feedback = ? WHERE site_id = ? AND room_name = ? AND call_type = 'widget'",
+                (rating, site_id, room_name),
+            )
+            return bool(cur.rowcount)
     finally:
         conn.close()
 

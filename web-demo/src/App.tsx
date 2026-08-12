@@ -72,8 +72,33 @@ const guard = (el: ReactNode) => <RequireAuth>{el}</RequireAuth>
 function AnalyticsListener() {
   const location = useLocation()
   useEffect(() => {
-    const id = setTimeout(() => trackPageView(location.pathname + location.search), 0)
-    return () => clearTimeout(id)
+    // Dashboard/admin pages do not mount the marketing <Seo> component, so
+    // without an explicit title they inherit whichever public page was last
+    // visited (usually the homepage). Keep browser tabs/history meaningful
+    // and prevent analytics from recording every product screen under the
+    // homepage title.
+    const isProductPage = location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/admin')
+    const section = location.pathname.startsWith('/admin') ? 'Admin' : 'Dashboard'
+    let observer: MutationObserver | null = null
+    const updateProductTitle = () => {
+      if (!isProductPage) return
+      const routeTitle = document.querySelector('h1')?.textContent?.trim()
+      document.title = `${routeTitle || section} - Vistrow Voice`
+      if (routeTitle) observer?.disconnect()
+    }
+    updateProductTitle()
+    // Auth/data gates can render the page heading after this route effect.
+    // Observe that short transition so a direct dashboard URL gets the real
+    // screen title rather than remaining the generic homepage title.
+    observer = isProductPage ? new MutationObserver(updateProductTitle) : null
+    if (observer) observer.observe(document.body, { childList: true, subtree: true })
+    const id = setTimeout(() => {
+      trackPageView(location.pathname + location.search)
+    }, 0)
+    return () => {
+      clearTimeout(id)
+      observer?.disconnect()
+    }
   }, [location.pathname, location.search])
   return null
 }

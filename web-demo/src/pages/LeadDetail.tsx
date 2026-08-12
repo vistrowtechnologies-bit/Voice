@@ -454,6 +454,9 @@ export function LeadDetail() {
               {call.website && <Row label="Website" value={call.website} />}
               <Row label="Agent" value={call.agent} />
               <Row label="Duration" value={formatDuration(call.durationSeconds)} />
+              {call.feedback && (
+                <Row label="Visitor feedback" value={call.feedback === 'helpful' ? '👍 Helpful' : '👎 Not helpful'} />
+              )}
               {call.creditsUsed != null && <Row label="Credits used" value={String(call.creditsUsed)} />}
               <Row label="Language" value={call.replyLanguage ? (LANGUAGE_NAMES[call.replyLanguage] ?? call.replyLanguage) : '-'} />
               <Row label="Time" value={formatDateTime(call.callDate)} />

@@ -820,6 +820,7 @@ function init(): void {
   let chatOpened = false
   let chatSessionId: string | null = null
   let chatStartedAt: string | null = null
+  let voiceSessionId: string | null = null
   const chatLead = { name: '', phone: '', email: '' }
   function generateId(): string {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
@@ -1318,7 +1319,9 @@ function init(): void {
         const body = await res.text().catch(() => '')
         throw new Error(`${res.status} ${res.statusText}: ${body}`)
       }
-      ;({ token, url } = (await res.json()) as { token: string; url: string })
+      const payload = (await res.json()) as { token: string; url: string; room?: string }
+      ;({ token, url } = payload)
+      voiceSessionId = payload.room || null
     } catch (err) {
       console.error('[Vistrow Voice widget] token request failed:', err)
       failCall('Could not reach the call server — please try again shortly.')
@@ -1509,15 +1512,36 @@ function init(): void {
   })
   typeInput.addEventListener('focus', startPresencePing)
   typeInput.addEventListener('blur', stopPresencePing)
+  async function submitFeedback(rating: 'helpful' | 'not_helpful'): Promise<void> {
+    const sessionId = selectedExperience === 'chat' ? chatSessionId : voiceSessionId
+    if (!sessionId) return
+    const body = JSON.stringify({ siteKey, sessionId, mode: selectedExperience, rating })
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await fetch(`${apiBase}/widget/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }).catch(() => null)
+      if (response?.ok) {
+        copyStatusEl.textContent = 'Feedback saved — thank you.'
+        return
+      }
+      if (attempt === 0) await new Promise((resolve) => window.setTimeout(resolve, 1200))
+    }
+    copyStatusEl.textContent = 'Could not save feedback. Please try again.'
+  }
+
   feedbackUpBtn.addEventListener('click', () => {
     feedbackUpBtn.setAttribute('aria-pressed', 'true')
     feedbackDownBtn.setAttribute('aria-pressed', 'false')
     trackEvent('feedback_submitted', { rating: 'helpful' })
+    void submitFeedback('helpful')
   })
   feedbackDownBtn.addEventListener('click', () => {
     feedbackDownBtn.setAttribute('aria-pressed', 'true')
     feedbackUpBtn.setAttribute('aria-pressed', 'false')
     trackEvent('feedback_submitted', { rating: 'not_helpful' })
+    void submitFeedback('not_helpful')
   })
   copyTranscriptBtn.addEventListener('click', async () => {
     try {
@@ -1543,11 +1567,12 @@ function init(): void {
       chatSessionId = null
       chatStartedAt = null
     }
+    voiceSessionId = null
     showWelcome()
   })
   shadow.getElementById('av-post-cta')?.addEventListener('click', () => trackEvent('post_call_cta_clicked'))
-  shadow.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !room) resetToIdle()
+  shadow.addEventListener('keydown', (event) => {
+    if ((event as KeyboardEvent).key === 'Escape' && !room) resetToIdle()
   })
   window.addEventListener('scroll', hideGreeting, { once: true, passive: true })
   trackEvent('loaded')
