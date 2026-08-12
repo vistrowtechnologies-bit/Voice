@@ -539,6 +539,12 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 voice_name=voice_name.capitalize(),
                 model_name="gemini-2.5-flash-tts",
                 credentials_info=_GOOGLE_CREDENTIALS,
+                # Was never wired up before — every Google voice spoke at a
+                # fixed 1.0x regardless of the agent's Tone preset, unlike
+                # Sarvam/ElevenLabs below which both already read "pace" via
+                # **tone. Same TONE_PRESETS pace values now apply here too
+                # (professional=0.95, balanced=1.0, casual=1.08).
+                speaking_rate=tone.get("pace", 1.0),
             )
             return _google_fallback_tts(google_tts, sarvam_safety_net), "google-multilingual"
         voice_language = "-".join(voice_name.split("-")[:2])
@@ -546,6 +552,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             language=voice_language,
             voice_name=voice_name,
             credentials_info=_GOOGLE_CREDENTIALS,
+            speaking_rate=tone.get("pace", 1.0),
             **_GOOGLE_TTS_KWARGS,
         )
         return _google_fallback_tts(google_tts, sarvam_safety_net), "google-native"
