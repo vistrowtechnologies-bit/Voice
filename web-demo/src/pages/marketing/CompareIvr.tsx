@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { RoiCalculator } from '../../components/RoiCalculator'
 import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
 
 // Deliberately compares against the incumbent *category* - a phone menu or
@@ -184,16 +183,6 @@ export function CompareIvr() {
             </div>
           </div>
         </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
-        <div className="mb-8 text-center">
-          <SectionEyebrow>Run the numbers</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">
-            What it would cost you.
-          </h2>
-        </div>
-        <RoiCalculator />
       </section>
 
       <section className="mx-auto max-w-3xl px-5 pb-14 md:px-8">

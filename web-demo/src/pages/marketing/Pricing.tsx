@@ -1,10 +1,9 @@
-import { useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
-import { RoiCalculator } from '../../components/RoiCalculator'
 import { PLANS } from '../../lib/plans'
+import { useState } from 'react'
 
 const FAQ = [
   {
@@ -28,11 +27,6 @@ const FAQ = [
 // Answer-engine-friendly (AEO/GEO): FAQPage structured data lets Google,
 // Bing, and LLM-based answer engines quote these Q&As directly instead of
 // having to scrape the accordion markup.
-function annualPrice(price: string): string {
-  const n = Number(price.replace(/[^0-9]/g, ''))
-  return `₹${Math.round(n * 0.85).toLocaleString('en-IN')}`
-}
-
 const FAQ_JSONLD = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
@@ -44,14 +38,13 @@ const FAQ_JSONLD = {
 }
 
 export function Pricing() {
-  const [annual, setAnnual] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
 
   return (
     <MarketingLayout>
       <Seo
         title="Pricing - Vistrow Voice"
-        description="Simple, credit-based plans for AI voice agents. Every plan includes the web call widget, call history, and analytics - scale up as your call volume grows."
+        description="Credit-based plans for AI voice agents. Every plan includes the web call widget, call history, and analytics - scale up as your call volume grows."
         path="/pricing"
         jsonLd={FAQ_JSONLD}
       />
@@ -64,22 +57,8 @@ export function Pricing() {
           Every plan includes the web call widget, call history, and analytics. Scale up as your call volume grows.
         </p>
         <p className="mx-auto mt-3 max-w-xl text-sm text-text-muted">
-          Public-testing pricing is indicative; activation and upgrades are handled with our team while online checkout is being prepared.
+          We're finalizing introductory pricing ahead of public beta — talk to us for early access and rates.
         </p>
-        <div className="mt-8 inline-flex items-center gap-3 rounded-full border border-border bg-surface p-1 text-sm">
-          <button
-            onClick={() => setAnnual(false)}
-            className={`rounded-full px-4 py-1.5 font-semibold transition-colors ${!annual ? 'bg-primary text-white' : 'text-text-muted'}`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setAnnual(true)}
-            className={`rounded-full px-4 py-1.5 font-semibold transition-colors ${annual ? 'bg-primary text-white' : 'text-text-muted'}`}
-          >
-            Annual <span className="text-cyan">−15%</span>
-          </button>
-        </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
@@ -101,12 +80,8 @@ export function Pricing() {
                   </span>
                 )}
               </div>
-              <p className="mt-4 font-display text-4xl font-bold">
-                {annual ? annualPrice(plan.price) : plan.price}
-                <span className="text-base font-normal text-text-muted">/mo</span>
-              </p>
+              <p className="mt-4 font-display text-2xl font-bold text-text-muted">Pricing coming soon</p>
               <p className="mt-1 text-sm text-text-muted">{plan.credits}</p>
-              {annual && <p className="mt-1 text-xs font-semibold text-cyan">Billed annually - 15% off</p>}
               <ul className="mt-6 flex flex-1 flex-col gap-2.5">
                 {plan.features.map((feat) => (
                   <li key={feat} className="flex items-start gap-2 text-sm text-text-muted">
@@ -131,16 +106,6 @@ export function Pricing() {
         <p className="mt-6 text-center text-sm text-text-muted">
           Default usage: web calls start at 1 credit/min and phone calls at 1.5 credits/min. Voice-tier multipliers apply; both share one pool.
         </p>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
-        <div className="mb-8 text-center">
-          <SectionEyebrow>Estimate</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">
-            Which plan fits your call volume?
-          </h2>
-        </div>
-        <RoiCalculator />
       </section>
 
       {/* FAQ */}

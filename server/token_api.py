@@ -2221,6 +2221,8 @@ def billing_checkout(req: CheckoutRequest, user: dict = Depends(current_user)) -
     frontend needs to open Razorpay Checkout against — actual activation
     happens via the subscription.activated/charged webhook below, not here;
     this route only creates the pending subscription and hands back its id."""
+    if not calls_db.PRICING_FINALIZED:
+        raise HTTPException(503, "Introductory pricing is still being finalized — checkout isn't open yet.")
     if not razorpay_client.is_configured():
         raise HTTPException(503, "Billing isn't set up on this server yet — contact support.")
     plan = req.plan.strip().lower()
@@ -2275,6 +2277,8 @@ class TopupRequest(BaseModel):
 def billing_topup(req: TopupRequest, user: dict = Depends(current_user)) -> dict:
     """One-off credit purchase, priced at the account's own plan rate (not
     the overage penalty rate — this is buying ahead, not running over)."""
+    if not calls_db.PRICING_FINALIZED:
+        raise HTTPException(503, "Introductory pricing is still being finalized — top-ups aren't open yet.")
     if not razorpay_client.is_configured():
         raise HTTPException(503, "Billing isn't set up on this server yet — contact support.")
     if req.credits <= 0:

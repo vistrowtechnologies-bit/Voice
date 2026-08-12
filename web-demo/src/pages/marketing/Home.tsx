@@ -340,10 +340,7 @@ export function Home() {
                   </span>
                 )}
               </div>
-              <p className="mt-4 font-display text-3xl font-bold">
-                {plan.price}
-                <span className="text-base font-normal text-text-muted">/mo</span>
-              </p>
+              <p className="mt-4 font-display text-xl font-bold text-text-muted">Pricing coming soon</p>
               <p className="mt-1 text-sm text-text-muted">{plan.credits}</p>
               <ul className="mt-5 flex flex-col gap-2.5">
                 {plan.features.map((feat) => (

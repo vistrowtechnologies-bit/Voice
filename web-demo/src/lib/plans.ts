@@ -26,6 +26,13 @@ export interface Plan {
 // service, matching server/calls_db.py's ANNUAL_MONTHS_CHARGED.
 export const ANNUAL_MONTHS_CHARGED = 10
 
+// Flip to true once real introductory prices are locked in (after EnableX/
+// LiveKit/Railway cost accounting is done) - gates every ₹ figure and the
+// checkout/top-up actions across marketing + dashboard billing pages so
+// nothing charges real money at these placeholder rates in the meantime.
+// Mirrors server/calls_db.py's PRICING_FINALIZED - keep both in sync.
+export const PRICING_FINALIZED = false
+
 export const PLANS: Plan[] = [
   {
     name: 'Starter',

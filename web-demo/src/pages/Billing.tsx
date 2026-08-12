@@ -6,7 +6,7 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
 import { fetchBilling, fetchSubscription, startCheckout, startTopup, verifyTopupPayment } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { ANNUAL_MONTHS_CHARGED, PLANS } from '../lib/plans'
+import { ANNUAL_MONTHS_CHARGED, PLANS, PRICING_FINALIZED } from '../lib/plans'
 import type { BillingSummary, Invoice } from '../lib/types'
 
 // Razorpay's Checkout.js attaches itself to window - loaded on demand (only
@@ -165,7 +165,8 @@ export function Billing() {
               </div>
               <button
                 onClick={() => setTopupOpen(true)}
-                disabled={!razorpayConfigured}
+                disabled={!razorpayConfigured || !PRICING_FINALIZED}
+                title={!PRICING_FINALIZED ? 'Top-ups open once introductory pricing is finalized' : undefined}
                 className="rounded-lg border border-cyan/40 px-3 py-1.5 text-xs font-bold text-cyan hover:bg-cyan/10 disabled:opacity-40"
               >
                 + Buy credits
@@ -182,14 +183,16 @@ export function Billing() {
             </p>
             {billing && billing.overageCredits > 0 && (
               <p className="mt-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
-                {billing.overageCredits} credits over plan this cycle · ~₹{billing.overageAmountInr} will be added to
-                your next invoice ({billing.overageRateInr}/credit overage rate)
+                {billing.overageCredits} credits over plan this cycle
+                {PRICING_FINALIZED
+                  ? ` · ~₹${billing.overageAmountInr} will be added to your next invoice (${billing.overageRateInr}/credit overage rate)`
+                  : ' · overage pricing is being finalized'}
               </p>
             )}
             {billing && billing.phoneNumberCount > 0 && (
               <p className="mt-1 text-xs text-text-muted">
-                {billing.phoneNumberCount} active phone number{billing.phoneNumberCount === 1 ? '' : 's'} · ₹
-                {billing.phoneNumberFeesInr}/mo
+                {billing.phoneNumberCount} active phone number{billing.phoneNumberCount === 1 ? '' : 's'}
+                {PRICING_FINALIZED ? ` · ₹${billing.phoneNumberFeesInr}/mo` : ''}
               </p>
             )}
           </Card>
@@ -287,28 +290,36 @@ export function Billing() {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold">Available plans</h2>
             <div className="flex items-center gap-3">
-              <div className="flex items-center rounded-full border border-border p-0.5 text-xs font-bold">
-                <button
-                  onClick={() => setCycle('monthly')}
-                  className={`rounded-full px-3 py-1 ${cycle === 'monthly' ? 'bg-primary text-bg' : 'text-text-muted'}`}
-                >
-                  Monthly
-                </button>
-                <button
-                  onClick={() => setCycle('annual')}
-                  className={`rounded-full px-3 py-1 ${cycle === 'annual' ? 'bg-primary text-bg' : 'text-text-muted'}`}
-                >
-                  Annual · save {Math.round((1 - ANNUAL_MONTHS_CHARGED / 12) * 100)}%
-                </button>
-              </div>
+              {PRICING_FINALIZED && (
+                <div className="flex items-center rounded-full border border-border p-0.5 text-xs font-bold">
+                  <button
+                    onClick={() => setCycle('monthly')}
+                    className={`rounded-full px-3 py-1 ${cycle === 'monthly' ? 'bg-primary text-bg' : 'text-text-muted'}`}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    onClick={() => setCycle('annual')}
+                    className={`rounded-full px-3 py-1 ${cycle === 'annual' ? 'bg-primary text-bg' : 'text-text-muted'}`}
+                  >
+                    Annual · save {Math.round((1 - ANNUAL_MONTHS_CHARGED / 12) * 100)}%
+                  </button>
+                </div>
+              )}
               <span className="rounded-full border border-border px-3 py-1 text-[11px] text-text-muted">Region · India</span>
             </div>
           </div>
-          {!razorpayConfigured && (
+          {!PRICING_FINALIZED ? (
             <p className="mb-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-2 text-xs text-amber">
-              Online checkout isn't configured on this server yet — plans below are informational until Razorpay keys
-              are added.
+              Introductory pricing is being finalized ahead of public beta — upgrades aren't open yet.
             </p>
+          ) : (
+            !razorpayConfigured && (
+              <p className="mb-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-2 text-xs text-amber">
+                Online checkout isn't configured on this server yet — plans below are informational until Razorpay
+                keys are added.
+              </p>
+            )
           )}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {PLANS.map((plan) => {
@@ -332,10 +343,14 @@ export function Billing() {
                     </span>
                   )}
                   <h3 className="text-lg font-bold uppercase tracking-wide">{plan.name}</h3>
-                  <p className="mt-1 text-2xl font-bold">
-                    {displayPrice}
-                    <span className="text-xs font-normal text-text-muted"> {cycle === 'annual' ? '/year' : '/month'} + GST</span>
-                  </p>
+                  {PRICING_FINALIZED ? (
+                    <p className="mt-1 text-2xl font-bold">
+                      {displayPrice}
+                      <span className="text-xs font-normal text-text-muted"> {cycle === 'annual' ? '/year' : '/month'} + GST</span>
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-lg font-bold text-text-muted">Pricing coming soon</p>
+                  )}
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-cyan">
                     <Icon name="bolt" className="text-[14px]" />
                     {plan.credits}
@@ -364,10 +379,10 @@ export function Billing() {
                   ) : (
                     <button
                       onClick={() => handleUpgrade(plan.key, plan.name)}
-                      disabled={!razorpayConfigured || busyPlan === plan.key}
+                      disabled={!razorpayConfigured || !PRICING_FINALIZED || busyPlan === plan.key}
                       className="mt-auto rounded-lg bg-primary py-2 text-center text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40"
                     >
-                      {busyPlan === plan.key ? 'Opening checkout…' : `Upgrade to ${plan.name}`}
+                      {busyPlan === plan.key ? 'Opening checkout…' : !PRICING_FINALIZED ? 'Coming soon' : `Upgrade to ${plan.name}`}
                     </button>
                   )}
                 </div>
@@ -424,7 +439,7 @@ export function Billing() {
                     <p className="text-xs text-text-muted">{new Date(inv.created_at).toLocaleDateString()}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-text-muted">₹{inv.amount_inr}</span>
+                    {PRICING_FINALIZED && <span className="text-text-muted">₹{inv.amount_inr}</span>}
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
                         inv.status === 'paid'
