@@ -385,8 +385,9 @@ export function formatRelativeTime(iso: string): string {
 
 export function formatDuration(seconds: number | null): string {
   if (!seconds) return '-'
-  const m = Math.floor(seconds / 60)
-  const s = Math.round(seconds % 60)
+  const total = Math.round(seconds)
+  const m = Math.floor(total / 60)
+  const s = total % 60
   return `${m}m ${s}s`
 }
 
