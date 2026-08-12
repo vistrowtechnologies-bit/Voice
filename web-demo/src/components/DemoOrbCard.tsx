@@ -57,7 +57,7 @@ function releaseCallLock(): void {
 // browser's own native prompt, then the same card shows live call state
 // (status, timer, mute/end controls) in place of the idle "Tap to talk"
 // content. Reused on the homepage hero and every solution/product page.
-export function DemoOrbCard() {
+export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
   const [phase, setPhase] = useState<Phase>(() => (hasDemoCallsRemaining() ? 'idle' : 'capped'))
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
@@ -275,7 +275,10 @@ export function DemoOrbCard() {
   }, [isIdleLike, exhausted, phase])
 
   return (
-    <div id="live-demo" className="relative mx-auto w-full max-w-[420px] lg:mx-0 lg:ml-auto">
+    <div
+      id="live-demo"
+      className={`demo-card-shell relative mx-auto w-full max-w-[420px] scroll-mt-20 lg:mx-0 lg:ml-auto ${spotlight ? 'demo-card-spotlight' : ''}`}
+    >
       {/* inset-x-0, not -inset-10: a negative horizontal inset made this box
           80px wider than the card, which overflowed the viewport on small
           screens and gave the whole page a horizontal scrollbar. The blur
@@ -287,6 +290,9 @@ export function DemoOrbCard() {
         style={cardMinHeight ? { minHeight: cardMinHeight } : undefined}
         className="relative flex w-full flex-col items-center rounded-[28px] border border-border bg-surface/80 p-8 text-center backdrop-blur-xl sm:p-10"
       >
+        <span className="demo-start-label" aria-hidden="true">
+          <Icon name="south_east" className="text-[15px]" /> Start here
+        </span>
         <div className="absolute right-5 top-5 flex items-center gap-1.5 rounded-full border border-border bg-surface-high px-3 py-1">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan opacity-75" />
@@ -323,7 +329,7 @@ export function DemoOrbCard() {
               type="button"
               onClick={exhausted ? undefined : handleStart}
               disabled={phase === 'connecting'}
-              className="group relative my-6 flex h-48 w-48 items-center justify-center disabled:cursor-wait"
+              className="demo-start-target group relative my-6 flex h-48 w-48 items-center justify-center disabled:cursor-wait"
             >
               <span className="absolute inset-0 rounded-full border border-primary/20" />
               <span className="absolute inset-5 rounded-full border border-primary/10" />

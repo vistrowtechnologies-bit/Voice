@@ -61,6 +61,188 @@ body {
   color: #1a3c8b;
 }
 
+/* Independence Day feedback ribbon. The colour wash is deliberately subtle
+   enough to preserve text contrast in both themes; the compact three-bar mark
+   carries the tricolour even when reduced motion is enabled. */
+.independence-ribbon {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, #ff9933, rgb(255 255 255 / 55%), #138808) 1;
+  background:
+    linear-gradient(90deg, rgb(255 153 51 / 16%), rgb(255 255 255 / 5%) 48%, rgb(19 136 8 / 16%));
+  cursor: pointer;
+}
+
+.independence-ribbon::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: '';
+  background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 25%) 48%, transparent 66%);
+  transform: translateX(-120%);
+  animation: ribbon-shimmer 4.5s ease-in-out infinite;
+}
+
+.independence-ribbon:hover {
+  background:
+    linear-gradient(90deg, rgb(255 153 51 / 24%), rgb(255 255 255 / 8%) 48%, rgb(19 136 8 / 24%));
+}
+
+.ribbon-tricolour {
+  display: inline-flex;
+  height: 10px;
+  width: 18px;
+  flex: none;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 8%);
+}
+.ribbon-tricolour i { flex: 1; }
+.ribbon-tricolour i:nth-child(1) { background: #ff9933; }
+.ribbon-tricolour i:nth-child(2) { background: #fff; }
+.ribbon-tricolour i:nth-child(3) { background: #138808; }
+
+@keyframes ribbon-shimmer {
+  0%, 58% { transform: translateX(-120%); }
+  82%, 100% { transform: translateX(120%); }
+}
+
+/* Clicking the ribbon turns the demo into a temporary guided target. A
+   conic-gradient trace travels around every corner, while the orb and label
+   pulse just enough to make the next action unmistakable. */
+.demo-card-shell {
+  border-radius: 28px;
+}
+
+.demo-card-shell::after {
+  position: absolute;
+  z-index: 6;
+  inset: -3px;
+  border-radius: 31px;
+  content: '';
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(90deg, var(--color-primary), var(--color-cyan)) left top / 54px 3px no-repeat,
+    linear-gradient(180deg, var(--color-primary), var(--color-cyan)) left top / 3px 54px no-repeat,
+    linear-gradient(270deg, var(--color-primary), var(--color-cyan)) right top / 54px 3px no-repeat,
+    linear-gradient(180deg, var(--color-primary), var(--color-cyan)) right top / 3px 54px no-repeat,
+    linear-gradient(90deg, var(--color-primary), var(--color-cyan)) left bottom / 54px 3px no-repeat,
+    linear-gradient(0deg, var(--color-primary), var(--color-cyan)) left bottom / 3px 54px no-repeat,
+    linear-gradient(270deg, var(--color-primary), var(--color-cyan)) right bottom / 54px 3px no-repeat,
+    linear-gradient(0deg, var(--color-primary), var(--color-cyan)) right bottom / 3px 54px no-repeat;
+  filter: drop-shadow(0 0 7px rgb(168 85 247 / 55%));
+}
+
+.demo-card-spotlight::after {
+  animation: demo-corners-guide 5.2s ease-out both;
+}
+
+.demo-card-shell::before {
+  position: absolute;
+  z-index: 7;
+  top: -2px;
+  left: 5%;
+  width: 22%;
+  height: 2px;
+  border-radius: 999px;
+  content: '';
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, var(--color-cyan), var(--color-primary), transparent);
+  filter: drop-shadow(0 0 6px var(--color-primary));
+}
+
+.demo-card-spotlight::before {
+  animation: demo-edge-sweep 1.35s ease-in-out 3 both;
+}
+
+.demo-card-spotlight > div:nth-of-type(2) {
+  animation: demo-card-glow 1.15s ease-in-out 4;
+}
+
+.demo-start-label {
+  position: absolute;
+  z-index: 7;
+  top: 20px;
+  left: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgb(168 85 247 / 35%);
+  border-radius: 999px;
+  background: var(--color-surface-high);
+  padding: 5px 10px;
+  color: var(--color-primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0;
+  transform: translateY(5px);
+  pointer-events: none;
+}
+
+.demo-card-spotlight .demo-start-label {
+  animation: demo-label-in 5.2s ease-out both;
+}
+
+.demo-card-spotlight .demo-start-target {
+  animation: demo-target-pulse 1.15s ease-in-out 4;
+}
+
+@keyframes demo-edge-sweep {
+  0% { opacity: 0; transform: translateX(0); }
+  14% { opacity: 1; }
+  72% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(315%); }
+}
+
+@keyframes demo-corners-guide {
+  0% { opacity: 0; transform: scale(0.985); }
+  10%, 72% { opacity: 1; transform: none; }
+  84% { opacity: 0.45; }
+  100% { opacity: 0; transform: scale(1.01); }
+}
+
+@keyframes demo-card-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(168 85 247 / 0%); }
+  50% { box-shadow: 0 0 42px 8px rgb(168 85 247 / 28%); }
+}
+
+@keyframes demo-target-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.055); }
+}
+
+@keyframes demo-label-in {
+  0% { opacity: 0; transform: translateY(5px); }
+  8%, 82% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .independence-ribbon::after,
+  .demo-card-spotlight::before,
+  .demo-card-spotlight::after,
+  .demo-card-spotlight > div:nth-of-type(2),
+  .demo-card-spotlight .demo-start-target {
+    animation: none;
+  }
+  .demo-card-spotlight::after,
+  .demo-card-spotlight .demo-start-label {
+    opacity: 1;
+  }
+  .demo-card-spotlight .demo-start-label {
+    transform: none;
+    animation: none;
+  }
+}
+
 /* Applied briefly by lib/theme.ts's applyTheme() during an actual toggle
    click (not on route-change reapplication) so the light/dark switch fades
    instead of snapping. Scoped to a transient class, not a permanent global

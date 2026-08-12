@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
@@ -104,14 +104,29 @@ function SectionEyebrow({ children }: { children: string }) {
 
 export function Home() {
   const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const [demoSpotlight, setDemoSpotlight] = useState(false)
+  const spotlightTimer = useRef<number | null>(null)
+
+  const guideToDemo = () => {
+    document.getElementById('live-demo')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setDemoSpotlight(false)
+    window.requestAnimationFrame(() => setDemoSpotlight(true))
+    if (spotlightTimer.current) window.clearTimeout(spotlightTimer.current)
+    spotlightTimer.current = window.setTimeout(() => setDemoSpotlight(false), 5200)
+  }
   // Reached via TalkToArthaButton's fallback (navigate('/#live-demo')) when
   // a visitor clicks "Talk to Artha live" on a page with no on-page demo
   // widget - React Router doesn't scroll to hashes on route change, so we
   // finish the job ourselves once the hero (and its #live-demo orb) mounts.
   useEffect(() => {
     if (window.location.hash === '#live-demo') {
-      document.getElementById('live-demo')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      guideToDemo()
     }
+    return () => {
+      if (spotlightTimer.current) window.clearTimeout(spotlightTimer.current)
+    }
+    // This only handles the hash present when the homepage mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
@@ -122,14 +137,16 @@ export function Home() {
         path="/"
         jsonLd={HOME_JSONLD}
       />
-      <Link
-        to="#live-demo"
-        className="flex items-center justify-center gap-2 border-b border-primary/20 bg-gradient-to-r from-[#ff9933]/10 via-surface to-[#138808]/10 px-4 py-2.5 text-center text-xs font-semibold text-text transition-colors hover:bg-primary/10 sm:text-sm"
+      <button
+        type="button"
+        onClick={guideToDemo}
+        aria-controls="live-demo"
+        className="independence-ribbon flex w-full items-center justify-center gap-2 px-4 py-2.5 text-center text-xs font-semibold text-text sm:text-sm"
       >
-        <span aria-hidden="true">🇮🇳</span>
-        Public feedback opens 15 August — try Artha and help us build voice AI for Bharat
+        <span className="ribbon-tricolour" aria-hidden="true"><i /><i /><i /></span>
+        <span>Public feedback opens 15 August — try Artha and help us build voice AI for Bharat</span>
         <Icon name="arrow_forward" className="text-[16px]" />
-      </Link>
+      </button>
       {/* ---------- Hero ---------- */}
       <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-5 py-14 md:px-8 lg:grid-cols-2 lg:py-24">
         <div>
@@ -180,7 +197,7 @@ export function Home() {
         </div>
 
         <div>
-          <DemoOrbCard />
+          <DemoOrbCard spotlight={demoSpotlight} />
         </div>
       </section>
 
