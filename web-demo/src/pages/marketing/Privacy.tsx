@@ -30,7 +30,7 @@ export function Privacy() {
       </LegalSection>
 
       <LegalSection title="2. What we collect">
-        <p><b>Account data</b> - name, email, phone, password hash (or OAuth identity if you sign in with Google/GitHub), workspace/company name, and role.</p>
+        <p><b>Account data</b> - name, email, phone, password hash (or OAuth identity if you sign in with Google, GitHub, or Slack), workspace/company name, and role.</p>
         <p><b>Call data</b> - audio, live transcripts, call metadata (duration, timestamps, channel), and any structured fields your AI agent is configured to extract (e.g. name, budget, appointment time).</p>
         <p><b>Connected-integration data</b> - if you connect Google Calendar, Slack, WhatsApp, or a CRM webhook, we store the minimum needed to operate that connection (an OAuth token, a webhook URL) and the data your agent sends through it (e.g. a calendar event, a lead notification).</p>
         <p><b>Usage data</b> - pages visited in the dashboard, API requests, and error logs, used to keep the product working and secure.</p>
