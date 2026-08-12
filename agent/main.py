@@ -190,12 +190,15 @@ _DEFAULT_OPENERS = {"hi-IN": _DEFAULT_OPENER_HI}
 TONE_PRESETS: dict[str, dict[str, float]] = {
     # Measured and steady — a bit slower and low-variation, for formal/
     # informational agents (banking, legal, official notices).
-    "professional": {"pace": 0.95, "temperature": 0.4, "pitch": 0.0},
+    "professional": {"pace": 0.95, "temperature": 0.4, "pitch": 0.0, "loudness": 1.0},
     # Sarvam bulbul:v3's own defaults — natural conversational delivery.
-    "balanced": {"pace": 1.0, "temperature": 0.6, "pitch": 0.0},
+    "balanced": {"pace": 1.0, "temperature": 0.6, "pitch": 0.0, "loudness": 1.0},
     # Faster and more expressive/varied prosody — addresses "slow and
     # robotic" by injecting more natural pitch/pace variation per line.
-    "casual": {"pace": 1.08, "temperature": 0.85, "pitch": 0.05},
+    # loudness slightly up — bulbul:v3's own "loudness" param (never wired
+    # up before this), a genuinely separate dimension from pace/pitch that
+    # reads as more present/engaged rather than just faster.
+    "casual": {"pace": 1.08, "temperature": 0.85, "pitch": 0.05, "loudness": 1.1},
 }
 DEFAULT_TONE = "balanced"
 
@@ -947,6 +950,7 @@ class RealEstateAgent(Agent):
         # them, so the agent's configured base personality always shows through.
         self._base_pace = base_tone.get("pace", 1.0)
         self._base_pitch = base_tone.get("pitch", 0.0)
+        self._base_loudness = base_tone.get("loudness", 1.0)
         self._base_elevenlabs = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
         self._gemini_base_prompt = GEMINI_TONE_PROMPTS.get(tone_name, GEMINI_TONE_PROMPTS[DEFAULT_TONE])
         # Scales how strongly a detected caller emotion moves delivery away
@@ -1101,9 +1105,32 @@ class RealEstateAgent(Agent):
             )
         else:
             _gender_instruction = ""
+        # Personality is written up at length in platform_assistant.py, but
+        # by generation time it's competing with everything ELSE in that
+        # 480-line prompt (discovery arc, qualify-before-pushing, active
+        # listening) that comes AFTER it and wins on recency — confirmed
+        # live: real demo transcripts turned procedural (flat "ठीक है!"/
+        # "Got it!" acks, repeated fillers, discovery questions back-to-back
+        # with zero personality) despite the prompt explicitly asking for
+        # humor and warmth. Same fix as the language/gender reinforcement
+        # above — restate it fresh, last, every turn, so it isn't drowned
+        # out by the structural rules.
+        _personality_instruction = (
+            "This reply must sound like a witty, warm human friend on a call, not a form being "
+            "filled out. Open with a real filler or a genuine reaction to what they just said — "
+            "never the same one you used last turn. If there's a natural opening for a dry aside, "
+            "a light joke, or a playful callback to something they said earlier, take it — don't "
+            "wait for permission, and don't let two turns in a row come out flat and purely "
+            "informational. This matters even when you're also asking a discovery question or "
+            "qualifying them — being warm and being efficient are not in tension."
+            if self._is_platform_demo
+            else ""
+        )
         turn_ctx.add_message(
             role="system",
-            content=_language_instruction + ("\n\n" + _gender_instruction if _gender_instruction else ""),
+            content=_language_instruction
+            + ("\n\n" + _gender_instruction if _gender_instruction else "")
+            + ("\n\n" + _personality_instruction if _personality_instruction else ""),
         )
 
         emotion = detect_caller_emotion(text)
@@ -1168,16 +1195,17 @@ class RealEstateAgent(Agent):
                 delta = EMOTION_TONE_DELTAS.get(emotion, {}) if emotion else {}
                 new_pace = self._base_pace + delta.get("pace", 0.0) * self._emotion_intensity
                 new_pitch = self._base_pitch + delta.get("pitch", 0.0) * self._emotion_intensity
+                new_loudness = self._base_loudness + delta.get("loudness", 0.0) * self._emotion_intensity
                 try:
                     # self.tts is a TtsFallbackAdapter, not a raw sarvam.TTS,
                     # whenever Google credentials are configured (see
                     # _build_tts's default branch) — FallbackAdapter has no
                     # update_options at all, so this raises AttributeError.
                     # Never let a tone nudge kill the whole call over it.
-                    self.tts.update_options(pace=new_pace, pitch=new_pitch)
+                    self.tts.update_options(pace=new_pace, pitch=new_pitch, loudness=new_loudness)
                     logger.info(
-                        "caller tone -> %s (pace %.2f, pitch %.2f) from turn: %r",
-                        emotion or "neutral", new_pace, new_pitch, text,
+                        "caller tone -> %s (pace %.2f, pitch %.2f, loudness %.2f) from turn: %r",
+                        emotion or "neutral", new_pace, new_pitch, new_loudness, text,
                     )
                 except AttributeError:
                     logger.warning("caller tone update_options failed (fallback-wrapped TTS)", exc_info=True)

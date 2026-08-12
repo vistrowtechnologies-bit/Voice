@@ -50,14 +50,20 @@ def detect_caller_emotion(text: str) -> str | None:
 # a "professional" one even while both react to the same caller emotion.
 # pace is the reliable lever (works on every Sarvam voice, v2 and v3); pitch
 # only takes effect for v2 speakers, so its delta is small and secondary.
+# loudness is a genuinely separate dimension from both — added because pace/
+# pitch alone read as too subtle to notice as real "modulation" rather than
+# just faster/slower talking.
 EMOTION_TONE_DELTAS: dict[str, dict[str, float]] = {
-    "frustrated": {"pace": -0.08, "pitch": -0.03},
-    "confused": {"pace": -0.12, "pitch": 0.0},
+    # Quieter/calmer, not just slower — reads as de-escalating rather than
+    # sluggish.
+    "frustrated": {"pace": -0.08, "pitch": -0.03, "loudness": -0.05},
+    "confused": {"pace": -0.12, "pitch": 0.0, "loudness": 0.0},
     # Kept modest deliberately — this stacks additively on top of the
     # agent's base tone (TONE_PRESETS), and "casual" alone already runs at
     # pace 1.08. The original 0.06 pushed a casual agent to ~1.14, which
-    # read as rushed/too-fast rather than "upbeat."
-    "excited": {"pace": 0.03, "pitch": 0.02},
+    # read as rushed/too-fast rather than "upbeat." loudness carries more of
+    # the "more energy" signal here instead of pushing pace further.
+    "excited": {"pace": 0.03, "pitch": 0.02, "loudness": 0.1},
 }
 
 # ElevenLabs equivalent of EMOTION_TONE_DELTAS above — same caller-emotion
