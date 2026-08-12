@@ -380,6 +380,37 @@ _ELEVENLABS_V3_VOICE_PREFIX = "elevenlabs-v3:"
 _ELEVENLABS_API_KEY = os.environ.get("ELEVEN_API_KEY")
 
 
+def _google_fallback_tts(google_tts, sarvam_safety_net):
+    """TtsFallbackAdapter wrapper for a Google-primary voice, tuned to stop
+    a brief transient hiccup from swapping the caller's voice mid-call.
+
+    FallbackAdapter's own default (max_retry_per_tts=2) marks Google fully
+    UNAVAILABLE after just 2 failed attempts on a single utterance — every
+    later reply then goes straight to Sarvam, with no further attempt at
+    Google, until a background "recovery" synthesis quietly succeeds. That
+    all-or-nothing behavior is what makes a one-off timeout sound like the
+    agent "changed voices for a while, then changed back" instead of a
+    single dropped utterance. Raising the retry budget gives a flaky
+    connection more chances to succeed before the adapter gives up on
+    Google for the rest of the call.
+
+    Also logs tts_availability_changed explicitly — the library's own log
+    line on the *first* failure omits the actual exception, so a future
+    occurrence is otherwise nearly undiagnosable from logs alone.
+    """
+    adapter = TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=5)
+
+    def _on_availability_changed(ev):
+        if ev.tts is google_tts:
+            if ev.available:
+                logger.info("Google TTS recovered — switching back from Sarvam fallback")
+            else:
+                logger.warning("Google TTS failed repeatedly — falling back to Sarvam until it recovers")
+
+    adapter.on("tts_availability_changed", _on_availability_changed)
+    return adapter
+
+
 def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_name: str):
     """Same fallback pattern as _build_stt, for TTS. Returns (tts, provider)
     — provider identifies the active TTS family, telling the caller which
@@ -508,7 +539,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 model_name="gemini-2.5-flash-tts",
                 credentials_info=_GOOGLE_CREDENTIALS,
             )
-            return TtsFallbackAdapter([google_tts, sarvam_safety_net]), "google-multilingual"
+            return _google_fallback_tts(google_tts, sarvam_safety_net), "google-multilingual"
         voice_language = "-".join(voice_name.split("-")[:2])
         google_tts = google.TTS(
             language=voice_language,
@@ -516,7 +547,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             credentials_info=_GOOGLE_CREDENTIALS,
             **_GOOGLE_TTS_KWARGS,
         )
-        return TtsFallbackAdapter([google_tts, sarvam_safety_net]), "google-native"
+        return _google_fallback_tts(google_tts, sarvam_safety_net), "google-native"
     # A Google or ElevenLabs voice selected with no credentials/key
     # configured falls back to the default Sarvam speaker rather than
     # passing the raw "google:..."/"elevenlabs:..." string through as an
