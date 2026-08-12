@@ -486,6 +486,11 @@ def auth_oauth_slack_callback(
     error: str | None = None,
 ) -> RedirectResponse:
     base_url = _app_base_url(request)
+    if request.cookies.get(_SLACK_INTEGRATION_STATE_COOKIE):
+        session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+        user = {"user_id": session["uid"], "account_id": session["aid"]} if session else None
+        return _complete_slack_integration_oauth(request, code, state, error, user)
+
     expected_state = request.cookies.get(_OAUTH_STATE_COOKIE)
     expected_nonce = request.cookies.get(_OAUTH_NONCE_COOKIE)
     if error or not code or not expected_state or not secrets.compare_digest(state or "", expected_state):
@@ -574,14 +579,14 @@ def integration_slack_start(
 ) -> RedirectResponse:
     client_id = os.environ.get("SLACK_OAUTH_CLIENT_ID")
     client_secret = os.environ.get("SLACK_OAUTH_CLIENT_SECRET")
-    if not client_id or not client_secret:
+    redirect_uri = os.environ.get("SLACK_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
         raise HTTPException(404, "Slack integration is not configured on this server")
 
     state = secrets.token_urlsafe(24)
-    callback_uri = f"{_app_base_url(request)}/api/integrations/slack/callback"
     params = {
         "client_id": client_id,
-        "redirect_uri": callback_uri,
+        "redirect_uri": redirect_uri,
         "scope": "incoming-webhook",
         "state": state,
     }
@@ -598,24 +603,27 @@ def integration_slack_start(
     return redirect
 
 
-@app.get("/integrations/slack/callback")
-def integration_slack_callback(
+def _complete_slack_integration_oauth(
     request: Request,
-    code: str | None = None,
-    state: str | None = None,
-    error: str | None = None,
-    user: dict = Depends(require_role("admin")),
+    code: str | None,
+    state: str | None,
+    error: str | None,
+    user: dict | None,
 ) -> RedirectResponse:
     base_url = _app_base_url(request)
     expected_state = request.cookies.get(_SLACK_INTEGRATION_STATE_COOKIE)
-    redirect_uri = f"{base_url}/api/integrations/slack/callback"
+    redirect_uri = os.environ.get("SLACK_OAUTH_REDIRECT_URI") or f"{base_url}/api/auth/oauth/slack/callback"
 
     def _finish(query: str = "") -> RedirectResponse:
         response = RedirectResponse(f"{base_url}/dashboard/integrations{query}")
         response.delete_cookie(_SLACK_INTEGRATION_STATE_COOKIE, path="/")
         return response
 
-    if error or not code or not expected_state or not secrets.compare_digest(state or "", expected_state):
+    if error or not code or not expected_state or not secrets.compare_digest(state or "", expected_state) or not user:
+        return _finish("?slack=failed")
+
+    full_user = calls_db.get_user_by_id(user["user_id"])
+    if full_user is None or calls_db.ROLE_RANK.get(full_user["role"], 0) < calls_db.ROLE_RANK["admin"]:
         return _finish("?slack=failed")
 
     client_id = os.environ.get("SLACK_OAUTH_CLIENT_ID")
@@ -671,6 +679,17 @@ def integration_slack_callback(
         user["account_id"],
     )
     return _finish()
+
+
+@app.get("/integrations/slack/callback")
+def integration_slack_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    user: dict = Depends(require_role("admin")),
+) -> RedirectResponse:
+    return _complete_slack_integration_oauth(request, code, state, error, user)
 
 
 @app.get("/auth/oauth/github/start")
