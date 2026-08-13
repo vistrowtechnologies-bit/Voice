@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Icon } from './Icon'
 import { LANGUAGES } from '../lib/marketingContent'
 
 // Cultural identity here comes from the product itself - the actual scripts
@@ -86,19 +85,28 @@ export function ScriptMarquee() {
  * the page's normal font stack instead of fighting SVG text/font quirks. */
 export function BharatOrbit({ className = '' }: { className?: string }) {
   return (
-    <div className={`relative mx-auto aspect-square w-full max-w-[320px] ${className}`}>
+    <div className={`relative mx-auto aspect-square w-full max-w-[340px] ${className}`}>
       {/* Orbit rings, faint to strong from outside in. */}
       <div className="absolute inset-0 rounded-full border border-border/50" />
       <div className="absolute inset-[12%] rounded-full border border-border/40" />
       <div className="absolute inset-[24%] rounded-full border border-dashed border-cyan/25" />
+      <div className="auth-orb-ripple absolute inset-[33%] rounded-full border border-primary/25" aria-hidden="true" />
 
       {/* Center voice orb - same visual language as the demo widget's orb.
           Sits outside the rotating ring below so it stays put while the
           languages orbit it. */}
-      <div className="absolute left-1/2 top-1/2 z-10 h-16 w-16 -translate-x-1/2 -translate-y-1/2">
-        <div className="glow-pulse absolute -inset-3 rounded-full bg-primary/50 blur-xl" aria-hidden="true" />
-        <div className="relative flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-primary to-magenta shadow-lg shadow-primary/30">
-          <Icon name="graphic_eq" className="text-[26px] text-white" />
+      <div className="auth-orb-center absolute left-1/2 top-1/2 z-10 h-24 w-24 -translate-x-1/2 -translate-y-1/2">
+        <div className="glow-pulse absolute -inset-6 rounded-full bg-primary/50 blur-2xl" aria-hidden="true" />
+        <div className="auth-orb-halo absolute -inset-3 rounded-full border border-primary/35" aria-hidden="true" />
+        <div className="relative h-full w-full overflow-hidden rounded-full border border-white/15 bg-bg shadow-2xl shadow-primary/40">
+          <video
+            src="/agent-orb.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="h-full w-full scale-150 object-cover"
+          />
         </div>
       </div>
 
@@ -111,8 +119,8 @@ export function BharatOrbit({ className = '' }: { className?: string }) {
       <div className="auth-orbit-ring absolute inset-0">
         {LANGUAGES.map((lang, i) => {
           const angle = (i / LANGUAGES.length) * 2 * Math.PI - Math.PI / 2
-          const x = 50 + 46 * Math.cos(angle)
-          const y = 50 + 46 * Math.sin(angle)
+          const x = 50 + 47 * Math.cos(angle)
+          const y = 50 + 47 * Math.sin(angle)
           return (
             <div
               key={lang.slug}

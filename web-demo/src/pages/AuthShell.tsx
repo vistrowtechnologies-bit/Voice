@@ -32,13 +32,13 @@ export function AuthShell({
           <span className="text-lg font-semibold tracking-tight">{BRAND.name}</span>
         </Link>
 
-        <div className="auth-panel-in relative z-10 flex max-w-md flex-col items-center gap-10">
+        <div className="auth-panel-in relative z-10 flex max-w-md flex-col items-center gap-12">
           {/* The illustration this panel was missing - a mandala of all ten
               scripts Artha speaks around a pulsing voice orb. Deliberately
               not a map of India (borders are a genuine legal/political
               minefield); this is unmistakably Bharat without touching that
               at all, and every glyph on the ring is real, not decorative. */}
-          <BharatOrbit />
+          <BharatOrbit className="max-w-[360px]" />
           <div className="w-full">
             <h2 className="font-display text-5xl font-bold leading-[1.05] tracking-tight">{headline}</h2>
             <ul className="mt-8 flex flex-col gap-4 text-base text-text-muted">
