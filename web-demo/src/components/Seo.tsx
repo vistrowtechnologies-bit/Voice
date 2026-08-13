@@ -22,6 +22,7 @@ interface SeoProps {
 const CANONICAL_ORIGIN = 'https://www.vistrowvoice.com'
 const DEFAULT_IMAGE = `${CANONICAL_ORIGIN}/og-image.png`
 const JSONLD_SCRIPT_ID = 'seo-page-jsonld'
+const SLACK_APP_ID = 'A0BPQRALFUN'
 
 function upsertMeta(attr: 'name' | 'property', key: string, content: string) {
   let el = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`)
@@ -68,6 +69,7 @@ export function Seo({ title, description, path, image = DEFAULT_IMAGE, noindex, 
     upsertMeta('name', 'twitter:description', description)
     upsertMeta('name', 'twitter:image', image)
     upsertMeta('name', 'twitter:image:alt', 'Vistrow Voice - multilingual AI voice agents for India')
+    upsertMeta('name', 'slack-app-id', SLACK_APP_ID)
 
     const existingScript = document.getElementById(JSONLD_SCRIPT_ID)
     if (existingScript) existingScript.remove()

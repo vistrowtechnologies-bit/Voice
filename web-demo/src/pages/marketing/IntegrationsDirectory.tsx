@@ -11,6 +11,8 @@ import { INTEGRATION_DIRECTORY } from '../../lib/marketingContent'
 // rather than dressed up as native connectors.
 export function IntegrationsDirectory() {
   const categories = [...new Set(INTEGRATION_DIRECTORY.map((i) => i.category))]
+  const slackInstallUrl =
+    'https://slack.com/oauth/v2/authorize?client_id=11837090508608.11806860695974&scope=incoming-webhook&user_scope='
 
   return (
     <MarketingLayout>
@@ -32,6 +34,42 @@ export function IntegrationsDirectory() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 pb-10 md:px-8">
+        <Reveal className="mb-10">
+          <div className="rounded-3xl border border-border bg-surface p-6 sm:p-8">
+            <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+              <div>
+                <SectionEyebrow>Native Slack app</SectionEyebrow>
+                <h2 className="mt-3 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+                  Send qualified Vistrow Voice leads into Slack.
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-text-muted">
+                  Connect once, choose a channel, and every qualified lead lands in Slack with the
+                  caller details, source, language, agent, outcome, summary, and transcript context
+                  your team needs for fast follow-up.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-surface-high p-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-text-muted">
+                  How to install
+                </p>
+                <ol className="mt-3 space-y-2 text-sm leading-relaxed text-text-muted">
+                  <li>1. In Vistrow Voice, open Dashboard → Integrations.</li>
+                  <li>2. Click Connect Slack and pick the workspace/channel.</li>
+                  <li>3. Use Test Slack to confirm your lead alert lands.</li>
+                </ol>
+                <a
+                  href={slackInstallUrl}
+                  className="mt-5 inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-bold text-bg transition hover:brightness-110"
+                  rel="noreferrer"
+                >
+                  Add to Slack
+                  <Icon name="arrow_forward" className="ml-1 text-[16px]" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </Reveal>
+
         {categories.map((category) => (
           <div key={category} className="mb-10">
             <h2 className="mb-4 text-xs font-bold uppercase tracking-widest text-text-muted">
