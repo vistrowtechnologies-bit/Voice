@@ -537,8 +537,14 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str):
     FallbackAdapter continues probing an unavailable primary and restores it
     automatically. This avoids the conspicuous Google -> Sarvam speaker swap
     that callers previously heard in the middle of one conversation.
+
+    max_retry_per_tts=5 (not 1): real Google Cloud Monitoring data showed
+    genuine 504 timeouts on Gemini TTS, not just transient blips — a single
+    retry gives up on calls that would have succeeded a moment later,
+    reintroducing the mid-call Google->Sarvam voice swap this adapter exists
+    to prevent. Paired with the 20s tts_conn_options timeout below.
     """
-    adapter = TtsFallbackAdapter([primary_tts, fallback_tts], max_retry_per_tts=1)
+    adapter = TtsFallbackAdapter([primary_tts, fallback_tts], max_retry_per_tts=5)
     fallback_model = _GOOGLE_25_MODEL if primary_model == _GOOGLE_31_MODEL else _GOOGLE_31_MODEL
 
     def _on_availability_changed(ev):
@@ -737,7 +743,9 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             speaker=safety_speaker,
             **tone,
         )
-        return TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=1), "google-native"
+        # max_retry_per_tts=5: see _google_fallback_tts docstring above —
+        # real Google-side 504s need real retries, not a single attempt.
+        return TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=5), "google-native"
     # A Google or ElevenLabs voice selected with no credentials/key
     # configured falls back to the default Sarvam speaker rather than
     # passing the raw "google:..."/"elevenlabs:..." string through as an
@@ -1830,11 +1838,11 @@ async def entrypoint(ctx: JobContext) -> None:
         # trips TtsFallbackAdapter into switching the caller's voice to
         # Sarvam for the rest of the call (see _google_fallback_tts). 20s
         # gives a genuinely-slow-but-alive response room to finish instead
-        # of being cut off and treated as dead.
-        # Fail over promptly when a provider is unhealthy.  This timeout is
-        # per TTS attempt, not a call-length limit; a successful streaming
-        # response continues normally once its first frames arrive.
-        conn_options=SessionConnectOptions(tts_conn_options=APIConnectOptions(timeout=8.0)),
+        # of being cut off and treated as dead. This is a per-TTS-attempt
+        # timeout, not a call-length limit — a successful streaming response
+        # continues normally once its first frames arrive, so this doesn't
+        # cost latency on the (large majority of) healthy requests.
+        conn_options=SessionConnectOptions(tts_conn_options=APIConnectOptions(timeout=20.0)),
     )
 
     # --- End-call-on-silence watchdog ---------------------------------------
