@@ -589,7 +589,7 @@ _SEED_INTEGRATIONS = [
         "slack",
         "Slack",
         "Notifications",
-        "Get a Slack message the moment a call qualifies a lead. Paste an Incoming Webhook URL.",
+        "Get a Slack message the moment a call qualifies a lead. Connect Slack and choose the channel once.",
     ),
     (
         "whatsapp",

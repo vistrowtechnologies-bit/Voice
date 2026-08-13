@@ -2,21 +2,20 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
-import { fetchIntegrations, formatRelativeTime, testIntegration, updateIntegration } from '../lib/api'
+import { fetchIntegrations, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateIntegration } from '../lib/api'
 import type { Integration } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import arthaleadsIcon from '../assets/arthaleads-logo.png'
 
 const ICONS: Record<string, string> = {
   webhook: 'webhook',
-  slack: 'forum',
   whatsapp: 'chat',
   sheets: 'table_chart',
 }
 
-// Integrations that connect with a pasted URL (delivery targets). arthaleads
-// connects with just a token - its endpoint is fixed.
-const CONNECTABLE = new Set(['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets'])
+// Integrations that open a local config form. Slack has its own OAuth install
+// flow so operators can choose a channel without hunting for webhook URLs.
+const CONNECTABLE = new Set(['arthaleads', 'webhook', 'whatsapp', 'sheets'])
 
 // The API returns integrations in undefined DB row order - pin a deliberate
 // display order instead (ArthaLeads first, since it's the flagship CRM)
@@ -34,7 +33,6 @@ const DELIVERY = new Set(['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets'
 // intentionally absent here (see the token-only form below).
 const URL_PLACEHOLDER: Record<string, string> = {
   webhook: 'https://your-crm.example.com/webhook',
-  slack: 'https://hooks.slack.com/services/T000/B000/XXXX',
   whatsapp: 'https://your-provider.example.com/whatsapp/send',
   sheets: 'https://script.google.com/macros/s/…/exec',
 }
@@ -42,7 +40,7 @@ const URL_PLACEHOLDER: Record<string, string> = {
 const CONNECT_HINT: Record<string, string> = {
   arthaleads: 'Paste your ArthaLeads API token - the endpoint is already wired up. Every qualified lead posts straight into ArthaLeads with the full call transcript.',
   webhook: 'Every qualified lead POSTs to this URL as JSON in real time.',
-  slack: 'Paste a Slack Incoming Webhook URL - you’ll get a message per qualified lead.',
+  slack: 'Choose the Slack channel that should receive qualified-lead alerts.',
   whatsapp: 'Your provider’s send endpoint receives { to, message } per lead.',
   sheets: 'Paste a Google Apps Script web-app URL that appends the lead JSON as a row.',
 }
@@ -67,6 +65,10 @@ export function Integrations() {
   const connected = integrations.filter((i) => i.status === 'connected').length
 
   const handleConnect = async (key: string) => {
+    if (key === 'slack') {
+      window.location.href = slackIntegrationStartUrl
+      return
+    }
     if (key === 'arthaleads') {
       if (!token.trim()) return
       await updateIntegration(key, 'connected', { token: token.trim() })
@@ -126,11 +128,17 @@ export function Integrations() {
                 <div className="flex items-center gap-3">
                   <div
                     className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                      integration.key === 'arthaleads' ? 'overflow-hidden' : 'bg-primary/20 text-primary'
+                      integration.key === 'arthaleads'
+                        ? 'overflow-hidden'
+                        : integration.key === 'slack'
+                          ? 'bg-white shadow-sm ring-1 ring-border'
+                          : 'bg-primary/20 text-primary'
                     }`}
                   >
                     {integration.key === 'arthaleads' ? (
                       <img src={arthaleadsIcon} alt="ArthaLeads" className="h-full w-full object-cover" />
+                    ) : integration.key === 'slack' ? (
+                      <SlackLogo className="h-6 w-6" />
                     ) : (
                       <Icon name={ICONS[integration.key] ?? 'extension'} className="text-[20px]" />
                     )}
@@ -158,6 +166,8 @@ export function Integrations() {
                 <InfoRow label="Status" value={integration.status === 'connected' ? 'Connected' : 'Not Connected'} />
                 {integration.key === 'arthaleads' ? (
                   <InfoRow label="Endpoint" value="api.arthaleads.com" />
+                ) : integration.key === 'slack' ? (
+                  <InfoRow label="Channel" value={integration.config.channel || '-'} />
                 ) : (
                   <InfoRow label="Endpoint" value={integration.config.url ? integration.config.url.slice(0, 40) : '-'} />
                 )}
@@ -259,6 +269,14 @@ export function Integrations() {
                     Disconnect
                   </button>
                 </div>
+              ) : integration.key === 'slack' ? (
+                <button
+                  onClick={() => handleConnect('slack')}
+                  className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-cyan/40 py-2 text-xs font-bold text-cyan hover:bg-cyan/10"
+                >
+                  <Icon name="link" className="text-[15px]" />
+                  Connect Slack
+                </button>
               ) : CONNECTABLE.has(integration.key) ? (
                 <button
                   onClick={() => setConfiguring(integration.key)}
@@ -280,6 +298,29 @@ export function Integrations() {
         </div>
       </section>
     </DashboardLayout>
+  )
+}
+
+function SlackLogo({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 122.8 122.8" className={className} aria-label="Slack" role="img">
+      <path
+        d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9Zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6Z"
+        fill="#E01E5A"
+      />
+      <path
+        d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2Zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3Z"
+        fill="#36C5F0"
+      />
+      <path
+        d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2Zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3Z"
+        fill="#2EB67D"
+      />
+      <path
+        d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9Zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6Z"
+        fill="#ECB22E"
+      />
+    </svg>
   )
 }
 
