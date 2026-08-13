@@ -720,26 +720,40 @@ function init(): void {
     }
   }
 
-  function formatCountdown(totalSeconds: number): string {
+  function formatCallTime(totalSeconds: number): string {
     const m = Math.floor(totalSeconds / 60)
     const s = totalSeconds % 60
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  function startCountdown(): void {
-    let remaining = MAX_CALL_SECONDS
-    timerEl.textContent = formatCountdown(remaining)
-    timerEl.classList.remove('av-timer-warn')
-    timerEl.style.display = 'inline'
-    countdownInterval = window.setInterval(() => {
-      remaining -= 1
-      timerEl.textContent = formatCountdown(Math.max(0, remaining))
-      if (remaining <= 30) timerEl.classList.add('av-timer-warn')
-      if (remaining <= 0) {
+  function elapsedCallSeconds(): number {
+    return callStartedAt ? Math.max(0, Math.floor((Date.now() - callStartedAt) / 1000)) : 0
+  }
+
+  // Display elapsed conversation time, while enforcing the 5-minute limit
+  // silently from the same agent-join timestamp. The previous UI displayed
+  // time remaining (e.g. 2:13) but the completion screen displayed elapsed
+  // time (e.g. 2:26), which made a correct limit look like a broken timer.
+  // Deriving both views from callStartedAt also avoids setInterval drift when
+  // a browser throttles a background tab.
+  function startCallTimer(): void {
+    if (countdownInterval !== null) return
+    if (!callStartedAt) callStartedAt = Date.now()
+    const tick = () => {
+      const elapsed = elapsedCallSeconds()
+      timerEl.textContent = formatCallTime(elapsed)
+      if (elapsed >= MAX_CALL_SECONDS - 30) timerEl.classList.add('av-timer-warn')
+      if (elapsed >= MAX_CALL_SECONDS) {
         showNotice('⏱️ 5-minute call limit reached — feel free to start a new call anytime.')
         endCall()
       }
-    }, 1000)
+    }
+    tick()
+    timerEl.classList.remove('av-timer-warn')
+    timerEl.style.display = 'inline'
+    timerEl.setAttribute('aria-label', 'Elapsed conversation time')
+    timerEl.title = 'Elapsed conversation time'
+    countdownInterval = window.setInterval(tick, 1000)
   }
 
   function stopCountdown(): void {
@@ -1058,7 +1072,7 @@ function init(): void {
     completeIconEl.textContent = successful ? '✓' : '!'
     completeIconEl.classList.toggle('av-complete-icon-error', !successful)
     completeTitleEl.textContent = successful ? 'Conversation complete' : 'Couldn’t connect'
-    const seconds = callStartedAt ? Math.max(1, Math.round((Date.now() - callStartedAt) / 1000)) : 0
+    const seconds = callStartedAt ? Math.max(1, elapsedCallSeconds()) : 0
     completeSummaryEl.textContent = successful && seconds ? `${message} Your conversation lasted ${seconds < 60 ? `${seconds} seconds` : `${Math.floor(seconds / 60)} min ${seconds % 60} sec`}.` : message
     const hasTranscript = transcriptText().length > 0
     copyTranscriptBtn.style.display = hasTranscript ? 'flex' : 'none'
@@ -1117,8 +1131,8 @@ function init(): void {
     intentionalEnd = true
     clearAgentJoinWatchdog()
     releaseCallLock()
-    // Without this, a manual hangup left the countdown interval from
-    // startCountdown() silently running in the background (it's a plain
+    // Without this, a manual hangup left the call-timer interval from
+    // startCallTimer() silently running in the background (it's a plain
     // setInterval, not tied to the room's lifecycle) — up to 5 real minutes
     // later it would still fire, showing "5-minute call limit reached" out
     // of nowhere long after the caller had already hung up, or misattributed
@@ -1291,7 +1305,10 @@ function init(): void {
     intentionalEnd = false
     callCompleted = false
     if (attempt === 0) {
-      callStartedAt = Date.now()
+      // Conversation duration starts only when the agent actually joins.
+      // Mic permission, token fetch and queue time are connection latency,
+      // not time spent speaking with the agent.
+      callStartedAt = 0
       voiceAttemptStartedAt = performance.now()
       connectLatencyMs = null
       agentJoinLatencyMs = null
@@ -1377,7 +1394,7 @@ function init(): void {
         // should. Only (re)start once armed at all; a second
         // ParticipantConnected on the same call (shouldn't normally
         // happen) must never reset an already-running countdown.
-        if (countdownInterval === null) startCountdown()
+        startCallTimer()
       })
       room.on(RoomEvent.ParticipantAttributesChanged, (changed: Record<string, string>) => {
         if ('lk.agent.state' in changed) applyAgentState(changed['lk.agent.state'])
@@ -1423,7 +1440,7 @@ function init(): void {
         room.remoteParticipants.forEach((p: RemoteParticipant) => {
           applyAgentState(p.attributes?.['lk.agent.state'])
         })
-        startCountdown()
+        startCallTimer()
       } else {
         setStatus('Waiting for the agent to join…')
       }
