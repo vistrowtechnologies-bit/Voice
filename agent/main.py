@@ -725,7 +725,19 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             speaking_rate=tone.get("pace", 1.0),
             **_GOOGLE_TTS_KWARGS,
         )
-        return _google_fallback_tts(google_tts, sarvam_safety_net), "google-native"
+        # Locale-specific Google Standard voices are not Gemini personas, so
+        # 3.1 cannot preserve their identity. Keep their existing gender-
+        # matched Sarvam safety net; the same-persona 2.5 <-> 3.1 routing
+        # above applies to Mira/Arin, which are the tenant/marketing Flash
+        # voices requested here.
+        safety_speaker = "ritu" if (voice_catalog.get_voice(speaker) or {}).get("gender") == "female" else "shubh"
+        sarvam_safety_net = sarvam.TTS(
+            target_language_code=reply_language,
+            model="bulbul:v3",
+            speaker=safety_speaker,
+            **tone,
+        )
+        return TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=1), "google-native"
     # A Google or ElevenLabs voice selected with no credentials/key
     # configured falls back to the default Sarvam speaker rather than
     # passing the raw "google:..."/"elevenlabs:..." string through as an
