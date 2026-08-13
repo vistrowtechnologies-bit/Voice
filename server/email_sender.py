@@ -50,14 +50,22 @@ def _from_address(default: str = _DEFAULT_FROM) -> str:
     return os.environ.get("EMAIL_FROM") or default
 
 
-# Mirrors web-demo/src/index.css's dark-theme tokens so transactional email
-# looks like the product, not a bare system notification.
-_BG = "#0a0a12"
-_SURFACE = "#17121f"
-_BORDER = "#2a2438"
-_PRIMARY = "#a855f7"
-TEXT = "#f5f3ff"
-_TEXT_MUTED = "#9089b0"
+# Transactional email deliberately uses a light surface even though the
+# dashboard defaults dark: inboxes are reading environments, and this gives
+# stronger contrast in Gmail/Outlook while retaining Vistrow's purple-pink
+# identity. The mark is an already-public, cacheable brand asset so email
+# clients can proxy it safely without embedding a bulky base64 image.
+_BG = "#f6f3ff"
+_SURFACE = "#ffffff"
+_BORDER = "#e8e0f4"
+_PRIMARY = "#7c3aed"
+_PRIMARY_PINK = "#db2777"
+TEXT = "#171122"
+_TEXT_MUTED = "#625a73"
+_LOGO_URL = os.environ.get("EMAIL_LOGO_URL") or "https://www.vistrowvoice.com/apple-touch-icon.png"
+_WEBSITE_URL = "https://www.vistrowvoice.com"
+_APP_URL = "https://app.vistrowvoice.com"
+_SUPPORT_EMAIL = "support@vistrowvoice.com"
 
 
 def render_email(*, preheader: str, heading: str, body_html: str, cta_label: str | None = None, cta_url: str | None = None) -> str:
@@ -71,40 +79,58 @@ def render_email(*, preheader: str, heading: str, body_html: str, cta_label: str
     if cta_label and cta_url:
         cta_block = f"""
         <tr><td style="padding:28px 0 4px;">
-          <a href="{cta_url}" style="display:inline-block;background:{_PRIMARY};color:{_BG};
-            font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:10px;">
+          <a href="{cta_url}" style="display:inline-block;background-color:{_PRIMARY};
+            background-image:linear-gradient(105deg,{_PRIMARY} 0%,#a832e8 52%,{_PRIMARY_PINK} 100%);color:#ffffff;
+            font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:10px;
+            box-shadow:0 8px 22px rgba(124,58,237,.24);">
             {cta_label}
           </a>
         </td></tr>
-        <tr><td style="padding:14px 0 0;font-size:12px;color:{_TEXT_MUTED};word-break:break-all;">
+        <tr><td style="padding:16px 0 0;font-size:12px;line-height:1.6;color:#817891;word-break:break-all;">
           Or paste this link into your browser:<br/>
-          <a href="{cta_url}" style="color:{_TEXT_MUTED};">{cta_url}</a>
+          <a href="{cta_url}" style="color:{_PRIMARY};">{cta_url}</a>
         </td></tr>"""
 
     return f"""<!doctype html>
 <html>
-<body style="margin:0;padding:0;background:{_BG};">
+<body style="margin:0;padding:0;background:{_BG};font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;">{preheader}</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{_BG};padding:40px 16px;">
     <tr><td align="center">
       <table role="presentation" width="480" cellpadding="0" cellspacing="0"
-        style="max-width:480px;width:100%;background:{_SURFACE};border:1px solid {_BORDER};border-radius:16px;padding:36px;">
+        style="max-width:480px;width:100%;background:{_SURFACE};border:1px solid {_BORDER};border-radius:18px;
+        box-shadow:0 18px 50px rgba(62,35,91,.10);overflow:hidden;">
+        <tr><td height="5" style="height:5px;line-height:5px;font-size:0;background-color:{_PRIMARY};
+          background-image:linear-gradient(90deg,{_PRIMARY} 0%,#a832e8 50%,{_PRIMARY_PINK} 100%);">&nbsp;</td></tr>
+        <tr><td style="padding:32px 36px 36px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
         <tr><td>
           <table role="presentation" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="width:32px;height:32px;background:{_PRIMARY};border-radius:8px;" align="center" valign="middle">
-                <span style="font-size:14px;line-height:32px;">&#127911;</span>
+              <td style="width:42px;height:42px;" align="center" valign="middle">
+                <a href="{_WEBSITE_URL}" style="text-decoration:none;">
+                  <img src="{_LOGO_URL}" width="42" height="42" alt="Vistrow Voice"
+                    style="display:block;width:42px;height:42px;border:0;border-radius:10px;" />
+                </a>
               </td>
-              <td style="padding-left:10px;font-size:16px;font-weight:700;color:{TEXT};">Vistrow Voice</td>
+              <td style="padding-left:12px;font-size:17px;font-weight:750;color:{TEXT};letter-spacing:-.2px;">
+                <a href="{_WEBSITE_URL}" style="color:{TEXT};text-decoration:none;">Vistrow Voice</a>
+              </td>
             </tr>
           </table>
         </td></tr>
-        <tr><td style="padding-top:28px;font-size:21px;font-weight:700;color:{TEXT};line-height:1.3;">{heading}</td></tr>
-        <tr><td style="padding-top:12px;font-size:15px;line-height:1.65;color:{_TEXT_MUTED};">{body_html}</td></tr>
+        <tr><td style="padding-top:30px;font-size:24px;font-weight:750;color:{TEXT};line-height:1.3;letter-spacing:-.35px;">{heading}</td></tr>
+        <tr><td style="padding-top:12px;font-size:15px;line-height:1.7;color:{_TEXT_MUTED};">{body_html}</td></tr>
         {cta_block}
-        <tr><td style="padding-top:32px;border-top:1px solid {_BORDER};margin-top:28px;"></td></tr>
-        <tr><td style="padding-top:16px;font-size:12px;color:{_TEXT_MUTED};">
-          &copy; 2026 Vistrow Voice. All rights reserved.
+        <tr><td style="padding-top:34px;"><div style="height:1px;background:{_BORDER};font-size:0;line-height:0;">&nbsp;</div></td></tr>
+        <tr><td style="padding-top:18px;font-size:12px;line-height:1.7;color:#817891;">
+          Need help? <a href="mailto:{_SUPPORT_EMAIL}" style="color:{_PRIMARY};text-decoration:none;">{_SUPPORT_EMAIL}</a><br/>
+          <a href="{_APP_URL}" style="color:#817891;text-decoration:none;">Open dashboard</a>
+          &nbsp;&middot;&nbsp;
+          <a href="{_WEBSITE_URL}/privacy" style="color:#817891;text-decoration:none;">Privacy</a><br/>
+          <span style="display:inline-block;padding-top:8px;">&copy; 2026 Vistrow Voice. Built for Bharat.</span>
+        </td></tr>
+        </table>
         </td></tr>
       </table>
     </td></tr>

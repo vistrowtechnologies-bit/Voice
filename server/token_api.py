@@ -835,7 +835,8 @@ def auth_signup(req: SignupRequest) -> dict:
         heading="Verify your email",
         body_html=(
             f"Hi {user['name'] if user else req.name.strip()}, use this code to finish creating your account: "
-            f"<div style='margin:24px 0;font-size:34px;font-weight:800;letter-spacing:9px;color:{email_sender.TEXT};'>{code}</div>"
+            f"<div style='margin:24px 0;padding:18px 16px;border:1px solid #e4d5fa;border-radius:12px;"
+            f"background:#faf7ff;text-align:center;font-size:34px;font-weight:800;letter-spacing:9px;color:#7c3aed;'>{code}</div>"
             "This code expires in 10 minutes. If you did not start this signup, you can ignore this email."
         ),
     )
@@ -888,7 +889,8 @@ def auth_resend_email_verification(req: ResendEmailVerificationRequest) -> dict:
         heading="Verify your email",
         body_html=(
             f"Hi {user['name']}, your new verification code is: "
-            f"<div style='margin:24px 0;font-size:34px;font-weight:800;letter-spacing:9px;color:{email_sender.TEXT};'>{code}</div>"
+            f"<div style='margin:24px 0;padding:18px 16px;border:1px solid #e4d5fa;border-radius:12px;"
+            f"background:#faf7ff;text-align:center;font-size:34px;font-weight:800;letter-spacing:9px;color:#7c3aed;'>{code}</div>"
             "This code expires in 10 minutes."
         ),
     )
