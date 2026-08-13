@@ -6,6 +6,13 @@ import { Icon } from '../../components/Icon'
 
 const CHANNELS = ['browser', 'phone', 'widget']
 
+function latencySummary(values?: number[]): string | null {
+  if (!values?.length) return null
+  const ordered = [...values].sort((a, b) => a - b)
+  const percentile = (p: number) => ordered[Math.min(ordered.length - 1, Math.floor((ordered.length - 1) * p))]
+  return `p50 ${(percentile(0.5) / 1000).toFixed(2)}s · p95 ${(percentile(0.95) / 1000).toFixed(2)}s`
+}
+
 export function AdminCalls() {
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState('')
@@ -155,6 +162,11 @@ export function AdminCallDetailPage() {
             <Field label="Connection" value={c.connect_latency_ms == null ? null : `${(c.connect_latency_ms / 1000).toFixed(1)}s`} />
             <Field label="Agent joined" value={c.agent_join_latency_ms == null ? null : `${(c.agent_join_latency_ms / 1000).toFixed(1)}s`} />
             <Field label="First response" value={c.first_response_latency_ms == null ? null : `${(c.first_response_latency_ms / 1000).toFixed(1)}s`} />
+            <Field label="Turn endpointing" value={latencySummary(c.latency_metrics?.eouMs)} />
+            <Field label="STT finalization" value={latencySummary(c.latency_metrics?.transcriptionMs)} />
+            <Field label="LLM first token" value={latencySummary(c.latency_metrics?.llmTtftMs)} />
+            <Field label="TTS first audio" value={latencySummary(c.latency_metrics?.ttsTtfbMs)} />
+            <Field label="Providers" value={c.latency_metrics?.providers?.join(', ') || null} />
             <Field label="Failure reason" value={c.failure_reason} />
             <Field label="Credits" value={String(c.credits)} />
             <Field label="Room" value={c.room_name} mono />

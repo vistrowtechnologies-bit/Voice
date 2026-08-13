@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS calls (
     site_id INTEGER,
     agent_id INTEGER,
     account_id INTEGER,
-    extracted_data TEXT DEFAULT ''
+    extracted_data TEXT DEFAULT '',
+    latency_metrics_json TEXT DEFAULT ''
 );
 
 -- Mirrors server/calls_db.py — created here too so the agent works even if it
@@ -85,6 +86,7 @@ def init_db() -> None:
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} TEXT")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS extracted_data TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS latency_metrics_json TEXT DEFAULT ''")
     finally:
         conn.close()
 
@@ -448,8 +450,8 @@ def save_call(record: dict) -> int | None:
                     lead_email, lead_budget, lead_location, lead_timeline, lead_company,
                     lead_use_case, lead_team_size, site_visit_json,
                     transcript_json, call_type, site_id, agent_id, account_id,
-                    extracted_data
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    extracted_data, latency_metrics_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -478,6 +480,7 @@ def save_call(record: dict) -> int | None:
                     json.dumps(record["extracted_data"], ensure_ascii=False)
                     if record.get("extracted_data")
                     else "",
+                    json.dumps(record.get("latency_metrics") or {}, ensure_ascii=False),
                 ),
             )
             return cur.lastrowid

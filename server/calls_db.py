@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS calls (
     transcript_json TEXT NOT NULL,
     call_type TEXT DEFAULT 'browser',
     site_id INTEGER,
-    agent_id INTEGER
+    agent_id INTEGER,
+    latency_metrics_json TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS sites (
@@ -792,6 +793,11 @@ def init_tables() -> None:
                 ("first_response_latency_ms", "INTEGER"),
                 ("failure_reason", "TEXT"),
                 ("feedback_comment", "TEXT"),
+                # Per-turn provider timings emitted by LiveKit: endpointing,
+                # STT finalization, LLM TTFT and TTS TTFB.  Stored as compact
+                # JSON because a call can contain many turns and provider
+                # fallbacks; the admin detail page summarizes it.
+                ("latency_metrics_json", "TEXT DEFAULT ''"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
@@ -1735,6 +1741,7 @@ def _call_dict(
         "firstResponseLatencyMs": _row_get(row, "first_response_latency_ms"),
         "failureReason": _row_get(row, "failure_reason"),
         "feedbackComment": _row_get(row, "feedback_comment"),
+        "latencyMetrics": _load_json_field(_row_get(row, "latency_metrics_json"), {}),
     }
     if credit_rates_by_type is not None:
         # Only computed for the single-call detail fetch (get_call) — using

@@ -168,6 +168,13 @@ export interface AdminCallDetail extends AdminCallRow {
   agent_join_latency_ms: number | null
   first_response_latency_ms: number | null
   failure_reason: string | null
+  latency_metrics: {
+    eouMs?: number[]
+    transcriptionMs?: number[]
+    llmTtftMs?: number[]
+    ttsTtfbMs?: number[]
+    providers?: string[]
+  }
 }
 
 export interface AdminAnalytics {

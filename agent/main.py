@@ -333,19 +333,47 @@ def _neutralize_caller_directed_gender(text: str) -> str:
 
 
 def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
-    """AgentSession tts_text_transforms entry — buffers to sentence
-    boundaries (so a verb split across streaming chunks is never missed
-    mid-word) and applies _neutralize_caller_directed_gender to each
-    completed sentence. Reads agent._caller_gender fresh per sentence since
-    it can change mid-call the moment the caller states it."""
+    """Correct caller-directed gender without holding a whole long sentence.
+
+    The first version buffered until ``।.!?`` so the correction regex could
+    see a complete Hindi verb phrase.  That was safe, but it accidentally
+    defeated streaming: a long first sentence did not reach TTS until its
+    final punctuation, adding seconds of perceived latency for every tenant.
+
+    Natural phrase punctuation is released immediately.  Long unpunctuated
+    text is force-flushed near 88 characters while retaining its final two
+    words; keeping that small tail is enough for a split ``सकती`` + ``हैं``
+    sequence to be corrected after the next LLM delta arrives.  We therefore
+    preserve the production gender guard without making callers wait for a
+    paragraph-sized sentence."""
+
+    phrase_boundary = re.compile(r"(?<=[।.!?,;:])")
+
+    def _ready_chunks(buffer: str) -> tuple[list[str], str]:
+        chunks: list[str] = []
+        *complete, remainder = phrase_boundary.split(buffer)
+        chunks.extend(part for part in complete if part)
+        buffer = remainder
+
+        # The LLM occasionally emits a long run without punctuation.  Keep
+        # two trailing words so a gendered verb and its auxiliary can never
+        # be separated across the correction boundary.
+        while len(buffer) > 112:
+            spaces = [m.start() for m in re.finditer(r"\s+", buffer[:96])]
+            if len(spaces) < 3:
+                break
+            split_at = spaces[-3]
+            chunks.append(buffer[:split_at])
+            buffer = buffer[split_at:]
+        return chunks, buffer
 
     async def _transform(text):
         buffer = ""
         async for chunk in text:
             buffer += chunk
-            *complete, buffer = re.split(r"(?<=[।.!?])", buffer)
-            for sentence in complete:
-                yield sentence if agent._caller_gender == "female" else _neutralize_caller_directed_gender(sentence)
+            complete, buffer = _ready_chunks(buffer)
+            for phrase in complete:
+                yield phrase if agent._caller_gender == "female" else _neutralize_caller_directed_gender(phrase)
         if buffer:
             yield buffer if agent._caller_gender == "female" else _neutralize_caller_directed_gender(buffer)
 
@@ -362,8 +390,26 @@ def _build_llm(model: str):
         api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         if not api_key:
             raise RuntimeError(f"{model} is selected, but GEMINI_API_KEY is not configured.")
-        return google.LLM(model=model, api_key=api_key)
-    return openai.LLM(model=model)
+        # Gemini 3 Flash models otherwise use dynamic/high thinking, which is
+        # useful for difficult reasoning but needlessly delays the first word
+        # in a live phone conversation.  Minimal thinking is the intended
+        # low-latency mode for chat/voice; the 3.5 Flash-Lite model already
+        # defaults to it, but setting it explicitly keeps every Gemini voice
+        # model on the same latency budget.
+        return google.LLM(
+            model=model,
+            api_key=api_key,
+            thinking_config={"thinking_level": "MINIMAL"},
+            max_output_tokens=320,
+        )
+    # Bound spoken replies and give OpenAI a stable cache-routing key.  The
+    # exact prompt prefix still has to match before it can be reused, so this
+    # does not mix one tenant's instructions or KB with another tenant's.
+    return openai.LLM(
+        model=model,
+        max_completion_tokens=320,
+        prompt_cache_key="vistrow-voice-agent-v1",
+    )
 
 
 def _google_credentials_info() -> dict | None:
@@ -501,7 +547,12 @@ def _google_fallback_tts(google_tts, sarvam_safety_net):
     line on the *first* failure omits the actual exception, so a future
     occurrence is otherwise nearly undiagnosable from logs alone.
     """
-    adapter = TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=5)
+    # A live caller values a timely fallback more than several attempts to
+    # preserve exactly the selected timbre.  Five retries combined with the
+    # old 20s timeout could leave the line silent for far too long.  One
+    # retry absorbs a transient failure, then immediately hands the segment
+    # to the matching-gender Sarvam safety net.
+    adapter = TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=1)
 
     def _on_availability_changed(ev):
         if ev.tts is google_tts:
@@ -1649,6 +1700,15 @@ async def entrypoint(ctx: JobContext) -> None:
         # This agent's own id, so book_appointment can attribute the booking
         # to it (appointments.agent_id).
         "agent_id": cfg.get("id"),
+        # Raw per-turn timings are captured from LiveKit's provider metrics
+        # below and persisted with the call for tenant/admin p50/p95 tuning.
+        "latency_metrics": {
+            "eouMs": [],
+            "transcriptionMs": [],
+            "llmTtftMs": [],
+            "ttsTtfbMs": [],
+            "providers": [],
+        },
     }
 
     # interruption_sensitivity 0-1 → how many real words it takes to interrupt
@@ -1709,7 +1769,12 @@ async def entrypoint(ctx: JobContext) -> None:
             # replying — felt as "the agent is slow" in a 2026-07-30 client
             # demo. 4.0 keeps real buffer over the old 3.0s default that
             # caused the drop while roughly halving the worst-case reply lag.
-            endpointing=EndpointingOptions(max_delay=4.0),
+            # 3.0s restores LiveKit's safe default ceiling.  The 4.0s value
+            # prevented late Sarvam transcripts from being dropped, but made
+            # low-confidence Hinglish turns visibly sluggish.  Preemptive LLM
+            # and TTS remain enabled, so normal turns still begin generating
+            # before this ceiling; only genuinely ambiguous turns wait here.
+            endpointing=EndpointingOptions(min_delay=0.4, max_delay=3.0),
         ),
         user_away_timeout=away_timeout,
         # Google's Gemini TTS backend (gemini-2.5-flash-tts) genuinely times
@@ -1720,7 +1785,10 @@ async def entrypoint(ctx: JobContext) -> None:
         # Sarvam for the rest of the call (see _google_fallback_tts). 20s
         # gives a genuinely-slow-but-alive response room to finish instead
         # of being cut off and treated as dead.
-        conn_options=SessionConnectOptions(tts_conn_options=APIConnectOptions(timeout=20.0)),
+        # Fail over promptly when a provider is unhealthy.  This timeout is
+        # per TTS attempt, not a call-length limit; a successful streaming
+        # response continues normally once its first frames arrive.
+        conn_options=SessionConnectOptions(tts_conn_options=APIConnectOptions(timeout=8.0)),
     )
 
     # --- End-call-on-silence watchdog ---------------------------------------
@@ -1814,9 +1882,34 @@ async def entrypoint(ctx: JobContext) -> None:
                 userdata["ending_call"] = False
                 asyncio.create_task(_hang_up(ctx.room.name))
 
+    def _on_metrics_collected(ev) -> None:
+        metric = ev.metrics
+        metric_type = getattr(metric, "type", "")
+        timings = userdata["latency_metrics"]
+        if metric_type == "eou_metrics":
+            timings["eouMs"].append(round(max(0.0, metric.end_of_utterance_delay) * 1000))
+            timings["transcriptionMs"].append(round(max(0.0, metric.transcription_delay) * 1000))
+        elif metric_type == "llm_metrics" and not metric.cancelled:
+            timings["llmTtftMs"].append(round(max(0.0, metric.ttft) * 1000))
+        elif metric_type == "tts_metrics" and not metric.cancelled:
+            timings["ttsTtfbMs"].append(round(max(0.0, metric.ttfb) * 1000))
+        else:
+            return
+
+        metadata = getattr(metric, "metadata", None)
+        provider = getattr(metadata, "model_provider", None) if metadata else None
+        model = getattr(metadata, "model_name", None) if metadata else None
+        label = "/".join(part for part in (provider, model) if part)
+        if label and label not in timings["providers"]:
+            timings["providers"].append(label)
+
     session.on("user_state_changed", _on_user_state_changed)
     session.on("agent_state_changed", _on_agent_state_changed)
     session.on("conversation_item_added", _on_conversation_item_added)
+    # Deprecated only for usage accounting; it remains LiveKit 1.6's public
+    # event for detailed per-stage latency.  session_usage_updated does not
+    # include EOU, TTFT or TTFB, which are the values we need here.
+    session.on("metrics_collected", _on_metrics_collected)
 
     # Held in a dict (not read at shutdown time) because by the time the job
     # drains and the shutdown callback runs, the visitor has already left the
@@ -1858,6 +1951,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     "agent_id": resolved_agent_id,
                     "account_id": cfg.get("account_id"),
                     "extracted_data": extracted,
+                    "latency_metrics": userdata["latency_metrics"],
                     **lead_data,
                 }
             )

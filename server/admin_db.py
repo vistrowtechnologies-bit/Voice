@@ -420,6 +420,10 @@ def call_detail(call_id: int) -> dict | None:
             return None
         d = dict(row)
         d["transcript"] = json.loads(d.pop("transcript_json")) if d.get("transcript_json") else []
+        try:
+            d["latency_metrics"] = json.loads(d.pop("latency_metrics_json") or "{}")
+        except (TypeError, ValueError):
+            d["latency_metrics"] = {}
         return d
     finally:
         conn.close()
