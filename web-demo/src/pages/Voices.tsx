@@ -86,7 +86,7 @@ function TierGroup({
         <h2 className="text-sm font-bold">{label ?? tierLabel}</h2>
         <span className="text-[11px] text-text-muted">{note ?? tierNote}</span>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {entries.map((entry) => (
           <VoiceCard
             key={entry.value}
@@ -265,7 +265,7 @@ export function Voices() {
         </div>
       </PageHeader>
 
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
+      <div className="flex w-full flex-col gap-6 p-4 sm:p-6">
         {!data ? (
           <div className="flex justify-center py-16">
             <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
