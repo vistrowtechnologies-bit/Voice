@@ -1905,12 +1905,16 @@ async def entrypoint(ctx: JobContext) -> None:
             # replying — felt as "the agent is slow" in a 2026-07-30 client
             # demo. 4.0 keeps real buffer over the old 3.0s default that
             # caused the drop while roughly halving the worst-case reply lag.
-            # 3.0s restores LiveKit's safe default ceiling.  The 4.0s value
-            # prevented late Sarvam transcripts from being dropped, but made
-            # low-confidence Hinglish turns visibly sluggish.  Preemptive LLM
-            # and TTS remain enabled, so normal turns still begin generating
-            # before this ceiling; only genuinely ambiguous turns wait here.
-            endpointing=EndpointingOptions(min_delay=0.4, max_delay=3.0),
+            #
+            # A later pass reverted this to 3.0 to shave latency further,
+            # which reintroduced the exact transcript-drop bug this comment
+            # describes — confirmed live again on 2026-08-13 (a real reply
+            # never arrived; the caller just got repeated "are you still
+            # there?" check-ins instead). 4.0 is the value actually proven
+            # to fix that failure mode; don't lower it again without a real
+            # fix for the underlying STT-finalization race, not just a
+            # latency trade that brings the drop back.
+            endpointing=EndpointingOptions(min_delay=0.4, max_delay=4.0),
         ),
         user_away_timeout=away_timeout,
         # Google's Gemini TTS backend (gemini-2.5-flash-tts) genuinely times
