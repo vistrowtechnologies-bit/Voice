@@ -530,7 +530,15 @@ _ELEVENLABS_V3_VOICE_PREFIX = "elevenlabs-v3:"
 _ELEVENLABS_API_KEY = os.environ.get("ELEVEN_API_KEY")
 
 
-def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str):
+# Monika (ElevenLabs) — the only safety net when BOTH Gemini models are
+# down at once. Not a persona match for every Google voice (nothing is,
+# short of the two Gemini models themselves), but a deliberate, one-time
+# product choice for the rare full-Google-TTS-outage case, not per-tenant
+# configurable — see _google_fallback_tts.
+_GEMINI_OUTAGE_SAFETY_NET_VOICE_ID = "1qEiC6qsybMkmnNdVMbK"
+
+
+def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_language: str, tone_name: str):
     """Keep Gemini calls inside the same voice persona during failover.
 
     A 2.5-selected tenant voice temporarily uses the identical 3.1 persona;
@@ -544,8 +552,34 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str):
     retry gives up on calls that would have succeeded a moment later,
     reintroducing the mid-call Google->Sarvam voice swap this adapter exists
     to prevent. Paired with the 20s tts_conn_options timeout below.
+
+    A third tier (ElevenLabs Monika) only engages if BOTH Gemini models are
+    down at the same time — a genuine Google-wide TTS outage, not just one
+    model's issue. That's rare, but the alternative (no third tier at all)
+    was dead air for the rest of the call, which is worse for a caller than
+    one more voice swap. Requires ELEVEN_API_KEY; silently 2-tier without it.
     """
-    adapter = TtsFallbackAdapter([primary_tts, fallback_tts], max_retry_per_tts=5)
+    tts_chain = [primary_tts, fallback_tts]
+    safety_net = None
+    if _ELEVENLABS_API_KEY:
+        eleven_base = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
+        eleven_language = (
+            reply_language.split("-")[0] if reply_language in ELEVENLABS_SUPPORTED_LANGUAGES else NOT_GIVEN
+        )
+        safety_net = elevenlabs.TTS(
+            voice_id=_GEMINI_OUTAGE_SAFETY_NET_VOICE_ID,
+            model="eleven_flash_v2_5",
+            language=eleven_language,
+            voice_settings=elevenlabs.VoiceSettings(
+                stability=eleven_base["stability"],
+                similarity_boost=_ELEVENLABS_SIMILARITY_BOOST,
+                style=eleven_base["style"],
+                speed=eleven_base["speed"],
+                use_speaker_boost=True,
+            ),
+        )
+        tts_chain.append(safety_net)
+    adapter = TtsFallbackAdapter(tts_chain, max_retry_per_tts=5)
     fallback_model = _GOOGLE_25_MODEL if primary_model == _GOOGLE_31_MODEL else _GOOGLE_31_MODEL
 
     def _on_availability_changed(ev):
@@ -558,13 +592,24 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str):
                     primary_model,
                     fallback_model,
                 )
+        elif safety_net is not None and ev.tts is safety_net:
+            if ev.available:
+                logger.info("Gemini outage safety net (Monika) no longer needed")
+            else:
+                logger.error(
+                    "Both Gemini TTS models unavailable — falling back to Monika (ElevenLabs) until either recovers"
+                )
 
     adapter.on("tts_availability_changed", _on_availability_changed)
     # LiveKit's FallbackAdapter intentionally exposes no update_options().
     # Forward runtime language/style changes to both Gemini instances so the
     # backup remains an exact same-persona substitute after code switching or
     # emotion adaptation, rather than being frozen at the call's first turn.
-    def _update_both(**kwargs):
+    # The Monika safety net only understands `language` — Gemini-specific
+    # kwargs (prompt/voice_name/model_name) don't apply to it, so those are
+    # never forwarded there; best-effort only, since it's an emergency
+    # backup voice, not the primary experience.
+    def _update_all(**kwargs):
         primary_tts.update_options(**kwargs)
         fallback_kwargs = dict(kwargs)
         if "model_name" in fallback_kwargs:
@@ -573,8 +618,13 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str):
                 _GOOGLE_25_MODEL if selected_model == _GOOGLE_31_MODEL else _GOOGLE_31_MODEL
             )
         fallback_tts.update_options(**fallback_kwargs)
+        if safety_net is not None and "language" in kwargs:
+            try:
+                safety_net.update_options(language=kwargs["language"].split("-")[0])
+            except Exception:
+                logger.warning("Monika safety-net language update failed", exc_info=True)
 
-    adapter.update_options = _update_both
+    adapter.update_options = _update_all
     return adapter
 
 
@@ -723,7 +773,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 prompt=google_prompt,
             )
             provider = "google-multilingual-31" if google_model == _GOOGLE_31_MODEL else "google-multilingual"
-            return _google_fallback_tts(google_tts, google_model_fallback, google_model), provider
+            return _google_fallback_tts(google_tts, google_model_fallback, google_model, reply_language, tone_name), provider
         voice_language = "-".join(voice_name.split("-")[:2])
         google_tts = google.TTS(
             language=voice_language,
