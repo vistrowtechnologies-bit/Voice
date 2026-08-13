@@ -87,8 +87,10 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
 
   const remaining = getRemainingDemoCalls()
 
-  // Pre-warms a room + LiveKit token the instant this card mounts, instead
-  // of only fetching them once the visitor actually taps "Tap to talk".
+  // Pre-warms a room + LiveKit token as soon as the visitor actually starts
+  // a call, before the browser's microphone permission prompt. This overlaps
+  // dispatch/config loading with the time they spend granting permission,
+  // without dispatching paid agent jobs for every passive page view.
   // /api/token now pre-creates the room server-side (see token_api.py),
   // which dispatches the agent immediately - agent/main.py's entrypoint
   // starts connecting and loading its config in the background while the
@@ -101,62 +103,31 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
   // sits on for minutes before clicking would otherwise hand them a token
   // for a room whose job already gave up and exited.
   const PREWARM_MAX_AGE_MS = 60_000
-  // Repeating this forever for as long as the tab is open - the original
-  // behavior - meant every homepage visitor who left the tab open (or
-  // backgrounded) kept re-dispatching a fresh agent job every ~50s,
-  // indefinitely, whether or not they ever clicked. At real traffic (a
-  // few hundred open tabs), that's a sustained, self-regenerating load on
-  // the demo agent's capacity completely independent of actual call
-  // volume - and each abandoned dispatch holds a worker slot for up to 90s
-  // (agent/main.py's wait_for_participant timeout) before it frees up.
-  // Capping the number of re-warms and pausing while the tab isn't visible
-  // keeps the "no cold start on click" benefit for an actually-engaged
-  // visitor without the unbounded background cost.
-  const MAX_PREWARM_CYCLES = 4
-  const prewarmCountRef = useRef(0)
   const prewarmRef = useRef<{ token: string; url: string; identity: string; room: string; at: number } | null>(null)
+  const prewarmPromiseRef = useRef<Promise<{ token: string; url: string; identity: string; room: string; at: number } | null> | null>(null)
   const prewarm = useCallback(() => {
-    if (!hasDemoCallsRemaining()) return
-    if (document.visibilityState !== 'visible') return
-    prewarmCountRef.current += 1
+    const cached = prewarmRef.current
+    if (cached && Date.now() - cached.at < PREWARM_MAX_AGE_MS) return Promise.resolve(cached)
+    if (prewarmPromiseRef.current) return prewarmPromiseRef.current
+    if (!hasDemoCallsRemaining()) return Promise.resolve(null)
     const identity = randomId('visitor')
     const room = randomId('voice-agent-demo')
-    fetchLiveKitToken(identity, room)
+    const request = fetchLiveKitToken(identity, room)
       .then(({ token: newToken, url }) => {
-        prewarmRef.current = { token: newToken, url, identity, room, at: Date.now() }
+        const warmed = { token: newToken, url, identity, room, at: Date.now() }
+        prewarmRef.current = warmed
+        return warmed
       })
       .catch(() => {
         // Best-effort - handleStart falls back to fetching its own token
         // live if this never lands or the room ends up rejected.
+        return null
       })
+    prewarmPromiseRef.current = request.finally(() => {
+      prewarmPromiseRef.current = null
+    })
+    return prewarmPromiseRef.current
   }, [])
-  useEffect(() => {
-    prewarm()
-    // Re-warm before the previous room's 90s wait_for_participant timeout
-    // (and this card's own PREWARM_MAX_AGE_MS reuse window) expire, so a
-    // visitor who reads the page for a while before clicking still gets a
-    // fresh, live-dispatched room instead of falling back to a cold fetch.
-    // Stops after MAX_PREWARM_CYCLES (~4 minutes of the tab sitting open
-    // unclicked) - a visitor who's read the page that long without tapping
-    // is unlikely to convert on this exact impression, and handleStart
-    // still works fine without a warm room, it just pays a live fetch
-    // instead of a pre-fetched one.
-    const interval = window.setInterval(() => {
-      if (prewarmCountRef.current >= MAX_PREWARM_CYCLES) {
-        window.clearInterval(interval)
-        return
-      }
-      prewarm()
-    }, PREWARM_MAX_AGE_MS - 10_000)
-    const onVisible = () => {
-      if (document.visibilityState === 'visible' && prewarmCountRef.current < MAX_PREWARM_CYCLES) prewarm()
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [prewarm])
 
   // Only counts against the free-call cap once a call actually connects to
   // an agent - a visitor whose call fails end-to-end (LiveKit never joins
@@ -185,9 +156,14 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
     creditChargedRef.current = false
     setPhase('connecting')
     setErrorMessage(null)
+    // Start dispatch before asking for microphone permission. On a first
+    // visit the native permission prompt usually gives the worker several
+    // seconds of useful head start; on repeat visits this still overlaps
+    // with getUserMedia and WebRTC setup.
+    const warming = prewarm()
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true })
-      const warm = prewarmRef.current
+      const warm = (await warming) ?? prewarmRef.current
       const isFresh = warm && Date.now() - warm.at < PREWARM_MAX_AGE_MS
       const { token: newToken, url } = isFresh
         ? warm
@@ -206,7 +182,7 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
       }
       setPhase('denied')
     }
-  }, [cooldownUntil])
+  }, [cooldownUntil, prewarm])
 
   // Ending the call just returns the card to its idle "Tap to talk" state,
   // right here - no separate summary page or route to send the visitor to.

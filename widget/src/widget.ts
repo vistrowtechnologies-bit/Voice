@@ -606,6 +606,7 @@ function init(): void {
   // instead of creating a fresh one, shaving the agent's cold-start wait off
   // the time the visitor spends filling in name/phone/email.
   let warmRoom: string | null = null
+  let warmRoomPromise: Promise<string | null> | null = null
   let selectedExperience: 'voice' | 'chat' = widgetMode === 'chat' ? 'chat' : 'voice'
   let callStartedAt = 0
   let callStartedAtMonotonic = 0
@@ -777,9 +778,10 @@ function init(): void {
     timerEl.style.display = 'none'
   }
 
-  function warmAgent(): void {
-    warmRoom = null
-    fetch(`${apiBase}/widget/warm`, {
+  function warmAgent(): Promise<string | null> {
+    if (warmRoom) return Promise.resolve(warmRoom)
+    if (warmRoomPromise) return warmRoomPromise
+    warmRoomPromise = fetch(`${apiBase}/widget/warm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ siteKey }),
@@ -787,12 +789,18 @@ function init(): void {
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { room: string | null } | null) => {
         if (data?.room) warmRoom = data.room
+        return warmRoom
       })
       .catch((err) => {
         // Best-effort only — startCall() falls back to a fresh room if this
         // never lands, so a failure here is silently swallowed.
         console.warn('[Vistrow Voice widget] warm request failed:', err)
+        return null
       })
+      .finally(() => {
+        warmRoomPromise = null
+      })
+    return warmRoomPromise
   }
 
   // Every panel view (pre-call form, chat, active call) is a sibling div
@@ -1343,6 +1351,11 @@ function init(): void {
     setStatus('Connecting…')
     resetTranscript()
 
+    // Begin dispatch before the browser permission prompt and keep the exact
+    // in-flight promise. Previously an immediate click could reach
+    // /widget/token before /widget/warm returned, create a second cold room,
+    // and then abandon the warm room that completed a moment later.
+    const warming = warmAgent()
     try {
       trackEvent('microphone_requested')
       const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -1357,10 +1370,11 @@ function init(): void {
 
     let token: string, url: string
     try {
+      const reusableWarmRoom = warmRoom ?? await warming
       const res = await fetch(`${apiBase}/widget/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteKey, identity: randomId('visitor'), name, phone, email, room: warmRoom }),
+        body: JSON.stringify({ siteKey, identity: randomId('visitor'), name, phone, email, room: reusableWarmRoom }),
       })
       warmRoom = null
       if (!res.ok) {
