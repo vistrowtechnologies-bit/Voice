@@ -1242,6 +1242,7 @@ class PreferencesRequest(BaseModel):
     notify_calls: bool | None = None
     notify_billing: bool | None = None
     notify_product: bool | None = None
+    dashboard_checklist_dismissed: bool | None = None
 
 
 @app.get("/profile/preferences")

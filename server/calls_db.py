@@ -249,6 +249,7 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     notify_calls INTEGER DEFAULT 1,
     notify_billing INTEGER DEFAULT 1,
     notify_product INTEGER DEFAULT 0,
+    dashboard_checklist_dismissed INTEGER DEFAULT 0,
     updated_at TEXT DEFAULT {_NOW}
 );
 
@@ -884,6 +885,12 @@ def init_tables() -> None:
             # Self-reported at signup, plain data field — no OTP/verification
             # flow attached (email is the verified identity here, not phone).
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT ''")
+            # Per-user dashboard preference. Unlike localStorage this follows
+            # the user across browsers and never hides onboarding for another
+            # teammate in the same account.
+            conn.execute(
+                "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS dashboard_checklist_dismissed INTEGER DEFAULT 0"
+            )
             # Surfaces *why* a live-call delivery to an integration failed
             # (e.g. "invalid token — reconnect") without flipping status away
             # from 'connected' — the operator's saved config is still good,
@@ -1212,7 +1219,15 @@ def get_user_preferences(user_id: int) -> dict:
 
 
 def update_user_preferences(user_id: int, values: dict) -> dict:
-    allowed = {"timezone", "language", "notify_leads", "notify_calls", "notify_billing", "notify_product"}
+    allowed = {
+        "timezone",
+        "language",
+        "notify_leads",
+        "notify_calls",
+        "notify_billing",
+        "notify_product",
+        "dashboard_checklist_dismissed",
+    }
     updates = {key: value for key, value in values.items() if key in allowed and value is not None}
     if not updates:
         return get_user_preferences(user_id)

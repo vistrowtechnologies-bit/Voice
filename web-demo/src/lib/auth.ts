@@ -102,6 +102,7 @@ export interface UserPreferences {
   notify_calls: boolean
   notify_billing: boolean
   notify_product: boolean
+  dashboard_checklist_dismissed: boolean
 }
 export const apiProfilePreferences = () => authFetch<UserPreferences>('/profile/preferences')
 export const apiUpdateProfilePreferences = (data: Partial<UserPreferences>) => authFetch<UserPreferences>('/profile/preferences', data, 'PATCH')

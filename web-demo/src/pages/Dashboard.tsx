@@ -22,7 +22,7 @@ import {
   formatDuration,
   type IntelligenceSummary,
 } from '../lib/api'
-import { useAuth } from '../lib/auth'
+import { apiProfilePreferences, apiUpdateProfilePreferences, useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
 import type { ActiveCallInfo, Analytics, CallRecord, DashboardSummary, FeedbackSummary, LaunchReadiness, UsageTrends } from '../lib/types'
 
@@ -73,7 +73,9 @@ export function Dashboard() {
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
   const [recentCalls, setRecentCalls] = useState<CallRecord[]>([])
   const [rangeDays, setRangeDays] = useState(14)
-  const [recentCallsCollapsed, setRecentCallsCollapsed] = useState(false)
+  const [recentCallsCollapsed, setRecentCallsCollapsed] = useState(true)
+  const [checklistDismissed, setChecklistDismissed] = useState<boolean | null>(null)
+  const [dismissingChecklist, setDismissingChecklist] = useState(false)
   const [readiness, setReadiness] = useState<LaunchReadiness | null>(null)
   const [feedback, setFeedback] = useState<FeedbackSummary | null>(null)
 
@@ -92,6 +94,9 @@ export function Dashboard() {
     fetchCalls().then((calls) => setRecentCalls(calls.slice(0, 5))).catch(() => setRecentCalls([]))
     fetchLaunchReadiness().then(setReadiness).catch(() => setReadiness(null))
     fetchFeedbackSummary().then(setFeedback).catch(() => setFeedback(null))
+    apiProfilePreferences()
+      .then((preferences) => setChecklistDismissed(Boolean(preferences.dashboard_checklist_dismissed)))
+      .catch(() => setChecklistDismissed(false))
   }, [])
 
   useEffect(() => {
@@ -115,6 +120,20 @@ export function Dashboard() {
 
   const successPct = summary ? Math.round(summary.qualifiedRatio * 100) : 0
   const showingLive = activeCalls.length > 0
+  const callsCollapsed = !showingLive && recentCallsCollapsed
+
+  const dismissChecklist = async () => {
+    if (dismissingChecklist) return
+    setDismissingChecklist(true)
+    setChecklistDismissed(true)
+    try {
+      await apiUpdateProfilePreferences({ dashboard_checklist_dismissed: true })
+    } catch {
+      setChecklistDismissed(false)
+    } finally {
+      setDismissingChecklist(false)
+    }
+  }
 
   return (
     <DashboardLayout>
@@ -146,10 +165,24 @@ export function Dashboard() {
               </p>
             </div>
 
-            {readiness && readiness.completed < readiness.total && (
+            {readiness && checklistDismissed === false && readiness.completed < readiness.total && (
               <SectionCard
                 title="Launch checklist"
-                action={<span className="text-xs font-bold text-primary">{readiness.completed}/{readiness.total} complete</span>}
+                action={(
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-primary">{readiness.completed}/{readiness.total} complete</span>
+                    <button
+                      type="button"
+                      onClick={dismissChecklist}
+                      disabled={dismissingChecklist}
+                      aria-label="Dismiss launch checklist and do not show it again"
+                      title="Don't show again"
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-high/50 hover:text-text disabled:opacity-50"
+                    >
+                      <Icon name="close" className="text-[18px]" />
+                    </button>
+                  </div>
+                )}
               >
                 <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3">
                   {readiness.checks.map((check) => (
@@ -183,29 +216,31 @@ export function Dashboard() {
                       View all →
                     </Link>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setRecentCallsCollapsed((c) => !c)}
-                    aria-label={recentCallsCollapsed ? 'Expand' : 'Minimize'}
-                    aria-expanded={!recentCallsCollapsed}
-                    className="flex h-6 w-6 items-center justify-center rounded text-text-muted transition-colors hover:bg-surface-high/40 hover:text-text"
-                  >
-                    <Icon
-                      name="expand_more"
-                      className={`text-[18px] transition-transform ${recentCallsCollapsed ? '-rotate-90' : ''}`}
-                    />
-                  </button>
+                  {!showingLive && (
+                    <button
+                      type="button"
+                      onClick={() => setRecentCallsCollapsed((c) => !c)}
+                      aria-label={recentCallsCollapsed ? 'Expand recent calls' : 'Collapse recent calls'}
+                      aria-expanded={!recentCallsCollapsed}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-high/40 hover:text-text"
+                    >
+                      <Icon
+                        name="expand_more"
+                        className={`text-[18px] transition-transform ${recentCallsCollapsed ? '-rotate-90' : ''}`}
+                      />
+                    </button>
+                  )}
                 </div>
               }
               footer={
-                !recentCallsCollapsed && !showingLive && recentCalls.length > 0 ? (
+                !callsCollapsed && !showingLive && recentCalls.length > 0 ? (
                   <Link to="/dashboard/calls" className="font-bold text-cyan hover:underline">
                     View full call history →
                   </Link>
                 ) : undefined
               }
             >
-              <div className={`divide-y divide-border ${recentCallsCollapsed ? 'hidden' : ''}`}>
+              <div className={`divide-y divide-border ${callsCollapsed ? 'hidden' : ''}`}>
                 {showingLive
                   ? activeCalls.map((call) => (
                       <div key={call.room} className="flex items-center gap-3 px-4 py-3 sm:px-5">
