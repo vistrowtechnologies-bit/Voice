@@ -11,3 +11,6 @@ pyjwt>=2.8
 # see audio.py's _decode_mp3. Requires ffmpeg on PATH.
 pydub>=0.25
 google-cloud-texttospeech>=2.31.0
+# Anti-aliasing low-pass filter before downsampling TTS output to 8kHz for
+# the phone leg (audioop.ratecv alone has no filtering) — see audio.py.
+numpy>=1.26

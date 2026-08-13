@@ -23,9 +23,37 @@ import audioop
 import io
 import wave
 
+import numpy as np
+
 _ULAW_SAMPLE_RATE = 8000
 _FADE_SAMPLES = 80  # 10ms at 8000Hz
 _ULAW_SAMPLE_WIDTH = 2  # audioop's lin16 width used as the intermediate format
+
+
+def _lowpass_pcm16(pcm16: bytes, source_rate: int, cutoff_hz: float, numtaps: int = 63) -> bytes:
+    """Windowed-sinc FIR low-pass filter (Hamming window, unity DC gain).
+
+    audioop.ratecv (used below for the actual rate conversion) is a plain
+    linear-interpolation resampler with no filtering of its own. Every TTS
+    provider here returns audio well above 8kHz (ElevenLabs 44.1kHz,
+    Sarvam/Google ~22-24kHz) — downsampling that directly to 8kHz for the
+    phone leg folds everything above the new Nyquist frequency (4kHz) back
+    into the audible range as noise, heard live as crackling/gritty audio.
+    Filtering out that content first (before ratecv decimates) is the
+    standard fix. Not used on the browser path, which stays near the TTS
+    provider's native rate and never downsamples enough to alias audibly."""
+    if len(pcm16) % 2:
+        pcm16 = pcm16[:-1]
+    samples = np.frombuffer(pcm16, dtype=np.int16).astype(np.float64)
+    if samples.size == 0:
+        return pcm16
+    fc = cutoff_hz / source_rate  # normalized cutoff (0..0.5)
+    n = np.arange(numtaps) - (numtaps - 1) / 2
+    taps = 2 * fc * np.sinc(2 * fc * n)
+    taps *= np.hamming(numtaps)
+    taps /= taps.sum()  # unity DC gain
+    filtered = np.convolve(samples, taps, mode="same")
+    return np.clip(filtered, -32768, 32767).astype(np.int16).tobytes()
 
 
 def pcm16_to_wav(pcm16: bytes, sample_rate: int) -> bytes:
@@ -92,6 +120,11 @@ def _decode_to_pcm16(audio_bytes: bytes, content_type: str, target_rate: int) ->
     if n_channels == 2:
         pcm16 = audioop.tomono(pcm16, 2, 0.5, 0.5)
     if frame_rate != target_rate:
+        if frame_rate > target_rate:
+            # Anti-alias before decimating — see _lowpass_pcm16. 0.9x
+            # the new Nyquist frequency leaves headroom for the filter's
+            # own roll-off, matching standard practice (e.g. libsamplerate).
+            pcm16 = _lowpass_pcm16(pcm16, frame_rate, cutoff_hz=0.9 * (target_rate / 2))
         pcm16, _ = audioop.ratecv(pcm16, 2, 1, frame_rate, target_rate, None)
     return _fade_edges(pcm16)
 

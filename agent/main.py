@@ -1856,7 +1856,15 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         userdata=userdata,
-        tts_text_transforms=[_make_caller_gender_guard_transform(agent)],
+        # filter_markdown first: strips **bold**/bullets/etc before the
+        # gender guard ever sees the text, since the LLM occasionally
+        # ignores the "no markdown" prompt instruction (confirmed live -
+        # asterisks and list dashes were read aloud verbatim) and prompt
+        # compliance alone isn't a reliable guarantee for a live voice call.
+        # LiveKit's own built-in transform (livekit.agents.voice.
+        # transcription.filters.filter_markdown), not hand-rolled - already
+        # buffers correctly across split ** markers mid-stream.
+        tts_text_transforms=["filter_markdown", _make_caller_gender_guard_transform(agent)],
         turn_handling=TurnHandlingOptions(
             interruption={"min_words": min_words},
             # Preemptive LLM generation (starting on the interim, not-yet-
