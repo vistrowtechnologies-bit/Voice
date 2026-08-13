@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -33,48 +33,94 @@ function SettingsCard({ title, subtitle, children }: { title: string; subtitle: 
 }
 
 type Tab = 'general' | 'profile' | 'security' | 'team' | 'apiKeys' | 'availability'
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'general', label: 'General', icon: 'business' },
-  { id: 'profile', label: 'Profile', icon: 'person' },
-  { id: 'security', label: 'Security', icon: 'lock' },
-  { id: 'team', label: 'Team', icon: 'group' },
-  { id: 'apiKeys', label: 'API Keys', icon: 'key' },
-  { id: 'availability', label: 'Availability', icon: 'event_available' },
+type TabGroup = { label: string; tabs: { id: Tab; label: string; description: string; icon: string }[] }
+
+const TAB_GROUPS: TabGroup[] = [
+  {
+    label: 'Workspace',
+    tabs: [
+      { id: 'general', label: 'Workspace details', description: 'Company name and linked workspace controls', icon: 'business' },
+      { id: 'team', label: 'Team & roles', description: 'Invite people and manage access', icon: 'group' },
+      { id: 'availability', label: 'Scheduling', description: 'Business hours, timezone and booking rules', icon: 'event_available' },
+    ],
+  },
+  {
+    label: 'Account',
+    tabs: [
+      { id: 'profile', label: 'My profile', description: 'Your name and sign-in email', icon: 'person' },
+      { id: 'security', label: 'Sign-in & security', description: 'Password and account protection', icon: 'lock' },
+    ],
+  },
+  {
+    label: 'Developer',
+    tabs: [
+      { id: 'apiKeys', label: 'API keys', description: 'Secure access for your systems', icon: 'key' },
+    ],
+  },
 ]
+
+const TABS = TAB_GROUPS.flatMap((group) => group.tabs)
 
 export function Settings() {
   const { user } = useAuth()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const requestedTab = searchParams.get('tab')
   const initialTab = TABS.some((t) => t.id === requestedTab) ? (requestedTab as Tab) : 'general'
   const [tab, setTab] = useState<Tab>(initialTab)
 
+  useEffect(() => {
+    if (TABS.some((item) => item.id === requestedTab)) setTab(requestedTab as Tab)
+  }, [requestedTab])
+
+  const chooseTab = (next: Tab) => {
+    setTab(next)
+    setSearchParams(next === 'general' ? {} : { tab: next }, { replace: true })
+  }
+
   return (
     <DashboardLayout>
-      <PageHeader title="Settings" subtitle="Your account and workspace" />
+      <PageHeader title="Settings" subtitle="Manage your account, team, security, and workspace controls." />
 
-      <section className="flex max-w-3xl flex-col gap-4 p-4 sm:p-6">
-        <div className="flex gap-1 overflow-x-auto border-b border-border">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors ${
-                tab === t.id ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'
-              }`}
-            >
-              <Icon name={t.icon} className="text-[16px]" />
-              {t.label}
-            </button>
-          ))}
+      <section className="grid max-w-6xl gap-5 p-4 sm:p-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="rounded-xl border border-border bg-surface p-2 lg:self-start">
+          <div className="border-b border-border px-2 pb-3 pt-1">
+            <p className="text-sm font-bold">Settings centre</p>
+            <p className="mt-0.5 text-xs text-text-muted">Everything for your workspace and account.</p>
+          </div>
+          <div className="flex gap-1 overflow-x-auto py-2 lg:flex-col lg:overflow-visible">
+            {TAB_GROUPS.map((group) => (
+              <div key={group.label} className="shrink-0 lg:mt-2">
+                <p className="hidden px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-text-muted lg:block">{group.label}</p>
+                <div className="flex gap-1 lg:flex-col">
+                  {group.tabs.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => chooseTab(item.id)}
+                      className={`flex min-w-max items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors lg:min-w-0 ${
+                        tab === item.id ? 'bg-primary/10 text-primary' : 'text-text-muted hover:bg-surface-high hover:text-text'
+                      }`}
+                    >
+                      <Icon name={item.icon} className="shrink-0 text-[18px]" />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold">{item.label}</span>
+                        <span className="hidden truncate text-[11px] text-text-muted lg:block">{item.description}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        <div className="min-w-0">
+          {tab === 'general' && <GeneralTab />}
+          {tab === 'profile' && <ProfileTab />}
+          {tab === 'security' && <SecurityTab />}
+          {tab === 'team' && <TeamTab canManage={hasRole(user, 'admin')} />}
+          {tab === 'apiKeys' && <ApiKeysCard canManage={hasRole(user, 'admin')} />}
+          {tab === 'availability' && <AvailabilityTab canManage={hasRole(user, 'admin')} />}
         </div>
-
-        {tab === 'general' && <GeneralTab />}
-        {tab === 'profile' && <ProfileTab />}
-        {tab === 'security' && <SecurityTab />}
-        {tab === 'team' && <TeamTab canManage={hasRole(user, 'admin')} />}
-        {tab === 'apiKeys' && <ApiKeysCard canManage={hasRole(user, 'admin')} />}
-        {tab === 'availability' && <AvailabilityTab canManage={hasRole(user, 'admin')} />}
       </section>
     </DashboardLayout>
   )
@@ -102,7 +148,8 @@ function GeneralTab() {
   }
 
   return (
-    <SettingsCard title="Workspace" subtitle="The company name shown across your dashboard.">
+    <div className="flex flex-col gap-4">
+      <SettingsCard title="Workspace details" subtitle="The company name shown across your dashboard, agents, and shared workspace.">
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           value={companyName}
@@ -123,7 +170,28 @@ function GeneralTab() {
           {msg.text}
         </p>
       )}
-    </SettingsCard>
+      </SettingsCard>
+
+      <SettingsCard title="Related workspace controls" subtitle="These are kept with the feature they configure, so your team can find them where they work.">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {[
+            { to: '/dashboard/integrations', icon: 'extension', label: 'Integrations', description: 'Connect Slack, CRM, WhatsApp and more.' },
+            { to: '/dashboard/billing', icon: 'credit_card', label: 'Billing & credits', description: 'Plan, credits, invoices and usage.' },
+            { to: '/dashboard/numbers', icon: 'dialpad', label: 'Phone numbers', description: 'Assign and manage calling numbers.' },
+            { to: '/dashboard/website-widget', icon: 'widgets', label: 'Website widget', description: 'Control the embed and visitor experience.' },
+          ].map((item) => (
+            <Link key={item.to} to={item.to} className="group flex items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
+              <Icon name={item.icon} className="mt-0.5 text-[18px] text-primary" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold">{item.label}</span>
+                <span className="block text-xs text-text-muted">{item.description}</span>
+              </span>
+              <Icon name="arrow_forward" className="mt-1 text-[16px] text-text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+            </Link>
+          ))}
+        </div>
+      </SettingsCard>
+    </div>
   )
 }
 

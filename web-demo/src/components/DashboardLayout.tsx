@@ -130,14 +130,21 @@ function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
               className="flex items-center gap-2.5 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-surface-high"
             >
               <Icon name="person" className="text-[17px] text-text-muted" />
-              Profile
+              My profile
             </button>
             <button
-              onClick={() => go('/dashboard/settings')}
+              onClick={() => go('/dashboard/settings?tab=general')}
               className="flex items-center gap-2.5 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-surface-high"
             >
-              <Icon name="settings" className="text-[17px] text-text-muted" />
-              Settings
+              <Icon name="business" className="text-[17px] text-text-muted" />
+              Workspace settings
+            </button>
+            <button
+              onClick={() => go('/dashboard/settings?tab=team')}
+              className="flex items-center gap-2.5 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-surface-high"
+            >
+              <Icon name="group" className="text-[17px] text-text-muted" />
+              Team & access
             </button>
           </div>
           <div className="border-t border-border py-1">
