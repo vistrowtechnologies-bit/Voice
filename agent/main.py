@@ -529,39 +529,45 @@ _ELEVENLABS_V3_VOICE_PREFIX = "elevenlabs-v3:"
 _ELEVENLABS_API_KEY = os.environ.get("ELEVEN_API_KEY")
 
 
-def _google_fallback_tts(google_tts, sarvam_safety_net):
-    """TtsFallbackAdapter wrapper for a Google-primary voice, tuned to stop
-    a brief transient hiccup from swapping the caller's voice mid-call.
+def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str):
+    """Keep Gemini calls inside the same voice persona during failover.
 
-    FallbackAdapter's own default (max_retry_per_tts=2) marks Google fully
-    UNAVAILABLE after just 2 failed attempts on a single utterance — every
-    later reply then goes straight to Sarvam, with no further attempt at
-    Google, until a background "recovery" synthesis quietly succeeds. That
-    all-or-nothing behavior is what makes a one-off timeout sound like the
-    agent "changed voices for a while, then changed back" instead of a
-    single dropped utterance. Raising the retry budget gives a flaky
-    connection more chances to succeed before the adapter gives up on
-    Google for the rest of the call.
-
-    Also logs tts_availability_changed explicitly — the library's own log
-    line on the *first* failure omits the actual exception, so a future
-    occurrence is otherwise nearly undiagnosable from logs alone.
+    A 2.5-selected tenant voice temporarily uses the identical 3.1 persona;
+    a 3.1 admin/marketing voice temporarily uses its identical 2.5 persona.
+    FallbackAdapter continues probing an unavailable primary and restores it
+    automatically. This avoids the conspicuous Google -> Sarvam speaker swap
+    that callers previously heard in the middle of one conversation.
     """
-    # A live caller values a timely fallback more than several attempts to
-    # preserve exactly the selected timbre.  Five retries combined with the
-    # old 20s timeout could leave the line silent for far too long.  One
-    # retry absorbs a transient failure, then immediately hands the segment
-    # to the matching-gender Sarvam safety net.
-    adapter = TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=1)
+    adapter = TtsFallbackAdapter([primary_tts, fallback_tts], max_retry_per_tts=1)
+    fallback_model = _GOOGLE_25_MODEL if primary_model == _GOOGLE_31_MODEL else _GOOGLE_31_MODEL
 
     def _on_availability_changed(ev):
-        if ev.tts is google_tts:
+        if ev.tts is primary_tts:
             if ev.available:
-                logger.info("Google TTS recovered — switching back from Sarvam fallback")
+                logger.info("Google TTS %s recovered — restoring selected model", primary_model)
             else:
-                logger.warning("Google TTS failed repeatedly — falling back to Sarvam until it recovers")
+                logger.warning(
+                    "Google TTS %s unavailable — silently using %s with the same persona until recovery",
+                    primary_model,
+                    fallback_model,
+                )
 
     adapter.on("tts_availability_changed", _on_availability_changed)
+    # LiveKit's FallbackAdapter intentionally exposes no update_options().
+    # Forward runtime language/style changes to both Gemini instances so the
+    # backup remains an exact same-persona substitute after code switching or
+    # emotion adaptation, rather than being frozen at the call's first turn.
+    def _update_both(**kwargs):
+        primary_tts.update_options(**kwargs)
+        fallback_kwargs = dict(kwargs)
+        if "model_name" in fallback_kwargs:
+            selected_model = fallback_kwargs["model_name"]
+            fallback_kwargs["model_name"] = (
+                _GOOGLE_25_MODEL if selected_model == _GOOGLE_31_MODEL else _GOOGLE_31_MODEL
+            )
+        fallback_tts.update_options(**fallback_kwargs)
+
+    adapter.update_options = _update_both
     return adapter
 
 
@@ -674,17 +680,8 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         # issue #3347, unresolved) even though the LLM already produced the
         # full text. An operator who explicitly picked a Google voice still
         # gets it as primary; TtsFallbackAdapter catches that failure and
-        # finishes the utterance on Sarvam instead of the call going silent.
-        # The fallback speaker matches the chosen Google voice's gender
-        # (confirmed live: Gemini's Odia support times out — google_tts_
-        # streaming_patch's guarded stream still surfaces the real
-        # APITimeoutError — and the call fell over to a hardcoded "shubh",
-        # so a caller mid-conversation with Mira suddenly heard a male
-        # voice) rather than always defaulting to "shubh".
-        _safety_net_speaker = "ritu" if (voice_catalog.get_voice(speaker) or {}).get("gender") == "female" else "shubh"
-        sarvam_safety_net = sarvam.TTS(
-            target_language_code=reply_language, model="bulbul:v3", speaker=_safety_net_speaker, **tone
-        )
+        # finishes the utterance on the other Gemini model instead of either
+        # going silent or changing to a visibly different speaker family.
         if voice_name.lower() in _GOOGLE_MULTILINGUAL_VOICES:
             # TEST AGENT ONLY as of 2026-08-06 — see google_tts_streaming_patch.py.
             # Real streaming (default use_streaming=True, PCM encoding — the
@@ -692,6 +689,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             # Gemini personas via a subclass that guards the specific
             # cancel-time aclose() race that originally forced non-streaming
             # here. Not yet applied to the google-native branch below.
+            google_prompt = GEMINI_TONE_PROMPTS.get(tone_name, GEMINI_TONE_PROMPTS[DEFAULT_TONE])
             google_tts = PatchedGeminiTTS(
                 language=reply_language,
                 voice_name=voice_name.capitalize(),
@@ -706,10 +704,19 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 # Gemini-TTS' real emotion mechanism — see GEMINI_TONE_PROMPTS
                 # in emotion.py. Reinforced per-turn with the caller's
                 # detected emotion in on_user_turn_completed.
-                prompt=GEMINI_TONE_PROMPTS.get(tone_name, GEMINI_TONE_PROMPTS[DEFAULT_TONE]),
+                prompt=google_prompt,
+            )
+            fallback_model = _GOOGLE_25_MODEL if google_model == _GOOGLE_31_MODEL else _GOOGLE_31_MODEL
+            google_model_fallback = PatchedGeminiTTS(
+                language=reply_language,
+                voice_name=voice_name.capitalize(),
+                model_name=fallback_model,
+                credentials_info=_GOOGLE_CREDENTIALS,
+                speaking_rate=tone.get("pace", 1.0),
+                prompt=google_prompt,
             )
             provider = "google-multilingual-31" if google_model == _GOOGLE_31_MODEL else "google-multilingual"
-            return _google_fallback_tts(google_tts, sarvam_safety_net), provider
+            return _google_fallback_tts(google_tts, google_model_fallback, google_model), provider
         voice_language = "-".join(voice_name.split("-")[:2])
         google_tts = google.TTS(
             language=voice_language,
@@ -1234,19 +1241,19 @@ class RealEstateAgent(Agent):
                     _last_assistant_text = getattr(item, "text_content", None) or ""
                     break
             _repeat_filler_warning = (
-                "\nYou opened your LAST reply with \"अरे वाह\" — do not use it again this turn, "
-                "pick a different filler or reaction entirely."
-                if "अरे वाह" in _last_assistant_text
+                "\nYour last reply already used an expressive opener. Start this reply directly "
+                "unless a reaction is genuinely needed."
+                if any(opener in _last_assistant_text.lower() for opener in ("अरे वाह", "wow", "honestly", "actually"))
                 else ""
             )
             _personality_instruction = (
                 "This reply must sound like a witty, warm human friend on a call, not a form being "
-                "filled out. Open with a real filler or a genuine reaction to what they just said — "
-                "never the same one you used last turn. If there's a natural opening for a dry aside, "
-                "a light joke, or a playful callback to something they said earlier, take it — don't "
-                "wait for permission, and don't let two turns in a row come out flat and purely "
-                "informational. This matters even when you're also asking a discovery question or "
-                "qualifying them — being warm and being efficient are not in tension.\n"
+                "filled out. Most replies should begin directly. Use at most one filler, reaction, "
+                "self-correction, or playful aside, and only when the caller's words genuinely invite "
+                "it; never add one merely to sound human. A short acknowledgement followed by one "
+                "answer or one relevant question is allowed and often more natural than an artificial "
+                "one-sentence restriction. Never force humour, and never use it on complaints, urgent "
+                "requests, sensitive information, confirmations, or direct pricing questions.\n"
                 "An excited/delighted opener like \"अरे वाह\" or \"wow\" is ONLY for when the caller "
                 "said something genuinely positive or surprising — NEVER for a neutral fact, and "
                 "especially never for a pain point or something manual/burdensome about how they work "

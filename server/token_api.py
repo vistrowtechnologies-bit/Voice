@@ -25,6 +25,7 @@ import livekit_sip
 import razorpay_client
 import widget_avatars
 import widget_chat
+import voice_catalog
 from help_content import FAQS
 from dotenv import load_dotenv
 from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
@@ -1974,11 +1975,19 @@ def list_agents(user: dict = Depends(current_user)) -> list[dict]:
 
 @app.post("/agents")
 def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    requested_voice = str((data or {}).get("voice") or "")
+    entry = voice_catalog.get_voice(requested_voice) if requested_voice else None
+    if entry and entry.get("preview") and not calls_db.is_platform_owner(user["account_id"]):
+        raise HTTPException(400, "That preview voice is available only to the Vistrow admin account.")
     return calls_db.create_agent(data, user["account_id"])
 
 
 @app.patch("/agents/{agent_id}")
 def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    requested_voice = str((data or {}).get("voice") or "")
+    entry = voice_catalog.get_voice(requested_voice) if requested_voice else None
+    if entry and entry.get("preview") and not calls_db.is_platform_owner(user["account_id"]):
+        raise HTTPException(400, "That preview voice is available only to the Vistrow admin account.")
     if ("isPlatformDemo" in data or "is_platform_demo" in data) and not calls_db.is_platform_owner(
         user["account_id"]
     ):
@@ -3125,7 +3134,10 @@ def voices_preview(voice: str, lang: str = "", user: dict = Depends(current_user
     import voice_catalog
 
     lang = lang or voice_catalog.DEFAULT_SAMPLE_LANG
-    if voice_catalog.get_voice(voice) is None:
+    entry = voice_catalog.get_voice(voice)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Unknown voice.")
+    if entry.get("preview") and not calls_db.is_platform_owner(user["account_id"]):
         raise HTTPException(status_code=404, detail="Unknown voice.")
     if lang not in voice_catalog.SAMPLE_TEXTS:
         raise HTTPException(status_code=400, detail="Unsupported preview language.")

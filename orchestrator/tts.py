@@ -201,14 +201,16 @@ async def synthesize(
                 "gemini-3.1-flash-tts-preview" if is_google_31 else "gemini-2.5-flash-tts",
             )
         except Exception:
-            # Google's non-streaming synthesize_speech has a confirmed live
-            # failure mode — it silently drops a chunk mid-reply even though
-            # the text was already generated (upstream livekit/agents issue
-            # #3347, unresolved). agent/main.py's LiveKit path guards the
-            # same failure with TtsFallbackAdapter; this pipeline has no
-            # adapter abstraction, so finish the utterance on Sarvam
-            # directly rather than the call going silent.
-            return await _synth_sarvam("shubh", "bulbul:v3", reply_language or _SARVAM_LANG_DEFAULT, text, pace, pitch)
+            # Keep the same Gemini persona when the selected model is
+            # temporarily unhealthy: 2.5 tenants silently use 3.1, while a
+            # 3.1 admin/marketing test silently uses 2.5. Never switch the
+            # caller to a visibly different Sarvam speaker mid-conversation.
+            return await _synth_google(
+                voice_string[len(prefix):],
+                text,
+                reply_language,
+                "gemini-2.5-flash-tts" if is_google_31 else "gemini-3.1-flash-tts-preview",
+            )
     model = "bulbul:v2" if voice_string in _SARVAM_V2_SPEAKERS else "bulbul:v3"
     return await _synth_sarvam(voice_string, model, reply_language or _SARVAM_LANG_DEFAULT, text, pace, pitch)
 

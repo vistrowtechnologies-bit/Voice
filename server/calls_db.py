@@ -4468,7 +4468,7 @@ def list_account_voices(account_id: int) -> list[dict]:
     out = []
     for r in rows:
         entry = voice_catalog.get_voice(r["voice_string"])
-        if entry is None:
+        if entry is None or (entry.get("preview") and not is_owner):
             continue  # a voice removed from the catalog since it was added
         out.append(voice_catalog.public_entry(entry, allowed))
     out.sort(key=lambda e: (e["tierRank"], e["name"].lower()))
@@ -4493,13 +4493,18 @@ def voice_catalog_for_account(account_id: int) -> dict:
     allowed = voice_catalog.allowed_tiers_for_plan(plan, is_owner)
     voices = []
     for entry in voice_catalog.CATALOG:
+        if entry.get("preview") and not is_owner:
+            continue
         pub = voice_catalog.public_entry(entry, allowed)
         pub["selected"] = entry["value"] in selected
         voices.append(pub)
     voices.sort(key=lambda e: (e["tierRank"], e["name"].lower()))
     return {
         "voices": voices,
-        "selectedCount": len(selected),
+        # Count only entries this account can actually see. A tenant that
+        # historically selected an admin-preview voice must not get a badge
+        # count that disagrees with the visible menu after the preview gate.
+        "selectedCount": sum(1 for voice in voices if voice["selected"]),
     }
 
 
@@ -4514,6 +4519,8 @@ def add_account_voice(account_id: int, voice_string: str) -> None:
     try:
         with conn:
             plan, is_owner = _account_plan_and_owner(conn, account_id)
+            if entry.get("preview") and not is_owner:
+                raise VoiceMenuError("That preview voice is available only to the Vistrow admin account.")
             allowed = voice_catalog.allowed_tiers_for_plan(plan, is_owner)
             if entry["tier"] not in allowed:
                 label = voice_catalog.TIER_META[entry["tier"]]["label"]

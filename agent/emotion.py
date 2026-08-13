@@ -155,9 +155,24 @@ ELEVENLABS_EMOTION_DELTAS: dict[str, dict[str, float]] = {
 # EMOTION_TONE_DELTAS — it's composed as base-tone sentence + emotion
 # sentence, both plain English, and sent verbatim as the prompt.
 GEMINI_TONE_PROMPTS: dict[str, str] = {
-    "professional": "Speak in a calm, measured, professional tone.",
-    "balanced": "Speak in a natural, warm, conversational tone.",
-    "casual": "Speak in an upbeat, friendly, energetic tone.",
+    "professional": (
+        "Speak like a calm, sharp Indian business consultant in a real one-to-one phone call. "
+        "Be measured and concise, with subtle clause-level pace changes and brief natural pauses. "
+        "Never sound like an announcer, advertisement, IVR, or overly cheerful assistant."
+    ),
+    "balanced": (
+        "Speak like a warm, perceptive Indian business consultant in a real one-to-one phone call. "
+        "Keep the delivery relaxed and responsive, with subtle clause-level pace changes and brief "
+        "natural pauses after acknowledgements. Use Indian-English or Hinglish rhythm only when the "
+        "text naturally contains it. Never sound like an announcer, advertisement, IVR, or overly "
+        "cheerful assistant; do not exaggerate fillers or emotion."
+    ),
+    "casual": (
+        "Speak like a friendly, quick-witted Indian consultant in a relaxed one-to-one phone call. "
+        "Sound engaged rather than performative, vary pace subtly, and leave brief natural pauses. "
+        "Never sound like an announcer, advertisement, IVR, or hyperactive assistant; do not "
+        "exaggerate fillers, jokes, or emotion."
+    ),
 }
 GEMINI_EMOTION_PROMPT_DELTAS: dict[str, str] = {
     "frustrated": "The caller sounds frustrated — speak calmly, patiently, and reassuringly to de-escalate.",
