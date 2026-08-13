@@ -1061,7 +1061,7 @@ class RealEstateAgent(Agent):
             # short multilingual sentences plus a tool call.
             llm=_build_llm(
                 config.get("model") or "gpt-4.1",
-                max_output_tokens=160 if self._is_platform_demo else 220,
+                max_output_tokens=120 if self._is_platform_demo else 220,
             ),
             tts=tts,
             tools=agent_tools,
@@ -1758,7 +1758,16 @@ async def entrypoint(ctx: JobContext) -> None:
     # Silence check-in cadence: how long the caller can be quiet before the
     # session marks user_state "away" and the agent checks in (see below).
     silence_reminder_ms = int(cfg.get("silence_reminder_ms") or 0)
-    away_timeout = silence_reminder_ms / 1000 if silence_reminder_ms > 0 else 6.5
+    # Six-and-a-half seconds is too eager for a public demo: a skeptical
+    # prospect often pauses to think or composes a longer typed message, and
+    # the resulting "are you still there?" lands as an interruption. Give
+    # Artha callers a natural thinking window; tenant agents retain the
+    # existing cadence unless their operator configures another value.
+    away_timeout = (
+        silence_reminder_ms / 1000
+        if silence_reminder_ms > 0
+        else (18.0 if cfg.get("is_platform_demo") else 6.5)
+    )
     silence_reminder_max = int(cfg.get("silence_reminder_max") or 1)
     end_call_on_silence_ms = int(cfg.get("end_call_on_silence_ms") or 0)
     max_call_duration_s = int(cfg.get("max_call_duration_s") or 0)
