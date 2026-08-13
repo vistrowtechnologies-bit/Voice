@@ -131,19 +131,25 @@ const voicePickerGroups = (voices: VoiceEntry[]) => [
     key: tier,
     label: voices.find((v) => v.tier === tier)?.tierLabel ?? tier,
     note: voices.find((v) => v.tier === tier)?.tierNote ?? '',
-    voices: voices.filter((v) => v.tier === tier),
+    voices: voices.filter((v) => v.tier === tier && !v.preview),
   })),
   {
     key: 'sarvam-lite',
     label: 'Vistrow Lite v2',
     note: '0.5x credits · multilingual',
-    voices: voices.filter((v) => v.tier === 'lite' && !v.value.startsWith('google:')),
+    voices: voices.filter((v) => v.tier === 'lite' && !v.value.startsWith('google:') && !v.value.startsWith('google31:')),
+  },
+  {
+    key: 'next-preview',
+    label: 'Vistrow Next Preview',
+    note: '1x credits · testing only · experimental multilingual voices',
+    voices: voices.filter((v) => v.preview),
   },
   {
     key: 'multilingual-lite',
     label: 'Vistrow Multilingual',
     note: '0.5x credits · same voice switches languages live',
-    voices: voices.filter((v) => v.multilingual),
+    voices: voices.filter((v) => v.multilingual && !v.preview),
   },
   {
     key: 'native-lite',

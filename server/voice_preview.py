@@ -34,6 +34,7 @@ _SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY")
 
 _ELEVEN_V3_PREFIX = "elevenlabs-v3:"
 _ELEVEN_PREFIX = "elevenlabs:"
+_GOOGLE_31_PREFIX = "google31:"
 _GOOGLE_PREFIX = "google:"
 _GOOGLE_MULTILINGUAL_VOICES = {"charon", "kore"}
 _SARVAM_V2_SPEAKERS = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
@@ -105,7 +106,7 @@ def _synth_sarvam(speaker: str, model: str, lang: str, text: str) -> tuple[bytes
     return base64.b64decode(b64), "audio/wav"
 
 
-def _synth_google(voice_name: str, lang: str, text: str) -> tuple[bytes, str]:
+def _synth_google(voice_name: str, lang: str, text: str, model_name: str = "gemini-2.5-flash-tts") -> tuple[bytes, str]:
     raw_credentials = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if not raw_credentials:
         raise PreviewError("Google voice preview isn't configured (no service-account credentials).")
@@ -123,7 +124,7 @@ def _synth_google(voice_name: str, lang: str, text: str) -> tuple[bytes, str]:
             "name": voice_name.capitalize() if is_multilingual else voice_name,
         }
         if is_multilingual:
-            voice_kwargs["model_name"] = "gemini-2.5-flash-tts"
+            voice_kwargs["model_name"] = model_name
         response = client.synthesize_speech(
             input=texttospeech.SynthesisInput(text=text),
             voice=texttospeech.VoiceSelectionParams(**voice_kwargs),
@@ -153,6 +154,10 @@ def synthesize(voice_string: str, lang: str) -> tuple[bytes, str]:
         return _synth_elevenlabs(voice_string[len(_ELEVEN_V3_PREFIX):], "eleven_v3", text)
     if voice_string.startswith(_ELEVEN_PREFIX):
         return _synth_elevenlabs(voice_string[len(_ELEVEN_PREFIX):], "eleven_flash_v2_5", text)
+    if voice_string.startswith(_GOOGLE_31_PREFIX):
+        return _synth_google(
+            voice_string[len(_GOOGLE_31_PREFIX):], lang, text, "gemini-3.1-flash-tts-preview"
+        )
     if voice_string.startswith(_GOOGLE_PREFIX):
         return _synth_google(voice_string[len(_GOOGLE_PREFIX):], lang, text)
     model = "bulbul:v2" if voice_string in _SARVAM_V2_SPEAKERS else "bulbul:v3"

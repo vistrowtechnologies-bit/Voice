@@ -4375,6 +4375,8 @@ _ECONOMY_VOICES = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 # _ELEVENLABS_V3_VOICE_PREFIX) ElevenLabs voice forms bill as premium.
 _PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:")
 _ECONOMY_VOICE_PREFIXES = ("google:",)
+# The 3.1 preview is billed at twice Gemini 2.5 Flash TTS, so its explicit
+# test prefix intentionally falls through to the standard 1x credit tier.
 
 
 def voice_tier(voice: str | None) -> str:

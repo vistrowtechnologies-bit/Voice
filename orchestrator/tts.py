@@ -29,6 +29,7 @@ _SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY")
 
 _ELEVEN_V3_PREFIX = "elevenlabs-v3:"
 _ELEVEN_PREFIX = "elevenlabs:"
+_GOOGLE_31_PREFIX = "google31:"
 _GOOGLE_PREFIX = "google:"
 _GOOGLE_MULTILINGUAL_VOICES = {"charon", "kore"}
 _SARVAM_V2_SPEAKERS = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
@@ -115,7 +116,12 @@ async def _synth_sarvam(
     return base64.b64decode(b64), "audio/wav"
 
 
-def _synth_google_sync(voice_name: str, text: str, reply_language: str | None) -> tuple[bytes, str]:
+def _synth_google_sync(
+    voice_name: str,
+    text: str,
+    reply_language: str | None,
+    model_name: str = "gemini-2.5-flash-tts",
+) -> tuple[bytes, str]:
     raw_credentials = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if not raw_credentials:
         raise TTSError("Google voice isn't configured (no service-account credentials).")
@@ -133,7 +139,7 @@ def _synth_google_sync(voice_name: str, text: str, reply_language: str | None) -
             "name": voice_name.capitalize() if is_multilingual else voice_name,
         }
         if is_multilingual:
-            voice_kwargs["model_name"] = "gemini-2.5-flash-tts"
+            voice_kwargs["model_name"] = model_name
         response = client.synthesize_speech(
             input=texttospeech.SynthesisInput(text=text),
             voice=texttospeech.VoiceSelectionParams(**voice_kwargs),
@@ -150,8 +156,13 @@ def _synth_google_sync(voice_name: str, text: str, reply_language: str | None) -
     return response.audio_content, "audio/wav"
 
 
-async def _synth_google(voice_name: str, text: str, reply_language: str | None) -> tuple[bytes, str]:
-    return await asyncio.to_thread(_synth_google_sync, voice_name, text, reply_language)
+async def _synth_google(
+    voice_name: str,
+    text: str,
+    reply_language: str | None,
+    model_name: str = "gemini-2.5-flash-tts",
+) -> tuple[bytes, str]:
+    return await asyncio.to_thread(_synth_google_sync, voice_name, text, reply_language, model_name)
 
 
 async def synthesize(
@@ -179,9 +190,16 @@ async def synthesize(
     if voice_string.startswith(_ELEVEN_PREFIX):
         lang = reply_language.split("-")[0] if reply_language else None
         return await _synth_elevenlabs(voice_string[len(_ELEVEN_PREFIX):], "eleven_flash_v2_5", text, lang, speed, style)
-    if voice_string.startswith(_GOOGLE_PREFIX):
+    if voice_string.startswith((_GOOGLE_31_PREFIX, _GOOGLE_PREFIX)):
+        is_google_31 = voice_string.startswith(_GOOGLE_31_PREFIX)
+        prefix = _GOOGLE_31_PREFIX if is_google_31 else _GOOGLE_PREFIX
         try:
-            return await _synth_google(voice_string[len(_GOOGLE_PREFIX):], text, reply_language)
+            return await _synth_google(
+                voice_string[len(prefix):],
+                text,
+                reply_language,
+                "gemini-3.1-flash-tts-preview" if is_google_31 else "gemini-2.5-flash-tts",
+            )
         except Exception:
             # Google's non-streaming synthesize_speech has a confirmed live
             # failure mode — it silently drops a chunk mid-reply even though
@@ -203,6 +221,6 @@ def tts_provider_of(voice_string: str) -> str:
         return "elevenlabs-v3"
     if voice_string.startswith(_ELEVEN_PREFIX):
         return "elevenlabs"
-    if voice_string.startswith(_GOOGLE_PREFIX):
+    if voice_string.startswith((_GOOGLE_31_PREFIX, _GOOGLE_PREFIX)):
         return "google"
     return "sarvam"

@@ -544,6 +544,8 @@ export interface VoiceEntry {
   // True when one voice persona can retain its identity while the call
   // switches between supported languages.
   multilingual: boolean
+  // Test-only preview model; shown separately from stable production voices.
+  preview: boolean
   selected?: boolean
 }
 

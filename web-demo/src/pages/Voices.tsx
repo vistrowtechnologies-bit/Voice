@@ -241,7 +241,9 @@ export function Voices() {
   }
 
   const byTier = (tier: VoiceTier) => (data?.voices ?? []).filter((v) => v.tier === tier)
-  const sarvamLite = () => byTier('lite').filter((v) => !v.value.startsWith('google:'))
+  const stableByTier = (tier: VoiceTier) => byTier(tier).filter((v) => !v.preview)
+  const previewVoices = () => (data?.voices ?? []).filter((v) => v.preview)
+  const sarvamLite = () => byTier('lite').filter((v) => !v.value.startsWith('google:') && !v.value.startsWith('google31:'))
   const multilingualLite = () => byTier('lite').filter((v) => v.multilingual)
   const nativeLite = () => byTier('lite').filter((v) => v.value.startsWith('google:') && !v.multilingual)
 
@@ -292,14 +294,14 @@ export function Voices() {
             )}
 
             <TierGroup
-              entries={byTier('premium')}
+              entries={stableByTier('premium')}
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
               onRemove={onRemove}
             />
             <TierGroup
-              entries={byTier('standard')}
+              entries={stableByTier('standard')}
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
@@ -309,6 +311,15 @@ export function Voices() {
               entries={sarvamLite()}
               label="Vistrow Lite v2"
               note="0.5x credits · multilingual"
+              lang={lang}
+              busyVoice={busyVoice}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
+            <TierGroup
+              entries={previewVoices()}
+              label="Vistrow Next Preview"
+              note="1x credits · testing only · experimental multilingual voices"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}

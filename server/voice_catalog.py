@@ -13,6 +13,7 @@ calls_db.voice_tier() — the prefix convention there and here must agree:
   - "elevenlabs:<id>"     → ElevenLabs Flash v2.5  → tier "premium"      (2x credits)
   - "elevenlabs-v3:<id>"  → ElevenLabs v3          → tier "premium_plus" (2x credits)
   - "google:<voice>"      → Google Cloud / Gemini TTS → tier "lite"      (0.5x credits)
+  - "google31:<voice>"    → next-generation TTS preview → tier "standard" (1x credits)
   - bare Sarvam bulbul:v2 speaker (abhilash/anushka) → tier "lite"       (0.5x credits)
   - any other bare name (Sarvam bulbul:v3)           → tier "standard"   (1x credits)
 
@@ -88,6 +89,10 @@ CATALOG: list[dict] = [
     # so the existing service-account credential is sufficient.
     {"value": "google:kore", "name": "Mira", "gender": "female", "tier": "lite", "multilingual": True, "note": "Same voice across languages"},
     {"value": "google:charon", "name": "Arin", "gender": "male", "tier": "lite", "multilingual": True, "note": "Same voice across languages"},
+    # Explicit opt-in test voices for the newer preview model. Keep a distinct
+    # value prefix so existing Mira/Arin agents remain on the stable 2.5 model.
+    {"value": "google31:kore", "name": "Mira Next (Preview)", "gender": "female", "tier": "standard", "multilingual": True, "preview": True, "note": "Next-generation multilingual preview · testing only"},
+    {"value": "google31:charon", "name": "Arin Next (Preview)", "gender": "male", "tier": "standard", "multilingual": True, "preview": True, "note": "Next-generation multilingual preview · testing only"},
     # Google Cloud Standard — locale-specific economy alternatives.
     {"value": "google:en-IN-Standard-D", "name": "Aarav (English)", "gender": "female", "tier": "lite", "force_lang": "en"},
     {"value": "google:en-IN-Standard-B", "name": "Kabir (English)", "gender": "male", "tier": "lite", "force_lang": "en"},
@@ -232,4 +237,5 @@ def public_entry(entry: dict, allowed_tiers: set[str]) -> dict:
         # English), the Hindi sample line wouldn't demonstrate it.
         "forceLang": entry.get("force_lang", ""),
         "multilingual": bool(entry.get("multilingual")),
+        "preview": bool(entry.get("preview")),
     }
