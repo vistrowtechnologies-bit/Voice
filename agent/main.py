@@ -4,6 +4,7 @@ import logging
 import os
 import random
 import re
+import time
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
@@ -1120,6 +1121,13 @@ class RealEstateAgent(Agent):
         if self._first_speaker == "user":
             self.session.userdata["greeting_played"] = True
             return
+        # See the [latency] markers in entrypoint() — this is the last
+        # segment: how long after dispatch the greeting's TTS call actually
+        # starts, vs. how long the call itself (session.say(), which awaits
+        # until the line is queued for playout) takes.
+        dispatch_t0 = getattr(self, "_dispatch_t0", None)
+        if dispatch_t0 is not None:
+            logger.info("[latency] on_enter starting at +%.2fs", time.monotonic() - dispatch_t0)
         try:
             if self._welcome_message:
                 # Operator wrote an exact opening line — speak it verbatim
@@ -1157,6 +1165,8 @@ class RealEstateAgent(Agent):
             # behind it, so the caller hears the opener immediately followed
             # by "are you still there?" before they've had a chance to speak.
             self.session.userdata["greeting_played"] = True
+            if dispatch_t0 is not None:
+                logger.info("[latency] greeting say() returned at +%.2fs", time.monotonic() - dispatch_t0)
 
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
@@ -1641,6 +1651,15 @@ async def _post_call_analysis(
 
 
 async def entrypoint(ctx: JobContext) -> None:
+    # Click-to-first-audio latency has real complaints behind it (marketing
+    # demo felt like a 5-6s dead pause before the greeting), but the per-turn
+    # provider metrics (session "metrics_collected") only cover the LLM/TTS
+    # hops — they don't explain time spent before entrypoint even starts
+    # doing anything, or between here and the greeting's first TTS call.
+    # These markers exist to find out which segment (dispatch -> connect ->
+    # caller-joins -> config-loaded -> greeting-TTS-starts) actually owns the
+    # delay, instead of guessing.
+    _t0 = time.monotonic()
     logger.info("starting session in room %s", ctx.room.name)
     call_context = _call_context_from_job(ctx)
     # The agent-config lookup is a synchronous psycopg call — run it in a
@@ -1649,6 +1668,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # (which also hosts every other concurrent call's session).
     config_task = asyncio.create_task(asyncio.to_thread(db.get_agent_config, call_context["agent_id"]))
     await ctx.connect()
+    logger.info("[latency] room connected at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # Don't say a word until the caller is actually in the room. Widget
     # rooms are pre-created at token-issuance time (to carry visitor
     # metadata), so this job usually starts BEFORE the visitor's browser
@@ -1662,6 +1682,7 @@ async def entrypoint(ctx: JobContext) -> None:
     except asyncio.TimeoutError:
         logger.warning("no caller joined room %s within 90s — abandoning job", ctx.room.name)
         return
+    logger.info("[latency] caller joined at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # /widget/warm pre-creates the room (to give the agent a head start
     # waking up) before the visitor has typed their name/phone/email, so
     # call_context above may have been read from a metadata snapshot that
@@ -1727,6 +1748,9 @@ async def entrypoint(ctx: JobContext) -> None:
         }
         cfg = config
     agent = RealEstateAgent(config, call_context["visitor_name"], call_context["visitor_phone"])
+    # See the [latency] markers above/below — lets on_enter() log its own
+    # elapsed-since-dispatch time around the greeting's TTS call.
+    agent._dispatch_t0 = _t0
     userdata = {
         "room": ctx.room,
         "lead_data": lead_data,
@@ -2128,11 +2152,13 @@ async def entrypoint(ctx: JobContext) -> None:
 
     ctx.room.on("data_received", _on_data_received)
 
+    logger.info("[latency] session.start() beginning at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     await session.start(
         agent=agent,
         room=ctx.room,
         room_input_options=RoomInputOptions(noise_cancellation=noise_filter),
     )
+    logger.info("[latency] session.start() returned at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # Started only after the session (and therefore both the caller's and
     # the agent's audio tracks) is actually up — see recording.py for why
     # this taps tracks directly instead of LiveKit's own record=True/Egress.

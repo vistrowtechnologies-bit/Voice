@@ -402,6 +402,12 @@ const STATE_LABELS: Record<string, string> = {
   thinking: 'Thinking…',
   speaking: 'Agent is speaking…',
 }
+// Shown before lk.agent.state has any value yet — the window between the
+// agent joining the room and it actually starting its turn (dispatch/cold
+// start/greeting synthesis). Defaulting this to 'Listening…' read as "the
+// agent skipped its greeting and is waiting on the caller", which isn't
+// what's happening — it just hasn't started yet.
+const WAITING_LABEL = 'Connecting…'
 
 // Rendered inside <LiveKitRoom> once connected - same card, same footprint,
 // swapped from the idle "Tap to talk" content to live call state: a running
@@ -542,7 +548,7 @@ function InlineOrchestratorCallBody({
       </div>
 
       {connected ? (
-        <p className="mt-5 text-sm text-text-muted">{STATE_LABELS[agentState ?? ''] ?? 'Listening…'}</p>
+        <p className="mt-5 text-sm text-text-muted">{STATE_LABELS[agentState ?? ''] ?? WAITING_LABEL}</p>
       ) : (
         <p className="mt-5 text-sm text-text-muted">Connecting to Artha…</p>
       )}
@@ -623,5 +629,5 @@ function AgentVisual({ agentParticipant }: { agentParticipant: RemoteParticipant
 // the orb - same gating rule applies: only mount once agentParticipant exists.
 function AgentStateLabel({ agentParticipant }: { agentParticipant: RemoteParticipant }) {
   const agentState = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
-  return <p className="mt-5 text-sm text-text-muted">{STATE_LABELS[agentState ?? ''] ?? 'Listening…'}</p>
+  return <p className="mt-5 text-sm text-text-muted">{STATE_LABELS[agentState ?? ''] ?? WAITING_LABEL}</p>
 }
