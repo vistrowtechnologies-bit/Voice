@@ -250,6 +250,7 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     notify_billing INTEGER DEFAULT 1,
     notify_product INTEGER DEFAULT 0,
     dashboard_checklist_dismissed INTEGER DEFAULT 0,
+    dashboard_hidden_cards TEXT DEFAULT '[]',
     updated_at TEXT DEFAULT {_NOW}
 );
 
@@ -891,6 +892,9 @@ def init_tables() -> None:
             conn.execute(
                 "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS dashboard_checklist_dismissed INTEGER DEFAULT 0"
             )
+            conn.execute(
+                "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS dashboard_hidden_cards TEXT DEFAULT '[]'"
+            )
             # Surfaces *why* a live-call delivery to an integration failed
             # (e.g. "invalid token — reconnect") without flipping status away
             # from 'connected' — the operator's saved config is still good,
@@ -1227,6 +1231,7 @@ def update_user_preferences(user_id: int, values: dict) -> dict:
         "notify_billing",
         "notify_product",
         "dashboard_checklist_dismissed",
+        "dashboard_hidden_cards",
     }
     updates = {key: value for key, value in values.items() if key in allowed and value is not None}
     if not updates:
@@ -2060,6 +2065,66 @@ def usage_trends(account_id: int, days: int = 14) -> dict:
             "calls": [r["total"] for r in rows],
             "qualified": [r["qualified"] for r in rows],
             "minutes": [round(r["minutes"], 1) for r in rows],
+        }
+    finally:
+        conn.close()
+
+
+def period_comparison(account_id: int, days: int = 14) -> dict:
+    """Compare the selected rolling period with the equally sized period
+    immediately before it. One query keeps every dashboard KPI on the same
+    date boundary and avoids misleading comparisons assembled client-side."""
+    days = max(1, min(int(days), 90))
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT
+              COUNT(*) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval) current_calls,
+              COUNT(*) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval AND lead_name IS NOT NULL) current_qualified,
+              COUNT(*) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval AND site_visit_json IS NOT NULL) current_booked,
+              COALESCE(SUM(duration_seconds) FILTER (WHERE started_at::date >= CURRENT_DATE - (? || ' days')::interval), 0) current_seconds,
+              COUNT(*) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval) previous_calls,
+              COUNT(*) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval AND lead_name IS NOT NULL) previous_qualified,
+              COUNT(*) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval AND site_visit_json IS NOT NULL) previous_booked,
+              COALESCE(SUM(duration_seconds) FILTER (WHERE started_at::date < CURRENT_DATE - (? || ' days')::interval AND started_at::date >= CURRENT_DATE - (? || ' days')::interval), 0) previous_seconds
+            FROM calls WHERE account_id = ?
+            """,
+            (
+                str(days - 1), str(days - 1), str(days - 1), str(days - 1),
+                str(days - 1), str((days * 2) - 1),
+                str(days - 1), str((days * 2) - 1),
+                str(days - 1), str((days * 2) - 1),
+                str(days - 1), str((days * 2) - 1), account_id,
+            ),
+        ).fetchone()
+
+        def snapshot(prefix: str) -> dict:
+            calls = row[f"{prefix}_calls"] or 0
+            qualified = row[f"{prefix}_qualified"] or 0
+            booked = row[f"{prefix}_booked"] or 0
+            return {
+                "calls": calls,
+                "qualified": qualified,
+                "booked": booked,
+                "minutes": round((row[f"{prefix}_seconds"] or 0) / 60, 1),
+                "qualificationRate": round(qualified * 100 / calls, 1) if calls else 0,
+                "bookingRate": round(booked * 100 / calls, 1) if calls else 0,
+            }
+
+        current, previous = snapshot("current"), snapshot("previous")
+
+        def change(key: str) -> float | None:
+            before = previous[key]
+            if before == 0:
+                return None if current[key] == 0 else 100.0
+            return round((current[key] - before) * 100 / before, 1)
+
+        return {
+            "days": days,
+            "current": current,
+            "previous": previous,
+            "change": {key: change(key) for key in ("calls", "qualified", "booked", "minutes")},
         }
     finally:
         conn.close()

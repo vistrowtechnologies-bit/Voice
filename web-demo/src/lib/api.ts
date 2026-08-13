@@ -12,6 +12,7 @@ import type {
   ContactDetail,
   CsvPreview,
   DashboardSummary,
+  DashboardPeriodComparison,
   FeedbackSummary,
   HelpChatMessage,
   HelpFaq,
@@ -117,6 +118,7 @@ export const fetchActiveCalls = () => get<ActiveCallInfo[]>('/active-calls')
 
 export const fetchDashboardSummary = () => get<DashboardSummary>('/dashboard/summary')
 export const fetchUsageTrends = (days = 14) => get<UsageTrends>(`/dashboard/usage-trends?days=${days}`)
+export const fetchPeriodComparison = (days = 14) => get<DashboardPeriodComparison>(`/dashboard/period-comparison?days=${days}`)
 export const fetchAnalytics = () => get<Analytics>('/dashboard/analytics')
 export const fetchLaunchReadiness = () => get<LaunchReadiness>('/dashboard/launch-readiness')
 export const fetchFeedbackSummary = () => get<FeedbackSummary>('/dashboard/feedback')

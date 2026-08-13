@@ -1243,6 +1243,7 @@ class PreferencesRequest(BaseModel):
     notify_billing: bool | None = None
     notify_product: bool | None = None
     dashboard_checklist_dismissed: bool | None = None
+    dashboard_hidden_cards: str | None = None
 
 
 @app.get("/profile/preferences")
@@ -1257,6 +1258,15 @@ def update_profile_preferences(req: PreferencesRequest, user: dict = Depends(cur
         raise HTTPException(400, "Unsupported language")
     if values.get("timezone") and "/" not in values["timezone"] and values["timezone"] != "UTC":
         raise HTTPException(400, "Use a valid IANA timezone")
+    if "dashboard_hidden_cards" in values:
+        try:
+            hidden_cards = json.loads(values["dashboard_hidden_cards"])
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Dashboard card preferences must be a JSON list")
+        allowed_cards = {"attention", "quick_actions", "funnel", "followups", "appointments", "channels", "feedback"}
+        if not isinstance(hidden_cards, list) or len(hidden_cards) > len(allowed_cards) or any(card not in allowed_cards for card in hidden_cards):
+            raise HTTPException(400, "Unknown dashboard card preference")
+        values["dashboard_hidden_cards"] = json.dumps(list(dict.fromkeys(hidden_cards)))
     return calls_db.update_user_preferences(user["user_id"], values)
 
 
@@ -1932,6 +1942,11 @@ def dashboard_summary(user: dict = Depends(current_user)) -> dict:
 @app.get("/dashboard/usage-trends")
 def dashboard_usage_trends(days: int = 14, user: dict = Depends(current_user)) -> dict:
     return calls_db.usage_trends(user["account_id"], days=days)
+
+
+@app.get("/dashboard/period-comparison")
+def dashboard_period_comparison(days: int = 14, user: dict = Depends(current_user)) -> dict:
+    return calls_db.period_comparison(user["account_id"], days=days)
 
 
 @app.get("/dashboard/analytics")

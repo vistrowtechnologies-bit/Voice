@@ -166,6 +166,22 @@ export interface UsageTrends {
   minutes: number[]
 }
 
+export interface DashboardPeriodSnapshot {
+  calls: number
+  qualified: number
+  booked: number
+  minutes: number
+  qualificationRate: number
+  bookingRate: number
+}
+
+export interface DashboardPeriodComparison {
+  days: number
+  current: DashboardPeriodSnapshot
+  previous: DashboardPeriodSnapshot
+  change: Record<'calls' | 'qualified' | 'booked' | 'minutes', number | null>
+}
+
 export interface ChannelStats {
   channel: string
   calls: number
