@@ -11,6 +11,13 @@ import {
   apiTeamMembers,
   apiUpdateAccount,
   apiUpdateProfileAvatar,
+  apiRequestEmailChange,
+  apiProfilePreferences,
+  apiRequestDataExport,
+  apiRequestAccountDeletion,
+  apiSecurityEvents,
+  apiSignOutOthers,
+  apiUpdateProfilePreferences,
   apiUpdateMemberRole,
   apiUpdateProfile,
   hasRole,
@@ -33,7 +40,7 @@ function SettingsCard({ title, subtitle, children }: { title: string; subtitle: 
   )
 }
 
-type Tab = 'general' | 'profile' | 'security' | 'team' | 'apiKeys' | 'availability'
+type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'team' | 'apiKeys' | 'availability'
 type TabGroup = { label: string; tabs: { id: Tab; label: string; description: string; icon: string }[] }
 
 const TAB_GROUPS: TabGroup[] = [
@@ -50,6 +57,7 @@ const TAB_GROUPS: TabGroup[] = [
     tabs: [
       { id: 'profile', label: 'My profile', description: 'Your name and sign-in email', icon: 'person' },
       { id: 'security', label: 'Sign-in & security', description: 'Password and account protection', icon: 'lock' },
+      { id: 'preferences', label: 'Preferences', description: 'Personal timezone, language and alerts', icon: 'tune' },
     ],
   },
   {
@@ -118,6 +126,7 @@ export function Settings() {
           {tab === 'general' && <GeneralTab />}
           {tab === 'profile' && <ProfileTab />}
           {tab === 'security' && <SecurityTab />}
+          {tab === 'preferences' && <PreferencesTab />}
           {tab === 'team' && <TeamTab canManage={hasRole(user, 'admin')} />}
           {tab === 'apiKeys' && <ApiKeysCard canManage={hasRole(user, 'admin')} />}
           {tab === 'availability' && <AvailabilityTab canManage={hasRole(user, 'admin')} />}
@@ -201,6 +210,8 @@ function ProfileTab() {
   const [profileName, setProfileName] = useState(user?.name || '')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [newEmail, setNewEmail] = useState('')
+  const [emailBusy, setEmailBusy] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
@@ -236,6 +247,21 @@ function ProfileTab() {
     } finally {
       setUploading(false)
       if (avatarInputRef.current) avatarInputRef.current.value = ''
+    }
+  }
+
+  const requestEmailChange = async () => {
+    if (!newEmail.trim()) return
+    setEmailBusy(true)
+    setMsg(null)
+    try {
+      await apiRequestEmailChange(newEmail.trim())
+      setMsg({ type: 'ok', text: `We sent a confirmation link to ${newEmail.trim()}.` })
+      setNewEmail('')
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Could not request the email change.' })
+    } finally {
+      setEmailBusy(false)
     }
   }
 
@@ -277,6 +303,28 @@ function ProfileTab() {
           className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text-muted outline-none"
         />
       </div>
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-high/30 p-3">
+        <div>
+          <p className="text-sm font-bold">Change sign-in email</p>
+          <p className="text-xs text-text-muted">A confirmation link will be sent to the new address before anything changes.</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="new@company.com"
+            className="flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+          <button
+            onClick={requestEmailChange}
+            disabled={emailBusy || !newEmail.trim()}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-bold transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
+          >
+            {emailBusy ? 'Sending…' : 'Verify new email'}
+          </button>
+        </div>
+      </div>
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-semibold text-text-muted">Name</span>
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -310,8 +358,11 @@ function SecurityTab() {
   const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+  const [events, setEvents] = useState<{ event: string; provider: string; user_agent: string; created_at: string }[]>([])
+  const [endingSessions, setEndingSessions] = useState(false)
 
   const hasPassword = user?.passwordSet !== false
+  useEffect(() => { apiSecurityEvents().then(setEvents).catch(() => setEvents([])) }, [])
   const save = async () => {
     if ((hasPassword && !currentPassword) || newPassword.length < 8) return
     setSaving(true)
@@ -327,6 +378,19 @@ function SecurityTab() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const signOutOthers = async () => {
+    setEndingSessions(true)
+    try {
+      const { user: updated } = await apiSignOutOthers()
+      setUser(updated)
+      const next = await apiSecurityEvents()
+      setEvents(next)
+      setMsg({ type: 'ok', text: 'Other sessions were signed out.' })
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Could not sign out other sessions.' })
+    } finally { setEndingSessions(false) }
   }
 
   return (
@@ -383,8 +447,81 @@ function SecurityTab() {
           Send reset link
         </a>
       </SettingsCard>
+
+      <SettingsCard title="Active sign-in methods" subtitle="You can continue using the sign-in method shown here. Creating a password adds email sign-in; it does not remove OAuth access.">
+        <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+          <span className="flex items-center gap-2 text-sm font-semibold"><Icon name="verified_user" className="text-[17px] text-success" /> {hasPassword ? 'Email and password' : 'Email and password not set'}</span>
+          <span className="text-xs text-text-muted">{hasPassword ? 'Available' : 'Optional'}</span>
+        </div>
+        {user?.authProvider && user.authProvider !== 'password' && (
+          <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+            <span className="flex items-center gap-2 text-sm font-semibold"><Icon name="login" className="text-[17px] text-primary" /> {user.authProvider[0].toUpperCase() + user.authProvider.slice(1)}</span>
+            <span className="text-xs text-success">Available</span>
+          </div>
+        )}
+      </SettingsCard>
+
+      <SettingsCard title="Sessions & recent security activity" subtitle="End other browser sessions if you no longer recognise a device.">
+        <button onClick={signOutOthers} disabled={endingSessions} className="self-start rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-destructive hover:text-destructive disabled:opacity-40">
+          {endingSessions ? 'Signing out…' : 'Sign out of other sessions'}
+        </button>
+        <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
+          {events.length === 0 ? <p className="px-3 py-3 text-xs text-text-muted">No security activity recorded yet.</p> : events.map((event, index) => (
+            <div key={`${event.event}-${event.created_at}-${index}`} className="flex items-start gap-2 px-3 py-2.5">
+              <Icon name="security" className="mt-0.5 text-[16px] text-text-muted" />
+              <div className="min-w-0"><p className="text-xs font-semibold">{event.event.replaceAll('_', ' ')}</p><p className="text-[11px] text-text-muted">{formatDateTime(event.created_at)}{event.provider ? ` · ${event.provider}` : ''}</p></div>
+            </div>
+          ))}
+        </div>
+      </SettingsCard>
     </div>
   )
+}
+
+function PreferencesTab() {
+  const [prefs, setPrefs] = useState<{ timezone: string; language: 'en' | 'hi'; notify_leads: boolean; notify_calls: boolean; notify_billing: boolean; notify_product: boolean } | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [action, setAction] = useState<'export' | 'delete' | null>(null)
+
+  useEffect(() => { apiProfilePreferences().then(setPrefs).catch(() => setPrefs(null)) }, [])
+  const save = async (next: NonNullable<typeof prefs>) => {
+    setPrefs(next); setSaving(true); setMessage(null)
+    try { setPrefs(await apiUpdateProfilePreferences(next)); setMessage('Preferences saved.') }
+    catch (err) { setMessage(err instanceof Error ? err.message : 'Could not save preferences.') }
+    finally { setSaving(false) }
+  }
+  const request = async (kind: 'export' | 'delete') => {
+    setAction(kind); setMessage(null)
+    try {
+      if (kind === 'export') await apiRequestDataExport(); else await apiRequestAccountDeletion()
+      setMessage(kind === 'export' ? 'Your export request was received. We’ll email the next steps.' : 'Your deletion request was received. We’ll verify ownership by email before any data is removed.')
+    } catch (err) { setMessage(err instanceof Error ? err.message : 'Could not send request.') }
+    finally { setAction(null) }
+  }
+  if (!prefs) return <SettingsCard title="Preferences" subtitle="Personal dashboard settings."><p className="text-xs text-text-muted">Loading…</p></SettingsCard>
+  const Toggle = ({ field, label, description }: { field: 'notify_leads' | 'notify_calls' | 'notify_billing' | 'notify_product'; label: string; description: string }) => (
+    <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border px-3 py-2.5">
+      <span><span className="block text-sm font-semibold">{label}</span><span className="block text-xs text-text-muted">{description}</span></span>
+      <input type="checkbox" checked={prefs[field]} onChange={(e) => save({ ...prefs, [field]: e.target.checked })} className="h-4 w-4 accent-primary" />
+    </label>
+  )
+  return <div className="flex flex-col gap-4">
+    <SettingsCard title="Personal preferences" subtitle="These settings affect your own dashboard experience, not your team’s shared booking schedule.">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Preferred language<select value={prefs.language} onChange={(e) => save({ ...prefs, language: e.target.value as 'en' | 'hi' })} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary"><option value="en">English</option><option value="hi">Hindi</option></select><span className="font-normal text-[11px]">Used for your account communication preferences.</span></label>
+        <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Your timezone<TimezoneSelect value={prefs.timezone} onChange={(timezone) => save({ ...prefs, timezone })} /></label>
+      </div>
+      {saving && <p className="text-xs text-text-muted">Saving…</p>}
+    </SettingsCard>
+    <SettingsCard title="Notifications" subtitle="Choose the operational emails you receive personally.">
+      <div className="flex flex-col gap-2"><Toggle field="notify_leads" label="Qualified leads" description="New lead and follow-up alerts." /><Toggle field="notify_calls" label="Call issues" description="Important failed-call and delivery alerts." /><Toggle field="notify_billing" label="Billing" description="Credit, invoice, and plan notices." /><Toggle field="notify_product" label="Product updates" description="Occasional Vistrow Voice release updates." /></div>
+    </SettingsCard>
+    <SettingsCard title="Your data" subtitle="Request a copy of your personal account data or start a verified deletion request.">
+      <div className="flex flex-wrap gap-2"><button onClick={() => request('export')} disabled={action !== null} className="rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary hover:text-primary">{action === 'export' ? 'Requesting…' : 'Request data export'}</button><button onClick={() => request('delete')} disabled={action !== null} className="rounded-lg border border-destructive/50 px-4 py-2 text-sm font-bold text-destructive hover:bg-destructive/10">{action === 'delete' ? 'Requesting…' : 'Request account deletion'}</button></div>
+    </SettingsCard>
+    {message && <p className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-muted">{message}</p>}
+  </div>
 }
 
 const ROLE_LABELS: Record<string, string> = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'Viewer' }

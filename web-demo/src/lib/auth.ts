@@ -82,6 +82,22 @@ export const apiUpdateProfileAvatar = async (image: File) => {
   if (!res.ok) throw new Error(data?.detail || `Request failed (${res.status})`)
   return data as { user: AuthUser }
 }
+export const apiRequestEmailChange = (email: string) => authFetch<{ ok: boolean }>('/profile/request-email-change', { email })
+export const apiConfirmEmailChange = (token: string) => authFetch<{ ok: boolean; user: AuthUser }>(`/auth/confirm-email-change?token=${encodeURIComponent(token)}`)
+export interface UserPreferences {
+  timezone: string
+  language: 'en' | 'hi'
+  notify_leads: boolean
+  notify_calls: boolean
+  notify_billing: boolean
+  notify_product: boolean
+}
+export const apiProfilePreferences = () => authFetch<UserPreferences>('/profile/preferences')
+export const apiUpdateProfilePreferences = (data: Partial<UserPreferences>) => authFetch<UserPreferences>('/profile/preferences', data, 'PATCH')
+export const apiSecurityEvents = () => authFetch<{ event: string; provider: string; user_agent: string; created_at: string }[]>('/profile/security-events')
+export const apiSignOutOthers = () => authFetch<{ ok: boolean; user: AuthUser }>('/profile/sign-out-others', {})
+export const apiRequestDataExport = () => authFetch<{ ok: boolean }>('/profile/request-data-export', {})
+export const apiRequestAccountDeletion = () => authFetch<{ ok: boolean }>('/profile/request-account-deletion', {})
 export const apiUpdateAccount = (name: string) => authFetch<{ user: AuthUser }>('/account', { name }, 'PATCH')
 export const apiCompleteOnboarding = () => authFetch<{ user: AuthUser }>('/onboarding/complete', {})
 export const apiCompleteTour = () => authFetch<{ user: AuthUser }>('/tour/complete', {})

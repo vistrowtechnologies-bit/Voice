@@ -102,6 +102,9 @@ async def require_session(request: Request, call_next):
         return await call_next(request)
     session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
     if session is not None:
+        profile = calls_db.get_user_by_id(session["uid"])
+        if profile is None or int(profile.get("session_version") or 1) != int(session.get("sv") or 1):
+            return JSONResponse({"detail": "Session expired — please sign in again"}, status_code=401)
         # Stash for downstream handlers/dependencies (Phase 3 scopes queries by it).
         request.state.user_id = session["uid"]
         request.state.account_id = session["aid"]
@@ -292,9 +295,10 @@ class LoginRequest(BaseModel):
 
 
 def _set_session_cookie(response: Response, user_id: int, account_id: int) -> None:
+    profile = calls_db.get_user_by_id(user_id)
     response.set_cookie(
         auth.COOKIE_NAME,
-        auth.make_session_token(user_id, account_id),
+        auth.make_session_token(user_id, account_id, session_version=int((profile or {}).get("session_version") or 1)),
         max_age=auth.SESSION_TTL_SECONDS,
         httponly=True,
         secure=_COOKIE_SECURE,
@@ -922,6 +926,8 @@ def auth_reset_password(req: ResetPasswordRequest, response: Response) -> dict:
     if user_id is None:
         raise HTTPException(400, "This reset link is invalid or has expired")
     calls_db.update_user_profile(user_id, password_hash=auth.hash_password(req.password))
+    calls_db.invalidate_other_sessions(user_id)
+    calls_db.record_security_event(user_id, "password_reset")
     # Log them straight in on success.
     user = calls_db.get_user_by_id(user_id)
     if user is not None:
@@ -977,6 +983,9 @@ def auth_me(request: Request) -> dict:
     session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
     if session is None:
         raise HTTPException(401, "Not authenticated")
+    profile = calls_db.get_user_by_id(session["uid"])
+    if profile is None or int(profile.get("session_version") or 1) != int(session.get("sv") or 1):
+        raise HTTPException(401, "Session expired — please sign in again")
     return {"user": _me_payload(session["uid"], session.get("imp"))}
 
 
@@ -987,7 +996,7 @@ class UpdateProfileRequest(BaseModel):
 
 
 @app.patch("/profile")
-def update_profile(req: UpdateProfileRequest, user: dict = Depends(current_user)) -> dict:
+def update_profile(req: UpdateProfileRequest, response: Response, user: dict = Depends(current_user)) -> dict:
     name = req.name.strip() if req.name is not None else None
     if name is not None and not name:
         raise HTTPException(400, "Name can't be empty")
@@ -1012,6 +1021,10 @@ def update_profile(req: UpdateProfileRequest, user: dict = Depends(current_user)
         user["user_id"], name=name, password_hash=password_hash,
         password_set=True if password_hash is not None else None,
     )
+    if password_hash is not None:
+        calls_db.invalidate_other_sessions(user["user_id"])
+        calls_db.record_security_event(user["user_id"], "password_changed")
+        _set_session_cookie(response, user["user_id"], user["account_id"])
     return {"user": _me_payload(user["user_id"])}
 
 
@@ -1079,6 +1092,127 @@ def update_account(req: UpdateAccountRequest, user: dict = Depends(current_user)
         raise HTTPException(400, "Company name can't be empty")
     calls_db.update_account(user["account_id"], name=name)
     return {"user": _me_payload(user["user_id"])}
+
+
+class EmailChangeRequest(BaseModel):
+    email: str
+
+
+@app.post("/profile/request-email-change")
+def request_email_change(req: EmailChangeRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+    new_email = req.email.strip().lower()
+    if "@" not in new_email or "." not in new_email.rsplit("@", 1)[-1]:
+        raise HTTPException(400, "Enter a valid email address")
+    profile = calls_db.get_user_by_id(user["user_id"])
+    if profile is None:
+        raise HTTPException(404, "Account not found")
+    if new_email == profile["email"].lower():
+        raise HTTPException(400, "That is already your sign-in email")
+    if calls_db.email_exists(new_email):
+        raise HTTPException(409, "An account already uses that email address")
+    # A passwordless OAuth account cannot safely move its identity away from
+    # the provider email. Ask it to create a password first, then it can use
+    # email sign-in even if the provider identity remains unchanged.
+    if not profile.get("password_set", True):
+        raise HTTPException(400, "Create a password first, then change your sign-in email")
+    token = calls_db.create_email_change_request(user["user_id"], new_email)
+    link = f"{_app_base_url(request)}/confirm-email-change?token={token}"
+    html = email_sender.render_email(
+        preheader="Confirm your new Vistrow Voice sign-in email",
+        heading="Confirm your new email",
+        body_html=(
+            f"Hi {profile['name']}, confirm <b>{new_email}</b> as your new Vistrow Voice sign-in email. "
+            "This link is valid for one hour. If you did not request this change, you can ignore this email."
+        ),
+        cta_label="Confirm new email",
+        cta_url=link,
+    )
+    email_sender.send_email(new_email, "Confirm your new Vistrow Voice email", html, email_sender.FROM_ACCOUNT_SECURITY)
+    calls_db.record_security_event(user["user_id"], "email_change_requested", user_agent=request.headers.get("user-agent", ""))
+    return {"ok": True}
+
+
+@app.get("/auth/confirm-email-change")
+def confirm_email_change(token: str, response: Response) -> dict:
+    result = calls_db.consume_email_change_request(token)
+    if result is None:
+        raise HTTPException(400, "This email-change link is invalid or has expired")
+    user_id, email = result
+    if calls_db.email_exists(email):
+        raise HTTPException(409, "An account already uses that email address")
+    profile = calls_db.get_user_by_id(user_id)
+    if profile is None:
+        raise HTTPException(404, "Account not found")
+    calls_db.update_user_email(user_id, email)
+    calls_db.invalidate_other_sessions(user_id)
+    calls_db.record_security_event(user_id, "email_changed")
+    _set_session_cookie(response, user_id, profile["account_id"])
+    return {"ok": True, "user": _me_payload(user_id)}
+
+
+class PreferencesRequest(BaseModel):
+    timezone: str | None = None
+    language: str | None = None
+    notify_leads: bool | None = None
+    notify_calls: bool | None = None
+    notify_billing: bool | None = None
+    notify_product: bool | None = None
+
+
+@app.get("/profile/preferences")
+def get_profile_preferences(user: dict = Depends(current_user)) -> dict:
+    return calls_db.get_user_preferences(user["user_id"])
+
+
+@app.patch("/profile/preferences")
+def update_profile_preferences(req: PreferencesRequest, user: dict = Depends(current_user)) -> dict:
+    values = req.model_dump(exclude_none=True)
+    if values.get("language") not in (None, "en", "hi"):
+        raise HTTPException(400, "Unsupported language")
+    if values.get("timezone") and "/" not in values["timezone"] and values["timezone"] != "UTC":
+        raise HTTPException(400, "Use a valid IANA timezone")
+    return calls_db.update_user_preferences(user["user_id"], values)
+
+
+@app.get("/profile/security-events")
+def profile_security_events(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_security_events(user["user_id"])
+
+
+@app.post("/profile/sign-out-others")
+def sign_out_other_sessions(response: Response, request: Request, user: dict = Depends(current_user)) -> dict:
+    calls_db.invalidate_other_sessions(user["user_id"])
+    calls_db.record_security_event(user["user_id"], "signed_out_other_sessions", user_agent=request.headers.get("user-agent", ""))
+    _set_session_cookie(response, user["user_id"], user["account_id"])
+    return {"ok": True, "user": _me_payload(user["user_id"])}
+
+
+@app.post("/profile/request-data-export")
+def request_data_export(user: dict = Depends(current_user)) -> dict:
+    profile = calls_db.get_user_by_id(user["user_id"])
+    if profile:
+        html = email_sender.render_email(
+            preheader="Vistrow Voice data export request",
+            heading="Your data export request was received",
+            body_html="We received your request. Our team will verify it and contact you at this email with the export process.",
+        )
+        email_sender.send_email(profile["email"], "Vistrow Voice data export request", html, email_sender.FROM_ACCOUNT_SECURITY)
+    calls_db.record_security_event(user["user_id"], "data_export_requested")
+    return {"ok": True}
+
+
+@app.post("/profile/request-account-deletion")
+def request_account_deletion(user: dict = Depends(current_user)) -> dict:
+    profile = calls_db.get_user_by_id(user["user_id"])
+    if profile:
+        html = email_sender.render_email(
+            preheader="Vistrow Voice account deletion request",
+            heading="Account deletion request received",
+            body_html="We received your request. For security, our team will verify ownership before any account or workspace data is deleted.",
+        )
+        email_sender.send_email(profile["email"], "Vistrow Voice account deletion request", html, email_sender.FROM_ACCOUNT_SECURITY)
+    calls_db.record_security_event(user["user_id"], "account_deletion_requested")
+    return {"ok": True}
 
 
 @app.post("/onboarding/complete")
