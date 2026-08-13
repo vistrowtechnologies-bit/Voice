@@ -380,7 +380,7 @@ def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
     return _transform
 
 
-def _build_llm(model: str):
+def _build_llm(model: str, *, max_output_tokens: int = 220):
     """Picks the LLM plugin by model-name prefix, so an operator can switch
     an agent between OpenAI and Gemini from the dashboard's model dropdown
     without any other config change. GEMINI_API_KEY is the name Google AI
@@ -400,14 +400,14 @@ def _build_llm(model: str):
             model=model,
             api_key=api_key,
             thinking_config={"thinking_level": "MINIMAL"},
-            max_output_tokens=320,
+            max_output_tokens=max_output_tokens,
         )
     # Bound spoken replies and give OpenAI a stable cache-routing key.  The
     # exact prompt prefix still has to match before it can be reused, so this
     # does not mix one tenant's instructions or KB with another tenant's.
     return openai.LLM(
         model=model,
-        max_completion_tokens=320,
+        max_completion_tokens=max_output_tokens,
         prompt_cache_key="vistrow-voice-agent-v1",
     )
 
@@ -1054,7 +1054,15 @@ class RealEstateAgent(Agent):
         super().__init__(
             instructions=instructions,
             stt=_build_stt(),
-            llm=_build_llm(config.get("model") or "gpt-4.1"),
+            # The public demo is judged turn-by-turn. A hard generation cap
+            # prevents a missed prompt instruction from becoming a spoken
+            # sales monologue; Indian scripts consume more tokens than the
+            # same sentence in English, so 160 still leaves room for two
+            # short multilingual sentences plus a tool call.
+            llm=_build_llm(
+                config.get("model") or "gpt-4.1",
+                max_output_tokens=160 if self._is_platform_demo else 220,
+            ),
             tts=tts,
             tools=agent_tools,
         )
@@ -1259,6 +1267,16 @@ class RealEstateAgent(Agent):
                 else ""
             )
             _personality_instruction = (
+                "HARD TURN LIMIT: reply with ONE short sentence by default and never more than TWO "
+                "short sentences or about thirty-five spoken words. This limit overrides discovery, "
+                "active-listening, sales, and personality guidance elsewhere. Give only the single "
+                "most relevant point; the caller can ask for more. Do not repeat or summarize what "
+                "the caller just said. Do not append a generic follow-up such as 'anything else?' or "
+                "'would you like to know more?'. If they asked to change language, switch it and give "
+                "only a brief confirmation in that language. If they say they have no more questions, "
+                "are done for now, thank you/bye, or otherwise close the conversation, give one short "
+                "goodbye and call end_call—never reopen discovery. If they sound skeptical (for example "
+                "'seriously?'), answer the concern directly in one sentence without repeating the pitch.\n"
                 "This reply must sound like a witty, warm human friend on a call, not a form being "
                 "filled out. Most replies should begin directly. Use at most one filler, reaction, "
                 "self-correction, or playful aside, and only when the caller's words genuinely invite "
