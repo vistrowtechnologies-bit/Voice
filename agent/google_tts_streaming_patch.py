@@ -22,13 +22,33 @@ Scoped to Gemini's multilingual voice personas (Mira/Arin, see
 voice_catalog.py) only — agent/main.py's google-native branch (locale-
 specific Neural2/Chirp voices) keeps use_streaming=False untouched, since
 it hasn't been validated against this same race yet.
+
+Second, separate bug fixed here (found via real Cloud Monitoring data,
+2026-08-13): a normal caller barge-in cancels the in-flight gRPC
+streaming_synthesize call, which google-api-core surfaces as
+`Cancelled` (HTTP/gRPC code 499) — NOT a server-side failure. `Cancelled`
+is a subclass of `GoogleAPICallError`, so the unpatched exception
+handling below wraps it as `APIStatusError`, which
+`TtsFallbackAdapter._try_synthesize` catches via a bare `except
+Exception` — counting a routine interruption against max_retry_per_tts
+and, once exhausted, flipping availability to False and swapping the
+caller to the Sarvam/Monika safety net mid-conversation. Real data:
+499s were ~19% of ALL Google TTS requests over 7 days — by far the
+largest error category, dwarfing genuine 504 timeouts (~1.6%). This is
+very likely the dominant cause of the "Google TTS randomly falls back
+mid-call" symptom, not backend slowness. Converting `Cancelled` to
+`asyncio.CancelledError` (a `BaseException`, not `Exception`) makes it
+bypass `_try_synthesize`'s `except Exception` entirely, so an
+interruption is handled the same way every other TTS provider's
+cancellation already is — never counted as a provider failure.
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 
-from google.api_core.exceptions import DeadlineExceeded, GoogleAPICallError
+from google.api_core.exceptions import Cancelled, DeadlineExceeded, GoogleAPICallError
 from google.cloud import texttospeech
 from livekit.agents import APIConnectOptions, APIStatusError, APITimeoutError, tokenize, tts, utils
 from livekit.agents.types import DEFAULT_API_CONNECT_OPTIONS
@@ -74,6 +94,11 @@ class _PatchedSynthesizeStream(GoogleSynthesizeStream):
 
             output_emitter.end_segment()
 
+        except Cancelled:
+            # A caller barge-in, not a provider failure — see module
+            # docstring. Must be caught before the GoogleAPICallError
+            # branch below, since Cancelled is one of its subclasses.
+            raise asyncio.CancelledError() from None
         except DeadlineExceeded:
             raise APITimeoutError() from None
         except GoogleAPICallError as e:
