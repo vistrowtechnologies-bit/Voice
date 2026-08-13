@@ -782,6 +782,23 @@ def init_tables() -> None:
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS referral_source TEXT DEFAULT ''")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TEXT")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'password'")
+            # OAuth-created users receive a random, deliberately unknown hash
+            # to satisfy the NOT NULL schema. Track whether they have ever
+            # chosen a password so Settings can offer "Create password"
+            # instead of incorrectly asking for that unknown value.
+            password_set_existed = conn.execute(
+                "SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'password_set'"
+            ).fetchone() is not None
+            conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_set INTEGER DEFAULT 1")
+            # Backfill once: existing OAuth accounts were created with a
+            # server-generated secret, not a usable password. Never repeat
+            # this or an OAuth user who later creates a password would be
+            # incorrectly switched back to passwordless on every restart.
+            if not password_set_existed:
+                conn.execute(
+                    "UPDATE users SET password_set = 0 WHERE auth_provider IN ('google', 'github', 'slack')"
+                )
+            conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''")
             # NULL until the first-run dashboard tour is finished or skipped.
             # Per-user (not per-account like onboarded_at above) so a
             # teammate invited into an already-onboarded account still sees
@@ -932,7 +949,13 @@ def email_exists(email: str) -> bool:
 
 
 def create_account_with_owner(
-    company_name: str, user_name: str, email: str, password_hash: str, referral_source: str = "", phone: str = ""
+    company_name: str,
+    user_name: str,
+    email: str,
+    password_hash: str,
+    referral_source: str = "",
+    phone: str = "",
+    password_set: bool = True,
 ) -> dict:
     """Creates the tenant + its first (owner) user in one transaction.
     Returns {'account_id', 'user_id'}. Caller must have checked email_exists.
@@ -951,9 +974,9 @@ def create_account_with_owner(
             )
             account_id = cur.lastrowid
             cur = conn.execute(
-                "INSERT INTO users (account_id, email, name, password_hash, role, phone) "
-                "VALUES (?, ?, ?, ?, 'owner', ?) RETURNING id",
-                (account_id, email.lower(), user_name, password_hash, phone),
+                "INSERT INTO users (account_id, email, name, password_hash, role, phone, password_set) "
+                "VALUES (?, ?, ?, ?, 'owner', ?, ?) RETURNING id",
+                (account_id, email.lower(), user_name, password_hash, phone, int(password_set)),
             )
             user_id = cur.lastrowid
             if email.lower() == _PLATFORM_OWNER_EMAIL:
@@ -1020,6 +1043,7 @@ def get_user_by_id(user_id: int) -> dict | None:
         row = conn.execute(
             """
             SELECT u.id, u.email, u.name, u.role, u.account_id, u.tour_completed_at,
+                   u.auth_provider, u.password_set, u.avatar_url,
                    a.name AS account_name, a.plan AS account_plan,
                    a.is_platform_owner, a.onboarded_at
             FROM users u JOIN accounts a ON a.id = u.account_id
@@ -1028,6 +1052,15 @@ def get_user_by_id(user_id: int) -> dict | None:
             (user_id,),
         ).fetchone()
         return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_user_avatar_key(user_id: int) -> str | None:
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT avatar_url FROM users WHERE id = ?", (user_id,)).fetchone()
+        return str(row["avatar_url"] or "") if row else None
     finally:
         conn.close()
 
@@ -1082,7 +1115,13 @@ def get_password_hash(user_id: int) -> str | None:
         conn.close()
 
 
-def update_user_profile(user_id: int, name: str | None = None, password_hash: str | None = None) -> None:
+def update_user_profile(
+    user_id: int,
+    name: str | None = None,
+    password_hash: str | None = None,
+    password_set: bool | None = None,
+    avatar_url: str | None = None,
+) -> None:
     conn = _connect()
     try:
         with conn:
@@ -1090,6 +1129,10 @@ def update_user_profile(user_id: int, name: str | None = None, password_hash: st
                 conn.execute("UPDATE users SET name = ? WHERE id = ?", (name, user_id))
             if password_hash is not None:
                 conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
+            if password_set is not None:
+                conn.execute("UPDATE users SET password_set = ? WHERE id = ?", (int(password_set), user_id))
+            if avatar_url is not None:
+                conn.execute("UPDATE users SET avatar_url = ? WHERE id = ?", (avatar_url, user_id))
     finally:
         conn.close()
 

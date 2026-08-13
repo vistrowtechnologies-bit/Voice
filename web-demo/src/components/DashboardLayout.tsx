@@ -104,9 +104,13 @@ function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-surface-high"
       >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
-          {initials(workspace)}
-        </div>
+        {user?.avatarUrl ? (
+          <img src={user.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full border border-primary/30 object-cover" />
+        ) : (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
+            {initials(workspace)}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{workspace}</p>
           <p className="truncate text-[11px] text-text-muted">{user?.name || 'Admin'}</p>
@@ -117,9 +121,13 @@ function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
       {open && (
         <div className="absolute bottom-full left-0 z-20 mb-2 w-full overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
           <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
-              {initials(workspace)}
-            </div>
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full border border-primary/30 object-cover" />
+            ) : (
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
+                {initials(workspace)}
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{workspace}</p>
             </div>

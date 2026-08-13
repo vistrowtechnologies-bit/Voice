@@ -26,7 +26,7 @@ import widget_avatars
 import widget_chat
 from help_content import FAQS
 from dotenv import load_dotenv
-from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from livekit import api
@@ -319,6 +319,12 @@ def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
         "onboarded": user["onboarded_at"] is not None,
         "tourCompleted": user["tour_completed_at"] is not None,
         "impersonating": False,
+        "authProvider": user.get("auth_provider") or "password",
+        "passwordSet": bool(user.get("password_set", True)),
+        # The database holds an opaque object-storage key, never a direct
+        # storage URL. The dashboard fetches it through an authenticated API
+        # route, keeping account photos private.
+        "avatarUrl": "/api/profile/avatar" if user.get("avatar_url") else "",
     }
     if impersonator_id:
         # Support session: the panel shows the "viewing as" banner and the
@@ -368,7 +374,11 @@ def _oauth_or_create_user(email: str, name: str, provider: str = "password") -> 
         return {"user_id": user["id"], "account_id": user["account_id"]}
     company_name = f"{name.split(' ')[0]}'s Workspace" if name else email.split("@")[0]
     created = calls_db.create_account_with_owner(
-        company_name, name or email.split("@")[0], email, auth.hash_password(secrets.token_urlsafe(32))
+        company_name,
+        name or email.split("@")[0],
+        email,
+        auth.hash_password(secrets.token_urlsafe(32)),
+        password_set=False,
     )
     calls_db.record_login(created["user_id"], provider)
     return created
@@ -986,13 +996,76 @@ def update_profile(req: UpdateProfileRequest, user: dict = Depends(current_user)
     if req.newPassword is not None:
         if len(req.newPassword) < 8:
             raise HTTPException(400, "New password must be at least 8 characters")
-        stored_hash = calls_db.get_password_hash(user["user_id"])
-        if stored_hash is None or not req.currentPassword or not auth.verify_password(req.currentPassword, stored_hash):
-            raise HTTPException(401, "Current password is incorrect")
+        profile = calls_db.get_user_by_id(user["user_id"])
+        if profile is None:
+            raise HTTPException(404, "Account not found")
+        # OAuth users have no password they could possibly know. Their first
+        # password is created from an authenticated Settings session; later
+        # changes still require the current password.
+        if profile.get("password_set", True):
+            stored_hash = calls_db.get_password_hash(user["user_id"])
+            if stored_hash is None or not req.currentPassword or not auth.verify_password(req.currentPassword, stored_hash):
+                raise HTTPException(401, "Current password is incorrect")
         password_hash = auth.hash_password(req.newPassword)
 
-    calls_db.update_user_profile(user["user_id"], name=name, password_hash=password_hash)
+    calls_db.update_user_profile(
+        user["user_id"], name=name, password_hash=password_hash,
+        password_set=True if password_hash is not None else None,
+    )
     return {"user": _me_payload(user["user_id"])}
+
+
+@app.post("/profile/avatar")
+async def update_profile_avatar(
+    image: UploadFile = File(...), user: dict = Depends(current_user)
+) -> dict:
+    """Persist a small, private avatar in durable object storage. Railway's
+    container filesystem is ephemeral, so profile photos must never live in
+    /app/static in production."""
+    allowed = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+    suffix = allowed.get(image.content_type or "")
+    if suffix is None:
+        raise HTTPException(400, "Use a JPG, PNG, or WebP image")
+    data = await image.read()
+    if not data or len(data) > 2 * 1024 * 1024:
+        raise HTTPException(400, "Profile image must be smaller than 2 MB")
+    client, bucket = _b2_client()
+    if client is None or bucket is None:
+        raise HTTPException(503, "Profile photo storage is not configured")
+    old_key = calls_db.get_user_avatar_key(user["user_id"])
+    object_key = f"profile-avatars/{user['user_id']}/{secrets.token_urlsafe(12)}.{suffix}"
+    try:
+        client.put_object(Bucket=bucket, Key=object_key, Body=data, ContentType=image.content_type)
+        calls_db.update_user_profile(user["user_id"], avatar_url=object_key)
+        if old_key:
+            try:
+                client.delete_object(Bucket=bucket, Key=old_key)
+            except Exception:
+                logger.warning("Could not remove superseded profile avatar for user %s", user["user_id"])
+    except Exception:
+        logger.exception("Profile avatar upload failed")
+        raise HTTPException(502, "Could not store profile photo")
+    return {"user": _me_payload(user["user_id"])}
+
+
+@app.get("/profile/avatar")
+def get_profile_avatar(user: dict = Depends(current_user)) -> StreamingResponse:
+    key = calls_db.get_user_avatar_key(user["user_id"])
+    if not key:
+        raise HTTPException(404, "No profile photo")
+    client, bucket = _b2_client()
+    if client is None or bucket is None:
+        raise HTTPException(503, "Profile photo storage is not configured")
+    try:
+        obj = client.get_object(Bucket=bucket, Key=key)
+        return StreamingResponse(
+            obj["Body"].iter_chunks(),
+            media_type=obj.get("ContentType") or "image/jpeg",
+            headers={"Cache-Control": "private, max-age=300"},
+        )
+    except Exception:
+        logger.exception("Profile avatar read failed")
+        raise HTTPException(404, "Profile photo not found")
 
 
 class UpdateAccountRequest(BaseModel):

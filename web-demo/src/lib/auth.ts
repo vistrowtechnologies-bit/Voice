@@ -12,6 +12,9 @@ export interface AuthUser {
   onboarded: boolean
   tourCompleted: boolean
   impersonating: boolean
+  authProvider: string
+  passwordSet: boolean
+  avatarUrl: string
 }
 
 export interface AuthState {
@@ -71,6 +74,14 @@ export const apiSignup = (data: {
 export const apiLogout = () => authFetch<{ ok: boolean }>('/auth/logout', {})
 export const apiUpdateProfile = (data: { name?: string; currentPassword?: string; newPassword?: string }) =>
   authFetch<{ user: AuthUser }>('/profile', data, 'PATCH')
+export const apiUpdateProfileAvatar = async (image: File) => {
+  const form = new FormData()
+  form.append('image', image)
+  const res = await fetch('/api/profile/avatar', { method: 'POST', credentials: 'include', body: form })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.detail || `Request failed (${res.status})`)
+  return data as { user: AuthUser }
+}
 export const apiUpdateAccount = (name: string) => authFetch<{ user: AuthUser }>('/account', { name }, 'PATCH')
 export const apiCompleteOnboarding = () => authFetch<{ user: AuthUser }>('/onboarding/complete', {})
 export const apiCompleteTour = () => authFetch<{ user: AuthUser }>('/tour/complete', {})

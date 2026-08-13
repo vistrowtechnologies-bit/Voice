@@ -10,6 +10,7 @@ import {
   apiTeamInvites,
   apiTeamMembers,
   apiUpdateAccount,
+  apiUpdateProfileAvatar,
   apiUpdateMemberRole,
   apiUpdateProfile,
   hasRole,
@@ -199,7 +200,9 @@ function ProfileTab() {
   const { user, setUser } = useAuth()
   const [profileName, setProfileName] = useState(user?.name || '')
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
 
   const save = async () => {
     if (!profileName.trim()) return
@@ -216,8 +219,56 @@ function ProfileTab() {
     }
   }
 
+  const uploadAvatar = async (file?: File) => {
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      setMsg({ type: 'error', text: 'Use a JPG, PNG, or WebP image under 2 MB.' })
+      return
+    }
+    setUploading(true)
+    setMsg(null)
+    try {
+      const { user: updated } = await apiUpdateProfileAvatar(file)
+      setUser(updated)
+      setMsg({ type: 'ok', text: 'Profile photo updated.' })
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Could not update your photo.' })
+    } finally {
+      setUploading(false)
+      if (avatarInputRef.current) avatarInputRef.current.value = ''
+    }
+  }
+
   return (
-    <SettingsCard title="Your profile" subtitle="Name and email on this account.">
+    <SettingsCard title="Your profile" subtitle="Your personal details and photo for this account.">
+      <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-high/40 p-3">
+        {user?.avatarUrl ? (
+          <img src={user.avatarUrl} alt="Your profile" className="h-14 w-14 rounded-full border-2 border-primary/30 object-cover" />
+        ) : (
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/15 text-lg font-bold text-primary">
+            {(user?.name || '?').trim().slice(0, 1).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold">Profile photo</p>
+          <p className="text-xs text-text-muted">JPG, PNG, or WebP · up to 2 MB</p>
+        </div>
+        <input
+          ref={avatarInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => uploadAvatar(e.target.files?.[0])}
+        />
+        <button
+          type="button"
+          onClick={() => avatarInputRef.current?.click()}
+          disabled={uploading}
+          className="rounded-lg border border-border px-3 py-2 text-xs font-bold transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+        >
+          {uploading ? 'Uploading…' : 'Change photo'}
+        </button>
+      </div>
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-semibold text-text-muted">Email</span>
         <input
@@ -254,14 +305,15 @@ function ProfileTab() {
 }
 
 function SecurityTab() {
-  const { setUser } = useAuth()
+  const { user, setUser } = useAuth()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
 
+  const hasPassword = user?.passwordSet !== false
   const save = async () => {
-    if (!currentPassword || newPassword.length < 8) return
+    if ((hasPassword && !currentPassword) || newPassword.length < 8) return
     setSaving(true)
     setMsg(null)
     try {
@@ -278,8 +330,18 @@ function SecurityTab() {
   }
 
   return (
-    <SettingsCard title="Password" subtitle="Change the password used to sign in.">
-      <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-4">
+      <SettingsCard
+        title={hasPassword ? 'Password' : 'Create a password'}
+        subtitle={hasPassword ? 'Change the password used to sign in.' : `You currently sign in with ${user?.authProvider || 'your connected account'}. Create a password to also sign in with email.`}
+      >
+      {!hasPassword && (
+        <p className="flex items-start gap-2 rounded-lg border border-cyan/30 bg-cyan/5 p-3 text-xs text-text-muted">
+          <Icon name="info" className="mt-0.5 shrink-0 text-[16px] text-cyan" />
+          Your existing Google, Slack, or GitHub sign-in will continue to work. This simply adds email-and-password sign-in as another option.
+        </p>
+      )}
+      {hasPassword && <div className="flex flex-col gap-1.5">
         <span className="text-xs font-semibold text-text-muted">Current password</span>
         <input
           type="password"
@@ -287,7 +349,7 @@ function SecurityTab() {
           onChange={(e) => setCurrentPassword(e.target.value)}
           className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
         />
-      </div>
+      </div>}
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-semibold text-text-muted">New password</span>
         <input
@@ -300,10 +362,10 @@ function SecurityTab() {
       </div>
       <button
         onClick={save}
-        disabled={saving || !currentPassword || newPassword.length < 8}
+        disabled={saving || (hasPassword && !currentPassword) || newPassword.length < 8}
         className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
       >
-        {saving ? 'Updating…' : 'Update password'}
+        {saving ? 'Saving…' : hasPassword ? 'Update password' : 'Create password'}
       </button>
       {msg && (
         <p className={`flex items-center gap-1.5 text-xs ${msg.type === 'ok' ? 'text-success' : 'text-destructive'}`}>
@@ -311,7 +373,17 @@ function SecurityTab() {
           {msg.text}
         </p>
       )}
-    </SettingsCard>
+      </SettingsCard>
+
+      <SettingsCard title="Forgot your password?" subtitle="We’ll send a secure reset link to your sign-in email. You can use it even while you are signed in.">
+        <a
+          href="/forgot-password"
+          className="self-start rounded-lg border border-border px-4 py-2 text-sm font-bold text-text transition-colors hover:border-primary hover:text-primary"
+        >
+          Send reset link
+        </a>
+      </SettingsCard>
+    </div>
   )
 }
 
