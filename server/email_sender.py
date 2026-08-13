@@ -33,6 +33,7 @@ _DEFAULT_FROM = "Vistrow Voice <noreply@vistrowvoice.com>"
 # EMAIL_FROM (if set) still overrides everything, same as before — these are
 # just better-labeled defaults, not a new configuration surface.
 FROM_ACCOUNT_SECURITY = "Vistrow Voice <security@vistrowvoice.com>"  # password reset
+FROM_EMAIL_VERIFICATION = "Vistrow Voice <verify@vistrowvoice.com>"  # signup OTP
 FROM_INVITES = "Vistrow Voice <invites@vistrowvoice.com>"  # team member invites
 FROM_WEBSITE = "Vistrow Voice Website <contact@vistrowvoice.com>"  # contact-form notifications
 

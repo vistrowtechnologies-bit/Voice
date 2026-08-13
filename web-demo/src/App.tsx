@@ -39,6 +39,7 @@ import { Signup } from './pages/Signup'
 import { ForgotPassword } from './pages/ForgotPassword'
 import { ResetPassword } from './pages/ResetPassword'
 import { ConfirmEmailChange } from './pages/ConfirmEmailChange'
+import { VerifyEmail } from './pages/VerifyEmail'
 import { InviteAccept } from './pages/InviteAccept'
 import { Dashboard } from './pages/Dashboard'
 import { Agents } from './pages/Agents'
@@ -135,6 +136,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/confirm-email-change" element={<ConfirmEmailChange />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/invite/:token" element={<InviteAccept />} />
 
         {/* Auth-gated dashboard */}

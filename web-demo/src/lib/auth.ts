@@ -28,7 +28,7 @@ export interface AuthState {
     password: string
     referral_source?: string
     phone?: string
-  }) => Promise<void>
+  }) => Promise<SignupResult>
   logout: () => Promise<void>
   refresh: () => Promise<void>
   setUser: (user: AuthUser) => void
@@ -70,7 +70,18 @@ export const apiSignup = (data: {
   password: string
   referral_source?: string
   phone?: string
-}) => authFetch<{ user: AuthUser }>('/auth/signup', data)
+}) => authFetch<SignupResult>('/auth/signup', data)
+export interface SignupResult {
+  ok: boolean
+  verificationRequired: true
+  email: string
+  emailSent: boolean
+  resendAfter: number
+}
+export const apiVerifyEmail = (email: string, code: string) =>
+  authFetch<{ ok: boolean; user: AuthUser }>('/auth/verify-email', { email, code })
+export const apiResendEmailVerification = (email: string) =>
+  authFetch<{ ok: boolean; resendAfter: number }>('/auth/resend-email-verification', { email })
 export const apiLogout = () => authFetch<{ ok: boolean }>('/auth/logout', {})
 export const apiUpdateProfile = (data: { name?: string; currentPassword?: string; newPassword?: string }) =>
   authFetch<{ user: AuthUser }>('/profile', data, 'PATCH')

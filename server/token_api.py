@@ -16,6 +16,7 @@ import call_intelligence
 import calls_db
 import campaign_dialer
 import email_sender
+import disposable_email
 import help_chat
 import integrations_dispatch
 import kb_crawl
@@ -294,6 +295,15 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class VerifyEmailRequest(BaseModel):
+    email: str
+    code: str
+
+
+class ResendEmailVerificationRequest(BaseModel):
+    email: str
+
+
 def _set_session_cookie(response: Response, user_id: int, account_id: int) -> None:
     profile = calls_db.get_user_by_id(user_id)
     response.set_cookie(
@@ -374,6 +384,7 @@ def _oauth_or_create_user(email: str, name: str, provider: str = "password") -> 
     email = email.lower()
     user = calls_db.get_user_by_email(email)
     if user is not None:
+        calls_db.mark_user_email_verified(user["id"])
         calls_db.record_login(user["id"], provider)
         return {"user_id": user["id"], "account_id": user["account_id"]}
     company_name = f"{name.split(' ')[0]}'s Workspace" if name else email.split("@")[0]
@@ -383,6 +394,7 @@ def _oauth_or_create_user(email: str, name: str, provider: str = "password") -> 
         email,
         auth.hash_password(secrets.token_urlsafe(32)),
         password_set=False,
+        email_verified=True,
     )
     calls_db.record_login(created["user_id"], provider)
     return created
@@ -792,7 +804,7 @@ def auth_oauth_github_callback(request: Request, code: str | None = None, state:
 
 
 @app.post("/auth/signup")
-def auth_signup(req: SignupRequest, response: Response) -> dict:
+def auth_signup(req: SignupRequest) -> dict:
     email = req.email.strip().lower()
     if "@" not in email or "." not in email.split("@")[-1]:
         raise HTTPException(400, "Enter a valid email address")
@@ -800,6 +812,10 @@ def auth_signup(req: SignupRequest, response: Response) -> dict:
         raise HTTPException(400, "Password must be at least 8 characters")
     if not req.name.strip() or not req.company.strip():
         raise HTTPException(400, "Name and company are required")
+    if disposable_email.is_disposable(email):
+        raise HTTPException(400, "Please use a permanent email address — temporary email providers are not supported")
+    if not email_sender.is_configured():
+        raise HTTPException(503, "Email verification is temporarily unavailable. Please try again shortly")
     if calls_db.email_exists(email):
         raise HTTPException(409, "An account with this email already exists")
     created = calls_db.create_account_with_owner(
@@ -810,10 +826,75 @@ def auth_signup(req: SignupRequest, response: Response) -> dict:
         req.referral_source.strip(),
         req.phone.strip(),
     )
-    _set_session_cookie(response, created["user_id"], created["account_id"])
-    calls_db.record_login(created["user_id"], "password")
+    code, _ = calls_db.create_email_verification(created["user_id"])
+    if code is None:
+        raise HTTPException(429, "Please wait before requesting another code")
+    user = calls_db.get_user_by_email(email)
+    html = email_sender.render_email(
+        preheader="Verify your Vistrow Voice email",
+        heading="Verify your email",
+        body_html=(
+            f"Hi {user['name'] if user else req.name.strip()}, use this code to finish creating your account: "
+            f"<div style='margin:24px 0;font-size:34px;font-weight:800;letter-spacing:9px;color:{email_sender.TEXT};'>{code}</div>"
+            "This code expires in 10 minutes. If you did not start this signup, you can ignore this email."
+        ),
+    )
+    email_sent = email_sender.send_email(
+        email,
+        f"{code} is your Vistrow Voice verification code",
+        html,
+        email_sender.FROM_EMAIL_VERIFICATION,
+    )
     logger.info("new signup: account #%s (%s)", created["account_id"], email)
-    return {"ok": True, "user": _me_payload(created["user_id"])}
+    return {
+        "ok": True,
+        "verificationRequired": True,
+        "email": email,
+        "emailSent": email_sent,
+        "resendAfter": 60,
+    }
+
+
+@app.post("/auth/verify-email")
+def auth_verify_email(req: VerifyEmailRequest, response: Response) -> dict:
+    email = req.email.strip().lower()
+    code = re.sub(r"\D", "", req.code)
+    if len(code) != 6:
+        raise HTTPException(400, "Enter the 6-digit verification code")
+    user_id = calls_db.consume_email_verification(email, code)
+    if user_id is None:
+        raise HTTPException(400, "That code is incorrect, expired, or has been used")
+    user = calls_db.get_user_by_id(user_id)
+    if user is None:
+        raise HTTPException(400, "This account is no longer available")
+    _set_session_cookie(response, user_id, user["account_id"])
+    calls_db.record_login(user_id, "password")
+    calls_db.record_security_event(user_id, "email_verified")
+    return {"ok": True, "user": _me_payload(user_id)}
+
+
+@app.post("/auth/resend-email-verification")
+def auth_resend_email_verification(req: ResendEmailVerificationRequest) -> dict:
+    # Generic success shape prevents using this endpoint to enumerate users.
+    email = req.email.strip().lower()
+    user = calls_db.get_user_by_email(email)
+    if user is None or user.get("email_verified_at"):
+        return {"ok": True, "resendAfter": 60}
+    code, retry_after = calls_db.create_email_verification(user["id"])
+    if code is None:
+        raise HTTPException(429, f"Please wait {retry_after} seconds before requesting another code")
+    html = email_sender.render_email(
+        preheader="Your new Vistrow Voice verification code",
+        heading="Verify your email",
+        body_html=(
+            f"Hi {user['name']}, your new verification code is: "
+            f"<div style='margin:24px 0;font-size:34px;font-weight:800;letter-spacing:9px;color:{email_sender.TEXT};'>{code}</div>"
+            "This code expires in 10 minutes."
+        ),
+    )
+    if not email_sender.send_email(email, f"{code} is your Vistrow Voice verification code", html, email_sender.FROM_EMAIL_VERIFICATION):
+        raise HTTPException(503, "We could not send the verification email. Please try again")
+    return {"ok": True, "resendAfter": retry_after}
 
 
 @app.post("/auth/login")
@@ -822,6 +903,8 @@ def auth_login(req: LoginRequest, response: Response) -> dict:
     if user is None or not auth.verify_password(req.password, user["password_hash"]):
         # Same message either way — don't reveal which emails are registered.
         raise HTTPException(401, "Incorrect email or password")
+    if not user.get("email_verified_at"):
+        raise HTTPException(403, "Verify your email before signing in. You can request a new code from the verification page")
     _set_session_cookie(response, user["id"], user["account_id"])
     calls_db.record_login(user["id"])
     return {"ok": True, "user": _me_payload(user["id"])}

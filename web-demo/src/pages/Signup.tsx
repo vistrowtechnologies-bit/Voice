@@ -92,11 +92,9 @@ export function Signup() {
     setBusy(true)
     try {
       const { phoneNumber, ...rest } = form
-      await signup({ ...rest, phone: phoneNumber ? `${dialCode} ${phoneNumber}` : '' })
+      const result = await signup({ ...rest, phone: phoneNumber ? `${dialCode} ${phoneNumber}` : '' })
       trackQualifyLead('signup')
-      // DashboardLayout shows the onboarding modal automatically for any
-      // account that hasn't completed it yet - no special-case route here.
-      navigate('/dashboard', { replace: true })
+      navigate(`/verify-email?email=${encodeURIComponent(result.email)}&sent=${result.emailSent ? '1' : '0'}`, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create your account')
     } finally {

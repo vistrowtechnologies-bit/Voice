@@ -35,7 +35,12 @@ export function Login() {
       await login(email, password)
       navigate(from, { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      const message = err instanceof Error ? err.message : 'Login failed'
+      if (message.startsWith('Verify your email')) {
+        navigate(`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}&sent=0`)
+      } else {
+        setError(message)
+      }
     } finally {
       setBusy(false)
     }

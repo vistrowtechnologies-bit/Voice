@@ -46,8 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       referral_source?: string
       phone?: string
     }) => {
-      const { user } = await apiSignup(data)
-      setUser(user)
+      return apiSignup(data)
     },
     [],
   )
