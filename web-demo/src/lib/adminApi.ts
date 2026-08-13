@@ -234,6 +234,20 @@ export interface AdminHealth {
   apiKeys: { name: string; configured: boolean }[]
 }
 
+export interface AdminPrivacyRequest {
+  id: number
+  request_type: 'export' | 'deletion'
+  status: 'pending' | 'in_progress' | 'completed' | 'rejected'
+  admin_note: string
+  created_at: string
+  updated_at: string
+  user_id: number
+  user_name: string
+  user_email: string
+  account_id: number
+  account_name: string
+}
+
 // ---------------------------------------------------------------- calls
 
 export const adminOverview = (days = 30) => aget<AdminOverview>(`/overview${qs({ days })}`)
@@ -259,6 +273,11 @@ export const adminAudit = (p: { action?: string; limit?: number; offset?: number
   aget<{ entries: AdminAuditEntry[]; total: number }>(`/audit${qs(p)}`)
 
 export const adminHealth = () => aget<AdminHealth>('/health')
+
+export const adminPrivacyRequests = (status = '') =>
+  aget<{ requests: AdminPrivacyRequest[] }>(`/privacy-requests${qs({ status })}`)
+export const adminUpdatePrivacyRequest = (id: number, status: AdminPrivacyRequest['status'], note: string) =>
+  apost<{ request: AdminPrivacyRequest }>(`/privacy-requests/${id}`, { status, note })
 
 export const adminVendorCredits = () => aget<{ vendors: AdminVendorCredit[] }>('/vendor-credits')
 export const adminUpdateVendorCredit = (

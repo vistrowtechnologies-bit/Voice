@@ -107,7 +107,24 @@ export const apiProfilePreferences = () => authFetch<UserPreferences>('/profile/
 export const apiUpdateProfilePreferences = (data: Partial<UserPreferences>) => authFetch<UserPreferences>('/profile/preferences', data, 'PATCH')
 export const apiSecurityEvents = () => authFetch<{ event: string; provider: string; user_agent: string; created_at: string }[]>('/profile/security-events')
 export const apiSignOutOthers = () => authFetch<{ ok: boolean; user: AuthUser }>('/profile/sign-out-others', {})
-export const apiRequestDataExport = () => authFetch<{ ok: boolean }>('/profile/request-data-export', {})
+export const apiDownloadDataExport = async () => {
+  const res = await fetch('/api/profile/request-data-export', { method: 'POST', credentials: 'include' })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data?.detail || `Export failed (${res.status})`)
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition') || ''
+  const filename = disposition.match(/filename="?([^";]+)"?/)?.[1] || 'vistrow-voice-data.json'
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
 export const apiRequestAccountDeletion = () => authFetch<{ ok: boolean }>('/profile/request-account-deletion', {})
 export const apiUpdateAccount = (name: string) => authFetch<{ user: AuthUser }>('/account', { name }, 'PATCH')
 export const apiCompleteOnboarding = () => authFetch<{ user: AuthUser }>('/onboarding/complete', {})

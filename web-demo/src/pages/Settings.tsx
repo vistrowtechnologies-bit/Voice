@@ -13,7 +13,7 @@ import {
   apiUpdateProfileAvatar,
   apiRequestEmailChange,
   apiProfilePreferences,
-  apiRequestDataExport,
+  apiDownloadDataExport,
   apiRequestAccountDeletion,
   apiSecurityEvents,
   apiSignOutOthers,
@@ -25,8 +25,8 @@ import {
   type PendingInvite,
   type TeamMember,
 } from '../lib/auth'
-import { createApiKey, deleteApiKey, fetchApiKeys, fetchAvailabilitySettings, formatDateTime, updateAvailabilitySettings } from '../lib/api'
-import type { ApiKey, AvailabilityConfig } from '../lib/types'
+import { fetchAvailabilitySettings, formatDateTime, updateAvailabilitySettings } from '../lib/api'
+import type { AvailabilityConfig } from '../lib/types'
 
 function SettingsCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
@@ -40,7 +40,7 @@ function SettingsCard({ title, subtitle, children }: { title: string; subtitle: 
   )
 }
 
-type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'team' | 'apiKeys' | 'availability'
+type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'team' | 'availability'
 type TabGroup = { label: string; tabs: { id: Tab; label: string; description: string; icon: string }[] }
 
 const TAB_GROUPS: TabGroup[] = [
@@ -58,12 +58,6 @@ const TAB_GROUPS: TabGroup[] = [
       { id: 'profile', label: 'My profile', description: 'Your name and sign-in email', icon: 'person' },
       { id: 'security', label: 'Sign-in & security', description: 'Password and account protection', icon: 'lock' },
       { id: 'preferences', label: 'Preferences', description: 'Personal timezone, language and alerts', icon: 'tune' },
-    ],
-  },
-  {
-    label: 'Developer',
-    tabs: [
-      { id: 'apiKeys', label: 'API keys', description: 'Secure access for your systems', icon: 'key' },
     ],
   },
 ]
@@ -128,7 +122,6 @@ export function Settings() {
           {tab === 'security' && <SecurityTab />}
           {tab === 'preferences' && <PreferencesTab />}
           {tab === 'team' && <TeamTab canManage={hasRole(user, 'admin')} />}
-          {tab === 'apiKeys' && <ApiKeysCard canManage={hasRole(user, 'admin')} />}
           {tab === 'availability' && <AvailabilityTab canManage={hasRole(user, 'admin')} />}
         </div>
       </section>
@@ -494,8 +487,8 @@ function PreferencesTab() {
   const request = async (kind: 'export' | 'delete') => {
     setAction(kind); setMessage(null)
     try {
-      if (kind === 'export') await apiRequestDataExport(); else await apiRequestAccountDeletion()
-      setMessage(kind === 'export' ? 'Your export request was received. We’ll email the next steps.' : 'Your deletion request was received. We’ll verify ownership by email before any data is removed.')
+      if (kind === 'export') await apiDownloadDataExport(); else await apiRequestAccountDeletion()
+      setMessage(kind === 'export' ? 'Your data export was downloaded.' : 'Deletion request submitted. Our privacy team will review it within 2 business days; no data has been removed yet.')
     } catch (err) { setMessage(err instanceof Error ? err.message : 'Could not send request.') }
     finally { setAction(null) }
   }
@@ -517,8 +510,9 @@ function PreferencesTab() {
     <SettingsCard title="Notifications" subtitle="Choose the operational emails you receive personally.">
       <div className="flex flex-col gap-2"><Toggle field="notify_leads" label="Qualified leads" description="New lead and follow-up alerts." /><Toggle field="notify_calls" label="Call issues" description="Important failed-call and delivery alerts." /><Toggle field="notify_billing" label="Billing" description="Credit, invoice, and plan notices." /><Toggle field="notify_product" label="Product updates" description="Occasional Vistrow Voice release updates." /></div>
     </SettingsCard>
-    <SettingsCard title="Your data" subtitle="Request a copy of your personal account data or start a verified deletion request.">
-      <div className="flex flex-wrap gap-2"><button onClick={() => request('export')} disabled={action !== null} className="rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary hover:text-primary">{action === 'export' ? 'Requesting…' : 'Request data export'}</button><button onClick={() => request('delete')} disabled={action !== null} className="rounded-lg border border-destructive/50 px-4 py-2 text-sm font-bold text-destructive hover:bg-destructive/10">{action === 'delete' ? 'Requesting…' : 'Request account deletion'}</button></div>
+    <SettingsCard title="Your data" subtitle="Download your workspace data immediately or submit a verified deletion request for admin review.">
+      <div className="flex flex-wrap gap-2"><button onClick={() => request('export')} disabled={action !== null} className="rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary hover:text-primary">{action === 'export' ? 'Preparing…' : 'Download my data'}</button><button onClick={() => { if (window.confirm('Request deletion of this account and workspace? Nothing is deleted immediately; our privacy team reviews the request first.')) request('delete') }} disabled={action !== null} className="rounded-lg border border-destructive/50 px-4 py-2 text-sm font-bold text-destructive hover:bg-destructive/10">{action === 'delete' ? 'Submitting…' : 'Request account deletion'}</button></div>
+      <p className="text-[11px] text-text-muted">Exports include profile, preferences, agents, calls, contacts, appointments, knowledge-base metadata, integration status, and billing usage. Secrets and stored integration credentials are excluded.</p>
     </SettingsCard>
     {message && <p className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-muted">{message}</p>}
   </div>
@@ -730,144 +724,6 @@ function InviteForm({ onSent }: { onSent: () => void }) {
         <p className={`text-xs ${result.ok ? 'text-success' : 'text-destructive'}`}>{result.text}</p>
       )}
     </div>
-  )
-}
-
-function ApiKeysCard({ canManage }: { canManage: boolean }) {
-  const [keys, setKeys] = useState<ApiKey[]>([])
-  const [loading, setLoading] = useState(true)
-  const [name, setName] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  // The full secret is returned exactly once, on creation - we hold it in
-  // memory only until the operator dismisses it; it's never fetchable again.
-  const [freshKey, setFreshKey] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-
-  const load = () =>
-    fetchApiKeys()
-      .then(setKeys)
-      .catch(() => setKeys([]))
-      .finally(() => setLoading(false))
-
-  useEffect(() => {
-    load()
-  }, [])
-
-  const create = async () => {
-    setCreating(true)
-    setError(null)
-    try {
-      const created = await createApiKey(name.trim() || 'API key')
-      setFreshKey(created.key)
-      setName('')
-      setCopied(false)
-      await load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create key.')
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  const remove = async (id: number) => {
-    await deleteApiKey(id).catch(() => {})
-    load()
-  }
-
-  return (
-    <SettingsCard
-      title="API keys"
-      subtitle="Programmatic access to the Vistrow Voice API. Send the key as the X-Api-Key header."
-    >
-      {!canManage && (
-        <p className="flex items-center gap-1.5 text-xs text-text-muted">
-          <Icon name="info" className="text-[15px]" />
-          Only Admins and the Owner can create or revoke API keys.
-        </p>
-      )}
-
-      {freshKey && (
-        <div className="flex flex-col gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
-          <p className="flex items-center gap-1.5 text-xs font-bold text-text">
-            <Icon name="key" className="text-[15px] text-primary" />
-            Copy this key now - it won't be shown again.
-          </p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 truncate rounded-md bg-bg px-3 py-2 font-mono text-xs text-cyan">{freshKey}</code>
-            <button
-              onClick={() => {
-                navigator.clipboard?.writeText(freshKey)
-                setCopied(true)
-              }}
-              className="rounded-lg border border-border px-3 py-2 text-xs font-bold hover:border-primary"
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-            <button
-              onClick={() => setFreshKey(null)}
-              aria-label="Dismiss"
-              className="text-text-muted hover:text-text"
-            >
-              <Icon name="close" className="text-[18px]" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {canManage && (
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Key name (e.g. Production server)"
-            className="flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
-          />
-          <button
-            onClick={create}
-            disabled={creating}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
-          >
-            {creating ? 'Creating…' : '+ New key'}
-          </button>
-        </div>
-      )}
-      {error && (
-        <p className="flex items-center gap-1.5 text-xs text-destructive">
-          <Icon name="error" className="text-[15px]" />
-          {error}
-        </p>
-      )}
-
-      {loading ? (
-        <p className="text-xs text-text-muted">Loading…</p>
-      ) : keys.length === 0 ? (
-        <p className="text-xs text-text-muted">No API keys yet.</p>
-      ) : (
-        <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
-          {keys.map((k) => (
-            <div key={k.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{k.name}</p>
-                <p className="font-mono text-[11px] text-text-muted">
-                  {k.prefix}••••••  · created {formatDateTime(k.createdAt)}
-                  {k.lastUsedAt ? ` · last used ${formatDateTime(k.lastUsedAt)}` : ' · never used'}
-                </p>
-              </div>
-              {canManage && (
-                <button
-                  onClick={() => remove(k.id)}
-                  aria-label={`Revoke ${k.name}`}
-                  className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-text-muted hover:border-destructive hover:text-destructive"
-                >
-                  Revoke
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </SettingsCard>
   )
 }
 

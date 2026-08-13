@@ -35,7 +35,7 @@ const STEPS: TourStep[] = [
   {
     selector: '[data-tour="nav-settings"]',
     title: 'Manage your workspace',
-    body: 'Invite teammates, set roles, and manage API keys.',
+    body: 'Invite teammates, set roles, configure security, and manage workspace preferences.',
   },
   {
     selector: '[data-tour="help-chat"]',

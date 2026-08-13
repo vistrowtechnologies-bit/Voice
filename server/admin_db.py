@@ -75,6 +75,43 @@ def log_error(message: str, source: str = "backend", level: str = "error", accou
         conn.close()
 
 
+def privacy_requests(status: str = "") -> list[dict]:
+    conn = _connect()
+    try:
+        where = "WHERE pr.status = ?" if status else ""
+        params = (status,) if status else ()
+        rows = conn.execute(
+            f"""SELECT pr.id, pr.request_type, pr.status, pr.admin_note, pr.created_at, pr.updated_at,
+                       pr.user_id, u.name AS user_name, u.email AS user_email,
+                       pr.account_id, a.name AS account_name
+                FROM privacy_requests pr
+                JOIN users u ON u.id = pr.user_id
+                JOIN accounts a ON a.id = pr.account_id
+                {where}
+                ORDER BY CASE pr.status WHEN 'pending' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, pr.id DESC""",
+            params,
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def update_privacy_request(request_id: int, status: str, admin_note: str = "") -> dict | None:
+    if status not in ("pending", "in_progress", "completed", "rejected"):
+        raise ValueError("invalid privacy request status")
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE privacy_requests SET status = ?, admin_note = ?, updated_at = {_NOW} WHERE id = ?",
+                (status, admin_note[:1000], request_id),
+            )
+        row = conn.execute("SELECT * FROM privacy_requests WHERE id = ?", (request_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
 # ----------------------------------------------------------------- overview
 
 

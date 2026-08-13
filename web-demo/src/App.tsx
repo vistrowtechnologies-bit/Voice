@@ -13,6 +13,7 @@ import { AdminBilling } from './pages/admin/AdminBilling'
 import { AdminAudit } from './pages/admin/AdminAudit'
 import { AdminHealth } from './pages/admin/AdminHealth'
 import { AdminVendorCredits } from './pages/admin/AdminVendorCredits'
+import { AdminPrivacyRequests } from './pages/admin/AdminPrivacyRequests'
 import { AdminSettings } from './pages/admin/AdminSettings'
 import { Home } from './pages/marketing/Home'
 import { ProductOverview } from './pages/marketing/ProductOverview'
@@ -172,6 +173,7 @@ function App() {
         <Route path="/admin/audit" element={<RequireOwner><AdminAudit /></RequireOwner>} />
         <Route path="/admin/health" element={<RequireOwner><AdminHealth /></RequireOwner>} />
         <Route path="/admin/vendor-credits" element={<RequireOwner><AdminVendorCredits /></RequireOwner>} />
+        <Route path="/admin/privacy-requests" element={<RequireOwner><AdminPrivacyRequests /></RequireOwner>} />
         <Route path="/admin/settings" element={<RequireOwner><AdminSettings /></RequireOwner>} />
         <Route path="*" element={<NotFound />} />
       </Routes>

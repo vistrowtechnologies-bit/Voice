@@ -1273,17 +1273,41 @@ def sign_out_other_sessions(response: Response, request: Request, user: dict = D
 
 
 @app.post("/profile/request-data-export")
-def request_data_export(user: dict = Depends(current_user)) -> dict:
+def request_data_export(user: dict = Depends(current_user)) -> StreamingResponse:
     profile = calls_db.get_user_by_id(user["user_id"])
-    if profile:
-        html = email_sender.render_email(
-            preheader="Vistrow Voice data export request",
-            heading="Your data export request was received",
-            body_html="We received your request. Our team will verify it and contact you at this email with the export process.",
-        )
-        email_sender.send_email(profile["email"], "Vistrow Voice data export request", html, email_sender.FROM_ACCOUNT_SECURITY)
+    if profile is None:
+        raise HTTPException(404, "Account not found")
+    export = {
+        "exportedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "profile": {
+            "name": profile["name"],
+            "email": profile["email"],
+            "role": profile["role"],
+            "workspace": profile["account_name"],
+            "plan": profile["account_plan"],
+        },
+        "preferences": calls_db.get_user_preferences(user["user_id"]),
+        "securityEvents": calls_db.list_security_events(user["user_id"], 100),
+        "agents": calls_db.list_agents(user["account_id"]),
+        "calls": calls_db.list_calls(user["account_id"], limit=10000),
+        "contacts": calls_db.list_contacts(user["account_id"]),
+        "appointments": calls_db.list_appointments(user["account_id"]),
+        "knowledgeBases": calls_db.list_knowledge_bases(user["account_id"]),
+        "integrations": [
+            {k: v for k, v in item.items() if k != "config"}
+            for item in calls_db.list_integrations(user["account_id"])
+        ],
+        "billing": calls_db.billing_summary(user["account_id"]),
+    }
+    calls_db.create_privacy_request(user["user_id"], user["account_id"], "export", status="completed")
     calls_db.record_security_event(user["user_id"], "data_export_requested")
-    return {"ok": True}
+    content = json.dumps(export, ensure_ascii=False, indent=2, default=str).encode("utf-8")
+    filename = f"vistrow-voice-data-{time.strftime('%Y-%m-%d')}.json"
+    return StreamingResponse(
+        iter([content]),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post("/profile/request-account-deletion")
@@ -1293,11 +1317,12 @@ def request_account_deletion(user: dict = Depends(current_user)) -> dict:
         html = email_sender.render_email(
             preheader="Vistrow Voice account deletion request",
             heading="Account deletion request received",
-            body_html="We received your request. For security, our team will verify ownership before any account or workspace data is deleted.",
+            body_html="We received your request. For security, our team will verify ownership before any account or workspace data is deleted. Our privacy team will review this request within 2 business days.",
         )
         email_sender.send_email(profile["email"], "Vistrow Voice account deletion request", html, email_sender.FROM_ACCOUNT_SECURITY)
     calls_db.record_security_event(user["user_id"], "account_deletion_requested")
-    return {"ok": True}
+    request_row = calls_db.create_privacy_request(user["user_id"], user["account_id"], "deletion")
+    return {"ok": True, "requestId": request_row["id"], "status": request_row["status"]}
 
 
 @app.post("/onboarding/complete")
@@ -1575,6 +1600,39 @@ async def admin_health(admin: dict = Depends(require_platform_owner)) -> dict:
 @app.get("/admin/vendor-credits")
 def admin_vendor_credits(admin: dict = Depends(require_platform_owner)) -> dict:
     return {"vendors": admin_db.list_vendor_credits()}
+
+
+class AdminPrivacyRequestUpdate(BaseModel):
+    status: str
+    note: str = ""
+
+
+@app.get("/admin/privacy-requests")
+def admin_privacy_requests(status: str = "", admin: dict = Depends(require_platform_owner)) -> dict:
+    return {"requests": admin_db.privacy_requests(status)}
+
+
+@app.post("/admin/privacy-requests/{request_id}")
+def admin_update_privacy_request(
+    request_id: int,
+    req: AdminPrivacyRequestUpdate,
+    admin: dict = Depends(require_platform_owner),
+) -> dict:
+    try:
+        updated = admin_db.update_privacy_request(request_id, req.status, req.note)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if updated is None:
+        raise HTTPException(404, "Privacy request not found")
+    admin_db.write_audit(
+        admin["user_id"],
+        admin["email"],
+        "update_privacy_request",
+        updated["account_id"],
+        updated["user_id"],
+        detail=f"request #{request_id} -> {req.status}: {req.note[:200]}",
+    )
+    return {"request": updated}
 
 
 class AdminVendorCreditRequest(BaseModel):
