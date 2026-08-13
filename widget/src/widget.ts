@@ -608,6 +608,8 @@ function init(): void {
   let warmRoom: string | null = null
   let selectedExperience: 'voice' | 'chat' = widgetMode === 'chat' ? 'chat' : 'voice'
   let callStartedAt = 0
+  let callStartedAtMonotonic = 0
+  let lastDisplayedCallSecond = 0
   let callCompleted = false
 
   // Backs off repeated call attempts instead of letting an impatient
@@ -727,7 +729,14 @@ function init(): void {
   }
 
   function elapsedCallSeconds(): number {
-    return callStartedAt ? Math.max(0, Math.floor((Date.now() - callStartedAt) / 1000)) : 0
+    if (!callStartedAtMonotonic) return 0
+    // performance.now() is monotonic: it cannot jump when the device clock
+    // syncs, the timezone changes, or the operating system adjusts time.
+    // Clamp to the last rendered value as a second layer of protection so a
+    // timer shown to a caller can only ever stay still or move forward.
+    const measured = Math.max(0, Math.floor((performance.now() - callStartedAtMonotonic) / 1000))
+    lastDisplayedCallSecond = Math.max(lastDisplayedCallSecond, measured)
+    return lastDisplayedCallSecond
   }
 
   // Display elapsed conversation time, while enforcing the 5-minute limit
@@ -738,7 +747,11 @@ function init(): void {
   // a browser throttles a background tab.
   function startCallTimer(): void {
     if (countdownInterval !== null) return
-    if (!callStartedAt) callStartedAt = Date.now()
+    if (!callStartedAtMonotonic) {
+      callStartedAt = Date.now()
+      callStartedAtMonotonic = performance.now()
+      lastDisplayedCallSecond = 0
+    }
     const tick = () => {
       const elapsed = elapsedCallSeconds()
       timerEl.textContent = formatCallTime(elapsed)
@@ -1309,6 +1322,8 @@ function init(): void {
       // Mic permission, token fetch and queue time are connection latency,
       // not time spent speaking with the agent.
       callStartedAt = 0
+      callStartedAtMonotonic = 0
+      lastDisplayedCallSecond = 0
       voiceAttemptStartedAt = performance.now()
       connectLatencyMs = null
       agentJoinLatencyMs = null
@@ -1627,6 +1642,8 @@ function init(): void {
     feedbackNote.style.display = 'none'
     feedbackNote.value = ''
     callStartedAt = 0
+    callStartedAtMonotonic = 0
+    lastDisplayedCallSecond = 0
     if (selectedExperience === 'chat') {
       chatHistory.splice(0)
       chatMessagesEl.innerHTML = '<p class="av-transcript-empty">Ask anything - no call, just type.</p>'

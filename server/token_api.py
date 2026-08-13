@@ -3172,7 +3172,15 @@ def widget_js() -> FileResponse:
     `npm run build` in widget/ and copy dist/widget.js here after editing
     widget/src/widget.ts; there's no automated build step wiring the two
     together yet."""
-    return FileResponse(WIDGET_JS_PATH, media_type="application/javascript; charset=utf-8")
+    # This URL is deliberately stable in every customer embed snippet, so it
+    # must revalidate instead of being cached for days by a browser/CDN after
+    # a widget bug fix. no-cache permits storage but requires an origin check;
+    # the ETag/Last-Modified response still makes unchanged loads cheap.
+    return FileResponse(
+        WIDGET_JS_PATH,
+        media_type="application/javascript; charset=utf-8",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 @app.get("/widget/wordpress-plugin.zip")
