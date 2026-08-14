@@ -406,6 +406,7 @@ function widgetHtml(label: string): string {
             <button id="av-feedback-down" aria-label="Not helpful" aria-pressed="false">👎</button>
           </div>
           <textarea id="av-feedback-note" class="av-feedback-note" rows="2" maxlength="500" placeholder="What went wrong? (optional)" style="display:none;"></textarea>
+          <button id="av-feedback-send" class="av-complete-action" style="display:none;">Send</button>
           <div class="av-complete-actions">
             <button id="av-copy-transcript" class="av-complete-action">${COPY_ICON} Copy transcript</button>
             ${ctaLabel && ctaUrl ? `<a id="av-post-cta" class="av-complete-action av-cta" href="${ctaUrl}" target="_blank" rel="noopener">${ctaLabel} ${ARROW_ICON}</a>` : ''}
@@ -492,6 +493,7 @@ function init(): void {
   const feedbackUpBtn = shadow.getElementById('av-feedback-up') as HTMLButtonElement
   const feedbackDownBtn = shadow.getElementById('av-feedback-down') as HTMLButtonElement
   const feedbackNote = shadow.getElementById('av-feedback-note') as HTMLTextAreaElement
+  const feedbackSendBtn = shadow.getElementById('av-feedback-send') as HTMLButtonElement
   const copyTranscriptBtn = shadow.getElementById('av-copy-transcript') as HTMLButtonElement
   const copyStatusEl = shadow.getElementById('av-copy-status') as HTMLSpanElement
   const newConversationBtn = shadow.getElementById('av-new-conversation') as HTMLButtonElement
@@ -1628,9 +1630,21 @@ function init(): void {
     feedbackDownBtn.setAttribute('aria-pressed', 'true')
     feedbackUpBtn.setAttribute('aria-pressed', 'false')
     feedbackNote.style.display = 'block'
+    feedbackSendBtn.style.display = 'flex'
     feedbackNote.focus()
     trackEvent('feedback_submitted', { rating: 'not_helpful' })
     void submitFeedback('not_helpful')
+  })
+  // Comment also auto-submits on blur (e.g. clicking another button) as a
+  // safety net, but that has no visible affordance — confirmed live,
+  // visitors had no way to tell a typed comment was ever sent. This button
+  // is the actual visible "send" action; submitFeedback's own /widget/
+  // feedback call is a plain idempotent UPDATE, so this button firing after
+  // (or instead of) the blur handler is harmless either way.
+  feedbackSendBtn.addEventListener('click', () => {
+    void submitFeedback('not_helpful')
+    feedbackSendBtn.textContent = 'Sent'
+    feedbackSendBtn.setAttribute('disabled', 'true')
   })
   feedbackNote.addEventListener('blur', () => {
     if (feedbackDownBtn.getAttribute('aria-pressed') === 'true' && feedbackNote.value.trim()) {
@@ -1655,6 +1669,9 @@ function init(): void {
     feedbackDownBtn.setAttribute('aria-pressed', 'false')
     feedbackNote.style.display = 'none'
     feedbackNote.value = ''
+    feedbackSendBtn.style.display = 'none'
+    feedbackSendBtn.textContent = 'Send'
+    feedbackSendBtn.removeAttribute('disabled')
     callStartedAt = 0
     callStartedAtMonotonic = 0
     lastDisplayedCallSecond = 0
