@@ -157,25 +157,40 @@ ELEVENLABS_EMOTION_DELTAS: dict[str, dict[str, float]] = {
 GEMINI_TONE_PROMPTS: dict[str, str] = {
     "professional": (
         "Speak like a calm, sharp Indian business consultant in a real one-to-one phone call. "
-        "Be measured and concise, with subtle clause-level pace changes and brief natural pauses. "
-        "Never sound like an announcer, advertisement, IVR, or overly cheerful assistant."
+        "Be measured and concise, but let your pitch, pace, and emphasis genuinely move with the "
+        "weight of what you're saying — a real consultant's voice is alive, not flat. Use brief "
+        "natural pauses for effect. Never sound like an announcer, advertisement, IVR, or overly "
+        "cheerful assistant."
     ),
     "balanced": (
         "Speak like a warm, perceptive Indian business consultant in a real one-to-one phone call. "
-        "Keep the delivery relaxed and responsive, with subtle clause-level pace changes and brief "
-        "natural pauses after acknowledgements. Use Indian-English or Hinglish rhythm only when the "
-        "text naturally contains it. Never sound like an announcer, advertisement, IVR, or overly "
-        "cheerful assistant; do not exaggerate fillers or emotion."
+        "Let the delivery breathe and react — genuine shifts in pitch, pace, and warmth as the "
+        "conversation moves, with natural pauses after acknowledgements. Use Indian-English or "
+        "Hinglish rhythm when the text naturally contains it. Never sound like an announcer, "
+        "advertisement, IVR, or a flat text-to-speech read."
     ),
     "casual": (
         "Speak like a friendly, quick-witted Indian consultant in a relaxed one-to-one phone call. "
-        "Sound engaged rather than performative, vary pace subtly, and leave brief natural pauses. "
-        "Never sound like an announcer, advertisement, IVR, or hyperactive assistant; do not "
-        "exaggerate fillers, jokes, or emotion."
+        "Sound genuinely engaged — real pitch and pace variation, energy that rises and falls with "
+        "what's being said — rather than performative or monotone. Leave brief natural pauses. Never "
+        "sound like an announcer, advertisement, IVR, or hyperactive assistant."
     ),
 }
+# Written to be performed, not just stated — Gemini 3.1 Flash's prompt-driven
+# style control is expressive enough to actually land a described vocal
+# shift (pitch, breath, pacing), not just a mood label, so these spell out
+# the physical delivery rather than naming the emotion and hoping.
 GEMINI_EMOTION_PROMPT_DELTAS: dict[str, str] = {
-    "frustrated": "The caller sounds frustrated — speak calmly, patiently, and reassuringly to de-escalate.",
-    "confused": "The caller sounds confused — speak slowly and clearly, articulating each word.",
-    "excited": "The caller sounds excited and happy — match their energy with warmth and enthusiasm.",
+    "frustrated": (
+        "The caller sounds frustrated — drop your pitch slightly, slow down, and speak calmly and "
+        "reassuringly to de-escalate; let the calm be audible, not just polite."
+    ),
+    "confused": (
+        "The caller sounds confused — slow down noticeably and articulate each word clearly, with "
+        "a patient, grounding tone."
+    ),
+    "excited": (
+        "The caller sounds excited and happy — let your energy visibly lift to match theirs: a "
+        "brighter pitch, quicker pace, and real warmth, not a restrained acknowledgement."
+    ),
 }

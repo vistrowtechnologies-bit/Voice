@@ -94,6 +94,11 @@ const BHARAT_POINTS = [
     title: 'Ten Indian languages, one agent',
     body: 'From Punjabi in the north to Malayalam in the south, one agent covers them all - no separate deployment, no per-language rebuild, no region left on an English-only fallback.',
   },
+  {
+    glyph: '🎭',
+    title: 'A voice that reacts, not just replies',
+    body: 'Built by an Indian team, tuned for Indian callers: Artha reads frustration, confusion, or excitement in your caller’s voice and shifts its own pace and warmth to match - live, mid-call, not a flat text-to-speech read.',
+  },
 ]
 
 function SectionEyebrow({ children }: { children: string }) {
