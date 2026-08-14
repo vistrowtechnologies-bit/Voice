@@ -616,10 +616,22 @@ async def handle_utterance_streaming(
         reply_text, new_messages = await llm.stream_turn(
             session.model, session.messages, session.tool_schemas, session.tool_handlers, session, _on_sentence
         )
+        # pipeline.close() is inside this same try, not after it: the
+        # consumer task (streaming already-queued sentences out) is a
+        # sibling task, not a child of this coroutine, so a cancellation
+        # that lands while awaiting close() (i.e. the model already
+        # finished generating and we're just draining/sending remaining
+        # audio - the most likely moment for a real barge-in, since that's
+        # most of a turn's wall-clock time) would otherwise propagate
+        # straight out WITHOUT ever calling pipeline.abort(), leaving the
+        # consumer running and the interrupted reply's audio still playing
+        # to completion. Confirmed as the actual reason barge-in silently
+        # failed to stop in-flight audio even when the cancellation itself
+        # fired correctly.
+        await pipeline.close()
     except asyncio.CancelledError:
         await pipeline.abort()
         raise
-    await pipeline.close()
     session.messages.extend(new_messages)
     session.transcript.append({"role": "assistant", "text": reply_text})
     return reply_text

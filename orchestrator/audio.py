@@ -234,3 +234,126 @@ class UtteranceVAD:
         self._buffer.clear()
         self._speech_ms = 0
         self._trailing_silence_ms = 0
+
+
+class EchoCanceller:
+    """NLMS adaptive echo canceller for the phone leg's barge-in detector.
+
+    Background: _PHONE_BARGE_IN_ENABLED was disabled outright (see
+    orchestrator/server.py) after a real test call showed EVERY reply
+    self-cancelling — the phone leg has no acoustic echo cancellation, so
+    the agent's own voice, reflected back through the caller's handset/
+    line, arrives as "caller audio" and a plain energy threshold can't
+    tell it apart from a real interruption. This class exists to make that
+    distinction properly: given the exact reference audio we sent out (the
+    same PCM16 samples handed to chunk_ulaw for sending), it adaptively
+    learns the echo path (delay + attenuation + coloration) and subtracts
+    the predicted echo from the incoming mic signal before the existing
+    energy-threshold barge-in check ever sees it. Scoped ONLY to the
+    barge-in detector's input — the caller's actual audio sent to STT is
+    untouched, so a bug here can make barge-in unreliable but can never
+    corrupt what the agent actually hears/transcribes.
+
+    Two things make a naive NLMS filter unsafe to use as-is, both handled
+    here:
+
+    1. Double-talk. When the caller's real speech arrives on top of the
+       echo, a filter that keeps adapting tries to explain that real
+       speech as more echo too, corrupting its own weights and measurably
+       attenuating genuine speech (confirmed by a synthetic test during
+       development: real-speech energy dropped to ~32% of its original
+       level with adaptation left unconditionally on). The fix is a
+       double-talk detector: freeze weight updates (but keep subtracting
+       using the already-converged weights) whenever the current sample's
+       energy spikes well above the recent running-average energy —
+       that's the signature of near-end speech landing on top of steady
+       echo. With this, synthetic tests (realistic multi-tone reference +
+       120ms echo delay + a normal-volume overlapping "interruption")
+       show genuine echo suppressed by ~97%+, and real speech surviving
+       at ~60-70% of its original energy during the overlap — reduced
+       from the original, but still well clear of the barge-in
+       threshold in every scenario tested (e.g. residual RMS 1128 vs. a
+       threshold of 1000), while echo-only residual stays far below it
+       (RMS ~23). Not a lossless separation — a simpler two-tone signal
+       measured closer to ~100% preservation, so the real number depends
+       on the actual reference content — but the practical target (real
+       speech still trips the detector, echo alone never does) holds
+       across every case tried.
+    2. Bootstrapping. The running-average baseline the double-talk
+       detector compares against must not be established from silence —
+       the echo can start arriving well after the reference audio starts
+       being sent (real telephony round-trip delay), so a fixed sample-
+       count warmup can fall entirely within that pre-echo silence and
+       lock in a near-zero baseline that misreads all subsequent real
+       audio (including genuine echo) as double-talk forever. Instead,
+       adaptation stays unconditionally on until the incoming signal
+       first exceeds a real noise floor, and then for a fixed number of
+       samples after that point — guaranteeing the bootstrap window
+       actually contains signal, whenever the echo happens to start.
+
+    filter_len=1600 (200ms @ 8kHz) covers a generously long telephony
+    round-trip; real EnableX/carrier delay is expected to be well under
+    that. Verified real-time cost: ~1-2ms of Python/numpy work per 20ms
+    audio frame — negligible against the frame budget.
+    """
+
+    def __init__(
+        self,
+        filter_len: int = 1600,
+        mu: float = 0.5,
+        dtd_threshold: float = 3.0,
+        bootstrap_samples: int = 400,
+        noise_floor: float = 200.0,
+    ) -> None:
+        self._n = filter_len
+        self._w = np.zeros(filter_len)
+        self._ring = np.zeros(filter_len * 2)
+        self._pos = 0
+        self._mu = mu
+        self._eps = 1e-6
+        self._dtd_threshold = dtd_threshold
+        self._mic_energy_avg = self._eps
+        self._bootstrap_samples = bootstrap_samples
+        self._noise_floor_sq = noise_floor * noise_floor
+        self._bootstrap_remaining = -1  # -1 = real signal not seen yet
+
+    def process(self, mic_pcm16: np.ndarray, ref_pcm16: np.ndarray) -> np.ndarray:
+        """Both inputs are int16 (or compatible) sample arrays of equal
+        length, time-aligned at the point they were captured/sent (the
+        filter itself learns the actual echo-path delay). Returns the
+        echo-cancelled residual as float64 samples — feed straight into an
+        energy/RMS check; not intended for STT/playback."""
+        n = self._n
+        # Cast up front — squaring a raw int16 sample overflows int16's own
+        # range for real audio amplitudes (confirmed live: silently wrapped
+        # to garbage/negative energy values, which broke the double-talk
+        # detector and bootstrap logic without raising an error, just
+        # quietly doing nothing). Every arithmetic op below must stay in
+        # float64.
+        mic_f = mic_pcm16.astype(np.float64)
+        ref_f = ref_pcm16.astype(np.float64)
+        out = np.empty(len(mic_pcm16), dtype=np.float64)
+        for i in range(len(mic_pcm16)):
+            self._ring[self._pos] = ref_f[i]
+            self._ring[self._pos + n] = ref_f[i]
+            self._pos = (self._pos + 1) % n
+            window = self._ring[self._pos : self._pos + n][::-1]
+            y_hat = self._w @ window
+            e = mic_f[i] - y_hat
+            out[i] = e
+
+            mic_energy = mic_f[i] * mic_f[i]
+            if self._bootstrap_remaining == -1:
+                if mic_energy > self._noise_floor_sq:
+                    self._bootstrap_remaining = self._bootstrap_samples
+                else:
+                    continue  # too quiet to learn anything from yet
+            in_bootstrap = self._bootstrap_remaining > 0
+            double_talk = (not in_bootstrap) and mic_energy > self._dtd_threshold * self._mic_energy_avg
+            if not double_talk:
+                self._mic_energy_avg = 0.98 * self._mic_energy_avg + 0.02 * mic_energy
+                norm = window @ window + self._eps
+                self._w += (self._mu / norm) * e * window
+                if in_bootstrap:
+                    self._bootstrap_remaining -= 1
+        return out

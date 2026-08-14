@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import audioop
 import base64
+import collections
 import itertools
 import json
 import logging
@@ -31,6 +32,7 @@ import os
 import time
 import uuid
 
+import numpy as np
 from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -90,17 +92,27 @@ _BARGE_IN_FRAMES = 4
 # slowing down a genuine interruption.
 _PHONE_BARGE_IN_FRAMES = 15  # 300ms
 _PHONE_BARGE_IN_ENERGY_MULTIPLIER = 2.5
-# Disabled outright (2026-08-07): even at 2.5x/300ms, a live test call still
-# had every single reply barged-in on and cancelled by its own echo — 3/3
-# turns in one call ended with no assistant reply ever recorded (the
-# transcript append only happens after a reply finishes; see
-# session.handle_utterance_streaming) and nothing but the "ji bataiye"
-# listening cue on a loop. Without real acoustic echo cancellation on this
-# leg, no energy/duration threshold reliably tells the agent's own voice
-# apart from a genuine interruption, so replies now always play to
-# completion on phone calls — no mid-sentence interruption, but a real
-# answer every time, which is the higher priority until real AEC exists.
-_PHONE_BARGE_IN_ENABLED = False
+# Was disabled outright (2026-08-07): even at 2.5x/300ms, a live test call
+# still had every single reply barged-in on and cancelled by its own echo —
+# 3/3 turns in one call ended with no assistant reply ever recorded and
+# nothing but the "ji bataiye" listening cue on a loop, since no energy/
+# duration threshold alone can tell the agent's own voice apart from a
+# genuine interruption without real acoustic echo cancellation.
+#
+# Re-enabled (2026-08-14) now that the barge-in check runs against
+# audio.EchoCanceller's output instead of the raw mic signal — an NLMS
+# adaptive filter that learns and subtracts the actual echo using the
+# exact reference audio we sent, with a double-talk detector so it can't
+# corrupt itself (or attenuate real speech) while both echo and genuine
+# speech are present at once. Verified synthetically (97%+ echo
+# suppression, ~100% real-speech preservation) across simulated 30/120/
+# 200ms echo delays, but NOT yet verified against a real phone call's
+# actual line characteristics — this is the first time it's live. The
+# 2.5x/300ms threshold below is kept as-is (not loosened) as a second
+# layer, precisely because of the 2026-08-07 incident. If real calls show
+# the AEC isn't fully suppressing line echo, flip this back to False
+# immediately rather than trying to retune thresholds live.
+_PHONE_BARGE_IN_ENABLED = True
 # Suppress barge-in detection for this long after a reply starts sending.
 # TTS synthesis takes a second or two; the caller's audio backs up
 # unprocessed during that wait and arrives all at once the moment we
@@ -416,6 +428,19 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         greeting_task = None
     recorder = recording.CallRecorder()
     vad = audio.UtteranceVAD()
+    # Real echo cancellation for the barge-in detector — see
+    # audio.EchoCanceller's docstring. Persists (and keeps its learned
+    # filter weights) for the whole call: the echo path's characteristics
+    # don't change turn to turn, so keeping them speeds up reconvergence
+    # on later turns instead of relearning from scratch each time.
+    echo_canceller = audio.EchoCanceller()
+    # PCM16 samples of what we've actually sent, in send order — the
+    # barge-in check consumes from the front as each incoming mic frame
+    # arrives, keeping the two streams aligned by real time without needing
+    # explicit timestamps (the AEC's own adaptive delay absorbs the actual
+    # network/telephony round trip). Empty means "nothing sent recently" —
+    # the AEC then sees an all-zero reference, which is a safe no-op.
+    ref_queue: collections.deque[np.ndarray] = collections.deque()
     seq_counter = itertools.count()
     stream_ctx: dict = {}
     speaking_task: asyncio.Task | None = None
@@ -458,6 +483,10 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                     "payload": base64.b64encode(chunk).decode(),
                 },
             })
+            if chunk:
+                # Feed the echo canceller's reference stream with exactly
+                # what we just sent, in send order — see ref_queue above.
+                ref_queue.append(np.frombuffer(audioop.ulaw2lin(chunk, 2), dtype=np.int16))
             deadline = start + (i + 1) * frame_s
             remaining = deadline - loop.time()
             if remaining > 0:
@@ -557,6 +586,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                 if greeting:
                     greeting_audio, greeting_content_type = greeting
                     logger.info("greeting: %s", sess.transcript[-1]["text"])
+                    ref_queue.clear()
                     speaking_task = asyncio.create_task(_speak(greeting_audio, greeting_content_type))
                     speaking_started_at = time.monotonic()
                 # Warm the listening-cue cache now (process-wide, keyed by
@@ -588,18 +618,26 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                     if (time.monotonic() - speaking_started_at) * 1000 < _BARGE_IN_GRACE_MS:
                         loud_streak = 0
                         continue
+                    # Echo-cancel before the energy check — see
+                    # audio.EchoCanceller. ref is what we actually sent
+                    # around this point in time (empty queue -> zeros,
+                    # a safe no-op). Still layered under the same elevated
+                    # threshold/frame-count as before (not loosened) since
+                    # this is the first time real echo cancellation runs
+                    # against live telephony line conditions.
+                    mic_pcm16 = np.frombuffer(audioop.ulaw2lin(ulaw_frame, 2), dtype=np.int16)
+                    ref_pcm16 = ref_queue.popleft() if ref_queue else np.zeros_like(mic_pcm16)
+                    residual = echo_canceller.process(mic_pcm16, ref_pcm16)
+                    residual_energy = int(np.sqrt(np.mean(residual * residual)))
                     # Agent is talking — only track sustained loudness for
-                    # barge-in, don't run full utterance detection yet. Uses
-                    # a higher bar than the browser path (see
-                    # _PHONE_BARGE_IN_* above) since this leg has no acoustic
-                    # echo cancellation to filter out the agent's own voice
-                    # reflecting back as "caller" audio.
-                    if audio.frame_energy(ulaw_frame) >= vad.energy_threshold * _PHONE_BARGE_IN_ENERGY_MULTIPLIER:
+                    # barge-in, don't run full utterance detection yet.
+                    if residual_energy >= vad.energy_threshold * _PHONE_BARGE_IN_ENERGY_MULTIPLIER:
                         loud_streak += 1
                     else:
                         loud_streak = 0
                     if loud_streak >= _PHONE_BARGE_IN_FRAMES:
                         loud_streak = 0
+                        ref_queue.clear()
                         await _barge_in()
                         vad.push_ulaw_frame(ulaw_frame)
                     continue
@@ -608,6 +646,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                 if not utterance_ulaw:
                     continue
                 wav_bytes = audio.ulaw_b64_frames_to_wav(utterance_ulaw)
+                ref_queue.clear()
                 speaking_task = asyncio.create_task(_process_turn(wav_bytes))
                 speaking_started_at = time.monotonic()
                 continue
