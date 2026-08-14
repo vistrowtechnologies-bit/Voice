@@ -4,6 +4,7 @@ import { trackQualifyLead } from '../../lib/analytics'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
+import { CONTACT_PHONE } from '../../lib/marketingContent'
 
 const BENEFITS = [
   'A live walkthrough tuned to your use case',
@@ -38,6 +39,22 @@ export function Contact() {
               </li>
             ))}
           </ul>
+          <div className="mt-8 flex flex-col gap-2.5">
+            <a
+              href="mailto:vistrowtechnologies@gmail.com"
+              className="flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-primary"
+            >
+              <Icon name="mail" className="text-[18px]" />
+              Or email us directly at vistrowtechnologies@gmail.com
+            </a>
+            <a
+              href={`tel:${CONTACT_PHONE.replace(/\s/g, '')}`}
+              className="flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-primary"
+            >
+              <Icon name="call" className="text-[18px]" />
+              Or call us at {CONTACT_PHONE}
+            </a>
+          </div>
         </div>
 
         {/* Right - form */}

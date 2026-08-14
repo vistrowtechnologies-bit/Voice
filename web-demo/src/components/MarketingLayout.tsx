@@ -296,7 +296,7 @@ function Footer() {
             </NavLink>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-text-muted">{BRAND.tagline}</p>
             <div className="mt-5 flex gap-3 text-text-muted">
-              <a href="mailto:vistrowai@gmail.com" className="hover:text-text"><Icon name="mail" className="text-[20px]" /></a>
+              <a href="mailto:vistrowtechnologies@gmail.com" className="hover:text-text"><Icon name="mail" className="text-[20px]" /></a>
               <a href={`tel:${CONTACT_PHONE.replace(/\s/g, '')}`} className="hover:text-text"><Icon name="call" className="text-[20px]" /></a>
             </div>
           </div>
