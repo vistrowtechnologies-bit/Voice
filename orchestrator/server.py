@@ -99,19 +99,23 @@ _PHONE_BARGE_IN_ENERGY_MULTIPLIER = 2.5
 # duration threshold alone can tell the agent's own voice apart from a
 # genuine interruption without real acoustic echo cancellation.
 #
-# Re-enabled (2026-08-14) now that the barge-in check runs against
-# audio.EchoCanceller's output instead of the raw mic signal — an NLMS
-# adaptive filter that learns and subtracts the actual echo using the
-# exact reference audio we sent, with a double-talk detector so it can't
-# corrupt itself (or attenuate real speech) while both echo and genuine
-# speech are present at once. Verified synthetically (97%+ echo
-# suppression, ~100% real-speech preservation) across simulated 30/120/
-# 200ms echo delays, but NOT yet verified against a real phone call's
-# actual line characteristics — this is the first time it's live. The
-# 2.5x/300ms threshold below is kept as-is (not loosened) as a second
-# layer, precisely because of the 2026-08-07 incident. If real calls show
-# the AEC isn't fully suppressing line echo, flip this back to False
-# immediately rather than trying to retune thresholds live.
+# Was briefly re-enabled (2026-08-14) once the barge-in check ran against
+# audio.EchoCanceller's output (an NLMS adaptive filter + double-talk
+# detector) instead of the raw mic signal — verified synthetically first
+# (97%+ echo suppression, real speech still clearing the threshold), but
+# a live test call that same day reproduced the exact 2026-08-07 symptom:
+# the "ji bataiye" listening cue looping on interruption, then the agent
+# going silent instead of giving a real reply. Disabled again immediately
+# per this file's own stated policy above. The AEC code and wiring are
+# left in place (audio.EchoCanceller, the reference-audio queue in this
+# file) for the next attempt, but do not flip this back to True without
+# first adding real logging around _barge_in()/the residual-energy check
+# — the 2026-08-14 attempt had no log line marking when barge-in actually
+# fired, so the live failure couldn't be diagnosed from logs alone, only
+# inferred from what the caller heard. Re-enabled again (same day) once
+# the diagnostic logging below (phone barge-in triggered / candidate) was
+# added, specifically to get real evidence from the next test call instead
+# of guessing at a fix for an unconfirmed cause.
 _PHONE_BARGE_IN_ENABLED = True
 # Suppress barge-in detection for this long after a reply starts sending.
 # TTS synthesis takes a second or two; the caller's audio backs up
@@ -534,6 +538,13 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         # Caller started talking over the agent — stop the in-flight reply
         # immediately and tell EnableX to drop whatever's still queued on
         # its side, per the clear_media event in EnableX's streaming docs.
+        #
+        # Logged explicitly (added 2026-08-14, after a live test call with
+        # _PHONE_BARGE_IN_ENABLED=True reproduced the pre-AEC "ji bataiye
+        # loop then mute" failure with no way to tell from logs alone
+        # whether this actually fired, fired falsely, or something else
+        # broke downstream of it) — next attempt should have real evidence.
+        logger.info("phone barge-in triggered for voice_id=%s", voice_id)
         nonlocal speaking_task
         if speaking_task and not speaking_task.done():
             speaking_task.cancel()
@@ -626,12 +637,29 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                     # this is the first time real echo cancellation runs
                     # against live telephony line conditions.
                     mic_pcm16 = np.frombuffer(audioop.ulaw2lin(ulaw_frame, 2), dtype=np.int16)
+                    ref_empty = not ref_queue
                     ref_pcm16 = ref_queue.popleft() if ref_queue else np.zeros_like(mic_pcm16)
                     residual = echo_canceller.process(mic_pcm16, ref_pcm16)
                     residual_energy = int(np.sqrt(np.mean(residual * residual)))
                     # Agent is talking — only track sustained loudness for
                     # barge-in, don't run full utterance detection yet.
                     if residual_energy >= vad.energy_threshold * _PHONE_BARGE_IN_ENERGY_MULTIPLIER:
+                        if loud_streak == 0:
+                            # First loud frame of a potential barge-in run —
+                            # log once here (not every frame) with enough to
+                            # diagnose a false trigger after the fact:
+                            # ref_empty=True means the echo canceller had
+                            # nothing to cancel against for this frame (the
+                            # reply's audio queue had drained, but the phone
+                            # line may still be finishing playback of it) -
+                            # a real gap where echo could pass through
+                            # uncancelled. See _PHONE_BARGE_IN_ENABLED above.
+                            logger.info(
+                                "phone barge-in candidate: residual_energy=%d threshold=%d ref_empty=%s",
+                                residual_energy,
+                                int(vad.energy_threshold * _PHONE_BARGE_IN_ENERGY_MULTIPLIER),
+                                ref_empty,
+                            )
                         loud_streak += 1
                     else:
                         loud_streak = 0
