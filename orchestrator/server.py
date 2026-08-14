@@ -113,10 +113,22 @@ _PHONE_BARGE_IN_ENERGY_MULTIPLIER = 2.5
 # — the 2026-08-14 attempt had no log line marking when barge-in actually
 # fired, so the live failure couldn't be diagnosed from logs alone, only
 # inferred from what the caller heard. Re-enabled again (same day) once
-# the diagnostic logging below (phone barge-in triggered / candidate) was
-# added, specifically to get real evidence from the next test call instead
-# of guessing at a fix for an unconfirmed cause.
-_PHONE_BARGE_IN_ENABLED = True
+# diagnostic logging (phone barge-in triggered / candidate) was added, to
+# get real evidence instead of guessing.
+#
+# That evidence came back the same day and disabled this again: even on
+# frames where the echo canceller DID have a reference to cancel against
+# (ref_empty=False), residual_energy was still 1100-3300 against a 1000
+# threshold - well above what the synthetic sine-tone tests predicted
+# (~20-30). A real caller's voice has far richer harmonic content than a
+# test tone, and real telephony lines add nonlinear distortion (companding,
+# AGC, handset nonlinearities) that a purely linear NLMS filter cannot
+# model - this is a known, real limitation of linear-only echo
+# cancellation, not a tuning problem. A working fix needs a nonlinear
+# residual echo suppression stage on top of the linear filter (standard in
+# production AEC systems), not just retuning thresholds/filter length.
+# Don't re-enable without that.
+_PHONE_BARGE_IN_ENABLED = False
 # Suppress barge-in detection for this long after a reply starts sending.
 # TTS synthesis takes a second or two; the caller's audio backs up
 # unprocessed during that wait and arrives all at once the moment we
