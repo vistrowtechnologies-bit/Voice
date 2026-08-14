@@ -10,11 +10,11 @@ import {
   hasDemoCallsRemaining,
   recordDemoCall,
 } from '../lib/demoCallCap'
-import { fetchLiveKitToken, randomId } from '../lib/livekit'
+import { fetchLiveKitToken, randomId, submitDemoFeedback } from '../lib/livekit'
 import { trackQualifyLead } from '../lib/analytics'
 import { useOrchestratorCall } from '../lib/orchestratorCall'
 
-type Phase = 'idle' | 'connecting' | 'active' | 'active-orchestrator' | 'denied' | 'capped' | 'unreachable'
+type Phase = 'idle' | 'connecting' | 'active' | 'active-orchestrator' | 'denied' | 'capped' | 'unreachable' | 'feedback'
 
 // How long the visitor's browser waits for the AI agent to actually join the
 // room after connecting. A healthy dispatch + (cold) worker start is a few
@@ -135,6 +135,14 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
   // an outage that wasn't their fault. The ref guards against a mid-call
   // provider fallback (LiveKit -> orchestrator) double-charging one attempt.
   const creditChargedRef = useRef(false)
+  // The room name the call actually used - captured at dial time (there are
+  // two paths: a fresh prewarm's room, or a live fetchLiveKitToken fallback)
+  // so handleDisconnected can attach post-call feedback to the right call
+  // record. fetchLiveKitToken returns {token, url} only, not the room it
+  // was minted for - the room name is ours to begin with (we generate it),
+  // so it's tracked here rather than round-tripped through the response.
+  const lastRoomNameRef = useRef<string | null>(null)
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
   const chargeDemoCall = useCallback(() => {
     if (creditChargedRef.current) return
     creditChargedRef.current = true
@@ -165,10 +173,11 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
       await navigator.mediaDevices.getUserMedia({ audio: true })
       const warm = (await warming) ?? prewarmRef.current
       const isFresh = warm && Date.now() - warm.at < PREWARM_MAX_AGE_MS
-      const { token: newToken, url } = isFresh
-        ? warm
-        : await fetchLiveKitToken(randomId('visitor'), randomId('voice-agent-demo'))
+      const room = isFresh ? warm.room : randomId('voice-agent-demo')
+      const { token: newToken, url } = isFresh ? warm : await fetchLiveKitToken(randomId('visitor'), room)
       prewarmRef.current = null
+      lastRoomNameRef.current = room
+      setFeedbackSubmitted(false)
       trackQualifyLead('demo_call')
       setToken(newToken)
       setServerUrl(url)
@@ -184,15 +193,37 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
     }
   }, [cooldownUntil, prewarm])
 
-  // Ending the call just returns the card to its idle "Tap to talk" state,
-  // right here - no separate summary page or route to send the visitor to.
+  // Ending the call shows a brief feedback prompt in the same card (only
+  // when the call actually connected to an agent - creditChargedRef mirrors
+  // the same "only counts once connected" gate chargeDemoCall uses, so a
+  // call that failed end-to-end never asks a visitor to rate a conversation
+  // that didn't happen) before returning to idle - no separate summary page.
   const handleDisconnected = useCallback(() => {
     releaseCallLock()
     setToken(null)
     setServerUrl(null)
-    setPhase(hasDemoCallsRemaining() ? 'idle' : 'capped')
+    setPhase(creditChargedRef.current && hasDemoCallsRemaining() ? 'feedback' : hasDemoCallsRemaining() ? 'idle' : 'capped')
     prewarm()
   }, [prewarm])
+
+  const handleFeedbackDone = useCallback(() => {
+    setPhase(hasDemoCallsRemaining() ? 'idle' : 'capped')
+  }, [])
+
+  // Not gated on feedbackSubmitted - called twice on a "not helpful" rating
+  // (once bare the moment the thumbs-down is tapped, so the rating is
+  // captured even if the visitor never writes anything; once more with the
+  // comment if they do write one and hit Send). set_demo_feedback is a
+  // plain UPDATE, so a second call for the same room safely just adds the
+  // comment rather than double-counting anything.
+  const handleFeedback = useCallback((rating: 'helpful' | 'not_helpful', comment?: string) => {
+    const room = lastRoomNameRef.current
+    if (!room) return
+    setFeedbackSubmitted(true)
+    submitDemoFeedback(room, rating, comment).catch(() => {
+      // Best-effort - a visitor never needs to know this failed silently.
+    })
+  }, [])
 
   // The browser connected to the room but no AI agent ever joined (worker
   // cold-start/crash/restart - LiveKit Cloud's own agent worker, unrelated
@@ -299,6 +330,8 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
           </LiveKitRoom>
         ) : isCallLiveOrchestrator ? (
           <InlineOrchestratorCallBody onEnded={handleDisconnected} onFailed={handleOrchestratorFailed} onConnected={chargeDemoCall} />
+        ) : phase === 'feedback' ? (
+          <FeedbackPrompt submitted={feedbackSubmitted} onRate={handleFeedback} onDone={handleFeedbackDone} />
         ) : (
           <>
             <button
@@ -369,6 +402,112 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+// Shown for a few seconds right after a real call ends, in the same card
+// (no separate page/route) - mirrors the embeddable widget's own post-call
+// feedback (widget/src/widget.ts's #av-complete panel): a quick thumbs up/
+// down, with an optional comment box on a negative rating. Auto-returns to
+// idle shortly after a choice is made, or immediately via "Skip" - a
+// visitor who just finished talking to Artha shouldn't be stuck looking at
+// a rating prompt if they don't want to leave one.
+function FeedbackPrompt({
+  submitted,
+  onRate,
+  onDone,
+}: {
+  submitted: boolean
+  onRate: (rating: 'helpful' | 'not_helpful', comment?: string) => void
+  onDone: () => void
+}) {
+  const [rated, setRated] = useState<'helpful' | 'not_helpful' | null>(null)
+  const [comment, setComment] = useState('')
+  const [commentSent, setCommentSent] = useState(false)
+
+  useEffect(() => {
+    if (!submitted) return
+    // Give a moment to see the thanks (or write a comment on a negative
+    // rating) before the card resets - not an instant jump back to idle.
+    const delay = rated === 'not_helpful' && !commentSent ? 6000 : 1800
+    const timer = window.setTimeout(onDone, delay)
+    return () => window.clearTimeout(timer)
+  }, [submitted, rated, commentSent, onDone])
+
+  const handleRate = (rating: 'helpful' | 'not_helpful') => {
+    setRated(rating)
+    // Sent bare here (no comment yet) so the rating itself is captured even
+    // if the visitor never types anything below - the Send button re-sends
+    // with the comment attached as a second, safe UPDATE.
+    onRate(rating)
+  }
+
+  return (
+    <div className="flex w-full flex-col items-center">
+      <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-primary/15 text-primary">
+        <Icon name="forum" className="text-[28px]" />
+      </span>
+      <h3 className="mt-5 font-display text-2xl font-semibold">
+        {rated ? 'Thanks for the feedback!' : 'How was that?'}
+      </h3>
+      <p className="mt-1 text-sm text-text-muted">
+        {rated === 'not_helpful'
+          ? 'Anything specific we should fix?'
+          : rated
+            ? 'That helps us build a better Artha.'
+            : 'Rate your conversation with Artha'}
+      </p>
+
+      {!rated && (
+        <div className="mt-5 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => handleRate('helpful')}
+            aria-label="Helpful"
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-bg text-xl transition-colors hover:border-success hover:bg-success/10"
+          >
+            <Icon name="thumb_up" className="text-[20px]" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRate('not_helpful')}
+            aria-label="Not helpful"
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-bg text-xl transition-colors hover:border-destructive hover:bg-destructive/10"
+          >
+            <Icon name="thumb_down" className="text-[20px]" />
+          </button>
+        </div>
+      )}
+
+      {rated === 'not_helpful' && !commentSent && (
+        <div className="mt-4 w-full">
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            maxLength={500}
+            rows={2}
+            placeholder="What went wrong? (optional)"
+            className="w-full resize-none rounded-xl border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setCommentSent(true)
+              if (comment.trim()) onRate('not_helpful', comment.trim())
+            }}
+            className="mt-2 rounded-full bg-primary px-4 py-1.5 text-xs font-bold text-bg transition-opacity hover:opacity-90"
+          >
+            Send
+          </button>
+        </div>
+      )}
+
+      {!rated && (
+        <button type="button" onClick={onDone} className="mt-5 text-xs text-text-muted underline underline-offset-2 hover:text-text">
+          Skip
+        </button>
+      )}
     </div>
   )
 }

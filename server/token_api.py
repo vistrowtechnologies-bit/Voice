@@ -3597,6 +3597,12 @@ class WidgetFeedbackRequest(BaseModel):
     comment: str | None = None
 
 
+class DemoFeedbackRequest(BaseModel):
+    roomName: str
+    rating: str
+    comment: str | None = None
+
+
 class WidgetTelemetryRequest(BaseModel):
     siteKey: str
     sessionId: str
@@ -3622,6 +3628,22 @@ def widget_feedback(req: WidgetFeedbackRequest) -> dict:
     if not calls_db.set_widget_feedback(site["id"], room_name, req.rating, (req.comment or "").strip()[:500]):
         # Voice-call persistence can finish just after LiveKit disconnects;
         # the widget retries once when this short race happens.
+        raise HTTPException(404, "Conversation is still being saved")
+    return {"ok": True}
+
+
+@app.post("/demo/feedback")
+def demo_feedback(req: DemoFeedbackRequest) -> dict:
+    """Same as /widget/feedback, for the marketing site's own DemoOrbCard
+    orb — no siteKey involved, since there's no tenant site, just the
+    platform's own demo call."""
+    if req.rating not in ("helpful", "not_helpful"):
+        raise HTTPException(400, "Invalid feedback rating")
+    if not req.roomName or len(req.roomName) > 200:
+        raise HTTPException(400, "Invalid conversation session")
+    if not calls_db.set_demo_feedback(req.roomName, req.rating, (req.comment or "").strip()[:500]):
+        # Same short race as widget_feedback above — call persistence can
+        # finish just after LiveKit disconnects.
         raise HTTPException(404, "Conversation is still being saved")
     return {"ok": True}
 

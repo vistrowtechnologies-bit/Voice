@@ -144,7 +144,7 @@ export function Home() {
         className="independence-ribbon flex w-full items-center justify-center gap-2 px-4 py-2.5 text-center text-xs font-semibold text-text sm:text-sm"
       >
         <span className="ribbon-tricolour" aria-hidden="true"><i /><i /><i /></span>
-        <span>Public feedback opens 15 August — try Artha and help us build voice AI for Bharat</span>
+        <span>We're open for your feedback — try Artha and help us build voice AI for Bharat</span>
         <Icon name="arrow_forward" className="text-[16px]" />
       </button>
       {/* ---------- Hero ---------- */}

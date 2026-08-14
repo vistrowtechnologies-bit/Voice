@@ -22,3 +22,21 @@ export async function fetchLiveKitToken(
 export function randomId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
 }
+
+// Public, unauthenticated like fetchLiveKitToken above — the marketing
+// site's own "Tap to talk" orb has no logged-in session, same reasoning
+// as the embeddable widget's /widget/feedback call it mirrors server-side.
+export async function submitDemoFeedback(
+  roomName: string,
+  rating: 'helpful' | 'not_helpful',
+  comment?: string,
+): Promise<void> {
+  const res = await fetch('/api/demo/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roomName, rating, comment }),
+  })
+  if (!res.ok) {
+    throw new Error(`feedback request failed with status ${res.status}`)
+  }
+}

@@ -4114,6 +4114,28 @@ def set_widget_feedback(site_id: int, room_name: str, rating: str, comment: str 
         conn.close()
 
 
+def set_demo_feedback(room_name: str, rating: str, comment: str = "") -> bool:
+    """Same as set_widget_feedback, for the marketing site's own "Tap to
+    talk" orb (DemoOrbCard) instead of a tenant's embedded widget - those
+    calls have no site_id (there's no tenant site involved, it's the
+    platform's own demo), so matched by room_name + call_type alone.
+    room_name is a client-generated randomId('voice-agent-demo'), unique
+    enough on its own that a site_id isn't needed as a second key. Reuses
+    the same calls.feedback/feedback_comment columns, so this flows into
+    feedback_summary() for whichever account owns the demo agent same as
+    any other call - no separate dashboard wiring needed."""
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                "UPDATE calls SET feedback = ?, feedback_comment = ? WHERE room_name = ? AND call_type = 'browser'",
+                (rating, comment or None, room_name),
+            )
+            return bool(cur.rowcount)
+    finally:
+        conn.close()
+
+
 def set_widget_telemetry(site_id: int, room_name: str, data: dict) -> bool:
     conn = _connect()
     try:
