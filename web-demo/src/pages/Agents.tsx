@@ -699,7 +699,7 @@ function AgentEditor({
               checked={webSearchEnabled}
               onChange={setWebSearch}
               label="Let the agent search the web"
-              hint="Looks up current facts, prices, or news outside the knowledge base via Tavily. Requires TAVILY_API_KEY to be set on the agent worker - otherwise this has no effect."
+              hint="Looks up current facts, prices, or news that aren't in the knowledge base."
             />
             <Field label="Transfer to a human - number to dial (blank = disabled)">
               <input
