@@ -1963,6 +1963,21 @@ async def entrypoint(ctx: JobContext) -> None:
                 # Away fired before the opening line finished playing (slow
                 # cold start / TTS) — not real caller silence, ignore it.
                 return
+            if userdata.get("agent_speaking", False):
+                # Away fired while the AGENT's own reply is still generating
+                # or playing — user_away_timeout only watches caller VOICE
+                # activity, so a long agent turn (a multi-sentence answer,
+                # slow TTS) leaves it counting straight through the agent's
+                # own monologue. Confirmed live: this generate_reply()
+                # call raced the in-flight turn and won, cutting the real
+                # answer off mid-word and replacing it with "are you still
+                # there?" — visible to the caller as the agent apparently
+                # ignoring what it was just saying. It is never correct to
+                # check in while the agent itself is mid-turn, so skip
+                # entirely here; _on_agent_state_changed will let a real
+                # away condition (caller silent after the agent finishes)
+                # be caught by the next "away" event instead.
+                return
             sent = userdata.get("silence_reminders", 0)
             if sent < silence_reminder_max:
                 userdata["silence_reminders"] = sent + 1
@@ -1974,6 +1989,9 @@ async def entrypoint(ctx: JobContext) -> None:
                 )
 
     def _on_agent_state_changed(ev) -> None:
+        # Read by _on_user_state_changed's "away" branch above, so the
+        # check-in can never fire mid-reply.
+        userdata["agent_speaking"] = ev.new_state == "speaking"
         # end_call (tools.py) sets userdata["ending_call"] and returns
         # instructions for a goodbye line; this waits for that goodbye to
         # actually finish playing (agent state drops out of "speaking")
