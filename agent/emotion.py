@@ -182,15 +182,18 @@ GEMINI_TONE_PROMPTS: dict[str, str] = {
 # the physical delivery rather than naming the emotion and hoping.
 GEMINI_EMOTION_PROMPT_DELTAS: dict[str, str] = {
     "frustrated": (
-        "The caller sounds frustrated — drop your pitch slightly, slow down, and speak calmly and "
-        "reassuringly to de-escalate; let the calm be audible, not just polite."
+        "The caller sounds frustrated — mirror that with a calmer, gently lower pitch, at a "
+        "natural conversational pace (not slowed down or dragging), so the calm reads as genuine "
+        "reassurance rather than a performance of patience."
     ),
     "confused": (
-        "The caller sounds confused — slow down noticeably and articulate each word clearly, with "
-        "a patient, grounding tone."
+        "The caller sounds confused — mirror that with clearer articulation and a grounding tone, "
+        "at your normal pace; speaking too slowly reads as condescending, so stay natural and just "
+        "be clear."
     ),
     "excited": (
-        "The caller sounds excited and happy — let your energy visibly lift to match theirs: a "
-        "brighter pitch, quicker pace, and real warmth, not a restrained acknowledgement."
+        "The caller sounds excited and happy — mirror that energy with a brighter pitch and real "
+        "warmth, at a natural conversational pace; don't speed up to match them, let the warmth "
+        "carry the energy instead."
     ),
 }

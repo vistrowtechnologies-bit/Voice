@@ -37,8 +37,6 @@ import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # gender so the LLM self-refers with the right grammatical gender.
 from google_tts_streaming_patch import PatchedGeminiTTS
 from emotion import (
-    ELEVENLABS_EMOTION_DELTAS,
-    EMOTION_TONE_DELTAS,
     GEMINI_EMOTION_PROMPT_DELTAS,
     GEMINI_TONE_PROMPTS,
     detect_caller_emotion,
@@ -215,16 +213,13 @@ _ELEVENLABS_TONE_PRESETS: dict[str, dict[str, float]] = {
 }
 _ELEVENLABS_SIMILARITY_BOOST = 0.75
 
-# Dashboard-facing "Emotion intensity" dial (see Agents.tsx) — scales
-# EMOTION_TONE_DELTAS/ELEVENLABS_EMOTION_DELTAS deltas before they're applied
-# in on_user_turn_completed. "strong" (1.0) reproduces today's behavior
-# exactly; "off" (0.0) always reproduces the base tone regardless of detected
-# caller emotion.
+# Dashboard-facing "Emotion intensity" dial (see Agents.tsx). Emotion-
+# reactive delivery is now Google-TTS-only (see on_user_turn_completed) —
+# this multiplier is read into self._emotion_intensity below but currently
+# has no effect on any provider's delivery; kept so the dashboard setting
+# still round-trips cleanly if a future Google-side intensity control is
+# added, rather than orphaning the DB column/UI control silently.
 _EMOTION_INTENSITY_MULTIPLIERS = {"off": 0.0, "subtle": 0.5, "strong": 1.0}
-
-
-def _clamp(value: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, value))
 
 
 # Deliberately narrow and low-ambiguity — a false positive here just adds a
@@ -1409,25 +1404,13 @@ class RealEstateAgent(Agent):
         if emotion != self._current_emotion:
             self._current_emotion = emotion
             if self._tts_provider == "elevenlabs":
-                delta = ELEVENLABS_EMOTION_DELTAS.get(emotion, {}) if emotion else {}
-                new_style = _clamp(
-                    self._base_elevenlabs["style"] + delta.get("style", 0.0) * self._emotion_intensity, 0.0, 1.0
-                )
-                new_speed = _clamp(
-                    self._base_elevenlabs["speed"] + delta.get("speed", 0.0) * self._emotion_intensity, 0.8, 1.2
-                )
-                self.tts.update_options(
-                    voice_settings=elevenlabs.VoiceSettings(
-                        stability=self._base_elevenlabs["stability"],
-                        similarity_boost=_ELEVENLABS_SIMILARITY_BOOST,
-                        style=new_style,
-                        speed=new_speed,
-                        use_speaker_boost=True,
-                    )
-                )
+                # Emotion-reactive delivery is a Google-TTS-only feature by
+                # product decision, not a technical limitation (ElevenLabs'
+                # VoiceSettings could do this) — logged so it's visible the
+                # signal was detected but intentionally not applied here.
                 logger.info(
-                    "caller tone -> %s (style %.2f, speed %.2f) from turn: %r",
-                    emotion or "neutral", new_style, new_speed, text,
+                    "caller tone -> %s (no-op: emotion-reactive delivery is Google-TTS-only) from turn: %r",
+                    emotion or "neutral", text,
                 )
             elif self._tts_provider == "elevenlabs-v3":
                 # StreamAdapter (see _build_tts) has no update_options — v3
@@ -1464,23 +1447,14 @@ class RealEstateAgent(Agent):
                     emotion or "neutral", text,
                 )
             else:
-                delta = EMOTION_TONE_DELTAS.get(emotion, {}) if emotion else {}
-                new_pace = self._base_pace + delta.get("pace", 0.0) * self._emotion_intensity
-                new_pitch = self._base_pitch + delta.get("pitch", 0.0) * self._emotion_intensity
-                new_loudness = self._base_loudness + delta.get("loudness", 0.0) * self._emotion_intensity
-                try:
-                    # self.tts is a TtsFallbackAdapter, not a raw sarvam.TTS,
-                    # whenever Google credentials are configured (see
-                    # _build_tts's default branch) — FallbackAdapter has no
-                    # update_options at all, so this raises AttributeError.
-                    # Never let a tone nudge kill the whole call over it.
-                    self.tts.update_options(pace=new_pace, pitch=new_pitch, loudness=new_loudness)
-                    logger.info(
-                        "caller tone -> %s (pace %.2f, pitch %.2f, loudness %.2f) from turn: %r",
-                        emotion or "neutral", new_pace, new_pitch, new_loudness, text,
-                    )
-                except AttributeError:
-                    logger.warning("caller tone update_options failed (fallback-wrapped TTS)", exc_info=True)
+                # Sarvam branch. Same product decision as the elevenlabs
+                # branch above — emotion-reactive delivery is Google-TTS-only
+                # now, so this stays a no-op log rather than pushing
+                # pace/pitch/loudness deltas.
+                logger.info(
+                    "caller tone -> %s (no-op: emotion-reactive delivery is Google-TTS-only) from turn: %r",
+                    emotion or "neutral", text,
+                )
 
         candidate = detect_reply_language(text)
         if candidate == "hi-IN" and self._reply_language == "mr-IN":
