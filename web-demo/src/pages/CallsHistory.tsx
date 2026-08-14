@@ -22,16 +22,27 @@ const SENTIMENT_STYLES: Record<Sentiment, string> = {
   negative: 'bg-destructive/20 text-destructive border-destructive/30',
 }
 
+// Placeholder names the backend fills in for a caller who gave no real
+// identity (server/token_api.py's widget token route uses "Website visitor"
+// for a widget call with no name asked/given; the agent side uses "Unknown
+// caller"). Neither is a real identity, so neither should group unrelated
+// callers together - confirmed live: every anonymous widget visitor shares
+// the literal string "Website visitor", so before this fix all 74 of a
+// site's distinct anonymous visitors collapsed into one grouped row instead
+// of showing as 74 separate calls.
+const GENERIC_CALLER_NAMES = new Set(['unknown caller', 'website visitor'])
+
 // Same caller identity used to group repeat calls into one row: phone first
 // (normalized - digits only, so "+91 706-688-0808" and "917066880808" match),
-// then email, then name. A call with none of those (an anonymous "Unknown
-// caller" row) gets a unique per-call key instead of grouping with every
-// other unidentified caller, which would wrongly merge unrelated people.
+// then email, then name. A call with none of those (an anonymous/generic
+// name) gets a unique per-call key instead of grouping with every other
+// unidentified caller, which would wrongly merge unrelated people.
 function identityKey(c: CallRecord): string {
   const phone = c.phone.replace(/\D/g, '')
   if (phone) return `phone:${phone}`
   if (c.email) return `email:${c.email.toLowerCase()}`
-  if (c.name && c.name.trim() && c.name.toLowerCase() !== 'unknown caller') return `name:${c.name.trim().toLowerCase()}`
+  const name = c.name?.trim().toLowerCase()
+  if (name && !GENERIC_CALLER_NAMES.has(name)) return `name:${name}`
   return `call:${c.id}`
 }
 
