@@ -462,6 +462,15 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
     # don't change turn to turn, so keeping them speeds up reconvergence
     # on later turns instead of relearning from scratch each time.
     echo_canceller = audio.EchoCanceller()
+    # EnableX's phone audio is 8000 Hz ulaw both directions, but the recorder
+    # always declares its WAV at recording.RECORDING_SAMPLE_RATE (16000, see
+    # recording.py) — the browser path already resamples up to that before
+    # appending; this path was writing raw 8kHz PCM into a WAV header
+    # claiming 16kHz, which plays back at 2x speed. audioop.ratecv's `state`
+    # must persist across calls for a continuous, click-free resample, same
+    # pattern as the browser path's caller_ratecv_state below.
+    agent_recording_ratecv_state = None
+    caller_recording_ratecv_state = None
     # PCM16 samples of what we've actually sent, in send order — the
     # barge-in check consumes from the front as each incoming mic frame
     # arrives, keeping the two streams aligned by real time without needing
@@ -494,7 +503,11 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         # only costs that one frame's slack, not a permanent, growing
         # offset for everything after it.
         reply_ulaw = audio.wav_or_mp3_to_ulaw(reply_audio, content_type)
-        recorder.append_agent_audio(audioop.ulaw2lin(reply_ulaw, 2))
+        nonlocal agent_recording_ratecv_state
+        agent_pcm16, agent_recording_ratecv_state = audioop.ratecv(
+            audioop.ulaw2lin(reply_ulaw, 2), 2, 1, 8000, recording.RECORDING_SAMPLE_RATE, agent_recording_ratecv_state
+        )
+        recorder.append_agent_audio(agent_pcm16)
         frame_ms = 20
         frame_s = frame_ms / 1000
         loop = asyncio.get_event_loop()
@@ -644,7 +657,11 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
 
             if event == "media":
                 ulaw_frame = base64.b64decode(msg["media"]["payload"])
-                recorder.append_caller_audio(audioop.ulaw2lin(ulaw_frame, 2))
+                caller_recording_pcm16, caller_recording_ratecv_state = audioop.ratecv(
+                    audioop.ulaw2lin(ulaw_frame, 2), 2, 1, 8000, recording.RECORDING_SAMPLE_RATE,
+                    caller_recording_ratecv_state,
+                )
+                recorder.append_caller_audio(caller_recording_pcm16)
 
                 if speaking_task and not speaking_task.done():
                     if not _PHONE_BARGE_IN_ENABLED:
@@ -814,11 +831,15 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
     vad = audio.UtteranceVAD(energy_threshold=80)
     frame_count = 0
     recorder = recording.CallRecorder()
-    # CallRecorder assumes 16kHz PCM16 input (matches the phone path's
-    # decoded-ulaw rate); the browser mic runs at whatever rate the client's
-    # AudioContext used (typically 48000), so both directions get resampled
-    # down. audioop.ratecv's `state` must persist across calls for a
-    # continuous, click-free resample — reassigned each call below.
+    # CallRecorder always writes at recording.RECORDING_SAMPLE_RATE (16kHz) -
+    # the phone path's decoded ulaw is actually 8kHz (EnableX's rate, not
+    # 16kHz; a stale version of this comment claimed otherwise, which is why
+    # stream_ws above went uncorrected for so long and played back at 2x
+    # speed), and the browser mic runs at whatever rate the client's
+    # AudioContext used (typically 48000) - both get resampled to 16kHz
+    # before reaching the recorder. audioop.ratecv's `state` must persist
+    # across calls for a continuous, click-free resample — reassigned each
+    # call below.
     caller_ratecv_state = None
     speaking_task: asyncio.Task | None = None
     # Unlike the phone path, sending a reply clip here is near-instant (one
