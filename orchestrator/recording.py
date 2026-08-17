@@ -13,6 +13,7 @@ import io
 import logging
 import os
 import tempfile
+import time
 import wave
 
 logger = logging.getLogger("orchestrator-recording")
@@ -31,12 +32,38 @@ class CallRecorder:
     def __init__(self) -> None:
         self._caller_chunks: list[bytes] = []
         self._agent_chunks: list[bytes] = []
+        self._caller_len = 0
+        self._agent_len = 0
+        # Shared clock both tracks pad against — see _pad_to_now. Caller
+        # audio arrives continuously in real time (one chunk per incoming
+        # 20ms frame, the whole call); agent audio only arrives while the
+        # agent is actually speaking, with nothing recorded for the silent
+        # gaps in between (thinking time, waiting for the caller). Without
+        # padding, stop() below just concatenates each side's chunks
+        # back-to-back and mixes from byte 0 - the agent track drifts out of
+        # real-time alignment with the caller track from the first gap
+        # onward, and a multi-turn call comes out with later replies mixed
+        # against earlier caller audio. Confirmed live: a caller reported the
+        # recording as "totally mismatched" once the separate 2x-speed bug
+        # was fixed and the misalignment was actually audible.
+        self._start = time.monotonic()
+
+    def _pad_to_now(self, chunks: list[bytes], current_len: int) -> int:
+        target_len = int((time.monotonic() - self._start) * RECORDING_SAMPLE_RATE) * 2
+        if target_len > current_len:
+            chunks.append(b"\x00" * (target_len - current_len))
+            return target_len
+        return current_len
 
     def append_caller_audio(self, pcm16_mono: bytes) -> None:
+        self._caller_len = self._pad_to_now(self._caller_chunks, self._caller_len)
         self._caller_chunks.append(pcm16_mono)
+        self._caller_len += len(pcm16_mono)
 
     def append_agent_audio(self, pcm16_mono: bytes) -> None:
+        self._agent_len = self._pad_to_now(self._agent_chunks, self._agent_len)
         self._agent_chunks.append(pcm16_mono)
+        self._agent_len += len(pcm16_mono)
 
     def stop(self) -> str | None:
         """Writes a local temp WAV mixing both sides. Returns its path, or
