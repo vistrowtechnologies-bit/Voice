@@ -127,8 +127,20 @@ _PHONE_BARGE_IN_ENERGY_MULTIPLIER = 2.5
 # cancellation, not a tuning problem. A working fix needs a nonlinear
 # residual echo suppression stage on top of the linear filter (standard in
 # production AEC systems), not just retuning thresholds/filter length.
-# Don't re-enable without that.
-_PHONE_BARGE_IN_ENABLED = False
+# Don't re-enable without that - or without a clear reason to believe this
+# specific attempt differs from the ones above.
+#
+# Re-enabled 2026-08-17 for one deliberate test call, not because the
+# nonlinear-suppression gap above got fixed - it didn't. What changed is
+# purely diagnostic: this same file's _barge_in() and session.py's
+# handle_utterance_streaming now record the listening cue and any
+# interrupted reply into session.transcript (previously silent - see their
+# own comments), so this run produces real transcript + call-recording
+# evidence instead of only the caller's account of what they heard. Expect
+# this to very possibly reproduce the same failure; that's fine, the goal
+# this time is evidence, not success. Revert to False after the test call
+# unless the evidence says otherwise.
+_PHONE_BARGE_IN_ENABLED = True
 # Suppress barge-in detection for this long after a reply starts sending.
 # TTS synthesis takes a second or two; the caller's audio backs up
 # unprocessed during that wait and arrives all at once the moment we
