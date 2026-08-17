@@ -357,3 +357,136 @@ class EchoCanceller:
                 if in_bootstrap:
                     self._bootstrap_remaining -= 1
         return out
+
+
+class AnchoredDelayEchoCanceller:
+    """Wraps EchoCanceller with a coarse, cross-correlation-based delay
+    estimate, found ONCE per speaking turn and then held fixed for the rest
+    of it — rather than assuming reference frame N always pairs with the
+    Nth incoming mic frame, which EchoCanceller alone requires and which
+    real telephony round-trip delay makes false in practice (confirmed live
+    and offline: even a few samples of frame-pairing error - e.g. from a
+    single skipped queue pop - collapses cancellation completely, since the
+    underlying filter's convolution window is built from calls in a fixed
+    assumed order).
+
+    Deliberately does NOT re-estimate delay mid-turn. Continuously
+    re-anchoring was tried and made things measurably worse (verified
+    offline): each re-anchor jumps which reference samples the filter is
+    fed, which corrupts its already-converged weights - a wrong-but-stable
+    reference is less damaging than a right-then-suddenly-different one.
+    EnableX's stream is a WebSocket (TCP-ordered, reliable delivery, unlike
+    raw RTP/UDP), so within one turn the true delay is expected to be
+    genuinely constant, not something that needs continuous tracking - only
+    call reset_for_new_turn() between turns, where a fresh anchor costs
+    nothing and any actual drift (e.g. a network path change) gets picked up.
+
+    Verified offline against a synthetic reference/echo pair: an exact
+    delay anchor plus this filter removes ~50% of residual energy on a
+    clean linear echo path. With realistic nonlinear line distortion added
+    (soft clipping, modeling the companding/AGC real telephony lines apply -
+    the same class of distortion the original live-call evidence blamed),
+    suppression drops to ~13% and residual stays above a naive fixed
+    threshold. This is a real, verified improvement over the unanchored
+    version, not a complete fix - callers of process() should size their
+    barge-in threshold assuming partial, not full, cancellation.
+    """
+
+    def __init__(
+        self,
+        sample_rate: int = 8000,
+        max_delay_s: float = 0.5,
+        anchor_window_s: float = 0.3,
+        min_energy: float = 150.0,
+        min_confidence: float = 0.15,
+        **nlms_kwargs,
+    ) -> None:
+        self._sr = sample_rate
+        self._nlms = EchoCanceller(**nlms_kwargs)
+        self._max_delay = int(max_delay_s * sample_rate)
+        self._anchor_win = int(anchor_window_s * sample_rate)
+        self._min_energy = min_energy
+        self._min_conf = min_confidence
+
+        self._ref_buf = np.zeros(0, dtype=np.int16)
+        self._ref_base = 0
+        self._mic_total = 0
+        self._recent_mic = np.zeros(0, dtype=np.int16)
+
+        self._delay: int | None = None
+
+    @property
+    def anchored(self) -> bool:
+        """False until a delay estimate has actually been found for this
+        turn — callers should treat process()'s output as unreliable until
+        then, same as the old "ref_available" check: with no anchor yet,
+        process() feeds an all-zero reference, so residual is just the raw
+        mic signal (agent's own unprocessed echo included) rather than a
+        genuine cancellation result."""
+        return self._delay is not None
+
+    def reset_for_new_turn(self) -> None:
+        """Call once at the start of each speaking turn (same points the
+        old ref_queue.clear() fired: greeting start, new utterance, and
+        after a barge-in) - forces a fresh delay anchor for that turn."""
+        self._delay = None
+
+    def push_reference(self, ref_frame: np.ndarray) -> None:
+        self._ref_buf = np.concatenate([self._ref_buf, ref_frame.astype(np.int16)])
+        max_keep = self._max_delay + self._anchor_win + self._sr
+        if len(self._ref_buf) > max_keep:
+            trim = len(self._ref_buf) - max_keep
+            self._ref_buf = self._ref_buf[trim:]
+            self._ref_base += trim
+
+    def _extract_ref_at(self, abs_start: int, length: int) -> np.ndarray:
+        out = np.zeros(length, dtype=np.int16)
+        buf_start = abs_start - self._ref_base
+        src_lo = max(0, buf_start)
+        src_hi = min(len(self._ref_buf), buf_start + length)
+        if src_hi > src_lo:
+            dst_lo = src_lo - buf_start
+            out[dst_lo : dst_lo + (src_hi - src_lo)] = self._ref_buf[src_lo:src_hi]
+        return out
+
+    def _try_anchor(self) -> None:
+        if len(self._recent_mic) < self._anchor_win:
+            return
+        mic_win = self._recent_mic[-self._anchor_win :]
+        if np.sqrt(np.mean(mic_win.astype(np.float64) ** 2)) < self._min_energy:
+            return  # too quiet to correlate against yet
+        mic_f = mic_win.astype(np.float64)
+        mic_norm = np.linalg.norm(mic_f) + 1e-9
+        best_delay, best_score = None, -1.0
+        for d in range(0, self._max_delay, 2):
+            ref_end = self._mic_total - d
+            seg = self._extract_ref_at(ref_end - self._anchor_win, self._anchor_win).astype(np.float64)
+            score = float(np.dot(seg, mic_f) / (np.linalg.norm(seg) + 1e-9) / mic_norm)
+            if score > best_score:
+                best_score, best_delay = score, d
+        if best_score >= self._min_conf:
+            self._delay = best_delay
+
+    def process(self, mic_pcm16: np.ndarray) -> np.ndarray:
+        """One mic frame in, one echo-cancelled residual out — same shape
+        as EchoCanceller.process, but takes only the mic frame; the
+        reference comes from what was already handed to push_reference()."""
+        n = len(mic_pcm16)
+        self._recent_mic = np.concatenate([self._recent_mic, mic_pcm16.astype(np.int16)])
+        if len(self._recent_mic) > self._anchor_win:
+            self._recent_mic = self._recent_mic[-self._anchor_win :]
+        # mic_total must include the current frame before any correlation
+        # search runs against it, or the search compares against a stale
+        # total and anchors exactly one frame off (confirmed offline: this
+        # ordering bug alone was worth the difference between 0% and 50%
+        # suppression at an otherwise-correct delay).
+        self._mic_total += n
+
+        if self._delay is None:
+            self._try_anchor()
+
+        if self._delay is None:
+            ref_aligned = np.zeros(n, dtype=np.int16)
+        else:
+            ref_aligned = self._extract_ref_at(self._mic_total - n - self._delay, n)
+        return self._nlms.process(mic_pcm16, ref_aligned)

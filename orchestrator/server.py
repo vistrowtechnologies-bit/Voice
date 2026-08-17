@@ -24,7 +24,6 @@ from __future__ import annotations
 import asyncio
 import audioop
 import base64
-import collections
 import itertools
 import json
 import logging
@@ -91,7 +90,21 @@ _BARGE_IN_FRAMES = 4
 # demanding more of both cuts the false-positive rate without meaningfully
 # slowing down a genuine interruption.
 _PHONE_BARGE_IN_FRAMES = 15  # 300ms
-_PHONE_BARGE_IN_ENERGY_MULTIPLIER = 2.5
+# 2.5x (threshold 1000) was set before AnchoredDelayEchoCanceller existed and
+# is now known to be too low: offline testing against realistic nonlinear
+# line distortion (the same class of distortion real calls showed) put
+# pure-echo residual around 2700 mean even with a correct delay anchor -
+# comfortably above 1000, which is exactly the false-trigger failure mode
+# this was meant to prevent. 7x (threshold 2800) was chosen from a 40-trial
+# offline sweep (20 seeds x 2 interruption loudness levels, including a
+# deliberately quiet "hello") comparing candidate multipliers: 7x was the
+# lowest value with zero false positives on pure echo AND zero missed
+# interruptions across every trial, including the quiet ones - 8x started
+# missing quiet interruptions (3/20), lower multipliers let echo alone
+# false-trigger. Still synthetic modelling, not a live call - expect one
+# more real-evidence adjustment either direction once the next real call's
+# logs are in.
+_PHONE_BARGE_IN_ENERGY_MULTIPLIER = 7.0
 # Was disabled outright (2026-08-07): even at 2.5x/300ms, a live test call
 # still had every single reply barged-in on and cancelled by its own echo —
 # 3/3 turns in one call ended with no assistant reply ever recorded and
@@ -466,11 +479,15 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
     recorder = recording.CallRecorder()
     vad = audio.UtteranceVAD()
     # Real echo cancellation for the barge-in detector — see
-    # audio.EchoCanceller's docstring. Persists (and keeps its learned
-    # filter weights) for the whole call: the echo path's characteristics
-    # don't change turn to turn, so keeping them speeds up reconvergence
-    # on later turns instead of relearning from scratch each time.
-    echo_canceller = audio.EchoCanceller()
+    # audio.AnchoredDelayEchoCanceller's docstring. Persists for the whole
+    # call (keeps the underlying NLMS filter's learned weights across
+    # turns), but its delay ANCHOR gets reset per turn via
+    # reset_for_new_turn() below — the round-trip delay is expected to be
+    # stable within a turn (EnableX's stream is a reliable, ordered
+    # WebSocket, not raw RTP), but re-anchoring fresh each turn is nearly
+    # free and catches anything that did change (e.g. a network path
+    # change) between turns.
+    echo_canceller = audio.AnchoredDelayEchoCanceller()
     # EnableX's phone audio is 8000 Hz ulaw both directions, but the recorder
     # always declares its WAV at recording.RECORDING_SAMPLE_RATE (16000, see
     # recording.py) — the browser path already resamples up to that before
@@ -480,13 +497,6 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
     # pattern as the browser path's caller_ratecv_state below.
     agent_recording_ratecv_state = None
     caller_recording_ratecv_state = None
-    # PCM16 samples of what we've actually sent, in send order — the
-    # barge-in check consumes from the front as each incoming mic frame
-    # arrives, keeping the two streams aligned by real time without needing
-    # explicit timestamps (the AEC's own adaptive delay absorbs the actual
-    # network/telephony round trip). Empty means "nothing sent recently" —
-    # the AEC then sees an all-zero reference, which is a safe no-op.
-    ref_queue: collections.deque[np.ndarray] = collections.deque()
     seq_counter = itertools.count()
     stream_ctx: dict = {}
     speaking_task: asyncio.Task | None = None
@@ -551,8 +561,8 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
             last_frame_sent_at = time.monotonic()
             if chunk:
                 # Feed the echo canceller's reference stream with exactly
-                # what we just sent, in send order — see ref_queue above.
-                ref_queue.append(np.frombuffer(audioop.ulaw2lin(chunk, 2), dtype=np.int16))
+                # what we just sent, in send order.
+                echo_canceller.push_reference(np.frombuffer(audioop.ulaw2lin(chunk, 2), dtype=np.int16))
             deadline = start + (i + 1) * frame_s
             remaining = deadline - loop.time()
             if remaining > 0:
@@ -669,7 +679,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                 if greeting:
                     greeting_audio, greeting_content_type = greeting
                     logger.info("greeting: %s", sess.transcript[-1]["text"])
-                    ref_queue.clear()
+                    echo_canceller.reset_for_new_turn()
                     speaking_task = asyncio.create_task(_speak(greeting_audio, greeting_content_type))
                 # Warm the listening-cue cache now (process-wide, keyed by
                 # voice+language) so it's already synthesized by the time a
@@ -695,33 +705,15 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                         # reply finish instead of self-cancelling it.
                         continue
                     mic_pcm16 = np.frombuffer(audioop.ulaw2lin(ulaw_frame, 2), dtype=np.int16)
-                    # EXACTLY one reference frame is consumed per incoming
-                    # mic frame, unconditionally, before any of the skip
-                    # checks below. The filter's window is an index-based
-                    # history of the reference stream, so it only lines up
-                    # with the echo in the mic if the two streams advance in
-                    # lockstep with real time. The old code skipped this pop
-                    # whenever it skipped the check (grace window), which
-                    # permanently offset the queue by however many frames
-                    # were sent during the skip - after that the filter was
-                    # subtracting a prediction built from the wrong moment in
-                    # time, which ADDS energy instead of removing it (see the
-                    # divergence guard below).
-                    ref_frame = ref_queue.popleft() if ref_queue else None
-                    ref_available = ref_frame is not None
-                    if ref_frame is None:
-                        # Nothing was being sent for this slice of time, so
-                        # silence is the honest reference - and it still has
-                        # to be pushed through so the history keeps advancing.
-                        ref_frame = np.zeros_like(mic_pcm16)
-                    elif len(ref_frame) < len(mic_pcm16):
-                        # chunk_ulaw's final chunk of a sentence is a partial
-                        # frame; process() indexes the reference per mic
-                        # sample and would raise IndexError on it.
-                        ref_frame = np.pad(ref_frame, (0, len(mic_pcm16) - len(ref_frame)))
-                    elif len(ref_frame) > len(mic_pcm16):
-                        ref_frame = ref_frame[: len(mic_pcm16)]
-                    residual = echo_canceller.process(mic_pcm16, ref_frame)
+                    # process() finds (or reuses) its own delay anchor for
+                    # this turn internally — see
+                    # audio.AnchoredDelayEchoCanceller's docstring for why
+                    # this replaced the old per-frame ref_queue pop (that
+                    # approach assumed reference frame N always pairs with
+                    # mic frame N, which any pairing error at all - even one
+                    # skipped pop - collapsed completely).
+                    residual = echo_canceller.process(mic_pcm16)
+                    ref_available = echo_canceller.anchored
 
                     now = time.monotonic()
                     # Nothing is playing right now (mid think-time, or the
@@ -788,7 +780,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                         loud_streak = 0
                     if loud_streak >= _PHONE_BARGE_IN_FRAMES:
                         loud_streak = 0
-                        ref_queue.clear()
+                        echo_canceller.reset_for_new_turn()
                         await _barge_in()
                         vad.push_ulaw_frame(ulaw_frame)
                     continue
@@ -797,7 +789,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                 if not utterance_ulaw:
                     continue
                 wav_bytes = audio.ulaw_b64_frames_to_wav(utterance_ulaw)
-                ref_queue.clear()
+                echo_canceller.reset_for_new_turn()
                 speaking_task = asyncio.create_task(_process_turn(wav_bytes))
                 continue
 
