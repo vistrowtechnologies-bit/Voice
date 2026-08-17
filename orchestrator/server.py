@@ -575,6 +575,16 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
             cue_audio, cue_content_type = await session_module.get_listening_cue_audio(
                 sess.voice, sess.reply_language
             )
+            # Recorded in the transcript, not just the WAV: the cue is a real
+            # thing the caller hears, and its absence here is why a barge-in
+            # loop showed up as an empty transcript while the caller was
+            # hearing "जी, बताइए।" over and over. Flagged `cue` so it reads
+            # as an acknowledgment, not something the agent chose to say.
+            sess.transcript.append({
+                "role": "assistant",
+                "text": session_module.listening_cue_text(sess.reply_language),
+                "cue": True,
+            })
             await _send_reply_audio(cue_audio, cue_content_type)
         except tts.TTSError as e:
             logger.warning("listening cue TTS failed: %s", e)

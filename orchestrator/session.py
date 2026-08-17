@@ -388,6 +388,12 @@ _LISTENING_CUE_TEXT_DEFAULT = "Mm-hmm, go ahead."
 _listening_cue_cache: dict[tuple[str, str], tuple[bytes, str]] = {}
 
 
+def listening_cue_text(reply_language: str) -> str:
+    """The exact words get_listening_cue_audio will speak — so a caller can
+    record the cue in the transcript without duplicating the lookup."""
+    return _LISTENING_CUE_TEXT.get(reply_language, _LISTENING_CUE_TEXT_DEFAULT)
+
+
 async def get_listening_cue_audio(voice: str, reply_language: str) -> tuple[bytes, str]:
     """A short, near-instant acknowledgment ('yes, go ahead') played the
     moment a barge-in is detected — before STT/LLM/TTS have even started on
@@ -520,24 +526,39 @@ class _OrderedTTSPipeline:
         self._on_reply_audio = on_reply_audio
         self._tone_kwargs = tone_kwargs or {}
         self._queue: asyncio.Queue = asyncio.Queue()
+        # Sentences whose audio actually started going out, in order. Read by
+        # handle_utterance_streaming when a barge-in cancels the turn: without
+        # it, the words the caller genuinely heard before interrupting are
+        # thrown away with the cancelled reply, and the whole turn records as
+        # nothing at all (confirmed live - a barge-in loop looked like total
+        # silence in the dashboard while the caller was hearing real speech).
+        self.spoken: list[str] = []
         self._consumer = asyncio.create_task(self._consume())
 
     async def enqueue(self, sentence: str) -> None:
         synth_task = asyncio.create_task(
             tts.synthesize(self._voice, sentence, self._reply_language, **self._tone_kwargs)
         )
-        await self._queue.put(synth_task)
+        await self._queue.put((synth_task, sentence))
 
     async def _consume(self) -> None:
         while True:
-            synth_task = await self._queue.get()
-            if synth_task is None:
+            item = await self._queue.get()
+            if item is None:
                 return
+            synth_task, sentence = item
             try:
                 audio_bytes, content_type = await synth_task
             except tts.TTSError as e:
                 logger.warning("TTS failed for one sentence, skipping it: %s", e)
                 continue
+            # Marked before the send, not after: _send_reply_audio paces
+            # frames in real time, so a barge-in landing mid-sentence still
+            # means the caller heard the start of it. "Started playing" is
+            # the honest signal for a transcript meant to reflect what was
+            # actually said aloud; "finished playing" would silently drop
+            # exactly the interrupted sentence we most want recorded.
+            self.spoken.append(sentence)
             await self._on_reply_audio(audio_bytes, content_type)
 
     async def close(self) -> None:
@@ -631,6 +652,17 @@ async def handle_utterance_streaming(
         await pipeline.close()
     except asyncio.CancelledError:
         await pipeline.abort()
+        # A cancelled turn re-raises past the transcript append below, so
+        # without this a barged-in reply is recorded as if the agent never
+        # spoke - the single reason a barge-in failure loop was invisible in
+        # transcripts and could only be inferred from what the caller
+        # reported hearing. Flagged `interrupted` rather than written as a
+        # normal turn: this is what was said aloud up to the cut, not a
+        # complete reply, and anything reading these rows should be able to
+        # tell the difference.
+        spoken = " ".join(pipeline.spoken).strip()
+        if spoken:
+            session.transcript.append({"role": "assistant", "text": spoken, "interrupted": True})
         raise
     session.messages.extend(new_messages)
     session.transcript.append({"role": "assistant", "text": reply_text})
