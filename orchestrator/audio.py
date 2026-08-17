@@ -21,9 +21,12 @@ from __future__ import annotations
 import array
 import audioop
 import io
+import logging
 import wave
 
 import numpy as np
+
+logger = logging.getLogger("orchestrator-audio")
 
 _ULAW_SAMPLE_RATE = 8000
 _FADE_SAMPLES = 80  # 10ms at 8000Hz
@@ -414,6 +417,7 @@ class AnchoredDelayEchoCanceller:
         self._recent_mic = np.zeros(0, dtype=np.int16)
 
         self._delay: int | None = None
+        self._anchor_attempts = 0  # diagnostic only - see _try_anchor
 
     @property
     def anchored(self) -> bool:
@@ -430,6 +434,7 @@ class AnchoredDelayEchoCanceller:
         old ref_queue.clear() fired: greeting start, new utterance, and
         after a barge-in) - forces a fresh delay anchor for that turn."""
         self._delay = None
+        self._anchor_attempts = 0
 
     def push_reference(self, ref_frame: np.ndarray) -> None:
         self._ref_buf = np.concatenate([self._ref_buf, ref_frame.astype(np.int16)])
@@ -450,11 +455,20 @@ class AnchoredDelayEchoCanceller:
         return out
 
     def _try_anchor(self) -> None:
+        # Diagnostic logging here is deliberately not-silent: the previous
+        # design had ZERO log output whenever anchoring never succeeded for
+        # an entire call, which looked identical in the logs to "nothing to
+        # report" - confirmed live: a call with real, repeated interruption
+        # attempts produced not one barge-in log line, and there was no way
+        # to tell from logs alone whether that meant "no false positives"
+        # (good) or "the detector never engaged at all" (silently broken).
         if len(self._recent_mic) < self._anchor_win:
             return
         mic_win = self._recent_mic[-self._anchor_win :]
-        if np.sqrt(np.mean(mic_win.astype(np.float64) ** 2)) < self._min_energy:
-            return  # too quiet to correlate against yet
+        mic_energy = np.sqrt(np.mean(mic_win.astype(np.float64) ** 2))
+        if mic_energy < self._min_energy:
+            return  # too quiet to correlate against yet - not logged, this is the common case between turns
+        self._anchor_attempts += 1
         mic_f = mic_win.astype(np.float64)
         mic_norm = np.linalg.norm(mic_f) + 1e-9
         best_delay, best_score = None, -1.0
@@ -466,6 +480,18 @@ class AnchoredDelayEchoCanceller:
                 best_score, best_delay = score, d
         if best_score >= self._min_conf:
             self._delay = best_delay
+            logger.info(
+                "echo canceller anchored: delay=%dsamples (%.0fms) confidence=%.2f after %d attempt(s)",
+                best_delay, best_delay * 1000 / self._sr, best_score, self._anchor_attempts,
+            )
+        elif self._anchor_attempts == 1 or self._anchor_attempts % 10 == 0:
+            # First attempt and then every 10th, not every frame - mic stays
+            # above min_energy for as long as the agent keeps talking, so an
+            # unconditional log here would spam once anchoring is failing.
+            logger.info(
+                "echo canceller: anchor attempt %d found no confident match (best_score=%.2f, need>=%.2f, mic_energy=%.0f)",
+                self._anchor_attempts, best_score, self._min_conf, mic_energy,
+            )
 
     def process(self, mic_pcm16: np.ndarray) -> np.ndarray:
         """One mic frame in, one echo-cancelled residual out — same shape
