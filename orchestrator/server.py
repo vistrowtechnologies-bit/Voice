@@ -141,12 +141,21 @@ _PHONE_BARGE_IN_ENERGY_MULTIPLIER = 2.5
 # this time is evidence, not success. Revert to False after the test call
 # unless the evidence says otherwise.
 _PHONE_BARGE_IN_ENABLED = True
-# Suppress barge-in detection for this long after a reply starts sending.
-# TTS synthesis takes a second or two; the caller's audio backs up
-# unprocessed during that wait and arrives all at once the moment we
-# resume reading — without this grace window that backlog alone satisfies
-# _BARGE_IN_FRAMES and cancels the reply before any of it is heard.
+# Suppress barge-in detection for this long after audio actually starts
+# going out (NOT from when the turn task started - the first ~2s of a turn
+# are STT/LLM/TTS with nothing playing at all). Covers the echo's round trip
+# plus any tail of the caller's own sentence that triggered this reply.
 _BARGE_IN_GRACE_MS = 500
+# There is only something to barge in ON while frames are actually being
+# sent. Frames go out every 20ms during playback, so no frame for this long
+# means playback has stopped (thinking, or the reply finished) - anything the
+# caller says then is an ordinary turn for the VAD path, not an interruption.
+_PLAYBACK_ACTIVE_S = 0.12
+# A pause longer than this between sent frames ends the current playback run
+# and restarts the grace window. Comfortably longer than the sub-frame gap
+# between two sentences of the same reply (session.py's _OrderedTTSPipeline
+# hands them over back-to-back), short enough to catch a real think-pause.
+_PLAYBACK_GAP_S = 0.25
 
 # voice_id -> account_id, populated on `incomingcall` so the `connected`
 # event (which doesn't repeat the dialed number reliably enough to re-derive
@@ -481,7 +490,14 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
     seq_counter = itertools.count()
     stream_ctx: dict = {}
     speaking_task: asyncio.Task | None = None
-    speaking_started_at = 0.0
+    # Barge-in timing is driven by when audio is actually going OUT, not by
+    # when the turn task started. speaking_task covers STT -> LLM -> TTS ->
+    # send, so its first ~2s are pure think time with nothing playing; the
+    # old grace window was measured from task start and therefore expired
+    # mid-LLM, leaving the caller's own trailing speech (and any line noise)
+    # to "barge in" on a reply that had not played a single frame yet.
+    last_frame_sent_at = 0.0
+    playback_run_started_at = 0.0
     loud_streak = 0
     logger.info("stream connected for voice_id=%s", voice_id)
 
@@ -512,6 +528,14 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         frame_s = frame_ms / 1000
         loop = asyncio.get_event_loop()
         start = loop.time()
+        nonlocal last_frame_sent_at, playback_run_started_at
+        # A reply is delivered one sentence at a time (see session.py's
+        # _OrderedTTSPipeline), so consecutive calls here are one continuous
+        # playback run with only a tiny gap between them; a real gap means
+        # the agent stopped talking and is thinking again. Only the latter
+        # restarts the grace window.
+        if time.monotonic() - last_frame_sent_at > _PLAYBACK_GAP_S:
+            playback_run_started_at = time.monotonic()
         for i, chunk in enumerate(audio.chunk_ulaw(reply_ulaw, frame_ms=frame_ms)):
             await websocket.send_json({
                 "event": "media",
@@ -524,6 +548,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                     "payload": base64.b64encode(chunk).decode(),
                 },
             })
+            last_frame_sent_at = time.monotonic()
             if chunk:
                 # Feed the echo canceller's reference stream with exactly
                 # what we just sent, in send order — see ref_queue above.
@@ -646,7 +671,6 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                     logger.info("greeting: %s", sess.transcript[-1]["text"])
                     ref_queue.clear()
                     speaking_task = asyncio.create_task(_speak(greeting_audio, greeting_content_type))
-                    speaking_started_at = time.monotonic()
                 # Warm the listening-cue cache now (process-wide, keyed by
                 # voice+language) so it's already synthesized by the time a
                 # barge-in could plausibly happen partway through the
@@ -670,46 +694,94 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                         # real interruption on this leg yet, so let the
                         # reply finish instead of self-cancelling it.
                         continue
-                    # Grace period right after starting to speak: TTS
-                    # synthesis takes a second or two, during which the
-                    # caller's real-time audio backs up unprocessed. The
-                    # instant we resume reading, that whole backlog arrives
-                    # at once and looks exactly like "sustained loudness" —
-                    # without this window it triggers a false barge-in
-                    # before a single frame of the reply has gone out.
-                    if (time.monotonic() - speaking_started_at) * 1000 < _BARGE_IN_GRACE_MS:
+                    mic_pcm16 = np.frombuffer(audioop.ulaw2lin(ulaw_frame, 2), dtype=np.int16)
+                    # EXACTLY one reference frame is consumed per incoming
+                    # mic frame, unconditionally, before any of the skip
+                    # checks below. The filter's window is an index-based
+                    # history of the reference stream, so it only lines up
+                    # with the echo in the mic if the two streams advance in
+                    # lockstep with real time. The old code skipped this pop
+                    # whenever it skipped the check (grace window), which
+                    # permanently offset the queue by however many frames
+                    # were sent during the skip - after that the filter was
+                    # subtracting a prediction built from the wrong moment in
+                    # time, which ADDS energy instead of removing it (see the
+                    # divergence guard below).
+                    ref_frame = ref_queue.popleft() if ref_queue else None
+                    ref_available = ref_frame is not None
+                    if ref_frame is None:
+                        # Nothing was being sent for this slice of time, so
+                        # silence is the honest reference - and it still has
+                        # to be pushed through so the history keeps advancing.
+                        ref_frame = np.zeros_like(mic_pcm16)
+                    elif len(ref_frame) < len(mic_pcm16):
+                        # chunk_ulaw's final chunk of a sentence is a partial
+                        # frame; process() indexes the reference per mic
+                        # sample and would raise IndexError on it.
+                        ref_frame = np.pad(ref_frame, (0, len(mic_pcm16) - len(ref_frame)))
+                    elif len(ref_frame) > len(mic_pcm16):
+                        ref_frame = ref_frame[: len(mic_pcm16)]
+                    residual = echo_canceller.process(mic_pcm16, ref_frame)
+
+                    now = time.monotonic()
+                    # Nothing is playing right now (mid think-time, or the
+                    # reply already finished) - there is no reply to barge in
+                    # on, so any energy here is just the caller talking into a
+                    # silent line, which the normal VAD path handles.
+                    if now - last_frame_sent_at > _PLAYBACK_ACTIVE_S:
                         loud_streak = 0
                         continue
-                    # Echo-cancel before the energy check — see
-                    # audio.EchoCanceller. ref is what we actually sent
-                    # around this point in time (empty queue -> zeros,
-                    # a safe no-op). Still layered under the same elevated
-                    # threshold/frame-count as before (not loosened) since
-                    # this is the first time real echo cancellation runs
-                    # against live telephony line conditions.
-                    mic_pcm16 = np.frombuffer(audioop.ulaw2lin(ulaw_frame, 2), dtype=np.int16)
-                    ref_empty = not ref_queue
-                    ref_pcm16 = ref_queue.popleft() if ref_queue else np.zeros_like(mic_pcm16)
-                    residual = echo_canceller.process(mic_pcm16, ref_pcm16)
+                    # Grace window, measured from when audio actually started
+                    # going out: the echo has not even completed its round
+                    # trip yet, and the caller may still be finishing the
+                    # sentence that triggered this reply.
+                    if (now - playback_run_started_at) * 1000 < _BARGE_IN_GRACE_MS:
+                        loud_streak = 0
+                        continue
+                    # No reference for this frame while audio is playing means
+                    # the queue drained (pacing drift) - the canceller had
+                    # nothing to work with, so echo and speech are genuinely
+                    # indistinguishable here. Staying quiet is the safe call;
+                    # counting these was the single biggest source of false
+                    # triggers (they were the loudest readings in the logs,
+                    # precisely because nothing was ever cancelled).
+                    if not ref_available:
+                        loud_streak = 0
+                        continue
                     residual_energy = int(np.sqrt(np.mean(residual * residual)))
+                    mic_energy = int(np.sqrt(np.mean(mic_pcm16.astype(np.float64) ** 2)))
+                    # Cancellation can only ever remove energy from a signal
+                    # it actually predicts. Residual LOUDER than the raw mic
+                    # means the filter's prediction is uncorrelated with what
+                    # arrived - it is diverging or mis-timed, and its output
+                    # carries no information about whether a human is talking.
+                    # Confirmed live before this guard existed: readings of
+                    # 25000-39000 against a mic signal that cannot physically
+                    # exceed 32767, i.e. the canceller was manufacturing the
+                    # "interruption" it then fired on.
+                    if residual_energy > mic_energy:
+                        if loud_streak == 0:
+                            logger.info(
+                                "phone barge-in: ignoring diverged frame (residual=%d > mic=%d)",
+                                residual_energy, mic_energy,
+                            )
+                        loud_streak = 0
+                        continue
                     # Agent is talking — only track sustained loudness for
                     # barge-in, don't run full utterance detection yet.
                     if residual_energy >= vad.energy_threshold * _PHONE_BARGE_IN_ENERGY_MULTIPLIER:
                         if loud_streak == 0:
                             # First loud frame of a potential barge-in run —
-                            # log once here (not every frame) with enough to
-                            # diagnose a false trigger after the fact:
-                            # ref_empty=True means the echo canceller had
-                            # nothing to cancel against for this frame (the
-                            # reply's audio queue had drained, but the phone
-                            # line may still be finishing playback of it) -
-                            # a real gap where echo could pass through
-                            # uncancelled. See _PHONE_BARGE_IN_ENABLED above.
+                            # logged once here (not every frame). mic_energy
+                            # alongside residual_energy shows how much the
+                            # canceller actually removed, which is the number
+                            # that says whether the echo path is being modelled
+                            # at all.
                             logger.info(
-                                "phone barge-in candidate: residual_energy=%d threshold=%d ref_empty=%s",
+                                "phone barge-in candidate: residual_energy=%d mic_energy=%d threshold=%d",
                                 residual_energy,
+                                mic_energy,
                                 int(vad.energy_threshold * _PHONE_BARGE_IN_ENERGY_MULTIPLIER),
-                                ref_empty,
                             )
                         loud_streak += 1
                     else:
@@ -727,7 +799,6 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                 wav_bytes = audio.ulaw_b64_frames_to_wav(utterance_ulaw)
                 ref_queue.clear()
                 speaking_task = asyncio.create_task(_process_turn(wav_bytes))
-                speaking_started_at = time.monotonic()
                 continue
 
             if event == "stop_media":
