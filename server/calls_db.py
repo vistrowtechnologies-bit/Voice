@@ -4592,7 +4592,21 @@ def fetch_wp_pages_via_rest(domain: str) -> list[dict]:
     page_num = 1
     while page_num <= 10:  # 1000 pages is far past any real landing-page site; a hard stop, not a real limit
         url = f"{base}/wp-json/wp/v2/pages?per_page=100&page={page_num}&status=publish&_fields=title,link"
-        request = urllib.request.Request(url, headers={"Accept": "application/json"})
+        # Explicit browser-like User-Agent: confirmed live against a real
+        # customer site (shapoorji-treetopia.in) that urllib's default
+        # "Python-urllib/3.x" UA gets a hard 406 from the host's security
+        # layer, while an empty or browser UA both get a normal 200 for the
+        # identical request — a bot-signature block, not a REST-API-disabled
+        # site. Without this, every WAF/security-plugin-protected WordPress
+        # site (a large share of real installs) would falsely read as "not
+        # WordPress" instead of actually being fetchable.
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 (compatible; VistrowVoice/1.0; +https://www.vistrowvoice.com)",
+            },
+        )
         try:
             with urllib.request.urlopen(request, timeout=8) as resp:
                 body = json.loads(resp.read().decode() or "[]")
