@@ -16,6 +16,7 @@ import {
   fetchWidgetAvatarCatalog,
   fetchWidgetBackendUrl,
   regenerateSiteKey,
+  syncSiteWpPages,
   updateSite,
   wordpressPluginUrl,
 } from '../lib/api'
@@ -599,21 +600,35 @@ function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
   const [newGreeting, setNewGreeting] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<string | null>(null)
 
   const reload = () => fetchSitePageRoutes(site.id).then(setRoutes).catch(() => setRoutes([]))
+  const reloadSeenPaths = () => fetchSiteSeenPaths(site.id).then(setSeenPaths).catch(() => setSeenPaths([]))
 
   useEffect(() => {
     if (expanded && !loaded) {
-      Promise.all([
-        reload(),
-        fetchSiteSeenPaths(site.id).then(setSeenPaths).catch(() => setSeenPaths([])),
-      ]).finally(() => setLoaded(true))
+      Promise.all([reload(), reloadSeenPaths()]).finally(() => setLoaded(true))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded])
 
   const datalistId = `site-${site.id}-seen-paths`
   const unruledPaths = seenPaths.filter((p) => !routes.some((r) => p.path.includes(r.pathPattern)))
+
+  const handleSync = async () => {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const result = await syncSiteWpPages(site.id)
+      setSyncResult(`Found ${result.count} page${result.count === 1 ? '' : 's'}`)
+      await reloadSeenPaths()
+    } catch (err) {
+      setSyncResult(err instanceof Error ? err.message : "Couldn't sync pages")
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const handleAdd = async () => {
     if (!newPattern.trim()) return
@@ -656,6 +671,19 @@ function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
 
       {expanded && (
         <div className="mt-3 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSync}
+              disabled={syncing || !site.allowedDomain}
+              className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-bold text-text-muted hover:bg-surface disabled:cursor-default disabled:opacity-40"
+              title={site.allowedDomain ? undefined : 'Set this site\'s domain above first'}
+            >
+              <Icon name={syncing ? 'progress_activity' : 'sync'} className={`text-[14px] ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Fetching pages…' : 'Fetch pages from this domain'}
+            </button>
+            {syncResult && <span className="text-[11px] text-text-muted">{syncResult}</span>}
+          </div>
+
           {loaded && routes.length === 0 && (
             <p className="text-[11px] text-text-muted">
               No rules yet - every page on this site uses the default agent above.
@@ -698,8 +726,8 @@ function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
               </datalist>
               {loaded && seenPaths.length === 0 && (
                 <span className="mt-1 block text-[10px] text-text-muted">
-                  No pages known yet - once the WordPress plugin syncs its page list (visit its settings screen) or
-                  a visitor opens a page with the widget installed, URLs show up here to pick from.
+                  No pages known yet - use "Fetch pages from this domain" above, or URLs show up here on their own
+                  once a visitor opens a page with the widget installed.
                 </span>
               )}
             </Field>

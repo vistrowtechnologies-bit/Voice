@@ -4567,6 +4567,75 @@ def sync_wp_site_pages(site_id: int, pages: list[dict]) -> None:
         conn.close()
 
 
+def fetch_wp_pages_via_rest(domain: str) -> list[dict]:
+    """Pulls a site's published Page list straight from its own public
+    WordPress REST API (no plugin, no logging into WP admin required) —
+    the dashboard-triggered alternative to vistrow_voice_sync_wp_pages'
+    plugin-push path, for an operator who wants to manage everything from
+    the Vistrow Voice dashboard alone. WordPress exposes GET /wp-json/wp/v2/
+    pages publicly by default for a site with no page-level access
+    restrictions; this raises RuntimeError with a message safe to show the
+    operator directly when that isn't the case (not a WordPress site, REST
+    API disabled, or a genuinely private site) rather than failing silently.
+    """
+    import urllib.error
+    import urllib.request
+
+    domain = (domain or "").strip()
+    if not domain:
+        raise RuntimeError("This site has no domain set — add one first (Website Widget → this site → Domain).")
+    if not domain.startswith(("http://", "https://")):
+        domain = f"https://{domain}"
+    base = domain.rstrip("/")
+
+    pages: list[dict] = []
+    page_num = 1
+    while page_num <= 10:  # 1000 pages is far past any real landing-page site; a hard stop, not a real limit
+        url = f"{base}/wp-json/wp/v2/pages?per_page=100&page={page_num}&status=publish&_fields=title,link"
+        request = urllib.request.Request(url, headers={"Accept": "application/json"})
+        try:
+            with urllib.request.urlopen(request, timeout=8) as resp:
+                body = json.loads(resp.read().decode() or "[]")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 400 and page_num > 1:
+                break  # WP returns 400 "rest_post_invalid_page_number" past the last page
+            if page_num == 1:
+                raise RuntimeError(
+                    f"{base} didn't return a WordPress page list (HTTP {exc.code}) — is this a WordPress "
+                    "site with its REST API enabled?"
+                )
+            break
+        except Exception as exc:
+            if page_num == 1:
+                raise RuntimeError(f"Could not reach {base}: {exc}")
+            break
+        if not isinstance(body, list) or not body:
+            break
+        for row in body:
+            if not isinstance(row, dict):
+                continue
+            link = row.get("link") or ""
+            path = _url_path_only(link)
+            title = ((row.get("title") or {}).get("rendered") or "").strip()
+            if path:
+                pages.append({"title": title, "url": path})
+        if len(body) < 100:
+            break
+        page_num += 1
+    if not pages:
+        raise RuntimeError(f"{base} returned no published pages via its WordPress REST API.")
+    return pages
+
+
+def _url_path_only(url: str) -> str:
+    from urllib.parse import urlparse
+
+    try:
+        return urlparse(url).path
+    except ValueError:
+        return ""
+
+
 # --------------------------------------------------------------- billing
 
 

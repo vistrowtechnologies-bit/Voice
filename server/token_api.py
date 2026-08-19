@@ -3355,6 +3355,24 @@ def list_site_seen_paths(site_id: int, user: dict = Depends(current_user)) -> li
     return calls_db.list_site_seen_paths(site_id, user["account_id"])
 
 
+@app.post("/widget/sites/{site_id}/sync-wp-pages")
+def sync_wp_pages_from_dashboard(site_id: int, user: dict = Depends(current_user)) -> dict:
+    """Dashboard-triggered counterpart to the WordPress plugin's own push
+    (POST /widget/wp-pages) — pulls the page list directly from the site's
+    public WP REST API instead, so an operator who wants to manage
+    everything from this dashboard never has to open WordPress admin at
+    all. Requires the site's domain to be set."""
+    site = calls_db.get_site(site_id, user["account_id"])
+    if site is None:
+        raise HTTPException(404, "Site not found")
+    try:
+        pages = calls_db.fetch_wp_pages_via_rest(site["allowedDomain"])
+    except RuntimeError as exc:
+        raise HTTPException(400, str(exc))
+    calls_db.sync_wp_site_pages(site_id, pages)
+    return {"ok": True, "count": len(pages)}
+
+
 # Loose since this only fires when an admin views the plugin's own settings
 # page in WP admin, not on real visitor traffic — same idea as
 # _widget_warm_rate_limited, scaled down for much lower expected volume.
