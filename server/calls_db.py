@@ -4579,6 +4579,7 @@ def fetch_wp_pages_via_rest(domain: str) -> list[dict]:
     API disabled, or a genuinely private site) rather than failing silently.
     """
     import urllib.error
+    import html
     import urllib.request
 
     domain = (domain or "").strip()
@@ -4630,7 +4631,12 @@ def fetch_wp_pages_via_rest(domain: str) -> list[dict]:
                 continue
             link = row.get("link") or ""
             path = _url_path_only(link)
-            title = ((row.get("title") or {}).get("rendered") or "").strip()
+            # WordPress's REST API returns titles HTML-entity-encoded
+            # (e.g. "TERMS &amp; CONDITIONS") since title.rendered is meant
+            # for direct embedding in HTML — decode before it reaches a
+            # plain-text UI, or an "&" anywhere in a page title shows up
+            # literally as "&amp;" in the dashboard's picker.
+            title = html.unescape(((row.get("title") or {}).get("rendered") or "").strip())
             if path:
                 pages.append({"title": title, "url": path})
         if len(body) < 100:
