@@ -43,9 +43,9 @@ const DEFAULT_CHAT_OPENER = "Hi, I'm Artha! What can I help you with today?"
 // re-prompt — each one leans harder into "this is a real voice, not a
 // chatbot" since that's the actual differentiator worth being curious about.
 const CURIOSITY_GREETINGS = [
-  "🎙️ I actually talk back — try me.",
+  '🎙️ I actually talk back. Try me!',
   '👀 Still reading? Just ask me out loud instead.',
-  "Wait — before you go, hear this for yourself?",
+  'Before you go, hear this for yourself?',
 ]
 // Explicit per-tenant override, if a site wants its own custom line instead
 // of the real platform-wide count fetched below. Never a fabricated
@@ -211,7 +211,11 @@ const CSS = `
 .av-greeting::after { content:'';position:absolute;right:-7px;top:50%;width:12px;height:12px;background:#17121f;border-top:1px solid #2a2440;border-right:1px solid #2a2440;transform:translateY(-50%) rotate(45deg); }
 :host([data-side="left"]) .av-greeting { left: 80px; right: auto; }
 :host([data-side="left"]) .av-greeting::after { left:-7px;right:auto;border:0;border-left:1px solid #2a2440;border-bottom:1px solid #2a2440; }
-.av-greeting span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* text-wrap:balance evens out the line lengths when it does wrap to 2
+   lines (avoids a long first line + one orphaned word on the second) -
+   line-clamp still caps it at 2 for an arbitrarily long tenant-supplied
+   custom greeting, which balance alone wouldn't bound. */
+.av-greeting span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-wrap: balance; }
 .av-greeting span { flex: 1 1 auto; min-width: 0; }
 .av-greeting button { background: none; border: none; color: #7d7594; cursor: pointer; padding: 2px; display: flex; flex-shrink: 0; }
 @keyframes av-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
@@ -920,7 +924,7 @@ function init(): void {
       timerEl.textContent = formatCallTime(elapsed)
       if (elapsed >= MAX_CALL_SECONDS - 30) timerEl.classList.add('av-timer-warn')
       if (elapsed >= MAX_CALL_SECONDS) {
-        showNotice('⏱️ 5-minute call limit reached — feel free to start a new call anytime.')
+        showNotice('⏱️ 5-minute call limit reached. Feel free to start a new call anytime.')
         endCall()
       }
     }
@@ -1281,7 +1285,7 @@ function init(): void {
       if (consecutiveCallFailures >= 2) {
         const cooldownMs = Math.min(30_000, 8_000 * 2 ** (consecutiveCallFailures - 2))
         callCooldownUntil = Date.now() + cooldownMs
-        message = "We're seeing high demand right now — please wait a moment before trying again."
+        message = "We're seeing high demand right now. Please wait a moment before trying again."
       }
     }
     showComplete(message, false)
@@ -1462,7 +1466,7 @@ function init(): void {
     // even if a cooldown started moments ago, since that's the SAME attempt
     // continuing, not a new one.
     if (attempt === 0 && callCooldownRemainingMs() > 0) {
-      failCall('High demand right now — please wait a moment and try again.', { skipBackoff: true })
+      failCall('High demand right now. Please wait a moment and try again.', { skipBackoff: true })
       return
     }
     // Defensive: if a call is somehow already active when a fresh attempt
@@ -1484,7 +1488,7 @@ function init(): void {
     // (attempt=1) is a continuation of a call this same widget already
     // claimed the lock for.
     if (attempt === 0 && !claimCallLock()) {
-      failCall('A conversation is already active on this page — please finish it first.', { skipBackoff: true })
+      failCall('A conversation is already active on this page. Please finish it first.', { skipBackoff: true })
       return
     }
     intentionalEnd = false
@@ -1528,7 +1532,7 @@ function init(): void {
     } catch (err) {
       console.error('[Vistrow Voice widget] microphone permission error:', err)
       trackEvent('microphone_denied')
-      failCall('Microphone access was blocked — allow it in your browser and try again.')
+      failCall('Microphone access was blocked. Allow it in your browser and try again.')
       return
     }
 
@@ -1550,7 +1554,7 @@ function init(): void {
       voiceSessionId = payload.room || null
     } catch (err) {
       console.error('[Vistrow Voice widget] token request failed:', err)
-      failCall('Could not reach the call server — please try again shortly.')
+      failCall('Could not reach the call server. Please try again shortly.')
       return
     }
 
@@ -1574,7 +1578,7 @@ function init(): void {
       })
       room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
         clearAgentJoinWatchdog()
-        setStatus('Agent joined — say hello!')
+        setStatus('Agent joined. Say hello!')
         trackEvent('agent_joined')
         consecutiveCallFailures = 0
         callCooldownUntil = 0
@@ -1609,10 +1613,10 @@ function init(): void {
         if (intentionalEnd) {
           resetToIdle()
         } else if (reason === DisconnectReason.ROOM_DELETED) {
-          endCallGracefully('Call ended — thanks for chatting!')
+          endCallGracefully('Call ended. Thanks for chatting!')
         } else {
           console.warn('[Vistrow Voice widget] room disconnected unexpectedly:', reason)
-          failCall('The call ended unexpectedly — please try again.')
+          failCall('The call ended unexpectedly. Please try again.')
         }
       })
 
@@ -1625,7 +1629,7 @@ function init(): void {
       // a participant that's already there, so without this check the UI
       // stayed stuck on "Waiting for the agent to join…" for the whole call.
       if (room.remoteParticipants.size > 0) {
-        setStatus('Agent joined — say hello!')
+        setStatus('Agent joined. Say hello!')
         trackEvent('agent_joined')
         consecutiveCallFailures = 0
         callCooldownUntil = 0
@@ -1652,15 +1656,15 @@ function init(): void {
         room = null
         if (attempt === 0) {
           console.warn('[Vistrow Voice widget] no agent within 15s — retrying with a fresh call')
-          setStatus('Still connecting — one moment…')
+          setStatus('Still connecting. One moment…')
           void startCall(name, phone, email, 1)
         } else {
-          failCall('The agent could not join the call — please try again in a moment.')
+          failCall('The agent could not join the call. Please try again in a moment.')
         }
       }, 15000)
     } catch (err) {
       console.error('[Vistrow Voice widget] LiveKit connect failed:', err)
-      failCall('Could not connect the call — please try again.')
+      failCall('Could not connect the call. Please try again.')
     }
   }
 
@@ -1755,7 +1759,7 @@ function init(): void {
         body,
       }).catch(() => null)
       if (response?.ok) {
-        copyStatusEl.textContent = 'Feedback saved — thank you.'
+        copyStatusEl.textContent = 'Feedback saved. Thank you.'
         return
       }
       if (attempt === 0) await new Promise((resolve) => window.setTimeout(resolve, 1200))
