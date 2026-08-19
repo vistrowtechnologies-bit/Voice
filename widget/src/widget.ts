@@ -207,9 +207,13 @@ const CSS = `
    land on top of whatever else a site anchors in the other bottom corner
    (a WhatsApp chat button, in the case that surfaced this) instead of
    stopping with real clearance from it. */
-.av-greeting { position: absolute; bottom: 6px; right: 80px; display: none; align-items: center; gap: 8px; width: min(236px, calc(100vw - 128px)); min-height:56px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
+/* right:68px is flush with the button's own width (no dead gap before the
+   avatar) - the tail's ::after triangle then bridges right up to its edge.
+   Was 80px, leaving a visible 12px empty strip between the bubble and the
+   avatar it's supposedly pointing at. */
+.av-greeting { position: absolute; bottom: 6px; right: 68px; display: none; align-items: center; gap: 8px; width: min(236px, calc(100vw - 128px)); min-height:56px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
 .av-greeting::after { content:'';position:absolute;right:-7px;top:50%;width:12px;height:12px;background:#17121f;border-top:1px solid #2a2440;border-right:1px solid #2a2440;transform:translateY(-50%) rotate(45deg); }
-:host([data-side="left"]) .av-greeting { left: 80px; right: auto; }
+:host([data-side="left"]) .av-greeting { left: 68px; right: auto; }
 :host([data-side="left"]) .av-greeting::after { left:-7px;right:auto;border:0;border-left:1px solid #2a2440;border-bottom:1px solid #2a2440; }
 /* text-wrap:balance evens out the line lengths when it does wrap to 2
    lines (avoids a long first line + one orphaned word on the second) -
