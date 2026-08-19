@@ -7,12 +7,16 @@
   <body>
     <h1>Widget test page</h1>
     <p>Loads the built widget bundle from ./dist/widget.js for visual verification.</p>
+    <div style="height:1600px;padding:40px;font-family:sans-serif;color:#333;">
+      <p>Scroll down to trigger the scroll-depth greeting re-prompt.</p>
+    </div>
     <script
       src="./dist/widget.js"
       data-site-key="test_local_key"
       data-api-base="http://localhost:8000"
       data-position="bottom-right"
       data-label="Talk to Artha"
+      data-proof-label="1,200+ people talked to Artha this week"
     ></script>
   </body>
 </html>

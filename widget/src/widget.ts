@@ -36,6 +36,21 @@ let avatarKey = scriptEl?.dataset.avatar || 'default'
 let customGreeting = scriptEl?.dataset.greeting || ''
 const DEFAULT_GREETING = "👋 Hi, I’m Artha. Tap to start."
 const DEFAULT_CHAT_OPENER = "Hi, I'm Artha! What can I help you with today?"
+// Rotated instead of a single static line — a tenant supplying their own
+// data-greeting always wins and skips this entirely (see greeting-render
+// call sites below), so this only applies to the out-of-the-box default.
+// Ordered by trigger: [0] first paint, [1] scroll re-prompt, [2] exit-intent
+// re-prompt — each one leans harder into "this is a real voice, not a
+// chatbot" since that's the actual differentiator worth being curious about.
+const CURIOSITY_GREETINGS = [
+  "🎙️ I actually talk back — try me.",
+  '👀 Still reading? Just ask me out loud instead.',
+  "Wait — before you go, hear this for yourself?",
+]
+// Optional, honest proof line — only rendered if the embedding site passes
+// data-proof-label explicitly. Never fabricated here: a made-up number is
+// worse for trust than no number at all.
+const proofLabel = scriptEl?.dataset.proofLabel || ''
 // 'voice' is the backwards-compatible default; 'chat' skips LiveKit and
 // 'both' lets the visitor choose on the welcome screen.
 let widgetMode: 'voice' | 'chat' | 'both' =
@@ -139,8 +154,33 @@ const CSS = `
   80% { transform: scale(0.98); }
   100% { transform: scale(1); }
 }
-.av-button { width: 68px; height: 68px; border-radius: 9999px; background: #000; border: none; padding: 0; overflow: hidden; cursor: pointer; animation: av-pulse-ring 2.6s ease-out infinite, av-attention-pop 1.1s ease-in-out 1; transition: transform .15s ease; }
+.av-button { position: relative; width: 68px; height: 68px; border-radius: 9999px; background: #000; border: none; padding: 0; overflow: hidden; cursor: pointer; animation: av-pulse-ring 2.6s ease-out infinite, av-attention-pop 1.1s ease-in-out 1; transition: transform .15s ease; }
 .av-button:hover { transform: scale(1.06); }
+
+/* Signals "voice", not "chat", at a glance — the actual point of
+   differentiation, so the button shouldn't read as just another speech-
+   bubble icon like every competing widget. */
+.av-mic-badge { position: absolute; top: -3px; right: -3px; width: 24px; height: 24px; border-radius: 9999px; background: linear-gradient(135deg,#a855f7,#7c3aed); border: 2px solid #17121f; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.35); pointer-events: none; }
+.av-mic-badge svg { width: 12px; height: 12px; }
+.av-mic-bars { display: flex; align-items: flex-end; gap: 1.5px; height: 10px; }
+.av-mic-bars span { width: 2px; background: #fff; border-radius: 1px; animation: av-mic-wave 1s ease-in-out infinite; }
+.av-mic-bars span:nth-child(1) { height: 40%; animation-delay: 0s; }
+.av-mic-bars span:nth-child(2) { height: 100%; animation-delay: .15s; }
+.av-mic-bars span:nth-child(3) { height: 65%; animation-delay: .3s; }
+@keyframes av-mic-wave { 0%,100% { transform: scaleY(.5); } 50% { transform: scaleY(1); } }
+
+/* max-width mirrors .av-greeting's own viewport-relative cap — a long
+   proof line must wrap to 2 lines on a narrow phone instead of running
+   past the screen edge with nowrap. align-items:flex-start (not center)
+   since the leading dot needs to sit with the first line, not centered
+   against the full wrapped block. */
+.av-proof-pill { position: absolute; bottom: 76px; right: 0; display: flex; align-items: flex-start; gap: 6px; width: max-content; max-width: min(230px, calc(100vw - 100px)); background: #17121f; border: 1px solid #2a2440; color: #cfc9e6; font-size: 11px; font-weight: 600; line-height: 1.35; padding: 7px 10px; border-radius: 14px; box-shadow: 0 8px 20px rgba(0,0,0,.35); animation: av-fade-in .25s ease; box-sizing: border-box; }
+.av-proof-pill::before { content:''; flex-shrink:0; margin-top:4px; width:6px;height:6px;border-radius:99px;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.16); }
+/* min-width:0 is the actual fix - without it a flex item defaults to
+   min-width:auto (its longest unbreakable word), which is what made the
+   pill wrap one word per line instead of using the full available width. */
+.av-proof-pill span { flex: 1 1 auto; min-width: 0; }
+:host([data-side="left"]) .av-proof-pill { right: auto; left: 0; }
 /* The 1.5x zoom exists only for the orb video (agent-orb.mp4 has a lot of
    dark padding baked into the frame around the actual visual ring, so it
    needs cropping in to fill the circle) - a photo avatar is already a
@@ -155,7 +195,7 @@ const CSS = `
    land on top of whatever else a site anchors in the other bottom corner
    (a WhatsApp chat button, in the case that surfaced this) instead of
    stopping with real clearance from it. */
-.av-greeting { position: absolute; bottom: 6px; right: 80px; display: flex; align-items: center; gap: 8px; width: min(236px, calc(100vw - 128px)); min-height:56px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
+.av-greeting { position: absolute; bottom: 6px; right: 80px; display: none; align-items: center; gap: 8px; width: min(236px, calc(100vw - 128px)); min-height:56px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
 .av-greeting::after { content:'';position:absolute;right:-7px;top:50%;width:12px;height:12px;background:#17121f;border-top:1px solid #2a2440;border-right:1px solid #2a2440;transform:translateY(-50%) rotate(45deg); }
 :host([data-side="left"]) .av-greeting { left: 80px; right: auto; }
 :host([data-side="left"]) .av-greeting::after { left:-7px;right:auto;border:0;border-left:1px solid #2a2440;border-bottom:1px solid #2a2440; }
@@ -286,6 +326,7 @@ audio { display: none; }
   .av-panel,:host([data-side="left"]) .av-panel { position:fixed;left:10px;right:10px;bottom:10px;width:auto;max-height:calc(100dvh - 20px);border-radius:22px; }
   .av-greeting,:host([data-side="left"]) .av-greeting { left:auto;right:0;bottom:78px;width:min(260px,calc(100vw - 32px)); }
   .av-greeting::after,:host([data-side="left"]) .av-greeting::after { left:auto;right:25px;top:auto;bottom:-7px;border:0;border-right:1px solid #2a2440;border-bottom:1px solid #2a2440;transform:rotate(45deg); }
+  .av-proof-pill,:host([data-side="left"]) .av-proof-pill { left:auto;right:0;max-width:min(220px,calc(100vw - 32px)); }
   #av-call,#av-chat { height:min(500px,calc(100dvh - 110px)); }
   .av-welcome { padding:25px 22px 23px; }
 }
@@ -418,8 +459,13 @@ function widgetHtml(label: string): string {
         <a class="av-branding" href="https://www.vistrowvoice.com" target="_blank" rel="noopener">Powered by Vistrow Voice</a>
       </div>
 
+      ${proofLabel ? `<div id="av-proof-pill" class="av-proof-pill"><span>${proofLabel}</span></div>` : ''}
+
       <button id="av-button" class="av-button" aria-label="${label}" aria-haspopup="dialog" aria-expanded="false">
         ${avatarTag()}
+        <span class="av-mic-badge" aria-hidden="true">
+          <span class="av-mic-bars"><span></span><span></span><span></span></span>
+        </span>
       </button>
     </div>
   `
@@ -444,6 +490,7 @@ function init(): void {
   const titleAvatarEl = shadow.getElementById('av-title-avatar') as HTMLSpanElement
   const greeting = shadow.getElementById('av-greeting') as HTMLDivElement
   const greetingClose = shadow.getElementById('av-greeting-close') as HTMLButtonElement
+  const proofPillEl = shadow.getElementById('av-proof-pill') as HTMLDivElement | null
   const panel = shadow.getElementById('av-panel') as HTMLDivElement
   const closeBtn = shadow.getElementById('av-close') as HTMLButtonElement
   const endChatBtn = shadow.getElementById('av-end-chat') as HTMLButtonElement
@@ -635,8 +682,12 @@ function init(): void {
   // the call just randomly dropped.
   const MAX_CALL_SECONDS = 5 * 60
 
-  // A quiet greeting bubble after a few seconds does more to earn a click
-  // than a button alone — dismissible, and only shown once per page load.
+  // A quiet greeting bubble does more to earn a click than a button alone.
+  // An explicit close-button dismissal opts the visitor out for the rest of
+  // the session (respected below), but short of that we re-prompt a few
+  // times across genuinely different moments — first paint, scrolling deep
+  // into the page, and exit-intent — each with a different curiosity line,
+  // rather than showing the same static bubble once and going quiet.
   const greetingStorageKey = `vistrow-widget-greeting-${siteKey}`
   function greetingWasDismissed(): boolean {
     try { return sessionStorage.getItem(greetingStorageKey) === 'dismissed' } catch { return false }
@@ -644,21 +695,81 @@ function init(): void {
   function rememberGreetingDismissal(): void {
     try { sessionStorage.setItem(greetingStorageKey, 'dismissed') } catch { /* storage may be blocked */ }
   }
-  const greetingTimer = window.setTimeout(() => {
-    if (!greetingWasDismissed()) {
-      greeting.style.display = 'flex'
-      trackEvent('greeting_shown')
+
+  let greetingShowCount = 0
+  const MAX_AUTO_GREETING_SHOWS = 3
+  function nextGreetingText(): string {
+    if (customGreeting) return customGreeting
+    const idx = Math.min(greetingShowCount, CURIOSITY_GREETINGS.length - 1)
+    return CURIOSITY_GREETINGS[idx]
+  }
+  // Only re-prompt while the widget is actually closed (button visible) -
+  // openPanel() hides the button, so this doubles as "isn't already open."
+  function isWidgetClosed(): boolean {
+    return button.style.display !== 'none'
+  }
+  // The two float in the same bottom-right corner and can both wrap to
+  // multi-line, so stacking them at fixed offsets isn't reliable (this is
+  // exactly what caused them to overlap on mobile, where the greeting's own
+  // position shifts under the 520px media query). Simplest robust fix:
+  // never show both at once — the proof pill only holds the corner while
+  // there is no greeting bubble occupying it.
+  function syncProofPillVisibility(): void {
+    if (!proofPillEl) return
+    proofPillEl.style.display = isWidgetClosed() && greeting.style.display !== 'flex' ? 'flex' : 'none'
+  }
+
+  function triggerGreeting(reason: string): void {
+    if (greetingWasDismissed()) return
+    if (greetingShowCount >= MAX_AUTO_GREETING_SHOWS) return
+    if (!isWidgetClosed()) return
+    greetingText.textContent = nextGreetingText()
+    greeting.style.display = 'flex'
+    greetingShowCount += 1
+    trackEvent('greeting_shown', { reason })
+    syncProofPillVisibility()
+  }
+
+  const greetingTimer = window.setTimeout(() => triggerGreeting('timer'), 2800)
+
+  // Fires once the visitor has scrolled halfway down the page - a real
+  // engagement signal (they're reading, not bouncing) worth a fresh nudge
+  // with different copy, not the same line they may have already ignored.
+  let scrollGreetingArmed = true
+  function handleScrollForGreeting(): void {
+    if (!scrollGreetingArmed) return
+    const total = document.documentElement.scrollHeight - window.innerHeight
+    if (total > 0 && window.scrollY / total >= 0.5) {
+      scrollGreetingArmed = false
+      triggerGreeting('scroll_depth')
     }
-  }, 2800)
+  }
+  window.addEventListener('scroll', handleScrollForGreeting, { passive: true })
+
+  // Classic exit-intent: the cursor leaving the top of the viewport toward
+  // the browser chrome (tab bar / address bar) usually means the visitor is
+  // about to navigate away or close the tab - the last real chance to earn
+  // a click on this page view.
+  let exitIntentArmed = true
+  function handleExitIntent(e: MouseEvent): void {
+    if (!exitIntentArmed) return
+    if (e.clientY <= 0) {
+      exitIntentArmed = false
+      triggerGreeting('exit_intent')
+    }
+  }
+  document.addEventListener('mouseout', handleExitIntent)
 
   function hideGreeting(): void {
     window.clearTimeout(greetingTimer)
     greeting.style.display = 'none'
+    syncProofPillVisibility()
   }
 
   function showNotice(text: string): void {
     greetingText.textContent = text
     greeting.style.display = 'flex'
+    syncProofPillVisibility()
   }
 
   function setStatus(text: string): void {
@@ -822,6 +933,7 @@ function init(): void {
     panel.style.display = 'flex'
     button.style.display = 'none'
     button.setAttribute('aria-expanded', 'true')
+    syncProofPillVisibility()
   }
 
   function showWelcome(): void {
@@ -1053,6 +1165,7 @@ function init(): void {
     panel.style.display = 'none'
     button.style.display = 'flex'
     button.setAttribute('aria-expanded', 'false')
+    syncProofPillVisibility()
     button.focus()
   }
 
@@ -1690,7 +1803,7 @@ function init(): void {
   shadow.addEventListener('keydown', (event) => {
     if ((event as KeyboardEvent).key === 'Escape' && !room) resetToIdle()
   })
-  window.addEventListener('scroll', hideGreeting, { once: true, passive: true })
+  syncProofPillVisibility()
   trackEvent('loaded')
 }
 
