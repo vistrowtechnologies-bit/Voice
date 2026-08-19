@@ -73,6 +73,8 @@ _PUBLIC_PATHS = {
     "/widget/feedback",                # widget post-conversation rating
     "/widget/telemetry",               # widget latency/failure diagnostics
     "/widget/site-config",             # public avatar/greeting/mode lookup by site key
+    "/widget/warm",                    # widget room pre-warm (runs on customers' sites)
+    "/widget/wp-pages",                # WordPress plugin pushing its own page list (runs on customers' sites)
     "/widget/wordpress-plugin.zip",    # plugin download
     "/agent-orb.mp4",                  # widget avatar video
     "/public/contact",                 # marketing site's "Book a Demo" form (anonymous visitors)
@@ -3349,8 +3351,48 @@ def list_site_page_routes(site_id: int, user: dict = Depends(current_user)) -> l
 
 
 @app.get("/widget/sites/{site_id}/seen-paths")
-def list_site_seen_paths(site_id: int, user: dict = Depends(current_user)) -> list[str]:
+def list_site_seen_paths(site_id: int, user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_site_seen_paths(site_id, user["account_id"])
+
+
+# Loose since this only fires when an admin views the plugin's own settings
+# page in WP admin, not on real visitor traffic — same idea as
+# _widget_warm_rate_limited, scaled down for much lower expected volume.
+_WP_PAGES_SYNC_WINDOW_SECONDS = 60
+_WP_PAGES_SYNC_MAX_PER_WINDOW = 10
+_wp_pages_sync_calls: dict[str, list[float]] = {}
+
+
+def _wp_pages_sync_rate_limited(site_key: str) -> bool:
+    import time
+
+    now = time.monotonic()
+    calls = [t for t in _wp_pages_sync_calls.get(site_key, []) if now - t < _WP_PAGES_SYNC_WINDOW_SECONDS]
+    calls.append(now)
+    _wp_pages_sync_calls[site_key] = calls
+    return len(calls) > _WP_PAGES_SYNC_MAX_PER_WINDOW
+
+
+class WpPagesSyncRequest(BaseModel):
+    siteKey: str
+    pages: list[dict] = []
+
+
+@app.post("/widget/wp-pages")
+def sync_wp_pages(req: WpPagesSyncRequest) -> dict:
+    """Public, unauthenticated — same site-key-is-the-auth model as
+    /widget/token. Called by the WordPress plugin's own admin settings
+    page (vistrow_voice_sync_wp_pages) with its already-local get_pages()
+    list, so the dashboard's page-rules picker can suggest real WordPress
+    pages immediately instead of waiting for actual visitor traffic to
+    populate site_seen_paths."""
+    site = calls_db.get_site_by_key(req.siteKey)
+    if site is None:
+        raise HTTPException(404, "Unknown site key")
+    if _wp_pages_sync_rate_limited(req.siteKey):
+        raise HTTPException(429, "Too many syncs right now — try again shortly")
+    calls_db.sync_wp_site_pages(site["id"], req.pages)
+    return {"ok": True}
 
 
 @app.post("/widget/sites/{site_id}/routes")

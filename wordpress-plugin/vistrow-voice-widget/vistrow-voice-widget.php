@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.6.2
+ * Version: 1.7.0
  * Author: Vistrow Voice
  */
 
@@ -154,6 +154,46 @@ function vistrow_voice_sanitize_settings($input) {
     );
 }
 
+// Pushes this site's real page list to the dashboard so the Website Widget
+// page's "page rules" picker (per-page agent/KB routing) can suggest actual
+// pages immediately, instead of only learning about a page once a real
+// visitor has opened it with the widget installed. Fires from the settings
+// screen itself (which already computes get_pages() for its own "show
+// widget on selected pages" picker below) — debounced via a transient so
+// visiting the settings screen repeatedly doesn't hammer the backend.
+function vistrow_voice_sync_wp_pages($site_key, $backend_url, $all_pages) {
+    if (empty($site_key) || empty($all_pages)) {
+        return;
+    }
+    $debounce_key = 'vistrow_voice_wp_pages_synced_' . md5($site_key);
+    if (get_transient($debounce_key)) {
+        return;
+    }
+    $pages = array();
+    foreach ($all_pages as $page) {
+        $permalink = get_permalink($page);
+        $path = $permalink ? wp_parse_url($permalink, PHP_URL_PATH) : '';
+        if (empty($path)) {
+            continue;
+        }
+        $pages[] = array('title' => $page->post_title, 'url' => $path);
+    }
+    if (empty($pages)) {
+        return;
+    }
+    wp_remote_post($backend_url . '/widget/wp-pages', array(
+        'timeout' => 5,
+        'blocking' => false,
+        'headers' => array('Content-Type' => 'application/json'),
+        'body' => wp_json_encode(array('siteKey' => $site_key, 'pages' => $pages)),
+    ));
+    // Set regardless of whether the request above actually lands (blocking
+    // is false, so we never see its result) — the next real settings-page
+    // view an hour from now retries either way, which is enough for a
+    // page list that only changes when an admin edits content.
+    set_transient($debounce_key, 1, HOUR_IN_SECONDS);
+}
+
 function vistrow_voice_render_settings_page() {
     if (!current_user_can('manage_options')) {
         return;
@@ -290,6 +330,7 @@ function vistrow_voice_render_settings_page() {
                             </label>
                             <?php
                             $all_pages = get_pages(array('sort_column' => 'post_title'));
+                            vistrow_voice_sync_wp_pages($settings['site_key'], $settings['backend_url'], $all_pages);
                             if ($all_pages) :
                             ?>
                             <div class="vvw-page-list">

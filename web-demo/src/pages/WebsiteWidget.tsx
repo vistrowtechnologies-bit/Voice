@@ -19,7 +19,7 @@ import {
   updateSite,
   wordpressPluginUrl,
 } from '../lib/api'
-import type { AgentConfig, Site, SitePageRoute, WidgetAvatarOption } from '../lib/types'
+import type { AgentConfig, Site, SitePageRoute, SiteSeenPath, WidgetAvatarOption } from '../lib/types'
 
 // The greeting can contain quotes/ampersands - this is copy-pasted verbatim
 // into a customer's own HTML, so it must be a well-formed attribute value,
@@ -591,7 +591,7 @@ function SiteRow({
 // is purely additive and never required.
 function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
   const [routes, setRoutes] = useState<SitePageRoute[]>([])
-  const [seenPaths, setSeenPaths] = useState<string[]>([])
+  const [seenPaths, setSeenPaths] = useState<SiteSeenPath[]>([])
   const [loaded, setLoaded] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [newPattern, setNewPattern] = useState('')
@@ -613,7 +613,7 @@ function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
   }, [expanded])
 
   const datalistId = `site-${site.id}-seen-paths`
-  const unruledPaths = seenPaths.filter((p) => !routes.some((r) => p.includes(r.pathPattern)))
+  const unruledPaths = seenPaths.filter((p) => !routes.some((r) => p.path.includes(r.pathPattern)))
 
   const handleAdd = async () => {
     if (!newPattern.trim()) return
@@ -693,13 +693,13 @@ function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
               />
               <datalist id={datalistId}>
                 {unruledPaths.map((p) => (
-                  <option key={p} value={p} />
+                  <option key={p.path} value={p.path} label={p.title || p.path} />
                 ))}
               </datalist>
               {loaded && seenPaths.length === 0 && (
                 <span className="mt-1 block text-[10px] text-text-muted">
-                  No page visits seen yet - once someone opens a page with the widget installed, its URL shows up
-                  here to pick from.
+                  No pages known yet - once the WordPress plugin syncs its page list (visit its settings screen) or
+                  a visitor opens a page with the widget installed, URLs show up here to pick from.
                 </span>
               )}
             </Field>

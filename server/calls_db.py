@@ -138,6 +138,11 @@ CREATE TABLE IF NOT EXISTS site_seen_paths (
     hit_count INTEGER DEFAULT 1,
     first_seen_at TEXT DEFAULT {_NOW},
     last_seen_at TEXT DEFAULT {_NOW},
+    -- 'seen' = discovered from real widget traffic, 'wp' = pushed directly
+    -- by the WordPress plugin's own page list — see the ALTER TABLE below
+    -- for the full story (this column was added after the table shipped).
+    source TEXT DEFAULT 'seen',
+    title TEXT DEFAULT '',
     PRIMARY KEY (site_id, path)
 );
 
@@ -986,6 +991,14 @@ def init_tables() -> None:
             conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_require_phone INTEGER DEFAULT 1")
             conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_ask_email INTEGER DEFAULT 1")
             conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_require_email INTEGER DEFAULT 0")
+            # 'seen' (default) = discovered from real widget traffic
+            # (record_site_page_view); 'wp' = pushed directly by the
+            # WordPress plugin's own get_pages() list (vistrow_voice_sync_wp_pages
+            # in vistrow-voice-widget.php) — the same row's source flips to
+            # 'wp' the moment the plugin confirms a page exists, which is
+            # immediate, versus 'seen' which needs an actual visit first.
+            conn.execute("ALTER TABLE site_seen_paths ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'seen'")
+            conn.execute("ALTER TABLE site_seen_paths ADD COLUMN IF NOT EXISTS title TEXT DEFAULT ''")
             # "Premium+" (ElevenLabs v3) was folded into Premium (Flash v2.5) on
             # 2026-07-14 — v3's realtime endpoint 403s in production, so it was
             # never a good tier to keep selling (see voice_catalog.py's CATALOG
@@ -4494,19 +4507,62 @@ def record_site_page_view(site_id: int, path: str) -> None:
         pass
 
 
-def list_site_seen_paths(site_id: int, account_id: int, limit: int = 100) -> list[str]:
-    """Distinct real pages the widget has actually loaded on for this site,
-    most-recently-seen first — feeds the dashboard's page-rules path picker
-    so an operator can choose from live pages instead of typing a URL from
-    memory. Account-scoped via a join, same as list_site_page_routes."""
+def list_site_seen_paths(site_id: int, account_id: int, limit: int = 200) -> list[dict]:
+    """Real pages this site's widget knows about, for the dashboard's
+    page-rules path picker — either declared directly by the WordPress
+    plugin (source='wp', immediate, complete) or discovered from actual
+    widget traffic (source='seen', needs a real visit first). WP-declared
+    pages sort first since they're the more complete/authoritative list
+    when both are available. Account-scoped via a join, same as
+    list_site_page_routes."""
     conn = _connect()
     try:
         rows = conn.execute(
-            "SELECT p.path FROM site_seen_paths p JOIN sites s ON s.id = p.site_id "
-            "WHERE p.site_id = ? AND s.account_id = ? ORDER BY p.last_seen_at DESC LIMIT ?",
+            "SELECT p.path, p.title, p.source FROM site_seen_paths p JOIN sites s ON s.id = p.site_id "
+            "WHERE p.site_id = ? AND s.account_id = ? "
+            "ORDER BY (p.source = 'wp') DESC, p.last_seen_at DESC LIMIT ?",
             (site_id, account_id, limit),
         ).fetchall()
-        return [r["path"] for r in rows]
+        return [{"path": r["path"], "title": r["title"] or "", "source": r["source"]} for r in rows]
+    finally:
+        conn.close()
+
+
+def sync_wp_site_pages(site_id: int, pages: list[dict]) -> None:
+    """Replaces this site's WordPress-declared page list (source='wp')
+    with the plugin's current get_pages() output — called from the
+    plugin's own settings-page render (see vistrow_voice_sync_wp_pages in
+    vistrow-voice-widget.php), so a renamed/deleted WP page eventually
+    stops being suggested instead of lingering forever. Never touches
+    'seen' rows for paths not in this list; a path that's both
+    traffic-seen and WP-declared gets bumped to source='wp' — more
+    authoritative, since it means the page genuinely exists right now,
+    not just that someone once visited a URL that may since 404."""
+    clean: dict[str, str] = {}
+    for p in pages[:300]:
+        if not isinstance(p, dict):
+            continue
+        url = str(p.get("url") or "").strip()
+        title = str(p.get("title") or "").strip()[:200]
+        if url and len(url) <= 500:
+            clean[url] = title
+    conn = _connect()
+    try:
+        with conn:
+            existing = conn.execute(
+                "SELECT path FROM site_seen_paths WHERE site_id = ? AND source = 'wp'", (site_id,)
+            ).fetchall()
+            for row in existing:
+                if row["path"] not in clean:
+                    conn.execute(
+                        "DELETE FROM site_seen_paths WHERE site_id = ? AND path = ?", (site_id, row["path"])
+                    )
+            for url, title in clean.items():
+                conn.execute(
+                    "INSERT INTO site_seen_paths (site_id, path, source, title) VALUES (?, ?, 'wp', ?) "
+                    "ON CONFLICT (site_id, path) DO UPDATE SET source = 'wp', title = EXCLUDED.title",
+                    (site_id, url, title),
+                )
     finally:
         conn.close()
 

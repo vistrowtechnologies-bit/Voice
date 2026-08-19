@@ -499,6 +499,12 @@ export interface Site {
   createdAt: string
 }
 
+export interface SiteSeenPath {
+  path: string
+  title: string
+  source: 'seen' | 'wp'
+}
+
 export interface SitePageRoute {
   id: number
   siteId: number
