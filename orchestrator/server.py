@@ -511,7 +511,14 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
     loud_streak = 0
     logger.info("stream connected for voice_id=%s", voice_id)
 
-    async def _send_reply_audio(reply_audio: bytes, content_type: str) -> None:
+    async def _send_ulaw_frames(ulaw_chunks) -> None:
+        # Shared pacing/record/echo-reference core for both _send_reply_audio
+        # (whole-clip batch path) and _send_reply_audio_stream (incremental
+        # streaming path, tts.synthesize_stream) — ulaw_chunks is an async
+        # iterable of raw 8kHz mono ulaw byte blobs, any size, sliced into
+        # 20ms `media` frames and paced identically regardless of how many
+        # pieces the caller handed over.
+        #
         # Paced at real time (one frame's worth of sleep per frame sent) —
         # sending all chunks back-to-back as fast as the network allows
         # overruns EnableX's playback buffer and comes out as crackling.
@@ -528,17 +535,11 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         # the next deadline on every iteration means a single slow send
         # only costs that one frame's slack, not a permanent, growing
         # offset for everything after it.
-        reply_ulaw = audio.wav_or_mp3_to_ulaw(reply_audio, content_type)
-        nonlocal agent_recording_ratecv_state
-        agent_pcm16, agent_recording_ratecv_state = audioop.ratecv(
-            audioop.ulaw2lin(reply_ulaw, 2), 2, 1, 8000, recording.RECORDING_SAMPLE_RATE, agent_recording_ratecv_state
-        )
-        recorder.append_agent_audio(agent_pcm16)
+        nonlocal agent_recording_ratecv_state, last_frame_sent_at, playback_run_started_at
         frame_ms = 20
         frame_s = frame_ms / 1000
         loop = asyncio.get_event_loop()
         start = loop.time()
-        nonlocal last_frame_sent_at, playback_run_started_at
         # A reply is delivered one sentence at a time (see session.py's
         # _OrderedTTSPipeline), so consecutive calls here are one continuous
         # playback run with only a tiny gap between them; a real gap means
@@ -546,27 +547,49 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         # restarts the grace window.
         if time.monotonic() - last_frame_sent_at > _PLAYBACK_GAP_S:
             playback_run_started_at = time.monotonic()
-        for i, chunk in enumerate(audio.chunk_ulaw(reply_ulaw, frame_ms=frame_ms)):
-            await websocket.send_json({
-                "event": "media",
-                "voice_id": stream_ctx.get("voice_id", voice_id),
-                "stream_id": stream_ctx.get("stream_id"),
-                "media": {
-                    "seq": next(seq_counter),
-                    "timestamp": int(time.time() * 1000),
-                    "format": {"encoding": "ulaw", "sample_rate": 8000, "channels": 1},
-                    "payload": base64.b64encode(chunk).decode(),
-                },
-            })
-            last_frame_sent_at = time.monotonic()
-            if chunk:
-                # Feed the echo canceller's reference stream with exactly
-                # what we just sent, in send order.
-                echo_canceller.push_reference(np.frombuffer(audioop.ulaw2lin(chunk, 2), dtype=np.int16))
-            deadline = start + (i + 1) * frame_s
-            remaining = deadline - loop.time()
-            if remaining > 0:
-                await asyncio.sleep(remaining)
+        i = 0
+        async for ulaw_bytes in ulaw_chunks:
+            agent_pcm16, agent_recording_ratecv_state = audioop.ratecv(
+                audioop.ulaw2lin(ulaw_bytes, 2), 2, 1, 8000, recording.RECORDING_SAMPLE_RATE, agent_recording_ratecv_state
+            )
+            recorder.append_agent_audio(agent_pcm16)
+            for chunk in audio.chunk_ulaw(ulaw_bytes, frame_ms=frame_ms):
+                await websocket.send_json({
+                    "event": "media",
+                    "voice_id": stream_ctx.get("voice_id", voice_id),
+                    "stream_id": stream_ctx.get("stream_id"),
+                    "media": {
+                        "seq": next(seq_counter),
+                        "timestamp": int(time.time() * 1000),
+                        "format": {"encoding": "ulaw", "sample_rate": 8000, "channels": 1},
+                        "payload": base64.b64encode(chunk).decode(),
+                    },
+                })
+                last_frame_sent_at = time.monotonic()
+                if chunk:
+                    # Feed the echo canceller's reference stream with exactly
+                    # what we just sent, in send order.
+                    echo_canceller.push_reference(np.frombuffer(audioop.ulaw2lin(chunk, 2), dtype=np.int16))
+                i += 1
+                deadline = start + i * frame_s
+                remaining = deadline - loop.time()
+                if remaining > 0:
+                    await asyncio.sleep(remaining)
+
+    async def _single_item_aiter(item: bytes):
+        yield item
+
+    async def _send_reply_audio(reply_audio: bytes, content_type: str) -> None:
+        reply_ulaw = audio.wav_or_mp3_to_ulaw(reply_audio, content_type)
+        await _send_ulaw_frames(_single_item_aiter(reply_ulaw))
+
+    async def _send_reply_audio_stream(ulaw_chunk_iter) -> None:
+        # Streaming counterpart to _send_reply_audio — ulaw_chunk_iter
+        # yields raw 8kHz mono ulaw bytes directly (already exactly what
+        # EnableX needs, per tts.synthesize_stream's output_audio_codec=
+        # "mulaw" request), so there's no wav_or_mp3_to_ulaw decode step
+        # before pacing/sending, unlike the batch path above.
+        await _send_ulaw_frames(ulaw_chunk_iter)
 
     async def _speak(reply_audio: bytes, content_type: str) -> None:
         try:
@@ -587,7 +610,9 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         # makes barge-in work uniformly across the whole turn, not just
         # during playback.
         try:
-            reply_text = await session_module.handle_utterance_streaming(sess, wav_bytes, _send_reply_audio)
+            reply_text = await session_module.handle_utterance_streaming(
+                sess, wav_bytes, _send_reply_audio, on_reply_chunk=_send_reply_audio_stream
+            )
         except stt.STTError as e:
             logger.info("skipping turn, no speech detected: %s", e)
             return

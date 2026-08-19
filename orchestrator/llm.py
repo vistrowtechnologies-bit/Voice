@@ -29,6 +29,13 @@ _MAX_CHUNK_CHARS = 220  # force-flush a long unpunctuated run so it isn't held f
 _MIN_CHUNK_CHARS = 20
 
 
+# Matches agent/main.py's _build_llm — OpenAI only (Gemini's OpenAI-compat
+# endpoint doesn't support this param). The exact prompt prefix still has
+# to match before OpenAI reuses anything cached, so this never mixes one
+# tenant's system prompt/KB with another's.
+_OPENAI_PROMPT_CACHE_KEY = "vistrow-voice-agent-v1"
+
+
 def _get_client(model: str) -> AsyncOpenAI:
     provider = "gemini" if model.startswith("gemini") else "openai"
     if provider not in _clients:
@@ -69,6 +76,7 @@ async def run_turn(
     codebase: fail safe, never hang a live call indefinitely.
     """
     client = _get_client(model)
+    extra = {"prompt_cache_key": _OPENAI_PROMPT_CACHE_KEY} if not model.startswith("gemini") else {}
     working = list(messages)
     for _ in range(max_tool_hops):
         resp = await client.chat.completions.create(
@@ -76,6 +84,7 @@ async def run_turn(
             messages=working,
             tools=tool_schemas or None,
             tool_choice="auto" if tool_schemas else None,
+            **extra,
         )
         choice = resp.choices[0]
         msg = choice.message
@@ -157,12 +166,14 @@ async def stream_turn(
     updated_messages), same shape as run_turn.
     """
     client = _get_client(model)
+    extra = {"prompt_cache_key": _OPENAI_PROMPT_CACHE_KEY} if not model.startswith("gemini") else {}
     stream = await client.chat.completions.create(
         model=model,
         messages=messages,
         tools=tool_schemas or None,
         tool_choice="auto" if tool_schemas else None,
         stream=True,
+        **extra,
     )
     pending = ""
     parts: list[str] = []

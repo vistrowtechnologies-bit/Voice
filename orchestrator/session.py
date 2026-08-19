@@ -501,6 +501,46 @@ def _tone_kwargs_for(session: Session, caller_text: str) -> dict:
     return {"pace": 1.0 + delta.get("pace", 0.0), "pitch": 0.0 + delta.get("pitch", 0.0)}
 
 
+class _BufferedTTSStream:
+    """Actively drains an async generator of ulaw chunks into an internal
+    queue from the moment this is constructed — a background task, not lazy
+    iteration — so synthesis for this sentence starts immediately, the same
+    "starts now, overlaps whatever the pipeline is still sending" property
+    asyncio.create_task(tts.synthesize(...)) already gives the batch path
+    below. Without this, a bare async generator does nothing until the
+    consumer starts iterating it (Python generators are lazy), which would
+    silently lose the overlap and let synthesis start only once this
+    sentence's turn to be sent actually arrives."""
+
+    def __init__(self, source) -> None:
+        self._queue: asyncio.Queue = asyncio.Queue()
+        self._task = asyncio.create_task(self._drain(source))
+
+    async def _drain(self, source) -> None:
+        try:
+            async for chunk in source:
+                await self._queue.put(("chunk", chunk))
+        except tts.TTSError as e:
+            await self._queue.put(("error", e))
+        except Exception as e:  # noqa: BLE001 — surfaced to the consumer as a TTSError, not swallowed
+            await self._queue.put(("error", tts.TTSError(f"Streaming TTS failed: {e}")))
+        finally:
+            await self._queue.put(("end", None))
+
+    async def chunks(self):
+        while True:
+            kind, value = await self._queue.get()
+            if kind == "chunk":
+                yield value
+            elif kind == "error":
+                raise value
+            else:
+                return
+
+    def cancel(self) -> None:
+        self._task.cancel()
+
+
 class _OrderedTTSPipeline:
     """Overlaps TTS synthesis with delivery: as soon as llm.stream_turn()
     hands us a completed sentence, synthesis for it starts immediately in
@@ -512,6 +552,16 @@ class _OrderedTTSPipeline:
     Without this, a long multi-sentence reply pays N sequential TTS round
     trips (~2-3s each on Sarvam) back to back — this cuts that to roughly
     one round trip's worth of added latency regardless of sentence count.
+
+    on_reply_chunk, when given, is tried first for each sentence — real
+    streaming delivery (chunks handed to the caller as they arrive from
+    tts.synthesize_stream, instead of waiting for the whole sentence to
+    finish synthesizing). tts.synthesize_stream returns None for any
+    voice/provider it doesn't support yet (ElevenLabs, Google — see its
+    docstring), and this pipeline falls back to the batch on_reply_audio
+    path for that one sentence when it does, so a call using a mixed or
+    unsupported voice degrades to exactly today's behavior rather than
+    failing.
     """
 
     def __init__(
@@ -519,11 +569,13 @@ class _OrderedTTSPipeline:
         voice: str,
         reply_language: str,
         on_reply_audio: Callable[[bytes, str], Awaitable[None]],
+        on_reply_chunk: Callable[[object], Awaitable[None]] | None = None,
         tone_kwargs: dict | None = None,
     ) -> None:
         self._voice = voice
         self._reply_language = reply_language
         self._on_reply_audio = on_reply_audio
+        self._on_reply_chunk = on_reply_chunk
         self._tone_kwargs = tone_kwargs or {}
         self._queue: asyncio.Queue = asyncio.Queue()
         # Sentences whose audio actually started going out, in order. Read by
@@ -534,32 +586,61 @@ class _OrderedTTSPipeline:
         # silence in the dashboard while the caller was hearing real speech).
         self.spoken: list[str] = []
         self._consumer = asyncio.create_task(self._consume())
+        # Every _BufferedTTSStream currently open (queued or actively being
+        # consumed) — abort() needs this to cancel their background drain
+        # tasks explicitly; cancelling self._consumer alone doesn't touch
+        # them, same sibling-task reasoning as self._consumer itself.
+        self._active_streams: list[_BufferedTTSStream] = []
 
     async def enqueue(self, sentence: str) -> None:
+        stream = None
+        if self._on_reply_chunk is not None:
+            # tone_kwargs (pace/pitch) only apply to Sarvam's speed/pitch
+            # knobs, which synthesize_stream shares with synthesize() — see
+            # tts._synth_sarvam_stream's signature.
+            pace = self._tone_kwargs.get("pace")
+            pitch = self._tone_kwargs.get("pitch")
+            stream = tts.synthesize_stream(self._voice, sentence, self._reply_language, pace=pace, pitch=pitch)
+        if stream is not None:
+            buffered = _BufferedTTSStream(stream)
+            self._active_streams.append(buffered)
+            await self._queue.put(("stream", buffered, sentence))
+            return
         synth_task = asyncio.create_task(
             tts.synthesize(self._voice, sentence, self._reply_language, **self._tone_kwargs)
         )
-        await self._queue.put((synth_task, sentence))
+        await self._queue.put(("batch", synth_task, sentence))
 
     async def _consume(self) -> None:
         while True:
             item = await self._queue.get()
             if item is None:
                 return
-            synth_task, sentence = item
+            kind, payload, sentence = item
             try:
-                audio_bytes, content_type = await synth_task
+                if kind == "stream":
+                    # Marked before sending, same reasoning as the batch
+                    # path below — a barge-in mid-stream still means the
+                    # caller heard the start of it.
+                    self.spoken.append(sentence)
+                    try:
+                        await self._on_reply_chunk(payload.chunks())
+                    finally:
+                        if payload in self._active_streams:
+                            self._active_streams.remove(payload)
+                else:
+                    audio_bytes, content_type = await payload
+                    # Marked before the send, not after: _send_reply_audio paces
+                    # frames in real time, so a barge-in landing mid-sentence still
+                    # means the caller heard the start of it. "Started playing" is
+                    # the honest signal for a transcript meant to reflect what was
+                    # actually said aloud; "finished playing" would silently drop
+                    # exactly the interrupted sentence we most want recorded.
+                    self.spoken.append(sentence)
+                    await self._on_reply_audio(audio_bytes, content_type)
             except tts.TTSError as e:
                 logger.warning("TTS failed for one sentence, skipping it: %s", e)
                 continue
-            # Marked before the send, not after: _send_reply_audio paces
-            # frames in real time, so a barge-in landing mid-sentence still
-            # means the caller heard the start of it. "Started playing" is
-            # the honest signal for a transcript meant to reflect what was
-            # actually said aloud; "finished playing" would silently drop
-            # exactly the interrupted sentence we most want recorded.
-            self.spoken.append(sentence)
-            await self._on_reply_audio(audio_bytes, content_type)
 
     async def close(self) -> None:
         """Graceful end-of-turn: drain and send whatever's still queued."""
@@ -577,6 +658,14 @@ class _OrderedTTSPipeline:
             await self._consumer
         except asyncio.CancelledError:
             pass
+        # Cancelling the consumer above doesn't touch any _BufferedTTSStream's
+        # own background drain task — another sibling-task relationship, same
+        # reasoning as the consumer itself. Without this, every barge-in
+        # leaves an open Sarvam WebSocket connection running to completion
+        # in the background instead of actually stopping.
+        for stream in self._active_streams:
+            stream.cancel()
+        self._active_streams.clear()
 
 
 async def handle_utterance_streaming(
@@ -584,6 +673,7 @@ async def handle_utterance_streaming(
     caller_wav_bytes: bytes,
     on_reply_audio: Callable[[bytes, str], Awaitable[None]],
     on_transcript: Callable[[str, str], Awaitable[None]] | None = None,
+    on_reply_chunk: Callable[[object], Awaitable[None]] | None = None,
 ) -> str:
     """Same STT -> LLM -> TTS turn as handle_utterance, but pipelined:
     llm.stream_turn() calls back per-sentence as the model generates them,
@@ -599,6 +689,15 @@ async def handle_utterance_streaming(
     each side's text becomes final — the browser adapter uses this to push
     a live transcript over the WS; the phone path has no on-screen surface
     for it and leaves this None.
+
+    on_reply_chunk, when given, is _OrderedTTSPipeline's real-streaming path
+    — see its docstring. Left None for the browser adapter on purpose: it
+    already gets a whole clip near-instantly (see server.py's browser
+    _send_reply_audio comment) and expects one self-describing WAV/MP3 blob
+    it can decodeAudioData() in one shot, not raw ulaw frames, so streaming
+    there would be a regression, not a win. Phone calls pass it; browser
+    calls don't and fall back to on_reply_audio for every sentence,
+    identical to today.
     """
     if not session.messages:
         session.messages.append({"role": "system", "content": await build_system_prompt(session)})
@@ -618,7 +717,7 @@ async def handle_utterance_streaming(
         await on_transcript("user", caller_text)
 
     tone_kwargs = _tone_kwargs_for(session, caller_text)
-    pipeline = _OrderedTTSPipeline(session.voice, session.reply_language, on_reply_audio, tone_kwargs)
+    pipeline = _OrderedTTSPipeline(session.voice, session.reply_language, on_reply_audio, on_reply_chunk, tone_kwargs)
 
     async def _on_sentence(sentence: str) -> None:
         # Just enqueue — returns immediately so llm.stream_turn() can keep

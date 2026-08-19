@@ -31,6 +31,23 @@ _SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY")
 _STT_URL = "https://api.sarvam.ai/speech-to-text"
 _TIMEOUT_S = 20.0
 
+# Reused across every transcribe() call in this process instead of opening a
+# fresh httpx.AsyncClient (and therefore a fresh TCP+TLS handshake to
+# api.sarvam.ai) per utterance — on a live call that handshake cost is paid
+# on every single turn. httpx.AsyncClient itself pools connections across
+# requests, so one long-lived client here is what actually gets that reuse;
+# a `async with` client per call defeats it by tearing the pool down each
+# time. Created lazily (not at import time) so a client without an active
+# event loop yet doesn't bind one prematurely.
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient(timeout=_TIMEOUT_S)
+    return _client
+
 
 class STTError(Exception):
     def __init__(self, message: str) -> None:
@@ -48,13 +65,12 @@ async def transcribe(wav_bytes: bytes) -> str:
     headers = {"api-subscription-key": _SARVAM_API_KEY}
     files = {"file": ("utterance.wav", io.BytesIO(wav_bytes), "audio/wav")}
     data = {"model": "saaras:v3", "mode": "transcribe", "language_code": "unknown"}
-    async with httpx.AsyncClient(timeout=_TIMEOUT_S) as client:
-        try:
-            resp = await client.post(_STT_URL, headers=headers, files=files, data=data)
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            raise STTError(f"STT provider returned {e.response.status_code}: {e.response.text[:300]}") from e
-        except httpx.HTTPError as e:
-            raise STTError(f"Could not reach STT provider: {e}") from e
+    try:
+        resp = await _get_client().post(_STT_URL, headers=headers, files=files, data=data)
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        raise STTError(f"STT provider returned {e.response.status_code}: {e.response.text[:300]}") from e
+    except httpx.HTTPError as e:
+        raise STTError(f"Could not reach STT provider: {e}") from e
     body = resp.json()
     return (body.get("transcript") or "").strip()

@@ -1,5 +1,9 @@
 openai>=1.40
 httpx>=0.27
+# Streaming STT/TTS (stt.py's transcribe(), tts.py's synthesize_stream()) —
+# Sarvam doesn't publish a raw WebSocket protocol, only this SDK's
+# AsyncSarvamAI client (speech_to_text_streaming/text_to_speech_streaming).
+sarvamai>=0.1.8
 aiohttp
 psycopg[binary,pool]>=3.2
 python-dotenv
