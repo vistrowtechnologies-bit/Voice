@@ -3309,6 +3309,7 @@ def widget_site_config(siteKey: str, path: str = "") -> dict:
     site = calls_db.get_site_by_key(siteKey)
     if site is None:
         raise HTTPException(404, "Unknown site key")
+    calls_db.record_site_page_view(site["id"], path)
     resolved = calls_db.resolve_site_page(site, path)
     return {
         "avatar": site["widgetAvatar"],
@@ -3345,6 +3346,11 @@ def regenerate_site_key(site_id: int, user: dict = Depends(current_user)) -> dic
 @app.get("/widget/sites/{site_id}/routes")
 def list_site_page_routes(site_id: int, user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_site_page_routes(site_id, user["account_id"])
+
+
+@app.get("/widget/sites/{site_id}/seen-paths")
+def list_site_seen_paths(site_id: int, user: dict = Depends(current_user)) -> list[str]:
+    return calls_db.list_site_seen_paths(site_id, user["account_id"])
 
 
 @app.post("/widget/sites/{site_id}/routes")

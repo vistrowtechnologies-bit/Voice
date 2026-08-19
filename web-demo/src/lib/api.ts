@@ -366,6 +366,7 @@ export const updateSite = (id: number, data: Partial<Site>) => send<Site>('PATCH
 export const deleteSite = (id: number) => send('DELETE', `/widget/sites/${id}`)
 export const regenerateSiteKey = (id: number) => send<Site>('POST', `/widget/sites/${id}/regenerate-key`)
 export const fetchSitePageRoutes = (siteId: number) => get<SitePageRoute[]>(`/widget/sites/${siteId}/routes`)
+export const fetchSiteSeenPaths = (siteId: number) => get<string[]>(`/widget/sites/${siteId}/seen-paths`)
 export const createSitePageRoute = (siteId: number, pathPattern: string, agentId: number | null, greetingOverride: string) =>
   send<SitePageRoute>('POST', `/widget/sites/${siteId}/routes`, { pathPattern, agentId, greetingOverride })
 export const deleteSitePageRoute = (siteId: number, routeId: number) =>

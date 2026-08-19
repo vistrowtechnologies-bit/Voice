@@ -12,6 +12,7 @@ import {
   fetchAgents,
   fetchSitePageRoutes,
   fetchSites,
+  fetchSiteSeenPaths,
   fetchWidgetAvatarCatalog,
   fetchWidgetBackendUrl,
   regenerateSiteKey,
@@ -590,6 +591,7 @@ function SiteRow({
 // is purely additive and never required.
 function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
   const [routes, setRoutes] = useState<SitePageRoute[]>([])
+  const [seenPaths, setSeenPaths] = useState<string[]>([])
   const [loaded, setLoaded] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [newPattern, setNewPattern] = useState('')
@@ -602,10 +604,16 @@ function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
 
   useEffect(() => {
     if (expanded && !loaded) {
-      reload().finally(() => setLoaded(true))
+      Promise.all([
+        reload(),
+        fetchSiteSeenPaths(site.id).then(setSeenPaths).catch(() => setSeenPaths([])),
+      ]).finally(() => setLoaded(true))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded])
+
+  const datalistId = `site-${site.id}-seen-paths`
+  const unruledPaths = seenPaths.filter((p) => !routes.some((r) => p.includes(r.pathPattern)))
 
   const handleAdd = async () => {
     if (!newPattern.trim()) return
@@ -679,9 +687,21 @@ function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
               <input
                 value={newPattern}
                 onChange={(e) => setNewPattern(e.target.value)}
+                list={datalistId}
                 placeholder="/shapoorji-pallonji-plot-khopoli/"
                 className="w-full min-w-[220px] rounded-lg border border-border bg-surface-high px-2.5 py-1.5 text-xs outline-none focus:border-primary"
               />
+              <datalist id={datalistId}>
+                {unruledPaths.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+              {loaded && seenPaths.length === 0 && (
+                <span className="mt-1 block text-[10px] text-text-muted">
+                  No page visits seen yet - once someone opens a page with the widget installed, its URL shows up
+                  here to pick from.
+                </span>
+              )}
             </Field>
             <Field label="Agent">
               <select

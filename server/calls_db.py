@@ -26,6 +26,8 @@ import secrets
 import time
 from zoneinfo import ZoneInfo
 
+import psycopg
+
 import dbconn
 import voice_catalog
 from widget_avatars import is_valid_avatar_key
@@ -122,6 +124,21 @@ CREATE TABLE IF NOT EXISTS site_page_routes (
     greeting_override TEXT DEFAULT '',
     position INTEGER DEFAULT 0,
     created_at TEXT DEFAULT {_NOW}
+);
+
+-- Every page the widget script has actually loaded on reports its
+-- location.pathname via /widget/site-config (see widget_site_config) — this
+-- is what lets the dashboard's page-rules picker suggest real, currently-
+-- live pages instead of asking an operator to type a URL from memory.
+-- Passive/best-effort: a page nobody has opened since install just won't be
+-- suggested yet, and this table never blocks or fails the widget itself.
+CREATE TABLE IF NOT EXISTS site_seen_paths (
+    site_id INTEGER NOT NULL,
+    path TEXT NOT NULL,
+    hit_count INTEGER DEFAULT 1,
+    first_seen_at TEXT DEFAULT {_NOW},
+    last_seen_at TEXT DEFAULT {_NOW},
+    PRIMARY KEY (site_id, path)
 );
 
 CREATE TABLE IF NOT EXISTS accounts (
@@ -4451,6 +4468,47 @@ def resolve_site_page(site: dict, path: str) -> dict:
                     "matchedRouteId": r["id"],
                 }
     return {"agentId": site["agentId"], "greeting": site["widgetGreeting"], "matchedRouteId": None}
+
+
+def record_site_page_view(site_id: int, path: str) -> None:
+    """Best-effort: called on every /widget/site-config load (i.e. every
+    page load, since that fetch fires unconditionally on init — see
+    widget.ts). Never raises past this function — this is telemetry, not
+    something that should ever break a page's widget over a DB hiccup."""
+    path = (path or "").strip()
+    if not path or len(path) > 500:
+        return
+    try:
+        conn = _connect()
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT INTO site_seen_paths (site_id, path) VALUES (?, ?) "
+                    "ON CONFLICT (site_id, path) DO UPDATE SET "
+                    f"hit_count = site_seen_paths.hit_count + 1, last_seen_at = {_NOW}",
+                    (site_id, path),
+                )
+        finally:
+            conn.close()
+    except psycopg.Error:
+        pass
+
+
+def list_site_seen_paths(site_id: int, account_id: int, limit: int = 100) -> list[str]:
+    """Distinct real pages the widget has actually loaded on for this site,
+    most-recently-seen first — feeds the dashboard's page-rules path picker
+    so an operator can choose from live pages instead of typing a URL from
+    memory. Account-scoped via a join, same as list_site_page_routes."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT p.path FROM site_seen_paths p JOIN sites s ON s.id = p.site_id "
+            "WHERE p.site_id = ? AND s.account_id = ? ORDER BY p.last_seen_at DESC LIMIT ?",
+            (site_id, account_id, limit),
+        ).fetchall()
+        return [r["path"] for r in rows]
+    finally:
+        conn.close()
 
 
 # --------------------------------------------------------------- billing
