@@ -736,13 +736,30 @@ function init(): void {
   // engagement signal (they're reading, not bouncing) worth a fresh nudge
   // with different copy, not the same line they may have already ignored.
   let scrollGreetingArmed = true
+  // Fires once on a deliberate scroll back UP toward the top - often means
+  // "done reading, heading back to the header/nav to leave" - a second,
+  // independent read on intent from the scroll-depth trigger above (armed
+  // separately so a visitor who never scrolls down past 50% can still get
+  // this one if they scroll up from wherever they stopped).
+  let scrollUpGreetingArmed = true
+  let lastScrollY = window.scrollY
+  const SCROLL_UP_TRIGGER_PX = 40
   function handleScrollForGreeting(): void {
-    if (!scrollGreetingArmed) return
-    const total = document.documentElement.scrollHeight - window.innerHeight
-    if (total > 0 && window.scrollY / total >= 0.5) {
-      scrollGreetingArmed = false
-      triggerGreeting('scroll_depth')
+    const currentY = window.scrollY
+    if (scrollGreetingArmed) {
+      const total = document.documentElement.scrollHeight - window.innerHeight
+      if (total > 0 && currentY / total >= 0.5) {
+        scrollGreetingArmed = false
+        triggerGreeting('scroll_depth')
+      }
     }
+    // Independent of the depth trigger above - fires even if the visitor
+    // never made it past 50% before turning back.
+    if (scrollUpGreetingArmed && currentY > 80 && currentY < lastScrollY - SCROLL_UP_TRIGGER_PX) {
+      scrollUpGreetingArmed = false
+      triggerGreeting('scroll_up')
+    }
+    lastScrollY = currentY
   }
   window.addEventListener('scroll', handleScrollForGreeting, { passive: true })
 
