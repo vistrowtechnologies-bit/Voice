@@ -169,6 +169,18 @@ _PLAYBACK_ACTIVE_S = 0.12
 # between two sentences of the same reply (session.py's _OrderedTTSPipeline
 # hands them over back-to-back), short enough to catch a real think-pause.
 _PLAYBACK_GAP_S = 0.25
+# loud_streak used to hard-reset to 0 on any single frame below threshold -
+# confirmed live 2026-08-19: a real call showed 3 separate barge-in
+# "candidate" runs, none ever reached _PHONE_BARGE_IN_FRAMES/_BARGE_IN_FRAMES,
+# and the caller reported barge-in simply not working. Natural speech has
+# brief energy dips between syllables (tens of ms) that a strict
+# "genuinely consecutive" requirement resets to zero on almost every one -
+# exactly the failure mode this decay fixes. A quiet frame now costs this
+# many frames of progress instead of erasing all of it; several consecutive
+# quiet frames still drains the streak back to zero quickly (5 x 20ms = a
+# real pause, not an articulation gap), so genuine silence/false starts
+# still reset normally.
+_BARGE_IN_STREAK_DECAY = 5
 
 # voice_id -> account_id, populated on `incomingcall` so the `connected`
 # event (which doesn't repeat the dialed number reliably enough to re-derive
@@ -802,7 +814,7 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
                             )
                         loud_streak += 1
                     else:
-                        loud_streak = 0
+                        loud_streak = max(0, loud_streak - _BARGE_IN_STREAK_DECAY)
                     if loud_streak >= _PHONE_BARGE_IN_FRAMES:
                         loud_streak = 0
                         echo_canceller.reset_for_new_turn()
@@ -1077,7 +1089,11 @@ async def browser_stream_ws(websocket: WebSocket) -> None:
                 if audio.frame_energy_pcm16(pcm16_frame) >= vad.energy_threshold:
                     loud_streak += 1
                 else:
-                    loud_streak = 0
+                    # Same leaky-decay reasoning as the phone leg above,
+                    # scaled down for this leg's much shorter _BARGE_IN_FRAMES
+                    # window (4 frames / 80ms) — a full _BARGE_IN_STREAK_DECAY
+                    # would just be a hard reset again at this scale.
+                    loud_streak = max(0, loud_streak - 1)
                 if loud_streak >= _BARGE_IN_FRAMES:
                     loud_streak = 0
                     await _barge_in()

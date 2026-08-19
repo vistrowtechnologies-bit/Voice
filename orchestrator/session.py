@@ -26,6 +26,7 @@ import json
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 
@@ -591,6 +592,12 @@ class _OrderedTTSPipeline:
         # tasks explicitly; cancelling self._consumer alone doesn't touch
         # them, same sibling-task reasoning as self._consumer itself.
         self._active_streams: list[_BufferedTTSStream] = []
+        # Set once, the moment this turn's first byte of audio is actually
+        # handed off for sending (not when it's fully sent) — the real
+        # "caller starts hearing something" latency number. handle_utterance_
+        # streaming reads this after the turn to log it; None if the turn
+        # never got any audio out at all (e.g. every sentence's TTS failed).
+        self.first_audio_at: float | None = None
 
     async def enqueue(self, sentence: str) -> None:
         stream = None
@@ -623,6 +630,8 @@ class _OrderedTTSPipeline:
                     # path below — a barge-in mid-stream still means the
                     # caller heard the start of it.
                     self.spoken.append(sentence)
+                    if self.first_audio_at is None:
+                        self.first_audio_at = time.monotonic()
                     try:
                         await self._on_reply_chunk(payload.chunks())
                     finally:
@@ -637,6 +646,8 @@ class _OrderedTTSPipeline:
                     # actually said aloud; "finished playing" would silently drop
                     # exactly the interrupted sentence we most want recorded.
                     self.spoken.append(sentence)
+                    if self.first_audio_at is None:
+                        self.first_audio_at = time.monotonic()
                     await self._on_reply_audio(audio_bytes, content_type)
             except tts.TTSError as e:
                 logger.warning("TTS failed for one sentence, skipping it: %s", e)
@@ -702,7 +713,9 @@ async def handle_utterance_streaming(
     if not session.messages:
         session.messages.append({"role": "system", "content": await build_system_prompt(session)})
 
+    turn_started = time.monotonic()
     caller_text = await stt.transcribe(caller_wav_bytes)
+    stt_done = time.monotonic()
     if not caller_text:
         raise stt.STTError("No speech detected in utterance.")
 
@@ -719,7 +732,18 @@ async def handle_utterance_streaming(
     tone_kwargs = _tone_kwargs_for(session, caller_text)
     pipeline = _OrderedTTSPipeline(session.voice, session.reply_language, on_reply_audio, on_reply_chunk, tone_kwargs)
 
+    # Per-turn latency, logged (not yet persisted to the DB — the
+    # latency_metrics_json column agent/main.py populates has no orchestrator
+    # writer yet, tracked as a follow-up). This is what's currently missing
+    # to actually see where a slow turn's time goes instead of guessing from
+    # sparse existing logs — see server.py's STT/LLM httpx request logs for
+    # the other half of the picture (provider-side timing).
+    first_sentence_at: float | None = None
+
     async def _on_sentence(sentence: str) -> None:
+        nonlocal first_sentence_at
+        if first_sentence_at is None:
+            first_sentence_at = time.monotonic()
         # Just enqueue — returns immediately so llm.stream_turn() can keep
         # consuming the model's stream for the NEXT sentence right away,
         # instead of blocking here for the ~2-3s this sentence's TTS takes.
@@ -765,6 +789,14 @@ async def handle_utterance_streaming(
         raise
     session.messages.extend(new_messages)
     session.transcript.append({"role": "assistant", "text": reply_text})
+    turn_done = time.monotonic()
+    logger.info(
+        "turn latency: stt=%dms llm_first_sentence=%dms first_audio=%dms total=%dms",
+        int((stt_done - turn_started) * 1000),
+        int((first_sentence_at - turn_started) * 1000) if first_sentence_at is not None else -1,
+        int((pipeline.first_audio_at - turn_started) * 1000) if pipeline.first_audio_at is not None else -1,
+        int((turn_done - turn_started) * 1000),
+    )
     return reply_text
 
 
