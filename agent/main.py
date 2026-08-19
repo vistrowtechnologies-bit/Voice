@@ -903,7 +903,9 @@ class RealEstateAgent(Agent):
                 "confirm one of them."
             )
         if config.get("kb_id"):
+            _kb_t0 = time.monotonic()
             kb = db.get_kb_content(config["kb_id"])
+            logger.info("[latency] get_kb_content(%s) took %.2fs", config["kb_id"], time.monotonic() - _kb_t0)
             if kb:
                 if db.is_kb_strict(config["kb_id"]):
                     # Strict mode: the KB (especially its operator-approved
@@ -1740,6 +1742,7 @@ async def entrypoint(ctx: JobContext) -> None:
         except ValueError:
             pass
     config = await config_task
+    logger.info("[latency] config_task awaited at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     if config and config.get("status") == "paused":
         # Paused from the dashboard — don't take the call.
         logger.info("agent '%s' is paused; skipping room %s", config.get("name"), ctx.room.name)
@@ -1784,6 +1787,7 @@ async def entrypoint(ctx: JobContext) -> None:
         }
         cfg = config
     agent = RealEstateAgent(config, call_context["visitor_name"], call_context["visitor_phone"])
+    logger.info("[latency] RealEstateAgent() constructed at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # See the [latency] markers above/below — lets on_enter() log its own
     # elapsed-since-dispatch time around the greeting's TTS call.
     agent._dispatch_t0 = _t0
@@ -1810,6 +1814,19 @@ async def entrypoint(ctx: JobContext) -> None:
         "latency_metrics": {
             "eouMs": [],
             "transcriptionMs": [],
+            # Previously not captured at all, despite the framework providing
+            # it on the same eou_metrics event as the two above — the one
+            # piece of "why does it still feel slow after the caller stops
+            # talking" that was completely invisible: how long our OWN
+            # on_user_turn_completed callback (real synchronous work every
+            # turn — building the language/gender instruction blocks) takes
+            # before the LLM call can even begin. Added 2026-08-19 after
+            # transcriptionMs turned out to likely be a correct ~0 (Sarvam's
+            # streaming STT usually has the transcript finalized before
+            # end-of-speech fires, per LiveKit's own EOUMetrics docstring),
+            # not the blind spot it first looked like — this field is where
+            # a real one might actually be hiding.
+            "onTurnCompletedMs": [],
             "llmTtftMs": [],
             "ttsTtfbMs": [],
             "providers": [],
@@ -1916,6 +1933,7 @@ async def entrypoint(ctx: JobContext) -> None:
         # cost latency on the (large majority of) healthy requests.
         conn_options=SessionConnectOptions(tts_conn_options=APIConnectOptions(timeout=20.0)),
     )
+    logger.info("[latency] AgentSession() constructed at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
 
     # --- End-call-on-silence watchdog ---------------------------------------
     # A resettable timer: if the caller produces no speech for
@@ -2033,6 +2051,7 @@ async def entrypoint(ctx: JobContext) -> None:
         if metric_type == "eou_metrics":
             timings["eouMs"].append(round(max(0.0, metric.end_of_utterance_delay) * 1000))
             timings["transcriptionMs"].append(round(max(0.0, metric.transcription_delay) * 1000))
+            timings["onTurnCompletedMs"].append(round(max(0.0, metric.on_user_turn_completed_delay) * 1000))
         elif metric_type == "llm_metrics" and not metric.cancelled:
             timings["llmTtftMs"].append(round(max(0.0, metric.ttft) * 1000))
         elif metric_type == "tts_metrics" and not metric.cancelled:

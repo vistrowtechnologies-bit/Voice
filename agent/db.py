@@ -186,6 +186,10 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
     return result
 
 
+_kb_cache: dict[int, tuple[float, tuple[str, bool]]] = {}
+_KB_CACHE_TTL_S = 30.0
+
+
 def get_kb_content(kb_id: int, max_chars: int = 8000) -> str:
     """Knowledge-base text to append to the system prompt.
 
@@ -196,6 +200,28 @@ def get_kb_content(kb_id: int, max_chars: int = 8000) -> str:
     Prompt-stuffing rather than embeddings — right-sized while KBs are a few
     brochures/price sheets; swap for retrieval once sources outgrow this cap.
     """
+    return get_kb(kb_id, max_chars)[0]
+
+
+def is_kb_strict(kb_id: int) -> bool:
+    """Whether the operator turned strict mode on for this KB (default yes)."""
+    return get_kb(kb_id)[1]
+
+
+def get_kb(kb_id: int, max_chars: int = 8000) -> tuple[str, bool]:
+    """Combined (content, strict) fetch — one connection instead of the two
+    get_kb_content/is_kb_strict used to open separately, and cached with the
+    same 30s-TTL pattern as get_agent_config. Confirmed live (2026-08-19,
+    call room=widget-5-b89683a199375e71) that the uncached two-connection
+    version cost 1.16s on its own, entirely inside RealEstateAgent.__init__
+    on the call's critical path — this was the single largest piece of the
+    "still listening" gap reported after the caller stops talking, and
+    predates streaming/turn-detection entirely: the agent hadn't even
+    started session.start() yet."""
+    cached = _kb_cache.get(kb_id)
+    now = time.monotonic()
+    if cached is not None and now - cached[0] < _KB_CACHE_TTL_S:
+        return cached[1]
     conn = dbconn.connect()
     try:
         parts: list[str] = []
@@ -215,24 +241,18 @@ def get_kb_content(kb_id: int, max_chars: int = 8000) -> str:
             (kb_id,),
         ).fetchall()
         parts.extend(f"## {r['name']}\n{r['content']}" for r in rows)
-        return "\n\n".join(parts)[:max_chars]
+        content = "\n\n".join(parts)[:max_chars]
+        strict_row = conn.execute("SELECT strict FROM knowledge_bases WHERE id = ?", (kb_id,)).fetchone()
+        strict = bool(strict_row["strict"]) if strict_row is not None else True
     except psycopg.Error:
-        return ""
+        # A genuine query failure is never cached — see get_agent_config's
+        # identical reasoning.
+        return "", True
     finally:
         conn.close()
-
-
-def is_kb_strict(kb_id: int) -> bool:
-    """Whether the operator turned strict mode on for this KB (default yes)."""
-    conn = dbconn.connect()
-    try:
-        row = conn.execute("SELECT strict FROM knowledge_bases WHERE id = ?", (kb_id,)).fetchone()
-        return bool(row["strict"]) if row is not None else True
-    except psycopg.Error:
-        # strict column predates KB 2.0 — treat as strict, the safe default.
-        return True
-    finally:
-        conn.close()
+    result = (content, strict)
+    _kb_cache[kb_id] = (now, result)
+    return result
 
 
 def get_webhook_url() -> str | None:

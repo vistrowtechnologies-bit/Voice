@@ -3281,7 +3281,7 @@ def _platform_conversation_count_cached(days: int = 7) -> int:
 
 
 @app.get("/widget/site-config")
-def widget_site_config(siteKey: str) -> dict:
+def widget_site_config(siteKey: str, path: str = "") -> dict:
     """Public, unauthenticated — lets any embed method (WordPress plugin,
     a hand-pasted snippet) pull a site's current avatar/greeting/mode
     straight from the dashboard's own record instead of keeping its own
@@ -3289,13 +3289,19 @@ def widget_site_config(siteKey: str) -> dict:
     single source of truth for these; the WordPress plugin used to store
     its own copies in wp_options, which could silently drift out of sync
     with whatever the dashboard said - this endpoint is what lets it defer
-    to the dashboard instead (see wp_footer's short-lived transient cache)."""
+    to the dashboard instead (see wp_footer's short-lived transient cache).
+
+    `path` (the visitor's current location.pathname) lets one site-wide
+    install still show a page-specific greeting via site_page_routes — see
+    calls_db.resolve_site_page. Omitted or unmatched, this behaves exactly
+    as it did before per-page routing existed."""
     site = calls_db.get_site_by_key(siteKey)
     if site is None:
         raise HTTPException(404, "Unknown site key")
+    resolved = calls_db.resolve_site_page(site, path)
     return {
         "avatar": site["widgetAvatar"],
-        "greeting": site["widgetGreeting"],
+        "greeting": resolved["greeting"],
         "mode": site["widgetMode"],
         "position": site["widgetPosition"],
         "askName": site["widgetAskName"],
@@ -3323,6 +3329,31 @@ def regenerate_site_key(site_id: int, user: dict = Depends(current_user)) -> dic
     if site is None:
         raise HTTPException(404, "Site not found")
     return site
+
+
+@app.get("/widget/sites/{site_id}/routes")
+def list_site_page_routes(site_id: int, user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_site_page_routes(site_id, user["account_id"])
+
+
+@app.post("/widget/sites/{site_id}/routes")
+def create_site_page_route(site_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    route = calls_db.create_site_page_route(
+        site_id,
+        user["account_id"],
+        data.get("pathPattern", ""),
+        data.get("agentId"),
+        data.get("greetingOverride", ""),
+    )
+    if route is None:
+        raise HTTPException(400, "Site not found, or path pattern is empty")
+    return route
+
+
+@app.delete("/widget/sites/{site_id}/routes/{route_id}")
+def delete_site_page_route(site_id: int, route_id: int, user: dict = Depends(current_user)) -> dict:
+    calls_db.delete_site_page_route(route_id, user["account_id"])
+    return {"ok": True}
 
 
 @app.delete("/widget/sites/{site_id}")
@@ -3413,6 +3444,7 @@ def _looks_like_real_phone(phone: str) -> bool:
 
 class WidgetWarmRequest(BaseModel):
     siteKey: str
+    path: str = ""
 
 
 @app.post("/widget/warm")
@@ -3427,6 +3459,10 @@ async def warm_widget_agent(req: WidgetWarmRequest) -> dict:
     the empty room is just abandoned — the agent's own 90s
     wait_for_participant timeout (agent/main.py) cleans that job up on its
     own, same as it already does for a normal widget room nobody joins.
+
+    req.path (location.pathname at open time) can steer this to a
+    different agent than the site's own default — see
+    calls_db.resolve_site_page.
     """
     site = calls_db.get_site_by_key(req.siteKey)
     if site is None or site["status"] == "paused":
@@ -3445,17 +3481,18 @@ async def warm_widget_agent(req: WidgetWarmRequest) -> dict:
 
     import secrets
 
+    resolved_agent_id = calls_db.resolve_site_page(site, req.path)["agentId"]
     room = f"widget-{site['id']}-{secrets.token_hex(8)}"
     try:
         async with api.LiveKitAPI() as lkapi:
             await lkapi.room.create_room(
                 CreateRoomRequest(
                     name=room,
-                    metadata=json.dumps({"agent_id": site["agentId"], "site_id": site["id"]}),
-                    **_demo_dispatch_kwargs(site["agentId"]),
+                    metadata=json.dumps({"agent_id": resolved_agent_id, "site_id": site["id"]}),
+                    **_demo_dispatch_kwargs(resolved_agent_id),
                 )
             )
-        logger.info("widget warm: pre-created room=%s for site=%s", room, site["name"])
+        logger.info("widget warm: pre-created room=%s for site=%s agent_id=%s", room, site["name"], resolved_agent_id)
     except Exception:
         logger.warning("widget warm: could not pre-create room for site=%s", site["name"], exc_info=True)
         return {"room": None}
@@ -3469,6 +3506,7 @@ class WidgetTokenRequest(BaseModel):
     phone: str
     email: str
     room: str | None = None
+    path: str = ""
 
 
 @app.post("/widget/token")
@@ -3532,9 +3570,10 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
 
     import secrets
 
+    resolved_agent_id = calls_db.resolve_site_page(site, req.path)["agentId"]
     metadata = json.dumps(
         {
-            "agent_id": site["agentId"],
+            "agent_id": resolved_agent_id,
             "site_id": site["id"],
             "visitor_name": name,
             "visitor_phone": req.phone.strip(),
@@ -3545,7 +3584,9 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
     # joining/waiting in) when its prefix matches this site — updating its
     # metadata rather than creating a new one keeps the agent's head start.
     # Falls back to creating fresh whenever warm wasn't called, failed, or
-    # named a room for a different site (stale/tampered value).
+    # named a room for a different site (stale/tampered value). Metadata is
+    # always overwritten here regardless of what warm() guessed, so this is
+    # the one place that actually decides which agent picks up the call.
     room = req.room if req.room and req.room.startswith(f"widget-{site['id']}-") else None
     try:
         async with api.LiveKitAPI() as lkapi:
@@ -3561,10 +3602,10 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
                 room = f"widget-{site['id']}-{secrets.token_hex(8)}"
                 await lkapi.room.create_room(
                     CreateRoomRequest(
-                        name=room, metadata=metadata, **_demo_dispatch_kwargs(site["agentId"])
+                        name=room, metadata=metadata, **_demo_dispatch_kwargs(resolved_agent_id)
                     )
                 )
-        logger.info("widget token issued: site=%s agent_id=%s room=%s", site["name"], site["agentId"], room)
+        logger.info("widget token issued: site=%s agent_id=%s room=%s", site["name"], resolved_agent_id, room)
     except Exception:
         logger.exception("widget token failed: could not create LiveKit room for site=%s", site["name"])
         raise HTTPException(502, "Could not start the call right now — please try again shortly")
@@ -3611,6 +3652,7 @@ class WidgetChatRequest(BaseModel):
     name: str | None = None
     phone: str | None = None
     email: str | None = None
+    path: str = ""
 
 
 class WidgetFeedbackRequest(BaseModel):
@@ -3721,9 +3763,10 @@ def widget_chat_route(req: WidgetChatRequest) -> StreamingResponse:
     if _widget_chat_rate_limited(req.siteKey):
         raise HTTPException(429, "Too many messages right now — try again shortly")
 
-    if not site["agentId"]:
+    resolved_agent_id = calls_db.resolve_site_page(site, req.path)["agentId"]
+    if not resolved_agent_id:
         raise HTTPException(400, "This site has no agent assigned yet")
-    agent = calls_db.get_agent_by_id_unscoped(site["agentId"])
+    agent = calls_db.get_agent_by_id_unscoped(resolved_agent_id)
     if agent is None:
         raise HTTPException(400, "This site's agent no longer exists")
 

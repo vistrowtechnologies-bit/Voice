@@ -499,6 +499,16 @@ export interface Site {
   createdAt: string
 }
 
+export interface SitePageRoute {
+  id: number
+  siteId: number
+  pathPattern: string
+  agentId: number | null
+  greetingOverride: string
+  position: number
+  createdAt: string
+}
+
 export interface WidgetAvatarOption {
   key: string
   label: string

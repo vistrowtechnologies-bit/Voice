@@ -25,6 +25,7 @@ import type {
   PhoneNumber,
   QaDraft,
   Site,
+  SitePageRoute,
   Subscription,
   TelephonyStatus,
   UsageTrends,
@@ -364,6 +365,11 @@ export const createSite = (
 export const updateSite = (id: number, data: Partial<Site>) => send<Site>('PATCH', `/widget/sites/${id}`, data)
 export const deleteSite = (id: number) => send('DELETE', `/widget/sites/${id}`)
 export const regenerateSiteKey = (id: number) => send<Site>('POST', `/widget/sites/${id}/regenerate-key`)
+export const fetchSitePageRoutes = (siteId: number) => get<SitePageRoute[]>(`/widget/sites/${siteId}/routes`)
+export const createSitePageRoute = (siteId: number, pathPattern: string, agentId: number | null, greetingOverride: string) =>
+  send<SitePageRoute>('POST', `/widget/sites/${siteId}/routes`, { pathPattern, agentId, greetingOverride })
+export const deleteSitePageRoute = (siteId: number, routeId: number) =>
+  send('DELETE', `/widget/sites/${siteId}/routes/${routeId}`)
 export const fetchWidgetAvatarCatalog = () => get<{ avatars: WidgetAvatarOption[] }>('/widget/avatar-catalog')
 export const wordpressPluginUrl = '/api/widget/wordpress-plugin.zip'
 export const fetchWidgetBackendUrl = () => get<{ backendUrl: string | null }>('/widget/backend-url')

@@ -592,7 +592,7 @@ function init(): void {
   // Best-effort, fire-and-forget - a slow/failed fetch just means this
   // load keeps whatever was baked into the script tag, same as before
   // this existed.
-  fetch(`${apiBase}/widget/site-config?siteKey=${encodeURIComponent(siteKey)}`)
+  fetch(`${apiBase}/widget/site-config?siteKey=${encodeURIComponent(siteKey)}&path=${encodeURIComponent(location.pathname)}`)
     .then((res) => (res.ok ? res.json() : null))
     .then(
       (
@@ -647,7 +647,7 @@ function init(): void {
         if (!proofLabelOverride && typeof data.platformConversationCount === 'number') {
           const count = data.platformConversationCount
           setProofPillContent(
-            count >= MIN_PLATFORM_PROOF_COUNT ? `${formatProofCount(count)}+ conversations on Vistrow Voice this week` : '',
+            count >= MIN_PLATFORM_PROOF_COUNT ? `${formatProofCount(count)}+ AI conversations this week` : '',
           )
         }
       },
@@ -954,7 +954,7 @@ function init(): void {
     warmRoomPromise = fetch(`${apiBase}/widget/warm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ siteKey }),
+      body: JSON.stringify({ siteKey, path: location.pathname }),
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { room: string | null } | null) => {
@@ -1171,6 +1171,7 @@ function init(): void {
           name: chatLead.name,
           phone: chatLead.phone,
           email: chatLead.email,
+          path: location.pathname,
         }),
       })
       if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`)
@@ -1546,7 +1547,7 @@ function init(): void {
       const res = await fetch(`${apiBase}/widget/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteKey, identity: randomId('visitor'), name, phone, email, room: reusableWarmRoom }),
+        body: JSON.stringify({ siteKey, identity: randomId('visitor'), name, phone, email, room: reusableWarmRoom, path: location.pathname }),
       })
       warmRoom = null
       if (!res.ok) {

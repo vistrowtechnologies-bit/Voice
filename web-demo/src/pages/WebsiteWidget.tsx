@@ -6,8 +6,11 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
 import {
   createSite,
+  createSitePageRoute,
   deleteSite,
+  deleteSitePageRoute,
   fetchAgents,
+  fetchSitePageRoutes,
   fetchSites,
   fetchWidgetAvatarCatalog,
   fetchWidgetBackendUrl,
@@ -15,7 +18,7 @@ import {
   updateSite,
   wordpressPluginUrl,
 } from '../lib/api'
-import type { AgentConfig, Site, WidgetAvatarOption } from '../lib/types'
+import type { AgentConfig, Site, SitePageRoute, WidgetAvatarOption } from '../lib/types'
 
 // The greeting can contain quotes/ampersands - this is copy-pasted verbatim
 // into a customer's own HTML, so it must be a well-formed attribute value,
@@ -496,6 +499,8 @@ function SiteRow({
         </div>
       )}
 
+      <PageRoutes site={site} agents={agents} />
+
       <div className="flex items-center gap-3">
         <button
           onClick={saveChanges}
@@ -573,6 +578,150 @@ function SiteRow({
           )
         )}
       </div>
+    </div>
+  )
+}
+
+// One site key (one embed, one WordPress install) still serving several
+// landing pages under the same domain - a builder site with a dozen
+// project-specific /project-name/ pages is the case this exists for. Each
+// rule matches when the visitor's current URL path contains the pattern;
+// unmatched pages keep using the site's own default agent above, so this
+// is purely additive and never required.
+function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
+  const [routes, setRoutes] = useState<SitePageRoute[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [newPattern, setNewPattern] = useState('')
+  const [newAgentId, setNewAgentId] = useState('')
+  const [newGreeting, setNewGreeting] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [addError, setAddError] = useState(false)
+
+  const reload = () => fetchSitePageRoutes(site.id).then(setRoutes).catch(() => setRoutes([]))
+
+  useEffect(() => {
+    if (expanded && !loaded) {
+      reload().finally(() => setLoaded(true))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded])
+
+  const handleAdd = async () => {
+    if (!newPattern.trim()) return
+    setAdding(true)
+    setAddError(false)
+    try {
+      await createSitePageRoute(site.id, newPattern.trim(), newAgentId ? Number(newAgentId) : null, newGreeting.trim())
+      setNewPattern('')
+      setNewAgentId('')
+      setNewGreeting('')
+      await reload()
+    } catch {
+      setAddError(true)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  const handleDelete = (routeId: number) => {
+    deleteSitePageRoute(site.id, routeId).then(reload)
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-surface-high/40 p-3">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <span className="flex items-center gap-1.5 text-xs font-bold text-text">
+          <Icon name="signpost" className="text-[15px] text-cyan" />
+          Page rules {routes.length > 0 && `(${routes.length})`}
+        </span>
+        <Icon name={expanded ? 'expand_less' : 'expand_more'} className="text-[18px] text-text-muted" />
+      </button>
+      {!expanded && (
+        <p className="mt-1 text-[11px] text-text-muted">
+          Same install, different agent per landing page - e.g. one project's URL gets its own agent and knowledge base.
+        </p>
+      )}
+
+      {expanded && (
+        <div className="mt-3 flex flex-col gap-3">
+          {loaded && routes.length === 0 && (
+            <p className="text-[11px] text-text-muted">
+              No rules yet - every page on this site uses the default agent above.
+            </p>
+          )}
+          {routes.map((route) => (
+            <div key={route.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-2 text-xs">
+              <Icon name="link" className="text-[14px] text-text-muted" />
+              <code className="rounded bg-surface-high px-1.5 py-0.5 text-[11px]">{route.pathPattern}</code>
+              <Icon name="arrow_forward" className="text-[13px] text-text-muted" />
+              <span className="font-semibold">
+                {agents.find((a) => a.id === route.agentId)?.name ?? 'Unassigned'}
+              </span>
+              {route.greetingOverride && (
+                <span className="text-[11px] text-text-muted">"{route.greetingOverride}"</span>
+              )}
+              <button
+                onClick={() => handleDelete(route.id)}
+                aria-label={`Delete rule for ${route.pathPattern}`}
+                className="ml-auto text-text-muted hover:text-destructive"
+              >
+                <Icon name="delete" className="text-[15px]" />
+              </button>
+            </div>
+          ))}
+
+          <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
+            <Field label="URL contains">
+              <input
+                value={newPattern}
+                onChange={(e) => setNewPattern(e.target.value)}
+                placeholder="/shapoorji-pallonji-plot-khopoli/"
+                className="w-full min-w-[220px] rounded-lg border border-border bg-surface-high px-2.5 py-1.5 text-xs outline-none focus:border-primary"
+              />
+            </Field>
+            <Field label="Agent">
+              <select
+                value={newAgentId}
+                onChange={(e) => setNewAgentId(e.target.value)}
+                className="rounded-lg border border-border bg-surface-high px-2.5 py-1.5 text-xs"
+              >
+                <option value="">Unassigned</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    → {a.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Greeting override (optional)">
+              <input
+                value={newGreeting}
+                onChange={(e) => setNewGreeting(e.target.value.slice(0, 140))}
+                placeholder="Ask me about Khopoli plots!"
+                className="w-full min-w-[200px] rounded-lg border border-border bg-surface-high px-2.5 py-1.5 text-xs outline-none focus:border-primary"
+              />
+            </Field>
+            <button
+              onClick={handleAdd}
+              disabled={!newPattern.trim() || adding}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-bg disabled:opacity-40"
+            >
+              <Icon name="add" className="text-[15px]" />
+              Add rule
+            </button>
+          </div>
+          {addError && (
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-destructive">
+              <Icon name="error" className="text-[13px]" />
+              Couldn't add that rule - please try again
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
