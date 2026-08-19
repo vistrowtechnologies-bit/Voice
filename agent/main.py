@@ -15,6 +15,7 @@ from livekit.agents import (
     AgentSession,
     EndpointingOptions,
     JobContext,
+    JobProcess,
     RoomInputOptions,
     TurnHandlingOptions,
     WorkerOptions,
@@ -2235,6 +2236,57 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.exception("failed to start call recorder for room %s", ctx.room.name)
 
 
+def _prewarm(proc: JobProcess) -> None:
+    """Runs once per idle subprocess, before any job/call is assigned to it —
+    LiveKit's own mechanism for paying an expensive one-time cost in the
+    background instead of during a real caller's wait. num_idle_processes
+    below already keeps warm Python subprocesses ready, but that alone only
+    covers interpreter/import cost — it does nothing to warm a provider
+    client's own connection.
+
+    Confirmed live 2026-08-19 (platform-demo, real calls, real
+    [latency]-tagged logs): the greeting's TTS call — Gemini 3.1 Flash,
+    the FIRST TTS call a fresh process ever makes — took ~10.5s across
+    every call checked (session.start() returned at ~5-6s, greeting say()
+    didn't return until ~16-19s). Compare that to the ~1s average
+    ttsTtfbMs already measured for a mid-conversation turn in an
+    already-warm process (see calls.latency_metrics_json). The gap is
+    Google Cloud TTS client/credential/gRPC connection setup, not
+    synthesis itself being slow — a cost every idle process was paying
+    for the first time exactly when a real caller was waiting on it.
+
+    Uses the identical PatchedGeminiTTS streaming path the real greeting
+    call uses (not a different, cheaper Google API), so this pays down
+    the actual cost the greeting would otherwise pay, not a different one.
+    Best-effort: any failure here just means the first real call pays the
+    cost it always used to — never worth failing worker startup over.
+    """
+    if not _GOOGLE_CREDENTIALS:
+        return
+    try:
+        asyncio.run(_prewarm_google_tts())
+        logger.info("prewarm: Google TTS client warmed (pid=%s)", proc.pid)
+    except Exception:
+        logger.exception("prewarm: Google TTS warm-up failed — first real call pays the cost instead")
+
+
+async def _prewarm_google_tts() -> None:
+    tts = PatchedGeminiTTS(
+        language="hi-IN",
+        voice_name="Kore",
+        model_name=_GOOGLE_31_MODEL,
+        credentials_info=_GOOGLE_CREDENTIALS,
+    )
+    stream = tts.stream()
+    stream.push_text("ठीक है")
+    stream.end_input()
+    try:
+        async for _ in stream:
+            pass
+    finally:
+        await stream.aclose()
+
+
 if __name__ == "__main__":
     # num_idle_processes = how many warm subprocesses sit ready before a job
     # ever arrives — a call landing when every idle slot is already claimed
@@ -2257,4 +2309,6 @@ if __name__ == "__main__":
     # marketing site's own demo traffic its own permanently-warm replica,
     # isolated from autoscaling driven by tenant call volume.
     agent_name = os.environ.get("LIVEKIT_AGENT_NAME", "")
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, num_idle_processes=4, agent_name=agent_name))
+    cli.run_app(
+        WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=_prewarm, num_idle_processes=4, agent_name=agent_name)
+    )

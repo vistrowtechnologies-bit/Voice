@@ -14,6 +14,7 @@ without closing).
 
 import datetime
 import json
+import time
 
 import psycopg
 from zoneinfo import ZoneInfo
@@ -131,6 +132,23 @@ def save_caller_memory(account_id: int | None, agent_id: int, caller_phone: str,
         conn.close()
 
 
+# agent_id (or None, for the unrouted "whichever is_platform_demo" lookup) ->
+# (cached_at, config). Confirmed live 2026-08-19: LiveKit Cloud agent workers
+# run in India West; Postgres runs in US West (moved there the same day to
+# sit next to the orchestrator service) — a genuine trans-Pacific round trip
+# for what should be a fast lookup, measured as a real 2-4s dead-air gap
+# between a caller joining and session.start() actually beginning. A process
+# handles many calls over its lifetime (num_idle_processes keeps it warm
+# between jobs, not one-shot), and the platform-demo worker in particular
+# fetches the exact same agent_id on nearly every single call, so an
+# in-memory cache here has a real, meaningful hit rate — not just a
+# theoretical one. Short TTL (not "cache forever") so a dashboard config
+# change still reaches the next call within well under a minute, not stays
+# stale for a process's whole lifetime.
+_agent_config_cache: dict[int | None, tuple[float, dict | None]] = {}
+_AGENT_CONFIG_CACHE_TTL_S = 30.0
+
+
 def get_agent_config(agent_id: int | None = None) -> dict | None:
     """Dashboard-managed agent settings (server/calls_db.py owns the table).
 
@@ -144,6 +162,10 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
     so callers fall back to the in-code defaults and the agent keeps working
     standalone.
     """
+    cached = _agent_config_cache.get(agent_id)
+    now = time.monotonic()
+    if cached is not None and now - cached[0] < _AGENT_CONFIG_CACHE_TTL_S:
+        return cached[1]
     conn = dbconn.connect()
     try:
         if agent_id is not None:
@@ -152,11 +174,16 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
             row = conn.execute(
                 "SELECT * FROM agents ORDER BY is_platform_demo DESC, id LIMIT 1"
             ).fetchone()
-        return dict(row) if row else None
+        result = dict(row) if row else None
     except psycopg.Error:
+        # A genuine query failure (DB unreachable, etc.) is never cached —
+        # caching it would mean a 30s-stale None even after the DB recovers
+        # on what would otherwise have been the very next successful call.
         return None
     finally:
         conn.close()
+    _agent_config_cache[agent_id] = (now, result)
+    return result
 
 
 def get_kb_content(kb_id: int, max_chars: int = 8000) -> str:
