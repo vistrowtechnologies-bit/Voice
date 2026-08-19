@@ -2784,6 +2784,7 @@ async def enablex_inbound_event(request: Request) -> dict:
     if not accept.get("ok"):
         logger.error("failed to accept EnableX call %s: %s", voice_id, accept.get("error"))
         return accept
+    logger.info("accepted EnableX call %s: %s", voice_id, accept.get("response"))
 
     # See enablex_test_call_connected in calls_db.py for why the "+" is
     # stripped here — EnableX's gateway appears to reject a "+"-prefixed SIP
@@ -2792,6 +2793,16 @@ async def enablex_inbound_event(request: Request) -> dict:
     bridge = calls_db.enablex_connect_to_sip(voice_id, dialed_number, sip_uri, account_id)
     if not bridge.get("ok"):
         logger.error("failed to bridge EnableX call %s to %s: %s", voice_id, sip_uri, bridge.get("error"))
+    else:
+        # EnableX returning ok=True here only means it accepted the connect
+        # *request* — it says nothing about whether the SIP INVITE it then
+        # sends toward sip_uri actually reaches/authenticates against
+        # LiveKit's trunk. That's a real, previously-silent gap: a prior
+        # real call bridged with no error here and no LiveKit room ever
+        # got created. logged in full so a bridge that "succeeds" by
+        # EnableX's own account but never produces a LiveKit job can be
+        # told apart from one that actually reached the agent.
+        logger.info("bridged EnableX call %s to %s: %s", voice_id, sip_uri, bridge.get("response"))
     return bridge
 
 
