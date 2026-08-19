@@ -3258,6 +3258,28 @@ def widget_avatar_catalog(user: dict = Depends(current_user)) -> dict:
     return {"avatars": [{"key": k, "label": v} for k, v in widget_avatars.WIDGET_AVATAR_CATALOG.items()]}
 
 
+
+# This endpoint fires on every widget load across every tenant's site, but
+# the platform-wide conversation count only needs to be roughly fresh - a
+# 5-minute in-memory cache turns "one COUNT query per widget load,
+# platform-wide" into "one COUNT query per 5 minutes, platform-wide."
+# Per-process only (not shared across Railway replicas) and resets on
+# restart, same tradeoff as the rate-limit guards below - fine for a number
+# that's inherently approximate ("N+ people this week").
+_PLATFORM_PROOF_CACHE_TTL_SECONDS = 300
+_platform_proof_cache: dict[int, tuple[float, int]] = {}
+
+
+def _platform_conversation_count_cached(days: int = 7) -> int:
+    now = time.monotonic()
+    cached = _platform_proof_cache.get(days)
+    if cached is not None and now - cached[0] < _PLATFORM_PROOF_CACHE_TTL_SECONDS:
+        return cached[1]
+    count = calls_db.platform_conversation_count(days=days)
+    _platform_proof_cache[days] = (now, count)
+    return count
+
+
 @app.get("/widget/site-config")
 def widget_site_config(siteKey: str) -> dict:
     """Public, unauthenticated — lets any embed method (WordPress plugin,
@@ -3282,6 +3304,8 @@ def widget_site_config(siteKey: str) -> dict:
         "requirePhone": site["widgetRequirePhone"],
         "askEmail": site["widgetAskEmail"],
         "requireEmail": site["widgetRequireEmail"],
+        "platformConversationCount": _platform_conversation_count_cached(days=7),
+        "platformConversationWindowDays": 7,
     }
 
 

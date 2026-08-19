@@ -10,13 +10,29 @@
     <div style="height:1600px;padding:40px;font-family:sans-serif;color:#333;">
       <p>Scroll down to trigger the scroll-depth greeting re-prompt.</p>
     </div>
+    <script>
+      // Local-only mock: simulates a real /widget/site-config response
+      // (including the platform-wide conversation count) so the proof pill's
+      // real-data path can be checked visually without a running backend.
+      const _origFetch = window.fetch
+      window.fetch = (url, ...rest) => {
+        if (typeof url === 'string' && url.includes('/widget/site-config')) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ platformConversationCount: 1234 }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          )
+        }
+        return _origFetch(url, ...rest)
+      }
+    </script>
     <script
       src="./dist/widget.js"
       data-site-key="test_local_key"
       data-api-base="http://localhost:8000"
       data-position="bottom-right"
       data-label="Talk to Artha"
-      data-proof-label="1,200+ people talked to Artha this week"
     ></script>
   </body>
 </html>

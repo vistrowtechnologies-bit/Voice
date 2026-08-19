@@ -47,10 +47,22 @@ const CURIOSITY_GREETINGS = [
   '👀 Still reading? Just ask me out loud instead.',
   "Wait — before you go, hear this for yourself?",
 ]
-// Optional, honest proof line — only rendered if the embedding site passes
-// data-proof-label explicitly. Never fabricated here: a made-up number is
-// worse for trust than no number at all.
-const proofLabel = scriptEl?.dataset.proofLabel || ''
+// Explicit per-tenant override, if a site wants its own custom line instead
+// of the real platform-wide count fetched below. Never a fabricated
+// default — a made-up number is worse for trust than no number at all, so
+// with no override this stays empty until the real count arrives (or never
+// renders, if that count comes back too low to be worth showing).
+const proofLabelOverride = scriptEl?.dataset.proofLabel || ''
+// Below this, the platform-wide count looks sparse rather than impressive -
+// better to show nothing than "40+ people talked to Artha this week."
+const MIN_PLATFORM_PROOF_COUNT = 50
+// "N+" rounds down to a clean base rather than an oddly specific number -
+// standard practice for this kind of stat, and avoids implying more
+// precision than a 5-minute-cached count actually has.
+function formatProofCount(n: number): string {
+  const base = n < 100 ? 10 : n < 1000 ? 50 : 100
+  return (Math.floor(n / base) * base).toLocaleString('en-US')
+}
 // 'voice' is the backwards-compatible default; 'chat' skips LiveKit and
 // 'both' lets the visitor choose on the welcome screen.
 let widgetMode: 'voice' | 'chat' | 'both' =
@@ -174,7 +186,7 @@ const CSS = `
    past the screen edge with nowrap. align-items:flex-start (not center)
    since the leading dot needs to sit with the first line, not centered
    against the full wrapped block. */
-.av-proof-pill { position: absolute; bottom: 76px; right: 0; display: flex; align-items: flex-start; gap: 6px; width: max-content; max-width: min(230px, calc(100vw - 100px)); background: #17121f; border: 1px solid #2a2440; color: #cfc9e6; font-size: 11px; font-weight: 600; line-height: 1.35; padding: 7px 10px; border-radius: 14px; box-shadow: 0 8px 20px rgba(0,0,0,.35); animation: av-fade-in .25s ease; box-sizing: border-box; }
+.av-proof-pill { position: absolute; bottom: 76px; right: 0; display: none; align-items: flex-start; gap: 6px; width: max-content; max-width: min(230px, calc(100vw - 100px)); background: #17121f; border: 1px solid #2a2440; color: #cfc9e6; font-size: 11px; font-weight: 600; line-height: 1.35; padding: 7px 10px; border-radius: 14px; box-shadow: 0 8px 20px rgba(0,0,0,.35); animation: av-fade-in .25s ease; box-sizing: border-box; }
 .av-proof-pill::before { content:''; flex-shrink:0; margin-top:4px; width:6px;height:6px;border-radius:99px;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.16); }
 /* min-width:0 is the actual fix - without it a flex item defaults to
    min-width:auto (its longest unbreakable word), which is what made the
@@ -459,7 +471,7 @@ function widgetHtml(label: string): string {
         <a class="av-branding" href="https://www.vistrowvoice.com" target="_blank" rel="noopener">Powered by Vistrow Voice</a>
       </div>
 
-      ${proofLabel ? `<div id="av-proof-pill" class="av-proof-pill"><span>${proofLabel}</span></div>` : ''}
+      <div id="av-proof-pill" class="av-proof-pill"><span id="av-proof-pill-text"></span></div>
 
       <button id="av-button" class="av-button" aria-label="${label}" aria-haspopup="dialog" aria-expanded="false">
         ${avatarTag()}
@@ -491,6 +503,7 @@ function init(): void {
   const greeting = shadow.getElementById('av-greeting') as HTMLDivElement
   const greetingClose = shadow.getElementById('av-greeting-close') as HTMLButtonElement
   const proofPillEl = shadow.getElementById('av-proof-pill') as HTMLDivElement | null
+  const proofPillTextEl = shadow.getElementById('av-proof-pill-text') as HTMLSpanElement | null
   const panel = shadow.getElementById('av-panel') as HTMLDivElement
   const closeBtn = shadow.getElementById('av-close') as HTMLButtonElement
   const endChatBtn = shadow.getElementById('av-end-chat') as HTMLButtonElement
@@ -586,6 +599,7 @@ function init(): void {
           requirePhone?: boolean
           askEmail?: boolean
           requireEmail?: boolean
+          platformConversationCount?: number
         } | null,
       ) => {
         if (!data) return
@@ -619,6 +633,15 @@ function init(): void {
         if (typeof data.askEmail === 'boolean') askEmail = data.askEmail
         if (typeof data.requireEmail === 'boolean') requireEmail = askEmail && data.requireEmail
         applyFieldConfig(emailFieldEl, emailLabelEl, 'Email', askEmail, requireEmail)
+        // An explicit per-tenant override already wins outright (set
+        // synchronously at init, before this fetch can land) - this is the
+        // real, platform-wide fallback and never overwrites that.
+        if (!proofLabelOverride && typeof data.platformConversationCount === 'number') {
+          const count = data.platformConversationCount
+          setProofPillContent(
+            count >= MIN_PLATFORM_PROOF_COUNT ? `${formatProofCount(count)}+ conversations on Vistrow Voice this week` : '',
+          )
+        }
       },
     )
     .catch((err) => {
@@ -714,10 +737,19 @@ function init(): void {
   // position shifts under the 520px media query). Simplest robust fix:
   // never show both at once — the proof pill only holds the corner while
   // there is no greeting bubble occupying it.
+  let proofPillHasContent = false
+  function setProofPillContent(text: string): void {
+    if (!proofPillTextEl) return
+    proofPillTextEl.textContent = text
+    proofPillHasContent = text.length > 0
+    syncProofPillVisibility()
+  }
   function syncProofPillVisibility(): void {
     if (!proofPillEl) return
-    proofPillEl.style.display = isWidgetClosed() && greeting.style.display !== 'flex' ? 'flex' : 'none'
+    const shouldShow = proofPillHasContent && isWidgetClosed() && greeting.style.display !== 'flex'
+    proofPillEl.style.display = shouldShow ? 'flex' : 'none'
   }
+  if (proofLabelOverride) setProofPillContent(proofLabelOverride)
 
   function triggerGreeting(reason: string): void {
     if (greetingWasDismissed()) return

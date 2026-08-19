@@ -2000,6 +2000,30 @@ def summary(account_id: int) -> dict:
         conn.close()
 
 
+def platform_conversation_count(days: int = 7, min_duration_seconds: int = 10) -> int:
+    """Real, platform-wide count of completed conversations across every
+    tenant combined, in the trailing window - backs the widget's honest
+    proof-pill ("N people talked to Artha this week"). Deliberately not
+    scoped to account_id, unlike every other stats query in this file - the
+    whole point is a combined-across-all-tenants number. min_duration_seconds
+    filters out failed/abandoned connection attempts that never became a
+    real conversation, so a burst of dropped calls doesn't inflate it."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM calls
+            WHERE started_at::date >= (CURRENT_DATE - (? || ' days')::interval)::date
+              AND duration_seconds >= ?
+            """,
+            (days, min_duration_seconds),
+        ).fetchone()
+        return row["total"] or 0
+    finally:
+        conn.close()
+
+
 def launch_readiness(account_id: int) -> dict:
     """One cheap, read-only snapshot that powers first-run and launch QA."""
     conn = _connect()
