@@ -402,6 +402,7 @@ class AnchoredDelayEchoCanceller:
         anchor_window_s: float = 0.3,
         min_energy: float = 150.0,
         min_confidence: float = 0.15,
+        max_anchor_attempts: int = 40,
         **nlms_kwargs,
     ) -> None:
         self._sr = sample_rate
@@ -410,6 +411,23 @@ class AnchoredDelayEchoCanceller:
         self._anchor_win = int(anchor_window_s * sample_rate)
         self._min_energy = min_energy
         self._min_conf = min_confidence
+        # _try_anchor's search is a max_delay/2 ≈ 2000-iteration pure-Python
+        # loop, allocating a fresh array and computing a dot product every
+        # iteration - genuinely expensive, and it ran on EVERY incoming
+        # frame for the rest of the turn whenever it never converged, with
+        # no cap. Confirmed live 2026-08-19: a real call logged 80+ attempts
+        # (confidence stuck at 0.00 the whole time) in under a second,
+        # correlating exactly with a turn where first_audio latency grew
+        # from 8.2s to 10.4s within the same call and the caller reported
+        # the call going mute after ~1 minute - consistent with this
+        # blocking the single-threaded event loop long enough, repeatedly
+        # enough, to starve everything else running on it (TTS streaming,
+        # barge-in detection, WebSocket I/O). If it hasn't found a
+        # confident match in 40 attempts (~800ms of real time), it isn't
+        # going to - giving up bounds the cost instead of running the full
+        # search forever for a turn that was never going to anchor.
+        self._max_anchor_attempts = max_anchor_attempts
+        self._anchor_gave_up = False
 
         self._ref_buf = np.zeros(0, dtype=np.int16)
         self._ref_base = 0
@@ -435,6 +453,7 @@ class AnchoredDelayEchoCanceller:
         after a barge-in) - forces a fresh delay anchor for that turn."""
         self._delay = None
         self._anchor_attempts = 0
+        self._anchor_gave_up = False
 
     def push_reference(self, ref_frame: np.ndarray) -> None:
         self._ref_buf = np.concatenate([self._ref_buf, ref_frame.astype(np.int16)])
@@ -484,6 +503,13 @@ class AnchoredDelayEchoCanceller:
                 "echo canceller anchored: delay=%dsamples (%.0fms) confidence=%.2f after %d attempt(s)",
                 best_delay, best_delay * 1000 / self._sr, best_score, self._anchor_attempts,
             )
+        elif self._anchor_attempts >= self._max_anchor_attempts:
+            self._anchor_gave_up = True
+            logger.info(
+                "echo canceller: giving up on anchor after %d attempts (best_score=%.2f, need>=%.2f) — "
+                "not retrying for the rest of this turn",
+                self._anchor_attempts, best_score, self._min_conf,
+            )
         elif self._anchor_attempts == 1 or self._anchor_attempts % 10 == 0:
             # First attempt and then every 10th, not every frame - mic stays
             # above min_energy for as long as the agent keeps talking, so an
@@ -508,7 +534,7 @@ class AnchoredDelayEchoCanceller:
         # suppression at an otherwise-correct delay).
         self._mic_total += n
 
-        if self._delay is None:
+        if self._delay is None and not self._anchor_gave_up:
             self._try_anchor()
 
         if self._delay is None:

@@ -622,9 +622,19 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         # makes barge-in work uniformly across the whole turn, not just
         # during playback.
         try:
-            reply_text = await session_module.handle_utterance_streaming(
-                sess, wav_bytes, _send_reply_audio, on_reply_chunk=_send_reply_audio_stream
-            )
+            # on_reply_chunk (streaming TTS) temporarily reverted to the
+            # batch path — confirmed live 2026-08-19: first_audio latency
+            # grew turn over turn within the same call (8.2s, then 10.4s)
+            # instead of holding steady, alongside barge-in failures and a
+            # ~1-minute mute. That growth pattern points at something
+            # accumulating/leaking in the new streaming path under real
+            # concurrent load (echo-canceller CPU contention is one live
+            # hypothesis - see audio.py's _try_anchor, called on every
+            # incoming frame with no backoff when it never converges), not
+            # yet confirmed. Re-enable only after that's root-caused and
+            # re-verified against a real call, not just the offline tests
+            # that validated it in isolation before this.
+            reply_text = await session_module.handle_utterance_streaming(sess, wav_bytes, _send_reply_audio)
         except stt.STTError as e:
             logger.info("skipping turn, no speech detected: %s", e)
             return
