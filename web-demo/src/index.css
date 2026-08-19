@@ -50,6 +50,25 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* One place to make every solid-primary button (dashboard AND the public
+   marketing site both build from this same stylesheet) use the brand's
+   diagonal violet gradient instead of a flat fill, matching the gradient
+   already used on the WordPress plugin's own Save button
+   (wordpress-plugin/vistrow-voice-widget/vistrow-voice-widget.php's
+   .button-primary). Layered as background-image over Tailwind's own
+   bg-primary background-color utility rather than overriding the class
+   definition itself - a plain, unlayered rule here already wins the
+   cascade against Tailwind v4's @layer utilities, so this reaches every
+   `bg-primary` button across the whole app with no per-component changes,
+   while `bg-primary/NN` opacity variants (icon badges, decorative fills)
+   keep their flat translucent color since they're a different generated
+   class. Built from the same --color-primary/--color-primary-dark tokens
+   used everywhere else, so it re-themes with light/dark mode automatically
+   instead of a hardcoded hex pair. */
+.bg-primary {
+  background-image: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+}
+
 /* Indian tricolour wordmark used in the homepage hero. Its centre is white
    on the dark theme, then changes to Ashoka Chakra navy on the light theme
    where white lettering would disappear against the page. */

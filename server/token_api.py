@@ -3314,7 +3314,7 @@ def widget_site_config(siteKey: str, path: str = "") -> dict:
     calls_db.record_site_page_view(site["id"], path)
     resolved = calls_db.resolve_site_page(site, path)
     return {
-        "avatar": site["widgetAvatar"],
+        "avatar": resolved["avatar"],
         "greeting": resolved["greeting"],
         "mode": site["widgetMode"],
         "position": site["widgetPosition"],
@@ -3421,6 +3421,7 @@ def create_site_page_route(site_id: int, data: dict = Body(...), user: dict = De
         data.get("pathPattern", ""),
         data.get("agentId"),
         data.get("greetingOverride", ""),
+        data.get("avatarOverride", ""),
     )
     if route is None:
         raise HTTPException(400, "Site not found, or path pattern is empty")

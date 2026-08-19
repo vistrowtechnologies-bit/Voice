@@ -122,6 +122,9 @@ CREATE TABLE IF NOT EXISTS site_page_routes (
     -- Empty means "use the parent site's own widget_greeting" — same
     -- empty-means-inherit convention as sites.widget_greeting itself.
     greeting_override TEXT DEFAULT '',
+    -- Empty means "use the parent site's own widget_avatar" — same
+    -- inherit-when-empty convention as greeting_override above.
+    avatar_override TEXT DEFAULT '',
     position INTEGER DEFAULT 0,
     created_at TEXT DEFAULT {_NOW}
 );
@@ -999,6 +1002,7 @@ def init_tables() -> None:
             # immediate, versus 'seen' which needs an actual visit first.
             conn.execute("ALTER TABLE site_seen_paths ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'seen'")
             conn.execute("ALTER TABLE site_seen_paths ADD COLUMN IF NOT EXISTS title TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE site_page_routes ADD COLUMN IF NOT EXISTS avatar_override TEXT DEFAULT ''")
             # "Premium+" (ElevenLabs v3) was folded into Premium (Flash v2.5) on
             # 2026-07-14 — v3's realtime endpoint 403s in production, so it was
             # never a good tier to keep selling (see voice_catalog.py's CATALOG
@@ -4396,6 +4400,7 @@ def _page_route_dict(r: dict) -> dict:
         "pathPattern": r["path_pattern"],
         "agentId": r["agent_id"],
         "greetingOverride": r["greeting_override"] or "",
+        "avatarOverride": r["avatar_override"] or "",
         "position": r["position"] or 0,
         "createdAt": r["created_at"],
     }
@@ -4418,10 +4423,19 @@ def list_site_page_routes(site_id: int, account_id: int) -> list[dict]:
         conn.close()
 
 
-def create_site_page_route(site_id: int, account_id: int, path_pattern: str, agent_id: int | None, greeting_override: str = "") -> dict | None:
+def create_site_page_route(
+    site_id: int,
+    account_id: int,
+    path_pattern: str,
+    agent_id: int | None,
+    greeting_override: str = "",
+    avatar_override: str = "",
+) -> dict | None:
     path_pattern = path_pattern.strip()
     if not path_pattern:
         return None
+    if avatar_override and not is_valid_avatar_key(avatar_override):
+        avatar_override = ""
     conn = _connect()
     try:
         site_row = conn.execute("SELECT id FROM sites WHERE id = ? AND account_id = ?", (site_id, account_id)).fetchone()
@@ -4432,9 +4446,9 @@ def create_site_page_route(site_id: int, account_id: int, path_pattern: str, age
                 "SELECT COALESCE(MAX(position), -1) + 1 AS n FROM site_page_routes WHERE site_id = ?", (site_id,)
             ).fetchone()["n"]
             cur = conn.execute(
-                "INSERT INTO site_page_routes (site_id, path_pattern, agent_id, greeting_override, position) "
-                "VALUES (?, ?, ?, ?, ?) RETURNING id",
-                (site_id, path_pattern, agent_id, greeting_override.strip()[:140], next_pos),
+                "INSERT INTO site_page_routes (site_id, path_pattern, agent_id, greeting_override, avatar_override, position) "
+                "VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+                (site_id, path_pattern, agent_id, greeting_override.strip()[:140], avatar_override, next_pos),
             )
         row = conn.execute("SELECT * FROM site_page_routes WHERE id = ?", (cur.lastrowid,)).fetchone()
         return _page_route_dict(row)
@@ -4456,13 +4470,13 @@ def delete_site_page_route(route_id: int, account_id: int) -> None:
 
 
 def resolve_site_page(site: dict, path: str) -> dict:
-    """Effective agent_id/greeting for one visit, given the site's own
-    (possibly empty) list of page routes and the widget-reported
+    """Effective agent_id/greeting/avatar for one visit, given the site's
+    own (possibly empty) list of page routes and the widget-reported
     location.pathname. First route whose path_pattern is a substring of
     path wins; no match (or no path sent — older cached widget.js, or a
     site with no routes at all) falls back to the site's own agent_id/
-    widget_greeting, so this is a no-op for every site that hasn't set up
-    routing."""
+    widget_greeting/widget_avatar, so this is a no-op for every site that
+    hasn't set up routing."""
     path = (path or "").strip().lower()
     if path:
         conn = _connect()
@@ -4478,9 +4492,15 @@ def resolve_site_page(site: dict, path: str) -> dict:
                 return {
                     "agentId": r["agent_id"] if r["agent_id"] is not None else site["agentId"],
                     "greeting": r["greeting_override"] or site["widgetGreeting"],
+                    "avatar": r["avatar_override"] or site["widgetAvatar"],
                     "matchedRouteId": r["id"],
                 }
-    return {"agentId": site["agentId"], "greeting": site["widgetGreeting"], "matchedRouteId": None}
+    return {
+        "agentId": site["agentId"],
+        "greeting": site["widgetGreeting"],
+        "avatar": site["widgetAvatar"],
+        "matchedRouteId": None,
+    }
 
 
 def record_site_page_view(site_id: int, path: str) -> None:

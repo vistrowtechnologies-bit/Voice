@@ -511,6 +511,7 @@ export interface SitePageRoute {
   pathPattern: string
   agentId: number | null
   greetingOverride: string
+  avatarOverride: string
   position: number
   createdAt: string
 }

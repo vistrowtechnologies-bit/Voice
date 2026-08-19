@@ -232,7 +232,7 @@ export function WebsiteWidget() {
           {sites.length === 0 ? (
             <EmptyState icon="widgets" text="No sites yet - add one above to get an embeddable call widget." />
           ) : (
-            <div className="divide-y divide-border">
+            <div className="flex flex-col gap-3 bg-surface-high/40 p-3 sm:p-4">
               {sites.map((site) => (
                 <SiteRow
                   key={site.id}
@@ -296,6 +296,7 @@ function SiteRow({
   const [phoneModeDraft, setPhoneModeDraft] = useState<FieldMode>(fieldModeOf(site.widgetAskPhone, site.widgetRequirePhone))
   const [emailModeDraft, setEmailModeDraft] = useState<FieldMode>(fieldModeOf(site.widgetAskEmail, site.widgetRequireEmail))
   const [installMode, setInstallMode] = useState<'wordpress' | 'manual'>('wordpress')
+  const [expanded, setExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState(false)
@@ -390,13 +391,21 @@ function SiteRow({
   }
 
   return (
-    <div className="flex flex-col gap-3 px-5 py-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Icon name="widgets" className="text-[18px] text-cyan" />
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">{site.name}</p>
-          {site.allowedDomain && <p className="text-[11px] text-text-muted">{site.allowedDomain}</p>}
-        </div>
+    <div className="rounded-xl border border-border bg-surface shadow-sm">
+      <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? `Collapse ${site.name}` : `Expand ${site.name}`}
+          aria-expanded={expanded}
+          className="flex items-center gap-2 text-left"
+        >
+          <Icon name={expanded ? 'expand_less' : 'expand_more'} className="text-[20px] text-text-muted" />
+          <Icon name="widgets" className="text-[18px] text-cyan" />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">{site.name}</span>
+            {site.allowedDomain && <span className="block text-[11px] text-text-muted">{site.allowedDomain}</span>}
+          </span>
+        </button>
         <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:justify-end">
           <select
             value={site.agentId ?? ''}
@@ -439,6 +448,8 @@ function SiteRow({
         </div>
       </div>
 
+      {expanded && (
+      <div className="flex flex-col gap-3 border-t border-border px-5 py-4">
       <div className="flex items-center gap-2 text-xs">
         <span className="text-text-muted">Site key</span>
         <span className="font-mono">{showKey ? site.siteKey : `${site.siteKey.slice(0, 12)}${'•'.repeat(16)}`}</span>
@@ -501,7 +512,7 @@ function SiteRow({
         </div>
       )}
 
-      <PageRoutes site={site} agents={agents} />
+      <PageRoutes site={site} agents={agents} avatarCatalog={avatarCatalog} backendUrl={backendUrl} />
 
       <div className="flex items-center gap-3">
         <button
@@ -580,6 +591,8 @@ function SiteRow({
           )
         )}
       </div>
+      </div>
+      )}
     </div>
   )
 }
@@ -590,7 +603,17 @@ function SiteRow({
 // rule matches when the visitor's current URL path contains the pattern;
 // unmatched pages keep using the site's own default agent above, so this
 // is purely additive and never required.
-function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
+function PageRoutes({
+  site,
+  agents,
+  avatarCatalog,
+  backendUrl,
+}: {
+  site: Site
+  agents: AgentConfig[]
+  avatarCatalog: WidgetAvatarOption[]
+  backendUrl: string | null
+}) {
   const [routes, setRoutes] = useState<SitePageRoute[]>([])
   const [seenPaths, setSeenPaths] = useState<SiteSeenPath[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -598,6 +621,7 @@ function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
   const [newPattern, setNewPattern] = useState('')
   const [newAgentId, setNewAgentId] = useState('')
   const [newGreeting, setNewGreeting] = useState('')
+  const [newAvatar, setNewAvatar] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -635,10 +659,11 @@ function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
     setAdding(true)
     setAddError(false)
     try {
-      await createSitePageRoute(site.id, newPattern.trim(), newAgentId ? Number(newAgentId) : null, newGreeting.trim())
+      await createSitePageRoute(site.id, newPattern.trim(), newAgentId ? Number(newAgentId) : null, newGreeting.trim(), newAvatar)
       setNewPattern('')
       setNewAgentId('')
       setNewGreeting('')
+      setNewAvatar('')
       await reload()
     } catch {
       setAddError(true)
@@ -697,6 +722,14 @@ function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
               <span className="font-semibold">
                 {agents.find((a) => a.id === route.agentId)?.name ?? 'Unassigned'}
               </span>
+              {route.avatarOverride && backendUrl && (
+                <img
+                  src={`${backendUrl}/widget-avatars/${route.avatarOverride}.png`}
+                  alt=""
+                  title="Custom avatar for this page"
+                  className="h-5 w-5 rounded-full border border-border object-cover"
+                />
+              )}
               {route.greetingOverride && (
                 <span className="text-[11px] text-text-muted">"{route.greetingOverride}"</span>
               )}
@@ -753,6 +786,22 @@ function PageRoutes({ site, agents }: { site: Site; agents: AgentConfig[] }) {
                 className="w-full min-w-[200px] rounded-lg border border-border bg-surface-high px-2.5 py-1.5 text-xs outline-none focus:border-primary"
               />
             </Field>
+            {avatarCatalog.length > 0 && (
+              <Field label="Avatar override (optional)">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewAvatar('')}
+                    className={`rounded-lg border px-2 py-1.5 text-[11px] font-semibold ${
+                      newAvatar === '' ? 'border-primary text-primary' : 'border-border text-text-muted hover:text-text'
+                    }`}
+                  >
+                    Site default
+                  </button>
+                  <AvatarPicker catalog={avatarCatalog} backendUrl={backendUrl} value={newAvatar} onChange={setNewAvatar} />
+                </div>
+              </Field>
+            )}
             <button
               onClick={handleAdd}
               disabled={!newPattern.trim() || adding}

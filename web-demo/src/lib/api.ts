@@ -369,8 +369,13 @@ export const regenerateSiteKey = (id: number) => send<Site>('POST', `/widget/sit
 export const fetchSitePageRoutes = (siteId: number) => get<SitePageRoute[]>(`/widget/sites/${siteId}/routes`)
 export const fetchSiteSeenPaths = (siteId: number) => get<SiteSeenPath[]>(`/widget/sites/${siteId}/seen-paths`)
 export const syncSiteWpPages = (siteId: number) => send<{ ok: boolean; count: number }>('POST', `/widget/sites/${siteId}/sync-wp-pages`)
-export const createSitePageRoute = (siteId: number, pathPattern: string, agentId: number | null, greetingOverride: string) =>
-  send<SitePageRoute>('POST', `/widget/sites/${siteId}/routes`, { pathPattern, agentId, greetingOverride })
+export const createSitePageRoute = (
+  siteId: number,
+  pathPattern: string,
+  agentId: number | null,
+  greetingOverride: string,
+  avatarOverride: string,
+) => send<SitePageRoute>('POST', `/widget/sites/${siteId}/routes`, { pathPattern, agentId, greetingOverride, avatarOverride })
 export const deleteSitePageRoute = (siteId: number, routeId: number) =>
   send('DELETE', `/widget/sites/${siteId}/routes/${routeId}`)
 export const fetchWidgetAvatarCatalog = () => get<{ avatars: WidgetAvatarOption[] }>('/widget/avatar-catalog')
