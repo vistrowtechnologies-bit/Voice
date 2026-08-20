@@ -142,11 +142,20 @@ def save_caller_memory(account_id: int | None, agent_id: int, caller_phone: str,
 # between jobs, not one-shot), and the platform-demo worker in particular
 # fetches the exact same agent_id on nearly every single call, so an
 # in-memory cache here has a real, meaningful hit rate — not just a
-# theoretical one. Short TTL (not "cache forever") so a dashboard config
-# change still reaches the next call within well under a minute, not stays
-# stale for a process's whole lifetime.
+# theoretical one.
+#
+# TTL was originally 30s ("short, so a dashboard change reaches the next
+# call within well under a minute") but real call data showed this backfired:
+# calls on a low/medium-traffic agent are naturally spaced minutes apart, so
+# a 30s TTL meant the cache was cold on nearly every call anyway — confirmed
+# live on 2026-08-20 (get_kb_content, the equivalent cache below, still took
+# 1.47s on a real widget call despite this fix already being deployed).
+# Dashboard config edits are a rare, operator-driven event, not something
+# that needs near-real-time propagation — 10 minutes gives the cache a real
+# chance to actually warm up across realistic call spacing, while still
+# keeping edits from going stale for a process's entire lifetime.
 _agent_config_cache: dict[int | None, tuple[float, dict | None]] = {}
-_AGENT_CONFIG_CACHE_TTL_S = 30.0
+_AGENT_CONFIG_CACHE_TTL_S = 600.0
 
 
 def get_agent_config(agent_id: int | None = None) -> dict | None:
@@ -186,8 +195,10 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
     return result
 
 
+# Same reasoning as _AGENT_CONFIG_CACHE_TTL_S above — a 30s TTL was too
+# short to ever actually warm up against realistic call spacing.
 _kb_cache: dict[int, tuple[float, tuple[str, bool]]] = {}
-_KB_CACHE_TTL_S = 30.0
+_KB_CACHE_TTL_S = 600.0
 
 
 def get_kb_content(kb_id: int, max_chars: int = 8000) -> str:
