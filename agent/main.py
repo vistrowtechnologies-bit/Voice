@@ -1741,6 +1741,41 @@ async def entrypoint(ctx: JobContext) -> None:
             call_context["custom_fields"] = json.loads(raw_custom) if isinstance(raw_custom, str) else raw_custom
         except ValueError:
             pass
+
+    # Inbound phone: trust the dialled number over the room metadata.
+    #
+    # One LiveKit inbound trunk pools every tenant's numbers, and a SIP
+    # dispatch rule cannot filter on the dialled number — its inbound_numbers
+    # field matches the CALLER (verified against a live call, 2026-08-21).
+    # So the rule can only stamp ONE static agent_id, which stops being
+    # correct the moment a second number is registered. The dialled number
+    # does reach us, as the SIP participant's sip.trunkPhoneNumber, so
+    # resolve the owning tenant from that instead. Without this, tenant #2's
+    # callers would reach tenant #1's agent, prompt and knowledge base.
+    sip_attrs = dict(getattr(first_participant, "attributes", None) or {})
+    dialled_number = sip_attrs.get("sip.trunkPhoneNumber")
+    if dialled_number:
+        call_context["call_type"] = "phone"
+        # Caller ID — otherwise inbound phone leads save with a blank number.
+        caller_number = sip_attrs.get("sip.phoneNumber")
+        if caller_number and not call_context["visitor_phone"]:
+            call_context["visitor_phone"] = caller_number
+        owner = await asyncio.to_thread(db.get_phone_number_by_number, dialled_number)
+        owner_agent_id = (owner or {}).get("agent_id")
+        if owner_agent_id and owner_agent_id != call_context["agent_id"]:
+            logger.info(
+                "inbound to %s belongs to agent %s (room metadata said %s) — reloading config",
+                dialled_number, owner_agent_id, call_context["agent_id"],
+            )
+            call_context["agent_id"] = owner_agent_id
+            stale_task, config_task = config_task, asyncio.create_task(
+                asyncio.to_thread(db.get_agent_config, owner_agent_id)
+            )
+            # The head-start lookup above is now for the wrong agent. Retrieve
+            # its result so a failure inside it can't surface as an unhandled
+            # "exception was never retrieved" warning on a call that succeeded.
+            stale_task.add_done_callback(lambda t: t.cancelled() or t.exception())
+
     config = await config_task
     logger.info("[latency] config_task awaited at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     if config and config.get("status") == "paused":

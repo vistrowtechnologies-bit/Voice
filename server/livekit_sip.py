@@ -237,20 +237,21 @@ async def _drop_rules_for_number(lkapi, trunk_id: str, number: str) -> None:
         existing = await lkapi.sip.list_dispatch_rule(ListSIPDispatchRuleRequest(trunk_ids=[trunk_id]))
     except Exception:
         return  # best-effort; the create below will still surface a hard error
-    # Compare on bare digits, not the raw string: a rule created from a
-    # differently-spelled copy of the same number ("+91..." vs "91...")
-    # is still the rule that will win at match time, since dispatch rules
-    # normalize. Comparing exact strings would leave it in place and the
-    # create below would then 400 on the duplicate.
+    # Drop rules bound to this number in EITHER spelling, and any unfiltered
+    # rule on the trunk. The unfiltered case matters because that rule serves
+    # this number too, so leaving it in place makes the create below 400 with
+    # "... already exists in dispatch rule SDR_xxx".
     wanted = set(number_variants(number))
     for item in existing.items:
-        if wanted & set(item.inbound_numbers):
-            try:
-                await lkapi.sip.delete_dispatch_rule(
-                    DeleteSIPDispatchRuleRequest(sip_dispatch_rule_id=item.sip_dispatch_rule_id)
-                )
-            except Exception:
-                pass
+        numbers = set(item.inbound_numbers)
+        if numbers and not (wanted & numbers):
+            continue
+        try:
+            await lkapi.sip.delete_dispatch_rule(
+                DeleteSIPDispatchRuleRequest(sip_dispatch_rule_id=item.sip_dispatch_rule_id)
+            )
+        except Exception:
+            pass
 
 
 async def upsert_dispatch_rule(number_row: dict) -> None:
@@ -288,17 +289,18 @@ async def upsert_dispatch_rule(number_row: dict) -> None:
                 # CALLER's number, not the number that was dialled, so listing
                 # the dialled number here can never match.
                 #
-                # LIMITATION: the trunk pools every tenant's numbers, so with no
-                # per-rule filter one rule serves them all and the agent_id in
-                # room_config below is whichever number was saved last. That is
-                # correct while exactly one number is registered. Before a second
-                # number goes live, per-number routing has to move to one trunk
-                # per number (rules attach to trunks), or the agent must resolve
-                # its config from the dialled number at runtime instead of from
-                # this static metadata.
+                # Consequence: the trunk pools every tenant's numbers and one
+                # unfiltered rule serves all of them, so per-number routing
+                # cannot happen here. It happens in agent/main.py instead,
+                # which reads the dialled number off the SIP participant
+                # (sip.trunkPhoneNumber) and looks up the owning tenant.
                 name=f"riya-inbound-{number}",
-                # Stamped onto each created room so the auto-dispatched agent
-                # knows which dashboard agent config to load for this number.
+                # Informational only. The agent no longer trusts this to pick
+                # the tenant: with one shared trunk and one unfiltered rule,
+                # whichever number was saved last would win for everybody.
+                # agent/main.py resolves the real owner from the dialled number
+                # (the SIP participant's sip.trunkPhoneNumber) instead, so this
+                # metadata is a hint/debugging aid, not the routing decision.
                 room_config=RoomConfiguration(
                     metadata=json.dumps({"agent_id": agent_id, "phone_number": number})
                 ),

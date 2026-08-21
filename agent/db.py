@@ -266,6 +266,45 @@ def get_kb(kb_id: int, max_chars: int = 8000) -> tuple[str, bool]:
     return result
 
 
+def _normalize_sip_number(number: str) -> str:
+    """Canonical phone_numbers.number shape — mirrors server/calls_db.py's
+    _normalize_sip_number (and orchestrator/db.py's copy). This only has to
+    match on lookup, not write."""
+    digits = "".join(c for c in (number or "") if c.isdigit())
+    if not digits:
+        return (number or "").strip()
+    if len(digits) == 10:
+        digits = "91" + digits
+    elif digits.startswith("0") and len(digits) == 11:
+        digits = "91" + digits[1:]
+    return "+" + digits
+
+
+def get_phone_number_by_number(number: str) -> dict | None:
+    """account_id + agent_id for a registered inbound number.
+
+    Unscoped by design: on an inbound call the dialled number is the only
+    thing identifying the tenant. Needed because one LiveKit inbound trunk
+    pools every tenant's numbers and a SIP dispatch rule cannot filter on
+    the dialled number (its inbound_numbers field matches the CALLER), so
+    the rule can only stamp one static agent_id into room metadata. The
+    dialled number arrives instead as the SIP participant's
+    sip.trunkPhoneNumber attribute, and this resolves it to the tenant that
+    actually owns it.
+    """
+    conn = dbconn.connect()
+    try:
+        row = conn.execute(
+            "SELECT account_id, agent_id FROM phone_numbers WHERE number = ?",
+            (_normalize_sip_number(number),),
+        ).fetchone()
+        return dict(row) if row else None
+    except psycopg.Error:
+        return None
+    finally:
+        conn.close()
+
+
 def get_webhook_url() -> str | None:
     """URL of the connected CRM webhook integration, if any."""
     conn = dbconn.connect()
