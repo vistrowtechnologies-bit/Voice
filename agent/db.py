@@ -266,6 +266,51 @@ def get_kb(kb_id: int, max_chars: int = 8000) -> tuple[str, bool]:
     return result
 
 
+def prewarm_caches() -> None:
+    """Fill this process's agent-config and KB caches before a call arrives.
+
+    Both caches live in module globals, so they are per-process. LiveKit hands
+    each job an idle subprocess whose globals start empty, which meant every
+    inbound call paid both lookups while the caller sat listening to ringing:
+    measured on a real call 2026-08-21, 2.86s for the agent config plus 1.51s
+    for the knowledge base, and LiveKit holds the SIP leg at 180 Ringing until
+    the agent is ready. Raising the cache TTLs did nothing for this — a TTL
+    only helps a process that has already done the lookup once.
+
+    Called from main.py's _prewarm, i.e. in an idle process with nobody
+    waiting. Best-effort by design: any failure here just leaves the caches
+    cold and the first call pays what it always used to, which is never worth
+    failing worker startup over.
+
+    Only 'live' agents are warmed — paused ones cannot take a call, so their
+    rows and (often large) knowledge bases are not worth the memory.
+    """
+    conn = dbconn.connect()
+    try:
+        rows = conn.execute("SELECT * FROM agents WHERE status = 'live'").fetchall()
+    except psycopg.Error:
+        return
+    finally:
+        conn.close()
+
+    now = time.monotonic()
+    configs = [dict(r) for r in rows]
+    for cfg in configs:
+        _agent_config_cache[cfg["id"]] = (now, cfg)
+    # get_agent_config(None) — an unrouted browser call — resolves to the
+    # platform-demo agent, else the lowest id. Mirror that ordering here so
+    # the default lookup is warm too.
+    if configs:
+        default = sorted(configs, key=lambda c: (not c.get("is_platform_demo"), c["id"]))[0]
+        _agent_config_cache[None] = (now, default)
+
+    for kb_id in {c["kb_id"] for c in configs if c.get("kb_id")}:
+        try:
+            get_kb(kb_id)  # reuse the real loader so the cached shape matches
+        except Exception:
+            pass
+
+
 def _normalize_sip_number(number: str) -> str:
     """Canonical phone_numbers.number shape — mirrors server/calls_db.py's
     _normalize_sip_number (and orchestrator/db.py's copy). This only has to

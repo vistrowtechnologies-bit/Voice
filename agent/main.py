@@ -2315,6 +2315,20 @@ def _prewarm(proc: JobProcess) -> None:
     Best-effort: any failure here just means the first real call pays the
     cost it always used to — never worth failing worker startup over.
     """
+    # Agent config + knowledge base, from this process's own empty caches.
+    # Measured on a real inbound call (2026-08-21): 2.86s for the config and
+    # 1.51s for the KB, both paid after the caller was already in the room and
+    # while LiveKit held the SIP leg at 180 Ringing — i.e. ~4.4s of the answer
+    # delay the SIP provider complained about was two database round-trips.
+    # The caches are per-process, so their TTLs never helped a process's first
+    # call; doing the lookups here moves that cost to an idle process instead.
+    _t = time.monotonic()
+    try:
+        db.prewarm_caches()
+        logger.info("prewarm: agent config + KB caches warmed in %.2fs (pid=%s)", time.monotonic() - _t, proc.pid)
+    except Exception:
+        logger.exception("prewarm: cache warm-up failed — first real call pays the lookups instead")
+
     if not _GOOGLE_CREDENTIALS:
         return
     try:
