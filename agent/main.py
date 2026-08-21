@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from google.cloud import texttospeech
 from livekit import api
+from livekit.agents.inference import eot
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -375,6 +376,37 @@ def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
             yield buffer if agent._caller_gender == "female" else _neutralize_caller_directed_gender(buffer)
 
     return _transform
+
+
+# End-of-turn thresholds for the languages this product actually serves.
+#
+# The endpointing delay below only escalates from min_delay to max_delay when
+# end_of_turn_probability < unlikely_threshold, so this threshold — not
+# max_delay — is what decides HOW OFTEN a caller waits the full 4s. Measured
+# on real calls: eouMs median 401ms but p90 4001ms, i.e. roughly one turn in
+# ten was paying the ceiling.
+#
+# LiveKit ships per-language thresholds for 14 languages (see
+# livekit.agents.inference.eot.languages.LOCAL_LANGUAGES). Hindi is tuned
+# there at 0.3050, but Marathi, Bengali, Tamil, Telugu, Kannada, Malayalam,
+# Gujarati, Punjabi and Odia are absent — 9 of the 11 languages we sell. An
+# unlisted (or unreported) language falls back to the English default of
+# 0.3600, the single most conservative value in the table, which maximises
+# escalation on exactly the calls we care about.
+#
+# So: apply LiveKit's own Indic-tuned Hindi value to the other Indic
+# languages rather than leaving them on an English default. This is not a
+# guessed number — it is the one value LiveKit tuned for an Indian language,
+# applied to its linguistic neighbours. The failure mode if it is slightly
+# too low is the agent replying a shade early, which is recoverable; that is
+# deliberately the opposite direction from lowering max_delay, which
+# previously dropped whole transcripts (see the comment on EndpointingOptions
+# below).
+_EOT_HINDI_THRESHOLD = 0.3050
+_EOT_UNLIKELY_THRESHOLDS = {
+    lang: _EOT_HINDI_THRESHOLD
+    for lang in ("hi", "mr", "bn", "ta", "te", "kn", "ml", "gu", "pa", "or")
+}
 
 
 def _build_llm(model: str, *, max_output_tokens: int = 220):
@@ -1998,6 +2030,9 @@ async def entrypoint(ctx: JobContext) -> None:
             # latency trade that brings the drop back.
             endpointing=EndpointingOptions(min_delay=0.4, max_delay=4.0),
         ),
+        # See _EOT_UNLIKELY_THRESHOLDS: stops 9 of our 11 languages from
+        # being judged with LiveKit's English end-of-turn threshold.
+        turn_detection=eot.TurnDetector(unlikely_threshold=_EOT_UNLIKELY_THRESHOLDS),
         user_away_timeout=away_timeout,
         # Google's Gemini TTS backend (gemini-2.5-flash-tts) genuinely times
         # out under the framework's 10s default often enough to matter —
