@@ -13,6 +13,7 @@ without a second worker process or explicit named dispatch.
 """
 
 import json
+import logging
 import os
 import secrets
 
@@ -32,6 +33,8 @@ from livekit.protocol.sip import (
 )
 
 import calls_db
+
+logger = logging.getLogger(__name__)
 
 TRUNK_ID_SETTING = "lk_inbound_trunk_id"
 AUTH_USERNAME_SETTING = "lk_inbound_auth_username"
@@ -89,18 +92,40 @@ def ensure_inbound_auth() -> tuple[str, str]:
 
 
 def sip_host() -> str:
-    """SIP endpoint to hand EnableX for bridging inbound calls.
+    """SIP endpoint to hand a provider (EnableX) for inbound INVITEs.
 
-    LiveKit Cloud's SIP domain is a fixed per-project subdomain that mirrors
-    the project's regular <subdomain>.livekit.cloud host — see
-    https://docs.livekit.io/telephony/start/sip-trunk-setup/. Override with
-    LIVEKIT_SIP_HOST if that project's SIP subdomain ever differs.
+    IMPORTANT: LiveKit Cloud's SIP subdomain is the *project ID*, NOT the
+    websocket subdomain. A project whose URL is
+    wss://artha-voice-i8fimsza.livekit.cloud but whose project ID is
+    p_4an9t157nkc has the SIP URI 4an9t157nkc.sip.livekit.cloud (docs show
+    the same shape: sip:bwwn08a2m4o.sip.livekit.cloud). The two identifiers
+    are unrelated strings — you cannot derive one from the other.
+
+    This is not a cosmetic detail: *.sip.livekit.cloud is a wildcard, so a
+    wrong subdomain still resolves and the INVITE still reaches LiveKit's
+    shared SIP frontend — it just can't be mapped to any project, and every
+    call is rejected with "404 No trunk found" no matter how the trunk,
+    numbers, auth, or dispatch rules are configured. That failure cost us
+    months of debugging against the wrong layer.
+
+    So LIVEKIT_SIP_HOST must be set to "<project-id-without-p_>.sip.livekit.cloud"
+    (LiveKit Cloud dashboard -> Telephony -> Configuration). The fallback
+    below is a last resort that is very likely WRONG; it only exists so a
+    self-hosted deployment pointing at its own SIP host keeps working.
     """
     override = os.environ.get("LIVEKIT_SIP_HOST")
     if override:
         return override
     livekit_url = os.environ.get("LIVEKIT_URL", "")
     host = livekit_url.split("://", 1)[-1].rstrip("/")
+    if host.endswith(".livekit.cloud"):
+        logger.warning(
+            "LIVEKIT_SIP_HOST is not set — falling back to deriving the SIP host from "
+            "LIVEKIT_URL (%s). On LiveKit Cloud this is almost certainly wrong: the SIP "
+            "subdomain is the project ID, not the websocket subdomain, and a wrong host "
+            "still resolves (wildcard DNS) but rejects every call with 404 No trunk found.",
+            host,
+        )
     return host.replace(".livekit.cloud", ".sip.livekit.cloud")
 
 
