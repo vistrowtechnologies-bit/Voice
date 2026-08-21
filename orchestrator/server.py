@@ -622,19 +622,22 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
         # makes barge-in work uniformly across the whole turn, not just
         # during playback.
         try:
-            # on_reply_chunk (streaming TTS) temporarily reverted to the
-            # batch path — confirmed live 2026-08-19: first_audio latency
-            # grew turn over turn within the same call (8.2s, then 10.4s)
-            # instead of holding steady, alongside barge-in failures and a
-            # ~1-minute mute. That growth pattern points at something
-            # accumulating/leaking in the new streaming path under real
-            # concurrent load (echo-canceller CPU contention is one live
-            # hypothesis - see audio.py's _try_anchor, called on every
-            # incoming frame with no backoff when it never converges), not
-            # yet confirmed. Re-enable only after that's root-caused and
-            # re-verified against a real call, not just the offline tests
-            # that validated it in isolation before this.
-            reply_text = await session_module.handle_utterance_streaming(sess, wav_bytes, _send_reply_audio)
+            # on_reply_chunk (streaming TTS) was reverted to the batch path
+            # on 2026-08-19 after live latency grew turn-over-turn within
+            # the same call, alongside barge-in failures — the leading
+            # hypothesis was CPU contention from audio.py's echo-canceller
+            # _try_anchor loop, which ran unbounded on every incoming frame
+            # whenever it never converged. That loop is now capped
+            # (max_anchor_attempts=40, confirmed live 2026-08-20 — it gives
+            # up cleanly instead of retrying forever), so the suspected root
+            # cause of the streaming-TTS regression is fixed. Re-enabling
+            # here to re-verify against a real call: a real 2026-08-20 test
+            # on the batch path this reverted to still showed 30-53s total
+            # turn latency and non-functional barge-in, so the batch path
+            # was never actually a safe fallback either — worth the retest.
+            reply_text = await session_module.handle_utterance_streaming(
+                sess, wav_bytes, _send_reply_audio, on_reply_chunk=_send_reply_audio_stream
+            )
         except stt.STTError as e:
             logger.info("skipping turn, no speech detected: %s", e)
             return
