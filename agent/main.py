@@ -1534,6 +1534,41 @@ class RealEstateAgent(Agent):
             logger.info("switching reply language to %s", candidate)
 
 
+_PHONE_RE = re.compile(r"^\+?\d[\d\s\-().]{5,}$")
+
+
+def _caller_number_from_sip(attrs: dict, participant) -> str | None:
+    """The caller's real phone number from an inbound SIP participant.
+
+    Not simply sip.phoneNumber: that is the user-part of the From URI, and a
+    provider is free to put its trunk credentials there instead of the
+    caller. EnableX does exactly that — it sends
+    From: "+918088394833" <sip:vistrow-4xfxv26j@...>, so sip.phoneNumber is
+    the SIP username and the real number is only in the display name. Saving
+    it blind stored "vistrow-4xfxv26j" as lead_phone on every inbound call.
+
+    Try each place the number can appear and take the first that actually
+    looks like one, so a provider putting it in the URI (the normal case)
+    still works and a username can never be mistaken for a phone number:
+      1. the From header's display name (needs the trunk's include_headers)
+      2. the participant name LiveKit derived from the From header
+      3. sip.phoneNumber, the From URI user-part
+    """
+    def clean(value: str | None) -> str | None:
+        if not value:
+            return None
+        text = value.strip().strip('"').removeprefix("Phone ").strip()
+        return text if _PHONE_RE.match(text) else None
+
+    from_header = attrs.get("sip.h.from") or attrs.get("sip.h.From") or ""
+    display = from_header.split("<", 1)[0] if "<" in from_header else ""
+    for candidate in (display, getattr(participant, "name", None), attrs.get("sip.phoneNumber")):
+        number = clean(candidate)
+        if number:
+            return number
+    return None
+
+
 def _call_context_from_job(ctx: JobContext) -> dict:
     """Room metadata names which dashboard agent should handle this call, and
     (for phone/widget calls) which number or site it came in on:
@@ -1764,7 +1799,9 @@ async def entrypoint(ctx: JobContext) -> None:
     if dialled_number:
         call_context["call_type"] = "phone"
         # Caller ID — otherwise inbound phone leads save with a blank number.
-        caller_number = sip_attrs.get("sip.phoneNumber")
+        # Must not be sip.phoneNumber alone: see _caller_number_from_sip, which
+        # rejects a provider's SIP username sitting in the From URI user-part.
+        caller_number = _caller_number_from_sip(sip_attrs, first_participant)
         if caller_number and not call_context["visitor_phone"]:
             call_context["visitor_phone"] = caller_number
         owner = await asyncio.to_thread(db.get_phone_number_by_number, dialled_number)
