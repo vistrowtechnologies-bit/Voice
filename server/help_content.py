@@ -21,7 +21,10 @@ text.
 - **Agents** — build and edit AI voice agents: persona, system prompt,
   voice, default language, and which tools/integrations each agent can
   use (booking, transfer, custom webhooks). A workspace can have multiple
-  agents for different numbers or purposes.
+  agents for different numbers or purposes. Clicking "Edit" on an agent
+  opens its own dedicated page (not an inline panel) with all its
+  settings, including advanced sections like knowledge base, speech
+  settings, post-call data extraction, webhooks, and memory.
 - **Knowledge Base** — upload PDFs, docs, or paste text; the agent
   retrieves grounded facts on calls. A "strict mode" toggle locks an
   agent to only answer from uploaded material — no invented prices or
@@ -41,7 +44,14 @@ text.
   elsewhere), WhatsApp, and Google Sheets.
 - **Website Widget** — an embeddable "talk to us" button for the
   business's own website: a script tag or WordPress plugin, no phone
-  number needed on the visitor's side.
+  number needed on the visitor's side. "Page rules" let a single site
+  route different pages to different agents, with optional greeting and
+  avatar overrides per page (e.g. a specific property page routes to an
+  agent that only knows about that listing). Each page rule saves
+  immediately via its own "Add rule" button the moment you add it —
+  that's separate from the "Save changes" button lower on the page,
+  which only saves the site's main settings (button label, greeting,
+  avatar, required visitor fields).
 - **Phone Numbers** — buy or connect a phone number and route it to an
   agent.
 - **Compliance** — Do-Not-Call registry and calling-window enforcement
@@ -125,5 +135,13 @@ FAQS: list[dict] = [
     {
         "question": "Where do I find call transcripts and recordings?",
         "answer": "Every call — inbound, outbound, or from the website widget — is logged under All Calls, with transcript, recording, and any captured lead info.",
+    },
+    {
+        "question": "Why won't the Save changes button on my website widget page work after adding a page rule?",
+        "answer": "Page rules save immediately via their own \"Add rule\" button as soon as you add one — that's separate from \"Save changes\" lower on the page, which only saves the site's main settings (button label, greeting, avatar, required visitor fields) and stays disabled until one of those changes. Make sure you typed an actual value into \"URL contains\" (not just left the placeholder text) before clicking \"Add rule\".",
+    },
+    {
+        "question": "How do I edit an agent's settings?",
+        "answer": "Go to Agents and click Edit on the agent card — it opens that agent's own settings page with everything: persona, voice, knowledge base, speech settings, functions, webhooks, and memory.",
     },
 ]

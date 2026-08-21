@@ -744,6 +744,10 @@ function PageRoutes({
           ))}
 
           <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
+            <span className="w-full text-[10px] text-text-muted">
+              "Add rule" below saves this rule right away - it's separate from the "Save changes" button
+              at the bottom of the panel, which only saves the site's main settings.
+            </span>
             <Field label="URL contains">
               <input
                 value={newPattern}
