@@ -1640,6 +1640,13 @@ async def _hang_up(room_name: str) -> None:
         logger.warning("failed to end call gracefully for room %s", room_name, exc_info=True)
 
 
+# Upper bound on the post-call enrichment pass. It runs inside LiveKit's
+# shutdown callback, so it must not be able to stall teardown; the durable
+# call row is written before it either way, so exceeding this only costs the
+# extracted fields and the returning-caller summary.
+_POST_CALL_ANALYSIS_TIMEOUT_S = 8.0
+
+
 async def _post_call_analysis(
     transcript: list[dict], post_call_fields: list[dict], want_summary: bool
 ) -> tuple[dict, str]:
@@ -2126,9 +2133,15 @@ async def entrypoint(ctx: JobContext) -> None:
         ]
         resolved_agent_id = call_context["agent_id"] or cfg.get("id")
         want_memory = agent._memory_enabled and bool(agent._caller_phone)
-        extracted, memory_summary = await _post_call_analysis(
-            transcript, agent._post_call_fields, want_memory
-        )
+        # The post-call LLM pass used to run HERE, before save_call, and gate
+        # it. It is an optional enrichment (operator-defined fields + a
+        # returning-caller summary) but an un-timeouted OpenAI request, so a
+        # slow or hung one took the transcript, the recording AND the billing
+        # row down with it. Observed live 2026-08-21: a real ~60s conversation
+        # left no `calls` row at all, while trivial 2-turn calls either side of
+        # it saved fine. Write the durable record first; enrich it afterwards.
+        extracted: dict = {}
+        memory_summary = ""
         saved_call_id: int | None = None
         try:
             saved_call_id = db.save_call(
@@ -2156,6 +2169,25 @@ async def entrypoint(ctx: JobContext) -> None:
             logger.info("saved call log for room %s (%d turns)", ctx.room.name, len(transcript))
         except Exception:
             logger.exception("failed to save call log for room %s", ctx.room.name)
+        # Enrichment, now that the record is safely on disk. Bounded so a
+        # stalled provider can only cost the extracted fields/memory summary,
+        # never the call itself.
+        if transcript:
+            try:
+                extracted, memory_summary = await asyncio.wait_for(
+                    _post_call_analysis(transcript, agent._post_call_fields, want_memory),
+                    timeout=_POST_CALL_ANALYSIS_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "post-call analysis timed out after %ss for room %s — call already saved",
+                    _POST_CALL_ANALYSIS_TIMEOUT_S, ctx.room.name,
+                )
+            except Exception:
+                logger.exception("post-call analysis failed for room %s — call already saved", ctx.room.name)
+            if extracted:
+                db.set_call_extracted_data(saved_call_id, extracted)
+
         recorder = recorder_holder["recorder"]
         if recorder is not None:
             try:

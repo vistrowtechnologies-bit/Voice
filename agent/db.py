@@ -710,6 +710,32 @@ def set_call_arthaleads_status(call_id: int | None, status: str, error: str | No
         conn.close()
 
 
+def set_call_extracted_data(call_id: int | None, extracted: dict) -> None:
+    """Attaches post-call extracted fields after save_call's INSERT.
+
+    Same save-now-update-later shape as set_call_recording below. Exists so
+    the post-call LLM pass can run AFTER the durable record is written
+    instead of gating it: that analysis is an optional enrichment, but it
+    used to sit in front of save_call in main.py's shutdown callback, so a
+    slow or hung OpenAI request took the transcript, the recording and the
+    billing row down with it (observed live 2026-08-21 — a real 60s call
+    left no row at all while shorter calls in the same window saved fine).
+    Best-effort: a failure here must never disturb call teardown."""
+    if call_id is None or not extracted:
+        return
+    conn = dbconn.connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE calls SET extracted_data = ? WHERE id = ?",
+                (json.dumps(extracted), call_id),
+            )
+    except psycopg.Error:
+        pass
+    finally:
+        conn.close()
+
+
 def set_call_recording(call_id: int | None, recording_key: str) -> None:
     """Attaches this call's R2 recording key after upload finishes — same
     save-now-update-later shape as set_call_arthaleads_status above, since
