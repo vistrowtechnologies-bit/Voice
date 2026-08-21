@@ -2322,12 +2322,16 @@ def _prewarm(proc: JobProcess) -> None:
     # delay the SIP provider complained about was two database round-trips.
     # The caches are per-process, so their TTLs never helped a process's first
     # call; doing the lookups here moves that cost to an idle process instead.
-    _t = time.monotonic()
+    # Started on a background thread, NOT awaited: LiveKit kills a subprocess
+    # whose prewarm overruns its init window, and doing these lookups inline
+    # timed out every process and took inbound calls down (2026-08-21, rolled
+    # back). This returns immediately; the cache fills a moment later, and a
+    # call arriving first just does the lookups itself as it always did.
     try:
-        db.prewarm_caches()
-        logger.info("prewarm: agent config + KB caches warmed in %.2fs (pid=%s)", time.monotonic() - _t, proc.pid)
+        db.start_cache_prewarm()
+        logger.info("prewarm: cache warm started in background (pid=%s)", proc.pid)
     except Exception:
-        logger.exception("prewarm: cache warm-up failed — first real call pays the lookups instead")
+        logger.exception("prewarm: could not start cache warm — calls pay the lookups instead")
 
     if not _GOOGLE_CREDENTIALS:
         return

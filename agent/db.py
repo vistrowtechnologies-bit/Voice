@@ -14,6 +14,7 @@ without closing).
 
 import datetime
 import json
+import threading
 import time
 
 import psycopg
@@ -266,8 +267,31 @@ def get_kb(kb_id: int, max_chars: int = 8000) -> tuple[str, bool]:
     return result
 
 
+def start_cache_prewarm() -> None:
+    """Kick off the cache warm in a background thread and return immediately.
+
+    MUST NOT BLOCK. LiveKit gives each job subprocess a bounded initialization
+    window and kills the process when prewarm overruns it. Calling the
+    blocking warm below directly cost ~14 database round-trips inside that
+    window, which timed out every process ("error initializing process" ->
+    TimeoutError -> exit code -10), left the worker with zero usable
+    processes, and took inbound calls down entirely on 2026-08-21 until the
+    deploy was rolled back. Starting a thread returns in microseconds, so the
+    process is registered as ready straight away and the cache fills a moment
+    later while nothing is waiting on it.
+
+    A call arriving before the warm finishes is not a problem: get_agent_config
+    and get_kb simply miss and do their own lookup, exactly as before. The
+    caches are plain dicts written under the GIL, so the racing write is safe.
+    """
+    threading.Thread(target=prewarm_caches, name="cache-prewarm", daemon=True).start()
+
+
 def prewarm_caches() -> None:
     """Fill this process's agent-config and KB caches before a call arrives.
+
+    Blocking. Call start_cache_prewarm() from a worker; this stays public so
+    the warm can be exercised directly in a test.
 
     Both caches live in module globals, so they are per-process. LiveKit hands
     each job an idle subprocess whose globals start empty, which meant every
@@ -310,6 +334,23 @@ def prewarm_caches() -> None:
         except Exception:
             pass
 
+    # Registered inbound numbers. agent/main.py resolves the owning tenant
+    # from the dialled number on every inbound call, before the greeting, so
+    # leaving this uncached would put a fresh-connection query back on the
+    # critical path and undo the saving above.
+    conn = dbconn.connect()
+    try:
+        rows = conn.execute("SELECT number, account_id, agent_id FROM phone_numbers").fetchall()
+    except psycopg.Error:
+        return
+    finally:
+        conn.close()
+    now = time.monotonic()
+    for row in rows:
+        d = dict(row)
+        number = d.pop("number")
+        _phone_number_cache[_normalize_sip_number(number)] = (now, d)
+
 
 def _normalize_sip_number(number: str) -> str:
     """Canonical phone_numbers.number shape — mirrors server/calls_db.py's
@@ -325,6 +366,16 @@ def _normalize_sip_number(number: str) -> str:
     return "+" + digits
 
 
+# Same per-process TTL cache as the agent-config/KB ones above, and for a
+# sharper reason: this lookup sits in the inbound critical path, between the
+# caller joining and the greeting, and dbconn.connect() opens a fresh
+# connection every call. Measured uncached at 4.67s cold / 1.73s warm-ish
+# against the real DB, which would have handed back everything the prewarm
+# saves and then some. Warmed by prewarm_caches() so a real call never pays it.
+_phone_number_cache: dict[str, tuple[float, dict | None]] = {}
+_PHONE_NUMBER_CACHE_TTL_S = 600.0
+
+
 def get_phone_number_by_number(number: str) -> dict | None:
     """account_id + agent_id for a registered inbound number.
 
@@ -337,17 +388,25 @@ def get_phone_number_by_number(number: str) -> dict | None:
     sip.trunkPhoneNumber attribute, and this resolves it to the tenant that
     actually owns it.
     """
+    key = _normalize_sip_number(number)
+    cached = _phone_number_cache.get(key)
+    now = time.monotonic()
+    if cached is not None and now - cached[0] < _PHONE_NUMBER_CACHE_TTL_S:
+        return cached[1]
     conn = dbconn.connect()
     try:
         row = conn.execute(
             "SELECT account_id, agent_id FROM phone_numbers WHERE number = ?",
-            (_normalize_sip_number(number),),
+            (key,),
         ).fetchone()
-        return dict(row) if row else None
+        result = dict(row) if row else None
     except psycopg.Error:
+        # Never cache a query failure — same reasoning as get_agent_config.
         return None
     finally:
         conn.close()
+    _phone_number_cache[key] = (now, result)
+    return result
 
 
 def get_webhook_url() -> str | None:
