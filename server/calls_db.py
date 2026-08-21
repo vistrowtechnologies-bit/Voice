@@ -1747,8 +1747,19 @@ def _call_dict(
         name = row["lead_name"]
     elif visitor_numbers and row["id"] in visitor_numbers:
         name = f"Visitor #{visitor_numbers[row['id']]}"
+    elif row["lead_phone"]:
+        # A phone caller who never gave a name is best identified by their
+        # number, not by the LiveKit participant identity below.
+        name = row["lead_phone"]
     else:
-        name = row["visitor_identity"] or "Unknown caller"
+        # visitor_identity for a SIP call is "sip_" + the From URI user-part,
+        # which a provider is free to fill with its own trunk credentials
+        # rather than the caller — EnableX sends our SIP username there, so
+        # every inbound caller rendered as "sip_vistrow-4xfxv26j", i.e. our
+        # own credentials shown as the customer's name. It is internal
+        # plumbing either way and never meaningful to an operator.
+        identity = row["visitor_identity"] or ""
+        name = "Unknown caller" if identity.startswith("sip_") else (identity or "Unknown caller")
     call_type = row["call_type"] or "browser"
     site_id = row["site_id"]
     site = sites_by_id.get(site_id) if sites_by_id and site_id else None
