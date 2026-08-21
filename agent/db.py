@@ -14,6 +14,7 @@ without closing).
 
 import datetime
 import json
+import logging
 import threading
 import time
 
@@ -21,6 +22,8 @@ import psycopg
 from zoneinfo import ZoneInfo
 
 import dbconn
+
+logger = logging.getLogger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
@@ -127,8 +130,13 @@ def save_caller_memory(account_id: int | None, agent_id: int, caller_phone: str,
                 "summary = EXCLUDED.summary, updated_at = (now() AT TIME ZONE 'utc')::text",
                 (account_id, agent_id, caller_phone, summary),
             )
-    except psycopg.Error:
-        pass
+    except Exception:
+        # Best-effort, but never silent: swallowing this lost real data.
+        # A recording uploaded fine to B2 on 2026-08-21 while this UPDATE
+        # failed, so calls showed no recording even though the audio existed.
+        # Catches Exception, not psycopg.Error: the connection pool raises
+        # PoolTimeout, which is not a psycopg.Error and slipped past entirely.
+        logger.exception("could not persist caller memory")
     finally:
         conn.close()
 
@@ -598,8 +606,13 @@ def touch_integration_sync(account_id: int | None, key: str) -> None:
                 "WHERE key = ? AND account_id = ?",
                 (key, account_id),
             )
-    except psycopg.Error:
-        pass
+    except Exception:
+        # Best-effort, but never silent: swallowing this lost real data.
+        # A recording uploaded fine to B2 on 2026-08-21 while this UPDATE
+        # failed, so calls showed no recording even though the audio existed.
+        # Catches Exception, not psycopg.Error: the connection pool raises
+        # PoolTimeout, which is not a psycopg.Error and slipped past entirely.
+        logger.exception("could not persist integration sync timestamp")
     finally:
         conn.close()
 
@@ -617,8 +630,13 @@ def mark_integration_error(account_id: int | None, key: str, message: str) -> No
                 "UPDATE integrations SET last_error = ? WHERE key = ? AND account_id = ?",
                 (message[:500], key, account_id),
             )
-    except psycopg.Error:
-        pass
+    except Exception:
+        # Best-effort, but never silent: swallowing this lost real data.
+        # A recording uploaded fine to B2 on 2026-08-21 while this UPDATE
+        # failed, so calls showed no recording even though the audio existed.
+        # Catches Exception, not psycopg.Error: the connection pool raises
+        # PoolTimeout, which is not a psycopg.Error and slipped past entirely.
+        logger.exception("could not persist integration error")
     finally:
         conn.close()
 
@@ -704,8 +722,13 @@ def set_call_arthaleads_status(call_id: int | None, status: str, error: str | No
                 "arthaleads_error = ? WHERE id = ?",
                 (status, error, call_id),
             )
-    except psycopg.Error:
-        pass
+    except Exception:
+        # Best-effort, but never silent: swallowing this lost real data.
+        # A recording uploaded fine to B2 on 2026-08-21 while this UPDATE
+        # failed, so calls showed no recording even though the audio existed.
+        # Catches Exception, not psycopg.Error: the connection pool raises
+        # PoolTimeout, which is not a psycopg.Error and slipped past entirely.
+        logger.exception("could not persist ArthaLeads status")
     finally:
         conn.close()
 
@@ -730,8 +753,13 @@ def set_call_extracted_data(call_id: int | None, extracted: dict) -> None:
                 "UPDATE calls SET extracted_data = ? WHERE id = ?",
                 (json.dumps(extracted), call_id),
             )
-    except psycopg.Error:
-        pass
+    except Exception:
+        # Best-effort, but never silent: swallowing this lost real data.
+        # A recording uploaded fine to B2 on 2026-08-21 while this UPDATE
+        # failed, so calls showed no recording even though the audio existed.
+        # Catches Exception, not psycopg.Error: the connection pool raises
+        # PoolTimeout, which is not a psycopg.Error and slipped past entirely.
+        logger.exception("could not persist post-call extracted data")
     finally:
         conn.close()
 
@@ -750,7 +778,12 @@ def set_call_recording(call_id: int | None, recording_key: str) -> None:
                 "UPDATE calls SET recording_key = ? WHERE id = ?",
                 (recording_key, call_id),
             )
-    except psycopg.Error:
-        pass
+    except Exception:
+        # Best-effort, but never silent: swallowing this lost real data.
+        # A recording uploaded fine to B2 on 2026-08-21 while this UPDATE
+        # failed, so calls showed no recording even though the audio existed.
+        # Catches Exception, not psycopg.Error: the connection pool raises
+        # PoolTimeout, which is not a psycopg.Error and slipped past entirely.
+        logger.exception("could not persist recording key")
     finally:
         conn.close()
