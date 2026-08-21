@@ -278,7 +278,24 @@ async def upsert_dispatch_rule(number_row: dict) -> None:
                     dispatch_rule_individual=SIPDispatchRuleIndividual(room_prefix=f"phone-{safe_prefix}")
                 ),
                 trunk_ids=[trunk_id],
-                inbound_numbers=[number],
+                # NO inbound_numbers filter. Verified 2026-08-21 by placing a
+                # real authenticated INVITE at LiveKit: with inbound_numbers
+                # set to the dialed number — in either the "+91..." or "91..."
+                # spelling — the call authenticates, reaches 180 Ringing, then
+                # dies with "404 Does not match Trunks or Dispatch Rules".
+                # Removing the filter entirely makes the same call answer 200 OK
+                # and the agent join the room. inbound_numbers filters on the
+                # CALLER's number, not the number that was dialled, so listing
+                # the dialled number here can never match.
+                #
+                # LIMITATION: the trunk pools every tenant's numbers, so with no
+                # per-rule filter one rule serves them all and the agent_id in
+                # room_config below is whichever number was saved last. That is
+                # correct while exactly one number is registered. Before a second
+                # number goes live, per-number routing has to move to one trunk
+                # per number (rules attach to trunks), or the agent must resolve
+                # its config from the dialled number at runtime instead of from
+                # this static metadata.
                 name=f"riya-inbound-{number}",
                 # Stamped onto each created room so the auto-dispatched agent
                 # knows which dashboard agent config to load for this number.
