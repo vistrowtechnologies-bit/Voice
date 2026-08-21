@@ -2,6 +2,10 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <!-- Without this the harness gets a 980px fallback layout viewport under
+         mobile emulation, so the widget's (max-width:520px) rules never match
+         and mobile-only bugs cannot be reproduced here. Real sites set this. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Vistrow Voice widget — local test harness</title>
   </head>
   <body>

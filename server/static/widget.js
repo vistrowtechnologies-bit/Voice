@@ -64,7 +64,11 @@ a=extmap-allow-mixed`)!==-1){let n=t.sdp.split(`
    outside the button's own edge (top:-3px, right:-3px). This wrapper shares
    the button's exact footprint but has no overflow rule, so the badge
    renders in full instead of getting cut off at the corner. */
-.av-button-wrap { position: relative; width: 68px; height: 68px; }
+.av-button-wrap { position: relative; width: 68px; height: 68px; pointer-events: none; }
+/* Only the button takes taps; the wrapper is a positioning box for the
+   mic badge and must stay transparent to pointer events, so that when
+   the button is hidden (panel open on mobile) nothing invisible is left
+   sitting over the panel's send button. */
 .av-button { position: relative; width: 100%; height: 100%; border-radius: 9999px; background: #000; border: none; padding: 0; overflow: hidden; cursor: pointer; animation: av-pulse-ring 2.6s ease-out infinite, av-attention-pop 1.1s ease-in-out 1; transition: transform .15s ease; }
 .av-button:hover { transform: scale(1.06); }
 
@@ -235,6 +239,7 @@ a=extmap-allow-mixed`)!==-1){let n=t.sdp.split(`
 .av-complete-action:hover { border-color:#7657a5; }
 .av-complete-action.av-cta { color:#fff;border:0;background:linear-gradient(135deg,#a855f7,#7c3aed);text-decoration:none;box-sizing:border-box; }
 .av-visually-hidden { position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important; }
+.av-button { pointer-events: auto; }
 .av-button:focus-visible,.av-primary:focus-visible,.av-secondary:focus-visible,.av-submit:focus-visible,.av-chat-send-btn:focus-visible,.av-complete-action:focus-visible { outline:3px solid rgba(192,132,252,.72);outline-offset:3px; }
 .av-branding { display: block; text-align: center; padding: 7px 0; font-size: 10px; font-weight: 600; letter-spacing: .02em; color: #6b6383; text-decoration: none; border-top: 1px solid #241f38; background: #140f1c; }
 .av-branding:hover { color: #a78bda; }
@@ -248,6 +253,17 @@ audio { display: none; }
   .av-proof-pill,:host([data-side="left"]) .av-proof-pill { left:auto;right:0;max-width:min(220px,calc(100vw - 32px)); }
   #av-call,#av-chat { height:min(500px,calc(100dvh - 110px)); }
   .av-welcome { padding:25px 22px 23px; }
+  /* The panel goes position:fixed here and fills the screen, but the
+     launcher stays pinned at right:16px/bottom:16px — i.e. ON TOP of the
+     panel's bottom-right corner, which is exactly where the send button
+     sits. Reported on a real phone: the send button looked overlapped by
+     the mic badge and would not respond, because the launcher's 68px box
+     was swallowing the tap. Collapse it entirely while open: hiding only
+     its children would leave the wrapper still sized and still eating
+     taps. Desktop is unaffected — there the panel opens ABOVE the
+     launcher (bottom:78px), so they never overlap. */
+  #av-button[aria-expanded="true"],
+  #av-button[aria-expanded="true"] ~ .av-mic-badge { display:none; }
 }
 @media (prefers-reduced-motion:reduce) {
   .av-button,.av-panel,.av-greeting,.av-status::before,.av-typing-dots span { animation:none!important; }
