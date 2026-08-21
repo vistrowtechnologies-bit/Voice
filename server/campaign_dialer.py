@@ -151,7 +151,18 @@ def _loop() -> None:
 
 
 def start_dialer() -> None:
-    """Idempotent — safe to call from FastAPI startup even if it fires twice."""
+    """Idempotent — safe to call from FastAPI startup even if it fires twice.
+
+    Set DISABLE_CAMPAIGN_DIALER=1 to keep it off entirely. That matters for
+    running this app locally: the idempotence below is per-process only, and
+    a local instance pointed at the production DATABASE_URL dials the same
+    running campaigns as the deployed service — i.e. real outbound calls to
+    real contacts, placed twice. Nothing about "it's just my laptop" stops
+    that, so local runs should set this flag.
+    """
+    if os.environ.get("DISABLE_CAMPAIGN_DIALER", "").strip() not in ("", "0", "false", "False"):
+        logger.info("campaign dialer disabled via DISABLE_CAMPAIGN_DIALER")
+        return
     global _started
     with _lock:
         if _started:
