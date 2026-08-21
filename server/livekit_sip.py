@@ -38,6 +38,37 @@ AUTH_USERNAME_SETTING = "lk_inbound_auth_username"
 AUTH_PASSWORD_SETTING = "lk_inbound_auth_password"
 
 
+def number_variants(number: str) -> list[str]:
+    """Both the bare-digit and +E.164 spelling of one number.
+
+    LiveKit matches an inbound INVITE to a trunk on the *exact* number
+    string — it does NOT treat "917713128715" and "+917713128715" as the
+    same number. Verified against LiveKit Cloud on 2026-08-21: creating two
+    inbound trunks, one per spelling of the same number, is accepted rather
+    than rejected as a conflict. Providers differ on which spelling lands in
+    the INVITE's Request-URI/To (EnableX's Asterisk sends the +E.164 form),
+    and registering only the DB's spelling is what produced a live
+    "404 No trunk found" on every inbound call. So register both and let
+    whichever arrives match.
+
+    Only the trunk needs this — SIP *dispatch rules* do normalize, and in
+    fact reject both spellings in one rule as a duplicate.
+    """
+    digits = (number or "").strip().lstrip("+")
+    if not digits:
+        return []
+    return [digits, f"+{digits}"]
+
+
+def _trunk_numbers() -> list[str]:
+    """Every registered number, in both spellings, de-duplicated."""
+    seen: dict[str, None] = {}
+    for row in calls_db.list_all_phone_numbers():
+        for variant in number_variants(row["number"]):
+            seen.setdefault(variant, None)
+    return list(seen)
+
+
 def ensure_inbound_auth() -> tuple[str, str]:
     """Username/password every SIP provider's INVITEs must carry to reach our
     shared inbound trunk (see ensure_inbound_trunk). One pair for the whole
@@ -105,7 +136,7 @@ async def ensure_inbound_trunk() -> str | None:
     others later) is handed the same one username/password pair and must
     stamp it on every INVITE it sends toward this trunk.
     """
-    numbers = [n["number"] for n in calls_db.list_all_phone_numbers()]
+    numbers = _trunk_numbers()
     trunk_id = calls_db.get_setting(TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
     auth_username, auth_password = ensure_inbound_auth()
 
@@ -181,8 +212,14 @@ async def _drop_rules_for_number(lkapi, trunk_id: str, number: str) -> None:
         existing = await lkapi.sip.list_dispatch_rule(ListSIPDispatchRuleRequest(trunk_ids=[trunk_id]))
     except Exception:
         return  # best-effort; the create below will still surface a hard error
+    # Compare on bare digits, not the raw string: a rule created from a
+    # differently-spelled copy of the same number ("+91..." vs "91...")
+    # is still the rule that will win at match time, since dispatch rules
+    # normalize. Comparing exact strings would leave it in place and the
+    # create below would then 400 on the duplicate.
+    wanted = set(number_variants(number))
     for item in existing.items:
-        if number in list(item.inbound_numbers):
+        if wanted & set(item.inbound_numbers):
             try:
                 await lkapi.sip.delete_dispatch_rule(
                     DeleteSIPDispatchRuleRequest(sip_dispatch_rule_id=item.sip_dispatch_rule_id)

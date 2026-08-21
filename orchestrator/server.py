@@ -416,6 +416,19 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     if state == "connected":
         account_id = _PENDING_ACCOUNT_BY_VOICE_ID.get(voice_id)
         if account_id is None:
+            # Normally means the call isn't ours (another app on the same
+            # EnableX account). But it also fires when the `incomingcall`
+            # event that populates this map never arrived at all — which is
+            # exactly what happened on 2026-08-21, when every inbound call
+            # went connected -> disconnected in silence. Returning quietly
+            # made a total inbound outage produce no error line anywhere,
+            # so it read as "no traffic" rather than "every call dropped".
+            # Log it so the next occurrence is visible in one grep.
+            logger.info(
+                "connected for unknown voice_id=%s (to=%s) — no pending call context, "
+                "not streaming; expected an earlier `incomingcall` event for this call",
+                voice_id, dialed_number,
+            )
             return {"ok": True}  # not one of ours
         wss_base = enablex.public_wss_host()
         if not wss_base:
