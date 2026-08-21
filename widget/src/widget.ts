@@ -166,7 +166,15 @@ const CSS = `
   80% { transform: scale(0.98); }
   100% { transform: scale(1); }
 }
-.av-button { position: relative; width: 68px; height: 68px; border-radius: 9999px; background: #000; border: none; padding: 0; overflow: hidden; cursor: pointer; animation: av-pulse-ring 2.6s ease-out infinite, av-attention-pop 1.1s ease-in-out 1; transition: transform .15s ease; }
+/* Wraps the button (and only the button) so the mic badge below can be a
+   sibling positioned against this box instead of a child of .av-button
+   itself — .av-button needs overflow:hidden to crop the avatar image/video
+   into a circle, which was also clipping the badge since it pokes slightly
+   outside the button's own edge (top:-3px, right:-3px). This wrapper shares
+   the button's exact footprint but has no overflow rule, so the badge
+   renders in full instead of getting cut off at the corner. */
+.av-button-wrap { position: relative; width: 68px; height: 68px; }
+.av-button { position: relative; width: 100%; height: 100%; border-radius: 9999px; background: #000; border: none; padding: 0; overflow: hidden; cursor: pointer; animation: av-pulse-ring 2.6s ease-out infinite, av-attention-pop 1.1s ease-in-out 1; transition: transform .15s ease; }
 .av-button:hover { transform: scale(1.06); }
 
 /* Signals "voice", not "chat", at a glance — the actual point of
@@ -481,12 +489,14 @@ function widgetHtml(label: string): string {
 
       <div id="av-proof-pill" class="av-proof-pill"><span id="av-proof-pill-text"></span></div>
 
-      <button id="av-button" class="av-button" aria-label="${label}" aria-haspopup="dialog" aria-expanded="false">
-        ${avatarTag()}
+      <div class="av-button-wrap">
+        <button id="av-button" class="av-button" aria-label="${label}" aria-haspopup="dialog" aria-expanded="false">
+          ${avatarTag()}
+        </button>
         <span class="av-mic-badge" aria-hidden="true">
           <span class="av-mic-bars"><span></span><span></span><span></span></span>
         </span>
-      </button>
+      </div>
     </div>
   `
 }
