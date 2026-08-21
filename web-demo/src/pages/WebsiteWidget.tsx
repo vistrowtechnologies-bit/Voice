@@ -246,27 +246,6 @@ export function WebsiteWidget() {
             </div>
           )}
         </SectionCard>
-
-        <Card>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 text-primary">
-              <Icon name="extension" className="text-[20px]" />
-            </div>
-            <div>
-              <p className="font-semibold">WordPress plugin</p>
-              <p className="text-xs text-text-muted">
-                Install it and paste in the site key above - that's the only thing it needs, no coding required.
-              </p>
-            </div>
-            <a
-              href={wordpressPluginUrl}
-              className="ml-auto flex items-center gap-1.5 rounded-lg border border-cyan/40 px-3 py-2 text-xs font-bold text-cyan hover:bg-cyan/10"
-            >
-              <Icon name="download" className="text-[15px]" />
-              Download plugin
-            </a>
-          </div>
-        </Card>
       </section>
     </DashboardLayout>
   )
