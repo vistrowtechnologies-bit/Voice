@@ -140,7 +140,8 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
 export const MODEL_OPTIONS = [
   { value: 'gpt-4.1', label: 'Vistrow Prime', tag: 'Best reasoning & quality' },
   { value: 'gpt-4o', label: 'Vistrow Pro', tag: 'Fast & natural' },
-  { value: 'gpt-4o-mini', label: 'Vistrow Standard', tag: 'Balanced · recommended' },
+  { value: 'gpt-4.1-mini', label: 'Vistrow Swift', tag: 'Fastest & most consistent · recommended' },
+  { value: 'gpt-4o-mini', label: 'Vistrow Standard', tag: 'Balanced' },
   { value: 'gemini-3.6-flash', label: 'Vistrow Flash', tag: 'Fast' },
   { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite', tag: 'Lowest cost' },
 ] as const
