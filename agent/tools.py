@@ -7,7 +7,7 @@ from livekit.agents import RunContext
 from livekit.agents.llm import function_tool
 
 import db
-from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES
+from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES, detect_reply_language
 
 logger = logging.getLogger("real-estate-tools")
 
@@ -477,6 +477,25 @@ async def end_call(context: RunContext) -> str:
     )
 
 
+def _last_user_utterance(context: RunContext) -> str | None:
+    """Most recent thing the caller actually said, as committed transcript
+    text — used by switch_reply_language to sanity-check a switch against
+    the same script-confidence bar detect_reply_language() already applies
+    to the automatic per-turn reply_language tracking in main.py. Without
+    this, the tool path had NO such check: the LLM is told to switch when
+    "the caller's own words are themselves in a different language", but it
+    is reading raw STT output, including a single mis-transcribed word, with
+    no way to tell that apart from a real switch."""
+    try:
+        items = context.session.history.items
+    except Exception:
+        return None
+    for item in reversed(items):
+        if getattr(item, "role", None) == "user" and getattr(item, "text_content", None):
+            return item.text_content
+    return None
+
+
 @function_tool
 async def switch_reply_language(context: RunContext, language: str) -> str:
     """Call this the INSTANT the caller asks you to switch what language you
@@ -506,6 +525,34 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
     agent = context.session.current_agent
     if getattr(agent, "_reply_language", None) == code:
         return f"Already replying in {language} — just continue."
+
+    # Confirmed live in production (2026-08-22): a caller saying a Hindi
+    # place name ("बानेर") got mis-transcribed by STT as ~4 characters of
+    # Bengali script. The LLM, following its own instruction to switch when
+    # "the caller's own words are themselves in a different language", called
+    # this tool with "Bengali" and it was honored outright — the agent then
+    # replied to a Hindi-speaking caller entirely in Bengali for the rest of
+    # the call. detect_reply_language() already declines exactly this input
+    # (too short/low-confidence a script majority) for the automatic
+    # per-turn path; this tool had no equivalent check at all. A confident
+    # detection of ANY language (not just a match on the requested one) is
+    # accepted as real evidence a switch or request genuinely happened —
+    # explicit requests are typically phrased in the CALLER'S CURRENT
+    # language ("please speak in English"), so requiring the detected script
+    # to equal the target would wrongly block those.
+    #
+    # Trade-off, accepted deliberately: a bare one-word request (just
+    # "Hindi") is below detect_reply_language's own two-word minimum and
+    # will be declined too. That degrades to the agent asking the caller to
+    # repeat themselves — safe, if mildly annoying — versus the alternative
+    # of derailing the whole call into the wrong language on STT noise.
+    if detect_reply_language(_last_user_utterance(context)) is None:
+        return (
+            f"Not switching to {language} — the caller's last message is too short or unclear "
+            "to confirm this is a real language switch or request (it may be a mis-transcribed "
+            "word). Stay in the current language, and if you're not sure what they want, ask "
+            "them to repeat or clarify which language they'd like."
+        )
     voice_unsupported = False
     if hasattr(agent, "_reply_language"):
         agent._reply_language = code
