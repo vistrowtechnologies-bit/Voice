@@ -88,9 +88,13 @@ export function Contact() {
                       body: JSON.stringify({
                         name: form.get('name'),
                         email: form.get('email'),
+                        phone: form.get('phone'),
                         company: form.get('company'),
                         team_size: form.get('team_size'),
+                        call_volume: form.get('call_volume'),
+                        timeline: form.get('timeline'),
                         use_case: form.get('use_case'),
+                        hp: form.get('hp'),
                       }),
                     })
                     if (!res.ok) throw new Error('Could not send your request')
@@ -104,23 +108,69 @@ export function Contact() {
                 }}
                 className="flex flex-col gap-4"
               >
+                {/* Honeypot - real visitors never see this field (off-screen, not
+                    display:none, since some bots specifically skip display:none
+                    inputs). tabIndex -1 and autoComplete off so it's never reachable
+                    by keyboard nav or autofill either. */}
+                <input
+                  type="text"
+                  name="hp"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden"
+                />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Full name" name="name" placeholder="Your name" required />
                   <Field label="Work email" name="email" type="email" placeholder="you@company.com" required />
                 </div>
-                <Field label="Company" name="company" placeholder="Company name" />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Phone number" name="phone" type="tel" placeholder="+91 98765 43210" />
+                  <Field label="Company" name="company" placeholder="Company name" />
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted">
+                      Team size
+                    </label>
+                    <select
+                      name="team_size"
+                      className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm text-text outline-none focus:border-primary"
+                    >
+                      <option>1–10</option>
+                      <option>11–50</option>
+                      <option>51–200</option>
+                      <option>200+</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted">
+                      Monthly call volume
+                    </label>
+                    <select
+                      name="call_volume"
+                      className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm text-text outline-none focus:border-primary"
+                    >
+                      <option>Under 500</option>
+                      <option>500–2,000</option>
+                      <option>2,000–10,000</option>
+                      <option>10,000+</option>
+                      <option>Not sure yet</option>
+                    </select>
+                  </div>
+                </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-text-muted">
-                    Team size
+                    When do you want to go live?
                   </label>
                   <select
-                    name="team_size"
+                    name="timeline"
                     className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm text-text outline-none focus:border-primary"
                   >
-                    <option>1–10</option>
-                    <option>11–50</option>
-                    <option>51–200</option>
-                    <option>200+</option>
+                    <option>Immediately</option>
+                    <option>Within 30 days</option>
+                    <option>1–3 months</option>
+                    <option>Just researching</option>
                   </select>
                 </div>
                 <div>

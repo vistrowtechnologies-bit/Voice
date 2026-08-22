@@ -919,9 +919,17 @@ def auth_login(req: LoginRequest, response: Response) -> dict:
 class ContactRequest(BaseModel):
     name: str
     email: str
+    phone: str = ""
     company: str = ""
     team_size: str = ""
+    call_volume: str = ""
+    timeline: str = ""
     use_case: str = ""
+    # Honeypot: a field real visitors never see or fill (hidden off-screen in
+    # the form, not just display:none — some bots skip display:none fields).
+    # Any value here means a bot filled every input blindly. Silently accept
+    # rather than 400, so a bot never learns which signal gave it away.
+    hp: str = ""
 
 
 @app.post("/public/contact")
@@ -931,18 +939,28 @@ def public_contact(req: ContactRequest) -> dict:
     prospective customer reaching the Vistrow Voice team directly. Notifies
     the team by email rather than writing to any per-tenant table (this isn't
     a lead for an account's own CRM, it's a lead for Vistrow itself)."""
+    if req.hp.strip():
+        return {"ok": True}
     name = req.name.strip()
     email = req.email.strip().lower()
     if not name or "@" not in email or "." not in email.split("@")[-1]:
         raise HTTPException(400, "Enter a valid name and email address")
     notify_to = os.environ.get("SALES_NOTIFY_EMAIL") or "vistrowai@gmail.com"
+    # Call volume and timeline are the two fields that actually let sales
+    # prioritize a queue of inbound leads (a 10k-calls/month "start
+    # immediately" lead and a 50-calls/month "just researching" one need very
+    # different follow-up speed) - phone number lets sales call back directly
+    # for a calling product, rather than starting the relationship over email.
     details = "".join(
         f"<p style='margin:4px 0;'><strong>{label}:</strong> {value}</p>"
         for label, value in [
             ("Name", name),
             ("Email", email),
+            ("Phone", req.phone.strip() or "-"),
             ("Company", req.company.strip() or "-"),
             ("Team size", req.team_size.strip() or "-"),
+            ("Monthly call volume", req.call_volume.strip() or "-"),
+            ("Timeline", req.timeline.strip() or "-"),
             ("Use case", req.use_case.strip() or "-"),
         ]
     )
