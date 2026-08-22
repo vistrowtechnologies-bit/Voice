@@ -14,7 +14,7 @@ import {
 import {
   EMOTION_INTENSITIES,
   LANGUAGES,
-  MODEL_OPTIONS,
+  modelOptionsFor,
   TONES,
   voiceLabel,
   voicePickerGroups,
@@ -212,7 +212,7 @@ function AgentEditorForm({
           </Field>
           <Field label="Model">
             <select value={form.model} onChange={(e) => set('model', e.target.value)} className={inputCls}>
-              {MODEL_OPTIONS.map((m) => (
+              {modelOptionsFor(isPlatformOwner).map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label} - {m.tag}
                 </option>

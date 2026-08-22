@@ -1975,12 +1975,27 @@ def list_agents(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_agents(user["account_id"])
 
 
+# Models restricted to the Vistrow admin account. Groq is the fastest
+# time-to-first-token option available but its model list is open-weight
+# only and unevaluated for Hindi/Marathi quality on real calls — speed was
+# measured, quality was not. Keep it owner-only until that is checked, the
+# same way preview voices are gated below.
+_ADMIN_ONLY_MODEL_PREFIXES = ("groq/",)
+
+
+def _guard_admin_only_model(data: dict | None, account_id: int) -> None:
+    model = str((data or {}).get("model") or "")
+    if model.startswith(_ADMIN_ONLY_MODEL_PREFIXES) and not calls_db.is_platform_owner(account_id):
+        raise HTTPException(400, "That model is available only to the Vistrow admin account.")
+
+
 @app.post("/agents")
 def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     requested_voice = str((data or {}).get("voice") or "")
     entry = voice_catalog.get_voice(requested_voice) if requested_voice else None
     if entry and entry.get("preview") and not calls_db.is_platform_owner(user["account_id"]):
         raise HTTPException(400, "That preview voice is available only to the Vistrow admin account.")
+    _guard_admin_only_model(data, user["account_id"])
     return calls_db.create_agent(data, user["account_id"])
 
 
@@ -1990,6 +2005,7 @@ def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(cur
     entry = voice_catalog.get_voice(requested_voice) if requested_voice else None
     if entry and entry.get("preview") and not calls_db.is_platform_owner(user["account_id"]):
         raise HTTPException(400, "That preview voice is available only to the Vistrow admin account.")
+    _guard_admin_only_model(data, user["account_id"])
     if ("isPlatformDemo" in data or "is_platform_demo" in data) and not calls_db.is_platform_owner(
         user["account_id"]
     ):

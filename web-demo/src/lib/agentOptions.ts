@@ -145,7 +145,25 @@ export const MODEL_OPTIONS = [
   { value: 'gemini-3.6-flash', label: 'Vistrow Flash', tag: 'Fast' },
   { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite', tag: 'Lowest cost' },
 ] as const
-export const modelLabel = (value: string) => MODEL_OPTIONS.find((m) => m.value === value)?.label ?? value
+// Groq runs open-weight models on its own LPU hardware — the fastest
+// time-to-first-token available (~120-180ms published, vs ~900ms for
+// gpt-4.1-mini at our prompt size). Admin-only for now: the speed is
+// measured, the Hindi/Marathi quality is not. server/token_api.py enforces
+// the same restriction, so hiding these here is UX, not the security
+// boundary. Same treatment as preview voices.
+export const ADMIN_ONLY_MODELS = [
+  { value: 'groq/openai/gpt-oss-20b', label: 'Groq GPT-OSS 20B', tag: 'Admin only · testing · needs paid Groq tier' },
+  { value: 'groq/openai/gpt-oss-120b', label: 'Groq GPT-OSS 120B', tag: 'Admin only · testing · needs paid Groq tier' },
+  { value: 'groq/qwen/qwen3.6-27b', label: 'Groq Qwen3.6 27B', tag: 'Admin only · testing · needs paid Groq tier' },
+] as const
+
+export const modelOptionsFor = (isPlatformOwner: boolean) =>
+  isPlatformOwner ? [...MODEL_OPTIONS, ...ADMIN_ONLY_MODELS] : MODEL_OPTIONS
+
+export const modelLabel = (value: string) =>
+  MODEL_OPTIONS.find((m) => m.value === value)?.label ??
+  ADMIN_ONLY_MODELS.find((m) => m.value === value)?.label ??
+  value
 // Presets for Sarvam bulbul:v3's own pace/temperature/pitch - controls how
 // the voice is actually delivered (speed + prosodic variation), separate
 // from the LLM's wording. Must mirror agent/main.py's TONE_PRESETS exactly.

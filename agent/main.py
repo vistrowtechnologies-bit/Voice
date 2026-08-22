@@ -431,6 +431,23 @@ def _build_llm(model: str, *, max_output_tokens: int = 220):
             thinking_config={"thinking_level": "MINIMAL"},
             max_output_tokens=max_output_tokens,
         )
+    if model.startswith("groq/"):
+        # Groq runs open-weight models on its own LPU hardware and is the
+        # fastest time-to-first-token available (~120-180ms in public
+        # benchmarks vs ~900ms for gpt-4.1-mini at our prompt size), which is
+        # why it is worth having even though the model list is narrower. Its
+        # API is OpenAI-compatible, so the same plugin works with a base_url
+        # swap — no separate client. Admin-gated in server/token_api.py until
+        # it has been evaluated for Hindi/Marathi quality, not just speed.
+        api_key = os.environ.get("GROQ_API_KEY")
+        if not api_key:
+            raise RuntimeError(f"{model} is selected, but GROQ_API_KEY is not configured.")
+        return openai.LLM(
+            model=model.split("/", 1)[1],
+            api_key=api_key,
+            base_url="https://api.groq.com/openai/v1",
+            max_completion_tokens=max_output_tokens,
+        )
     # Bound spoken replies and give OpenAI a stable cache-routing key.  The
     # exact prompt prefix still has to match before it can be reused, so this
     # does not mix one tenant's instructions or KB with another tenant's.
