@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchAgents } from '../lib/api'
-import { apiCompleteOnboarding, apiUpdateAccount, useAuth } from '../lib/auth'
+import { apiAcceptConsent, apiCompleteOnboarding, apiUpdateAccount, useAuth } from '../lib/auth'
 import type { AgentConfig } from '../lib/types'
 import { BrowserTestModal } from './AgentTestCall'
 import { Icon } from './Icon'
 
-type Step = 'welcome' | 'try-agent' | 'next-steps'
-const STEPS: Step[] = ['welcome', 'try-agent', 'next-steps']
+type Step = 'consent' | 'welcome' | 'try-agent' | 'next-steps'
+const ALL_STEPS: Step[] = ['consent', 'welcome', 'try-agent', 'next-steps']
 
 const NEXT_STEPS = [
   { to: '/dashboard/agents', icon: 'smart_toy', label: 'Customize your agent', hint: 'Persona, voice, language, and knowledge.' },
@@ -21,11 +21,35 @@ const NEXT_STEPS = [
  * so it never shows again. */
 export function OnboardingModal() {
   const { user, setUser } = useAuth()
-  const [step, setStep] = useState<Step>('welcome')
+  // Skip the consent step entirely once accepted, rather than showing and
+  // auto-advancing past it - a returning user re-triggering this modal
+  // (e.g. the dismiss-call-failed fallback in finish() below) should never
+  // see a "consent" screen with nothing left to consent to.
+  const needsConsent = !!user && !user.consent.accepted
+  const STEPS = needsConsent ? ALL_STEPS : ALL_STEPS.filter((s) => s !== 'consent')
+  const [step, setStep] = useState<Step>(needsConsent ? 'consent' : 'welcome')
+  const [consentChecked, setConsentChecked] = useState(false)
   const [workspaceName, setWorkspaceName] = useState(user?.accountName ?? '')
   const [saving, setSaving] = useState(false)
   const [agent, setAgent] = useState<AgentConfig | null>(null)
   const [showTestCall, setShowTestCall] = useState(false)
+
+  const finishConsent = async () => {
+    if (!user || !consentChecked) return
+    setSaving(true)
+    try {
+      const { user: updated } = await apiAcceptConsent(user.consent.currentVersion)
+      setUser(updated)
+      setStep('welcome')
+    } catch {
+      // A version mismatch (409) or transient failure shouldn't strand the
+      // user with no way forward - let them retry the checkbox rather than
+      // silently skip consent (unlike the best-effort fallbacks below, this
+      // one is not optional, so no catch-and-continue here).
+    } finally {
+      setSaving(false)
+    }
+  }
 
   useEffect(() => {
     fetchAgents()
@@ -78,6 +102,44 @@ export function OnboardingModal() {
             />
           ))}
         </div>
+
+        {step === 'consent' && (
+          <div className="flex flex-col gap-4">
+            <div>
+              <h2 className="font-display text-xl font-semibold">Before you start</h2>
+              <p className="mt-1 text-sm text-text-muted">
+                Quick one - please review and accept to continue.
+              </p>
+            </div>
+            <label className="flex items-start gap-2.5 rounded-lg border border-border bg-surface-high/40 p-3 text-xs leading-relaxed text-text-muted">
+              <input
+                type="checkbox"
+                checked={consentChecked}
+                onChange={(e) => setConsentChecked(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                I agree to the{' '}
+                <Link to="/terms" target="_blank" className="font-semibold text-primary hover:underline">
+                  Terms of Service
+                </Link>{' '}
+                and{' '}
+                <Link to="/privacy" target="_blank" className="font-semibold text-primary hover:underline">
+                  Privacy Policy
+                </Link>
+                , including that calls placed or received through this platform may be transcribed and
+                recorded to provide and improve the service.
+              </span>
+            </label>
+            <button
+              onClick={finishConsent}
+              disabled={saving || !consentChecked}
+              className="mt-1 rounded-lg bg-primary py-2.5 text-sm font-bold text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Agree and continue'}
+            </button>
+          </div>
+        )}
 
         {step === 'welcome' && (
           <div className="flex flex-col gap-4">

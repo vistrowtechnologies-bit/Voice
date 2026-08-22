@@ -10,6 +10,7 @@ export interface AuthUser {
   plan: string
   isPlatformOwner: boolean
   onboarded: boolean
+  consent: { accepted: boolean; version: string; currentVersion: string }
   tourCompleted: boolean
   impersonating: boolean
   authProvider: string
@@ -129,6 +130,8 @@ export const apiDownloadDataExport = async () => {
 }
 export const apiRequestAccountDeletion = () => authFetch<{ ok: boolean }>('/profile/request-account-deletion', {})
 export const apiUpdateAccount = (name: string) => authFetch<{ user: AuthUser }>('/account', { name }, 'PATCH')
+export const apiAcceptConsent = (version: string) =>
+  authFetch<{ user: AuthUser }>('/onboarding/consent', { version })
 export const apiCompleteOnboarding = () => authFetch<{ user: AuthUser }>('/onboarding/complete', {})
 export const apiCompleteTour = () => authFetch<{ user: AuthUser }>('/tour/complete', {})
 

@@ -902,6 +902,19 @@ def init_tables() -> None:
             # Self-reported at signup ("How did you hear about us?") — pure
             # marketing-attribution data, never read by app logic.
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS referral_source TEXT DEFAULT ''")
+            # Evidence of Terms/Privacy consent at signup — one combined
+            # checkbox (industry-standard: nobody reads five separate policy
+            # boxes at signup), but DPDP requires being able to show WHO
+            # consented, WHEN, and to WHICH version if it's ever challenged.
+            # consent_version is the value the frontend passes (bump it when
+            # the Terms/Privacy actually change materially — a version bump
+            # does NOT retroactively un-consent existing accounts, it just
+            # means the current text differs from what they saw).
+            # No backfill for pre-existing accounts: those are all internal
+            # test accounts per explicit product decision, not real tenants.
+            conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_accepted_at TEXT")
+            conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_version TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_user_id INTEGER")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TEXT")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'password'")
             # Existing accounts predate verified-email onboarding and must
@@ -1454,6 +1467,45 @@ def record_login(user_id: int, provider: str | None = None) -> None:
             )
     except Exception:
         pass
+    finally:
+        conn.close()
+
+
+CONSENT_VERSION = "2026-08-22"
+
+
+def record_consent(account_id: int, user_id: int) -> None:
+    """Records that this account accepted the Terms/Privacy bundle shown at
+    signup — a single combined checkbox, not five separate ones, matching
+    how every major consumer product actually does this (nobody reads five
+    boxes). What makes that defensible under DPDP is being able to show WHO
+    accepted, WHEN, and to WHICH version, so this writes all three rather
+    than just a boolean. Idempotent — a re-submit (e.g. double-click) does
+    not overwrite the original timestamp/user, since that would destroy the
+    evidence of the FIRST acceptance."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE accounts SET consent_accepted_at = {_NOW}, consent_version = ?, "
+                "consent_user_id = ? WHERE id = ? AND consent_accepted_at IS NULL",
+                (CONSENT_VERSION, user_id, account_id),
+            )
+    finally:
+        conn.close()
+
+
+def get_consent(account_id: int) -> dict:
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT consent_accepted_at, consent_version FROM accounts WHERE id = ?", (account_id,)
+        ).fetchone()
+        return {
+            "accepted": bool(row and row["consent_accepted_at"]),
+            "version": (row["consent_version"] if row else "") or "",
+            "currentVersion": CONSENT_VERSION,
+        }
     finally:
         conn.close()
 

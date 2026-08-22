@@ -334,6 +334,7 @@ def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
         "plan": user["account_plan"],
         "isPlatformOwner": bool(user["is_platform_owner"]),
         "onboarded": user["onboarded_at"] is not None,
+        "consent": calls_db.get_consent(user["account_id"]),
         "tourCompleted": user["tour_completed_at"] is not None,
         "impersonating": False,
         "authProvider": user.get("auth_provider") or "password",
@@ -1337,6 +1338,20 @@ def request_account_deletion(user: dict = Depends(current_user)) -> dict:
     calls_db.record_security_event(user["user_id"], "account_deletion_requested")
     request_row = calls_db.create_privacy_request(user["user_id"], user["account_id"], "deletion")
     return {"ok": True, "requestId": request_row["id"], "status": request_row["status"]}
+
+
+@app.post("/onboarding/consent")
+def accept_consent(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    """One combined Terms/Privacy acceptance shown at signup, before the rest
+    of onboarding — matches how consumer products actually do this (nobody
+    reads five separate consent boxes), but the frontend must send back the
+    exact version string it displayed, so a stale client can never silently
+    record acceptance of text the user didn't see."""
+    version = str((data or {}).get("version") or "")
+    if version != calls_db.CONSENT_VERSION:
+        raise HTTPException(409, "This consent version is out of date - please refresh and try again.")
+    calls_db.record_consent(user["account_id"], user["user_id"])
+    return {"user": _me_payload(user["user_id"])}
 
 
 @app.post("/onboarding/complete")
