@@ -5731,12 +5731,50 @@ def purge_expired_calls(account_id: int) -> int:
             cur = conn.execute(
                 "DELETE FROM calls WHERE account_id = ? "
                 "AND started_at::timestamptz < now() - (? || ' days')::interval "
-                "RETURNING id",
+                "RETURNING id, recording_key",
                 (account_id, days),
             )
-            return len(cur.fetchall())
+            rows = cur.fetchall()
     finally:
         conn.close()
+
+    # Delete the audio too, not just the row. Purging the row alone left the
+    # recording sitting in B2 forever AND unreachable through the app (the
+    # only pointer to it was the row we just deleted) — the opposite of the
+    # data-minimisation this function exists for. Best-effort and outside the
+    # DB transaction: a storage failure must not roll back or block the purge,
+    # it just leaves an object to be swept later.
+    keys = [r["recording_key"] for r in rows if _row_get(r, "recording_key")]
+    if keys:
+        _delete_recording_objects(keys)
+    return len(rows)
+
+
+def _delete_recording_objects(keys: list[str]) -> None:
+    """Remove recording objects from B2. Never raises — see purge_expired_calls."""
+    endpoint = os.environ.get("B2_ENDPOINT_URL")
+    key_id = os.environ.get("B2_KEY_ID")
+    app_key = os.environ.get("B2_APPLICATION_KEY")
+    bucket = os.environ.get("B2_BUCKET_NAME")
+    region = os.environ.get("B2_REGION")
+    if not (endpoint and key_id and app_key and bucket and region):
+        logger.warning("retention purge: B2 not configured, %d recording(s) left in storage", len(keys))
+        return
+    try:
+        import boto3
+
+        client = boto3.client(
+            "s3", endpoint_url=endpoint, aws_access_key_id=key_id,
+            aws_secret_access_key=app_key, region_name=region,
+        )
+        for key in keys:
+            try:
+                client.delete_object(Bucket=bucket, Key=key)
+            except Exception:
+                logger.exception("retention purge: could not delete recording %s", key)
+    except Exception:
+        logger.exception("retention purge: could not reach B2 to delete %d recording(s)", len(keys))
+
 
 
 def enablex_credentials(account_id: int) -> tuple[str | None, str | None]:

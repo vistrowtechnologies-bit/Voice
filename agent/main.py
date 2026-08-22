@@ -2403,12 +2403,25 @@ async def entrypoint(ctx: JobContext) -> None:
     # Started only after the session (and therefore both the caller's and
     # the agent's audio tracks) is actually up — see recording.py for why
     # this taps tracks directly instead of LiveKit's own record=True/Egress.
-    try:
-        recorder = recording.CallRecorder(ctx.room)
-        recorder.start()
-        recorder_holder["recorder"] = recorder
-    except Exception:
-        logger.exception("failed to start call recorder for room %s", ctx.room.name)
+    # Honour the tenant's record_calls setting. Until now the agent recorded
+    # unconditionally: the dashboard toggle existed, defaulted to False, and
+    # nothing read it — 357 recordings were stored on this account under a
+    # False flag. Reads through the prewarmed cache, so this costs nothing on
+    # the call path, and get_compliance_config fails closed (recording OFF) so
+    # a DB problem can never become the reason a call was recorded.
+    _compliance = db.get_compliance_config(cfg.get("account_id"))
+    if not _compliance.get("record_calls"):
+        logger.info(
+            "recording disabled by compliance settings for account %s (room=%s)",
+            cfg.get("account_id"), ctx.room.name,
+        )
+    else:
+        try:
+            recorder = recording.CallRecorder(ctx.room)
+            recorder.start()
+            recorder_holder["recorder"] = recorder
+        except Exception:
+            logger.exception("failed to start call recorder for room %s", ctx.room.name)
 
 
 def _prewarm(proc: JobProcess) -> None:

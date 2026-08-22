@@ -350,6 +350,7 @@ const CSS = `
 .av-visually-hidden { position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important; }
 .av-button { pointer-events: auto; }
 .av-button:focus-visible,.av-primary:focus-visible,.av-secondary:focus-visible,.av-submit:focus-visible,.av-chat-send-btn:focus-visible,.av-complete-action:focus-visible { outline:3px solid rgba(192,132,252,.72);outline-offset:3px; }
+.av-notice { display:block; max-width:280px; margin:2px auto 0; color:#7d7694; font-size:10.5px; line-height:1.45; text-align:center; }
 .av-branding { display: block; text-align: center; padding: 7px 0; font-size: 10px; font-weight: 600; letter-spacing: .02em; color: #6b6383; text-decoration: none; border-top: 1px solid #241f38; background: #140f1c; }
 .av-branding:hover { color: #a78bda; }
 audio { display: none; }
@@ -425,7 +426,19 @@ function widgetHtml(label: string): string {
             <button id="av-choose-voice" class="av-primary">${MIC_ICON} Start a voice conversation</button>
             <button id="av-choose-chat" class="av-secondary">${CHAT_ICON} Chat instead</button>
           </div>
-          <span class="av-trust">🔒 Your conversation is private</span>
+          <span class="av-trust">🔒 Secure connection</span>
+          <!-- Recording/processing notice. Shown before the conversation starts,
+               deliberately as small on-screen text rather than something the
+               agent speaks. Wording covers both cases on purpose: transcripts
+               are always stored, audio recording depends on the tenant's
+               record_calls setting, so "recorded" is hedged and "transcribed"
+               is not. The previous copy here claimed the conversation was
+               "private", which sat badly next to storing a transcript (and,
+               when enabled, an audio recording) of it. -->
+          <span class="av-notice">
+            This conversation is transcribed, and may be recorded, to provide and
+            improve this service. Do not share passwords or payment details.
+          </span>
         </div>
 
         <div id="av-form" class="av-form" style="display:none;">

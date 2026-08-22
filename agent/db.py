@@ -342,6 +342,12 @@ def prewarm_caches() -> None:
         except Exception:
             pass
 
+    for account_id in {c.get("account_id") for c in configs}:
+        try:
+            get_compliance_config(account_id)
+        except Exception:
+            pass
+
     # Registered inbound numbers. agent/main.py resolves the owning tenant
     # from the dialled number on every inbound call, before the greeting, so
     # leaving this uncached would put a fresh-connection query back on the
@@ -358,6 +364,52 @@ def prewarm_caches() -> None:
         d = dict(row)
         number = d.pop("number")
         _phone_number_cache[_normalize_sip_number(number)] = (now, d)
+
+
+# Per-tenant compliance config (server/calls_db.py owns the settings row under
+# "compliance.config"). Cached and prewarmed like the others because it is read
+# on the call path: an uncached read here would put a fresh connection round
+# trip in front of the caller, which is what the prewarm work removed.
+_compliance_cache: dict[int | None, tuple[float, dict]] = {}
+_COMPLIANCE_CACHE_TTL_S = 600.0
+
+# Mirrors _COMPLIANCE_DEFAULTS in server/calls_db.py. Kept conservative: if the
+# row is missing or unreadable we must NOT invent permission to record.
+_COMPLIANCE_FALLBACK = {"record_calls": False, "require_consent": False, "retention_days": 0}
+
+
+def get_compliance_config(account_id: int | None) -> dict:
+    """Compliance settings for this tenant, defaulting to the safe values.
+
+    Exists because the agent recorded every call unconditionally while the
+    dashboard's record_calls toggle sat at False — the control existed and
+    nothing honoured it (357 recordings were stored under a False flag).
+    A DB failure returns the fallback, i.e. recording OFF, so an outage can
+    never be the reason a call is recorded without the operator enabling it.
+    """
+    cached = _compliance_cache.get(account_id)
+    now = time.monotonic()
+    if cached is not None and now - cached[0] < _COMPLIANCE_CACHE_TTL_S:
+        return cached[1]
+    conn = dbconn.connect()
+    try:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = 'compliance.config' AND account_id = ?",
+            (account_id,),
+        ).fetchone()
+        cfg = dict(_COMPLIANCE_FALLBACK)
+        if row and row["value"]:
+            try:
+                cfg.update(json.loads(row["value"]) or {})
+            except ValueError:
+                pass
+    except psycopg.Error:
+        logger.exception("could not read compliance config for account %s", account_id)
+        return dict(_COMPLIANCE_FALLBACK)
+    finally:
+        conn.close()
+    _compliance_cache[account_id] = (now, cfg)
+    return cfg
 
 
 def _normalize_sip_number(number: str) -> str:
