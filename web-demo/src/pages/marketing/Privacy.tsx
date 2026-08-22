@@ -9,7 +9,7 @@ export function Privacy() {
     <LegalLayout
       eyebrow="Legal"
       title="Privacy Policy"
-      updated="10 August 2026"
+      updated="22 August 2026"
       path="/privacy"
       description="How Vistrow Voice collects, uses, shares, retains, and protects account, call, and integration data."
       intro={`${BRAND.name} ("we", "us", "${BRAND.short}") builds AI voice agents that businesses use to answer and place phone calls. This policy explains what we collect, why, and the choices you have - whether you're a business running ${BRAND.name} or someone who spoke with an AI agent powered by it.`}
@@ -80,14 +80,36 @@ export function Privacy() {
         <ul>
           <li><b>Speech &amp; language models</b> - OpenAI, Google Cloud/Google AI, Sarvam AI, and ElevenLabs, used for conversation intelligence, speech recognition, and voice generation according to the agent configuration.</li>
           <li><b>Call infrastructure</b> - LiveKit (real-time voice transport) and EnableX (telephony/SIP).</li>
-          <li><b>Hosting &amp; database</b> - Railway (application servers, Postgres database) and Vercel (web app).</li>
+          <li><b>Hosting &amp; database</b> - Railway (application servers, Postgres database, hosted in the United States) and Vercel (web app).</li>
+          <li><b>Call recording storage</b> - Backblaze B2 (audio recordings, hosted in the United States).</li>
           <li><b>Email delivery</b> - Resend, to send account and notification emails.</li>
           <li><b>Integrations you connect</b> - Google Calendar, Slack, WhatsApp providers, or a CRM you configure - only the data needed for that specific integration to work, and only while it's connected.</li>
         </ul>
         <p>Each of these processes data under its own privacy commitments; we choose providers that meet industry-standard security practices.</p>
       </LegalSection>
 
-      <LegalSection title="6. Data retention & deletion">
+      <LegalSection title="6. Where your data is stored & international transfers">
+        <p>
+          {BRAND.name} is built and operated for Indian businesses, but some of the service providers
+          listed in Section 5 store or process data on servers located in the United States - currently
+          our application database and hosting (Railway) and call recording storage (Backblaze B2). This
+          means account data, call transcripts, and call recordings may be transferred to, and stored
+          in, the United States as part of running the service.
+        </p>
+        <p>
+          The Digital Personal Data Protection Act, 2023 (DPDP Act) permits this kind of transfer unless
+          the destination country is specifically restricted by the Indian government, which the United
+          States currently is not. We require every processor we use to handle data under a contract
+          committing them to appropriate security and confidentiality obligations, consistent with the
+          protections this policy describes, regardless of where they're located.
+        </p>
+        <p>
+          We may add or change hosting providers or regions over time; this section will be updated to
+          reflect where data is actually stored, and material changes will be notified per Section 12.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="7. Data retention & deletion">
         <p>
           Call recordings and transcripts are kept until a Customer configures a retention period in
           their Compliance settings (default: indefinite, but a Customer can set an automatic
@@ -103,27 +125,27 @@ export function Privacy() {
         </p>
       </LegalSection>
 
-      <LegalSection title="7. Your rights">
+      <LegalSection title="8. Your rights">
         <p>Depending on where you're located, you may have the right to access, correct, export, or delete your personal data, and to object to certain processing. Indian residents have these rights under the Digital Personal Data Protection Act, 2023; residents of other regions may have equivalent rights under local law (e.g. GDPR). To exercise any of these, contact us at <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>
       </LegalSection>
 
-      <LegalSection title="8. Cookies & similar technologies">
+      <LegalSection title="9. Cookies & similar technologies">
         <p>We use a single essential, httpOnly session cookie to keep you signed in - no third-party advertising or tracking cookies. Disabling this cookie will sign you out.</p>
       </LegalSection>
 
-      <LegalSection title="9. Security">
+      <LegalSection title="10. Security">
         <p>Passwords are hashed, not stored in plain text. Session tokens are signed and httpOnly. Data in transit is encrypted (HTTPS/TLS). No system is perfectly secure, but we take reasonable, industry-standard measures to protect your data and will notify affected Customers of any breach as required by law.</p>
       </LegalSection>
 
-      <LegalSection title="10. Children's privacy">
+      <LegalSection title="11. Children's privacy">
         <p>{BRAND.name} is a business tool and is not directed at children. We do not knowingly collect personal data from anyone under 18.</p>
       </LegalSection>
 
-      <LegalSection title="11. Changes to this policy">
+      <LegalSection title="12. Changes to this policy">
         <p>We'll update the date at the top of this page when we make changes, and for material changes we'll notify active Customers by email.</p>
       </LegalSection>
 
-      <LegalSection title="12. Contact us">
+      <LegalSection title="13. Contact us">
         <p>
           {BRAND.name} (operated by Vistrow Technologies). Questions or requests about this policy:{' '}
           <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. See also our{' '}
