@@ -5,6 +5,7 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
 import { CONTACT_PHONE } from '../../lib/marketingContent'
+import { DemoOrbCard } from '../../components/DemoOrbCard'
 
 const BENEFITS = [
   'A live walkthrough tuned to your use case',
@@ -63,18 +64,30 @@ export function Contact() {
             narrowed to whatever the fields happened to measure instead of
             filling its half of the grid. */}
         <div className="w-full lg:pl-6">
-          <div className="w-full rounded-3xl border border-border bg-surface p-7 sm:p-9">
-            {sent ? (
-              <div className="flex flex-col items-center py-16 text-center">
-                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success/15 text-success">
-                  <Icon name="check" className="text-[28px]" />
+          {sent ? (
+            // DemoOrbCard supplies its own card chrome (rounded corners,
+            // border, glow) - it isn't nested inside the form's wrapper div,
+            // it replaces it. A static "we'll be in touch" card left a
+            // visitor doing nothing for however long email takes; a voice
+            // product's own best pitch is letting them actually hear Artha
+            // right now instead of just reading that someone will call.
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center gap-3 rounded-2xl border border-success/30 bg-success/5 px-5 py-3.5 text-left">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
+                  <Icon name="check" className="text-[18px]" />
                 </span>
-                <h2 className="mt-5 font-display text-2xl font-semibold">Thanks - we’ll be in touch.</h2>
-                <p className="mt-2 max-w-xs text-sm text-text-muted">
-                  Our team will reach out shortly to set up your walkthrough.
-                </p>
+                <div>
+                  <p className="text-sm font-semibold">Thanks - we’ll be in touch.</p>
+                  <p className="text-xs text-text-muted">Our team will reach out shortly to set up your walkthrough.</p>
+                </div>
               </div>
-            ) : (
+              <p className="text-center text-sm font-semibold text-text-muted">
+                While you wait, talk to Artha yourself -
+              </p>
+              <DemoOrbCard />
+            </div>
+          ) : (
+            <div className="w-full rounded-3xl border border-border bg-surface p-7 sm:p-9">
               <form
                 onSubmit={async (e) => {
                   e.preventDefault()
@@ -193,8 +206,8 @@ export function Contact() {
                   {busy ? 'Sending…' : 'Book my demo'}
                 </button>
               </form>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </section>
     </MarketingLayout>
