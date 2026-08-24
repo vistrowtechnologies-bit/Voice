@@ -1,0 +1,54 @@
+---
+title: "Knowledge Base"
+description: "Create knowledge bases and add source content."
+---
+
+## List knowledge bases
+
+```bash
+curl https://app.vistrowvoice.com/api/knowledge-bases \
+  -H "X-Api-Key: YOUR_API_KEY"
+```
+
+`GET /knowledge-bases`
+
+## Create a knowledge base
+
+```bash
+curl -X POST https://app.vistrowvoice.com/api/knowledge-bases \
+  -H "X-Api-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Pricing FAQ"}'
+```
+
+`POST /knowledge-bases` — `name` defaults to `"Untitled"` if omitted.
+
+## Add a source
+
+```bash
+curl -X POST https://app.vistrowvoice.com/api/knowledge-bases/KB_ID/sources \
+  -H "X-Api-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Pricing sheet",
+    "content": "Starter plan: ...",
+    "type": "text"
+  }'
+```
+
+`POST /knowledge-bases/{kbId}/sources`
+
+| Field | Type | Default |
+|---|---|---|
+| `name` | string | `"Untitled"` |
+| `content` | string | `""` |
+| `type` | string | `"text"` |
+
+## Delete a knowledge base
+
+```bash
+curl -X DELETE https://app.vistrowvoice.com/api/knowledge-bases/KB_ID \
+  -H "X-Api-Key: YOUR_API_KEY"
+```
+
+`DELETE /knowledge-bases/{kbId}`

@@ -1,0 +1,33 @@
+---
+title: "Introduction"
+description: "Base URL, authentication, and conventions for the Vistrow Voice API."
+---
+
+The Vistrow Voice API is the same REST API the dashboard itself calls — every endpoint the dashboard uses, you can call directly.
+
+## Base URL
+
+```
+https://app.vistrowvoice.com/api
+```
+
+## Authentication
+
+Every request needs an `X-Api-Key` header. See [Authentication](/essentials/authentication) for how to generate one.
+
+```bash
+curl https://app.vistrowvoice.com/api/agents \
+  -H "X-Api-Key: YOUR_API_KEY"
+```
+
+## Conventions
+
+- All request and response bodies are JSON.
+- Timestamps are ISO 8601 strings.
+- List endpoints return a plain JSON array — there's no pagination envelope; use each endpoint's own `limit`/filter query parameters to bound results.
+- Fields on a resource are camelCase (e.g. `durationSeconds`, `hasRecording`), even where the underlying data is stored differently.
+- A key only ever sees the account that created it — there is no cross-account access, by key or otherwise.
+
+<Card title="Authentication" icon="key" href="/essentials/authentication">
+  Generate a key and see request examples in cURL, Node, and Python.
+</Card>

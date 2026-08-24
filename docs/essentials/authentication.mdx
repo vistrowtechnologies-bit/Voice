@@ -1,0 +1,54 @@
+---
+title: "Authentication"
+description: "Generate an API key and authenticate requests to the Vistrow Voice API."
+---
+
+The dashboard itself authenticates with a session cookie, but any request can also authenticate with an **API key** — the same way, whether you're calling from a script, a backend service, or an integration.
+
+## Generate a key
+
+1. Sign in to the dashboard and go to **Settings → API keys**.
+2. Click **Create key**, name it something that identifies where it'll be used (e.g. `production-backend`).
+3. Copy the key immediately — it's shown once, in full, and never again.
+
+<Warning>
+  Creating an API key requires the **admin** role or higher on your account. Keys act as a full-access grant to your account's data, scoped to your account only — treat one the way you'd treat a password.
+</Warning>
+
+## Authenticate a request
+
+Send the key in the `X-Api-Key` header on every request. No other header or query parameter is needed.
+
+<CodeGroup>
+
+```bash cURL
+curl https://app.vistrowvoice.com/api/agents \
+  -H "X-Api-Key: YOUR_API_KEY"
+```
+
+```javascript Node.js
+const res = await fetch("https://app.vistrowvoice.com/api/agents", {
+  headers: { "X-Api-Key": process.env.VISTROW_API_KEY },
+});
+const agents = await res.json();
+```
+
+```python Python
+import requests
+
+res = requests.get(
+    "https://app.vistrowvoice.com/api/agents",
+    headers={"X-Api-Key": "YOUR_API_KEY"},
+)
+agents = res.json()
+```
+
+</CodeGroup>
+
+## Scope
+
+An API key resolves to the account that created it — every request made with it sees exactly what that account's dashboard sees, nothing from any other tenant. There's currently no per-key permission scoping below the account level; if you need a request path locked down further, use a dedicated key per integration and revoke it independently when needed.
+
+<Card title="API Reference" icon="code" href="/api-reference/introduction">
+  See every endpoint you can call with a key.
+</Card>

@@ -1,0 +1,52 @@
+---
+title: "Agents"
+description: "Voice, model, persona, and behavior settings for each AI agent."
+---
+
+An agent is one configured persona — a voice, a model, a system prompt, and a set of behaviors — that can answer calls on any channel you connect to it (phone, website widget, or browser test call).
+
+<Note>
+  Changes you make to an agent (prompt, voice, model, knowledge base, pause) apply from the very next call. There's no redeploy step.
+</Note>
+
+## Core settings
+
+| Field | What it controls |
+|---|---|
+| **Model** | The LLM powering responses — a balanced default plus faster/cheaper tiers. |
+| **Voice** | The TTS voice, including preview/next-generation voices where available. |
+| **Default language** | The language the agent opens in before any language switching happens. |
+| **Voice delivery** | Pacing and expressiveness — from measured to casual and fast. |
+| **Emotion intensity** | How much the agent's tone shifts in response to the caller's own tone. |
+| **Who speaks first** | Whether the agent greets the caller or waits to be spoken to. |
+| **Welcome message** | A fixed opening line, or leave blank to auto-generate one. |
+| **System prompt** | The agent's persona and instructions. Leave blank to use the built-in generic business assistant prompt. |
+
+## Speech settings
+
+Turn-taking is tunable per agent:
+
+- **Interruption sensitivity** — how quickly the agent yields the floor when the caller starts talking. Higher values yield faster; lower values let the agent finish its sentence through brief background noise.
+- **Silence check-in after (sec)** — how long a caller can go quiet before the agent checks in. `0` uses the platform default (~6.5s).
+- **Max check-ins** — how many times the agent will check in before giving up.
+- **End call after silence (sec)** — hangs up after this much continuous silence. `0` means never.
+
+## Functions
+
+Agents can be given tools to run during a call — checking calendar availability, booking an appointment, capturing a qualified lead, or calling a custom webhook mid-call. Enable only what a given agent's persona actually needs.
+
+## Knowledge base
+
+Attach a knowledge base (see [Knowledge Base](/platform/knowledge-base)) so the agent grounds its answers in your own content instead of improvising.
+
+## Post-call data extraction
+
+Define structured fields (name, budget, appointment time, anything else you need) that get pulled from the transcript automatically once a call ends, and surfaced on that call's record.
+
+## Webhook
+
+Send the outcome of every call — transcript, extracted fields, sentiment — to your own endpoint or CRM as JSON. See [Integrations](/platform/integrations) for the built-in ArthaLeads and Slack options if you don't want to build a custom receiver.
+
+## Public website demo agent
+
+Exactly one agent platform-wide can be flagged to power the "talk to it live" demo on the marketing site. Enabling it on one agent automatically turns it off on whichever agent had it before.

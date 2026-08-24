@@ -1,0 +1,60 @@
+---
+title: "Website Widget"
+description: "Embed a real-time AI call button on your website."
+---
+
+The website widget is a floating call button you add to any site with one script tag. Visitors can talk to your agent by voice, or switch to typing, without installing anything.
+
+## Adding a website
+
+Go to **Website Widget → Add your website** and fill in:
+
+| Field | Notes |
+|---|---|
+| Site name | Internal label, e.g. "Our Marketing Website". |
+| Agent | Which agent answers calls from this site. |
+| Domain (optional) | Restricts the widget to this domain. |
+| Corner | Bottom-right or bottom-left placement. |
+| Button label | Text shown on the launcher, e.g. "Talk to us". |
+| Greeting bubble (optional) | A speech-bubble prompt shown before the visitor opens the widget. |
+
+Every website gets its own **site key** and its own call history, filterable on the [Calls](/platform/calls) page.
+
+## Widget behavior
+
+- **Widget type** — Voice call (speaks, can also type) or Chat only (text, no voice).
+- **Before starting, ask for** — optionally collect name, phone, and/or email before the conversation starts (each independently Off, Optional, or Required). Leave all three off for a zero-friction, tap-to-talk experience.
+- **Avatar color** — pick which avatar represents the agent in this widget.
+
+## Page rules
+
+Page rules let the same install serve a different agent (and optionally a different avatar or greeting) per URL pattern — e.g. one project's listing page gets its own agent and knowledge base while the rest of the site uses your default.
+
+Click **Fetch pages from this domain** to pull in URLs the widget has actually seen traffic on, or type a URL pattern manually. Adding a rule saves it immediately — it's independent of the **Save changes** button at the bottom of the panel, which only saves the site's main settings above.
+
+## Installing the widget
+
+<Tabs>
+  <Tab title="Any other website">
+    Copy the exact snippet shown on your site's row in the dashboard — it already has your site key and backend URL filled in. It looks like this:
+
+    ```html
+    <script
+      src="https://voice-production-2950.up.railway.app/widget.js"
+      data-site-key="YOUR_SITE_KEY"
+      data-api-base="https://voice-production-2950.up.railway.app"
+      data-position="bottom-right"
+      data-label="Talk to us"
+    ></script>
+    ```
+
+    Paste it before `</body>` on every page you want the widget to appear on. Don't hand-type the URL or key — always copy the dashboard's generated snippet, since it also encodes your greeting bubble, avatar, and pre-call form settings as additional attributes.
+  </Tab>
+  <Tab title="WordPress">
+    Download the plugin from the Website Widget page, install and activate it, then paste your site key into its settings screen and save. It adds the widget to every page automatically — nothing to paste into your theme's code.
+  </Tab>
+</Tabs>
+
+## Disclosure
+
+The widget shows a short on-screen notice before a conversation starts, noting that it's transcribed and may be recorded. This is deliberately text, not spoken, so it doesn't interrupt the flow of a voice-first interaction — see your [Privacy Policy](https://vistrowvoice.com/privacy) for the full data-handling disclosure.

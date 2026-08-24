@@ -1,0 +1,86 @@
+---
+title: "Calls"
+description: "List and fetch call history, transcripts, and outcomes."
+---
+
+## List calls
+
+<CodeGroup>
+
+```bash cURL
+curl "https://app.vistrowvoice.com/api/calls?limit=50&days=7" \
+  -H "X-Api-Key: YOUR_API_KEY"
+```
+
+</CodeGroup>
+
+`GET /calls`
+
+| Query param | Type | Default | Notes |
+|---|---|---|---|
+| `limit` | integer | `200` | Max rows returned. |
+| `search` | string | `""` | Matches caller name or number. |
+| `status` | string | `""` | Filter by call status. |
+| `days` | integer | `0` | Restrict to the last N days. `0` returns all history. |
+
+Returns an array of call objects, newest first. Test calls made from the dashboard's own "Test Call" button are excluded.
+
+## Get a call
+
+```bash
+curl https://app.vistrowvoice.com/api/calls/CALL_ID \
+  -H "X-Api-Key: YOUR_API_KEY"
+```
+
+`GET /calls/{callId}` — includes the full transcript and a computed `creditsUsed` field the list endpoint doesn't return.
+
+### Response shape
+
+```json
+{
+  "id": "1234",
+  "name": "Website visitor",
+  "phone": "",
+  "email": "",
+  "status": "qualified",
+  "callStatus": "completed",
+  "sentiment": "positive",
+  "channel": "Website Widget",
+  "callType": "widget",
+  "website": "vistrowvoice.com",
+  "agent": "Artha",
+  "agentId": 4,
+  "callDate": "2026-08-24T10:15:00Z",
+  "durationSeconds": 76,
+  "replyLanguage": "hi-IN",
+  "hasRecording": true,
+  "feedback": null,
+  "extractedData": {},
+  "creditsUsed": 1.27,
+  "transcript": [
+    { "speaker": "agent", "text": "..." },
+    { "speaker": "visitor", "text": "..." }
+  ]
+}
+```
+
+<Note>
+  `hasRecording` only indicates whether audio exists — it's never the raw storage key.
+</Note>
+
+## Get a recording
+
+```bash
+curl https://app.vistrowvoice.com/api/calls/CALL_ID/recording \
+  -H "X-Api-Key: YOUR_API_KEY"
+```
+
+`GET /calls/{callId}/recording` — returns a short-lived presigned URL to the raw audio, for inline playback.
+
+```bash
+curl https://app.vistrowvoice.com/api/calls/CALL_ID/recording/download \
+  -H "X-Api-Key: YOUR_API_KEY" \
+  -o call.mp3
+```
+
+`GET /calls/{callId}/recording/download` — streams the recording back as an MP3 directly, named after the caller.

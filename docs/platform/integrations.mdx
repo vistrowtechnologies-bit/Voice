@@ -1,0 +1,24 @@
+---
+title: "Integrations"
+description: "Connect and manage external tools that power your agents."
+---
+
+Push qualified leads and call outcomes to the tools your team already uses.
+
+## Available integrations
+
+<CardGroup cols={2}>
+  <Card title="ArthaLeads CRM">
+    Push every qualified lead — with the full call transcript — straight into ArthaLeads. Paste your API token; no URL setup needed.
+  </Card>
+  <Card title="CRM / Webhook">
+    POST every qualified lead as JSON to any endpoint — your own CRM, Zapier, n8n, or Make.
+  </Card>
+  <Card title="Slack">
+    Get a Slack message the moment a call qualifies a lead. Connect Slack and choose the channel once.
+  </Card>
+</CardGroup>
+
+## How delivery works
+
+Integrations fire from the same webhook mechanism described in [Agents → Webhook](/platform/agents#webhook) — an agent delivers its call outcome to every integration you've connected, in addition to any custom webhook URL you've configured directly on that agent.

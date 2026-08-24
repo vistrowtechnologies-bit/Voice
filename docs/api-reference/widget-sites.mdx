@@ -1,0 +1,46 @@
+---
+title: "Widget Sites"
+description: "Manage website widget installs and their site keys."
+---
+
+## List sites
+
+```bash
+curl https://app.vistrowvoice.com/api/widget/sites \
+  -H "X-Api-Key: YOUR_API_KEY"
+```
+
+`GET /widget/sites` — returns every website you've added the widget to, including each one's site key and settings.
+
+## Create a site
+
+```bash
+curl -X POST https://app.vistrowvoice.com/api/widget/sites \
+  -H "X-Api-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Marketing Site",
+    "agentId": 4,
+    "allowedDomain": "example.com",
+    "widgetPosition": "bottom-right",
+    "widgetLabel": "Talk to us",
+    "widgetMode": "voice"
+  }'
+```
+
+`POST /widget/sites`
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `name` | string | — | Required. |
+| `agentId` | integer | `null` | Which agent answers calls from this site. |
+| `allowedDomain` | string | `""` | Restricts the widget to this domain. |
+| `widgetPosition` | string | `"bottom-right"` | Or `"bottom-left"`. |
+| `widgetLabel` | string | `"Talk to us"` | |
+| `widgetAvatar` | string | `"default"` | |
+| `widgetGreeting` | string | `""` | Optional greeting bubble text. |
+| `widgetMode` | string | `"voice"` | `"voice"` or `"chat"`. |
+| `widgetAskName` | boolean | `true` | |
+| `widgetAskPhone` | boolean | `true` | |
+
+The response includes the new site's `siteKey` — use it in the embed snippet described in [Website Widget](/platform/website-widget).

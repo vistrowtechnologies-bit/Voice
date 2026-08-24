@@ -1,0 +1,27 @@
+---
+title: "Compliance"
+description: "Calling rules, consent, and your Do-Not-Call registry."
+---
+
+Compliance settings apply platform-wide across every number and every outbound campaign on your account.
+
+## Calling window
+
+TRAI norms limit unsolicited calls to 9am–9pm, Monday–Saturday. With **Enforce calling window** on, Vistrow Voice blocks outbound dials automatically outside the start/end time and allowed days you configure, evaluated in the callee's local timezone.
+
+## Consent, recording & retention
+
+| Setting | What it does |
+|---|---|
+| **Honor Do-Not-Call list** | Never dials a number on your DNC registry. |
+| **Require spoken consent** | The agent opens every call with a consent line and logs the caller's reply. |
+| **Record calls** | Stores call audio alongside transcripts. |
+| **Data retention (days)** | Transcripts and recordings older than this are purged automatically. `0` keeps everything indefinitely. |
+
+<Tip>
+  If you're subject to India's DPDP Act or a similar data-minimization requirement, set a real retention window here rather than leaving it at `0` — see your [Privacy Policy](https://vistrowvoice.com/privacy) for how Vistrow Voice itself handles retention and deletion requests.
+</Tip>
+
+## Do-Not-Call registry
+
+Upload or paste numbers that should never be dialed. Every outbound dial — from a campaign or a one-off test call — is scrubbed against this list first.

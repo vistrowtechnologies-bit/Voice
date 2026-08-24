@@ -1,0 +1,72 @@
+---
+title: "Agents"
+description: "List, create, update, and delete agents."
+---
+
+## List agents
+
+<CodeGroup>
+
+```bash cURL
+curl https://app.vistrowvoice.com/api/agents \
+  -H "X-Api-Key: YOUR_API_KEY"
+```
+
+</CodeGroup>
+
+`GET /agents` — returns every agent on your account as a JSON array.
+
+## Create an agent
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://app.vistrowvoice.com/api/agents \
+  -H "X-Api-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Sales Agent",
+    "description": "Qualifies inbound leads",
+    "model": "gpt-4.1",
+    "voice": "shubh",
+    "language": "hi-IN",
+    "systemPrompt": "You are a helpful sales assistant for Acme Corp."
+  }'
+```
+
+</CodeGroup>
+
+`POST /agents`
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `name` | string | `"Unnamed agent"` | |
+| `description` | string | `""` | |
+| `model` | string | `"gpt-4.1"` | |
+| `voice` | string | `"shubh"` | Preview/next-generation voices are restricted to the platform's own account. |
+| `language` | string | `"hi-IN"` | Default reply language before any switching. |
+| `systemPrompt` | string | `""` | Leave blank for the built-in generic assistant prompt. |
+
+## Update an agent
+
+<CodeGroup>
+
+```bash cURL
+curl -X PATCH https://app.vistrowvoice.com/api/agents/AGENT_ID \
+  -H "X-Api-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Renamed Agent"}'
+```
+
+</CodeGroup>
+
+`PATCH /agents/{agentId}` — send only the fields you want to change. Returns `404` if the agent doesn't exist on your account.
+
+## Delete an agent
+
+```bash
+curl -X DELETE https://app.vistrowvoice.com/api/agents/AGENT_ID \
+  -H "X-Api-Key: YOUR_API_KEY"
+```
+
+`DELETE /agents/{agentId}`

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Vistrow Voice",
+  "description": "AI voice agents that answer, qualify, and book calls in 11 Indian languages.",
+  "colors": {
+    "primary": "#9333ea",
+    "light": "#a855f7",
+    "dark": "#7e22ce"
+  },
+  "favicon": "/favicon.png",
+  "logo": {
+    "light": "/logo/logo-light.png",
+    "dark": "/logo/logo-dark.png"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Welcome",
+            "pages": ["index"]
+          },
+          {
+            "group": "Getting Started",
+            "pages": ["quickstart", "essentials/authentication"]
+          },
+          {
+            "group": "Platform",
+            "pages": [
+              "platform/agents",
+              "platform/knowledge-base",
+              "platform/website-widget",
+              "platform/phone-numbers",
+              "platform/compliance",
+              "platform/billing",
+              "platform/integrations",
+              "platform/calls"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": ["api-reference/introduction"]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api-reference/agents",
+              "api-reference/calls",
+              "api-reference/knowledge-base",
+              "api-reference/widget-sites"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Dashboard",
+        "href": "https://app.vistrowvoice.com"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Sign in",
+      "href": "https://app.vistrowvoice.com/login"
+    }
+  },
+  "footer": {
+    "socials": {}
+  }
+}

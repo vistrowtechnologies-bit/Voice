@@ -1,0 +1,29 @@
+---
+title: "Phone Numbers"
+description: "Connect a telephony provider and route real calls to your AI agents."
+---
+
+Connect a provider, add a number, and route inbound and outbound calls to an agent.
+
+## Supported providers
+
+<Tabs>
+  <Tab title="EnableX">
+    Programmable voice for inbound and outbound calling. Create a project with the Voice service in the EnableX portal, then paste its API credentials here.
+
+    Go to **Phone Numbers → EnableX → Connect your EnableX project** and enter:
+    - **App ID** — from EnableX Portal → Project Settings → API Credentials.
+    - **App Key (secret)** — stored server-side only, never sent back to the browser.
+  </Tab>
+  <Tab title="Twilio / Exotel / Plivo">
+    Additional providers, connected the same way — paste that provider's credentials under its own tab.
+  </Tab>
+</Tabs>
+
+## Routing a number to an agent
+
+Once a provider is connected, add the number under **Phone Numbers** and assign it to an agent. Inbound calls to that number are answered by whichever agent it's routed to; the same agent can also be used for outbound campaigns dialing from that number.
+
+## Compliance
+
+Every number is subject to your account's [Compliance](/platform/compliance) settings — the TRAI calling window and Do-Not-Call registry apply automatically to outbound dials, regardless of which provider the number is on.
