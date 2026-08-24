@@ -1853,6 +1853,20 @@ async def entrypoint(ctx: JobContext) -> None:
         caller_number = _caller_number_from_sip(sip_attrs, first_participant)
         if caller_number and not call_context["visitor_phone"]:
             call_context["visitor_phone"] = caller_number
+        # Direction: a real inbound caller's number is never our own dialled
+        # number. The dashboard's "Test call" / campaign dialer path has
+        # EnableX place the outbound leg, then bridge the ANSWERED leg back
+        # to us over SIP with `from` set to our own tenant number (see
+        # server/calls_db.py's enablex_connect_to_sip) — so on that bridged
+        # leg, caller_number and dialled_number are the same number. No
+        # separate SIP call-direction attribute exists to read instead; this
+        # coincidence is the only signal available, verified against the
+        # actual bridging code rather than assumed.
+        call_context["direction"] = (
+            "outbound"
+            if caller_number and caller_number.lstrip("+") == dialled_number.lstrip("+")
+            else "inbound"
+        )
         owner = await asyncio.to_thread(db.get_phone_number_by_number, dialled_number)
         owner_agent_id = (owner or {}).get("agent_id")
         if owner_agent_id and owner_agent_id != call_context["agent_id"]:
@@ -2244,6 +2258,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     "voice": agent._voice,
                     "transcript": transcript,
                     "call_type": call_context["call_type"],
+                    "direction": call_context.get("direction"),
                     "site_id": call_context["site_id"],
                     # Which dashboard agent took the call — explicit from room
                     # metadata when routed, otherwise whichever agent config

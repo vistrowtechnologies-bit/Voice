@@ -844,6 +844,12 @@ def init_tables() -> None:
                 # JSON because a call can contain many turns and provider
                 # fallbacks; the admin detail page summarizes it.
                 ("latency_metrics_json", "TEXT DEFAULT ''"),
+                # "inbound" | "outbound", phone calls only — set at save time
+                # in agent/main.py. NULL for every call recorded before this
+                # column existed, and for web/widget calls (direction is a
+                # phone-only concept). See _call_context_from_job's docstring
+                # for how it's actually detected.
+                ("direction", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
@@ -1839,6 +1845,7 @@ def _call_dict(
         "sentiment": _sentiment(transcript),
         "channel": _CHANNEL_LABELS.get(call_type, "Web"),
         "callType": call_type,
+        "direction": _row_get(row, "direction"),
         "siteId": site_id,
         "website": website,
         "agent": agent_name,

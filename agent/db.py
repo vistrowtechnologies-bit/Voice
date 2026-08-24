@@ -702,8 +702,10 @@ def save_call(record: dict) -> int | None:
     reply_language, voice (the exact voice string this call used, for
     per-voice-tier credit billing — see server/calls_db.py's voice_tier()),
     transcript (list of {role, text}), call_type
-    ('phone'/'widget'/'browser'), site_id (for 'widget' calls), agent_id,
-    account_id (which tenant this call belongs to), and optionally
+    ('phone'/'widget'/'browser'), direction ('inbound'/'outbound', phone
+    calls only — see agent/main.py's _call_context_from_job), site_id (for
+    'widget' calls), agent_id, account_id (which tenant this call belongs
+    to), and optionally
     name/phone/email/budget/location/timeline/site_visit (dict with
     property_id/date/time) — matching the keys tools.py's log_lead and
     book_appointment write into the shared lead_data dict — or
@@ -720,9 +722,9 @@ def save_call(record: dict) -> int | None:
                     duration_seconds, reply_language, voice, lead_name, lead_phone,
                     lead_email, lead_budget, lead_location, lead_timeline, lead_company,
                     lead_use_case, lead_team_size, site_visit_json,
-                    transcript_json, call_type, site_id, agent_id, account_id,
+                    transcript_json, call_type, direction, site_id, agent_id, account_id,
                     extracted_data, latency_metrics_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -745,6 +747,7 @@ def save_call(record: dict) -> int | None:
                     json.dumps(record["site_visit"]) if record.get("site_visit") else None,
                     json.dumps(record["transcript"], ensure_ascii=False),
                     record.get("call_type") or "browser",
+                    record.get("direction"),
                     record.get("site_id"),
                     record.get("agent_id"),
                     record.get("account_id"),

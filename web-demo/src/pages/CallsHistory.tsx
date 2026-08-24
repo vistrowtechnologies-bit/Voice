@@ -73,6 +73,7 @@ export function CallsHistory() {
   const [search, setSearch] = useState('')
   const [sortDesc, setSortDesc] = useState(true)
   const [feedbackFilter, setFeedbackFilter] = useState(searchParams.get('feedback') || 'all')
+  const [directionFilter, setDirectionFilter] = useState(searchParams.get('direction') || 'all')
 
   useEffect(() => {
     fetchCalls().then(setCalls).catch(() => setCalls([]))
@@ -83,6 +84,7 @@ export function CallsHistory() {
     let rows = calls
     if (channel !== 'All') rows = rows.filter((c) => c.channel === channel)
     if (feedbackFilter !== 'all') rows = rows.filter((c) => c.feedback === feedbackFilter)
+    if (directionFilter !== 'all') rows = rows.filter((c) => c.direction === directionFilter)
     if (search) {
       const s = search.toLowerCase()
       rows = rows.filter((c) => c.name.toLowerCase().includes(s) || c.phone.includes(s))
@@ -91,7 +93,7 @@ export function CallsHistory() {
     return grouped.sort((a, b) =>
       sortDesc ? b.callDate.localeCompare(a.callDate) : a.callDate.localeCompare(b.callDate),
     )
-  }, [calls, channel, feedbackFilter, search, sortDesc])
+  }, [calls, channel, feedbackFilter, directionFilter, search, sortDesc])
 
   const completed = calls.filter((c) => c.callStatus === 'completed').length
   const failed = calls.filter((c) => c.callStatus === 'failed').length
@@ -136,6 +138,21 @@ export function CallsHistory() {
       ),
     },
     { key: 'channel', header: 'Channel', render: (call) => <span className="text-sm text-text-muted">{call.channel}</span> },
+    {
+      key: 'direction',
+      header: 'Direction',
+      // null for web/widget calls (direction is a phone-only concept) and
+      // for phone calls recorded before this field existed.
+      render: (call) =>
+        call.direction ? (
+          <span className="flex items-center gap-1 text-sm text-text-muted">
+            <Icon name={call.direction === 'inbound' ? 'call_received' : 'call_made'} className="text-[15px]" />
+            {call.direction === 'inbound' ? 'Inbound' : 'Outbound'}
+          </span>
+        ) : (
+          <span className="text-sm text-text-muted">-</span>
+        ),
+    },
     { key: 'website', header: 'Website', render: (call) => <span className="text-sm text-text-muted">{call.website || '-'}</span> },
     { key: 'duration', header: 'Duration', render: (call) => <span className="text-sm">{formatDuration(call.durationSeconds)}</span> },
     {
@@ -237,6 +254,25 @@ export function CallsHistory() {
             <option value="all">All feedback</option>
             <option value="helpful">👍 Helpful</option>
             <option value="not_helpful">👎 Needs review</option>
+          </select>
+          <select
+            value={directionFilter}
+            aria-label="Filter by direction"
+            onChange={(e) => {
+              const value = e.target.value
+              setDirectionFilter(value)
+              setSearchParams((current) => {
+                const next = new URLSearchParams(current)
+                if (value === 'all') next.delete('direction')
+                else next.set('direction', value)
+                return next
+              })
+            }}
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-muted outline-none focus:border-primary"
+          >
+            <option value="all">All directions</option>
+            <option value="inbound">Inbound</option>
+            <option value="outbound">Outbound</option>
           </select>
           <button
             onClick={() => setSortDesc((v) => !v)}
