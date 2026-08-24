@@ -3367,6 +3367,19 @@ def widget_avatar_image(key: str) -> FileResponse:
     return FileResponse(WIDGET_AVATARS_DIR / f"{key}.png", media_type="image/png")
 
 
+@app.get("/widget-avatars/{key}.mp4")
+def widget_avatar_video(key: str) -> FileResponse:
+    """Animated variant of a catalog avatar (see VIDEO_AVATAR_KEYS in
+    widget.ts's avatarTag()) — same catalog validation as the .png route
+    above, plus a filesystem check since only some avatars have one."""
+    if not widget_avatars.is_valid_avatar_key(key):
+        raise HTTPException(404, "Unknown avatar")
+    path = WIDGET_AVATARS_DIR / f"{key}.mp4"
+    if not path.exists():
+        raise HTTPException(404, "No video for this avatar")
+    return FileResponse(path, media_type="video/mp4")
+
+
 @app.get("/widget/sites")
 def list_sites(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_sites(user["account_id"])

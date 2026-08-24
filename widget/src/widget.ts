@@ -207,10 +207,13 @@ const CSS = `
 :host([data-side="left"]) .av-proof-pill { right: auto; left: 0; }
 /* The 1.5x zoom exists only for the orb video (agent-orb.mp4 has a lot of
    dark padding baked into the frame around the actual visual ring, so it
-   needs cropping in to fill the circle) - a photo avatar is already a
-   full-bleed square headshot and doesn't need it, so applying the same
-   scale there was cropping straight through faces. */
-.av-button video { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
+   needs cropping in to fill the circle) - a photo avatar (still or video,
+   e.g. artha.mp4) is already a full-bleed square headshot and doesn't need
+   it, so applying the same scale there was cropping straight through
+   faces. Scoped to .av-orb-media (set only on the orb's own video tag)
+   rather than every video, so a photo-style avatar video stays unscaled. */
+.av-button video { width: 100%; height: 100%; object-fit: cover; }
+.av-button video.av-orb-media { transform: scale(1.5); }
 .av-button img { width: 100%; height: 100%; object-fit: cover; }
 
 /* max-width is capped relative to the viewport, not just a flat 220px -
@@ -244,7 +247,7 @@ const CSS = `
 .av-dot { width: 8px; height: 8px; border-radius: 9999px; background: #a855f7; }
 .av-title-avatar { width: 22px; height: 22px; border-radius: 9999px; overflow: hidden; flex-shrink: 0; }
 .av-title-avatar video, .av-title-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.av-title-avatar video { transform: scale(1.5); }
+.av-title-avatar video.av-orb-media { transform: scale(1.5); }
 .av-header-right { display: flex; align-items: center; gap: 10px; }
 .av-timer { display: none; font-size: 12px; font-variant-numeric: tabular-nums; color: #b8b2cf; }
 .av-timer.av-timer-warn { color: #f87171; font-weight: 700; }
@@ -256,7 +259,7 @@ const CSS = `
 .av-welcome { padding: 24px 20px 22px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:10px; }
 .av-welcome-avatar { width:88px; height:88px; border-radius:999px; overflow:hidden; border:3px solid #8b5cf6; box-shadow:0 0 0 7px rgba(168,85,247,.12), 0 14px 38px rgba(88,28,135,.35); }
 .av-welcome-avatar img,.av-welcome-avatar video { width:100%;height:100%;object-fit:cover; }
-.av-welcome-avatar video { transform:scale(1.5); }
+.av-welcome-avatar video.av-orb-media { transform:scale(1.5); }
 .av-welcome h2 { margin:8px 0 0; font-size:21px; line-height:1.2; }
 .av-welcome p { margin:0; color:#b8b2cf; font-size:13px; line-height:1.5; }
 .av-presence { display:inline-flex; align-items:center; gap:6px; color:#8ee8be !important; font-size:11px !important; font-weight:700; }
@@ -303,7 +306,8 @@ const CSS = `
 #av-call, #av-chat { display: flex; flex-direction: column; height: min(470px, calc(100vh - 180px)); }
 .av-body { flex-shrink: 0; padding: 18px 16px 2px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .av-orb { position: relative; width: 96px; height: 96px; border-radius: 9999px; overflow: hidden; background: #000; transition: transform .15s ease-out, box-shadow .2s ease; box-shadow:0 0 0 7px rgba(168,85,247,.08),0 0 34px rgba(168,85,247,.22); }
-.av-orb video { width: 100%; height: 100%; object-fit: cover; transform: scale(1.5); }
+.av-orb video { width: 100%; height: 100%; object-fit: cover; }
+.av-orb video.av-orb-media { transform: scale(1.5); }
 .av-orb img { width: 100%; height: 100%; object-fit: cover; }
 .av-orb[data-state="listening"] { box-shadow:0 0 0 7px rgba(34,197,94,.12),0 0 30px rgba(34,197,94,.18); }
 .av-orb[data-state="thinking"] { box-shadow:0 0 0 7px rgba(168,85,247,.13),0 0 38px rgba(168,85,247,.32); }
@@ -326,7 +330,7 @@ const CSS = `
 .av-assistant-row .av-bubble { max-width:calc(85% - 28px); }
 .av-message-avatar { width:25px;height:25px;border-radius:999px;overflow:hidden;flex:0 0 25px;border:1.5px solid #8b5cf6;box-shadow:0 0 0 3px rgba(168,85,247,.1);position:relative; }
 .av-message-avatar img,.av-message-avatar video { width:100%;height:100%;object-fit:cover;display:block; }
-.av-message-avatar video { transform:scale(1.5); }
+.av-message-avatar video.av-orb-media { transform:scale(1.5); }
 .av-assistant-row.av-typing .av-message-avatar { animation:av-avatar-speaking 1.2s ease-in-out infinite; }
 @keyframes av-avatar-speaking { 50% { box-shadow:0 0 0 5px rgba(168,85,247,.22);transform:scale(1.04); } }
 .av-controls { flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px 16px; }
@@ -381,15 +385,34 @@ audio { display: none; }
 }
 `
 
-// 'default' keeps the animated video orb exactly as before; any other
-// catalog key swaps in a static color-variant image instead (no video
-// element to animate, so it's a plain <img>).
+// 'default' keeps the animated video orb exactly as before. Catalog keys
+// with a matching .mp4 in server/static/widget-avatars/ (only 'artha' today
+// - a short waving loop, meant to catch a visitor's eye the same way the
+// orb's motion does) render that video instead of the static headshot.
+// Every other key stays a plain <img>.
+const VIDEO_AVATAR_KEYS = new Set(['artha'])
+
 function avatarTag(id?: string): string {
   const idAttr = id ? ` id="${id}"` : ''
   if (avatarKey === 'default') {
-    return `<video${idAttr} src="${apiBase}/agent-orb.mp4" autoplay loop muted playsinline></video>`
+    return `<video${idAttr} class="av-orb-media" src="${apiBase}/agent-orb.mp4" autoplay loop muted playsinline></video>`
+  }
+  if (VIDEO_AVATAR_KEYS.has(avatarKey)) {
+    return `<video${idAttr} src="${apiBase}/widget-avatars/${avatarKey}.mp4" autoplay loop muted playsinline></video>`
   }
   return `<img${idAttr} src="${apiBase}/widget-avatars/${avatarKey}.png" alt="" />`
+}
+
+// The `autoplay` attribute only reliably starts playback for <video>
+// elements present in the page's initial parsed HTML - browsers generally
+// don't honor it for elements created dynamically via innerHTML (as every
+// avatarTag() call site here does), so those otherwise sit fully loaded but
+// paused on frame one. Call this right after any innerHTML assignment that
+// might contain a video.
+function playAnyVideos(container: ParentNode | null | undefined): void {
+  container?.querySelectorAll('video').forEach((v) => {
+    v.play().catch(() => {})
+  })
 }
 
 // Keep the same configured assistant identity inside the live call. The
@@ -544,6 +567,7 @@ function init(): void {
   document.body.appendChild(host)
   const shadow = host.attachShadow({ mode: 'open' })
   shadow.innerHTML = `<style>${CSS}</style>${widgetHtml(label)}`
+  playAnyVideos(shadow)
 
   const button = shadow.getElementById('av-button') as HTMLButtonElement
   const titleAvatarEl = shadow.getElementById('av-title-avatar') as HTMLSpanElement
@@ -657,6 +681,7 @@ function init(): void {
           welcomeAvatarEl.innerHTML = avatarTag()
           orbEl.innerHTML = activityOrbTag()
           orbVideoEl = shadow.getElementById('av-orb-video') as HTMLVideoElement | HTMLImageElement | null
+          playAnyVideos(shadow)
         }
         if (typeof data.greeting === 'string' && data.greeting !== customGreeting) {
           customGreeting = data.greeting
@@ -1131,6 +1156,7 @@ function init(): void {
       avatar.className = 'av-message-avatar'
       avatar.setAttribute('aria-hidden', 'true')
       avatar.innerHTML = avatarTag()
+      playAnyVideos(avatar)
       row.append(avatar, bubble)
       chatMessagesEl.appendChild(row)
     } else {
@@ -1149,6 +1175,7 @@ function init(): void {
     avatar.className = 'av-message-avatar'
     avatar.setAttribute('aria-hidden', 'true')
     avatar.innerHTML = avatarTag()
+    playAnyVideos(avatar)
     const bubble = document.createElement('div')
     bubble.className = 'av-bubble av-bubble-remote'
     bubble.innerHTML = '<span class="av-typing-dots"><span></span><span></span><span></span></span>'
