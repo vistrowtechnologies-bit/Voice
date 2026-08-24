@@ -287,7 +287,7 @@ export function Dashboard() {
                     {failedCalls.length > 0 && <AttentionLink to="/dashboard/calls?status=failed" icon="call_missed" label={`${failedCalls.length} failed call${failedCalls.length === 1 ? '' : 's'}`} detail="Review failure reasons" tone="destructive" />}
                     {integrationErrors.length > 0 && <AttentionLink to="/dashboard/integrations" icon="sync_problem" label={`${integrationErrors.length} integration error${integrationErrors.length === 1 ? '' : 's'}`} detail="Reconnect or retry delivery" tone="amber" />}
                     {lowCredits && <AttentionLink to="/dashboard/billing" icon="account_balance_wallet" label={`${billing?.creditsRemaining ?? 0} credits left`} detail="Top up before calls are affected" tone="amber" />}
-                    {(feedback?.notHelpful ?? 0) > 0 && <AttentionLink to="/dashboard/calls?feedback=not_helpful" icon="thumb_down" label={`${feedback?.notHelpful} conversation${feedback?.notHelpful === 1 ? '' : 's'} need review`} detail="Inspect customer feedback" tone="destructive" />}
+                    {(feedback?.notHelpful ?? 0) > 0 && <AttentionLink to="/dashboard/calls?feedback=not_helpful" icon="thumb_down" label={`${feedback?.notHelpful} conversation${feedback?.notHelpful === 1 ? '' : 's'} ${feedback?.notHelpful === 1 ? 'needs' : 'need'} review`} detail="Inspect customer feedback" tone="destructive" />}
                   </div>
                 )}
               </SectionCard>
