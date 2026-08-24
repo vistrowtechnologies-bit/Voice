@@ -125,7 +125,7 @@ export function IntegrationsDirectory() {
                 receiving pushes.
               </p>
               <NavLink
-                to="/resources/docs"
+                to="https://docs.vistrowvoice.com/api-reference/introduction"
                 className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
               >
                 Read the docs

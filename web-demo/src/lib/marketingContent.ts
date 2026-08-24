@@ -325,7 +325,7 @@ export const NAV: NavGroup[] = [
   {
     label: 'Resources',
     items: [
-      { label: 'Docs & Help', to: '/resources/docs', icon: 'description', desc: 'Set-up guides and how everything fits together.' },
+      { label: 'Docs & Help', to: 'https://docs.vistrowvoice.com', icon: 'description', desc: 'Set-up guides and how everything fits together.' },
       { label: 'Integrations', to: '/integrations', icon: 'hub', desc: 'Every tool Vistrow Voice connects to.' },
       { label: 'Changelog', to: '/changelog', icon: 'history', desc: 'What shipped, and when.' },
       { label: 'vs. traditional IVR', to: '/vs-ivr', icon: 'compare_arrows', desc: 'How this differs from a phone menu.' },
@@ -357,7 +357,7 @@ export const FOOTER_COLUMNS = [
   {
     title: 'Resources',
     links: [
-      { label: 'Docs & Help', to: '/resources/docs' },
+      { label: 'Docs & Help', to: 'https://docs.vistrowvoice.com' },
       { label: 'Integrations', to: '/integrations' },
       { label: 'Changelog', to: '/changelog' },
       { label: 'vs. traditional IVR', to: '/vs-ivr' },
