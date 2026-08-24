@@ -388,16 +388,19 @@ audio { display: none; }
 // 'default' keeps the animated video orb exactly as before. Catalog keys
 // with a matching .mp4 in server/static/widget-avatars/ (only 'artha' today
 // - a short waving loop, meant to catch a visitor's eye the same way the
-// orb's motion does) render that video instead of the static headshot.
-// Every other key stays a plain <img>.
+// orb's motion does) render that video instead of the static headshot -
+// except in the active-call orb (see activityOrbTag), where a wave that
+// loops on its own timer regardless of whether the agent is actually
+// talking reads as wrong rather than lively, so that one call site forces
+// the static photo back. Every other key stays a plain <img> everywhere.
 const VIDEO_AVATAR_KEYS = new Set(['artha'])
 
-function avatarTag(id?: string): string {
+function avatarTag(id?: string, forceStatic?: boolean): string {
   const idAttr = id ? ` id="${id}"` : ''
   if (avatarKey === 'default') {
     return `<video${idAttr} class="av-orb-media" src="${apiBase}/agent-orb.mp4" autoplay loop muted playsinline></video>`
   }
-  if (VIDEO_AVATAR_KEYS.has(avatarKey)) {
+  if (!forceStatic && VIDEO_AVATAR_KEYS.has(avatarKey)) {
     return `<video${idAttr} src="${apiBase}/widget-avatars/${avatarKey}.mp4" autoplay loop muted playsinline></video>`
   }
   return `<img${idAttr} src="${apiBase}/widget-avatars/${avatarKey}.png" alt="" />`
@@ -417,9 +420,13 @@ function playAnyVideos(container: ParentNode | null | undefined): void {
 
 // Keep the same configured assistant identity inside the live call. The
 // surrounding ring/state animation provides activity feedback without
-// replacing Artha with an unrelated abstract visual.
+// replacing Artha with an unrelated abstract visual. forceStatic=true so a
+// photo-style avatar (e.g. artha) shows its still photo here, not the
+// waving loop - the wave plays on its own timer, unrelated to whether the
+// agent is actually speaking, so during a real call it reads as wrong
+// rather than lively. The orb avatar is unaffected (see avatarTag).
 function activityOrbTag(): string {
-  return avatarTag('av-orb-video')
+  return avatarTag('av-orb-video', true)
 }
 
 function widgetHtml(label: string): string {

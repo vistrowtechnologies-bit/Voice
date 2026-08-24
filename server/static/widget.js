@@ -274,7 +274,7 @@ audio { display: none; }
   .av-button,.av-panel,.av-greeting,.av-status::before,.av-typing-dots span { animation:none!important; }
   * { scroll-behavior:auto!important;transition-duration:.01ms!important; }
 }
-`,Gf=new Set([`artha`]);function Kf(e){let t=e?` id="${e}"`:``;return mf==="default"?`<video${t} class="av-orb-media" src="${cf}/agent-orb.mp4" autoplay loop muted playsinline></video>`:Gf.has(mf)?`<video${t} src="${cf}/widget-avatars/${mf}.mp4" autoplay loop muted playsinline></video>`:`<img${t} src="${cf}/widget-avatars/${mf}.png" alt="" />`}function qf(e){e?.querySelectorAll(`video`).forEach(e=>{e.play().catch(()=>{})})}function Jf(){return Kf(`av-orb-video`)}function Yf(e){return`
+`,Gf=new Set([`artha`]);function Kf(e,t){let n=e?` id="${e}"`:``;return mf==="default"?`<video${n} class="av-orb-media" src="${cf}/agent-orb.mp4" autoplay loop muted playsinline></video>`:!t&&Gf.has(mf)?`<video${n} src="${cf}/widget-avatars/${mf}.mp4" autoplay loop muted playsinline></video>`:`<img${n} src="${cf}/widget-avatars/${mf}.png" alt="" />`}function qf(e){e?.querySelectorAll(`video`).forEach(e=>{e.play().catch(()=>{})})}function Jf(){return Kf(`av-orb-video`,!0)}function Yf(e){return`
     <div class="av-root">
       <div id="av-greeting" class="av-greeting">
         <span id="av-greeting-text"></span>
