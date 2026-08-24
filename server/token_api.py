@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -170,14 +171,56 @@ def require_platform_owner(request: Request) -> dict:
     return {"user_id": acting_uid, "email": user["email"]}
 
 
-# Browser demo runs on a different origin during local dev; tighten this once
-# the web-demo is deployed behind a known domain.
+# Wildcard is required, not a placeholder: the widget (/widget/*, /token) is
+# embedded on arbitrary tenant-owned domains we can't enumerate in advance.
+# This is safe because allow_credentials is (deliberately) never set to True
+# here — browsers refuse to expose a credentialed response to page JS without
+# it, and our own dashboard never actually makes a cross-origin *credentialed*
+# request in the first place (web-demo/vercel.json rewrites /api/* to this
+# service server-side, so the browser sees it as same-origin and the session
+# cookie's own `samesite=lax` is what's actually gating cross-site use of it).
+# If a future frontend calls this API cross-origin with cookies, it needs
+# allow_credentials=True + a real origin allowlist here, not a wildcard.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    """No page here is ever meant to be framed by another site (no iframe
+    embedding exists anywhere in this codebase — the widget injects into the
+    host page's own DOM instead), so clickjacking protection is free. Not
+    adding a script/style Content-Security-Policy here: getting that right
+    needs an audit of every asset host the dashboard/marketing/widget bundles
+    actually load, and shipping a wrong one silently breaks the app instead
+    of failing loudly — narrower scope than a pre-launch pass should risk.
+    """
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
+def _client_ip(request: Request) -> str:
+    """Real visitor IP behind Railway's edge proxy. request.client.host is
+    Railway's internal proxy address, not the caller's — uvicorn only trusts
+    X-Forwarded-For when started with --proxy-headers, which start.sh does
+    not set. Railway's edge sets X-Forwarded-For itself (this container isn't
+    reachable except through it), so the leftmost entry is trustworthy. Every
+    per-IP rate limiter must go through this, or it silently shares one
+    bucket (Railway's own proxy IP) across every real visitor.
+    """
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return (request.client.host if request.client else "") or "unknown"
 
 # Name of the dedicated LiveKit Cloud Agent that serves ONLY the marketing
 # site's own demo (the "try it live" widget and DemoOrbCard) — deployed
@@ -214,7 +257,7 @@ class TokenRequest(BaseModel):
 async def create_token(req: TokenRequest, request: Request) -> dict:
     # Public/unauthenticated: cap per client IP so a script can't mint
     # unlimited join tokens or dispatch unlimited billable agent calls.
-    client_ip = (request.client.host if request.client else "") or "unknown"
+    client_ip = _client_ip(request)
     if _token_rate_limited(client_ip):
         logger.warning("token rejected: rate limited (ip=%s)", client_ip)
         raise HTTPException(429, "Too many calls right now — please try again shortly.")
@@ -266,7 +309,7 @@ async def orchestrator_platform_demo_token(request: Request) -> dict:
     /orchestrator/browser-token this needs no agentId — the orchestrator
     resolves the same is_platform_demo-flagged agent LiveKit's own /token
     route resolves for an unrouted call, off the same `agents` table."""
-    client_ip = (request.client.host if request.client else "") or "unknown"
+    client_ip = _client_ip(request)
     if _token_rate_limited(client_ip):
         raise HTTPException(429, "Too many calls right now — please try again shortly.")
     orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
@@ -808,7 +851,9 @@ def auth_oauth_github_callback(request: Request, code: str | None = None, state:
 
 
 @app.post("/auth/signup")
-def auth_signup(req: SignupRequest) -> dict:
+def auth_signup(req: SignupRequest, request: Request) -> dict:
+    if _auth_rate_limited(_client_ip(request)):
+        raise HTTPException(429, "Too many attempts — please wait a minute and try again.")
     email = req.email.strip().lower()
     if "@" not in email or "." not in email.split("@")[-1]:
         raise HTTPException(400, "Enter a valid email address")
@@ -904,7 +949,9 @@ def auth_resend_email_verification(req: ResendEmailVerificationRequest) -> dict:
 
 
 @app.post("/auth/login")
-def auth_login(req: LoginRequest, response: Response) -> dict:
+def auth_login(req: LoginRequest, response: Response, request: Request) -> dict:
+    if _auth_rate_limited(_client_ip(request)):
+        raise HTTPException(429, "Too many attempts — please wait a minute and try again.")
     user = calls_db.get_user_by_email(req.email.strip().lower())
     if user is None or not auth.verify_password(req.password, user["password_hash"]):
         # Same message either way — don't reveal which emails are registered.
@@ -1001,6 +1048,8 @@ def _app_base_url(request: Request) -> str:
 
 @app.post("/auth/request-password-reset")
 def auth_request_password_reset(req: RequestResetRequest, request: Request) -> dict:
+    if _auth_rate_limited(_client_ip(request)):
+        raise HTTPException(429, "Too many attempts — please wait a minute and try again.")
     # Always report success — never reveal whether an email is registered.
     user = calls_db.get_user_by_email(req.email.strip().lower())
     if user is not None:
@@ -2745,6 +2794,30 @@ _ENABLEX_TERMINAL_STATES = {
 }
 
 
+def _verify_enablex_webhook(request: Request) -> bool:
+    """EnableX's own webhook docs offer exactly one authenticity check for
+    these callbacks: an HTTP Basic Authentication checkbox + username/password
+    in the portal's webhook config screen, sent back as the Authorization
+    header on every POST (no HMAC/signature scheme is offered). Until
+    ENABLEX_WEBHOOK_USER/PASS are set here *and* the same credentials are
+    entered in the portal, this returns True unverified — so shipping this
+    doesn't 401 real inbound calls the moment it deploys; it only starts
+    enforcing once both sides are actually configured to match.
+    """
+    expected_user = os.environ.get("ENABLEX_WEBHOOK_USER")
+    expected_pass = os.environ.get("ENABLEX_WEBHOOK_PASS")
+    if not expected_user or not expected_pass:
+        return True
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Basic "):
+        return False
+    try:
+        got_user, _, got_pass = base64.b64decode(auth_header[6:]).decode().partition(":")
+    except (ValueError, UnicodeDecodeError):
+        return False
+    return secrets.compare_digest(got_user, expected_user) and secrets.compare_digest(got_pass, expected_pass)
+
+
 @app.post("/telephony/enablex/inbound-event")
 async def enablex_inbound_event(request: Request) -> dict:
     """Webhook EnableX calls for inbound-call lifecycle events.
@@ -2777,6 +2850,8 @@ async def enablex_inbound_event(request: Request) -> dict:
     instead of ever 422ing again — a webhook that can 422 a call it can't
     parse is worse than one that just logs and moves on.
     """
+    if not _verify_enablex_webhook(request):
+        raise HTTPException(401, "Invalid webhook credentials")
     raw_body = await request.body()
     content_type = request.headers.get("content-type", "")
     event: dict = {}
@@ -2865,11 +2940,13 @@ _ENABLEX_ANSWERED_STATES = {"connected", "answered", "answer", "in-progress", "i
 
 
 @app.post("/telephony/enablex/outbound-test-event")
-def enablex_outbound_test_event(event: dict = Body(...)) -> dict:
+def enablex_outbound_test_event(request: Request, event: dict = Body(...)) -> dict:
     """Webhook for the dashboard's "Call test" outbound calls (see
     calls_db.place_test_call). Once EnableX reports the callee answered, we
     bridge the leg to the LiveKit agent the same way real inbound calls are
     bridged, instead of just playing a canned line and hanging up."""
+    if not _verify_enablex_webhook(request):
+        raise HTTPException(401, "Invalid webhook credentials")
     state = event.get("state")
     voice_id = event.get("voice_id")
     logger.info("EnableX outbound-test event: state=%s voice_id=%s raw=%s", state, voice_id, event)
@@ -3487,6 +3564,27 @@ def delete_site_page_route(site_id: int, route_id: int, user: dict = Depends(cur
 def delete_site(site_id: int, user: dict = Depends(current_user)) -> dict:
     calls_db.delete_site(site_id, user["account_id"])
     return {"ok": True}
+
+
+# Shared per-IP guard across /auth/login, /auth/signup, and
+# /auth/request-password-reset: password brute-forcing, signup spam, and
+# password-reset email-bombing are the same "unauthenticated form, cheap to
+# script" abuse shape, so one bucket per IP across all three is simpler than
+# three separate ones and strictly more conservative. Same
+# resets-on-restart/not-distributed caveat as the widget limiter below.
+_AUTH_WINDOW_SECONDS = 60
+_AUTH_MAX_PER_WINDOW = 8
+_auth_calls: dict[str, list[float]] = {}
+
+
+def _auth_rate_limited(client_ip: str) -> bool:
+    import time
+
+    now = time.monotonic()
+    calls = [t for t in _auth_calls.get(client_ip, []) if now - t < _AUTH_WINDOW_SECONDS]
+    calls.append(now)
+    _auth_calls[client_ip] = calls
+    return len(calls) > _AUTH_MAX_PER_WINDOW
 
 
 # Very small in-memory guard against a leaked/scraped site key being hammered
