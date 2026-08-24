@@ -470,7 +470,13 @@ add_action('wp_footer', function () {
         ? ' data-require-email="true"'
         : '';
     printf(
-        '<script src="%1$s/widget.js" data-site-key="%2$s" data-api-base="%1$s" data-position="%3$s" data-label="%4$s"%5$s%6$s%7$s%8$s%9$s%10$s%11$s%12$s%13$s></script>' . "\n",
+        // data-no-optimize="1" tells LiteSpeed Cache's JS optimizer (a common
+        // WordPress caching plugin) to leave this script alone instead of
+        // downloading a one-time local snapshot and serving that forever -
+        // an existing tenant's site was found still serving a widget.js
+        // build from before an update after LiteSpeed had frozen a copy of
+        // it under wp-content/litespeed/js/, since nothing told it not to.
+        '<script data-no-optimize="1" src="%1$s/widget.js" data-site-key="%2$s" data-api-base="%1$s" data-position="%3$s" data-label="%4$s"%5$s%6$s%7$s%8$s%9$s%10$s%11$s%12$s%13$s></script>' . "\n",
         esc_url($backend),
         esc_attr($settings['site_key']),
         esc_attr($settings['position']),
