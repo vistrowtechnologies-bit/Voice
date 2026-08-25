@@ -8,7 +8,6 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
-from google.cloud import texttospeech
 from livekit import api
 from livekit.agents.inference import eot
 from livekit.agents import (
@@ -539,23 +538,11 @@ _GOOGLE_VOICE_PREFIX = "google:"
 _GOOGLE_31_VOICE_PREFIX = "google31:"
 _GOOGLE_25_MODEL = "gemini-2.5-flash-tts"
 _GOOGLE_31_MODEL = "gemini-3.1-flash-tts-preview"
-# Google's own streaming TTS path (livekit-plugins-google 1.6.4) has a real
-# concurrency bug: on cancellation it can call aclose() on its internal
-# request generator while that generator is still being iterated by the
-# in-flight gRPC call, raising "RuntimeError: aclose(): asynchronous
-# generator is already running" and killing the call (seen in production
-# logs the moment Sarvam ran out of credits and TTS fell over to Google).
-# use_streaming=False routes through the plugin's non-streaming
-# synthesize_speech call instead, which doesn't share that code path —
-# slightly higher per-utterance latency, but it doesn't crash.
-# The plugin defaults to AudioEncoding.PCM, which Gemini accepts only on its
-# streaming endpoint. We deliberately use the non-streaming path above, so
-# request LINEAR16 explicitly; otherwise synthesize_speech rejects every
-# utterance with `400 Unsupported audio encoding` after the room connects.
-_GOOGLE_TTS_KWARGS = {
-    "use_streaming": False,
-    "audio_encoding": texttospeech.AudioEncoding.LINEAR16,
-}
+# Every google.TTS() construction in this file goes through PatchedGeminiTTS
+# (google_tts_streaming_patch.py) for real streaming — see that module's
+# docstring for the two real bugs it works around (an aclose() race on
+# cancellation, and a barge-in Cancelled/499 being miscounted as a provider
+# failure). Despite the class name, the fix isn't Gemini-specific.
 # Gemini's prebuilt multilingual voice personas — unlike a locale-tagged
 # voice name (e.g. "hi-IN-Neural2-A", good for exactly one language), these
 # generate natural speech in whatever language the input text is actually
@@ -820,12 +807,18 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             provider = "google-multilingual-31" if google_model == _GOOGLE_31_MODEL else "google-multilingual"
             return _google_fallback_tts(google_tts, google_model_fallback, google_model, reply_language, tone_name), provider
         voice_language = "-".join(voice_name.split("-")[:2])
-        google_tts = google.TTS(
+        # Real streaming, same as the Gemini-persona branch above — despite
+        # its name, PatchedGeminiTTS's fix (aclose() race + the Cancelled/499
+        # barge-in miscount, see google_tts_streaming_patch.py) is generic to
+        # google.TTS's SynthesizeStream, not Gemini-specific, and this branch
+        # was only ever left on non-streaming because it hadn't been
+        # exercised against that same race yet. TtsFallbackAdapter +
+        # max_retry_per_tts below already handle genuine failures.
+        google_tts = PatchedGeminiTTS(
             language=voice_language,
             voice_name=voice_name,
             credentials_info=_GOOGLE_CREDENTIALS,
             speaking_rate=tone.get("pace", 1.0),
-            **_GOOGLE_TTS_KWARGS,
         )
         # Locale-specific Google Standard voices are not Gemini personas, so
         # 3.1 cannot preserve their identity. Keep their existing gender-
@@ -863,9 +856,9 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     )
     if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
         return sarvam_tts, "sarvam"
-    google_tts = google.TTS(
-        language=reply_language, credentials_info=_GOOGLE_CREDENTIALS, **_GOOGLE_TTS_KWARGS
-    )
+    # Same streaming fix as the two branches above — see the comment on the
+    # google-native branch for why PatchedGeminiTTS applies here too.
+    google_tts = PatchedGeminiTTS(language=reply_language, credentials_info=_GOOGLE_CREDENTIALS)
     return TtsFallbackAdapter([sarvam_tts, google_tts]), "sarvam"
 
 

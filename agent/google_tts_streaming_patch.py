@@ -18,10 +18,14 @@ _run_stream, so if livekit-plugins-google ever fixes this upstream, deleting
 this file and going back to plain google.TTS(use_streaming=True) is a
 no-op change in behavior.
 
-Scoped to Gemini's multilingual voice personas (Mira/Arin, see
-voice_catalog.py) only — agent/main.py's google-native branch (locale-
-specific Neural2/Chirp voices) keeps use_streaming=False untouched, since
-it hasn't been validated against this same race yet.
+Despite the class name, nothing here is Gemini-specific — it subclasses
+google.TTS/SynthesizeStream from the same shared livekit-plugins-google
+module every Google TTS voice in this app goes through, Gemini persona or
+locale-specific Neural2/Chirp voice alike. Originally scoped to just the
+Gemini personas (Mira/Arin) while the locale-voice branch stayed on
+use_streaming=False, unvalidated against this same race; agent/main.py now
+uses PatchedGeminiTTS for every Google TTS construction, so there is no
+remaining non-streaming Google TTS path in this app.
 
 Second, separate bug fixed here (found via real Cloud Monitoring data,
 2026-08-13): a normal caller barge-in cancels the in-flight gRPC
