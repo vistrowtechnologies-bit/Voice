@@ -1,24 +1,31 @@
-// Per-route social-preview prerendering, without a real browser.
+// Per-route prerendering: real page HTML plus head tags, without a real
+// browser.
 //
-// This is a Vite SPA with no SSR - Seo.tsx sets <title>/meta tags via a
-// useEffect, which link-preview crawlers (LinkedIn, WhatsApp, Slack,
-// iMessage) never execute, so every route showed the homepage's static
-// index.html card. A prior version of this script drove a real headless
+// This is a Vite SPA with no SSR wired into the client bundle - React only
+// ever mounts into an empty <div id="root">, and Seo.tsx sets <title>/meta
+// tags via a useEffect. Neither reaches a crawler that doesn't execute JS,
+// which is most AI/answer-engine crawlers (GPTBot, ClaudeBot,
+// PerplexityBot, CCBot) as well as link-preview bots (LinkedIn, WhatsApp,
+// Slack, iMessage) - every route showed an empty body and the homepage's
+// static card. A prior version of this script drove a real headless
 // Chromium (Playwright) to render each route and capture the resulting
 // HTML - but Vercel's build container is missing shared libs Chromium
 // needs (libnspr4.so etc), so every build failed outright.
 //
-// Instead: mirror the small set of tags Seo.tsx upserts (title, meta
-// description, canonical, og:*, twitter:*) directly against the same
-// content data each page's <Seo> props are built from, and string-replace
-// them into a copy of the built index.html per route. No browser, no
-// native deps - just Node.
+// Instead: use react-dom/server's renderToString (via the separate SSR
+// bundle built from entry-server.tsx - see package.json's build script)
+// to render each route's actual component tree to a HTML string, and
+// inject that into a copy of the built index.html's <div id="root">. Head
+// tags (title, meta description, canonical, og:*, twitter:*) are mirrored
+// from the same content data each page's <Seo> props are built from, same
+// as before. No browser, no native deps - just Node.
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url)) + '/..'
+const { render } = await import('../dist-ssr/entry-server.js')
 
 const { PRODUCT_DETAIL, SOLUTIONS, LANGUAGES } = await import('../src/lib/marketingContent.ts')
 
@@ -74,7 +81,7 @@ function escapeAttr(s) {
   return escapeHtml(s)
 }
 
-function applyPage(template, page) {
+function applyPage(template, page, bodyHtml) {
   const url = `${CANONICAL_ORIGIN}${page.path}`
   const title = escapeHtml(page.title)
   const description = escapeAttr(page.description)
@@ -89,6 +96,7 @@ function applyPage(template, page) {
     .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${url}$2`)
     .replace(/(<meta name="twitter:title" content=")[^"]*(")/, `$1${title}$2`)
     .replace(/(<meta\s*\n?\s*name="twitter:description"\s*\n?\s*content=")[^"]*(")/, `$1${description}$2`)
+    .replace('<div id="root"></div>', `<div id="root">${bodyHtml}</div>`)
 }
 
 function outputPathFor(route) {
@@ -99,7 +107,9 @@ function outputPathFor(route) {
 async function main() {
   const template = await readFile(path.join(ROOT, 'dist', 'index.html'), 'utf8')
   for (const page of PAGES) {
-    const html = applyPage(template, page)
+    const bodyHtml = render(page.path)
+    if (!bodyHtml) throw new Error(`SSR render for ${page.path} produced no HTML`)
+    const html = applyPage(template, page, bodyHtml)
     const outPath = outputPathFor(page.path)
     await mkdir(path.dirname(outPath), { recursive: true })
     await writeFile(outPath, html)

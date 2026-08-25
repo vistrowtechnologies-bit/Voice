@@ -21,7 +21,6 @@ interface SeoProps {
 
 const CANONICAL_ORIGIN = 'https://www.vistrowvoice.com'
 const DEFAULT_IMAGE = `${CANONICAL_ORIGIN}/og-image.png`
-const JSONLD_SCRIPT_ID = 'seo-page-jsonld'
 const SLACK_APP_ID = 'A0BPQRALFUN'
 
 function upsertMeta(attr: 'name' | 'property', key: string, content: string) {
@@ -70,22 +69,13 @@ export function Seo({ title, description, path, image = DEFAULT_IMAGE, noindex, 
     upsertMeta('name', 'twitter:image', image)
     upsertMeta('name', 'twitter:image:alt', 'Vistrow Voice - multilingual AI voice agents for India')
     upsertMeta('name', 'slack-app-id', SLACK_APP_ID)
+  }, [title, description, path, image, noindex])
 
-    const existingScript = document.getElementById(JSONLD_SCRIPT_ID)
-    if (existingScript) existingScript.remove()
-    if (jsonLd) {
-      const script = document.createElement('script')
-      script.id = JSONLD_SCRIPT_ID
-      script.type = 'application/ld+json'
-      script.textContent = JSON.stringify(jsonLd)
-      document.head.appendChild(script)
-    }
-
-    // Page-specific JSON-LD shouldn't leak onto whatever page mounts next.
-    return () => {
-      document.getElementById(JSONLD_SCRIPT_ID)?.remove()
-    }
-  }, [title, description, path, image, noindex, jsonLd])
-
-  return null
+  // Rendered via JSX (not injected into <head> imperatively like the tags
+  // above) so prerender.mjs's renderToString pass captures it - a crawler
+  // that doesn't run JS still sees the structured data. Valid anywhere in
+  // the document, not just <head>.
+  return jsonLd ? (
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+  ) : null
 }

@@ -14,6 +14,8 @@ interface CallWindow {
 }
 
 function readWindow(): CallWindow {
+  // SSR (prerendering) has no localStorage - render as if no calls used yet.
+  if (typeof localStorage === 'undefined') return { count: 0, windowStart: Date.now() }
   const raw = localStorage.getItem(STORAGE_KEY)
   if (raw) {
     try {
@@ -35,6 +37,7 @@ function readWindow(): CallWindow {
 }
 
 function writeWindow(w: CallWindow): void {
+  if (typeof localStorage === 'undefined') return
   localStorage.setItem(STORAGE_KEY, JSON.stringify(w))
 }
 

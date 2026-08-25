@@ -1,13 +1,15 @@
+import { useLocation } from 'react-router-dom'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 
 export function NotFound() {
+  const { pathname } = useLocation()
   return (
     <MarketingLayout>
       <Seo
         title="Page Not Found | Vistrow Voice"
         description="The page you requested could not be found."
-        path={window.location.pathname}
+        path={pathname}
         noindex
       />
       <section className="mx-auto flex min-h-[55vh] max-w-2xl flex-col items-center justify-center px-5 py-24 text-center md:px-8">
