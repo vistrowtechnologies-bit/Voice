@@ -12,6 +12,7 @@ import {
   HOW_IT_WORKS,
   SOLUTIONS,
   HERO_STATS,
+  LANGUAGES,
 } from '../../lib/marketingContent'
 
 const FAQ = [
@@ -73,6 +74,11 @@ const HOME_JSONLD = [
 // Each maps to real behaviour: mid-call language switching, the per-turn
 // gender-agreement reminder, the Hinglish sentiment cues in emotion.py, and
 // the ten-script voice catalog.
+// Order matters for the bento grid below, not just for reading flow. In a
+// 2-column grid, exactly one card may span both columns without leaving a
+// hole: 2 + (4 x 1) = 6 column-units = 3 whole rows. That wide card also has
+// to sit at an index that STARTS a row, or CSS grid auto-placement pushes it
+// down and leaves a visible gap behind it - so the wide one is last.
 const BHARAT_POINTS = [
   {
     glyph: 'हिं+EN',
@@ -88,11 +94,6 @@ const BHARAT_POINTS = [
     glyph: '😤',
     title: 'It knows “bakwas” means trouble',
     body: 'Frustration in an Indian call rarely arrives in textbook English. Artha reads the cues people actually use - bekaar, faltu, bakwas - and softens its tone before the caller escalates.',
-  },
-  {
-    glyph: 'अ अ अ',
-    title: 'Ten Indian languages, one agent',
-    body: 'From Punjabi in the north to Malayalam in the south, one agent covers them all - no separate deployment, no per-language rebuild, no region left on an English-only fallback.',
   },
   {
     glyph: '🎭',
@@ -259,8 +260,8 @@ export function Home() {
 
         <div className="grid gap-5 md:grid-cols-2">
           {BHARAT_POINTS.map((point, i) => (
-            <Reveal key={point.title} delayMs={i * 70}>
-              <div className="group h-full rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-primary/60">
+            <Reveal key={point.title} delayMs={i * 70} className="h-full">
+              <div className="vv-lift group h-full rounded-2xl border border-border bg-surface p-7">
                 <div className="flex items-start justify-between gap-4">
                   <h3 className="font-display text-lg font-semibold">{point.title}</h3>
                   <span
@@ -274,114 +275,211 @@ export function Home() {
               </div>
             </Reveal>
           ))}
+
+          {/* The tenth-language claim, shown instead of asserted - every glyph
+              here is a language the product genuinely speaks, pulled from the
+              same LANGUAGES list that drives the hero greeting and /languages.
+              Spans both columns: it closes the section, and a full-width row
+              is what keeps the 5-card set from leaving an orphan (see the
+              note on BHARAT_POINTS above). */}
+          <Reveal delayMs={BHARAT_POINTS.length * 70} className="h-full md:col-span-2">
+            <div className="vv-lift group relative h-full overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-surface to-surface p-7">
+              <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                <div className="md:max-w-md">
+                  <div className="flex items-start justify-between gap-4">
+                    <h3 className="font-display text-lg font-semibold">Ten Indian languages, one agent</h3>
+                    <span
+                      aria-hidden="true"
+                      className="shrink-0 font-display text-2xl text-text-muted transition-colors group-hover:text-primary md:hidden"
+                    >
+                      अ अ अ
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-relaxed text-text-muted">
+                    From Punjabi in the north to Malayalam in the south, one agent covers them all - no
+                    separate deployment, no per-language rebuild, no region left on an English-only fallback.
+                  </p>
+                  <Link
+                    to="/languages"
+                    className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline"
+                  >
+                    See every language
+                    <Icon name="arrow_forward" className="text-[16px]" />
+                  </Link>
+                </div>
+                {/* Decorative: the greetings already carry the meaning, and
+                    reading ten scripts aloud in sequence tells a screen-reader
+                    user nothing the sentence above hasn't. */}
+                <ul aria-hidden="true" className="flex flex-wrap gap-2 md:max-w-sm md:justify-end">
+                  {LANGUAGES.map((lang) => (
+                    <li
+                      key={lang.slug}
+                      className="rounded-full border border-border bg-surface/70 px-3 py-1.5 font-display text-sm text-text-muted transition-colors group-hover:border-primary/40 group-hover:text-text"
+                    >
+                      {lang.greeting}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 
-      {/* ---------- How it works ---------- */}
+      {/* ---------- How it works ----------
+          Tinted band. Every section used to sit on the same background with
+          the same card treatment, so the page read as one endless column of
+          boxes with no sense of where a section began or ended. Tinting every
+          other section gives the scroll a rhythm, and the slightly darker
+          ground also makes the white cards read as raised instead of flat. */}
+      <div className="border-y border-border bg-surface-high/40">
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
-        <div className="mb-12 text-center">
-          <SectionEyebrow>How it works</SectionEyebrow>
-          <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Live in minutes, not months.</h2>
-        </div>
-        <div className="grid gap-6 md:grid-cols-3">
+        <Reveal>
+          <div className="mb-12 text-center">
+            <SectionEyebrow>How it works</SectionEyebrow>
+            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Live in minutes, not months.</h2>
+          </div>
+        </Reveal>
+        {/* The connecting rail turns three separate boxes into one sequence -
+            the numbers already imply order, but nothing was drawing the eye
+            along it. Desktop only: stacked on mobile, a horizontal rail would
+            point nowhere. */}
+        <div className="relative grid gap-6 md:grid-cols-3">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute left-0 right-0 top-[52px] hidden h-px bg-gradient-to-r from-transparent via-border to-transparent md:block"
+          />
           {HOW_IT_WORKS.map((step, i) => (
-            <div key={step.title} className="rounded-2xl border border-border bg-surface p-7">
-              <div className="flex items-center justify-between">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-primary">
-                  <Icon name={step.icon} className="text-[22px]" />
-                </span>
-                <span className="font-display text-3xl font-bold text-border">{`0${i + 1}`}</span>
+            <Reveal key={step.title} delayMs={i * 90} className="h-full">
+              <div className="vv-lift relative h-full rounded-2xl border border-border bg-surface p-7">
+                <div className="flex items-center justify-between">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-primary">
+                    <Icon name={step.icon} className="text-[22px]" />
+                  </span>
+                  <span className="font-display text-3xl font-bold text-border">{`0${i + 1}`}</span>
+                </div>
+                <h3 className="mt-5 font-display text-xl font-semibold">{step.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
               </div>
-              <h3 className="mt-5 font-display text-xl font-semibold">{step.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
+      </div>
 
       {/* ---------- Features grid ---------- */}
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
-        <div className="mb-12 text-center">
-          <SectionEyebrow>The platform</SectionEyebrow>
-          <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">
-            One platform for every voice conversation.
-          </h2>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {HOME_FEATURES.map((f) => (
-            <Link
-              key={f.to}
-              to={f.to}
-              className="group rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
-                <Icon name={f.icon ?? 'circle'} className="text-[22px]" />
-              </span>
-              <h3 className="mt-5 flex items-center gap-1 font-display text-lg font-semibold">
-                {f.label}
-                <Icon
-                  name="arrow_forward"
-                  className="text-[16px] text-text-muted transition-transform group-hover:translate-x-1 group-hover:text-primary"
-                />
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{f.desc}</p>
-            </Link>
+        <Reveal>
+          <div className="mb-12 text-center">
+            <SectionEyebrow>The platform</SectionEyebrow>
+            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">
+              One platform for every voice conversation.
+            </h2>
+          </div>
+        </Reveal>
+        {/* Swipeable rail on phones, grid from sm up. Six full-width cards
+            stacked vertically is a long scroll past near-identical boxes;
+            a snap rail makes the set feel browsable and keeps the section a
+            fixed height. -mx-5/px-5 lets cards bleed to the screen edge so
+            the rail reads as scrollable instead of looking clipped. */}
+        <div className="vv-rail -mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-2 sm:mx-0 sm:grid sm:snap-none sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3">
+          {HOME_FEATURES.map((f, i) => (
+            <Reveal key={f.to} delayMs={i * 60} className="w-[78%] shrink-0 snap-start sm:w-auto sm:shrink">
+              <Link
+                to={f.to}
+                className="vv-lift group flex h-full flex-col rounded-2xl border border-border bg-surface p-6"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary transition-transform group-hover:scale-110">
+                  <Icon name={f.icon ?? 'circle'} className="text-[22px]" />
+                </span>
+                <h3 className="mt-5 flex items-center gap-1 font-display text-lg font-semibold">
+                  {f.label}
+                  <Icon
+                    name="arrow_forward"
+                    className="text-[16px] text-text-muted transition-transform group-hover:translate-x-1 group-hover:text-primary"
+                  />
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">{f.desc}</p>
+              </Link>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* ---------- Solutions preview ---------- */}
+      <div className="border-y border-border bg-surface-high/40">
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
-        <div className="mb-12 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <SectionEyebrow>Solutions</SectionEyebrow>
-            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Built for your industry.</h2>
-          </div>
-          <Link to="/solutions" className="text-sm font-semibold text-primary hover:underline">
-            All industries →
-          </Link>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {SOLUTIONS.map((s) => (
-            <Link
-              key={s.to}
-              to={s.to}
-              className="group flex flex-col justify-between rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary"
-            >
-              <div>
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
-                  <Icon name={s.icon ?? 'circle'} className="text-[22px]" />
-                </span>
-                <h3 className="mt-5 font-display text-lg font-semibold">{s.label}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-muted">{s.desc}</p>
-              </div>
-              <span className="mt-5 flex items-center gap-1 text-sm font-semibold text-primary">
-                Explore
-                <Icon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-1" />
-              </span>
+        <Reveal>
+          <div className="mb-12 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <SectionEyebrow>Solutions</SectionEyebrow>
+              <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Built for your industry.</h2>
+            </div>
+            <Link to="/solutions" className="text-sm font-semibold text-primary hover:underline">
+              All industries →
             </Link>
+          </div>
+        </Reveal>
+        {/* Five cards in a 3-column grid left two dead slots. Promoting the
+            first vertical to a 2-column feature card fills the row exactly
+            (2 + 1, then 3) AND puts real weight behind the industry these
+            customers actually come from, instead of five interchangeable
+            tiles. Same snap rail as the platform grid on phones. */}
+        <div className="vv-rail -mx-5 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-2 sm:mx-0 sm:grid sm:snap-none sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3">
+          {SOLUTIONS.map((s, i) => (
+            <Reveal
+              key={s.to}
+              delayMs={i * 60}
+              className={`w-[78%] shrink-0 snap-start sm:w-auto sm:shrink ${i === 0 ? 'lg:col-span-2' : ''}`}
+            >
+              <Link
+                to={s.to}
+                className={`vv-lift group flex h-full flex-col justify-between rounded-2xl border border-border p-6 ${
+                  i === 0 ? 'bg-gradient-to-br from-cyan/10 via-surface to-surface' : 'bg-surface'
+                }`}
+              >
+                <div>
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan transition-transform group-hover:scale-110">
+                    <Icon name={s.icon ?? 'circle'} className="text-[22px]" />
+                  </span>
+                  <h3 className={`mt-5 font-display font-semibold ${i === 0 ? 'text-2xl' : 'text-lg'}`}>{s.label}</h3>
+                  <p className={`mt-2 leading-relaxed text-text-muted ${i === 0 ? 'max-w-md text-base' : 'text-sm'}`}>
+                    {s.desc}
+                  </p>
+                </div>
+                <span className="mt-5 flex items-center gap-1 text-sm font-semibold text-primary">
+                  Explore
+                  <Icon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-1" />
+                </span>
+              </Link>
+            </Reveal>
           ))}
         </div>
       </section>
+      </div>
 
       {/* ---------- Public beta access ---------- */}
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
-        <div className="mb-12 text-center">
-          <SectionEyebrow>Public beta</SectionEyebrow>
-          <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Try the product before pricing is finalized.</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-text-muted">Public testers get access to the complete multilingual voice platform and help shape the introductory plans.</p>
-        </div>
+        <Reveal>
+          <div className="mb-12 text-center">
+            <SectionEyebrow>Public beta</SectionEyebrow>
+            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Try the product before pricing is finalized.</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-text-muted">Public testers get access to the complete multilingual voice platform and help shape the introductory plans.</p>
+          </div>
+        </Reveal>
         <div className="grid gap-5 md:grid-cols-3">
           {[
             ['mic', 'Live voice and chat', 'Test real conversations in the browser, by phone, or through your website.'],
             ['translate', '10 Indian languages + English', 'One agent handles natural code-switching without separate language deployments.'],
             ['analytics', 'Calls, transcripts and feedback', 'Review outcomes, recordings, ratings, and operational analytics in one dashboard.'],
-          ].map(([icon, title, body]) => (
-            <div key={title} className="rounded-2xl border border-border bg-surface p-7">
-              <Icon name={icon} className="text-[24px] text-primary" />
-              <h3 className="mt-4 font-display text-lg font-semibold">{title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">{body}</p>
-            </div>
+          ].map(([icon, title, body], i) => (
+            <Reveal key={title} delayMs={i * 70} className="h-full">
+              <div className="vv-lift h-full rounded-2xl border border-border bg-surface p-7">
+                <Icon name={icon} className="text-[24px] text-primary" />
+                <h3 className="mt-4 font-display text-lg font-semibold">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">{body}</p>
+              </div>
+            </Reveal>
           ))}
         </div>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -392,10 +490,12 @@ export function Home() {
 
       {/* ---------- FAQ ---------- */}
       <section className="mx-auto max-w-3xl px-5 py-20 md:px-8">
-        <div className="mb-10 text-center">
-          <SectionEyebrow>FAQ</SectionEyebrow>
-          <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Questions, answered.</h2>
-        </div>
+        <Reveal>
+          <div className="mb-10 text-center">
+            <SectionEyebrow>FAQ</SectionEyebrow>
+            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Questions, answered.</h2>
+          </div>
+        </Reveal>
         <div className="flex flex-col gap-3">
           {FAQ.map((item, i) => (
             <div key={item.q} className="rounded-2xl border border-border bg-surface">
@@ -417,6 +517,7 @@ export function Home() {
 
       {/* ---------- Final CTA ---------- */}
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
+        <Reveal>
         <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-surface to-surface-high p-10 text-center sm:p-16">
           <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/20 blur-[100px]" />
           <h2 className="relative font-display text-4xl font-bold tracking-tight sm:text-5xl">
@@ -435,6 +536,7 @@ export function Home() {
             </Link>
           </div>
         </div>
+        </Reveal>
       </section>
     </MarketingLayout>
   )

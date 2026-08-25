@@ -43,7 +43,23 @@ export function Reveal({
       { rootMargin: '0px 0px -10% 0px', threshold: 0.05 },
     )
     observer.observe(el)
-    return () => observer.disconnect()
+
+    // Last-resort safety net. The guards above cover "no IntersectionObserver"
+    // and "reduced motion", but not the case where an observer is created and
+    // its callback simply never arrives - browsers suspend delivery entirely
+    // while document.visibilityState is "hidden" (observed directly: a fresh
+    // observer on an element sitting mid-viewport never fired at all in a
+    // backgrounded tab). Most of the marketing homepage now renders through
+    // this component, so a callback that never lands would leave the page
+    // blank rather than merely unanimated - and content held at opacity:0 is
+    // also content a crawler can reasonably treat as hidden. Showing after a
+    // beat downgrades that failure to "no animation", which is the trade this
+    // component already says it wants to make.
+    const failsafe = window.setTimeout(() => setShown(true), 2500)
+    return () => {
+      observer.disconnect()
+      window.clearTimeout(failsafe)
+    }
   }, [])
 
   return (
