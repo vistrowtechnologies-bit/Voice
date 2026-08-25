@@ -7,6 +7,7 @@ import { Seo } from '../../components/Seo'
 import { TalkToArthaButton } from '../../components/MarketingBits'
 import { RotatingGreeting, ScriptMarquee } from '../../components/BharatBits'
 import { Reveal } from '../../components/Reveal'
+import arthaAvatar from '../../assets/artha-avatar.png'
 import {
   HOME_FEATURES,
   HOW_IT_WORKS,
@@ -228,7 +229,14 @@ export function Home() {
             </div>
             <div className="mt-4 flex justify-end gap-3">
               <p className="rounded-2xl rounded-tr-sm bg-primary px-4 py-3 text-sm text-white">Of course. I’ll explain the plans in English and help you choose based on your call volume.</p>
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">A</span>
+              <img
+                src={arthaAvatar}
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                decoding="async"
+                className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-primary/25"
+              />
             </div>
             <p className="mt-4 text-right text-[11px] font-semibold uppercase tracking-wider text-text-muted">Hindi → English · same voice · same conversation</p>
           </div>
