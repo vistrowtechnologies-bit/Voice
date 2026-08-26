@@ -13,7 +13,8 @@ INDUSTRY_DEMOS: tuple[dict[str, str], ...] = (
         "slug": "real-estate",
         "name": "Artha · Real Estate Demo",
         "business_name": "Aarohan Homes",
-        "welcome_message": "नमस्ते, आरोहण होम्स से आर्था बोल रही हूँ। बताइए, प्रॉपर्टी के बारे में मैं आपकी कैसे मदद कर सकती हूँ?",
+        "previous_welcome_message": "नमस्ते, आरोहण होम्स से आर्था बोल रही हूँ। बताइए, प्रॉपर्टी के बारे में मैं आपकी कैसे मदद कर सकती हूँ?",
+        "welcome_message": "नमस्ते, आरोहण होम्स से आर्था बोल रही हूँ। जी, बताइए—आप किस तरह की प्रॉपर्टी देख रहे हैं?",
         "description": "Public real-estate role-play demo — qualifies buyers and books site visits.",
         "prompt": """
 You are Artha, the inbound property advisor for Aarohan Homes, a fictional
@@ -47,7 +48,8 @@ then use the calendar tool and offer only two or three options.
         "slug": "healthcare",
         "name": "Artha · Healthcare Demo",
         "business_name": "Sunrise Care Clinic",
-        "welcome_message": "नमस्ते, सनराइज़ केयर क्लिनिक से आर्था बोल रही हूँ। बताइए, मैं आपकी कैसे मदद कर सकती हूँ?",
+        "previous_welcome_message": "नमस्ते, सनराइज़ केयर क्लिनिक से आर्था बोल रही हूँ। बताइए, मैं आपकी कैसे मदद कर सकती हूँ?",
+        "welcome_message": "नमस्ते, सनराइज़ केयर क्लिनिक। आर्था बोल रही हूँ। जी बताइए—अपॉइंटमेंट के लिए कॉल किया है, या कुछ पूछना था?",
         "description": "Public clinic role-play demo — answers patient FAQs and books appointments.",
         "prompt": """
 You are Artha, the front-desk assistant for Sunrise Care Clinic, a fictional
@@ -70,7 +72,8 @@ and confirm a booking only after the booking tool succeeds.
         "slug": "ecommerce",
         "name": "Artha · E-commerce Demo",
         "business_name": "Nivara Living",
-        "welcome_message": "नमस्ते, निवारा लिविंग कस्टमर केयर से आर्था बोल रही हूँ। बताइए, मैं आपकी कैसे मदद कर सकती हूँ?",
+        "previous_welcome_message": "नमस्ते, निवारा लिविंग कस्टमर केयर से आर्था बोल रही हूँ। बताइए, मैं आपकी कैसे मदद कर सकती हूँ?",
+        "welcome_message": "नमस्ते, निवारा लिविंग कस्टमर केयर। आर्था बोल रही हूँ। जी बताइए—ऑर्डर से जुड़ी कोई दिक्कत है?",
         "description": "Public e-commerce role-play demo — handles order, return, and product-support calls.",
         "prompt": """
 You are Artha, the customer-care agent for Nivara Living, a fictional home and
@@ -102,7 +105,8 @@ step, not a policy lecture.
         "slug": "finance",
         "name": "Artha · Finance Demo",
         "business_name": "Saarthi Finance",
-        "welcome_message": "नमस्ते, सारथी फाइनेंस से आर्था बोल रही हूँ। बताइए, मैं आपकी कैसे मदद कर सकती हूँ?",
+        "previous_welcome_message": "नमस्ते, सारथी फाइनेंस से आर्था बोल रही हूँ। बताइए, मैं आपकी कैसे मदद कर सकती हूँ?",
+        "welcome_message": "नमस्ते, सारथी फाइनेंस से आर्था बोल रही हूँ। जी बताइए—पेमेंट या अकाउंट को लेकर कुछ मदद चाहिए थी?",
         "description": "Public finance role-play demo — handles respectful payment and account-support conversations.",
         "prompt": """
 You are Artha, the customer-assistance agent for Saarthi Finance, a fictional
@@ -134,7 +138,8 @@ and the response concise.
         "slug": "support",
         "name": "Artha · Support Demo",
         "business_name": "NovaDesk",
-        "welcome_message": "नमस्ते, नोवाडेस्क सपोर्ट से आर्था बोल रही हूँ। बताइए, मैं आपकी कैसे मदद कर सकती हूँ?",
+        "previous_welcome_message": "नमस्ते, नोवाडेस्क सपोर्ट से आर्था बोल रही हूँ। बताइए, मैं आपकी कैसे मदद कर सकती हूँ?",
+        "welcome_message": "नमस्ते, नोवाडेस्क सपोर्ट। आर्था बोल रही हूँ। जी बताइए—क्या दिक्कत आ रही है?",
         "description": "Public helpdesk role-play demo — resolves tier-one issues and prepares clean handoffs.",
         "prompt": """
 You are Artha, the tier-one support agent for NovaDesk, a fictional team

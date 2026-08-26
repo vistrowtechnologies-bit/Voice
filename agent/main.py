@@ -47,6 +47,7 @@ from emotion import (
 )
 from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
+from prompts.industry_demo_style import build_industry_demo_style, industry_demo_turn_nudge
 from prompts.platform_assistant import build_platform_assistant_prompt
 from prompts.voice_style import ELEVENLABS_EXPRESSIVE_PROMPT, VOICE_STYLE_PROMPT
 from tools import (
@@ -935,6 +936,7 @@ class RealEstateAgent(Agent):
         agent_name = config.get("name") or "Artha"
         voice_value = config.get("voice") or "shubh"
         self._is_platform_demo = bool(config.get("is_platform_demo"))
+        self._public_demo_slug = (config.get("public_demo_slug") or "").strip().lower()
         self._agent_name = agent_name
         self._visitor_first_name = visitor_name.strip().split()[0] if visitor_name else None
         # Resolve this before choosing built-in vs custom instructions. Public
@@ -961,7 +963,7 @@ class RealEstateAgent(Agent):
             # must answer as their demo business), then the tenant's company
             # name from signup, then the old placeholder.
             instructions = build_generic_assistant_prompt(agent_name, business_name)
-        if (config.get("public_demo_slug") or "").strip():
+        if self._public_demo_slug:
             # Public role-play callers often repeat the business name after
             # the greeting, while multilingual STT returns a close phonetic
             # spelling (the finance demo heard "Saarthi" as "Earth"). That
@@ -976,6 +978,7 @@ class RealEstateAgent(Agent):
                 "you have no information about a close-sounding version of the same name, and do "
                 "not correct or lecture the caller unless they clearly ask about another company."
             )
+            instructions += "\n\n" + build_industry_demo_style(self._public_demo_slug, business_name)
         if visitor_name and visitor_phone:
             # Website-widget calls collect these in a pre-call form, so the
             # agent already has them — this both stops it re-asking (the
@@ -1481,6 +1484,7 @@ class RealEstateAgent(Agent):
             )
         else:
             _personality_instruction = ""
+        _industry_turn_instruction = industry_demo_turn_nudge(self._public_demo_slug)
         # Same reinforcement pattern again for a different failure: the
         # prompt already says "search, don't dodge" for a concrete factual
         # question, but confirmed live — asked to name real hospitals near a
@@ -1509,6 +1513,7 @@ class RealEstateAgent(Agent):
             content=_language_instruction
             + ("\n\n" + _gender_instruction if _gender_instruction else "")
             + ("\n\n" + _personality_instruction if _personality_instruction else "")
+            + ("\n\n" + _industry_turn_instruction if _industry_turn_instruction else "")
             + ("\n\n" + _search_instruction if _search_instruction else ""),
         )
 

@@ -828,11 +828,19 @@ def _ensure_industry_demo_agents(conn: dbconn.Conn) -> None:
             (demo["slug"],),
         ).fetchone()
         if exists:
-            if not (exists["welcome_message"] or "").strip():
+            current_welcome = (exists["welcome_message"] or "").strip()
+            # Advance only our own generated opener. A tenant/operator-written
+            # welcome remains untouched even as the built-in role-play copy
+            # becomes more natural in a later release.
+            if not current_welcome or current_welcome == demo.get("previous_welcome_message", ""):
                 conn.execute(
                     "UPDATE agents SET welcome_message = ? WHERE id = ? AND "
-                    "(welcome_message IS NULL OR welcome_message = '')",
-                    (demo["welcome_message"], exists["id"]),
+                    "(welcome_message IS NULL OR welcome_message = '' OR welcome_message = ?)",
+                    (
+                        demo["welcome_message"],
+                        exists["id"],
+                        demo.get("previous_welcome_message", ""),
+                    ),
                 )
             continue
         conn.execute(
