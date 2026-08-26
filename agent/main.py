@@ -2454,12 +2454,18 @@ async def entrypoint(ctx: JobContext) -> None:
     if cfg.get("ambient_noise") == "on":
         try:
             background_audio = BackgroundAudioPlayer(
-                # 0.05 was a first guess and proved inaudible on a real call
-                # (-26dB under speech). This is the one knob to tune by ear;
-                # raise toward 0.5 for a busier room, drop toward 0.1 if it
-                # ever competes with the voice.
+                # volume here is a raw gain multiplier, NOT the 0.0-1.0 range
+                # AudioConfig's docstring implies: it is applied as
+                # `samples *= volume` and then clipped. Values above 1.0 are
+                # both legal and necessary here, because the bundled clip is
+                # itself very quiet - measured by decoding it: peak amplitude
+                # 435 of int16's 32767, RMS 55, i.e. -55.5 dBFS at volume=1.0.
+                # So 0.05 (-81 dBFS) and 0.3 (-66 dBFS) were both inaudible on
+                # real calls. 3.0 lands near -46 dBFS: present under the voice
+                # without competing with it. Clipping only starts around 75x,
+                # so there is plenty of headroom to raise this further.
                 ambient_sound=AudioConfig(
-                    BuiltinAudioClip.OFFICE_AMBIENCE, volume=0.3, fade_in=1.5
+                    BuiltinAudioClip.OFFICE_AMBIENCE, volume=3.0, fade_in=1.5
                 )
             )
             await background_audio.start(room=ctx.room, agent_session=session)
