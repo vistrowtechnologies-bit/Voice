@@ -937,6 +937,17 @@ class RealEstateAgent(Agent):
         self._is_platform_demo = bool(config.get("is_platform_demo"))
         self._agent_name = agent_name
         self._visitor_first_name = visitor_name.strip().split()[0] if visitor_name else None
+        # Resolve this before choosing built-in vs custom instructions. Public
+        # industry demos use focused custom prompts, but their opening still
+        # needs to say which fictional business the caller reached (the exact
+        # healthcare transcript bug fixed for generic tenant agents). The
+        # platform sales demo has its own opener and simply ignores this.
+        business_name = (
+            (config.get("business_name") or "").strip()
+            or (config.get("account_name") or "").strip()
+            or "this business"
+        )
+        self._business_name = business_name
         if config.get("system_prompt"):
             instructions = config["system_prompt"]
         elif config.get("is_platform_demo"):
@@ -949,19 +960,7 @@ class RealEstateAgent(Agent):
             # public industry demos, which run on the operator's account but
             # must answer as their demo business), then the tenant's company
             # name from signup, then the old placeholder.
-            business_name = (
-                (config.get("business_name") or "").strip()
-                or (config.get("account_name") or "").strip()
-                or "this business"
-            )
             instructions = build_generic_assistant_prompt(agent_name, business_name)
-            # on_enter's default opener needs this too — see there for why
-            # "this business" is fine mid-prompt (an LLM reads it in context)
-            # but should never be SPOKEN aloud as the literal words "this
-            # business" in the fixed greeting line. Not stored for the
-            # platform-demo/custom-prompt branches above, which never read
-            # self._business_name.
-            self._business_name = business_name
         if visitor_name and visitor_phone:
             # Website-widget calls collect these in a pre-call form, so the
             # agent already has them — this both stops it re-asking (the

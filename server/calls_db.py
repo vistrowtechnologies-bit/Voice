@@ -30,6 +30,7 @@ import psycopg
 
 import dbconn
 import voice_catalog
+from industry_demos import INDUSTRY_DEMOS
 from widget_avatars import is_valid_avatar_key
 
 logger = logging.getLogger(__name__)
@@ -791,6 +792,61 @@ def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
         )
 
 
+def _ensure_industry_demo_agents(conn: dbconn.Conn) -> None:
+    """Seed any missing public role-play demos under the platform account.
+
+    Existing rows are deliberately never updated: the operator may tune a
+    prompt, voice, model, KB, or availability in the dashboard, and a deploy
+    must not silently put those choices back to code defaults. The unique
+    slug index created in init_tables makes this safe across concurrent boots.
+    """
+    owner = conn.execute(
+        "SELECT id FROM accounts WHERE is_platform_owner = 1 ORDER BY id LIMIT 1"
+    ).fetchone()
+    if not owner:
+        return
+    account_id = owner["id"]
+    # Keep one recognizable Artha voice across the five demos; visual color
+    # and industry behavior change, not the brand character. Prefer the
+    # already-tuned healthcare demo, then the main marketing demo, then safe
+    # defaults on a brand-new install.
+    source = conn.execute(
+        "SELECT model, voice, language, tone FROM agents WHERE account_id = ? "
+        "ORDER BY CASE WHEN lower(public_demo_slug) = 'healthcare' THEN 0 "
+        "WHEN is_platform_demo = 1 THEN 1 ELSE 2 END, id LIMIT 1",
+        (account_id,),
+    ).fetchone()
+    model = source["model"] if source else "gpt-4.1-mini"
+    voice = source["voice"] if source else "pooja"
+    language = source["language"] if source else "hi-IN"
+    tone = source["tone"] if source else "casual"
+
+    for demo in INDUSTRY_DEMOS:
+        exists = conn.execute(
+            "SELECT 1 FROM agents WHERE lower(public_demo_slug) = ? LIMIT 1",
+            (demo["slug"],),
+        ).fetchone()
+        if exists:
+            continue
+        conn.execute(
+            "INSERT INTO agents (account_id, name, description, model, voice, language, status, "
+            "system_prompt, tone, first_speaker, max_call_duration_s, business_name, public_demo_slug) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'live', ?, ?, 'agent', 300, ?, ?)",
+            (
+                account_id,
+                demo["name"],
+                demo["description"],
+                model,
+                voice,
+                language,
+                demo["prompt"],
+                tone,
+                demo["business_name"],
+                demo["slug"],
+            ),
+        )
+
+
 def init_tables() -> None:
     conn = _connect()
     try:
@@ -1099,6 +1155,14 @@ def init_tables() -> None:
                 ")",
                 (_PLATFORM_OWNER_EMAIL,),
             )
+            # Public industry slugs are unauthenticated routing keys. Keep
+            # them globally unique so one page can never nondeterministically
+            # dispatch to two agents after concurrent deploy boots.
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS agents_public_demo_slug_unique "
+                "ON agents ((lower(public_demo_slug))) WHERE public_demo_slug <> ''"
+            )
+            _ensure_industry_demo_agents(conn)
             # If the first account already exists (a prior boot completed a
             # signup), any row still missing account_id predates that signup
             # — hand it over now rather than waiting for create_account_with_

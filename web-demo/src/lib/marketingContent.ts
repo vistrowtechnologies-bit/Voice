@@ -203,6 +203,8 @@ export interface Solution extends NavLink {
   /** Badge on the demo card — says what the visitor is about to phone
    * ("Clinic demo"), not a generic "Live demo". */
   demoBadge?: string
+  /** Short, industry-specific suggestions below the live card. */
+  demoPrompt?: string
   /** Hue rotation tinting the demo orb for this industry, so each page's
    * demo looks like its own thing. See index.css's --demo-accent-hue. */
   demoAccentHue?: string
@@ -210,6 +212,12 @@ export interface Solution extends NavLink {
 
 export const SOLUTIONS: Solution[] = [
   {
+    demoSlug: 'real-estate',
+    demoBusiness: 'Aarohan Homes',
+    demoBadge: 'Property demo',
+    demoPrompt: 'Ask about the Baner project, share a budget, or book a site visit.',
+    // Purple (271°) -> warm property gold (40°).
+    demoAccentHue: '129deg',
     label: 'Real Estate',
     to: '/solutions/real-estate',
     icon: 'apartment',
@@ -233,6 +241,7 @@ export const SOLUTIONS: Solution[] = [
     demoSlug: 'healthcare',
     demoBusiness: 'Sunrise Care Clinic',
     demoBadge: 'Clinic demo',
+    demoPrompt: 'Ask about clinic timings, a doctor, or book an appointment.',
     // Purple (hue 271°) -> teal (hue 170°), the colour healthcare UI
     // conventionally uses. Computed, not eyeballed - an earlier guess of
     // 135deg actually lands on hue 46 (amber), confirmed live: the orb
@@ -258,6 +267,12 @@ export const SOLUTIONS: Solution[] = [
     ],
   },
   {
+    demoSlug: 'ecommerce',
+    demoBusiness: 'Nivara Living',
+    demoBadge: 'Store support demo',
+    demoPrompt: 'Try sample order NV-1042, ask about a return, or describe a delivery issue.',
+    // Purple (271°) -> energetic commerce pink (330°).
+    demoAccentHue: '59deg',
     label: 'E-commerce & D2C',
     to: '/solutions/ecommerce',
     icon: 'shopping_bag',
@@ -278,6 +293,12 @@ export const SOLUTIONS: Solution[] = [
     ],
   },
   {
+    demoSlug: 'finance',
+    demoBusiness: 'Saarthi Finance',
+    demoBadge: 'Finance demo',
+    demoPrompt: 'Ask about a payment reminder, due-date concern, or request a safe callback.',
+    // Purple (271°) -> dependable finance blue (215°).
+    demoAccentHue: '-56deg',
     label: 'Finance & Collections',
     to: '/solutions/finance',
     icon: 'account_balance',
@@ -298,6 +319,12 @@ export const SOLUTIONS: Solution[] = [
     ],
   },
   {
+    demoSlug: 'support',
+    demoBusiness: 'NovaDesk',
+    demoBadge: 'Helpdesk demo',
+    demoPrompt: 'Try a missing password-reset email, a billing question, or a support escalation.',
+    // Purple (271°) -> clear support cyan (190°).
+    demoAccentHue: '-81deg',
     label: 'Support & Helpdesk',
     to: '/solutions/support',
     icon: 'support_agent',

@@ -49,7 +49,7 @@ export function SolutionDetail() {
             />
             <p className="mx-auto max-w-[420px] text-center text-xs text-text-muted lg:mx-0 lg:ml-auto">
               You’ll be talking to <span className="font-semibold text-text">{solution.demoBusiness}</span> — a
-              demo business we made up, answered live by Artha. Ask about timings, fees, or book an appointment.
+              demo business we made up, answered live by Artha. {solution.demoPrompt}
             </p>
           </div>
         ) : undefined}
