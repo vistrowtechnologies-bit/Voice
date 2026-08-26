@@ -604,13 +604,26 @@ html.theme-transition * {
 }
 
 /* Per-industry accent for the live demo card. Solution pages set
-   --demo-accent-hue on the card shell so the orb (and its glow) is tinted
-   for that industry — five identical purple cards read as one generic
-   widget pasted everywhere, which undercuts the "this is YOUR front desk"
-   point the industry pages are making. Done in CSS rather than threading a
-   prop through the five separate orb <video> instances inside the card.
-   Default 0deg leaves the homepage exactly as it was. */
-.demo-card-shell video,
-.demo-card-shell .demo-glow {
+   --demo-accent-hue on the card shell so the orb, its outer page glow, and
+   the corner status pill are all tinted for that industry — five identical
+   purple cards read as one generic widget pasted everywhere, which
+   undercuts the "this is YOUR front desk" point the industry pages are
+   making. Default 0deg leaves the homepage exactly as it was.
+   The orb video is one selector; its shadow/ring glow is a SEPARATE
+   sibling/parent element with a hardcoded rgba() shadow (5 near-identical
+   spans across the idle/connecting/active/orchestrator states) that
+   `filter` on the video alone never reaches — confirmed live: the video
+   tinted amber while its halo stayed purple. :has() reaches every one of
+   those wrapper spans in one rule instead of editing five JSX blocks
+   (and covers any new orb state added later for free). Filtering the span
+   ALONE is deliberate, not the video too — CSS filter rasterizes an
+   element's whole rendered subtree, so a filtered parent already tints
+   its child video; filtering both would compound the rotation (135deg
+   twice = 270deg) and land on the wrong hue. .demo-accent marks the two
+   elements that aren't a shadow-wrapped video (the badge pill, and the
+   idle button's ring borders) explicitly. */
+.demo-card-shell span:has(> video),
+.demo-card-shell .demo-glow,
+.demo-card-shell .demo-accent {
   filter: hue-rotate(var(--demo-accent-hue, 0deg));
 }

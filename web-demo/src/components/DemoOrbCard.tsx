@@ -322,7 +322,7 @@ export function DemoOrbCard({
         <span className="demo-start-label" aria-hidden="true">
           <Icon name="south_east" className="text-[15px]" /> Start here
         </span>
-        <div className="absolute right-5 top-5 flex items-center gap-1.5 rounded-full border border-border bg-surface-high px-3 py-1">
+        <div className="demo-accent absolute right-5 top-5 flex items-center gap-1.5 rounded-full border border-border bg-surface-high px-3 py-1">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
@@ -362,8 +362,13 @@ export function DemoOrbCard({
               disabled={phase === 'connecting'}
               className="demo-start-target group relative my-6 flex h-48 w-48 items-center justify-center disabled:cursor-wait"
             >
-              <span className="absolute inset-0 rounded-full border border-primary/20" />
-              <span className="absolute inset-5 rounded-full border border-primary/10" />
+              {/* Only these two ring borders get .demo-accent directly - the
+                  shadow-wrapped video span two lines down already picks up
+                  the same rotation via index.css's span:has(> video) rule,
+                  and this button wraps that span, so tinting the whole
+                  button would double-apply the rotation to it. */}
+              <span className="demo-accent absolute inset-0 rounded-full border border-primary/20" />
+              <span className="demo-accent absolute inset-5 rounded-full border border-primary/10" />
               <span className="relative h-32 w-32 overflow-hidden rounded-full shadow-[0_0_60px_-5px_rgba(168,85,247,0.6)] transition-transform group-hover:scale-105">
                 <video src="/agent-orb.mp4" autoPlay loop muted playsInline className="h-full w-full scale-150 object-cover" />
               </span>

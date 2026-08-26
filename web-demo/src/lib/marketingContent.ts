@@ -233,9 +233,11 @@ export const SOLUTIONS: Solution[] = [
     demoSlug: 'healthcare',
     demoBusiness: 'Sunrise Care Clinic',
     demoBadge: 'Clinic demo',
-    // Purple -> clinical teal/green, the colour healthcare UI conventionally
-    // uses, and far enough from the homepage purple to read as distinct.
-    demoAccentHue: '135deg',
+    // Purple (hue 271°) -> teal (hue 170°), the colour healthcare UI
+    // conventionally uses. Computed, not eyeballed - an earlier guess of
+    // 135deg actually lands on hue 46 (amber), confirmed live: the orb
+    // tinted amber, not teal. rotation = target_hue - source_hue.
+    demoAccentHue: '-101deg',
     label: 'Healthcare & Clinics',
     to: '/solutions/healthcare',
     icon: 'health_and_safety',
