@@ -68,29 +68,69 @@ export function NavLink({
   )
 }
 
+// Above this many items a single 320px column runs ~800px tall and swallows
+// the whole hero (Product and Solutions both carry 7). Two columns halve it.
+const NAV_TWO_COLUMN_THRESHOLD = 5
+
 function DesktopNav() {
   const [open, setOpen] = useState<string | null>(null)
+
+  // Escape closes, matching every other dismissible surface in the app.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
   return (
     <nav className="hidden items-center gap-1 lg:flex">
-      {NAV.map((group) =>
-        group.items ? (
+      {NAV.map((group) => {
+        const isOpen = open === group.label
+        const wide = (group.items?.length ?? 0) > NAV_TWO_COLUMN_THRESHOLD
+        return group.items ? (
           <div
             key={group.label}
             className="relative"
             onMouseEnter={() => setOpen(group.label)}
             onMouseLeave={() => setOpen(null)}
           >
-            <button className="flex items-center gap-1 rounded-full px-4 py-2 text-sm text-text-muted transition-colors hover:text-text">
+            <button
+              type="button"
+              aria-haspopup="true"
+              aria-expanded={isOpen}
+              // Hover alone left these submenus unreachable by keyboard and
+              // unusable on touch — the trigger had no click handler at all,
+              // so Tab + Enter did nothing and the pages under Product /
+              // Solutions / Resources / Company had no non-mouse route in.
+              onClick={() => setOpen(isOpen ? null : group.label)}
+              className="flex items-center gap-1 rounded-full px-4 py-2 text-sm text-text-muted transition-colors hover:text-text"
+            >
               {group.label}
-              <Icon name="expand_more" className="text-[16px]" />
+              <Icon
+                name="expand_more"
+                className={`text-[16px] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+              />
             </button>
-            {open === group.label && (
-              <div className="absolute left-1/2 top-full z-40 w-80 -translate-x-1/2 pt-2">
-                <div className="grid gap-1 rounded-2xl border border-border bg-surface p-2 shadow-2xl">
+            {isOpen && (
+              <div
+                className={`absolute left-1/2 top-full z-40 -translate-x-1/2 pt-2 ${wide ? 'w-[34rem]' : 'w-80'}`}
+              >
+                <div
+                  className={`grid gap-1 rounded-2xl border border-border bg-surface p-2 shadow-2xl ${
+                    wide ? 'grid-cols-2' : 'grid-cols-1'
+                  }`}
+                >
                   {group.items.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}
+                      // Without this the panel stays open over the page it
+                      // just navigated to when opened by click/keyboard,
+                      // since no mouseleave ever fires.
+                      onClick={() => setOpen(null)}
                       className="flex items-start gap-3 rounded-xl p-3 transition-colors hover:bg-surface-high"
                     >
                       <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-surface-high text-primary">
@@ -116,8 +156,8 @@ function DesktopNav() {
           >
             {group.label}
           </NavLink>
-        ),
-      )}
+        )
+      })}
     </nav>
   )
 }
