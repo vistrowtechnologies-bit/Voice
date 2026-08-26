@@ -293,6 +293,14 @@ async def check_calendar_availability(
     if not slots:
         return f"No open slots on {date}. Offer the caller a different day."
     listing = f"Open slots on {date}: {', '.join(slots)}."
+    # This full listing is CONTEXT for you, not a script to read aloud.
+    # Confirmed real failure: a caller who hadn't named a time got all
+    # sixteen open slots for the day read out in one breath ("10, 10:30,
+    # 11, 11:30, 12, 12:30..."), which is the exact IVR-menu monologue this
+    # product exists to avoid, and produced nothing but the caller saying
+    # "ok, ok, ok, ok, ok" until it stopped. Offer at most 2-3 - e.g. a
+    # morning, afternoon, and evening option - and offer more only if the
+    # caller asks. This applies whether or not requested_time is set.
     if requested_time:
         # Deterministic exact-match check instead of leaving the model to
         # scan a long comma list itself — a 2026-08-03 real call had the
@@ -309,7 +317,7 @@ async def check_calendar_availability(
             f"NO — {requested_time} on {date} is NOT available (already booked or outside business hours). "
             f"Do not offer {requested_time}. {listing} Offer the caller 2-3 of these instead."
         )
-    return f"{listing} Offer these to the caller."
+    return f"{listing} Offer 2-3 of these to the caller in one short turn, not the whole list."
 
 
 @function_tool

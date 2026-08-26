@@ -183,6 +183,19 @@ _PLATFORM_DEMO_OPENERS_EN: dict[str, list[str]] = {
 _DEFAULT_OPENER_HI = "{greeting} नमस्ते! ये {agent_name} है। बताइए, आपकी क्या मदद करूँ?"
 _DEFAULT_OPENER_EN = "{greeting} this is {agent_name}. Thanks for calling — how can I help you today?"
 _DEFAULT_OPENERS = {"hi-IN": _DEFAULT_OPENER_HI}
+# Every tenant-agent opener above named the AGENT ("this is Artha") and
+# never the actual business — confirmed real failure on a live healthcare
+# demo call: a caller asked "your clinic is where?" one turn after an
+# opener that never said which clinic they'd reached at all. For a real
+# front desk, confirming the caller dialed the right place matters more
+# than the agent introducing itself by name; if they want the agent's
+# name, "who am I speaking to" is already answered elsewhere in the
+# prompt. Gendered (कर रही/रहा हूँ) per the same self._voice_gender used
+# throughout this file, so a male-voiced agent isn't misgendered on its
+# very first line.
+_DEFAULT_OPENER_HI_BUSINESS_FEMALE = "{greeting}{business_name} से बात कर रही हूँ। मैं आपकी कैसे मदद कर सकती हूँ?"
+_DEFAULT_OPENER_HI_BUSINESS_MALE = "{greeting}{business_name} से बात कर रहा हूँ। मैं आपकी कैसे मदद कर सकता हूँ?"
+_DEFAULT_OPENER_EN_BUSINESS = "{greeting}thanks for calling {business_name} — how can I help you today?"
 
 
 # Sarvam bulbul:v3's own `pace`/`temperature`/`pitch` govern how the voice is
@@ -942,6 +955,13 @@ class RealEstateAgent(Agent):
                 or "this business"
             )
             instructions = build_generic_assistant_prompt(agent_name, business_name)
+            # on_enter's default opener needs this too — see there for why
+            # "this business" is fine mid-prompt (an LLM reads it in context)
+            # but should never be SPOKEN aloud as the literal words "this
+            # business" in the fixed greeting line. Not stored for the
+            # platform-demo/custom-prompt branches above, which never read
+            # self._business_name.
+            self._business_name = business_name
         if visitor_name and visitor_phone:
             # Website-widget calls collect these in a pre-call form, so the
             # agent already has them — this both stops it re-asking (the
@@ -1259,9 +1279,27 @@ class RealEstateAgent(Agent):
             # if the widget already collected it) covers the vast majority of
             # that gap; an operator who wants a fully custom line still sets
             # welcome_message above, which short-circuits before this.
-            greeting = f"Hi {self._visitor_first_name}," if self._visitor_first_name else "Hi,"
-            template = _DEFAULT_OPENERS.get(self._reply_language, _DEFAULT_OPENER_EN)
-            await self.session.say(template.format(greeting=greeting, agent_name=self._agent_name))
+            business_name = getattr(self, "_business_name", "") or ""
+            is_hindi = self._reply_language == "hi-IN"
+            if business_name and business_name != "this business":
+                if is_hindi:
+                    greeting = f"नमस्ते {self._visitor_first_name}, " if self._visitor_first_name else "नमस्ते, "
+                    template = (
+                        _DEFAULT_OPENER_HI_BUSINESS_MALE
+                        if self._voice_gender == "male"
+                        else _DEFAULT_OPENER_HI_BUSINESS_FEMALE
+                    )
+                else:
+                    greeting = f"Hi {self._visitor_first_name}, " if self._visitor_first_name else "Hi, "
+                    template = _DEFAULT_OPENER_EN_BUSINESS
+                await self.session.say(template.format(greeting=greeting, business_name=business_name))
+            else:
+                # No real business name to say (e.g. resolved to the
+                # placeholder) - fall back to the agent-name opener rather
+                # than ever speaking the literal words "this business".
+                greeting = f"Hi {self._visitor_first_name}," if self._visitor_first_name else "Hi,"
+                template = _DEFAULT_OPENERS.get(self._reply_language, _DEFAULT_OPENER_EN)
+                await self.session.say(template.format(greeting=greeting, agent_name=self._agent_name))
         finally:
             # Cold starts / slow TTS providers (Google) can push the opening
             # line's actual playback well past the away-timeout — without
