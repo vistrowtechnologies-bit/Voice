@@ -200,6 +200,12 @@ export interface Solution extends NavLink {
   /** Fictional business the demo agent answers as. Shown on the page so a
    * visitor is never misled into thinking it is a real company. */
   demoBusiness?: string
+  /** Badge on the demo card — says what the visitor is about to phone
+   * ("Clinic demo"), not a generic "Live demo". */
+  demoBadge?: string
+  /** Hue rotation tinting the demo orb for this industry, so each page's
+   * demo looks like its own thing. See index.css's --demo-accent-hue. */
+  demoAccentHue?: string
 }
 
 export const SOLUTIONS: Solution[] = [
@@ -226,6 +232,10 @@ export const SOLUTIONS: Solution[] = [
   {
     demoSlug: 'healthcare',
     demoBusiness: 'Sunrise Care Clinic',
+    demoBadge: 'Clinic demo',
+    // Purple -> clinical teal/green, the colour healthcare UI conventionally
+    // uses, and far enough from the homepage purple to read as distinct.
+    demoAccentHue: '135deg',
     label: 'Healthcare & Clinics',
     to: '/solutions/healthcare',
     icon: 'health_and_safety',

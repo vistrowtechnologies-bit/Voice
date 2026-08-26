@@ -30,13 +30,30 @@ export function SolutionDetail() {
   return (
     <MarketingLayout>
       <Seo title={`${solution.headline} - Vistrow Voice`} description={solution.subhead} path={solution.to} jsonLd={faqJsonLd} />
-      {/* Live demo widget is homepage-only now - see PageHero's heroless-of-
-          children branch for how this renders without it. */}
+      {/* An industry with a published roleplay agent puts the live call in
+          the hero, beside the headline — it is the strongest thing on the
+          page, so burying it below three sections wasted it. Industries
+          without one pass no children and PageHero falls back to its
+          single centered column. */}
       <PageHero
         eyebrow={`Solutions · ${solution.label}`}
         title={solution.headline}
         subhead={solution.subhead}
-      />
+      >
+        {solution.demoSlug ? (
+          <div className="flex flex-col gap-3">
+            <DemoOrbCard
+              demoSlug={solution.demoSlug}
+              badgeLabel={solution.demoBadge}
+              accentHue={solution.demoAccentHue}
+            />
+            <p className="mx-auto max-w-[420px] text-center text-xs text-text-muted lg:mx-0 lg:ml-auto">
+              You’ll be talking to <span className="font-semibold text-text">{solution.demoBusiness}</span> — a
+              demo business we made up, answered live by Artha. Ask about timings, fees, or book an appointment.
+            </p>
+          </div>
+        ) : undefined}
+      </PageHero>
 
       {/* Pain → outcome */}
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
@@ -57,22 +74,20 @@ export function SolutionDetail() {
         </div>
       </section>
 
-      {/* Sample transcript + feature list */}
-      <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-5 py-12 md:px-8 lg:grid-cols-2">
+      {/* Sample transcript + feature list. The transcript column is gone on
+          industries whose demo moved into the hero, so this drops to a
+          single centered column there rather than leaving a blank half. */}
+      <section
+        className={`mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-5 py-12 md:px-8 ${
+          solution.demoSlug ? 'max-w-3xl' : 'lg:grid-cols-2'
+        }`}
+      >
         {/* A real call beats a mock-up of one: where an industry has a
             published roleplay agent, the visitor phones the demo business
             and hears exactly what their own customer would. Industries
             without one keep the scripted sample until their agent exists -
             an unknown slug would 404 from /token. */}
-        {solution.demoSlug ? (
-          <div className="flex flex-col gap-3">
-            <DemoOrbCard demoSlug={solution.demoSlug} />
-            <p className="text-center text-xs text-text-muted">
-              You’ll be talking to <span className="font-semibold text-text">{solution.demoBusiness}</span> — a
-              demo clinic we made up, answered live by Artha. Try asking about timings, fees, or booking an appointment.
-            </p>
-          </div>
-        ) : (
+        {solution.demoSlug ? null : (
           <div className="rounded-2xl border border-border bg-surface p-6">
             <div className="mb-4 flex items-center gap-2">
               <span className="relative flex h-2 w-2">

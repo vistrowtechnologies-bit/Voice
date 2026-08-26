@@ -602,3 +602,15 @@ html.theme-transition * {
   .auth-orb-ripple,
   .auth-orb-halo { animation: none; }
 }
+
+/* Per-industry accent for the live demo card. Solution pages set
+   --demo-accent-hue on the card shell so the orb (and its glow) is tinted
+   for that industry — five identical purple cards read as one generic
+   widget pasted everywhere, which undercuts the "this is YOUR front desk"
+   point the industry pages are making. Done in CSS rather than threading a
+   prop through the five separate orb <video> instances inside the card.
+   Default 0deg leaves the homepage exactly as it was. */
+.demo-card-shell video,
+.demo-card-shell .demo-glow {
+  filter: hue-rotate(var(--demo-accent-hue, 0deg));
+}

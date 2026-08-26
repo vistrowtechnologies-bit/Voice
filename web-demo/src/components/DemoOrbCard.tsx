@@ -60,11 +60,20 @@ function releaseCallLock(): void {
 export function DemoOrbCard({
   spotlight = false,
   demoSlug,
+  badgeLabel = 'Live demo',
+  accentHue,
 }: {
   spotlight?: boolean
   /** Published industry-demo slug (e.g. 'healthcare'). Omitted on the
    * homepage, where the server resolves the platform-demo sales agent. */
   demoSlug?: string
+  /** Badge in the card corner. Industry pages say what the visitor is
+   * actually about to phone ("Clinic demo") rather than a generic label. */
+  badgeLabel?: string
+  /** Hue rotation (e.g. '140deg') tinting the orb and its glow, so each
+   * industry's demo reads as its own thing instead of five identical purple
+   * cards. Omitted = the homepage's original purple, untouched. */
+  accentHue?: string
 }) {
   const [phase, setPhase] = useState<Phase>(() => (hasDemoCallsRemaining() ? 'idle' : 'capped'))
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -297,13 +306,14 @@ export function DemoOrbCard({
     <div
       id="live-demo"
       className={`demo-card-shell relative mx-auto w-full max-w-[420px] scroll-mt-20 lg:mx-0 lg:ml-auto ${spotlight ? 'demo-card-spotlight' : ''}`}
+      style={accentHue ? ({ '--demo-accent-hue': accentHue } as React.CSSProperties) : undefined}
     >
       {/* inset-x-0, not -inset-10: a negative horizontal inset made this box
           80px wider than the card, which overflowed the viewport on small
           screens and gave the whole page a horizontal scrollbar. The blur
           still paints well outside the box, so the glow looks identical -
           it just no longer contributes that width to layout. */}
-      <div className="pointer-events-none absolute inset-x-0 -inset-y-10 rounded-full bg-primary/20 blur-[100px]" />
+      <div className="demo-glow pointer-events-none absolute inset-x-0 -inset-y-10 rounded-full bg-primary/20 blur-[100px]" />
       <div
         ref={cardRef}
         style={cardMinHeight ? { minHeight: cardMinHeight } : undefined}
@@ -317,7 +327,7 @@ export function DemoOrbCard({
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-cyan">Live demo</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-cyan">{badgeLabel}</span>
         </div>
 
         {isCallLive && token && serverUrl ? (
