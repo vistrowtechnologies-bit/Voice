@@ -885,6 +885,24 @@ def init_tables() -> None:
                 # unproven on real calls - existing agents don't change
                 # behavior until an operator opts in.
                 ("ambient_noise", "TEXT DEFAULT 'off'"),
+                # The business this agent answers AS, spoken aloud by the
+                # generic persona ("Hi, Sunrise Care Clinic — what can I do
+                # for you?"). Blank falls back to the account's own name
+                # (accounts.name), so tenants get correct behavior without
+                # touching anything; the override exists for one account
+                # running agents under more than one brand, and for the
+                # public industry demos, which live on the operator's
+                # account but must answer as the fictional business.
+                ("business_name", "TEXT DEFAULT ''"),
+                # Non-empty on agents that power a PUBLIC, unauthenticated
+                # industry demo (e.g. 'healthcare' -> /solutions/healthcare).
+                # Deliberately separate from is_platform_demo, which is
+                # exclusive platform-wide and means "the Vistrow sales
+                # agent"; these are roleplay agents answering as a demo
+                # business. /token resolves a slug to an agent id server-
+                # side so agent ids are never enumerable from the public
+                # endpoint - the slug set IS the allowlist.
+                ("public_demo_slug", "TEXT DEFAULT ''"),
             ):
                 conn.execute(f"ALTER TABLE agents ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # Per-number monthly line item — EnableX charges Vistrow for every
@@ -2407,7 +2425,7 @@ _AGENT_FIELDS = (
     "silence_reminder_ms", "silence_reminder_max", "end_call_on_silence_ms",
     "max_call_duration_s", "enabled_functions", "transfer_phone",
     "custom_functions", "post_call_fields", "webhook_url", "memory_enabled",
-    "emotion_intensity", "ambient_noise",
+    "emotion_intensity", "ambient_noise", "business_name", "public_demo_slug",
 )
 # INTEGER columns fed from a JSON bool (Postgres has no bool->int cast).
 _AGENT_BOOL_FIELDS = frozenset({"is_platform_demo", "memory_enabled"})
@@ -2434,6 +2452,8 @@ _AGENT_CAMEL_TO_SNAKE = {
     "memoryEnabled": "memory_enabled",
     "emotionIntensity": "emotion_intensity",
     "ambientNoise": "ambient_noise",
+    "businessName": "business_name",
+    "publicDemoSlug": "public_demo_slug",
 }
 
 
@@ -2469,6 +2489,8 @@ def _agent_dict(row: dict) -> dict:
         "tone": row["tone"] or "balanced",
         "emotionIntensity": row["emotion_intensity"] or "strong",
         "ambientNoise": row["ambient_noise"] or "off",
+        "businessName": _row_get(row, "business_name") or "",
+        "publicDemoSlug": _row_get(row, "public_demo_slug") or "",
         "isPlatformDemo": bool(row["is_platform_demo"]),
         "firstSpeaker": row["first_speaker"] or "agent",
         "welcomeMessage": row["welcome_message"] or "",
@@ -4180,6 +4202,47 @@ def is_platform_demo_agent(agent_id: int | None) -> bool:
     try:
         row = conn.execute("SELECT is_platform_demo FROM agents WHERE id = ?", (agent_id,)).fetchone()
         return bool(row and row["is_platform_demo"])
+    finally:
+        conn.close()
+
+
+def agent_id_for_public_demo_slug(slug: str) -> int | None:
+    """Resolve a public industry-demo slug (e.g. 'healthcare') to its agent id.
+
+    This is the ONLY way the public /token endpoint may name an agent: the
+    caller sends a slug, never a raw agent id, so agent ids stay
+    non-enumerable from an unauthenticated endpoint and the set of published
+    slugs is itself the allowlist. Only the platform owner can set the
+    column (see token_api.py's owner-only agent fields), and a paused agent
+    is excluded so taking a demo offline is just a status change."""
+    slug = (slug or "").strip().lower()
+    if not slug:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id FROM agents WHERE lower(public_demo_slug) = ? AND status = 'live'", (slug,)
+        ).fetchone()
+        return row["id"] if row else None
+    finally:
+        conn.close()
+
+
+def is_public_demo_agent(agent_id: int | None) -> bool:
+    """True for any agent the public marketing site is allowed to call: the
+    single is_platform_demo sales agent, or any industry roleplay agent
+    published under a public_demo_slug. Both need explicit dispatch to the
+    demo worker (see _demo_dispatch_kwargs)."""
+    if agent_id is None:
+        return False
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT is_platform_demo, public_demo_slug FROM agents WHERE id = ?", (agent_id,)
+        ).fetchone()
+        if not row:
+            return False
+        return bool(row["is_platform_demo"]) or bool((_row_get(row, "public_demo_slug") or "").strip())
     finally:
         conn.close()
 

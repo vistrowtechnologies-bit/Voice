@@ -241,7 +241,7 @@ def _demo_dispatch_kwargs(agent_id: int | None, *, default_is_demo: bool = False
     (unchanged behavior) so tenant traffic never touches this at all.
     default_is_demo covers /token's agentId=None case, which agent/db.py's
     get_agent_config resolves to the platform-demo agent by default."""
-    is_demo = calls_db.is_platform_demo_agent(agent_id) if agent_id is not None else default_is_demo
+    is_demo = calls_db.is_public_demo_agent(agent_id) if agent_id is not None else default_is_demo
     if not is_demo:
         return {}
     return {"agents": [RoomAgentDispatch(agent_name=_PLATFORM_DEMO_AGENT_NAME)]}
@@ -251,6 +251,11 @@ class TokenRequest(BaseModel):
     identity: str
     room: str = "voice-agent-demo"
     agentId: int | None = None
+    # Public industry demos (/solutions/<industry>) name the agent by slug,
+    # never by id — see calls_db.agent_id_for_public_demo_slug for why. When
+    # set it wins over agentId, so a crafted body can't pair a published
+    # slug with someone else's agent id.
+    demoSlug: str | None = None
 
 
 @app.post("/token")
@@ -279,13 +284,22 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
     # cold. Metadata is agentId-specific (see _agent_id_from_job) but the
     # create_room call itself is unconditional and idempotent — a no-op if
     # DemoOrbCard's prewarm already created this room moments earlier.
-    metadata = json.dumps({"agent_id": req.agentId}) if req.agentId is not None else None
+    # A published industry-demo slug resolves to its agent server-side and
+    # takes precedence over any agentId in the body — the slug is vouched
+    # for (owner-set, live), a raw id from an unauthenticated caller is not.
+    agent_id = req.agentId
+    if req.demoSlug:
+        agent_id = calls_db.agent_id_for_public_demo_slug(req.demoSlug)
+        if agent_id is None:
+            raise HTTPException(404, "That demo isn't available right now.")
+
+    metadata = json.dumps({"agent_id": agent_id}) if agent_id is not None else None
     async with api.LiveKitAPI() as lkapi:
         await lkapi.room.create_room(
             CreateRoomRequest(
                 name=req.room,
                 metadata=metadata,
-                **_demo_dispatch_kwargs(req.agentId, default_is_demo=req.agentId is None),
+                **_demo_dispatch_kwargs(agent_id, default_is_demo=agent_id is None),
             )
         )
 
@@ -2088,14 +2102,20 @@ def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(cur
     if entry and entry.get("preview") and not calls_db.is_platform_owner(user["account_id"]):
         raise HTTPException(400, "That preview voice is available only to the Vistrow admin account.")
     _guard_admin_only_model(data, user["account_id"])
-    if ("isPlatformDemo" in data or "is_platform_demo" in data) and not calls_db.is_platform_owner(
+    # Both of these decide what the PUBLIC marketing site talks to, so only
+    # the platform operator's own account may set them: isPlatformDemo
+    # redirects the main "talk to Artha" demo, and publicDemoSlug publishes
+    # an agent on an unauthenticated industry-demo endpoint (billable calls
+    # against that agent, from anyone). Silently dropped rather than an
+    # error, so an unrelated edit (name, voice) in the same request still
+    # saves — same reasoning as the original isPlatformDemo guard.
+    _OWNER_ONLY_AGENT_FIELDS = (
+        "isPlatformDemo", "is_platform_demo", "publicDemoSlug", "public_demo_slug",
+    )
+    if any(f in data for f in _OWNER_ONLY_AGENT_FIELDS) and not calls_db.is_platform_owner(
         user["account_id"]
     ):
-        # Only the platform operator's own account may redirect the public
-        # marketing site's live demo to one of its agents — silently drop
-        # the field rather than error, so an unrelated edit (name, voice)
-        # bundled in the same request still saves.
-        data = {k: v for k, v in data.items() if k not in ("isPlatformDemo", "is_platform_demo")}
+        data = {k: v for k, v in data.items() if k not in _OWNER_ONLY_AGENT_FIELDS}
     agent = calls_db.update_agent(agent_id, data, user["account_id"])
     if agent is None:
         raise HTTPException(404, "Agent not found")

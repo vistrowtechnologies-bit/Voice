@@ -186,11 +186,21 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
         return cached[1]
     conn = dbconn.connect()
     try:
+        # account_name joins in the tenant's own company name (accounts.name)
+        # so the generic persona can say it aloud. LEFT JOIN, never INNER:
+        # an agent whose account row is somehow missing must still take the
+        # call (falling back to "this business") rather than disappear.
         if agent_id is not None:
-            row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
+            row = conn.execute(
+                "SELECT a.*, acc.name AS account_name FROM agents a "
+                "LEFT JOIN accounts acc ON acc.id = a.account_id WHERE a.id = ?",
+                (agent_id,),
+            ).fetchone()
         else:
             row = conn.execute(
-                "SELECT * FROM agents ORDER BY is_platform_demo DESC, id LIMIT 1"
+                "SELECT a.*, acc.name AS account_name FROM agents a "
+                "LEFT JOIN accounts acc ON acc.id = a.account_id "
+                "ORDER BY a.is_platform_demo DESC, a.id LIMIT 1"
             ).fetchone()
         result = dict(row) if row else None
     except psycopg.Error:
@@ -319,7 +329,10 @@ def prewarm_caches() -> None:
     """
     conn = dbconn.connect()
     try:
-        rows = conn.execute("SELECT * FROM agents WHERE status = 'live'").fetchall()
+        rows = conn.execute(
+            "SELECT a.*, acc.name AS account_name FROM agents a "
+            "LEFT JOIN accounts acc ON acc.id = a.account_id WHERE a.status = 'live'"
+        ).fetchall()
     except psycopg.Error:
         return
     finally:

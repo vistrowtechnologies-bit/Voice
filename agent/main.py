@@ -929,7 +929,19 @@ class RealEstateAgent(Agent):
         elif config.get("is_platform_demo"):
             instructions = build_platform_assistant_prompt(agent_name)
         else:
-            instructions = build_generic_assistant_prompt(agent_name)
+            # build_generic_assistant_prompt has always taken a business_name,
+            # but nothing ever passed one — so every tenant on the built-in
+            # persona introduced itself as the literal words "this business".
+            # Order: the agent's own override (multi-brand tenants, and the
+            # public industry demos, which run on the operator's account but
+            # must answer as their demo business), then the tenant's company
+            # name from signup, then the old placeholder.
+            business_name = (
+                (config.get("business_name") or "").strip()
+                or (config.get("account_name") or "").strip()
+                or "this business"
+            )
+            instructions = build_generic_assistant_prompt(agent_name, business_name)
         if visitor_name and visitor_phone:
             # Website-widget calls collect these in a pre-call form, so the
             # agent already has them — this both stops it re-asking (the
