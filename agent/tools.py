@@ -1,6 +1,8 @@
+import asyncio
 import json
 import logging
 import os
+import random
 
 import aiohttp
 from livekit.agents import RunContext
@@ -51,6 +53,47 @@ _CALENDAR_CHECK_FILLERS = {
     "od-IN": {"default": "ଗୋଟେ ମିନିଟ୍, ଦେଖିକି କହୁଛି।"},
 }
 
+# The public role-play demos should sound like an employee checking the thing
+# the caller actually asked for, not a generic tool spinner. These are spoken
+# only in Hindi/English; every other supported language keeps the translated
+# generic line above rather than hearing an unexpected language switch.
+_INDUSTRY_CALENDAR_CHECK_FILLERS = {
+    "healthcare": {
+        "hi-IN": {
+            "female": (
+                "जी, एक मिनट—डॉक्टर के स्लॉट्स चेक कर रही हूँ।",
+                "हम्म, एक सेकंड... डॉक्टर की availability देखती हूँ।",
+            ),
+            "male": (
+                "जी, एक मिनट—डॉक्टर के स्लॉट्स चेक कर रहा हूँ।",
+                "हम्म, एक सेकंड... डॉक्टर की availability देखता हूँ।",
+            ),
+        },
+        "en-IN": {"default": ("One moment — I'm checking the doctor's slots.", "Hmm, one second... let me check the calendar.")},
+    },
+    "real-estate": {
+        "hi-IN": {
+            "female": ("जी, एक मिनट—साइट विज़िट के स्लॉट्स देख रही हूँ।",),
+            "male": ("जी, एक मिनट—साइट विज़िट के स्लॉट्स देख रहा हूँ।",),
+        },
+        "en-IN": {"default": ("One moment — I'm checking the site-visit slots.",)},
+    },
+    "finance": {
+        "hi-IN": {
+            "female": ("जी, एक मिनट—callback का समय चेक कर रही हूँ।",),
+            "male": ("जी, एक मिनट—callback का समय चेक कर रहा हूँ।",),
+        },
+        "en-IN": {"default": ("One moment — I'm checking a callback time.",)},
+    },
+    "support": {
+        "hi-IN": {
+            "female": ("एक सेकंड, callback का स्लॉट देख रही हूँ।",),
+            "male": ("एक सेकंड, callback का स्लॉट देख रहा हूँ।",),
+        },
+        "en-IN": {"default": ("One second — I'm checking a callback slot.",)},
+    },
+}
+
 _NAME_TO_LANGUAGE_CODE = {name.lower(): code for code, name in LANGUAGE_NAMES.items()}
 
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
@@ -62,6 +105,12 @@ def _calendar_check_filler(context: RunContext) -> str:
     agent = context.session.current_agent
     language = getattr(agent, "_reply_language", "en-IN")
     gender = getattr(agent, "_voice_gender", "female")
+    demo_slug = getattr(agent, "_public_demo_slug", "")
+    industry_options = (_INDUSTRY_CALENDAR_CHECK_FILLERS.get(demo_slug) or {}).get(language)
+    if industry_options:
+        variants = industry_options.get(gender) or industry_options.get("default")
+        if variants:
+            return random.choice(variants)
     options = _CALENDAR_CHECK_FILLERS.get(language) or _CALENDAR_CHECK_FILLERS["en-IN"]
     return options.get(gender) or options.get("default") or _TOOL_FILLER_TEXT
 
@@ -324,9 +373,24 @@ async def check_calendar_availability(
     # integration filler below. The caller has just asked us to look at the
     # calendar, so a short "एक मिनट, चेक करके बताती हूँ" is a meaningful
     # front-desk acknowledgement, not narration of invisible processing.
-    filler = context.session.say(_calendar_check_filler(context), allow_interruptions=True)
-    await filler.wait_for_playout()
-    slots = await _calendar_check(context, date, duration_minutes)
+    # Start the real DB lookup underneath the spoken bridge — the agent is
+    # genuinely checking while it says "एक मिनट, चेक कर रही हूँ", rather
+    # than narrating first and only then beginning the work. The line is very
+    # short and deliberately non-interruptible so it cannot disappear from
+    # playout when the caller makes a small acknowledgement such as "हाँ".
+    slots_task = asyncio.create_task(_calendar_check(context, date, duration_minutes))
+    try:
+        filler = context.session.say(_calendar_check_filler(context), allow_interruptions=False)
+        await filler.wait_for_playout()
+        slots = await slots_task
+    except BaseException:
+        if not slots_task.done():
+            slots_task.cancel()
+        try:
+            await slots_task
+        except BaseException:
+            pass
+        raise
     if slots is None:
         # A native calendar always exists now — None here means the DB call
         # itself failed. Don't invent slots; hand off honestly.

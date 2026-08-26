@@ -280,6 +280,19 @@ _FACT_LOOKUP_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# High-confidence appointment/availability language seen in real transcripts.
+# This does not itself perform the lookup; it adds a last-moment instruction
+# that makes the model call check_calendar_availability instead of treating a
+# doctor's published working hours as proof that a real slot is free.
+_APPOINTMENT_INTENT_PATTERN = re.compile(
+    r"\b(appointment|availability|available|slot|book|booking|schedule|site visit|"
+    r"come at|visit at|doctor available)\b|"
+    r"अपॉइंटमेंट|अवेलेबल|अवेलेबिलिटी|स्लॉट|बुक|समय लेना|आ सकता|आ सकती|"
+    r"कितने बजे|कोणत्या वेळी|अपॉइंटमेंट|उपलब्ध|वेळ|बुकिंग|"
+    r"\d{1,2}(?::\d{2})?\s*(?:am|pm|बजे)",
+    re.IGNORECASE,
+)
+
 
 def _detect_caller_gender(text: str) -> str | None:
     lowered = (text or "").lower()
@@ -1081,7 +1094,13 @@ class RealEstateAgent(Agent):
             "check_calendar_availability for their preferred date to see real open "
             "slots, offer those slots, and once they pick one call book_appointment to "
             "confirm it. Never promise a specific slot before check_calendar_availability "
-            "confirms it's free.\n"
+            "confirms it's free. Published business/doctor hours in the knowledge base tell "
+            "you when someone normally works; they NEVER prove that an appointment slot is "
+            "still open. Live availability questions must use the calendar tool. Before "
+            "book_appointment, you must have the caller's real name, phone number, and a short "
+            "purpose/reason for the visit. If any are missing, ask for them one at a time. "
+            "Never say booked, confirmed, reserved, or saved unless book_appointment returned "
+            "success in this call. A proposed time is not a booking.\n"
             "- Vistrow Voice platform-assistant calls (explaining Vistrow Voice itself "
             "to a prospective customer): once you have the caller's name plus at least "
             "one more of company/contact/use case/team size, call "
@@ -1485,6 +1504,17 @@ class RealEstateAgent(Agent):
         else:
             _personality_instruction = ""
         _industry_turn_instruction = industry_demo_turn_nudge(self._public_demo_slug)
+        _appointment_instruction = (
+            "The caller's last message is about appointment availability, choosing a time, or "
+            "booking. You MUST use check_calendar_availability before claiming any time is open; "
+            "do not answer availability from working hours or memory. The tool itself immediately "
+            "speaks a natural checking line to the caller, so call it silently without adding a "
+            "second filler. If they are trying to finalize a slot, do not say it is booked until "
+            "you have their name, phone number, and purpose and book_appointment returns success. "
+            "Ask for the next missing detail instead of pretending the booking happened."
+            if _APPOINTMENT_INTENT_PATTERN.search(text)
+            else ""
+        )
         # Same reinforcement pattern again for a different failure: the
         # prompt already says "search, don't dodge" for a concrete factual
         # question, but confirmed live — asked to name real hospitals near a
@@ -1514,6 +1544,7 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _gender_instruction if _gender_instruction else "")
             + ("\n\n" + _personality_instruction if _personality_instruction else "")
             + ("\n\n" + _industry_turn_instruction if _industry_turn_instruction else "")
+            + ("\n\n" + _appointment_instruction if _appointment_instruction else "")
             + ("\n\n" + _search_instruction if _search_instruction else ""),
         )
 
