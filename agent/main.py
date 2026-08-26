@@ -961,6 +961,21 @@ class RealEstateAgent(Agent):
             # must answer as their demo business), then the tenant's company
             # name from signup, then the old placeholder.
             instructions = build_generic_assistant_prompt(agent_name, business_name)
+        if (config.get("public_demo_slug") or "").strip():
+            # Public role-play callers often repeat the business name after
+            # the greeting, while multilingual STT returns a close phonetic
+            # spelling (the finance demo heard "Saarthi" as "Earth"). That
+            # is confirmation, not a request about a different company. This
+            # runtime rule applies even to demo prompts already stored in the
+            # database, which the seeder deliberately does not overwrite.
+            instructions += (
+                "\n\n# Business-name recognition\n"
+                f"The business in this call is {business_name}. If the caller repeats, shortens, "
+                "or slightly mispronounces that name, assume it is a normal speech-recognition "
+                "variation. Briefly confirm the business name and ask how you can help. Never say "
+                "you have no information about a close-sounding version of the same name, and do "
+                "not correct or lecture the caller unless they clearly ask about another company."
+            )
         if visitor_name and visitor_phone:
             # Website-widget calls collect these in a pre-call form, so the
             # agent already has them — this both stops it re-asking (the

@@ -795,10 +795,11 @@ def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
 def _ensure_industry_demo_agents(conn: dbconn.Conn) -> None:
     """Seed any missing public role-play demos under the platform account.
 
-    Existing rows are deliberately never updated: the operator may tune a
-    prompt, voice, model, KB, or availability in the dashboard, and a deploy
-    must not silently put those choices back to code defaults. The unique
-    slug index created in init_tables makes this safe across concurrent boots.
+    Existing rows keep every operator-tuned setting. The only backfill is an
+    industry-specific welcome line when that field is still blank, because a
+    blank row falls through to the generic agent-name opener and can expose an
+    internal label such as "Artha · Finance Demo" to the caller. The unique
+    slug index created in init_tables makes inserts safe across concurrent boots.
     """
     owner = conn.execute(
         "SELECT id FROM accounts WHERE is_platform_owner = 1 ORDER BY id LIMIT 1"
@@ -823,15 +824,22 @@ def _ensure_industry_demo_agents(conn: dbconn.Conn) -> None:
 
     for demo in INDUSTRY_DEMOS:
         exists = conn.execute(
-            "SELECT 1 FROM agents WHERE lower(public_demo_slug) = ? LIMIT 1",
+            "SELECT id, welcome_message FROM agents WHERE lower(public_demo_slug) = ? LIMIT 1",
             (demo["slug"],),
         ).fetchone()
         if exists:
+            if not (exists["welcome_message"] or "").strip():
+                conn.execute(
+                    "UPDATE agents SET welcome_message = ? WHERE id = ? AND "
+                    "(welcome_message IS NULL OR welcome_message = '')",
+                    (demo["welcome_message"], exists["id"]),
+                )
             continue
         conn.execute(
             "INSERT INTO agents (account_id, name, description, model, voice, language, status, "
-            "system_prompt, tone, first_speaker, max_call_duration_s, business_name, public_demo_slug) "
-            "VALUES (?, ?, ?, ?, ?, ?, 'live', ?, ?, 'agent', 300, ?, ?)",
+            "system_prompt, tone, first_speaker, welcome_message, max_call_duration_s, "
+            "business_name, public_demo_slug) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'live', ?, ?, 'agent', ?, 300, ?, ?)",
             (
                 account_id,
                 demo["name"],
@@ -841,6 +849,7 @@ def _ensure_industry_demo_agents(conn: dbconn.Conn) -> None:
                 language,
                 demo["prompt"],
                 tone,
+                demo["welcome_message"],
                 demo["business_name"],
                 demo["slug"],
             ),
