@@ -97,6 +97,48 @@ _INDUSTRY_CALENDAR_CHECK_FILLERS = {
 
 _NAME_TO_LANGUAGE_CODE = {name.lower(): code for code, name in LANGUAGE_NAMES.items()}
 
+_HINDI_HOUR_WORDS = {
+    1: "एक", 2: "दो", 3: "तीन", 4: "चार", 5: "पाँच", 6: "छह", 7: "सात",
+    8: "आठ", 9: "नौ", 10: "दस", 11: "ग्यारह", 12: "बारह",
+}
+
+
+def _spoken_slot_time(hhmm: str, language: str) -> str:
+    """A ready-made spoken phrase for an "HH:MM" 24-hour slot, so the model
+    reads it verbatim instead of inventing the number words itself.
+
+    Confirmed real failure: offered "10:30", the model said "दस बत्तीस"
+    ("ten THIRTY-TWO") instead of "साढ़े दस" - a caller got confused enough
+    by the agent's own nonsensical attempt to explain "battees" that they
+    hung up and went to another clinic. Bounding to 2-3 slots (see
+    check_calendar_availability) reduces how often this can happen, but
+    every remaining spoken number was still a fresh chance to invent a
+    wrong one - this removes that guesswork for Hindi, the language it was
+    observed on, by covering the quarter-hour marks real scheduling systems
+    actually use. Anything off that grid falls back to a literal but
+    unambiguous "H बजकर M मिनट" rather than inventing further. English is
+    unaffected - "10:30" read as digits doesn't carry this specific
+    confusion, so it's returned as-is for every other language.
+    """
+    if language != "hi-IN":
+        return hhmm
+    try:
+        h, m = (int(x) for x in hhmm.split(":"))
+    except ValueError:
+        return hhmm
+    h12 = h % 12 or 12
+    hour_word = _HINDI_HOUR_WORDS.get(h12, str(h12))
+    if m == 0:
+        return f"{hour_word} बजे"
+    if m == 30:
+        return f"साढ़े {hour_word}"
+    if m == 15:
+        return f"सवा {hour_word}"
+    if m == 45:
+        next_word = _HINDI_HOUR_WORDS.get((h12 % 12) + 1, str((h12 % 12) + 1))
+        return f"पौने {next_word}"
+    return f"{hour_word} बजकर {m} मिनट"
+
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
 _TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 
@@ -408,6 +450,20 @@ async def check_calendar_availability(
     # "ok, ok, ok, ok, ok" until it stopped. Offer at most 2-3 - e.g. a
     # morning, afternoon, and evening option - and offer more only if the
     # caller asks. This applies whether or not requested_time is set.
+    agent = context.session.current_agent
+    reply_language = getattr(agent, "_reply_language", "en-IN")
+    # Confirmed real failure, same call as the slot-count one above: offered
+    # "10:30", the model SPOKE "दस बत्तीस" ("ten THIRTY-TWO") — it invented
+    # the wrong Hindi number word converting the raw digits itself, and the
+    # caller got confused enough by the agent's own nonsensical attempt to
+    # explain "battees" that they hung up and went to another clinic.
+    # Bounding the slot count reduces exposure; this removes the guesswork
+    # outright by handing back a ready-made phrase (see _spoken_slot_time)
+    # instead of leaving Hindi number-words to chance on every remaining one.
+    def _say(hhmm: str) -> str:
+        spoken = _spoken_slot_time(hhmm, reply_language)
+        return hhmm if spoken == hhmm else f"{hhmm} (say: \"{spoken}\")"
+
     if requested_time:
         # Deterministic exact-match check instead of leaving the model to
         # scan a long comma list itself — a 2026-08-03 real call had the
@@ -417,27 +473,30 @@ async def check_calendar_availability(
         # the caller just asked for.
         if requested_time in slots:
             return (
-                f"YES — {requested_time} on {date} IS available. Offer it back to the caller and book it if they "
-                f"confirm; do not claim it's unavailable."
+                f"YES — {requested_time} on {date} IS available. Offer it back to the caller ({_say(requested_time)}) "
+                f"and book it if they confirm; do not claim it's unavailable."
             )
         alternatives = slots[:3]
         return (
             f"NO — {requested_time} on {date} is NOT available (already booked or outside business hours). "
-            f"Do not offer {requested_time}. Offer only these alternatives: {', '.join(alternatives)}."
+            f"Do not offer {requested_time}. Offer only these alternatives: "
+            f"{', '.join(_say(s) for s in alternatives)}."
         )
     # Never expose the entire day to the model: in a real failed call it
-    # ignored the prose instruction and read sixteen slots aloud, then even
-    # hallucinated every :30 value as :32. Three representative choices are
-    # enough for a natural phone turn; a caller can name another time and the
-    # next tool call verifies that exact requested_time.
+    # ignored the prose instruction and read sixteen slots aloud. Three
+    # representative choices are enough for a natural phone turn; a caller
+    # can name another time and the next tool call verifies that exact
+    # requested_time.
     if len(slots) <= 3:
         choices = slots
     else:
         choices = [slots[0], slots[len(slots) // 2], slots[-1]]
     return (
-        f"Offer ONLY these open choices on {date}: {', '.join(choices)}. "
-        "Do not mention any other time or read a full-day list. If none suits, ask whether the caller "
-        "prefers morning, afternoon, or evening, then check their exact requested time."
+        f"Offer ONLY these open choices on {date}: {', '.join(_say(c) for c in choices)}. "
+        "Where a \"(say: ...)\" phrase is given, speak that phrase, not the raw digits before it — "
+        "it's there so the time is pronounced correctly. Do not mention any other time or read a "
+        "full-day list. If none suits, ask whether the caller prefers morning, afternoon, or evening, "
+        "then check their exact requested time."
     )
 
 
