@@ -7,6 +7,9 @@ stored in production; the server seeder intentionally preserves their tuned
 business prompts.
 """
 
+import re
+from typing import Optional
+
 
 _INDUSTRY_MANNER: dict[str, str] = {
     "real-estate": (
@@ -51,6 +54,48 @@ _INDUSTRY_MANNER: dict[str, str] = {
 }
 
 
+_EMPATHY_CUE_PATTERN = re.compile(
+    r"(?:pain|hurt|worried|scared|anxious|frustrat\w*|annoy\w*|irritat\w*|"
+    r"not working|doesn['’]?t work|failed|broken|damaged|delayed|late|lost|"
+    r"charged|can(?:not|'t) pay|difficult|problem|issue|you should have asked|"
+    r"दर्द|तकलीफ|परेशानी|दिक्कत|चिंता|डर|गुस्सा|खराब|टूट|देरी|लेट|नहीं हो रहा|"
+    r"नहीं कर पा|मुश्किल|पहले पूछना चाहिए|समस्या|"
+    r"वेदना|त्रास|काळजी|अडचण|उशीर|"
+    r"வலி|பிரச்சனை|கவலை|தாமதம்|"
+    r"నొప్పి|సమస్య|ఆందోళన|ఆలస్యం|"
+    r"ನೋವು|ಸಮಸ್ಯೆ|ಚಿಂತೆ|ತಡ|"
+    r"വേദന|പ്രശ്നം|ആശങ്ക|വൈകി|"
+    r"ব্যথা|সমস্যা|চিন্তা|দেরি|"
+    r"ਦਰਦ|ਸਮੱਸਿਆ|ਚਿੰਤਾ|ਦੇਰੀ|"
+    r"ଦରଦ|ସମସ୍ୟା|ଚିନ୍ତା|ବିଳମ୍ବ)",
+    re.IGNORECASE,
+)
+
+
+_INDUSTRY_EMPATHY_ACTION: dict[str, str] = {
+    "healthcare": (
+        "Acknowledge the patient's exact discomfort or worry gently, then ask one useful safety or "
+        "booking question. Do not diagnose, dramatize, or sound cheerful about pain."
+    ),
+    "real-estate": (
+        "Acknowledge the buyer's urgency, uncertainty, or disappointment, then give one concrete next "
+        "step or qualification question. Do not turn it into a sales pitch."
+    ),
+    "ecommerce": (
+        "Acknowledge the specific inconvenience and take ownership of the next step. Do not defend policy "
+        "or make the customer repeat details they already gave."
+    ),
+    "finance": (
+        "Acknowledge the concern with dignity and no judgment, then calmly ask for or explain one next "
+        "step. Never use pity, pressure, jokes, or excitement around money."
+    ),
+    "support": (
+        "Acknowledge that the repeated failure is frustrating, then move to one concrete troubleshooting "
+        "step. Do not restart discovery or ask them to repeat the issue."
+    ),
+}
+
+
 def build_industry_demo_style(slug: str, business_name: str) -> str:
     """Return the common human texture plus the industry's own phone manner."""
     manner = _INDUSTRY_MANNER.get(slug, "Sound like a capable employee of this business on a real call.")
@@ -74,6 +119,10 @@ Human does not mean messy or inaccurate. It means natural rhythm:
   lines such as "I would be happy to assist", "I understand your concern",
   "certainly", "बिल्कुल, मैं आपकी सहायता कर सकती हूँ", and the repeated
   closer "क्या मैं आपकी और किसी चीज़ में मदद कर सकती हूँ?"
+- Empathy must be specific, brief, and earned by what the caller said. Name
+  the impact in ordinary language (for example, "हाँ, ये बार-बार fail होना
+  irritating है") and then help. Never perform sympathy on neutral questions,
+  repeat a generic apology, claim personal experience, or pity the caller.
 - It is fine to briefly change course like a person: "नहीं, एक सेकंड—पहले
   आपका order number ले लेती हूँ." The correction must improve the answer,
   never introduce a factual mistake.
@@ -98,4 +147,25 @@ def industry_demo_turn_nudge(slug: str) -> str:
         "this one directly. Keep it short, specific, and slightly conversational rather than polished; "
         "never add a filler merely to perform being human. Never read more than three choices in one "
         "turn; offer the most relevant two or three and let the caller ask for more."
+    )
+
+
+def industry_demo_empathy_nudge(slug: str, caller_text: str, emotion: Optional[str]) -> str:
+    """Require a brief, grounded acknowledgment only when the turn earns it."""
+    action = _INDUSTRY_EMPATHY_ACTION.get(slug)
+    if not action:
+        return ""
+    needs_empathy = emotion in {"frustrated", "confused"} or bool(
+        _EMPATHY_CUE_PATTERN.search(caller_text or "")
+    )
+    if not needs_empathy:
+        return ""
+    return (
+        "The caller's LAST message contains a real problem, discomfort, worry, confusion, or criticism. "
+        "Before moving to logistics, give ONE short, specific acknowledgment in the caller's language, "
+        "tied to what they actually said. Do not use canned lines like 'I understand your concern' or "
+        "repeat 'sorry/mujhe khed hai'; do not exaggerate, pity them, or claim you have personally felt it. "
+        "If the same issue was already acknowledged in your immediately previous reply, do not apologize "
+        "again—move straight to the useful action. "
+        + action
     )

@@ -47,7 +47,11 @@ from emotion import (
 )
 from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
-from prompts.industry_demo_style import build_industry_demo_style, industry_demo_turn_nudge
+from prompts.industry_demo_style import (
+    build_industry_demo_style,
+    industry_demo_empathy_nudge,
+    industry_demo_turn_nudge,
+)
 from prompts.platform_assistant import build_platform_assistant_prompt
 from prompts.voice_style import ELEVENLABS_EXPRESSIVE_PROMPT, VOICE_STYLE_PROMPT
 from tools import (
@@ -1503,7 +1507,11 @@ class RealEstateAgent(Agent):
             )
         else:
             _personality_instruction = ""
+        emotion = detect_caller_emotion(text)
         _industry_turn_instruction = industry_demo_turn_nudge(self._public_demo_slug)
+        _industry_empathy_instruction = industry_demo_empathy_nudge(
+            self._public_demo_slug, text, emotion
+        )
         _appointment_instruction = (
             "The caller's last message is about appointment availability, choosing a time, or "
             "booking. You MUST use check_calendar_availability before claiming any time is open; "
@@ -1544,11 +1552,11 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _gender_instruction if _gender_instruction else "")
             + ("\n\n" + _personality_instruction if _personality_instruction else "")
             + ("\n\n" + _industry_turn_instruction if _industry_turn_instruction else "")
+            + ("\n\n" + _industry_empathy_instruction if _industry_empathy_instruction else "")
             + ("\n\n" + _appointment_instruction if _appointment_instruction else "")
             + ("\n\n" + _search_instruction if _search_instruction else ""),
         )
 
-        emotion = detect_caller_emotion(text)
         if emotion != self._current_emotion:
             self._current_emotion = emotion
             if self._tts_provider == "elevenlabs":
