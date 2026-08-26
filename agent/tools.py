@@ -22,10 +22,48 @@ logger = logging.getLogger("real-estate-tools")
 # this product speaks, so it doesn't need translating to sound natural.
 _TOOL_FILLER_TEXT = "One second..."
 
+# Availability checks need an immediate spoken bridge, even though the native
+# calendar lookup itself is usually fast. Without one, the caller asks for a
+# slot and hears a dead beat before the agent suddenly starts listing times.
+# Keep this separate from _TOOL_FILLER_TEXT: that generic delayed filler is for
+# genuinely slow integration fan-out, while this line is part of the natural
+# front-desk interaction and must match the language currently being spoken.
+_CALENDAR_CHECK_FILLERS = {
+    "hi-IN": {
+        "female": "एक मिनट, चेक करके बताती हूँ।",
+        "male": "एक मिनट, चेक करके बताता हूँ।",
+    },
+    "en-IN": {"default": "One moment, let me check that for you."},
+    "mr-IN": {
+        "female": "एक मिनिट, तपासून सांगते.",
+        "male": "एक मिनिट, तपासून सांगतो.",
+    },
+    "ta-IN": {"default": "ஒரு நிமிடம், பார்த்துச் சொல்கிறேன்."},
+    "te-IN": {"default": "ఒక్క నిమిషం, చూసి చెబుతాను."},
+    "kn-IN": {"default": "ಒಂದು ನಿಮಿಷ, ನೋಡಿ ಹೇಳುತ್ತೇನೆ."},
+    "ml-IN": {"default": "ഒരു മിനിറ്റ്, നോക്കി പറയാം."},
+    "gu-IN": {"default": "એક મિનિટ, તપાસીને કહું છું."},
+    "bn-IN": {"default": "এক মিনিট, দেখে বলছি।"},
+    "pa-IN": {
+        "female": "ਇੱਕ ਮਿੰਟ, ਚੈੱਕ ਕਰਕੇ ਦੱਸਦੀ ਹਾਂ।",
+        "male": "ਇੱਕ ਮਿੰਟ, ਚੈੱਕ ਕਰਕੇ ਦੱਸਦਾ ਹਾਂ।",
+    },
+    "od-IN": {"default": "ଗୋଟେ ମିନିଟ୍, ଦେଖିକି କହୁଛି।"},
+}
+
 _NAME_TO_LANGUAGE_CODE = {name.lower(): code for code, name in LANGUAGE_NAMES.items()}
 
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
 _TAVILY_SEARCH_URL = "https://api.tavily.com/search"
+
+
+def _calendar_check_filler(context: RunContext) -> str:
+    """Natural, language-matched bridge spoken before a calendar lookup."""
+    agent = context.session.current_agent
+    language = getattr(agent, "_reply_language", "en-IN")
+    gender = getattr(agent, "_voice_gender", "female")
+    options = _CALENDAR_CHECK_FILLERS.get(language) or _CALENDAR_CHECK_FILLERS["en-IN"]
+    return options.get(gender) or options.get("default") or _TOOL_FILLER_TEXT
 
 
 async def _post_webhook(payload: dict) -> None:
@@ -282,6 +320,12 @@ async def check_calendar_availability(
     logger.info(
         "checking calendar availability for %s (%smin, requested=%s)", date, duration_minutes, requested_time or "-"
     )
+    # This is intentionally immediate rather than delay=0.6 like the generic
+    # integration filler below. The caller has just asked us to look at the
+    # calendar, so a short "एक मिनट, चेक करके बताती हूँ" is a meaningful
+    # front-desk acknowledgement, not narration of invisible processing.
+    filler = context.session.say(_calendar_check_filler(context), allow_interruptions=True)
+    await filler.wait_for_playout()
     slots = await _calendar_check(context, date, duration_minutes)
     if slots is None:
         # A native calendar always exists now — None here means the DB call
