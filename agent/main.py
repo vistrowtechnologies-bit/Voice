@@ -47,6 +47,7 @@ from emotion import (
 )
 from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES, detect_reply_language
 from prompts.generic_assistant import build_generic_assistant_prompt
+from prompts.human_speech import build_human_speech_manner
 from prompts.industry_demo_style import (
     build_industry_demo_style,
     industry_demo_empathy_nudge,
@@ -989,6 +990,15 @@ class RealEstateAgent(Agent):
             or "this business"
         )
         self._business_name = business_name
+        # A custom system_prompt REPLACES the built-in persona wholesale, so
+        # it also loses all of that persona's human-delivery guidance —
+        # fillers, self-correction, fragments, varied turn length. Measured
+        # on the live database: 8 of 14 agents were custom-prompt, including
+        # real tenant agents, i.e. the majority of production traffic was
+        # getting the flat, obviously-synthetic delivery. Those agents get
+        # the shared layer appended below instead; the two built-in personas
+        # already carry it inline and must not have it stacked twice.
+        needs_human_speech_layer = bool(config.get("system_prompt"))
         if config.get("system_prompt"):
             instructions = config["system_prompt"]
         elif config.get("is_platform_demo"):
@@ -1002,6 +1012,11 @@ class RealEstateAgent(Agent):
             # must answer as their demo business), then the tenant's company
             # name from signup, then the old placeholder.
             instructions = build_generic_assistant_prompt(agent_name, business_name)
+        if needs_human_speech_layer:
+            # Appended AFTER the tenant's own prompt so their content and
+            # rules read first and win any conflict — this layer is delivery
+            # only and says so explicitly.
+            instructions += "\n\n" + build_human_speech_manner()
         if self._public_demo_slug:
             # Public role-play callers often repeat the business name after
             # the greeting, while multilingual STT returns a close phonetic
