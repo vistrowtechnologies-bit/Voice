@@ -208,6 +208,17 @@ export interface Solution extends NavLink {
   /** Hue rotation tinting the demo orb for this industry, so each page's
    * demo looks like its own thing. See index.css's --demo-accent-hue. */
   demoAccentHue?: string
+  scenarios: Array<{
+    label: string
+    callerLine: string
+    agentAction: string
+    outcome: string
+  }>
+  workflow: FeatureRow[]
+  resultTitle: string
+  resultFields: Array<{ label: string; value: string }>
+  integrations: FeatureRow[]
+  guardrails: string[]
 }
 
 export const SOLUTIONS: Solution[] = [
@@ -231,6 +242,30 @@ export const SOLUTIONS: Solution[] = [
       { icon: 'schedule', title: 'Slow follow-up', body: 'Every qualified lead syncs to your CRM instantly, so agents follow up while it’s hot.' },
     ],
     features: ['Budget & location qualification', 'Site-visit booking', 'WhatsApp / CRM webhook', '24/7 multilingual pickup'],
+    scenarios: [
+      { label: 'New buyer enquiry', callerLine: '“Baner में two BHK चाहिए, budget करीब one crore है.”', agentAction: 'Captures configuration, budget, preferred location and purchase timeline without turning the call into a form.', outcome: 'Qualified buyer lead, ready for the right sales advisor.' },
+      { label: 'Project comparison', callerLine: '“Aarohan Crest और nearby options में फर्क क्या है?”', agentAction: 'Answers only from approved project knowledge and records the exact comparison the buyer wants.', outcome: 'A focused follow-up request with no invented inventory or pricing.' },
+      { label: 'Book a site visit', callerLine: '“Saturday afternoon site visit हो सकती है?”', agentAction: 'Checks the live calendar, offers a few real times, collects contact details and confirms only after the booking succeeds.', outcome: 'Confirmed site visit with date, time and buyer context.' },
+    ],
+    workflow: [
+      { icon: 'record_voice_over', title: 'Understand intent', body: 'New purchase, investment, project question or site-visit request.' },
+      { icon: 'filter_alt', title: 'Qualify naturally', body: 'Budget, configuration, location and timeline are gathered across the conversation.' },
+      { icon: 'menu_book', title: 'Answer from project facts', body: 'Prices, approvals and availability stay grounded in the knowledge you approve.' },
+      { icon: 'event_available', title: 'Complete the next step', body: 'Book a real site visit or route the lead to the right advisor with full context.' },
+    ],
+    resultTitle: 'Qualified property enquiry',
+    resultFields: [
+      { label: 'Requirement', value: '2 BHK · Baner' },
+      { label: 'Budget', value: 'Around ₹1 crore' },
+      { label: 'Timeline', value: 'Within 3 months' },
+      { label: 'Outcome', value: 'Site visit requested' },
+    ],
+    integrations: [
+      { icon: 'hub', title: 'CRM lead routing', body: 'Send budget, location, timeline and transcript to your CRM immediately.' },
+      { icon: 'calendar_month', title: 'Site-visit calendar', body: 'Offer only genuinely open appointments and prevent double booking.' },
+      { icon: 'forum', title: 'WhatsApp follow-up', body: 'Trigger a project brochure or visit confirmation after the call.' },
+    ],
+    guardrails: ['Never invent project inventory, price, possession date or approval status.', 'Never call an enquiry qualified until the buyer has shared meaningful intent.', 'Never claim a site visit is confirmed until the calendar booking succeeds.'],
     faqs: [
       { q: 'Can Artha book site visits automatically?', a: 'Yes - it checks real availability and books a site visit directly on the call, no back-and-forth needed.' },
       { q: 'Does it qualify budget and location before booking?', a: 'Yes - it captures budget, preferred location, and timeline, and scores the lead before handing it to your team.' },
@@ -260,6 +295,30 @@ export const SOLUTIONS: Solution[] = [
       { icon: 'quiz', title: 'Repetitive FAQs', body: 'Timings, location, prep instructions - answered instantly, grounded in your info.' },
     ],
     features: ['Appointment booking', 'Reminder calls', 'FAQ answering', 'Call triage'],
+    scenarios: [
+      { label: 'Patient with symptoms', callerLine: '“मेरे पेट में बहुत दर्द है—किस डॉक्टर को दिखाऊँ?”', agentAction: 'Acknowledges the concern, checks whether it sounds urgent and routes to the relevant clinic service without diagnosing.', outcome: 'Appropriate next step with safety kept ahead of scheduling.' },
+      { label: 'Find a doctor', callerLine: '“General physician कब available हैं?”', agentAction: 'Uses verified clinic information, asks for the preferred day and checks live availability instead of reading a directory.', outcome: 'Two or three relevant appointment choices.' },
+      { label: 'Book or reschedule', callerLine: '“कल दो बजे का appointment कर दीजिए.”', agentAction: 'Collects patient name, phone and visit reason, verifies the exact slot and confirms only after it is saved.', outcome: 'A traceable appointment—not a verbal promise.' },
+    ],
+    workflow: [
+      { icon: 'hearing', title: 'Listen to the concern', body: 'Capture the reason for calling before suggesting a doctor or appointment.' },
+      { icon: 'health_and_safety', title: 'Check urgency safely', body: 'Recognize possible warning signs and direct urgent cases to immediate human care.' },
+      { icon: 'stethoscope', title: 'Route to relevant care', body: 'Use verified clinic services and avoid diagnosis or unrelated specialties.' },
+      { icon: 'event_available', title: 'Confirm the appointment', body: 'Check live slots, collect patient details and save a real booking.' },
+    ],
+    resultTitle: 'Clinic call summary',
+    resultFields: [
+      { label: 'Reason', value: 'Abdominal pain' },
+      { label: 'Routing', value: 'General physician' },
+      { label: 'Urgency', value: 'Routine · no warning signs stated' },
+      { label: 'Outcome', value: 'Appointment requested' },
+    ],
+    integrations: [
+      { icon: 'calendar_month', title: 'Clinic calendar', body: 'Check live appointment availability and stop double bookings.' },
+      { icon: 'notifications_active', title: 'Reminder calls', body: 'Call patients before scheduled visits and capture confirmations.' },
+      { icon: 'badge', title: 'Clinic CRM', body: 'Send patient-provided contact and visit context to the clinic team.' },
+    ],
+    guardrails: ['Artha does not diagnose, prescribe medication or promise a clinical outcome.', 'Possible emergencies are directed to immediate local emergency or human care.', 'A booking needs a real patient name, phone number, visit reason and successful calendar response.'],
     faqs: [
       { q: 'Can it send appointment reminder calls?', a: 'Yes - automated reminder calls run ahead of each appointment, cutting no-shows without staff having to dial out.' },
       { q: 'Is patient information kept confidential?', a: 'Yes - call data is tenant-isolated to your clinic account and only accessible to your team.' },
@@ -286,6 +345,30 @@ export const SOLUTIONS: Solution[] = [
       { icon: 'language', title: 'Language barriers', body: 'Speaks the customer’s language, so support feels local everywhere you sell.' },
     ],
     features: ['Order status', 'Returns & exchanges', 'Product Q&A', 'Multilingual support'],
+    scenarios: [
+      { label: 'Track an order', callerLine: '“Order NV-1042 अभी कहाँ है?”', agentAction: 'Looks up the supplied sample order, states the latest verified status and avoids guessing a delivery promise.', outcome: 'Clear order status with the next useful action.' },
+      { label: 'Damaged delivery', callerLine: '“Package खुला था और product damaged है.”', agentAction: 'Acknowledges the inconvenience, collects the order reference and explains the applicable replacement path first.', outcome: 'Structured damage case ready for resolution.' },
+      { label: 'Return or exchange', callerLine: '“Size गलत है—return कैसे होगा?”', agentAction: 'Checks the store’s approved policy, confirms eligibility and records the requested resolution.', outcome: 'Return or exchange intent captured without policy improvisation.' },
+    ],
+    workflow: [
+      { icon: 'receipt_long', title: 'Identify the order', body: 'Capture the order reference and understand status, damage, return or product intent.' },
+      { icon: 'inventory_2', title: 'Retrieve verified details', body: 'Use connected order data and approved policy rather than guessing.' },
+      { icon: 'support_agent', title: 'Resolve or escalate', body: 'Give the next action, or hand a complex case to a person with context attached.' },
+      { icon: 'sync_alt', title: 'Update the workflow', body: 'Send the outcome to the helpdesk, CRM or follow-up channel.' },
+    ],
+    resultTitle: 'Order-support outcome',
+    resultFields: [
+      { label: 'Order', value: 'NV-1042' },
+      { label: 'Issue', value: 'Damaged on delivery' },
+      { label: 'Customer wants', value: 'Replacement' },
+      { label: 'Outcome', value: 'Human review requested' },
+    ],
+    integrations: [
+      { icon: 'inventory', title: 'Order system', body: 'Ground status answers in the customer’s actual order record.' },
+      { icon: 'confirmation_number', title: 'Helpdesk tickets', body: 'Open or update a case with the transcript and requested outcome.' },
+      { icon: 'forum', title: 'Customer follow-up', body: 'Send return instructions or resolution updates through your chosen channel.' },
+    ],
+    guardrails: ['Never invent an order status, delivery date, refund or replacement approval.', 'Give the next useful action before quoting long policy text.', 'Escalate exceptions with the customer’s context so they do not repeat everything.'],
     faqs: [
       { q: 'Can it check real order status?', a: 'Yes - grounded in your order data, Artha answers “where is my order” calls with the actual current status.' },
       { q: 'Can it handle returns without a human agent?', a: 'Yes - it guides customers through your returns and exchange policy end-to-end on the call.' },
@@ -312,6 +395,30 @@ export const SOLUTIONS: Solution[] = [
       { icon: 'insights', title: 'No visibility', body: 'Track promise-to-pay and outcomes across every call in one place.' },
     ],
     features: ['Payment reminders', 'Promise-to-pay capture', 'Full call recording', 'Outcome analytics'],
+    scenarios: [
+      { label: 'Payment reminder', callerLine: '“मेरी due date और amount confirm कर दीजिए.”', agentAction: 'Uses approved account context, communicates the reminder calmly and records the caller’s response.', outcome: 'Verified reminder outcome without pressure.' },
+      { label: 'Payment difficulty', callerLine: '“इस महीने payment करना मुश्किल है.”', agentAction: 'Responds without judgment, captures the situation and offers only approved next steps or a human callback.', outcome: 'Hardship context routed safely to the right team.' },
+      { label: 'Request a callback', callerLine: '“मुझे किसी person से बात करनी है.”', agentAction: 'Collects a suitable callback time and passes the reason and transcript to an authorized human.', outcome: 'Context-rich callback request.' },
+    ],
+    workflow: [
+      { icon: 'verified_user', title: 'Verify the purpose', body: 'State why the call is happening without exposing unnecessary account information.' },
+      { icon: 'record_voice_over', title: 'Hold a respectful conversation', body: 'Use consistent language without threats, shame or artificial urgency.' },
+      { icon: 'task_alt', title: 'Capture the outcome', body: 'Record paid, callback, disputed, hardship or promise-to-pay intent accurately.' },
+      { icon: 'assignment_ind', title: 'Route sensitive cases', body: 'Move disputes and hardship situations to an authorized human with context.' },
+    ],
+    resultTitle: 'Payment-call disposition',
+    resultFields: [
+      { label: 'Call reason', value: 'Upcoming payment reminder' },
+      { label: 'Customer response', value: 'Requests due-date discussion' },
+      { label: 'Commitment', value: 'No promise recorded' },
+      { label: 'Outcome', value: 'Human callback required' },
+    ],
+    integrations: [
+      { icon: 'account_balance_wallet', title: 'Payment workflow', body: 'Use verified payment context and write outcomes back to your system.' },
+      { icon: 'rule', title: 'Audit trail', body: 'Keep recordings, transcripts and dispositions available for review.' },
+      { icon: 'call', title: 'Human callback queue', body: 'Route hardship, dispute or sensitive cases to the correct team.' },
+    ],
+    guardrails: ['No threats, humiliation, coercion or fabricated consequences.', 'No sensitive account disclosure before the required verification flow.', 'No payment promise is recorded unless the caller clearly states the amount or date.'],
     faqs: [
       { q: 'Is this compliant with collection call regulations?', a: 'Every call runs a consistent, scripted flow with full recording and logging, built for compliant collections outreach.' },
       { q: 'Can it capture a promise-to-pay commitment?', a: 'Yes - Artha captures promise-to-pay commitments on the call and logs them to your outcome analytics.' },
@@ -338,6 +445,30 @@ export const SOLUTIONS: Solution[] = [
       { icon: 'swap_calls', title: 'Messy escalations', body: 'Hands off to a human with the full transcript and context attached.' },
     ],
     features: ['Tier-1 resolution', 'Knowledge-grounded answers', 'Context-rich handoff', 'Transcript logging'],
+    scenarios: [
+      { label: 'Reset email missing', callerLine: '“Password reset email अभी तक नहीं आया.”', agentAction: 'Acknowledges the failed attempt, checks the simple causes one at a time and avoids making the caller repeat themselves.', outcome: 'Resolved step or a clean escalation with attempted actions.' },
+      { label: 'Billing question', callerLine: '“मेरे invoice में extra charge क्यों है?”', agentAction: 'Uses approved billing information, explains what is known and escalates account-specific disputes safely.', outcome: 'A categorized billing case with exact caller concern.' },
+      { label: 'Escalate an issue', callerLine: '“मैं ये तीन बार try कर चुका हूँ—person से connect करो.”', agentAction: 'Stops repeating tier-one steps and hands off the full conversation and troubleshooting history.', outcome: 'Human escalation without restarting the story.' },
+    ],
+    workflow: [
+      { icon: 'hearing', title: 'Understand the failure', body: 'Capture what is broken and what the caller already tried.' },
+      { icon: 'menu_book', title: 'Use approved knowledge', body: 'Answer from your help content and account-safe integrations.' },
+      { icon: 'build', title: 'Try one useful step', body: 'Guide the caller one action at a time and wait for the result.' },
+      { icon: 'support_agent', title: 'Resolve or hand off', body: 'Close the issue or escalate with transcript and attempted steps attached.' },
+    ],
+    resultTitle: 'Support ticket context',
+    resultFields: [
+      { label: 'Issue', value: 'Password-reset email missing' },
+      { label: 'Already tried', value: 'Resend · spam folder checked' },
+      { label: 'Sentiment', value: 'Frustrated' },
+      { label: 'Outcome', value: 'Escalated to account support' },
+    ],
+    integrations: [
+      { icon: 'confirmation_number', title: 'Ticketing system', body: 'Create or update a ticket with the complete conversation context.' },
+      { icon: 'library_books', title: 'Knowledge base', body: 'Ground answers in your approved support documentation.' },
+      { icon: 'swap_calls', title: 'Human handoff', body: 'Transfer or schedule a callback without asking the caller to start again.' },
+    ],
+    guardrails: ['Never repeat troubleshooting the caller already completed.', 'Never invent account status, billing decisions or a resolution timeline.', 'Escalate when the caller requests a human or the issue leaves approved knowledge.'],
     faqs: [
       { q: 'What kind of tickets can it resolve without a human?', a: 'Routine, repetitive questions grounded in your knowledge base - timings, policies, status checks, and the like.' },
       { q: 'How does escalation to a human work?', a: 'Artha hands off with the full transcript and context attached, so your team never has to ask the caller to repeat themselves.' },
