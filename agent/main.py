@@ -293,7 +293,27 @@ _APPOINTMENT_INTENT_PATTERN = re.compile(
     r"come at|visit at|doctor available)\b|"
     r"अपॉइंटमेंट|अवेलेबल|अवेलेबिलिटी|स्लॉट|बुक|समय लेना|आ सकता|आ सकती|"
     r"कितने बजे|कोणत्या वेळी|अपॉइंटमेंट|उपलब्ध|वेळ|बुकिंग|"
-    r"\d{1,2}(?::\d{2})?\s*(?:am|pm|बजे)",
+    r"\d{1,2}(?::\d{2})?\s*(?:am|pm|बजे)|"
+    r"(?:एक|दो|तीन|चार|पाँच|पांच|छह|सात|आठ|नौ|दस|ग्यारह|बारह)\s*बजे",
+    re.IGNORECASE,
+)
+
+_BOOKING_AFFIRMATIVE_PATTERN = re.compile(
+    r"^\s*(?:yes|yeah|yep|okay|ok|sure|please do|do it|go ahead|"
+    r"जी(?:\s*[,，]?\s*(?:हाँ|हा|हां|ठीक है|कीजिए|कर दीजिए|कर दो|बुक कर(?:ो| दीजिए)?))?|"
+    r"हाँ|हा|हां|ठीक है|कीजिए|कर दीजिए|कर दो|बुक कर(?:ो| दीजिए)?|"
+    r"हो|होय|चालेल|करा)\s*[.!?।]*\s*$",
+    re.IGNORECASE,
+)
+_BOOKING_CONTEXT_PATTERN = re.compile(
+    r"appointment|availability|slot|book|schedule|doctor|time|"
+    r"अपॉइंटमेंट|अवेलेबल|स्लॉट|बुक|डॉक्टर|समय|बजे|वेळ|उपलब्ध",
+    re.IGNORECASE,
+)
+_HEALTHCARE_SYMPTOM_PATTERN = re.compile(
+    r"pain|hurt|ache|symptom|fever|bleed|vomit|dizzy|breath|"
+    r"दर्द|तकलीफ|पेट|बुखार|खून|उल्टी|चक्कर|साँस|सांस|"
+    r"वेदना|ताप|रक्त|வலி|காய்ச்சல்|నొప్పి|ಜ್ವರ|വേദന|പനി|ব্যথা|জ্বর|ਦਰਦ|ਬੁਖਾਰ|ଦରଦ|ଜ୍ୱର",
     re.IGNORECASE,
 )
 
@@ -954,6 +974,8 @@ class RealEstateAgent(Agent):
         voice_value = config.get("voice") or "shubh"
         self._is_platform_demo = bool(config.get("is_platform_demo"))
         self._public_demo_slug = (config.get("public_demo_slug") or "").strip().lower()
+        self._healthcare_symptom_mentioned = False
+        self._booking_confirmed_this_turn = False
         self._agent_name = agent_name
         self._visitor_first_name = visitor_name.strip().split()[0] if visitor_name else None
         # Resolve this before choosing built-in vs custom instructions. Public
@@ -1355,6 +1377,16 @@ class RealEstateAgent(Agent):
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
         text = new_message.text_content
+        self._booking_confirmed_this_turn = False
+
+        _last_assistant_text = ""
+        for item in reversed(turn_ctx.items):
+            if getattr(item, "role", None) == "assistant":
+                _last_assistant_text = getattr(item, "text_content", None) or ""
+                break
+
+        if self._public_demo_slug == "healthcare" and _HEALTHCARE_SYMPTOM_PATTERN.search(text):
+            self._healthcare_symptom_mentioned = True
 
         detected_gender = _detect_caller_gender(text)
         if detected_gender:
@@ -1459,11 +1491,6 @@ class RealEstateAgent(Agent):
         # above — restate it fresh, last, every turn, so it isn't drowned
         # out by the structural rules.
         if self._is_platform_demo:
-            _last_assistant_text = ""
-            for item in reversed(turn_ctx.items):
-                if getattr(item, "role", None) == "assistant":
-                    _last_assistant_text = getattr(item, "text_content", None) or ""
-                    break
             _repeat_filler_warning = (
                 "\nYour last reply already used an expressive opener. Start this reply directly "
                 "unless a reaction is genuinely needed."
@@ -1512,6 +1539,13 @@ class RealEstateAgent(Agent):
         _industry_empathy_instruction = industry_demo_empathy_nudge(
             self._public_demo_slug, text, emotion
         )
+        _appointment_turn = bool(
+            _APPOINTMENT_INTENT_PATTERN.search(text)
+            or (
+                _BOOKING_AFFIRMATIVE_PATTERN.search(text)
+                and _BOOKING_CONTEXT_PATTERN.search(_last_assistant_text)
+            )
+        )
         _appointment_instruction = (
             "The caller's last message is about appointment availability, choosing a time, or "
             "booking. You MUST use check_calendar_availability before claiming any time is open; "
@@ -1520,7 +1554,17 @@ class RealEstateAgent(Agent):
             "second filler. If they are trying to finalize a slot, do not say it is booked until "
             "you have their name, phone number, and purpose and book_appointment returns success. "
             "Ask for the next missing detail instead of pretending the booking happened."
-            if _APPOINTMENT_INTENT_PATTERN.search(text)
+            if _appointment_turn
+            else ""
+        )
+        _healthcare_safety_instruction = (
+            "This healthcare caller has already described pain or symptoms. Treat that as the active "
+            "reason for the visit: do not suggest unrelated specialties, and do not make them repeat it. "
+            "Use one brief, calm acknowledgment; ask only whether it is severe/urgent or whether there "
+            "are emergency warning signs if that has not been established. For ordinary clinic routing, "
+            "offer the one relevant general physician from verified clinic knowledge—not a directory of "
+            "pediatrics, dermatology, or orthopedics. Never diagnose."
+            if self._public_demo_slug == "healthcare" and self._healthcare_symptom_mentioned
             else ""
         )
         # Same reinforcement pattern again for a different failure: the
@@ -1554,6 +1598,7 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _industry_turn_instruction if _industry_turn_instruction else "")
             + ("\n\n" + _industry_empathy_instruction if _industry_empathy_instruction else "")
             + ("\n\n" + _appointment_instruction if _appointment_instruction else "")
+            + ("\n\n" + _healthcare_safety_instruction if _healthcare_safety_instruction else "")
             + ("\n\n" + _search_instruction if _search_instruction else ""),
         )
 

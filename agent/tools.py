@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+import re
 
 import aiohttp
 from livekit.agents import RunContext
@@ -400,8 +401,6 @@ async def check_calendar_availability(
         )
     if not slots:
         return f"No open slots on {date}. Offer the caller a different day."
-    listing = f"Open slots on {date}: {', '.join(slots)}."
-    # This full listing is CONTEXT for you, not a script to read aloud.
     # Confirmed real failure: a caller who hadn't named a time got all
     # sixteen open slots for the day read out in one breath ("10, 10:30,
     # 11, 11:30, 12, 12:30..."), which is the exact IVR-menu monologue this
@@ -419,13 +418,27 @@ async def check_calendar_availability(
         if requested_time in slots:
             return (
                 f"YES — {requested_time} on {date} IS available. Offer it back to the caller and book it if they "
-                f"confirm; do not claim it's unavailable. {listing}"
+                f"confirm; do not claim it's unavailable."
             )
+        alternatives = slots[:3]
         return (
             f"NO — {requested_time} on {date} is NOT available (already booked or outside business hours). "
-            f"Do not offer {requested_time}. {listing} Offer the caller 2-3 of these instead."
+            f"Do not offer {requested_time}. Offer only these alternatives: {', '.join(alternatives)}."
         )
-    return f"{listing} Offer 2-3 of these to the caller in one short turn, not the whole list."
+    # Never expose the entire day to the model: in a real failed call it
+    # ignored the prose instruction and read sixteen slots aloud, then even
+    # hallucinated every :30 value as :32. Three representative choices are
+    # enough for a natural phone turn; a caller can name another time and the
+    # next tool call verifies that exact requested_time.
+    if len(slots) <= 3:
+        choices = slots
+    else:
+        choices = [slots[0], slots[len(slots) // 2], slots[-1]]
+    return (
+        f"Offer ONLY these open choices on {date}: {', '.join(choices)}. "
+        "Do not mention any other time or read a full-day list. If none suits, ask whether the caller "
+        "prefers morning, afternoon, or evening, then check their exact requested time."
+    )
 
 
 @function_tool
@@ -451,6 +464,27 @@ async def book_appointment(
         purpose: What the appointment is for, e.g. "dental cleaning", "site visit".
         duration_minutes: Appointment length in minutes. Default 30.
     """
+    clean_name = (name or "").strip()
+    clean_phone = (phone or "").strip()
+    clean_purpose = (purpose or "").strip()
+    phone_digits = re.sub(r"\D", "", clean_phone)
+    placeholder_names = {"caller", "customer", "patient", "unknown", "not provided", "na", "n/a", "name"}
+    if len(clean_name) < 2 or clean_name.lower() in placeholder_names:
+        return (
+            "BOOKING REJECTED — the caller's real name is missing. Ask for their name and do not say "
+            "the appointment is booked or confirmed."
+        )
+    if len(phone_digits) < 8:
+        return (
+            "BOOKING REJECTED — a real callback phone number is missing or invalid. Ask for it and do "
+            "not say the appointment is booked or confirmed."
+        )
+    if len(clean_purpose) < 3 or clean_purpose.lower() in {"unknown", "not provided", "na", "n/a"}:
+        return (
+            "BOOKING REJECTED — the reason/purpose is missing. Ask what the visit is for and do not say "
+            "the appointment is booked or confirmed."
+        )
+    name, phone, purpose = clean_name, clean_phone, clean_purpose
     logger.info("booking appointment: %s (%s) %s %s for %s", name, phone, date, time, purpose)
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is not None:
@@ -486,6 +520,7 @@ async def book_appointment(
             f"That slot couldn't be booked ({result.get('error', 'unavailable')}). "
             "Offer the caller another time."
         )
+    context.session.current_agent._booking_confirmed_this_turn = True
     return f"Appointment confirmed for {name} on {date} at {time}. Confirm it warmly to the caller."
 
 
