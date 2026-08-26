@@ -1,5 +1,11 @@
 import { DisconnectReason, Room, RoomEvent, Track } from 'livekit-client'
-import type { Participant, RemoteParticipant, RemoteTrack, TranscriptionSegment } from 'livekit-client'
+import type {
+  Participant,
+  RemoteParticipant,
+  RemoteTrack,
+  RemoteTrackPublication,
+  TranscriptionSegment,
+} from 'livekit-client'
 
 // Must run synchronously at the top of the script — document.currentScript
 // only reflects the executing <script> tag during that tag's own
@@ -750,6 +756,10 @@ function init(): void {
   let room: Room | null = null
   let micEnabled = true
   let stopVolumeReactivity: (() => void) | null = null
+  // The agent publishes its optional background ambience as a SECOND audio
+  // track, under this name (livekit.agents' BackgroundAudioPlayer sets it).
+  // It must never share an element with the voice track — see clearAmbience.
+  let ambienceEl: HTMLMediaElement | null = null
   let countdownInterval: number | null = null
   // Set by warmAgent() the instant the pre-call form opens, well before the
   // visitor finishes typing — startCall() hands this room name back to
@@ -1283,6 +1293,7 @@ function init(): void {
     releaseCallLock()
     stopVolumeReactivity?.()
     stopVolumeReactivity = null
+    clearAmbience()
     stopCountdown()
     stopPresencePing()
     room = null
@@ -1309,6 +1320,7 @@ function init(): void {
     }
     stopVolumeReactivity?.()
     stopVolumeReactivity = null
+    clearAmbience()
     stopCountdown()
     stopPresencePing()
     room = null
@@ -1428,6 +1440,9 @@ function init(): void {
   function toggleSpeaker(): void {
     speakerMuted = !speakerMuted
     audioEl.muted = speakerMuted
+    // Ambience is a separate element, so muting the voice alone would leave
+    // the room tone playing on its own — worse than not muting at all.
+    if (ambienceEl) ambienceEl.muted = speakerMuted
     speakerBtn.innerHTML = speakerMuted ? SPEAKER_OFF_ICON : SPEAKER_ICON
     speakerBtn.setAttribute('aria-label', speakerMuted ? "Unmute Artha's voice" : "Mute Artha's voice")
   }
@@ -1471,6 +1486,26 @@ function init(): void {
     room.localParticipant
       .publishData(new TextEncoder().encode(text), { reliable: true, topic: 'typed-utterance' })
       .catch((err) => console.warn('[Vistrow Voice widget] failed to send typed message:', err))
+  }
+
+  // Name the agent's BackgroundAudioPlayer publishes its ambience track under.
+  const BACKGROUND_AUDIO_TRACK = 'background_audio'
+
+  // Ambience gets its OWN <audio> element, never the shared one the voice
+  // uses. livekit-client's attachToElement removes any existing audio track
+  // from an element's MediaStream before adding the new one (it replaces,
+  // it does not mix) — so attaching both to av-audio would have silenced
+  // Artha and played only room tone. Two elements let the browser mix them,
+  // which is also what LiveKit's own React components do (one element per
+  // publication) and avoids a Web Audio graph, whose
+  // MediaStreamAudioDestinationNode path has known silent-playback bugs on
+  // iOS Safari — not a risk worth taking on arbitrary customer sites.
+  function clearAmbience(): void {
+    if (!ambienceEl) return
+    ambienceEl.pause()
+    ambienceEl.srcObject = null
+    ambienceEl.remove()
+    ambienceEl = null
   }
 
   // Makes the orb visibly react to the agent's voice instead of just
@@ -1648,11 +1683,26 @@ function init(): void {
 
     try {
       room = new Room()
-      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
-        if (track.kind === Track.Kind.Audio) {
-          track.attach(audioEl)
-          stopVolumeReactivity = attachVolumeReactivity(track)
+      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, publication: RemoteTrackPublication) => {
+        if (track.kind !== Track.Kind.Audio) return
+        if (publication.trackName === BACKGROUND_AUDIO_TRACK) {
+          // Own element (see clearAmbience) so it mixes under the voice
+          // rather than replacing it. Deliberately NOT fed to the orb
+          // analyser below: ambience is continuous, so it would hold the
+          // orb permanently inflated and stop it tracking actual speech.
+          clearAmbience()
+          const el = track.attach()
+          el.autoplay = true
+          el.muted = speakerMuted
+          ambienceEl = el
+          audioEl.parentElement?.appendChild(el)
+          return
         }
+        track.attach(audioEl)
+        stopVolumeReactivity = attachVolumeReactivity(track)
+      })
+      room.on(RoomEvent.TrackUnsubscribed, (_track: RemoteTrack, publication: RemoteTrackPublication) => {
+        if (publication.trackName === BACKGROUND_AUDIO_TRACK) clearAmbience()
       })
       room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
         clearAgentJoinWatchdog()
@@ -1730,6 +1780,7 @@ function init(): void {
         room.disconnect()
         stopVolumeReactivity?.()
         stopVolumeReactivity = null
+        clearAmbience()
         stopCountdown()
         room = null
         if (attempt === 0) {
