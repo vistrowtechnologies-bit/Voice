@@ -7,11 +7,15 @@ export async function fetchLiveKitToken(
   identity: string,
   room: string,
   agentId?: number,
+  /** Published industry-demo slug (e.g. 'healthcare'). The server resolves
+   * it to an agent itself and ignores agentId when it's set — the public
+   * endpoint never accepts a raw agent id from the page. */
+  demoSlug?: string,
 ): Promise<TokenResponse> {
   const res = await fetch('/api/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identity, room, agentId }),
+    body: JSON.stringify({ identity, room, agentId, demoSlug }),
   })
   if (!res.ok) {
     throw new Error(`token request failed with status ${res.status}`)

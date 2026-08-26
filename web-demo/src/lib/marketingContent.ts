@@ -191,6 +191,15 @@ export interface Solution extends NavLink {
   pains: FeatureRow[]
   features: string[]
   faqs: Faq[]
+  /** Published public_demo_slug of the roleplay agent for this industry
+   * (server/calls_db.py's agent_id_for_public_demo_slug). When set, the
+   * page offers a real call where Artha answers AS demoBusiness instead of
+   * showing a scripted sample conversation. Only set it once that agent
+   * actually exists and is live - an unknown slug is a 404 from /token. */
+  demoSlug?: string
+  /** Fictional business the demo agent answers as. Shown on the page so a
+   * visitor is never misled into thinking it is a real company. */
+  demoBusiness?: string
 }
 
 export const SOLUTIONS: Solution[] = [
@@ -215,6 +224,8 @@ export const SOLUTIONS: Solution[] = [
     ],
   },
   {
+    demoSlug: 'healthcare',
+    demoBusiness: 'Sunrise Care Clinic',
     label: 'Healthcare & Clinics',
     to: '/solutions/healthcare',
     icon: 'health_and_safety',

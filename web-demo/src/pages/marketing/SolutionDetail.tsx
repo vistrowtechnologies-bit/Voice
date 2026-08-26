@@ -5,6 +5,7 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { PageHero, CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { SOLUTIONS } from '../../lib/marketingContent'
+import { DemoOrbCard } from '../../components/DemoOrbCard'
 
 // One template renders all five industry pages, keyed by the :slug route param.
 export function SolutionDetail() {
@@ -58,26 +59,41 @@ export function SolutionDetail() {
 
       {/* Sample transcript + feature list */}
       <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-5 py-12 md:px-8 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-surface p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
-            </span>
-            <span className="text-xs font-semibold text-text-muted">Live call · Artha</span>
+        {/* A real call beats a mock-up of one: where an industry has a
+            published roleplay agent, the visitor phones the demo business
+            and hears exactly what their own customer would. Industries
+            without one keep the scripted sample until their agent exists -
+            an unknown slug would 404 from /token. */}
+        {solution.demoSlug ? (
+          <div className="flex flex-col gap-3">
+            <DemoOrbCard demoSlug={solution.demoSlug} />
+            <p className="text-center text-xs text-text-muted">
+              You’ll be talking to <span className="font-semibold text-text">{solution.demoBusiness}</span> — a
+              demo clinic we made up, answered live by Artha. Try asking about timings, fees, or booking an appointment.
+            </p>
           </div>
-          <div className="flex flex-col gap-3 text-sm">
-            <div className="max-w-[85%] self-start rounded-2xl rounded-tl-sm bg-surface-high px-4 py-2.5 text-text">
-              Namaste! You’ve reached {solution.label}. How can I help you today?
+        ) : (
+          <div className="rounded-2xl border border-border bg-surface p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
+              </span>
+              <span className="text-xs font-semibold text-text-muted">Sample call · Artha</span>
             </div>
-            <div className="max-w-[85%] self-end rounded-2xl rounded-tr-sm bg-primary/15 px-4 py-2.5 text-text">
-              Hi, I wanted to know more about your services.
-            </div>
-            <div className="max-w-[85%] self-start rounded-2xl rounded-tl-sm bg-surface-high px-4 py-2.5 text-text">
-              Of course - may I take your name and number so our team can follow up with the right details?
+            <div className="flex flex-col gap-3 text-sm">
+              <div className="max-w-[85%] self-start rounded-2xl rounded-tl-sm bg-surface-high px-4 py-2.5 text-text">
+                Namaste! You’ve reached {solution.label}. How can I help you today?
+              </div>
+              <div className="max-w-[85%] self-end rounded-2xl rounded-tr-sm bg-primary/15 px-4 py-2.5 text-text">
+                Hi, I wanted to know more about your services.
+              </div>
+              <div className="max-w-[85%] self-start rounded-2xl rounded-tl-sm bg-surface-high px-4 py-2.5 text-text">
+                Of course - may I take your name and number so our team can follow up with the right details?
+              </div>
             </div>
           </div>
-        </div>
+        )}
         <div>
           <SectionEyebrow>What’s included</SectionEyebrow>
           <h3 className="mt-3 font-display text-2xl font-semibold">Everything Artha handles for {solution.label}.</h3>

@@ -57,7 +57,15 @@ function releaseCallLock(): void {
 // browser's own native prompt, then the same card shows live call state
 // (status, timer, mute/end controls) in place of the idle "Tap to talk"
 // content. Reused on the homepage hero and every solution/product page.
-export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
+export function DemoOrbCard({
+  spotlight = false,
+  demoSlug,
+}: {
+  spotlight?: boolean
+  /** Published industry-demo slug (e.g. 'healthcare'). Omitted on the
+   * homepage, where the server resolves the platform-demo sales agent. */
+  demoSlug?: string
+}) {
   const [phase, setPhase] = useState<Phase>(() => (hasDemoCallsRemaining() ? 'idle' : 'capped'))
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
@@ -112,7 +120,7 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
     if (!hasDemoCallsRemaining()) return Promise.resolve(null)
     const identity = randomId('visitor')
     const room = randomId('voice-agent-demo')
-    const request = fetchLiveKitToken(identity, room)
+    const request = fetchLiveKitToken(identity, room, undefined, demoSlug)
       .then(({ token: newToken, url }) => {
         const warmed = { token: newToken, url, identity, room, at: Date.now() }
         prewarmRef.current = warmed
@@ -127,7 +135,10 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
       prewarmPromiseRef.current = null
     })
     return prewarmPromiseRef.current
-  }, [])
+    // demoSlug decides WHICH agent the prewarmed room dispatches, so it has
+    // to be a dependency — a stale closure here would silently warm the
+    // homepage sales agent for an industry page.
+  }, [demoSlug])
 
   // Only counts against the free-call cap once a call actually connects to
   // an agent - a visitor whose call fails end-to-end (LiveKit never joins
@@ -174,7 +185,8 @@ export function DemoOrbCard({ spotlight = false }: { spotlight?: boolean }) {
       const warm = (await warming) ?? prewarmRef.current
       const isFresh = warm && Date.now() - warm.at < PREWARM_MAX_AGE_MS
       const room = isFresh ? warm.room : randomId('voice-agent-demo')
-      const { token: newToken, url } = isFresh ? warm : await fetchLiveKitToken(randomId('visitor'), room)
+      const { token: newToken, url } =
+        isFresh ? warm : await fetchLiveKitToken(randomId('visitor'), room, undefined, demoSlug)
       prewarmRef.current = null
       lastRoomNameRef.current = room
       setFeedbackSubmitted(false)
