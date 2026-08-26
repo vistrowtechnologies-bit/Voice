@@ -490,6 +490,7 @@ export const HOW_IT_WORKS: FeatureRow[] = [
 // ---- Header navigation structure ----
 
 export const NAV: NavGroup[] = [
+  { label: 'Home', to: '/' },
   {
     label: 'Product',
     items: [{ label: 'Overview', to: '/product', icon: 'grid_view', desc: 'The whole platform at a glance.' }, ...PRODUCT_PAGES],

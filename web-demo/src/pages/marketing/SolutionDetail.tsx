@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useParams, Navigate } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
-import { PageHero, CTABand, SectionEyebrow } from '../../components/MarketingBits'
-import { SOLUTIONS } from '../../lib/marketingContent'
+import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
+import { ScriptMarquee } from '../../components/BharatBits'
+import { HERO_STATS, SOLUTIONS } from '../../lib/marketingContent'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
 
 // One template renders all five industry pages, keyed by the :slug route param.
@@ -40,17 +41,57 @@ export function SolutionDetail() {
   return (
     <MarketingLayout>
       <Seo title={`${solution.headline} - Vistrow Voice`} description={solution.subhead} path={solution.to} jsonLd={faqJsonLd} />
-      {/* An industry with a published roleplay agent puts the live call in
-          the hero, beside the headline — it is the strongest thing on the
-          page, so burying it below three sections wasted it. Industries
-          without one pass no children and PageHero falls back to its
-          single centered column. */}
-      <PageHero
-        eyebrow={`Solutions · ${solution.label}`}
-        title={solution.headline}
-        subhead={solution.subhead}
+      <button
+        type="button"
+        onClick={scrollToDemo}
+        aria-controls="live-demo"
+        className="independence-ribbon flex w-full items-center justify-center gap-2 px-4 py-2.5 text-center text-xs font-semibold text-text sm:text-sm"
       >
-        {solution.demoSlug ? (
+        <span className="ribbon-tricolour" aria-hidden="true"><i /><i /><i /></span>
+        <span>Try a real {solution.label} call with Artha — no signup required</span>
+        <Icon name="arrow_forward" className="text-[16px]" />
+      </button>
+
+      {/* The industry hero mirrors the homepage's strongest visual system:
+          Bharat identity, living language proof, two-column live demo and a
+          compact proof strip. The business role and orb tint remain unique
+          to the selected industry. */}
+      <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-5 py-14 md:px-8 lg:grid-cols-2 lg:py-24">
+        <div>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold uppercase tracking-[0.28em]">
+            <span className="font-sans text-sm normal-case tracking-normal text-text-muted">भारत के लिए</span>
+            <span className="text-border">/</span>
+            <span aria-label="Built for Bharat">
+              <span className="text-text-muted">Built for </span>
+              <span className="text-[#ff9933]">BH</span><span className="bharat-middle-letter">AR</span><span className="text-[#138808]">AT</span>
+            </span>
+          </p>
+          <p className="mt-5 text-xs font-bold uppercase tracking-widest text-cyan">Solutions · {solution.label}</p>
+          <h1 className="mt-4 font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl lg:text-6xl">
+            {solution.headline}
+          </h1>
+          <p className="mt-5 max-w-lg text-base leading-7 text-text-muted sm:mt-6 sm:text-lg sm:leading-relaxed">{solution.subhead}</p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <TalkToArthaButton />
+            <Link
+              to="/contact"
+              className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
+            >
+              Book a demo
+            </Link>
+          </div>
+          <div className="mt-10 grid grid-cols-3 gap-4 border-t border-border pt-6 sm:gap-8">
+            {HERO_STATS.map((stat) => (
+              <div key={stat.label}>
+                <p className="font-display text-2xl font-bold text-text">{stat.value}</p>
+                <p className="text-[10px] uppercase tracking-wider text-text-muted sm:text-xs">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="w-full">
+          {solution.demoSlug ? (
           <div className="flex flex-col gap-3">
             <DemoOrbCard
               demoSlug={solution.demoSlug}
@@ -62,8 +103,11 @@ export function SolutionDetail() {
               demo business we made up, answered live by Artha. {solution.demoPrompt}
             </p>
           </div>
-        ) : undefined}
-      </PageHero>
+          ) : undefined}
+        </div>
+      </section>
+
+      <ScriptMarquee />
 
       {/* A useful demo needs a job, not just an orb. Each choice represents a
           real call this industry's agent is configured to handle and gives
