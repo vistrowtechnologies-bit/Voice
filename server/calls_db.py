@@ -876,6 +876,15 @@ def init_tables() -> None:
                 ("emotion_intensity", "TEXT DEFAULT 'strong'"),
                 ("webhook_url", "TEXT DEFAULT ''"),
                 ("memory_enabled", "INTEGER DEFAULT 0"),
+                # Low-volume looping office-ambience track mixed into the
+                # agent's outbound audio (agent/main.py, via LiveKit's own
+                # BackgroundAudioPlayer) - makes a synthetic voice feel like
+                # it's actually in a physical space instead of an unnaturally
+                # silent studio recording, which is itself a tell that gives
+                # away an AI caller. "off"/"on"; defaults off since it's
+                # unproven on real calls - existing agents don't change
+                # behavior until an operator opts in.
+                ("ambient_noise", "TEXT DEFAULT 'off'"),
             ):
                 conn.execute(f"ALTER TABLE agents ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # Per-number monthly line item — EnableX charges Vistrow for every
@@ -2398,7 +2407,7 @@ _AGENT_FIELDS = (
     "silence_reminder_ms", "silence_reminder_max", "end_call_on_silence_ms",
     "max_call_duration_s", "enabled_functions", "transfer_phone",
     "custom_functions", "post_call_fields", "webhook_url", "memory_enabled",
-    "emotion_intensity",
+    "emotion_intensity", "ambient_noise",
 )
 # INTEGER columns fed from a JSON bool (Postgres has no bool->int cast).
 _AGENT_BOOL_FIELDS = frozenset({"is_platform_demo", "memory_enabled"})
@@ -2424,6 +2433,7 @@ _AGENT_CAMEL_TO_SNAKE = {
     "webhookUrl": "webhook_url",
     "memoryEnabled": "memory_enabled",
     "emotionIntensity": "emotion_intensity",
+    "ambientNoise": "ambient_noise",
 }
 
 
@@ -2458,6 +2468,7 @@ def _agent_dict(row: dict) -> dict:
         "kbId": row["kb_id"],
         "tone": row["tone"] or "balanced",
         "emotionIntensity": row["emotion_intensity"] or "strong",
+        "ambientNoise": row["ambient_noise"] or "off",
         "isPlatformDemo": bool(row["is_platform_demo"]),
         "firstSpeaker": row["first_speaker"] or "agent",
         "welcomeMessage": row["welcome_message"] or "",

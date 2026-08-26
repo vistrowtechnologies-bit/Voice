@@ -12,6 +12,7 @@ import {
   updateAgent,
 } from '../lib/api'
 import {
+  AMBIENT_NOISE_OPTIONS,
   EMOTION_INTENSITIES,
   LANGUAGES,
   modelOptionsFor,
@@ -120,6 +121,7 @@ function AgentEditorForm({
     kbId: agent.kbId,
     tone: agent.tone || 'balanced',
     emotionIntensity: agent.emotionIntensity || 'strong',
+    ambientNoise: agent.ambientNoise || 'off',
     isPlatformDemo: agent.isPlatformDemo,
     firstSpeaker: agent.firstSpeaker || 'agent',
     welcomeMessage: agent.welcomeMessage || '',
@@ -294,6 +296,19 @@ function AgentEditorForm({
               {EMOTION_INTENSITIES.map((i) => (
                 <option key={i.value} value={i.value}>
                   {i.label} - {i.description}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Background ambience">
+            <select
+              value={form.ambientNoise}
+              onChange={(e) => set('ambientNoise', e.target.value as AgentForm['ambientNoise'])}
+              className={inputCls}
+            >
+              {AMBIENT_NOISE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label} - {o.description}
                 </option>
               ))}
             </select>

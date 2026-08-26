@@ -241,6 +241,7 @@ export interface AgentConfig {
   kbId: number | null
   tone: 'professional' | 'balanced' | 'casual'
   emotionIntensity: 'off' | 'subtle' | 'strong'
+  ambientNoise: 'off' | 'on'
   isPlatformDemo: boolean
   // Conversation start
   firstSpeaker: 'agent' | 'user'

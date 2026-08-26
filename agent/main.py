@@ -13,6 +13,9 @@ from livekit.agents.inference import eot
 from livekit.agents import (
     Agent,
     AgentSession,
+    AudioConfig,
+    BackgroundAudioPlayer,
+    BuiltinAudioClip,
     EndpointingOptions,
     JobContext,
     JobProcess,
@@ -2219,6 +2222,8 @@ async def entrypoint(ctx: JobContext) -> None:
     # Same reasoning as visitor_holder above — set once the recorder actually
     # starts (after session.start(), below), read here once the call ends.
     recorder_holder: dict[str, recording.CallRecorder | None] = {"recorder": None}
+    # Same pattern again for the optional background-ambience track.
+    background_audio_holder: dict[str, BackgroundAudioPlayer | None] = {"player": None}
 
     async def log_call() -> None:
         ended_at = datetime.now(timezone.utc)
@@ -2284,6 +2289,13 @@ async def entrypoint(ctx: JobContext) -> None:
                 logger.exception("post-call analysis failed for room %s — call already saved", ctx.room.name)
             if extracted:
                 db.set_call_extracted_data(saved_call_id, extracted)
+
+        background_audio = background_audio_holder["player"]
+        if background_audio is not None:
+            try:
+                await background_audio.aclose()
+            except Exception:
+                logger.exception("failed to close background audio for room %s", ctx.room.name)
 
         recorder = recorder_holder["recorder"]
         if recorder is not None:
@@ -2430,6 +2442,26 @@ async def entrypoint(ctx: JobContext) -> None:
             recorder_holder["recorder"] = recorder
         except Exception:
             logger.exception("failed to start call recorder for room %s", ctx.room.name)
+
+    # Opt-in per agent (see calls_db.py's ambient_noise column) - a low,
+    # looping office-ambience bed mixed into the agent's own audio track via
+    # LiveKit's own BackgroundAudioPlayer/BuiltinAudioClip, not a hand-rolled
+    # mixer. A synthetic voice with zero room tone is itself one of the
+    # tells that gives away an AI caller; kept deliberately quiet (5%) so it
+    # reads as "someone in an office" rather than drawing attention to
+    # itself. Off by default - unproven on real calls, so existing agents
+    # don't change behavior until an operator turns it on.
+    if cfg.get("ambient_noise") == "on":
+        try:
+            background_audio = BackgroundAudioPlayer(
+                ambient_sound=AudioConfig(
+                    BuiltinAudioClip.OFFICE_AMBIENCE, volume=0.05, fade_in=1.5
+                )
+            )
+            await background_audio.start(room=ctx.room, agent_session=session)
+            background_audio_holder["player"] = background_audio
+        except Exception:
+            logger.exception("failed to start background audio for room %s", ctx.room.name)
 
 
 def _prewarm(proc: JobProcess) -> None:

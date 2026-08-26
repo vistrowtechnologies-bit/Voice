@@ -192,6 +192,13 @@ export const EMOTION_INTENSITIES = [
   { value: 'subtle', label: 'Subtle', description: 'A light shift in delivery when the caller sounds frustrated, confused, or excited.' },
   { value: 'strong', label: 'Strong', description: 'Full reactivity - the default. Noticeably warmer or calmer depending on the caller.' },
 ] as const
+// A quiet, looping office-ambience track mixed into the agent's own audio -
+// matches agent/main.py's ambient_noise handling exactly. Off by default:
+// unproven on real calls, so an operator opts in per agent.
+export const AMBIENT_NOISE_OPTIONS = [
+  { value: 'off', label: 'Off', description: 'Clean, studio-quiet audio - the default.' },
+  { value: 'on', label: 'On', description: 'A subtle office-ambience loop, mixed in quietly under the agent’s voice.' },
+] as const
 export const LANGUAGES = [
   ['hi-IN', 'Hindi'],
   ['en-IN', 'English'],
