@@ -114,6 +114,12 @@ _GOOGLE_NAME_TO_LANGUAGE_CODE = {
 # English names — romanized Hindi for "English" above all, plus the endonyms
 # people reach for when asking in the language itself.
 _SPOKEN_LANGUAGE_ALIASES = frozenset({
+    # Callers name languages in their own script, and multilingual STT
+    # returns them that way — "फ्रेंच", not "French".
+    "फ्रेंच", "जापानी", "बंगाली", "बांग्ला", "मराठी", "मराठीत", "हिंदी", "हिन्दी",
+    "अंग्रेजी", "अंग्रेज़ी", "तमिल", "तेलुगु", "कन्नड़", "मलयालम", "गुजराती",
+    "पंजाबी", "उड़िया", "ଓଡ଼ିଆ", "ਪੰਜਾਬੀ", "বাংলা", "தமிழ்", "తెలుగు", "ಕನ್ನಡ",
+    "മലയാളം", "ગુજરાતી", "स्पेनिश", "जर्मन", "अरबी", "रूसी", "चीनी",
     "angrezi", "angreji", "angrezee", "inglish", "ingles",
     "nihongo", "francais", "français", "deutsch", "espanol", "español",
     "italiano", "portugues", "português", "mandarin", "putonghua",
