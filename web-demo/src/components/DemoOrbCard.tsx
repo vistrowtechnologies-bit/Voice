@@ -224,8 +224,16 @@ export function DemoOrbCard({
     setToken(null)
     setServerUrl(null)
     setPhase(creditChargedRef.current && hasDemoCallsRemaining() ? 'feedback' : hasDemoCallsRemaining() ? 'idle' : 'capped')
-    prewarm()
-  }, [prewarm])
+    // Deliberately NOT prewarming here. This used to speculatively warm a
+    // room for a hypothetical next call the moment one ended - but the
+    // visitor has just hung up, so nobody is waiting on latency, and most
+    // never call again. Every one of those rooms dispatched an agent that
+    // sat out agent/main.py's 90s wait_for_participant and was billed as
+    // agent session time: a guaranteed wasted 1.5 minutes per completed
+    // call. Measured on the LiveKit August invoice, agent session minutes
+    // ran ~11.8x actual participant minutes (9,125 vs 775). handleStart
+    // still prewarms, where a caller genuinely is waiting.
+  }, [])
 
   const handleFeedbackDone = useCallback(() => {
     setPhase(hasDemoCallsRemaining() ? 'idle' : 'capped')

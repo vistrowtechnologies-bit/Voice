@@ -1081,7 +1081,17 @@ function init(): void {
     chooseVoiceBtn.style.display = widgetMode === 'chat' ? 'none' : 'flex'
     chooseChatBtn.style.display = widgetMode === 'voice' ? 'none' : 'flex'
     trackEvent('open')
-    if (widgetMode !== 'chat') warmAgent()
+    // Deliberately NOT warming here. This fired on merely OPENING the
+    // bubble, so every curious click that never became a call still
+    // dispatched an agent that sat out agent/main.py's 90s
+    // wait_for_participant and was billed as agent session time. Measured
+    // on the LiveKit August invoice: 9,125 agent-session minutes against
+    // 775 real participant minutes, ~11.8x, which is what pushed the
+    // account 4,125 minutes past its included 5,000. showForm() below
+    // still warms - by then the visitor has chosen "Talk to <agent>" and
+    // is filling in the pre-call form, which is real intent and still
+    // lands well before they submit, so the latency head start is kept
+    // exactly where someone is actually waiting on it.
     window.setTimeout(() => (widgetMode === 'chat' ? chooseChatBtn : chooseVoiceBtn).focus(), 0)
   }
 
