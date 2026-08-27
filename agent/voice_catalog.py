@@ -209,6 +209,44 @@ def sample_text(lang: str, gender: str | None = None) -> str | None:
 _HIDDEN_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:")
 
 
+# Which languages a voice can actually SPEAK, and whether it can switch
+# between them mid-call. This is the decision an operator is really making
+# and the catalog never expressed it: a "lite" locale voice looks like the
+# cheap option next to Sarvam, but hi-IN-Standard-A speaks Hindi and only
+# Hindi - put it on a caller who slips into English and it cannot follow,
+# which is the one thing this product is sold on. Surfacing it stops that
+# being discovered on a live call.
+LANGUAGE_LABELS = {
+    "hi-IN": "Hindi", "en-IN": "English", "mr-IN": "Marathi", "ta-IN": "Tamil",
+    "te-IN": "Telugu", "kn-IN": "Kannada", "ml-IN": "Malayalam",
+    "gu-IN": "Gujarati", "bn-IN": "Bengali", "pa-IN": "Punjabi", "od-IN": "Odia",
+}
+# Sarvam bulbul (v2 and v3) accept exactly these - matches the plugin's own
+# SarvamTTSLanguages literal, which is every language this product speaks.
+_SARVAM_LANGUAGES = tuple(LANGUAGE_LABELS.keys())
+
+
+def languages_for(entry: dict) -> tuple[list[str], bool]:
+    """(language codes this voice speaks, can_switch_mid_call).
+
+    A Google locale voice encodes its one language in the value itself
+    ("google:hi-IN-Standard-A"); everything multilingual is a single voice
+    that carries across all of them.
+    """
+    value = entry.get("value", "")
+    if entry.get("multilingual"):
+        return list(_SARVAM_LANGUAGES), True
+    if value.startswith(("google:", "google31:")):
+        part = value.split(":", 1)[1]
+        code = "-".join(part.split("-")[:2])
+        if code in LANGUAGE_LABELS:
+            return [code], False
+        # Gemini persona (kore/charon) - multilingual but not flagged
+        return list(_SARVAM_LANGUAGES), True
+    # Bare Sarvam speaker name
+    return list(_SARVAM_LANGUAGES), True
+
+
 def is_hidden(value: str) -> bool:
     """Whether this voice should be withheld from voice pickers."""
     return bool(value) and value.startswith(_HIDDEN_VOICE_PREFIXES)
@@ -232,6 +270,7 @@ def allowed_tiers_for_plan(plan: str | None, is_owner: bool = False) -> set[str]
 
 def public_entry(entry: dict, allowed_tiers: set[str]) -> dict:
     """Catalog entry shaped for the API, with plan-gating annotations."""
+    _langs, _can_switch = languages_for(entry)
     tier = entry["tier"]
     meta = TIER_META[tier]
     addable = tier in allowed_tiers
@@ -253,4 +292,9 @@ def public_entry(entry: dict, allowed_tiers: set[str]) -> dict:
         "forceLang": entry.get("force_lang", ""),
         "multilingual": bool(entry.get("multilingual")),
         "preview": bool(entry.get("preview")),
+        # See languages_for(): what this voice can speak, and whether it can
+        # follow a caller who switches language mid-sentence.
+        "languages": _langs,
+        "languageLabels": [LANGUAGE_LABELS[c] for c in _langs if c in LANGUAGE_LABELS],
+        "canSwitchLanguage": _can_switch,
     }

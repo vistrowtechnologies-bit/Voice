@@ -565,6 +565,13 @@ export interface VoiceEntry {
   multilingual: boolean
   // Test-only preview model; shown separately from stable production voices.
   preview: boolean
+  // Which languages this voice can actually speak, and whether it can follow
+  // a caller who switches language mid-sentence. A Google locale voice
+  // ("Aditi (Hindi)") speaks exactly one and cannot switch - the single most
+  // consequential thing about picking it, and previously invisible here.
+  languages: string[]
+  languageLabels: string[]
+  canSwitchLanguage: boolean
   selected?: boolean
 }
 

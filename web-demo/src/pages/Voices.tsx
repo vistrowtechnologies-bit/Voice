@@ -139,10 +139,25 @@ function VoiceCard({
           <div className="min-w-0">
             <p className="truncate font-semibold">{entry.name}</p>
             {entry.note && <p className="truncate text-[11px] text-text-muted">{entry.note}</p>}
-            {entry.multilingual && (
-              <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-cyan/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan">
+            {/* What this voice can actually speak. A single-language voice
+                cannot follow a caller who switches mid-sentence, which is
+                the thing this product is sold on - so say it on the card
+                rather than letting it be discovered on a live call. */}
+            {entry.canSwitchLanguage ? (
+              <span
+                className="mt-1 inline-flex items-center gap-1 rounded-full bg-cyan/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan"
+                title={`Speaks ${entry.languageLabels.join(', ')} and switches between them mid-call`}
+              >
                 <Icon name="translate" className="text-[11px]" />
-                Multilingual
+                {entry.languageLabels.length} languages · switches
+              </span>
+            ) : (
+              <span
+                className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-500"
+                title={`Speaks only ${entry.languageLabels.join(', ')}. It cannot follow a caller who switches language mid-call.`}
+              >
+                <Icon name="info" className="text-[11px]" />
+                {entry.languageLabels[0] ?? 'Single'} only
               </span>
             )}
           </div>
