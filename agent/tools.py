@@ -10,7 +10,14 @@ from livekit.agents import RunContext
 from livekit.agents.llm import function_tool
 
 import db
-from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES, detect_reply_language
+from language import (
+    ELEVENLABS_SUPPORTED_LANGUAGES,
+    GOOGLE_LANGUAGE_NAMES,
+    LANGUAGE_NAMES,
+    detect_reply_language,
+    is_google_multilingual,
+    to_google_code,
+)
 
 logger = logging.getLogger("real-estate-tools")
 
@@ -96,6 +103,12 @@ _INDUSTRY_CALENDAR_CHECK_FILLERS = {
 }
 
 _NAME_TO_LANGUAGE_CODE = {name.lower(): code for code, name in LANGUAGE_NAMES.items()}
+# A Gemini persona voice speaks the full documented Gemini-TTS range; a Sarvam
+# voice speaks the native 11 and rejects anything else outright. So which
+# names are accepted has to follow the voice, not be one global list.
+_GOOGLE_NAME_TO_LANGUAGE_CODE = {
+    name.lower(): code for code, name in GOOGLE_LANGUAGE_NAMES.items()
+}
 
 _HINDI_HOUR_WORDS = {
     1: "एक", 2: "दो", 3: "तीन", 4: "चार", 5: "पाँच", 6: "छह", 7: "सात",
@@ -722,17 +735,24 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
     this before your first reply in the new language, not after.
 
     Args:
-        language: The language's plain English name — one of Hindi, English,
-            Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali,
-            Punjabi.
+        language: The language's plain English name ("Hindi", "Marathi",
+            "French", "Japanese"). Which names are accepted depends on the
+            voice this agent runs — see the language section of your prompt
+            for the list you actually have.
     """
-    code = _NAME_TO_LANGUAGE_CODE.get(language.strip().lower())
+    agent = context.session.current_agent
+    provider = getattr(agent, "_tts_provider", None)
+    _names = (
+        _GOOGLE_NAME_TO_LANGUAGE_CODE
+        if is_google_multilingual(provider)
+        else _NAME_TO_LANGUAGE_CODE
+    )
+    code = _names.get(language.strip().lower())
     if code is None:
         return (
             f"'{language}' isn't a language this line supports switching to — stay in "
             "the current language and don't mention this limitation to the caller."
         )
-    agent = context.session.current_agent
     if getattr(agent, "_reply_language", None) == code:
         return f"Already replying in {language} — just continue."
 
@@ -769,7 +789,6 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
         agent._pending_language = None
         agent._pending_language_streak = 0
         try:
-            provider = getattr(agent, "_tts_provider", None)
             if provider == "elevenlabs":
                 # eleven_flash_v2_5 hard-rejects a `language` code outside its
                 # own 32-language list — confirmed live in production: it
@@ -787,7 +806,9 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
                 is_google_31 = raw_voice.startswith("google31:")
                 voice_name = raw_voice.removeprefix("google31:" if is_google_31 else "google:")
                 agent.tts.update_options(
-                    language=code,
+                    # Google spells Odia or-IN and Bengali bn-BD; sending our
+                    # own od-IN/bn-IN would be an unrecognised locale.
+                    language=to_google_code(code),
                     voice_name=voice_name.capitalize(),
                     model_name="gemini-3.1-flash-tts-preview" if is_google_31 else "gemini-2.5-flash-tts",
                 )

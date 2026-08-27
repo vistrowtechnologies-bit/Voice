@@ -45,7 +45,12 @@ from emotion import (
     GEMINI_TONE_PROMPTS,
     detect_caller_emotion,
 )
-from language import ELEVENLABS_SUPPORTED_LANGUAGES, LANGUAGE_NAMES, detect_reply_language
+from language import (
+    ELEVENLABS_SUPPORTED_LANGUAGES,
+    GOOGLE_ONLY_LANGUAGE_NAMES,
+    LANGUAGE_NAMES,
+    detect_reply_language,
+)
 from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.human_speech import build_human_speech_manner
 from prompts.industry_demo_style import (
@@ -1237,6 +1242,27 @@ class RealEstateAgent(Agent):
             "pronunciation and the caller hears an accent, even though your words are "
             "correct. Call the tool first, then write your reply in the new language."
         )
+        # A Gemini persona voice is not limited to the native 11 — it speaks
+        # the full documented Gemini-TTS range. Without being told, the LLM
+        # falls back on the built-in prompt's "you are fluent in <11 Indian
+        # languages>" line and will refuse a caller who asks for French or
+        # Japanese on a voice that can do both. Only appended for those
+        # voices: a Sarvam voice handed "de-DE" fails outright, so promising
+        # German there would be worse than saying nothing.
+        _voice_entry = voice_catalog.get_voice(voice_value) or {}
+        if _voice_entry.get("multilingual") and voice_value.startswith(("google:", "google31:")):
+            _global = ", ".join(sorted(set(GOOGLE_ONLY_LANGUAGE_NAMES.values())))
+            instructions += (
+                "\n\n# Global languages — this voice speaks far more than the Indian set\n"
+                "Your voice is one of the global multilingual ones. On top of Hindi, English, "
+                "Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and "
+                "Odia, you can speak and be spoken to in ALL of these:\n"
+                f"{_global}.\n"
+                "Treat every one of them exactly like the Indian languages: if the caller uses "
+                "one, reply in it, in its own native script, and call switch_reply_language "
+                "with its plain English name first so your pronunciation follows. Never tell a "
+                "caller you cannot speak one of these — you can."
+            )
         # Grammatical gender: many Indian languages (Hindi, Marathi, Gujarati,
         # Punjabi, Bhojpuri…) inflect first-person verbs by the SPEAKER's
         # gender, so the LLM must know whether this agent's voice is a woman or

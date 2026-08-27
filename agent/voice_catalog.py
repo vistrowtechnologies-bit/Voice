@@ -246,7 +246,7 @@ _SARVAM_LANGUAGES = (
 # preview models). The two pages count locale variants differently; both are
 # far past the 11 we used to claim.
 GOOGLE_TTS_GA_LANGUAGES = {
-    "ar-EG": "Arabic", "bn-BD": "Bangla", "nl-NL": "Dutch",
+    "ar-EG": "Arabic (Egypt)", "bn-BD": "Bangla", "nl-NL": "Dutch",
     "en-IN": "English (India)", "en-US": "English (US)", "fr-FR": "French",
     "de-DE": "German", "hi-IN": "Hindi", "id-ID": "Indonesian",
     "it-IT": "Italian", "ja-JP": "Japanese", "ko-KR": "Korean",
@@ -256,20 +256,53 @@ GOOGLE_TTS_GA_LANGUAGES = {
     "uk-UA": "Ukrainian", "vi-VN": "Vietnamese",
 }
 GOOGLE_TTS_PREVIEW_LANGUAGES = {
-    "gu-IN": "Gujarati", "kn-IN": "Kannada", "ml-IN": "Malayalam",
-    "pa-IN": "Punjabi", "or-IN": "Odia", "kok-IN": "Konkani",
-    "mai-IN": "Maithili", "ur-PK": "Urdu", "cmn-CN": "Chinese (Mandarin)",
-    "el-GR": "Greek", "he-IL": "Hebrew", "cs-CZ": "Czech", "da-DK": "Danish",
-    "fi-FI": "Finnish", "hu-HU": "Hungarian", "nb-NO": "Norwegian",
-    "sv-SE": "Swedish", "sk-SK": "Slovak", "ca-ES": "Catalan",
-    "fil-PH": "Filipino", "sw-KE": "Swahili", "fa-IR": "Persian",
-    "ne-NP": "Nepali", "af-ZA": "Afrikaans", "bg-BG": "Bulgarian",
+    "af-ZA": "Afrikaans", "sq-AL": "Albanian", "am-ET": "Amharic",
+    "ar-001": "Arabic (World)", "hy-AM": "Armenian", "az-AZ": "Azerbaijani",
+    "eu-ES": "Basque", "be-BY": "Belarusian", "bg-BG": "Bulgarian",
+    "my-MM": "Burmese", "ca-ES": "Catalan", "ceb-PH": "Cebuano",
+    "cmn-CN": "Chinese (Mandarin)", "cmn-tw": "Chinese (Taiwan)",
+    "hr-HR": "Croatian", "cs-CZ": "Czech", "da-DK": "Danish",
+    "en-AU": "English (Australia)", "en-GB": "English (UK)",
+    "et-EE": "Estonian", "fil-PH": "Filipino", "fi-FI": "Finnish",
+    "fr-CA": "French (Canada)", "gl-ES": "Galician", "ka-GE": "Georgian",
+    "el-GR": "Greek", "gu-IN": "Gujarati", "ht-HT": "Haitian Creole",
+    "he-IL": "Hebrew", "hu-HU": "Hungarian", "is-IS": "Icelandic",
+    "jv-JV": "Javanese", "kn-IN": "Kannada", "kok-IN": "Konkani",
+    "lo-LA": "Lao", "la-VA": "Latin", "lv-LV": "Latvian",
+    "lt-LT": "Lithuanian", "lb-LU": "Luxembourgish", "mk-MK": "Macedonian",
+    "mai-IN": "Maithili", "mg-MG": "Malagasy", "ms-MY": "Malay",
+    "ml-IN": "Malayalam", "mn-MN": "Mongolian", "ne-NP": "Nepali",
+    "nb-NO": "Norwegian (Bokmal)", "nn-NO": "Norwegian (Nynorsk)",
+    "or-IN": "Odia", "ps-AF": "Pashto", "fa-IR": "Persian",
+    "pt-PT": "Portuguese (Portugal)", "pa-IN": "Punjabi", "sr-RS": "Serbian",
+    "sd-IN": "Sindhi", "si-LK": "Sinhala", "sk-SK": "Slovak",
+    "sl-SI": "Slovenian", "es-419": "Spanish (Latin America)",
+    "es-MX": "Spanish (Mexico)", "sw-KE": "Swahili", "sv-SE": "Swedish",
+    "ur-PK": "Urdu",
 }
 GOOGLE_TTS_LANGUAGES = {**GOOGLE_TTS_GA_LANGUAGES, **GOOGLE_TTS_PREVIEW_LANGUAGES}
-# What Google's docs claim in total, including the preview locales not named
-# above. Used for the "N languages" badge so we neither undersell the voice
-# nor imply we have verified every one of them.
-GOOGLE_TTS_TOTAL_LOCALES = 95
+
+# Sarvam spells Odia "od-IN"; Google spells it "or-IN". Same language. Any
+# code heading for a Google voice goes through here first, otherwise an Odia
+# caller on a Gemini voice would be sent a locale Google does not recognise.
+# bn-IN is the second entry for the same reason: Google's table names Bengali
+# only as bn-BD (Bangladesh). Same language, different regional accent, and a
+# documented locale is safer to send than one Google never lists. FLAGGED: the
+# accent difference on Indian-Bengali calls has not been checked on a real
+# call yet.
+SARVAM_TO_GOOGLE_CODE = {"od-IN": "or-IN", "bn-IN": "bn-BD"}
+
+
+def to_google_code(code: str) -> str:
+    """A reply-language code in the spelling Gemini-TTS expects."""
+    return SARVAM_TO_GOOGLE_CODE.get(code, code)
+
+
+# Derived, never hand-maintained: the badge can then only ever claim what the
+# table above actually names. Google's own pages quote 92, 95 and 99 on
+# different URLs (they count locale variants differently and the summary lines
+# disagree with their own tables), so the enumerated count is the honest one.
+GOOGLE_TTS_TOTAL_LOCALES = len(GOOGLE_TTS_LANGUAGES)
 
 # Labels for anything either engine can speak, so public_entry can name a
 # locale regardless of which engine produced it.

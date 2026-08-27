@@ -18,6 +18,41 @@ LANGUAGE_NAMES: dict[str, str] = {
     "od-IN": "Odia",
 }
 
+# Everything a Gemini-TTS voice can speak, which is a strict superset of the
+# native list above (all 11, once od-IN/bn-IN are respelled the way Google
+# spells them - see voice_catalog.to_google_code). Kept out of LANGUAGE_NAMES
+# because a Sarvam voice handed "de-DE" would fail: the wider set only applies
+# when the agent is actually running a Google multilingual voice.
+from voice_catalog import (  # noqa: E402
+    GOOGLE_TTS_LANGUAGES,
+    to_google_code,
+)
+
+GOOGLE_LANGUAGE_NAMES: dict[str, str] = dict(GOOGLE_TTS_LANGUAGES)
+# The native-11 names win where both tables describe the same language, so a
+# switch to "English" or "Bengali" keeps resolving to the code the rest of the
+# pipeline already uses; to_google_code() respells it at the TTS boundary.
+for _code, _name in LANGUAGE_NAMES.items():
+    GOOGLE_LANGUAGE_NAMES.setdefault(_code, _name)
+    GOOGLE_LANGUAGE_NAMES[_code] = _name
+
+# Names beyond the native 11 - what a Google voice unlocks over a Sarvam one.
+# Google's own spelling of a native language (or-IN for od-IN, bn-BD for
+# bn-IN) is excluded so the prompt does not list Odia and Bengali twice.
+_NATIVE_IN_GOOGLE_SPELLING = {to_google_code(c) for c in LANGUAGE_NAMES}
+GOOGLE_ONLY_LANGUAGE_NAMES: dict[str, str] = {
+    c: n
+    for c, n in GOOGLE_LANGUAGE_NAMES.items()
+    if c not in LANGUAGE_NAMES and c not in _NATIVE_IN_GOOGLE_SPELLING
+}
+
+
+def is_google_multilingual(provider: str | None) -> bool:
+    """Whether this TTS provider is a Gemini persona voice, and therefore
+    gets the full global language range rather than the native 11."""
+    return provider in ("google-multilingual", "google-multilingual-31")
+
+
 # Which of the languages above ElevenLabs' eleven_flash_v2_5 model actually
 # accepts as a `language` enforcement code. Confirmed against ElevenLabs'
 # own published 32-language list (elevenlabs.io/docs/overview/models,
