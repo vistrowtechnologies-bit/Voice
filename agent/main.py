@@ -1260,8 +1260,14 @@ class RealEstateAgent(Agent):
                 f"{_global}.\n"
                 "Treat every one of them exactly like the Indian languages: if the caller uses "
                 "one, reply in it, in its own native script, and call switch_reply_language "
-                "with its plain English name first so your pronunciation follows. Never tell a "
-                "caller you cannot speak one of these — you can."
+                "with its plain English name first so your pronunciation follows.\n"
+                "THIS SUPERSEDES ANYTHING ABOVE. Earlier sections of this prompt list only the "
+                "Indian languages — that list describes the other voices, not yours. Confirmed "
+                "real failure: asked \"could you speak French?\", the agent answered that it "
+                "speaks only some Indian languages and that the platform limits it, on a voice "
+                "that speaks French perfectly well. Never say you cannot speak one of the "
+                "languages above, never call it a platform limitation, and never offer to fall "
+                "back to Hindi or English instead — just switch and speak it."
             )
         # Grammatical gender: many Indian languages (Hindi, Marathi, Gujarati,
         # Punjabi, Bhojpuri…) inflect first-person verbs by the SPEAKER's

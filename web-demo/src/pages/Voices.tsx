@@ -344,7 +344,9 @@ export function Voices() {
             <TierGroup
               entries={multilingualPremium()}
               label="Vistrow Multilingual"
-              note="2x credits · one voice, 95 languages, switches live"
+              // Derived from the entries themselves — a hardcoded count here
+              // drifted out of sync with the badge the moment the catalog grew.
+              note={`2x credits · one voice, ${multilingualPremium()[0]?.languageCount ?? 0} languages, switches live`}
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}

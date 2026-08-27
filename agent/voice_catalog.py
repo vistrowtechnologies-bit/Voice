@@ -87,8 +87,8 @@ CATALOG: list[dict] = [
     # Gemini TTS personas keep the same voice identity while the reply
     # language changes during a call. They use Cloud Text-to-Speech directly,
     # so the existing service-account credential is sufficient.
-    {"value": "google:kore", "name": "Mira", "gender": "female", "tier": "premium", "multilingual": True, "note": "One voice, 95 languages · switches mid-call"},
-    {"value": "google:charon", "name": "Arin", "gender": "male", "tier": "premium", "multilingual": True, "note": "One voice, 95 languages · switches mid-call"},
+    {"value": "google:kore", "name": "Mira", "gender": "female", "tier": "premium", "multilingual": True, "note": "One voice, every language · switches mid-call"},
+    {"value": "google:charon", "name": "Arin", "gender": "male", "tier": "premium", "multilingual": True, "note": "One voice, every language · switches mid-call"},
     # Explicit opt-in test voices for the newer preview model. Keep a distinct
     # value prefix so existing Mira/Arin agents remain on the stable 2.5 model.
     {"value": "google31:kore", "name": "Mira Next (Preview)", "gender": "female", "tier": "standard", "multilingual": True, "preview": True, "note": "Next-generation multilingual preview · testing only"},

@@ -85,7 +85,7 @@ export const PRODUCT_DETAIL: Record<
     subhead:
       'A no-code builder for real-time AI phone agents. Set the persona, prompt, voice and language - publish, and Artha starts taking calls.',
     features: [
-      { icon: 'translate', title: 'Multilingual', body: 'Speaks 10 Indian languages plus English, including natural Hinglish, and switches mid-call with the caller.' },
+      { icon: 'translate', title: 'Multilingual', body: 'Speaks 10 Indian languages plus English, including natural Hinglish, and switches mid-call with the caller — plus 76 more worldwide on the global voices.' },
       { icon: 'menu_book', title: 'Grounded answers', body: 'Ties responses to your knowledge base with strict-mode RAG, so the agent never makes things up.' },
       { icon: 'swap_calls', title: 'Human handoff', body: 'Escalates to a live person with full context when a call needs a human touch.' },
       { icon: 'analytics', title: 'Analytics & transcripts', body: 'Every call is transcribed, scored, and searchable across channels and agents.' },
@@ -570,8 +570,20 @@ export const FOOTER_COLUMNS = [
 export const CONTACT_PHONE = '+91 80801 97945'
 
 /** Headline stats shown under the hero. */
+/** A handful of global greetings for the homepage chip strip. Deliberately
+ *  short: this is a visual signal that the agent goes past India, not the
+ *  catalogue — /languages carries the full list. Only greetings we are sure
+ *  of, in their own script. */
+export const GLOBAL_GREETINGS: { greeting: string; name: string }[] = [
+  { greeting: 'Bonjour', name: 'French' },
+  { greeting: 'Hola', name: 'Spanish' },
+  { greeting: 'Hallo', name: 'German' },
+  { greeting: 'こんにちは', name: 'Japanese' },
+  { greeting: 'مرحبا', name: 'Arabic' },
+]
+
 export const HERO_STATS = [
-  { value: '11', label: '10 Indian + English' },
+  { value: '87', label: '11 native + 76 global' },
   { value: '24/7', label: 'Always answering' },
   { value: '3', label: 'Inbound · outbound · web' },
 ]

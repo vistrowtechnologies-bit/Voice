@@ -70,8 +70,9 @@ Vistrow Voice is an AI voice-agent platform Indian businesses use to answer
 and make phone calls automatically — inbound calls, outbound campaigns, and
 calls placed straight from a website widget (exactly like this one) — in
 11 Indian languages (including Odia, our newest) plus Hinglish
-code-switching, with real-time response so it feels like a real
-conversation, not an IVR menu. A
+code-switching — and, on the global voices, 76 more worldwide including
+French, German, Spanish, Arabic and Japanese — with real-time response so it
+feels like a real conversation, not an IVR menu. A
 business signs up, configures one or more AI agents (name, voice,
 personality, knowledge base) through a no-code dashboard, connects a phone
 number or embeds the website widget, and every call is automatically
