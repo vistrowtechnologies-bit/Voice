@@ -1,6 +1,6 @@
-import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
@@ -12,7 +12,6 @@ import { LANGUAGES, SOLUTIONS } from '../../lib/marketingContent'
 // own FAQPage JSON-LD rather than sharing the overview's.
 export function LanguageDetail() {
   const { slug } = useParams()
-  const [openFaq, setOpenFaq] = useState<number | null>(0)
   const lang = LANGUAGES.find((l) => l.slug === slug)
   if (!lang) return <Navigate to="/languages" replace />
 
@@ -109,31 +108,7 @@ export function LanguageDetail() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-3xl px-5 py-12 md:px-8">
-        <div className="mb-10 text-center">
-          <SectionEyebrow>FAQ</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Questions, answered.</h2>
-        </div>
-        <div className="flex flex-col gap-3">
-          {faqs.map((item, i) => (
-            <div key={item.q} className="rounded-2xl border border-border bg-surface">
-              <button
-                onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left"
-              >
-                <span className="font-semibold text-text">{item.q}</span>
-                <Icon
-                  name="expand_more"
-                  className={`text-[20px] text-text-muted transition-transform ${openFaq === i ? 'rotate-180' : ''}`}
-                />
-              </button>
-              {openFaq === i && (
-                <p className="px-6 pb-5 text-sm leading-relaxed text-text-muted">{item.a}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
+      <FaqSection items={faqs} />
 
       <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
         <div className="rounded-2xl border border-border bg-surface/50 px-6 py-7">

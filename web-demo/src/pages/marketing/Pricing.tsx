@@ -1,13 +1,13 @@
 import { Icon } from '../../components/Icon'
+import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
-import { useState } from 'react'
 
 const FAQ = [
   {
     q: 'What is a credit?',
-    a: 'At the default rate, browser calls use 1 credit per minute and phone calls use 1.5 credits per minute. Economy, standard, and premium voice tiers apply 0.5×, 1×, and 2× multipliers. Both channels draw from the same monthly pool.',
+    a: 'At the default rate, browser and phone calls both use 1 credit per minute — telephony is billed separately by whichever provider you connect. Economy, standard, and premium voice tiers apply 0.75×, 1×, and 2× multipliers, and the LLM you pick applies its own. Both channels draw from the same monthly pool.',
   },
   {
     q: 'Which languages are supported?',
@@ -37,7 +37,6 @@ const FAQ_JSONLD = {
 }
 
 export function Pricing() {
-  const [openFaq, setOpenFaq] = useState<number | null>(0)
 
   return (
     <MarketingLayout>
@@ -79,29 +78,7 @@ export function Pricing() {
       </section>
 
       {/* FAQ */}
-      <section className="mx-auto max-w-3xl px-5 py-20 md:px-8">
-        <div className="mb-10 text-center">
-          <SectionEyebrow>FAQ</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Questions, answered.</h2>
-        </div>
-        <div className="flex flex-col gap-3">
-          {FAQ.map((item, i) => (
-            <div key={item.q} className="rounded-2xl border border-border bg-surface">
-              <button
-                onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left"
-              >
-                <span className="font-semibold text-text">{item.q}</span>
-                <Icon
-                  name="expand_more"
-                  className={`text-[20px] text-text-muted transition-transform ${openFaq === i ? 'rotate-180' : ''}`}
-                />
-              </button>
-              {openFaq === i && <p className="px-6 pb-5 text-sm leading-relaxed text-text-muted">{item.a}</p>}
-            </div>
-          ))}
-        </div>
-      </section>
+      <FaqSection items={FAQ} />
 
       <section className="mx-auto max-w-7xl px-5 pb-20 md:px-8">
         <div className="rounded-3xl border border-border bg-surface p-10 text-center">

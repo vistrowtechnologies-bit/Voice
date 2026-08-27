@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
@@ -11,13 +12,11 @@ import { DemoOrbCard } from '../../components/DemoOrbCard'
 // One template renders all five industry pages, keyed by the :slug route param.
 export function SolutionDetail() {
   const { slug } = useParams()
-  const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [activeScenario, setActiveScenario] = useState(0)
   const solution = SOLUTIONS.find((s) => s.to === `/solutions/${slug}`)
 
   useEffect(() => {
     setActiveScenario(0)
-    setOpenFaq(0)
   }, [slug])
 
   if (!solution) return <Navigate to="/solutions" replace />
@@ -294,29 +293,10 @@ export function SolutionDetail() {
       </section>
 
       {/* FAQ */}
-      <section className="mx-auto max-w-3xl px-5 py-12 md:px-8">
-        <div className="mb-10 text-center">
-          <SectionEyebrow>FAQ</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Questions, answered.</h2>
-        </div>
-        <div className="flex flex-col gap-3">
-          {solution.faqs.map((item, i) => (
-            <div key={item.q} className="rounded-2xl border border-border bg-surface">
-              <button
-                onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left"
-              >
-                <span className="font-semibold text-text">{item.q}</span>
-                <Icon
-                  name="expand_more"
-                  className={`text-[20px] text-text-muted transition-transform ${openFaq === i ? 'rotate-180' : ''}`}
-                />
-              </button>
-              {openFaq === i && <p className="px-6 pb-5 text-sm leading-relaxed text-text-muted">{item.a}</p>}
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* key: the accordion state lives in FaqSection now, and navigating
+          between two solution pages keeps it mounted — remount so the answer
+          list opens at the top the way it did before. */}
+      <FaqSection key={slug} items={solution.faqs} />
 
       <CTABand title={`Ready to try Artha for ${solution.label}?`} />
     </MarketingLayout>

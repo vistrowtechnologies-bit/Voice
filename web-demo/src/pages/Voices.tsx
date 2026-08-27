@@ -118,7 +118,7 @@ function VoiceCard({
   return (
     <Card padding="sm" className={`flex flex-col ${entry.selected ? '!border-primary/50' : ''}`}>
       <div className="mb-3 flex items-start justify-between gap-2">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="relative shrink-0">
             <div className="relative h-11 w-11 overflow-hidden rounded-full">
               {/* Inner layer is oversized and slowly spinning inside the
@@ -145,7 +145,7 @@ function VoiceCard({
                 rather than letting it be discovered on a live call. */}
             {entry.canSwitchLanguage ? (
               <span
-                className="mt-1 inline-flex items-center gap-1 rounded-full bg-cyan/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan"
+                className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full bg-cyan/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan"
                 title={`Speaks ${entry.languageCount} languages including ${entry.languageLabels.join(', ')} — and switches between them mid-call`}
               >
                 <Icon name="translate" className="text-[11px]" />
@@ -153,7 +153,7 @@ function VoiceCard({
               </span>
             ) : (
               <span
-                className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-500"
+                className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-500"
                 title={`Speaks only ${entry.languageLabels.join(', ')}. It cannot follow a caller who switches language mid-call.`}
               >
                 <Icon name="info" className="text-[11px]" />
