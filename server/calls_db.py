@@ -890,6 +890,11 @@ def init_tables() -> None:
                 # column existed; voice_tier() below treats that as "standard"
                 # so historical billing is unaffected.
                 ("voice", "TEXT"),
+                # The LLM this call actually ran on, recorded for the same
+                # reason `voice` is: per-model credit billing (see
+                # model_tier()). Without it an account on a 16x-costlier
+                # model was indistinguishable from one on the cheapest.
+                ("model", "TEXT"),
                 # Per-call ArthaLeads delivery outcome — separate from the
                 # integration-level last_sync/last_error (which only reflect
                 # the most recent attempt across ALL calls), so an operator
@@ -1984,7 +1989,10 @@ def _call_dict(
         minutes = (row["duration_seconds"] or 0) / 60.0
         rate = credit_rates_by_type.get(call_type, 1.0)
         tier = voice_tier(row["voice"])
-        out["creditsUsed"] = round(minutes * rate * _VOICE_TIER_MULTIPLIERS[tier], 2)
+        mtier = model_tier(_row_get(row, "model"))
+        out["creditsUsed"] = round(
+            minutes * rate * _VOICE_TIER_MULTIPLIERS[tier] * _MODEL_TIER_MULTIPLIERS[mtier], 2
+        )
     if include_transcript:
         out["transcript"] = [
             {
@@ -4995,6 +5003,54 @@ _ECONOMY_VOICE_PREFIXES = ("google:",)
 # test prefix intentionally falls through to the standard 1x credit tier.
 
 
+# Per-LLM credit billing, the exact counterpart of _VOICE_TIER_MULTIPLIERS
+# below. Until this existed the credit formula had no model term at all -
+# minutes x call-type rate x voice tier - so every account paid the same
+# regardless of which LLM it ran on, while the underlying cost varied 16.7x.
+# Measured on a representative 10-turn call (10,937-token cached system
+# prompt + ~1,695 uncached per-turn instructions + ~90 output tokens/turn),
+# priced at Aug-2026 rates:
+#
+#   gpt-4o-mini             Rs  1.28   <- baseline, and 977 of 1,210
+#   gemini-3.5-flash-lite   Rs  2.66      measured production turns
+#   gpt-4.1-mini            Rs  3.40
+#   gemini-3.6-flash        Rs  6.44
+#   gpt-4.1                 Rs 17.00
+#   gpt-4o                  Rs 21.26
+#
+# The multipliers below are deliberately NOT the raw cost ratios: charging
+# 16x credits for one dropdown choice would be incoherent as a product, and
+# the honest fix for the top of that range is to stop offering those models
+# rather than to bill them punitively. These recover the bulk of the spread
+# while staying legible to an operator; revisit alongside any change to the
+# offered model list.
+_MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0}
+# Anything unlisted bills at "standard" - the same don't-guess default
+# voice_tier() uses, so a newly added model can never silently bill as free.
+_PREMIUM_MODELS = {"gpt-4.1-mini", "gemini-3.5-flash-lite", "gemini-3.6-flash"}
+_PREMIUM_PLUS_MODELS = {"gpt-4.1", "gpt-4o"}
+
+
+def model_tier(model: str | None) -> str:
+    """Classifies a call's `model` string into a credit-billing tier.
+
+    None/empty covers every call recorded before the `model` column existed
+    and bills as standard, matching voice_tier()'s treatment of legacy rows.
+    """
+    if not model:
+        return "standard"
+    name = model.strip()
+    # Groq is admin-only and runs on the operator's own key for latency
+    # testing, so it must never bill a tenant at a premium rate.
+    if name.startswith("groq/"):
+        return "standard"
+    if name in _PREMIUM_PLUS_MODELS:
+        return "premium_plus"
+    if name in _PREMIUM_MODELS:
+        return "premium"
+    return "standard"
+
+
 def voice_tier(voice: str | None) -> str:
     """Classifies a call's `voice` string into a credit-billing tier. None/
     empty (every call recorded before the `voice` column existed) and any
@@ -5202,14 +5258,14 @@ def _credits_used_in_period(conn, account_id: int, rates: dict, period_start: st
     handler (a just-closed period) — credits burned by calls started at or
     after period_start (None = all-time, only used as a display fallback)."""
     query = (
-        "SELECT COALESCE(call_type, 'browser') call_type, voice, "
+        "SELECT COALESCE(call_type, 'browser') call_type, voice, model, "
         "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls WHERE account_id = ?"
     )
     params: list = [account_id]
     if period_start:
         query += " AND started_at >= ?"
         params.append(period_start)
-    query += " GROUP BY call_type, voice"
+    query += " GROUP BY call_type, voice, model"
 
     by_type: dict[str, float] = {}
     by_voice_tier: dict[str, float] = {}
@@ -5217,8 +5273,14 @@ def _credits_used_in_period(conn, account_id: int, rates: dict, period_start: st
     for row in conn.execute(query, params).fetchall():
         call_type = row["call_type"] if row["call_type"] in rates else "browser"
         tier = voice_tier(row["voice"])
+        mtier = model_tier(_row_get(row, "model"))
         minutes = row["m"]
-        credits = minutes * rates.get(call_type, 1.0) * _VOICE_TIER_MULTIPLIERS[tier]
+        credits = (
+            minutes
+            * rates.get(call_type, 1.0)
+            * _VOICE_TIER_MULTIPLIERS[tier]
+            * _MODEL_TIER_MULTIPLIERS[mtier]
+        )
         by_type[call_type] = round(by_type.get(call_type, 0.0) + minutes, 1)
         by_voice_tier[tier] = round(by_voice_tier.get(tier, 0.0) + minutes, 1)
         used += credits
@@ -5275,6 +5337,7 @@ def billing_summary(account_id: int) -> dict:
             "creditRates": rates,
             "minutesByVoiceTier": by_voice_tier,
             "voiceTierRates": _VOICE_TIER_MULTIPLIERS,
+            "modelTierRates": _MODEL_TIER_MULTIPLIERS,
             "plan": plan,
             "planPriceInr": plan_pricing["price_inr"],
             "subscriptionStatus": sub["status"] if sub else "inactive",
@@ -5327,15 +5390,21 @@ def overage_for_account_period(account_id: int, plan: str, period_start: str, pe
         # edge here since this is the one caller that needs a closed period
         # rather than "since period_start through now".
         query = (
-            "SELECT COALESCE(call_type, 'browser') call_type, voice, "
+            "SELECT COALESCE(call_type, 'browser') call_type, voice, model, "
             "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls "
-            "WHERE account_id = ? AND started_at >= ? AND started_at < ? GROUP BY call_type, voice"
+            "WHERE account_id = ? AND started_at >= ? AND started_at < ? GROUP BY call_type, voice, model"
         )
         used = 0.0
         for row in conn.execute(query, (account_id, period_start, period_end)).fetchall():
             call_type = row["call_type"] if row["call_type"] in rates else "browser"
             tier = voice_tier(row["voice"])
-            used += row["m"] * rates.get(call_type, 1.0) * _VOICE_TIER_MULTIPLIERS[tier]
+            mtier = model_tier(_row_get(row, "model"))
+            used += (
+                row["m"]
+                * rates.get(call_type, 1.0)
+                * _VOICE_TIER_MULTIPLIERS[tier]
+                * _MODEL_TIER_MULTIPLIERS[mtier]
+            )
         used = round(used, 1)
         plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
         overage_credits = max(0.0, round(used - plan_pricing["credits"], 1))

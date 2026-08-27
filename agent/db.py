@@ -732,12 +732,12 @@ def save_call(record: dict) -> int | None:
                 """
                 INSERT INTO calls (
                     room_name, visitor_identity, started_at, ended_at,
-                    duration_seconds, reply_language, voice, lead_name, lead_phone,
+                    duration_seconds, reply_language, voice, model, lead_name, lead_phone,
                     lead_email, lead_budget, lead_location, lead_timeline, lead_company,
                     lead_use_case, lead_team_size, site_visit_json,
                     transcript_json, call_type, direction, site_id, agent_id, account_id,
                     extracted_data, latency_metrics_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -748,6 +748,7 @@ def save_call(record: dict) -> int | None:
                     record["duration_seconds"],
                     record.get("reply_language"),
                     record.get("voice"),
+                    record.get("model"),
                     record.get("name"),
                     record.get("phone"),
                     record.get("email"),

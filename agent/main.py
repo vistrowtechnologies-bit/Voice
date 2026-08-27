@@ -1331,6 +1331,11 @@ class RealEstateAgent(Agent):
         # later voice change on the agent never retroactively reclassifies
         # this call's cost.
         self._voice = voice_value
+        # Recorded on the call row for per-model credit billing, exactly as
+        # _voice is for per-voice-tier billing. Must mirror the value handed
+        # to _build_llm below - the fallback included - or billing would
+        # attribute the call to the wrong model.
+        self._model = config.get("model") or "gpt-4.1"
         # Prosody-adaptation baseline (see on_user_turn_completed) — deltas
         # from a detected caller emotion apply on top of these, never replace
         # them, so the agent's configured base personality always shows through.
@@ -2540,6 +2545,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     "duration_seconds": (ended_at - started_at).total_seconds(),
                     "reply_language": agent._reply_language,
                     "voice": agent._voice,
+                    "model": agent._model,
                     "transcript": transcript,
                     "call_type": call_context["call_type"],
                     "direction": call_context.get("direction"),
