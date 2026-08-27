@@ -779,10 +779,17 @@ def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
         # Free trial allowance for a brand-new signup — deliberately small;
         # an operator upgrades the account's plan for more.
         ("credits_total", "10"),
-        # Phone minutes burn more credits than browser/widget minutes — they
-        # carry an EnableX telephony cost the others don't.
+        # All three channels burn credits at the same rate. Phone was 1.5x
+        # on the reasoning quoted here for a long time - "they carry an
+        # EnableX telephony cost the others don't" - but telephony is the
+        # tenant's own integration and their own bill, so that cost never
+        # reached us and the surcharge had nothing behind it. What a phone
+        # minute actually costs us is what any minute costs: STT + TTS +
+        # LLM + a LiveKit agent-session minute. LiveKit third-party SIP
+        # minutes are the one genuine extra and are included in the plan
+        # (23 of 5,000 used in August), so they do not justify a multiplier.
         ("credit_rate_browser", "1"),
-        ("credit_rate_phone", "1.5"),
+        ("credit_rate_phone", "1"),
         ("credit_rate_widget", "1"),
     ):
         conn.execute(
@@ -1272,7 +1279,7 @@ def create_account_with_owner(
                 for key, value in (
                     ("credits_total", "300"),
                     ("credit_rate_browser", "1"),
-                    ("credit_rate_phone", "1.5"),
+                    ("credit_rate_phone", "1"),
                     ("credit_rate_widget", "1"),
                 ):
                     conn.execute(
