@@ -2198,7 +2198,32 @@ async def entrypoint(ctx: JobContext) -> None:
         # buffers correctly across split ** markers mid-stream.
         tts_text_transforms=["filter_markdown", _make_caller_gender_guard_transform(agent)],
         turn_handling=TurnHandlingOptions(
-            interruption={"min_words": min_words},
+            interruption={
+                "min_words": min_words,
+                # min_words alone is language-asymmetric and cut real callers
+                # off mid-sentence: Hindi acknowledgements are almost all
+                # exactly two words ("ठीक है", "जी बिल्कुल", "जी बताइए"), so
+                # at min_words=2 a caller saying the equivalent of "mm-hmm"
+                # barges in, while the English one-word "okay"/"right" does
+                # not. Confirmed on a real call - four replies were cut
+                # mid-sentence, each immediately after one of those phrases,
+                # and the agent then re-stated the point it never finished,
+                # which is where the repetition in that transcript came from.
+                #
+                # min_duration filters by how LONG the caller spoke instead of
+                # how many words it parsed, which is language-neutral: a
+                # dropped-in acknowledgement is short, a genuine interruption
+                # runs longer. 0.8s clears typical two-word backchannels while
+                # still yielding the floor to someone actually cutting in.
+                #
+                # The right fix is interruption_detection="adaptive", whose
+                # backchannel_boundary suppresses exactly this - but it
+                # requires stt.capabilities.aligned_transcript, and the Sarvam
+                # plugin hardcodes that False ("chunk timestamps don't seem to
+                # work despite the docs saying they do"), so adaptive cannot
+                # run on this STT at all. Revisit if that changes.
+                "min_duration": 0.8,
+            },
             # Preemptive LLM generation (starting on the interim, not-yet-
             # finalized transcript) is already ON by default in this
             # livekit-agents version — nothing to change there. What's NOT
