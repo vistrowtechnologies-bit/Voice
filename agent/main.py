@@ -456,6 +456,19 @@ def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
 # deliberately the opposite direction from lowering max_delay, which
 # previously dropped whole transcripts (see the comment on EndpointingOptions
 # below).
+# The self-gender instruction injected every turn (see
+# on_user_turn_completed) only ever talks about Hindi, Marathi, Gujarati and
+# Punjabi verb forms - those are the languages this product speaks where a
+# first-person verb is gendered. It was nonetheless sent on EVERY turn in
+# every language, so an English, Tamil, Telugu, Kannada, Malayalam, Bengali
+# or Odia call paid 687 uncached tokens per turn for an instruction that is
+# a no-op there. Gating on the language actually being spoken keeps the
+# reinforcement exactly where it was proven necessary (a female-voiced agent
+# still drifting to "बताता हूँ") and drops it where it never applied.
+# Self-correcting on a mid-call switch: _reply_language updates first, so
+# the very next turn carries the instruction again.
+_GENDERED_VERB_LANGUAGES = {"hi-IN", "mr-IN", "gu-IN", "pa-IN"}
+
 _EOT_HINDI_THRESHOLD = 0.3050
 _EOT_UNLIKELY_THRESHOLDS = {
     lang: _EOT_HINDI_THRESHOLD
@@ -1533,7 +1546,7 @@ class RealEstateAgent(Agent):
             "then write the reply itself in that new language, not this one. Absent (a) or (b), staying "
             f"in {_current_language_name} is not optional."
         )
-        if self._voice_gender in ("male", "female"):
+        if self._voice_gender in ("male", "female") and self._reply_language in _GENDERED_VERB_LANGUAGES:
             _woman = self._voice_gender == "female"
             _gender_instruction = (
                 f"You are {'a woman' if _woman else 'a man'} — in THIS reply, if you use Hindi, "
