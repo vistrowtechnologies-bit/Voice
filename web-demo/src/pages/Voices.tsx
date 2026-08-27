@@ -146,10 +146,10 @@ function VoiceCard({
             {entry.canSwitchLanguage ? (
               <span
                 className="mt-1 inline-flex items-center gap-1 rounded-full bg-cyan/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan"
-                title={`Speaks ${entry.languageLabels.join(', ')} and switches between them mid-call`}
+                title={`Speaks ${entry.languageCount} languages including ${entry.languageLabels.join(', ')} — and switches between them mid-call`}
               >
                 <Icon name="translate" className="text-[11px]" />
-                {entry.languageLabels.length} languages · switches
+                {entry.languageCount} languages · switches
               </span>
             ) : (
               <span
@@ -259,7 +259,8 @@ export function Voices() {
   const stableByTier = (tier: VoiceTier) => byTier(tier).filter((v) => !v.preview)
   const previewVoices = () => (data?.voices ?? []).filter((v) => v.preview)
   const sarvamLite = () => byTier('lite').filter((v) => !v.value.startsWith('google:') && !v.value.startsWith('google31:'))
-  const multilingualLite = () => byTier('lite').filter((v) => v.multilingual)
+  const multilingualPremium = () => stableByTier('premium').filter((v) => v.multilingual)
+  const premiumSolo = () => stableByTier('premium').filter((v) => !v.multilingual)
   const nativeLite = () => byTier('lite').filter((v) => v.value.startsWith('google:') && !v.multilingual)
 
   return (
@@ -309,7 +310,7 @@ export function Voices() {
             )}
 
             <TierGroup
-              entries={stableByTier('premium')}
+              entries={premiumSolo()}
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
@@ -325,7 +326,7 @@ export function Voices() {
             <TierGroup
               entries={sarvamLite()}
               label="Vistrow Lite v2"
-              note="0.5x credits · multilingual"
+              note="0.75x credits · multilingual"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
@@ -341,9 +342,9 @@ export function Voices() {
               onRemove={onRemove}
             />
             <TierGroup
-              entries={multilingualLite()}
+              entries={multilingualPremium()}
               label="Vistrow Multilingual"
-              note="0.5x credits · same voice switches languages live"
+              note="2x credits · one voice, 95 languages, switches live"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
@@ -352,7 +353,7 @@ export function Voices() {
             <TierGroup
               entries={nativeLite()}
               label="Vistrow Native"
-              note="0.5x credits · native Indian languages"
+              note="0.75x credits · native Indian languages"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}

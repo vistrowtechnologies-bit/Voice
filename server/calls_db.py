@@ -5024,6 +5024,12 @@ _ECONOMY_VOICES = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 # _ELEVENLABS_V3_VOICE_PREFIX) ElevenLabs voice forms bill as premium.
 _PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:")
 _ECONOMY_VOICE_PREFIXES = ("google:",)
+# The two Gemini persona voices (Mira/Arin) share the "google:" prefix with
+# the cheap single-locale Google voices but are a different product: one voice
+# that carries across Gemini's ~95 locales and switches language mid-call.
+# Checked ahead of the prefix rules so they bill premium while
+# google:hi-IN-Standard-A and friends stay economy.
+_PREMIUM_VOICES = {"google:kore", "google:charon"}
 # The 3.1 preview is billed at twice Gemini 2.5 Flash TTS, so its explicit
 # test prefix intentionally falls through to the standard 1x credit tier.
 
@@ -5085,7 +5091,7 @@ def voice_tier(voice: str | None) -> str:
     own unconfigured-provider fallback."""
     if not voice:
         return "standard"
-    if voice.startswith(_PREMIUM_VOICE_PREFIXES):
+    if voice in _PREMIUM_VOICES or voice.startswith(_PREMIUM_VOICE_PREFIXES):
         return "premium"
     if voice.startswith(_ECONOMY_VOICE_PREFIXES) or voice in _ECONOMY_VOICES:
         return "economy"

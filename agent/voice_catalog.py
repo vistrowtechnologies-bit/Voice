@@ -12,9 +12,9 @@ agent/main.py's _build_tts, AND classified for billing by
 calls_db.voice_tier() — the prefix convention there and here must agree:
   - "elevenlabs:<id>"     → ElevenLabs Flash v2.5  → tier "premium"      (2x credits)
   - "elevenlabs-v3:<id>"  → ElevenLabs v3          → tier "premium_plus" (2x credits)
-  - "google:<voice>"      → Google Cloud / Gemini TTS → tier "lite"      (0.5x credits)
+  - "google:<voice>"      → Google Cloud locale voice → tier "lite"     (0.75x credits)
   - "google31:<voice>"    → next-generation TTS preview → tier "standard" (1x credits)
-  - bare Sarvam bulbul:v2 speaker (abhilash/anushka) → tier "lite"       (0.5x credits)
+  - bare Sarvam bulbul:v2 speaker (abhilash/anushka) → tier "lite"      (0.75x credits)
   - any other bare name (Sarvam bulbul:v3)           → tier "standard"   (1x credits)
 
 Adding a new voice here makes it appear in the catalog automatically; no
@@ -28,9 +28,9 @@ from __future__ import annotations
 
 # Display order + credit signalling per tier. tier -> (label, credits_note).
 TIER_META: dict[str, dict] = {
-    "premium": {"label": "Premium", "note": "2x credits · most expressive, reacts to caller emotion live", "rank": 0},
+    "premium": {"label": "Premium", "note": "2x credits · most expressive, widest language range", "rank": 0},
     "standard": {"label": "Standard", "note": "1x credits", "rank": 1},
-    "lite": {"label": "Lite", "note": "0.5x credits · economy", "rank": 2},
+    "lite": {"label": "Lite", "note": "0.75x credits · economy", "rank": 2},
 }
 
 # The master catalog. Keep display names free of vendor branding.
@@ -87,8 +87,8 @@ CATALOG: list[dict] = [
     # Gemini TTS personas keep the same voice identity while the reply
     # language changes during a call. They use Cloud Text-to-Speech directly,
     # so the existing service-account credential is sufficient.
-    {"value": "google:kore", "name": "Mira", "gender": "female", "tier": "lite", "multilingual": True, "note": "Same voice across languages"},
-    {"value": "google:charon", "name": "Arin", "gender": "male", "tier": "lite", "multilingual": True, "note": "Same voice across languages"},
+    {"value": "google:kore", "name": "Mira", "gender": "female", "tier": "premium", "multilingual": True, "note": "One voice, 95 languages · switches mid-call"},
+    {"value": "google:charon", "name": "Arin", "gender": "male", "tier": "premium", "multilingual": True, "note": "One voice, 95 languages · switches mid-call"},
     # Explicit opt-in test voices for the newer preview model. Keep a distinct
     # value prefix so existing Mira/Arin agents remain on the stable 2.5 model.
     {"value": "google31:kore", "name": "Mira Next (Preview)", "gender": "female", "tier": "standard", "multilingual": True, "preview": True, "note": "Next-generation multilingual preview · testing only"},
@@ -222,8 +222,60 @@ LANGUAGE_LABELS = {
     "gu-IN": "Gujarati", "bn-IN": "Bengali", "pa-IN": "Punjabi", "od-IN": "Odia",
 }
 # Sarvam bulbul (v2 and v3) accept exactly these - matches the plugin's own
-# SarvamTTSLanguages literal, which is every language this product speaks.
-_SARVAM_LANGUAGES = tuple(LANGUAGE_LABELS.keys())
+# SarvamTTSLanguages literal. Spelled out rather than derived from
+# LANGUAGE_LABELS: that dict now also has to carry labels for Gemini's
+# non-Indian locales, and deriving from it would have silently told Sarvam it
+# speaks German.
+_SARVAM_LANGUAGES = (
+    "hi-IN", "en-IN", "mr-IN", "ta-IN", "te-IN", "kn-IN",
+    "ml-IN", "gu-IN", "bn-IN", "pa-IN", "od-IN",
+)
+
+# Gemini-TTS speaks a much wider set than Sarvam - these voices were
+# previously reported as speaking exactly the 11 Sarvam languages, which hid
+# French/German/Japanese/Spanish and ~60 others. Gemini covers every language
+# Sarvam does, so this is a superset for the Indian market, not a trade-off.
+#
+# Note Odia: Sarvam calls it "od-IN", Google calls it "or-IN" (or/ory is the
+# ISO 639 code; od-IN is Sarvam-specific). Same language, different spelling -
+# do not read one vendor's list against the other's codes.
+#
+# Sources: cloud.google.com/text-to-speech/docs/gemini-tts (95 locales for
+# gemini-2.5-flash-tts, which is what _GOOGLE_25_MODEL uses) and
+# ai.google.dev/gemini-api/docs/speech-generation (92 languages for the
+# preview models). The two pages count locale variants differently; both are
+# far past the 11 we used to claim.
+GOOGLE_TTS_GA_LANGUAGES = {
+    "ar-EG": "Arabic", "bn-BD": "Bangla", "nl-NL": "Dutch",
+    "en-IN": "English (India)", "en-US": "English (US)", "fr-FR": "French",
+    "de-DE": "German", "hi-IN": "Hindi", "id-ID": "Indonesian",
+    "it-IT": "Italian", "ja-JP": "Japanese", "ko-KR": "Korean",
+    "mr-IN": "Marathi", "pl-PL": "Polish", "pt-BR": "Portuguese (Brazil)",
+    "ro-RO": "Romanian", "ru-RU": "Russian", "es-ES": "Spanish",
+    "ta-IN": "Tamil", "te-IN": "Telugu", "th-TH": "Thai", "tr-TR": "Turkish",
+    "uk-UA": "Ukrainian", "vi-VN": "Vietnamese",
+}
+GOOGLE_TTS_PREVIEW_LANGUAGES = {
+    "gu-IN": "Gujarati", "kn-IN": "Kannada", "ml-IN": "Malayalam",
+    "pa-IN": "Punjabi", "or-IN": "Odia", "kok-IN": "Konkani",
+    "mai-IN": "Maithili", "ur-PK": "Urdu", "cmn-CN": "Chinese (Mandarin)",
+    "el-GR": "Greek", "he-IL": "Hebrew", "cs-CZ": "Czech", "da-DK": "Danish",
+    "fi-FI": "Finnish", "hu-HU": "Hungarian", "nb-NO": "Norwegian",
+    "sv-SE": "Swedish", "sk-SK": "Slovak", "ca-ES": "Catalan",
+    "fil-PH": "Filipino", "sw-KE": "Swahili", "fa-IR": "Persian",
+    "ne-NP": "Nepali", "af-ZA": "Afrikaans", "bg-BG": "Bulgarian",
+}
+GOOGLE_TTS_LANGUAGES = {**GOOGLE_TTS_GA_LANGUAGES, **GOOGLE_TTS_PREVIEW_LANGUAGES}
+# What Google's docs claim in total, including the preview locales not named
+# above. Used for the "N languages" badge so we neither undersell the voice
+# nor imply we have verified every one of them.
+GOOGLE_TTS_TOTAL_LOCALES = 95
+
+# Labels for anything either engine can speak, so public_entry can name a
+# locale regardless of which engine produced it.
+_ALL_LANGUAGE_LABELS = {**LANGUAGE_LABELS, **GOOGLE_TTS_LANGUAGES}
+
+_GOOGLE_PREFIXES = ("google:", "google31:")
 
 
 def languages_for(entry: dict) -> tuple[list[str], bool]:
@@ -231,19 +283,19 @@ def languages_for(entry: dict) -> tuple[list[str], bool]:
 
     A Google locale voice encodes its one language in the value itself
     ("google:hi-IN-Standard-A"); everything multilingual is a single voice
-    that carries across all of them.
+    that carries across all of them. Which set "all of them" means depends on
+    the engine - Gemini and Sarvam do not overlap cleanly.
     """
     value = entry.get("value", "")
-    if entry.get("multilingual"):
-        return list(_SARVAM_LANGUAGES), True
-    if value.startswith(("google:", "google31:")):
+    if value.startswith(_GOOGLE_PREFIXES):
         part = value.split(":", 1)[1]
         code = "-".join(part.split("-")[:2])
-        if code in LANGUAGE_LABELS:
+        # A locale-specific Google voice (google:hi-IN-Standard-A).
+        if code in LANGUAGE_LABELS and not entry.get("multilingual"):
             return [code], False
-        # Gemini persona (kore/charon) - multilingual but not flagged
-        return list(_SARVAM_LANGUAGES), True
-    # Bare Sarvam speaker name
+        # Gemini persona (kore/charon) - one voice across Gemini's own list.
+        return list(GOOGLE_TTS_LANGUAGES.keys()), True
+    # Sarvam: bare speaker name, or anything else flagged multilingual.
     return list(_SARVAM_LANGUAGES), True
 
 
@@ -295,6 +347,15 @@ def public_entry(entry: dict, allowed_tiers: set[str]) -> dict:
         # See languages_for(): what this voice can speak, and whether it can
         # follow a caller who switches language mid-sentence.
         "languages": _langs,
-        "languageLabels": [LANGUAGE_LABELS[c] for c in _langs if c in LANGUAGE_LABELS],
+        # Gemini's docs claim 95 locales but only name a subset explicitly, so
+        # _langs holds the named ones while this reports the real total. The
+        # badge should not undersell the voice by counting only what we could
+        # enumerate without guessing.
+        "languageCount": (
+            GOOGLE_TTS_TOTAL_LOCALES
+            if _can_switch and entry.get("value", "").startswith(_GOOGLE_PREFIXES)
+            else len(_langs)
+        ),
+        "languageLabels": [_ALL_LANGUAGE_LABELS[c] for c in _langs if c in _ALL_LANGUAGE_LABELS],
         "canSwitchLanguage": _can_switch,
     }

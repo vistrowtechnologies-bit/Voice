@@ -571,6 +571,9 @@ export interface VoiceEntry {
   // consequential thing about picking it, and previously invisible here.
   languages: string[]
   languageLabels: string[]
+  // Authoritative total from the engine's own docs. Can exceed
+  // languageLabels.length, which only holds the locales we name explicitly.
+  languageCount: number
   canSwitchLanguage: boolean
   selected?: boolean
 }
