@@ -47,7 +47,6 @@ from emotion import (
 )
 from language import (
     ELEVENLABS_SUPPORTED_LANGUAGES,
-    GOOGLE_ONLY_LANGUAGE_NAMES,
     LANGUAGE_NAMES,
     detect_reply_language,
     to_google_code,
@@ -1264,13 +1263,21 @@ class RealEstateAgent(Agent):
         # voices: a Sarvam voice handed "de-DE" fails outright, so promising
         # German there would be worse than saying nothing.
         if speaks_global:
-            _global = ", ".join(sorted(set(GOOGLE_ONLY_LANGUAGE_NAMES.values())))
+            # Naming all 76 cost ~700 tokens of a prompt that is already
+            # rate-limiting the account: OpenAI 429s at 200k tokens/minute
+            # and every turn resends the whole thing. The roll-call bought
+            # nothing — the model does not need to recite the catalogue, it
+            # needs to know the range is wide and that switch_reply_language
+            # is the thing that actually knows it.
             instructions += (
                 "\n\n# Global languages — this voice speaks far more than the Indian set\n"
                 "Your voice is one of the global multilingual ones. On top of Hindi, English, "
                 "Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and "
-                "Odia, you can speak and be spoken to in ALL of these:\n"
-                f"{_global}.\n"
+                "Odia, you speak ~76 more worldwide — French, German, Spanish, Italian, "
+                "Portuguese, Dutch, Arabic, Japanese, Korean, Mandarin, Russian, Turkish, "
+                "Vietnamese, Thai, Polish, Ukrainian, Urdu and Nepali among them. If a caller "
+                "asks for a language you do not see named here, assume you HAVE it and call "
+                "switch_reply_language anyway — that tool knows the real list, you do not.\n"
                 "Treat every one of them exactly like the Indian languages: if the caller uses "
                 "one, reply in it, in its own native script, and call switch_reply_language "
                 "with its plain English name first so your pronunciation follows.\n"
