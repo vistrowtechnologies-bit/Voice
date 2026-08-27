@@ -1991,7 +1991,9 @@ def _call_dict(
         tier = voice_tier(row["voice"])
         mtier = model_tier(_row_get(row, "model"))
         out["creditsUsed"] = round(
-            minutes * rate * _VOICE_TIER_MULTIPLIERS[tier] * _MODEL_TIER_MULTIPLIERS[mtier], 2
+            minutes
+            * _credits_per_minute(rate, _VOICE_TIER_MULTIPLIERS[tier], _MODEL_TIER_MULTIPLIERS[mtier]),
+            2,
         )
     if include_transcript:
         out["transcript"] = [
@@ -4990,7 +4992,23 @@ def set_credit_rate(call_type: str, rate: float, account_id: int) -> None:
 # policy choice. Baselined at bulbul:v3 = 1.0x (today's implicit rate before
 # this feature shipped), so existing behavior is unchanged for every agent
 # still on a Sarvam v3/default voice.
-_VOICE_TIER_MULTIPLIERS = {"economy": 0.5, "standard": 1.0, "premium": 2.0}
+# economy was 0.5x, set as though cost scaled with the voice choice. It does
+# not: STT (Rs0.50/min, vendor-verified) plus a LiveKit agent-session minute
+# (Rs0.957 beyond the included 5,000) is a Rs1.457 floor on EVERY minute
+# regardless of voice or model. At 0.5x on the Scale plan a Gemini 2.5 voice
+# earned Rs2.60 against Rs2.23 of real cost - a 14% margin that one FX move
+# or a month of LiveKit overage erases. 0.75x is still a genuine discount
+# and takes that combo to roughly 43%.
+_VOICE_TIER_MULTIPLIERS = {"economy": 0.75, "standard": 1.0, "premium": 2.0}
+# Hard floor on billable credits per minute, for the same reason: no
+# combination of discounts may price a minute below the fixed cost of
+# serving it. Applied after every multiplier.
+_MIN_CREDITS_PER_MINUTE = 0.75
+
+
+def _credits_per_minute(call_type_rate: float, voice_mult: float, model_mult: float) -> float:
+    """Effective credits charged per minute, never below the fixed-cost floor."""
+    return max(_MIN_CREDITS_PER_MINUTE, call_type_rate * voice_mult * model_mult)
 # Same Sarvam bulbul:v2 speaker set as agent/main.py's _SARVAM_V2_SPEAKERS and
 # web-demo/src/pages/Agents.tsx's SARVAM_V2_VOICES — duplicated across all
 # three the same way the full voice lists already are.
@@ -5135,6 +5153,8 @@ def list_account_voices(account_id: int) -> list[dict]:
         entry = voice_catalog.get_voice(r["voice_string"])
         if entry is None or (entry.get("preview") and not is_owner):
             continue  # a voice removed from the catalog since it was added
+        if voice_catalog.is_hidden(r["voice_string"]):
+            continue  # withheld provider - existing agents still resolve it
         out.append(voice_catalog.public_entry(entry, allowed))
     out.sort(key=lambda e: (e["tierRank"], e["name"].lower()))
     return out
@@ -5159,6 +5179,8 @@ def voice_catalog_for_account(account_id: int) -> dict:
     voices = []
     for entry in voice_catalog.CATALOG:
         if entry.get("preview") and not is_owner:
+            continue
+        if voice_catalog.is_hidden(entry["value"]):
             continue
         pub = voice_catalog.public_entry(entry, allowed)
         pub["selected"] = entry["value"] in selected
@@ -5275,11 +5297,8 @@ def _credits_used_in_period(conn, account_id: int, rates: dict, period_start: st
         tier = voice_tier(row["voice"])
         mtier = model_tier(_row_get(row, "model"))
         minutes = row["m"]
-        credits = (
-            minutes
-            * rates.get(call_type, 1.0)
-            * _VOICE_TIER_MULTIPLIERS[tier]
-            * _MODEL_TIER_MULTIPLIERS[mtier]
+        credits = minutes * _credits_per_minute(
+            rates.get(call_type, 1.0), _VOICE_TIER_MULTIPLIERS[tier], _MODEL_TIER_MULTIPLIERS[mtier]
         )
         by_type[call_type] = round(by_type.get(call_type, 0.0) + minutes, 1)
         by_voice_tier[tier] = round(by_voice_tier.get(tier, 0.0) + minutes, 1)
@@ -5399,11 +5418,8 @@ def overage_for_account_period(account_id: int, plan: str, period_start: str, pe
             call_type = row["call_type"] if row["call_type"] in rates else "browser"
             tier = voice_tier(row["voice"])
             mtier = model_tier(_row_get(row, "model"))
-            used += (
-                row["m"]
-                * rates.get(call_type, 1.0)
-                * _VOICE_TIER_MULTIPLIERS[tier]
-                * _MODEL_TIER_MULTIPLIERS[mtier]
+            used += row["m"] * _credits_per_minute(
+                rates.get(call_type, 1.0), _VOICE_TIER_MULTIPLIERS[tier], _MODEL_TIER_MULTIPLIERS[mtier]
             )
         used = round(used, 1)
         plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])

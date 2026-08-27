@@ -199,6 +199,21 @@ def sample_text(lang: str, gender: str | None = None) -> str | None:
     return entry
 
 
+# Voices withheld from the pickers entirely. Unlike "preview" (which shows a
+# voice in its own testing section and gates selection to the platform
+# owner), a hidden voice is not listed to anyone. get_voice()/tier_of()
+# deliberately still resolve it, so an agent or saved menu row that already
+# points at one keeps working - correct gender for the prompt's gendered
+# verb forms, correct credit tier for billing - rather than silently
+# degrading. Nothing is deleted; clearing this tuple restores them.
+_HIDDEN_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:")
+
+
+def is_hidden(value: str) -> bool:
+    """Whether this voice should be withheld from voice pickers."""
+    return bool(value) and value.startswith(_HIDDEN_VOICE_PREFIXES)
+
+
 def get_voice(value: str) -> dict | None:
     """Catalog entry for a voice string, or None if not a known catalog voice."""
     return _BY_VALUE.get(value)
