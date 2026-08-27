@@ -50,6 +50,7 @@ from language import (
     GOOGLE_ONLY_LANGUAGE_NAMES,
     LANGUAGE_NAMES,
     detect_reply_language,
+    to_google_code,
 )
 from prompts.generic_assistant import build_generic_assistant_prompt
 from prompts.human_speech import build_human_speech_manner
@@ -876,7 +877,10 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             # here. Not yet applied to the google-native branch below.
             google_prompt = GEMINI_TONE_PROMPTS.get(tone_name, GEMINI_TONE_PROMPTS[DEFAULT_TONE])
             google_tts = PatchedGeminiTTS(
-                language=reply_language,
+                # Our own codes are Sarvam's spelling; Gemini wants or-IN for
+                # Odia and bn-BD for Bengali, and rejects od-IN/bn-IN as
+                # unknown locales. Every Gemini handoff goes through this.
+                language=to_google_code(reply_language),
                 voice_name=voice_name.capitalize(),
                 model_name=google_model,
                 credentials_info=_GOOGLE_CREDENTIALS,
@@ -893,7 +897,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             )
             fallback_model = _GOOGLE_25_MODEL if google_model == _GOOGLE_31_MODEL else _GOOGLE_31_MODEL
             google_model_fallback = PatchedGeminiTTS(
-                language=reply_language,
+                language=to_google_code(reply_language),
                 voice_name=voice_name.capitalize(),
                 model_name=fallback_model,
                 credentials_info=_GOOGLE_CREDENTIALS,
@@ -954,7 +958,9 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         return sarvam_tts, "sarvam"
     # Same streaming fix as the two branches above — see the comment on the
     # google-native branch for why PatchedGeminiTTS applies here too.
-    google_tts = PatchedGeminiTTS(language=reply_language, credentials_info=_GOOGLE_CREDENTIALS)
+    google_tts = PatchedGeminiTTS(
+        language=to_google_code(reply_language), credentials_info=_GOOGLE_CREDENTIALS
+    )
     return TtsFallbackAdapter([sarvam_tts, google_tts]), "sarvam"
 
 
@@ -1819,6 +1825,16 @@ class RealEstateAgent(Agent):
             # to Hindi mid-conversation after a few caller turns, corrupting
             # the TTS language hint the operator explicitly configured.
             candidate = None
+        elif candidate == "en-IN" and self._reply_language not in LANGUAGE_NAMES:
+            # Same shape as the Devanagari case above, for Latin script.
+            # detect_reply_language reports the SCRIPT, and Latin is shared by
+            # English, French, German, Spanish, Portuguese, Dutch and most of
+            # the global range — so on a call the caller has deliberately
+            # moved to French, every French turn reads back as "en-IN" and
+            # would drag them to English after a few turns. A caller who
+            # actually wants English can say so: switch_reply_language now
+            # accepts a bare "English" (see tools.py's short-utterance guard).
+            candidate = None
         if candidate is None or candidate == self._reply_language:
             # Ambiguous turn, or already the current language — nothing to
             # confirm. Reset the streak so a one-off stray word elsewhere
@@ -1863,7 +1879,7 @@ class RealEstateAgent(Agent):
                 voice_name = self._voice[len(prefix):]
                 try:
                     self.tts.update_options(
-                        language=candidate,
+                        language=to_google_code(candidate),
                         voice_name=voice_name.capitalize(),
                         model_name=_GOOGLE_31_MODEL if is_google_31 else _GOOGLE_25_MODEL,
                     )
