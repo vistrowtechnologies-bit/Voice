@@ -234,6 +234,15 @@ def _client_ip(request: Request) -> str:
 _PLATFORM_DEMO_AGENT_NAME = "platform-demo"
 
 
+# LiveKit's default empty_timeout is 300s, which is why an abandoned prewarm
+# used to sit in the console as a 5-minute session. agent/main.py now deletes
+# the room itself once its 90s wait_for_participant times out, so this is only
+# the backstop for rooms an agent never joined at all (worker down, dispatch
+# dropped). Kept above that 90s wait so it can never race the agent, and the
+# /widget/token path already recreates a warmed room that has expired.
+_ROOM_EMPTY_TIMEOUT_S = 120
+
+
 def _demo_dispatch_kwargs(agent_id: int | None, *, default_is_demo: bool = False) -> dict:
     """kwargs to spread into CreateRoomRequest so this room explicitly
     dispatches to the dedicated demo agent when agent_id is the platform
@@ -299,6 +308,7 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
             CreateRoomRequest(
                 name=req.room,
                 metadata=metadata,
+                empty_timeout=_ROOM_EMPTY_TIMEOUT_S,
                 **_demo_dispatch_kwargs(agent_id, default_is_demo=agent_id is None),
             )
         )
@@ -3747,6 +3757,7 @@ async def warm_widget_agent(req: WidgetWarmRequest) -> dict:
                 CreateRoomRequest(
                     name=room,
                     metadata=json.dumps({"agent_id": resolved_agent_id, "site_id": site["id"]}),
+                    empty_timeout=_ROOM_EMPTY_TIMEOUT_S,
                     **_demo_dispatch_kwargs(resolved_agent_id),
                 )
             )
@@ -3860,7 +3871,10 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
                 room = f"widget-{site['id']}-{secrets.token_hex(8)}"
                 await lkapi.room.create_room(
                     CreateRoomRequest(
-                        name=room, metadata=metadata, **_demo_dispatch_kwargs(resolved_agent_id)
+                        name=room,
+                        metadata=metadata,
+                        empty_timeout=_ROOM_EMPTY_TIMEOUT_S,
+                        **_demo_dispatch_kwargs(resolved_agent_id),
                     )
                 )
         logger.info("widget token issued: site=%s agent_id=%s room=%s", site["name"], resolved_agent_id, room)

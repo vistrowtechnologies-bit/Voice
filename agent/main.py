@@ -2071,7 +2071,14 @@ async def entrypoint(ctx: JobContext) -> None:
     try:
         first_participant = await asyncio.wait_for(ctx.wait_for_participant(), timeout=90)
     except asyncio.TimeoutError:
+        # Returning here drops the agent out of the room but leaves the room
+        # itself alive until LiveKit's empty_timeout expires — and every one
+        # of those orphans showed up in the console as a 5-minute session with
+        # a single participant. Prewarmed rooms nobody ever joins are common
+        # (the widget warms on form-open, the demo orb on hover), so that tail
+        # was the bulk of our agent-session minutes. Tear the room down now.
         logger.warning("no caller joined room %s within 90s — abandoning job", ctx.room.name)
+        await _hang_up(ctx.room.name)
         return
     logger.info("[latency] caller joined at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # /widget/warm pre-creates the room (to give the agent a head start
