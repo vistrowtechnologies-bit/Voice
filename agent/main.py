@@ -1280,7 +1280,14 @@ class RealEstateAgent(Agent):
                 "speaks only some Indian languages and that the platform limits it, on a voice "
                 "that speaks French perfectly well. Never say you cannot speak one of the "
                 "languages above, never call it a platform limitation, and never offer to fall "
-                "back to Hindi or English instead — just switch and speak it."
+                "back to Hindi or English instead — just switch and speak it.\n"
+                "A request to speak a language is an ACTION, not a question about this business, "
+                "so the knowledge-base rules do not apply to it: never answer one with \"I don't "
+                "have that information\" or \"I'll have the team confirm\". Call "
+                "switch_reply_language and speak. And you are never locked into a language for "
+                "the rest of a call — if you switched by mistake and the caller objects, apologise "
+                "in one short line, switch to what they asked for, and carry on. Refusing every "
+                "later switch because one earlier one was wrong is the failure, not the fix."
             )
         # Grammatical gender: many Indian languages (Hindi, Marathi, Gujarati,
         # Punjabi, Bhojpuri…) inflect first-person verbs by the SPEAKER's

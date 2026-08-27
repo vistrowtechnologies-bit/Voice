@@ -793,11 +793,25 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
     language, which sounds foreign/accented to the caller — so always call
     this before your first reply in the new language, not after.
 
+    NEVER tell a caller you cannot speak a language without calling this
+    tool first. THIS TOOL is what knows which languages are available — you
+    do not. If one genuinely is not, it returns a message saying so, and
+    only then do you say anything to the caller about it. There is also no
+    such thing as being locked into one language for the rest of a call: a
+    caller can move you as many times as they like.
+
+    Confirmed real failure: asked for Bengali, then Marathi, then Japanese,
+    on a voice that speaks all three, the agent refused each one in its own
+    words without ever calling this tool, and told the caller it would only
+    speak Hindi from then on.
+
     Args:
-        language: The language's plain English name ("Hindi", "Marathi",
-            "French", "Japanese"). Which names are accepted depends on the
-            voice this agent runs — see the language section of your prompt
-            for the list you actually have.
+        language: The language's plain English name — "Hindi", "English",
+            "Marathi", "Tamil", "Telugu", "Kannada", "Malayalam",
+            "Gujarati", "Bengali", "Punjabi", "Odia", and on the global
+            voices also "French", "German", "Spanish", "Japanese",
+            "Arabic", "Mandarin" and dozens more. Pass whatever language the
+            caller asked for and let the tool decide.
     """
     agent = context.session.current_agent
     provider = getattr(agent, "_tts_provider", None)
