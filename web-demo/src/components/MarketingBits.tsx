@@ -46,27 +46,78 @@ export function TalkToArthaButton({ className }: { className?: string }) {
 }
 
 /** The standard "Put an AI agent on every call" conversion band, reused across pages. */
+// Fixed, not random: this renders during SSR prerendering too, and a
+// Math.random() height here would differ between the server pass and
+// hydration, which React reports as a mismatch.
+const CTA_WAVEFORM = [
+  28, 52, 38, 74, 46, 92, 60, 34, 68, 44, 86, 30, 56, 78, 40, 64,
+  36, 88, 50, 26, 72, 42, 58, 80, 32, 66, 48, 90, 38, 54, 70, 30,
+]
+
 export function CTABand({
   title = 'Put an AI agent on every call.',
   subtitle = 'Try Artha live in your browser, or book a walkthrough with our team.',
+  eyebrow = 'Live demo',
 }: {
   title?: string
   subtitle?: string
+  eyebrow?: string
 }) {
   return (
-    <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
-      <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-surface to-surface-high p-10 text-center sm:p-16">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/20 blur-[100px]" />
-        <h2 className="relative font-display text-4xl font-bold tracking-tight sm:text-5xl">{title}</h2>
-        <p className="relative mx-auto mt-4 max-w-xl text-lg text-text-muted">{subtitle}</p>
-        <div className="relative mt-8 flex flex-wrap justify-center gap-3">
-          <TalkToArthaButton />
-          <Link
-            to="/contact"
-            className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
-          >
-            Book a demo
-          </Link>
+    <section className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
+      {/* The old band was surface -> surface-high on a surface page, which is
+          a gradient between two nearly identical greys: it read as one more
+          card rather than the end of the page. Tinting the ground toward the
+          brand and pulling the border with it makes it an endcap. */}
+      <div className="relative overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/[0.14] via-surface to-surface-high p-8 sm:p-12 lg:p-14">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/25 blur-[110px]" />
+        <div className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-cyan/20 blur-[110px]" />
+
+        {/* A voice product should look like one at the moment it asks for the
+            call. Decorative, so it is hidden from assistive tech and holds
+            still for anyone who asked for reduced motion. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 flex h-24 items-end justify-center gap-1.5 opacity-[0.18]"
+        >
+          {CTA_WAVEFORM.map((h, i) => (
+            <span
+              key={i}
+              className="w-1.5 rounded-t-full bg-gradient-to-t from-primary to-cyan motion-safe:animate-[pulse_2.6s_ease-in-out_infinite]"
+              style={{ height: `${h}%`, animationDelay: `${(i % 8) * 160}ms` }}
+            />
+          ))}
+        </div>
+
+        <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-14">
+          <div className="text-center lg:text-left">
+            <SectionEyebrow>{eyebrow}</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-balance sm:text-4xl lg:text-5xl">
+              {title}
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-lg text-text-muted lg:mx-0">{subtitle}</p>
+            {/* The three objections that actually stop someone clicking a
+                voice demo: having to sign up, not knowing what it costs, and
+                not expecting it to handle their language. */}
+            <ul className="mt-6 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-text-muted lg:justify-start">
+              {['No signup needed', '5 free calls', '87 languages'].map((item) => (
+                <li key={item} className="flex items-center gap-1.5">
+                  <Icon name="check_circle" className="text-[16px] text-primary" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center lg:flex-col lg:items-stretch">
+            <TalkToArthaButton className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-7 py-3.5 text-sm font-bold text-white shadow-[0_14px_36px_-12px_rgba(168,85,247,0.7)] transition-transform hover:-translate-y-0.5" />
+            <Link
+              to="/contact"
+              className="rounded-full border border-border bg-surface/80 px-7 py-3.5 text-center text-sm font-bold text-text backdrop-blur transition-colors hover:border-primary hover:text-primary"
+            >
+              Book a demo
+            </Link>
+          </div>
         </div>
       </div>
     </section>

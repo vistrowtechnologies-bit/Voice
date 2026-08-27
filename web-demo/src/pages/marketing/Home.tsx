@@ -5,7 +5,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
 import { Seo } from '../../components/Seo'
-import { TalkToArthaButton } from '../../components/MarketingBits'
+import { CTABand, TalkToArthaButton } from '../../components/MarketingBits'
 import { RotatingGreeting, ScriptMarquee } from '../../components/BharatBits'
 import { Reveal } from '../../components/Reveal'
 import arthaAvatar from '../../assets/artha-avatar.png'
@@ -514,29 +514,10 @@ export function Home() {
       {/* ---------- FAQ ---------- */}
       <FaqSection items={FAQ} />
 
-      {/* ---------- Final CTA ---------- */}
-      <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
-        <Reveal>
-        <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-surface to-surface-high p-10 text-center sm:p-16">
-          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/20 blur-[100px]" />
-          <h2 className="relative font-display text-4xl font-bold tracking-tight sm:text-5xl">
-            Put an AI agent on every call.
-          </h2>
-          <p className="relative mx-auto mt-4 max-w-xl text-lg text-text-muted">
-            Try Artha live in your browser, or book a walkthrough with our team.
-          </p>
-          <div className="relative mt-8 flex flex-wrap justify-center gap-3">
-            <TalkToArthaButton />
-            <Link
-              to="/contact"
-              className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
-            >
-              Book a demo
-            </Link>
-          </div>
-        </div>
-        </Reveal>
-      </section>
+      {/* The homepage kept its own copy of the conversion band, so it did
+          not pick up the shared one's redesign. Use CTABand like every other
+          page — one place to change it next time. */}
+      <CTABand />
     </MarketingLayout>
   )
 }
