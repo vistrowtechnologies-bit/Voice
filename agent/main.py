@@ -1039,11 +1039,19 @@ class RealEstateAgent(Agent):
         # getting the flat, obviously-synthetic delivery. Those agents get
         # the shared layer appended below instead; the two built-in personas
         # already carry it inline and must not have it stacked twice.
+        # Whether this agent's voice speaks past the Indian set. Computed
+        # before the prompts are built because the closed "fluent in eleven
+        # languages" list inside them has to change, not be argued with
+        # afterwards — see build_generic_assistant_prompt's docstring.
+        _vc_entry = voice_catalog.get_voice(voice_value) or {}
+        speaks_global = bool(_vc_entry.get("multilingual")) and voice_value.startswith(
+            ("google:", "google31:")
+        )
         needs_human_speech_layer = bool(config.get("system_prompt"))
         if config.get("system_prompt"):
             instructions = config["system_prompt"]
         elif config.get("is_platform_demo"):
-            instructions = build_platform_assistant_prompt(agent_name)
+            instructions = build_platform_assistant_prompt(agent_name, speaks_global)
         else:
             # build_generic_assistant_prompt has always taken a business_name,
             # but nothing ever passed one — so every tenant on the built-in
@@ -1052,7 +1060,7 @@ class RealEstateAgent(Agent):
             # public industry demos, which run on the operator's account but
             # must answer as their demo business), then the tenant's company
             # name from signup, then the old placeholder.
-            instructions = build_generic_assistant_prompt(agent_name, business_name)
+            instructions = build_generic_assistant_prompt(agent_name, business_name, speaks_global)
         if needs_human_speech_layer:
             # Appended AFTER the tenant's own prompt so their content and
             # rules read first and win any conflict — this layer is delivery
@@ -1249,8 +1257,7 @@ class RealEstateAgent(Agent):
         # Japanese on a voice that can do both. Only appended for those
         # voices: a Sarvam voice handed "de-DE" fails outright, so promising
         # German there would be worse than saying nothing.
-        _voice_entry = voice_catalog.get_voice(voice_value) or {}
-        if _voice_entry.get("multilingual") and voice_value.startswith(("google:", "google31:")):
+        if speaks_global:
             _global = ", ".join(sorted(set(GOOGLE_ONLY_LANGUAGE_NAMES.values())))
             instructions += (
                 "\n\n# Global languages — this voice speaks far more than the Indian set\n"
