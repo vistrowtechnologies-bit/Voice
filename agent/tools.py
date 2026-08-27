@@ -110,6 +110,65 @@ _GOOGLE_NAME_TO_LANGUAGE_CODE = {
     name.lower(): code for code, name in GOOGLE_LANGUAGE_NAMES.items()
 }
 
+# How callers actually name a language out loud, beyond the catalog's own
+# English names — romanized Hindi for "English" above all, plus the endonyms
+# people reach for when asking in the language itself.
+_SPOKEN_LANGUAGE_ALIASES = frozenset({
+    "angrezi", "angreji", "angrezee", "inglish", "ingles",
+    "nihongo", "francais", "français", "deutsch", "espanol", "español",
+    "italiano", "portugues", "português", "mandarin", "putonghua",
+    "arabi", "arabic", "russkiy", "bangla", "odiya", "oriya",
+})
+
+
+def _mentions_a_language(text: str | None) -> bool:
+    """Whether the caller's own words name a language.
+
+    The short-utterance guard below exists because mis-transcribed SCRIPT
+    once flipped a call into Bengali — the caller had said a Hindi place
+    name, and nothing in their words was the word "Bengali". A caller who
+    actually says a language's NAME is the opposite situation: "English" is
+    unambiguous in a way four stray characters of a script are not, so it is
+    safe to accept even though it is one word.
+
+    Confirmed real failure this fixes: a caller stuck in Japanese said
+    "Speaking English", then "Speak", "In", "English" as separate fragments.
+    Every one fell under the guard's two-word minimum, so the agent kept
+    declining to switch — and told them, in Japanese, that it could only
+    speak Japanese.
+    """
+    if not text:
+        return False
+    low = text.lower()
+    if any(tok in low for tok in _LANGUAGE_WORD_TOKENS):
+        return True
+    # Multilingual STT spells a language's name phonetically often enough to
+    # matter — the caller who got stuck said "japanees", not "Japanese". A
+    # six-character prefix catches that family of near-misses without
+    # matching on ordinary words. Bounded to longer names so short ones
+    # ("thai", "urdu") still need an exact hit.
+    return any(pref in low for pref in _LANGUAGE_WORD_PREFIXES)
+
+
+def _build_language_word_tokens() -> frozenset[str]:
+    tokens = set(_SPOKEN_LANGUAGE_ALIASES)
+    for name in GOOGLE_LANGUAGE_NAMES.values():
+        # "Chinese (Mandarin)" -> "chinese"; the parenthetical is a region or
+        # variant, and matching on "world" or "india" would fire on ordinary
+        # conversation.
+        for word in name.split("(")[0].strip().lower().split():
+            # 4+ characters keeps out "us"/"uk" and similar fragments that
+            # appear constantly in normal speech.
+            if len(word) >= 4:
+                tokens.add(word)
+    return frozenset(tokens)
+
+
+_LANGUAGE_WORD_TOKENS = _build_language_word_tokens()
+_LANGUAGE_WORD_PREFIXES = frozenset(
+    tok[:6] for tok in _LANGUAGE_WORD_TOKENS if len(tok) >= 7
+)
+
 _HINDI_HOUR_WORDS = {
     1: "एक", 2: "दो", 3: "तीन", 4: "चार", 5: "पाँच", 6: "छह", 7: "सात",
     8: "आठ", 9: "नौ", 10: "दस", 11: "ग्यारह", 12: "बारह",
@@ -776,7 +835,8 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
     # will be declined too. That degrades to the agent asking the caller to
     # repeat themselves — safe, if mildly annoying — versus the alternative
     # of derailing the whole call into the wrong language on STT noise.
-    if detect_reply_language(_last_user_utterance(context)) is None:
+    _last = _last_user_utterance(context)
+    if detect_reply_language(_last) is None and not _mentions_a_language(_last):
         return (
             f"Not switching to {language} — the caller's last message is too short or unclear "
             "to confirm this is a real language switch or request (it may be a mis-transcribed "
