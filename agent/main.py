@@ -1932,6 +1932,7 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "visitor_email": None,
         "company": "",
         "custom_fields": {},
+        "demo_language": None,
     }
     try:
         raw = ctx.job.room.metadata
@@ -1957,6 +1958,10 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "agent_id": int(agent_id) if agent_id is not None else None,
         "call_type": call_type,
         "site_id": int(site_id) if site_id is not None else None,
+        # Set only by /api/token's language picker on the public demos, and
+        # only ever honoured for a demo agent (see entrypoint) — a tenant's
+        # configured language is never overridable from the page.
+        "demo_language": meta.get("demo_language"),
         "visitor_name": meta.get("visitor_name"),
         "visitor_phone": meta.get("visitor_phone"),
         "visitor_email": meta.get("visitor_email"),
@@ -2223,6 +2228,18 @@ async def entrypoint(ctx: JobContext) -> None:
             "welcome_message": _substitute_template_vars(config.get("welcome_message") or "", template_vars),
         }
         cfg = config
+    # "Try it in your language" on the marketing site: the visitor picks a
+    # language before the call, so the agent has to OPEN in it rather than
+    # opening in Hindi and waiting to be corrected. Restricted to the demo
+    # agents — for a tenant, language is a dashboard setting and a public
+    # page must not be able to change how their line answers.
+    _requested_language = (call_context.get("demo_language") or "").strip()
+    if _requested_language and cfg and (
+        cfg.get("is_platform_demo") or cfg.get("public_demo_slug")
+    ):
+        config = {**(config or {}), "language": _requested_language}
+        cfg = config
+        logger.info("demo language override -> %s (room=%s)", _requested_language, ctx.room.name)
     agent = RealEstateAgent(config, call_context["visitor_name"], call_context["visitor_phone"])
     logger.info("[latency] RealEstateAgent() constructed at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # See the [latency] markers above/below — lets on_enter() log its own

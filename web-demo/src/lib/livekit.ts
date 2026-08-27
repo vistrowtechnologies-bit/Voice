@@ -11,11 +11,14 @@ export async function fetchLiveKitToken(
    * it to an agent itself and ignores agentId when it's set — the public
    * endpoint never accepts a raw agent id from the page. */
   demoSlug?: string,
+  /** BCP-47 code the demo should OPEN in ("fr-FR"). Server-validated against
+   * the voice catalog, and only honoured for demo agents. */
+  language?: string,
 ): Promise<TokenResponse> {
   const res = await fetch('/api/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identity, room, agentId, demoSlug }),
+    body: JSON.stringify({ identity, room, agentId, demoSlug, language }),
   })
   if (!res.ok) {
     throw new Error(`token request failed with status ${res.status}`)

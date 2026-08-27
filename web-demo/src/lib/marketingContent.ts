@@ -627,6 +627,102 @@ export const LANGUAGES: LanguagePage[] = [
   { slug: 'odia', name: 'Odia', native: 'ଓଡ଼ିଆ', code: 'od-IN', region: 'Odisha', greeting: 'ନମସ୍କାର', blurb: 'Odia coverage, so Odisha callers aren’t the ones who always get the English fallback.' },
 ]
 
+// ---- Global languages (feeds /languages) ----
+//
+// The 10 entries above are the native Indian languages, which every voice
+// speaks. These are what the Gemini multilingual voices (Mira/Arin) add on
+// top — generated from agent/voice_catalog.py's GOOGLE_TTS_LANGUAGES so the
+// marketing list cannot drift from what the agent will actually accept.
+// `ga` marks Google's generally-available locales; the rest are preview.
+// `native` is empty for the handful whose endonym we did not want to guess —
+// render the English name in that case rather than a wrong script.
+
+export interface GlobalLanguage {
+  name: string
+  native: string
+  code: string
+  ga: boolean
+}
+
+export const GLOBAL_LANGUAGES: GlobalLanguage[] = [
+  { name: "Afrikaans", native: "Afrikaans", code: "af-ZA", ga: false },
+  { name: "Albanian", native: "Shqip", code: "sq-AL", ga: false },
+  { name: "Amharic", native: "አማርኛ", code: "am-ET", ga: false },
+  { name: "Arabic (Egypt)", native: "العربية", code: "ar-EG", ga: true },
+  { name: "Arabic (World)", native: "العربية", code: "ar-001", ga: false },
+  { name: "Armenian", native: "Հայերեն", code: "hy-AM", ga: false },
+  { name: "Azerbaijani", native: "", code: "az-AZ", ga: false },
+  { name: "Basque", native: "Euskara", code: "eu-ES", ga: false },
+  { name: "Belarusian", native: "Беларуская", code: "be-BY", ga: false },
+  { name: "Bulgarian", native: "Български", code: "bg-BG", ga: false },
+  { name: "Burmese", native: "မြန်မာ", code: "my-MM", ga: false },
+  { name: "Catalan", native: "Català", code: "ca-ES", ga: false },
+  { name: "Cebuano", native: "", code: "ceb-PH", ga: false },
+  { name: "Chinese (Mandarin)", native: "中文", code: "cmn-CN", ga: false },
+  { name: "Chinese (Taiwan)", native: "中文 (台灣)", code: "cmn-tw", ga: false },
+  { name: "Croatian", native: "Hrvatski", code: "hr-HR", ga: false },
+  { name: "Czech", native: "Čeština", code: "cs-CZ", ga: false },
+  { name: "Danish", native: "Dansk", code: "da-DK", ga: false },
+  { name: "Dutch", native: "Nederlands", code: "nl-NL", ga: true },
+  { name: "English (Australia)", native: "English (AU)", code: "en-AU", ga: false },
+  { name: "English (UK)", native: "English (UK)", code: "en-GB", ga: false },
+  { name: "English (US)", native: "English (US)", code: "en-US", ga: true },
+  { name: "Estonian", native: "Eesti", code: "et-EE", ga: false },
+  { name: "Filipino", native: "Filipino", code: "fil-PH", ga: false },
+  { name: "Finnish", native: "Suomi", code: "fi-FI", ga: false },
+  { name: "French", native: "Français", code: "fr-FR", ga: true },
+  { name: "French (Canada)", native: "Français (CA)", code: "fr-CA", ga: false },
+  { name: "Galician", native: "Galego", code: "gl-ES", ga: false },
+  { name: "Georgian", native: "ქართული", code: "ka-GE", ga: false },
+  { name: "German", native: "Deutsch", code: "de-DE", ga: true },
+  { name: "Greek", native: "Ελληνικά", code: "el-GR", ga: false },
+  { name: "Haitian Creole", native: "", code: "ht-HT", ga: false },
+  { name: "Hebrew", native: "עברית", code: "he-IL", ga: false },
+  { name: "Hungarian", native: "Magyar", code: "hu-HU", ga: false },
+  { name: "Icelandic", native: "Íslenska", code: "is-IS", ga: false },
+  { name: "Indonesian", native: "Bahasa Indonesia", code: "id-ID", ga: true },
+  { name: "Italian", native: "Italiano", code: "it-IT", ga: true },
+  { name: "Japanese", native: "日本語", code: "ja-JP", ga: true },
+  { name: "Javanese", native: "", code: "jv-JV", ga: false },
+  { name: "Konkani", native: "कोंकणी", code: "kok-IN", ga: false },
+  { name: "Korean", native: "한국어", code: "ko-KR", ga: true },
+  { name: "Lao", native: "ລາວ", code: "lo-LA", ga: false },
+  { name: "Latin", native: "", code: "la-VA", ga: false },
+  { name: "Latvian", native: "Latviešu", code: "lv-LV", ga: false },
+  { name: "Lithuanian", native: "Lietuvių", code: "lt-LT", ga: false },
+  { name: "Luxembourgish", native: "", code: "lb-LU", ga: false },
+  { name: "Macedonian", native: "Македонски", code: "mk-MK", ga: false },
+  { name: "Maithili", native: "मैथिली", code: "mai-IN", ga: false },
+  { name: "Malagasy", native: "", code: "mg-MG", ga: false },
+  { name: "Malay", native: "Bahasa Melayu", code: "ms-MY", ga: false },
+  { name: "Mongolian", native: "Монгол", code: "mn-MN", ga: false },
+  { name: "Nepali", native: "नेपाली", code: "ne-NP", ga: false },
+  { name: "Norwegian (Bokmal)", native: "Norsk", code: "nb-NO", ga: false },
+  { name: "Norwegian (Nynorsk)", native: "Nynorsk", code: "nn-NO", ga: false },
+  { name: "Pashto", native: "پښتو", code: "ps-AF", ga: false },
+  { name: "Persian", native: "فارسی", code: "fa-IR", ga: false },
+  { name: "Polish", native: "Polski", code: "pl-PL", ga: true },
+  { name: "Portuguese (Brazil)", native: "Português", code: "pt-BR", ga: true },
+  { name: "Portuguese (Portugal)", native: "Português", code: "pt-PT", ga: false },
+  { name: "Romanian", native: "Română", code: "ro-RO", ga: true },
+  { name: "Russian", native: "Русский", code: "ru-RU", ga: true },
+  { name: "Serbian", native: "Српски", code: "sr-RS", ga: false },
+  { name: "Sindhi", native: "سنڌي", code: "sd-IN", ga: false },
+  { name: "Sinhala", native: "සිංහල", code: "si-LK", ga: false },
+  { name: "Slovak", native: "Slovenčina", code: "sk-SK", ga: false },
+  { name: "Slovenian", native: "Slovenščina", code: "sl-SI", ga: false },
+  { name: "Spanish", native: "Español", code: "es-ES", ga: true },
+  { name: "Spanish (Latin America)", native: "Español (LatAm)", code: "es-419", ga: false },
+  { name: "Spanish (Mexico)", native: "Español (MX)", code: "es-MX", ga: false },
+  { name: "Swahili", native: "Kiswahili", code: "sw-KE", ga: false },
+  { name: "Swedish", native: "Svenska", code: "sv-SE", ga: false },
+  { name: "Thai", native: "ไทย", code: "th-TH", ga: true },
+  { name: "Turkish", native: "Türkçe", code: "tr-TR", ga: true },
+  { name: "Ukrainian", native: "Українська", code: "uk-UA", ga: true },
+  { name: "Urdu", native: "اردو", code: "ur-PK", ga: false },
+  { name: "Vietnamese", native: "Tiếng Việt", code: "vi-VN", ga: true },
+]
+
 // ---- Integrations directory (feeds /integrations) ----
 //
 // Grounded in _SEED_INTEGRATIONS in server/calls_db.py - every entry here

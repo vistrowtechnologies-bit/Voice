@@ -243,6 +243,14 @@ _PLATFORM_DEMO_AGENT_NAME = "platform-demo"
 _ROOM_EMPTY_TIMEOUT_S = 120
 
 
+# What the public demo's language picker may ask for. The demo runs a Gemini
+# persona voice, so it is that voice's range plus our own native spellings -
+# voice_catalog.to_google_code maps od-IN/bn-IN across at the TTS boundary.
+_DEMO_SELECTABLE_LANGUAGES = frozenset(voice_catalog.GOOGLE_TTS_LANGUAGES) | frozenset(
+    voice_catalog.LANGUAGE_LABELS
+)
+
+
 def _demo_dispatch_kwargs(agent_id: int | None, *, default_is_demo: bool = False) -> dict:
     """kwargs to spread into CreateRoomRequest so this room explicitly
     dispatches to the dedicated demo agent when agent_id is the platform
@@ -265,6 +273,10 @@ class TokenRequest(BaseModel):
     # set it wins over agentId, so a crafted body can't pair a published
     # slug with someone else's agent id.
     demoSlug: str | None = None
+    # "Try it in your language" on the marketing pages. Validated against the
+    # catalog below and only ever applied to a demo agent (see agent/main.py's
+    # entrypoint), so this cannot repoint a tenant's configured language.
+    language: str | None = None
 
 
 @app.post("/token")
@@ -302,7 +314,17 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         if agent_id is None:
             raise HTTPException(404, "That demo isn't available right now.")
 
-    metadata = json.dumps({"agent_id": agent_id}) if agent_id is not None else None
+    meta: dict = {}
+    if agent_id is not None:
+        meta["agent_id"] = agent_id
+    if req.language:
+        # Reject anything not in the catalog rather than passing it through:
+        # an unknown code reaches the TTS as a locale it does not know, and
+        # Sarvam in particular fails the call outright rather than degrading.
+        if req.language not in _DEMO_SELECTABLE_LANGUAGES:
+            raise HTTPException(400, "That language isn't available on the demo.")
+        meta["demo_language"] = req.language
+    metadata = json.dumps(meta) if meta else None
     async with api.LiveKitAPI() as lkapi:
         await lkapi.room.create_room(
             CreateRoomRequest(

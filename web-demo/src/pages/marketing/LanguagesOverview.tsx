@@ -1,17 +1,19 @@
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { Reveal } from '../../components/Reveal'
-import { LANGUAGES } from '../../lib/marketingContent'
+import { DemoOrbCard } from '../../components/DemoOrbCard'
+import { GLOBAL_LANGUAGES, LANGUAGES } from '../../lib/marketingContent'
 
 export function LanguagesOverview() {
   return (
     <MarketingLayout>
       <Seo
-        title="AI Voice Agents in 10 Indian Languages + English | Vistrow Voice"
-        description="Artha answers in Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, Odia, and English - switching mid-call with the caller."
+        title="AI Voice Agents in 10 Indian Languages + 76 More | Vistrow Voice"
+        description="Artha answers in Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, Odia and English - plus French, German, Spanish, Japanese, Arabic and 70 more. Pick a language and try it live."
         path="/languages"
       />
 
@@ -22,9 +24,12 @@ export function LanguagesOverview() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
           Artha speaks 10 Indian languages plus English, and switches mid-call when the caller does - including
-          the everyday mixed speech most people actually use on the phone.
+          the everyday mixed speech most people actually use on the phone. On the global voices, that same
+          agent also handles {GLOBAL_LANGUAGES.length} more, from French to Japanese.
         </p>
       </section>
+
+      <TryALanguage />
 
       <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -53,6 +58,34 @@ export function LanguagesOverview() {
             </Reveal>
           ))}
         </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
+        <SectionEyebrow>Global languages</SectionEyebrow>
+        <h2 className="mt-4 max-w-2xl font-display text-2xl font-bold sm:text-3xl">
+          And {GLOBAL_LANGUAGES.length} more, on the same agent.
+        </h2>
+        <p className="mt-3 max-w-2xl text-text-muted">
+          The Indian languages above are the ones we build for. These come with the global voices — the
+          same agent, the same call, no separate setup. Pick any of them in the demo above.
+        </p>
+        {/* Chips, not cards: there are too many to give each one a tile, and
+            unlike the Indian languages these do not each have a page behind
+            them. The endonym leads because that is what a speaker scans for. */}
+        <ul className="mt-8 flex flex-wrap gap-2">
+          {GLOBAL_LANGUAGES.map((l) => (
+            <li
+              key={l.code}
+              className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm"
+              title={`${l.name} · ${l.code}${l.ga ? '' : ' · preview'}`}
+            >
+              <span className="font-medium">{l.native || l.name}</span>
+              {l.native && l.native !== l.name ? (
+                <span className="ml-1.5 text-text-muted">{l.name}</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
@@ -89,5 +122,92 @@ export function LanguagesOverview() {
 
       <CTABand />
     </MarketingLayout>
+  )
+}
+
+/** Pick a language, then phone the demo and hear it answer in that language.
+ *  The picker feeds DemoOrbCard's `language`, which rides the room metadata
+ *  to the agent so it OPENS in that language — a visitor who picks Japanese
+ *  should not have to first be greeted in Hindi and then correct it. */
+function TryALanguage() {
+  // The native 10 first (that is the product's centre of gravity), then
+  // everything the global voices add, grouped so the list is navigable
+  // rather than one 86-item dropdown.
+  const nativeOptions = useMemo(
+    () => LANGUAGES.map((l) => ({ code: l.code, label: l.name, native: l.native })),
+    [],
+  )
+  const globalOptions = useMemo(
+    () =>
+      GLOBAL_LANGUAGES.map((l) => ({
+        code: l.code,
+        label: l.name,
+        native: l.native || l.name,
+      })),
+    [],
+  )
+  const [code, setCode] = useState('hi-IN')
+  const selected =
+    nativeOptions.find((o) => o.code === code) ?? globalOptions.find((o) => o.code === code)
+
+  return (
+    <section className="mx-auto max-w-7xl px-5 pb-12 md:px-8">
+      <div className="grid items-center gap-8 rounded-3xl border border-border bg-surface p-6 sm:p-10 lg:grid-cols-2">
+        <div>
+          <SectionEyebrow>Try it</SectionEyebrow>
+          <h2 className="mt-4 font-display text-2xl font-bold sm:text-3xl">
+            Pick a language. Then actually talk to it.
+          </h2>
+          <p className="mt-3 text-text-muted">
+            Choose any language below and start the call — Artha will open in it, not default to Hindi
+            and wait to be corrected. Switch language mid-call too: just say so, and it follows you.
+          </p>
+
+          <label
+            htmlFor="demo-language"
+            className="mt-6 block text-xs font-semibold uppercase tracking-wider text-text-muted"
+          >
+            Demo language
+          </label>
+          <select
+            id="demo-language"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className="mt-2 w-full max-w-sm rounded-xl border border-border bg-bg px-4 py-3 text-base font-medium outline-none transition-colors focus:border-primary"
+          >
+            <optgroup label="Indian languages">
+              {nativeOptions.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.label} — {o.native}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Global languages">
+              {globalOptions.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.label}
+                  {o.native && o.native !== o.label ? ` — ${o.native}` : ''}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+          <p className="mt-3 text-xs text-text-muted">
+            {nativeOptions.length + globalOptions.length} languages available on this demo.
+          </p>
+        </div>
+
+        <div className="lg:pl-4">
+          <DemoOrbCard
+            language={code}
+            badgeLabel={selected ? `${selected.label} demo` : 'Live demo'}
+          />
+          <p className="mx-auto mt-3 max-w-[420px] text-center text-xs text-text-muted">
+            Artha will greet you in{' '}
+            <span className="font-semibold text-text">{selected?.label ?? 'Hindi'}</span>. Ask it
+            anything — or switch language halfway and watch it keep up.
+          </p>
+        </div>
+      </div>
+    </section>
   )
 }

@@ -60,6 +60,7 @@ function releaseCallLock(): void {
 export function DemoOrbCard({
   spotlight = false,
   demoSlug,
+  language,
   badgeLabel = 'Live demo',
   accentHue,
 }: {
@@ -67,6 +68,8 @@ export function DemoOrbCard({
   /** Published industry-demo slug (e.g. 'healthcare'). Omitted on the
    * homepage, where the server resolves the platform-demo sales agent. */
   demoSlug?: string
+  /** Open the demo in this language instead of the agent's configured one. */
+  language?: string
   /** Badge in the card corner. Industry pages say what the visitor is
    * actually about to phone ("Clinic demo") rather than a generic label. */
   badgeLabel?: string
@@ -129,7 +132,7 @@ export function DemoOrbCard({
     if (!hasDemoCallsRemaining()) return Promise.resolve(null)
     const identity = randomId('visitor')
     const room = randomId('voice-agent-demo')
-    const request = fetchLiveKitToken(identity, room, undefined, demoSlug)
+    const request = fetchLiveKitToken(identity, room, undefined, demoSlug, language)
       .then(({ token: newToken, url }) => {
         const warmed = { token: newToken, url, identity, room, at: Date.now() }
         prewarmRef.current = warmed
@@ -146,8 +149,17 @@ export function DemoOrbCard({
     return prewarmPromiseRef.current
     // demoSlug decides WHICH agent the prewarmed room dispatches, so it has
     // to be a dependency — a stale closure here would silently warm the
-    // homepage sales agent for an industry page.
-  }, [demoSlug])
+    // homepage sales agent for an industry page. language is baked into the
+    // room's metadata at creation for the same reason.
+  }, [demoSlug, language])
+
+  // A warmed room carries its language in metadata, fixed when the room was
+  // created — so a visitor who warms in Hindi and then picks French would be
+  // handed a room that still opens in Hindi. Drop the warm room on a change
+  // and let the next prewarm create one with the right metadata.
+  useEffect(() => {
+    prewarmRef.current = null
+  }, [language])
 
   // Only counts against the free-call cap once a call actually connects to
   // an agent - a visitor whose call fails end-to-end (LiveKit never joins
@@ -195,7 +207,7 @@ export function DemoOrbCard({
       const isFresh = warm && Date.now() - warm.at < PREWARM_MAX_AGE_MS
       const room = isFresh ? warm.room : randomId('voice-agent-demo')
       const { token: newToken, url } =
-        isFresh ? warm : await fetchLiveKitToken(randomId('visitor'), room, undefined, demoSlug)
+        isFresh ? warm : await fetchLiveKitToken(randomId('visitor'), room, undefined, demoSlug, language)
       prewarmRef.current = null
       lastRoomNameRef.current = room
       setFeedbackSubmitted(false)
@@ -212,7 +224,7 @@ export function DemoOrbCard({
       }
       setPhase('denied')
     }
-  }, [cooldownUntil, prewarm])
+  }, [cooldownUntil, prewarm, demoSlug, language])
 
   // Ending the call shows a brief feedback prompt in the same card (only
   // when the call actually connected to an agent - creditChargedRef mirrors
