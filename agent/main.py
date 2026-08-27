@@ -568,6 +568,29 @@ def _build_stt():
         model="saaras:v3",
         mode="transcribe",
         flush_signal=True,
+        # Sarvam's server-side VAD decides when END_SPEECH fires, which is
+        # what releases the final transcript. Every one of its ten VAD knobs
+        # was left unset, i.e. at Sarvam's defaults: negative_frames_count=18
+        # over a negative_frames_window=24, and one frame is 512 samples =
+        # 32ms at our 16kHz sample_rate. So Sarvam sat through 576ms of
+        # silence before declaring the turn over, on every single turn.
+        #
+        # high_vad_sensitivity is Sarvam's own documented preset for
+        # conversational voice agents: it drops count/window to 2/2, a ~64ms
+        # boundary — 512ms sooner, every turn. It matters for more than the
+        # 512ms: the plugin only waits EOS_FALLBACK_TIMEOUT (1.0s) after
+        # END_SPEECH for the final transcript before giving up and emitting a
+        # bare end-of-speech, which is the "transcript arrives after turn has
+        # been committed" drop this file's EndpointingOptions comment
+        # describes. Firing END_SPEECH earlier moves the whole exchange
+        # further inside that budget rather than racing the edge of it.
+        #
+        # Deliberately the documented preset rather than hand-picked frame
+        # counts: max_delay has already been lowered twice on latency
+        # reasoning and reintroduced that drop both times. This changes only
+        # the STT side and leaves max_delay=4.0 alone until measurement shows
+        # finalization actually got faster.
+        high_vad_sensitivity=True,
     )
     if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
         return sarvam_stt
