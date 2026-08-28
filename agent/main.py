@@ -2704,13 +2704,14 @@ async def entrypoint(ctx: JobContext) -> None:
             if extracted:
                 db.set_call_extracted_data(saved_call_id, extracted)
 
-        background_audio = background_audio_holder["player"]
-        if background_audio is not None:
-            try:
-                await background_audio.aclose()
-            except Exception:
-                logger.exception("failed to close background audio for room %s", ctx.room.name)
-
+        # ORDER MATTERS. The recorder used to stop AFTER the ambience player
+        # was closed, and aclose() can hang: on an ambience-enabled call the
+        # shutdown callback never reached recorder.stop() at all — no
+        # "recording: stop() called" line in the logs, just "process did not
+        # exit in time, killing process" — and the audio was lost. Recordings
+        # saved 7/7 with ambience off and 11/36 with it on, which is the same
+        # fact from the other side. The recording is the durable artifact, so
+        # it is finalised first and the ambience player is torn down after.
         recorder = recorder_holder["recorder"]
         if recorder is not None:
             try:
@@ -2726,6 +2727,18 @@ async def entrypoint(ctx: JobContext) -> None:
                         db.set_call_recording(saved_call_id, key)
             except Exception:
                 logger.exception("failed to finalize recording for room %s", ctx.room.name)
+
+        background_audio = background_audio_holder["player"]
+        if background_audio is not None:
+            try:
+                # Bounded: an aclose() that never returns must not be able to
+                # hold the whole shutdown callback open. The worker is going
+                # away anyway, so a leaked player costs nothing.
+                await asyncio.wait_for(background_audio.aclose(), timeout=3)
+            except asyncio.TimeoutError:
+                logger.warning("background audio aclose() timed out for room %s", ctx.room.name)
+            except Exception:
+                logger.exception("failed to close background audio for room %s", ctx.room.name)
         # A separate, comprehensive delivery at call end — unlike the
         # mid-call capture_lead/book_appointment fan-outs (small structured
         # events for fast CRM visibility during the call), this one carries

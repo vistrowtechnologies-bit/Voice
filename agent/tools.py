@@ -558,6 +558,29 @@ async def check_calendar_availability(
         except BaseException:
             pass
         raise
+    # A clinic asks what is wrong BEFORE reading out appointment times. The
+    # prompt has said so for two deploys and the model ignored it both times:
+    # call 720 answered "अपॉइंटमेंट के लिए" with "एक मिनट—डॉक्टर के स्लॉट्स
+    # चेक कर रही हूँ" and three times, and the caller had to ask twice to be
+    # asked what was actually wrong. Instruction alone does not carry it, so
+    # the tool refuses once instead: the first availability check of a
+    # healthcare call returns the question to ask rather than the slots.
+    #
+    # One-shot by design. The flag is set as it fires, so the next call goes
+    # through whatever the caller said — a patient who will not describe their
+    # problem still gets an appointment, they just get asked first.
+    _agent = context.session.current_agent
+    if getattr(_agent, "_public_demo_slug", "") == "healthcare" and not getattr(
+        _agent, "_asked_visit_reason", False
+    ):
+        _agent._asked_visit_reason = True
+        return (
+            "STOP — do not offer any times yet, and do not mention slots or availability. "
+            "You have not asked why they are coming in. Ask exactly one short, plain, "
+            "non-diagnostic question now — \"क्या परेशानी हो रही है?\" — wait for their answer, "
+            "and only then call this tool again to offer times."
+        )
+
     if slots is None:
         # A native calendar always exists now — None here means the DB call
         # itself failed. Don't invent slots; hand off honestly.
