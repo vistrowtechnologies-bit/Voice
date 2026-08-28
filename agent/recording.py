@@ -28,6 +28,9 @@ logger = logging.getLogger("recording")
 _SAMPLE_RATE = 16000
 
 
+_AMBIENCE_TRACK_NAME = "background_audio"
+
+
 class CallRecorder:
     """Tapes both sides of one call into a single mono WAV, both sides mixed
     together rather than hard-panned to a channel — a hard L/R split sounds
@@ -54,8 +57,22 @@ class CallRecorder:
         # so a track is never recorded twice.
         seen_sids: set[str] = set()
 
-        def _capture_if_audio(track, sid: str, chunks: list[bytes], side: str) -> None:
+        def _capture_if_audio(track, sid: str, chunks: list[bytes], side: str, name: str = "") -> None:
             if sid in seen_sids:
+                return
+            # The ambience bed is a SECOND local audio track, published
+            # alongside the agent's voice and streaming for the whole call.
+            # Both were being pumped into the same _agent_chunks list, so the
+            # agent side roughly doubled in size and the finalize (build WAV,
+            # then upload) ran long enough inside LiveKit's shutdown callback
+            # to be killed before set_call_recording could run — "process did
+            # not exit in time, killing process". Recordings saved 7/7 on
+            # agents with ambience off and 11/36 with it on.
+            #
+            # Skipping it also gives a cleaner recording: what was actually
+            # said, without a loop of office noise mixed under it.
+            if name and _AMBIENCE_TRACK_NAME in name.lower():
+                logger.info("recording: skipping ambience track sid=%s name=%s", sid, name)
                 return
             if track.kind != rtc.TrackKind.KIND_AUDIO:
                 logger.info("recording: skipping non-audio track sid=%s kind=%s side=%s", sid, track.kind, side)
@@ -76,7 +93,9 @@ class CallRecorder:
 
         for pub in local_pubs:
             if pub.track is not None:
-                _capture_if_audio(pub.track, pub.sid, self._agent_chunks, "agent")
+                _capture_if_audio(
+                    pub.track, pub.sid, self._agent_chunks, "agent", getattr(pub, "name", "") or ""
+                )
             else:
                 logger.info("recording: local publication sid=%s has no track yet", pub.sid)
 
@@ -87,8 +106,10 @@ class CallRecorder:
                 logger.info("recording: remote publication sid=%s has no track yet", pub.sid)
 
         def _on_local_published(pub, track) -> None:
-            logger.info("recording: local_track_published event sid=%s", pub.sid)
-            _capture_if_audio(track, pub.sid, self._agent_chunks, "agent")
+            logger.info("recording: local_track_published event sid=%s name=%s", pub.sid, getattr(pub, "name", ""))
+            _capture_if_audio(
+                track, pub.sid, self._agent_chunks, "agent", getattr(pub, "name", "") or ""
+            )
 
         def _on_remote_subscribed(track, pub, participant) -> None:
             logger.info("recording: track_subscribed event sid=%s", pub.sid)
