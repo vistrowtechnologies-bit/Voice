@@ -4,6 +4,7 @@ import logging
 import os
 import random
 import re
+from datetime import datetime
 
 import aiohttp
 from livekit.agents import RunContext
@@ -179,6 +180,51 @@ _HINDI_HOUR_WORDS = {
     1: "एक", 2: "दो", 3: "तीन", 4: "चार", 5: "पाँच", 6: "छह", 7: "सात",
     8: "आठ", 9: "नौ", 10: "दस", 11: "ग्यारह", 12: "बारह",
 }
+
+
+_HINDI_DAY_NUMBERS = {
+    1: "एक", 2: "दो", 3: "तीन", 4: "चार", 5: "पाँच", 6: "छह", 7: "सात",
+    8: "आठ", 9: "नौ", 10: "दस", 11: "ग्यारह", 12: "बारह", 13: "तेरह",
+    14: "चौदह", 15: "पंद्रह", 16: "सोलह", 17: "सत्रह", 18: "अठारह",
+    19: "उन्नीस", 20: "बीस", 21: "इक्कीस", 22: "बाईस", 23: "तेईस",
+    24: "चौबीस", 25: "पच्चीस", 26: "छब्बीस", 27: "सत्ताईस", 28: "अट्ठाईस",
+    29: "उनतीस", 30: "तीस", 31: "इकतीस",
+}
+_HINDI_MONTHS = {
+    1: "जनवरी", 2: "फ़रवरी", 3: "मार्च", 4: "अप्रैल", 5: "मई", 6: "जून",
+    7: "जुलाई", 8: "अगस्त", 9: "सितंबर", 10: "अक्टूबर", 11: "नवंबर",
+    12: "दिसंबर",
+}
+# Monday-first, matching date.weekday().
+_HINDI_WEEKDAYS = [
+    "सोमवार", "मंगलवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार", "रविवार",
+]
+
+
+def _spoken_date(iso_date: str, language: str) -> str:
+    """A ready-made spoken phrase for a "YYYY-MM-DD" date, for exactly the
+    same reason _spoken_slot_time exists below.
+
+    Confirmed real failure (call 710): offered a Saturday, the model said
+    "शनिवार को अड़तीस अगस्त" — Saturday the THIRTY-EIGHTH of August. There is
+    no 38 August; the real date was the 29th. Asked what today was, the same
+    call answered "तीस अगस्त" (the 30th) on the 27th, despite the prompt
+    carrying the date as the only source of truth. Times were fixed this way
+    after "दस बत्तीस"; dates were left to the model and invent themselves the
+    same way. Non-Hindi is returned unchanged — reading digits does not carry
+    this failure.
+    """
+    if not language.startswith("hi"):
+        return iso_date
+    try:
+        d = datetime.strptime(iso_date, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return iso_date
+    day = _HINDI_DAY_NUMBERS.get(d.day)
+    month = _HINDI_MONTHS.get(d.month)
+    if not day or not month:
+        return iso_date
+    return f"{_HINDI_WEEKDAYS[d.weekday()]}, {day} {month}"
 
 
 def _spoken_slot_time(hhmm: str, language: str) -> str:
@@ -542,6 +588,11 @@ async def check_calendar_availability(
         spoken = _spoken_slot_time(hhmm, reply_language)
         return hhmm if spoken == hhmm else f"{hhmm} (say: \"{spoken}\")"
 
+    # Same treatment for the DATE. Left to itself the model turned
+    # 2026-08-29 into "अड़तीस अगस्त" — the 38th of August (see _spoken_date).
+    _spoken_day = _spoken_date(date, reply_language)
+    date_phrase = date if _spoken_day == date else f"{date} (say: \"{_spoken_day}\")"
+
     if requested_time:
         # Deterministic exact-match check instead of leaving the model to
         # scan a long comma list itself — a 2026-08-03 real call had the
@@ -551,12 +602,12 @@ async def check_calendar_availability(
         # the caller just asked for.
         if requested_time in slots:
             return (
-                f"YES — {requested_time} on {date} IS available. Offer it back to the caller ({_say(requested_time)}) "
+                f"YES — {requested_time} on {date_phrase} IS available. Offer it back to the caller ({_say(requested_time)}) "
                 f"and book it if they confirm; do not claim it's unavailable."
             )
         alternatives = slots[:3]
         return (
-            f"NO — {requested_time} on {date} is NOT available (already booked or outside business hours). "
+            f"NO — {requested_time} on {date_phrase} is NOT available (already booked or outside business hours). "
             f"Do not offer {requested_time}. Offer only these alternatives: "
             f"{', '.join(_say(s) for s in alternatives)}."
         )
@@ -570,7 +621,7 @@ async def check_calendar_availability(
     else:
         choices = [slots[0], slots[len(slots) // 2], slots[-1]]
     return (
-        f"Offer ONLY these open choices on {date}: {', '.join(_say(c) for c in choices)}. "
+        f"Offer ONLY these open choices on {date_phrase}: {', '.join(_say(c) for c in choices)}. "
         "Where a \"(say: ...)\" phrase is given, speak that phrase, not the raw digits before it — "
         "it's there so the time is pronounced correctly. Do not mention any other time or read a "
         "full-day list. If none suits, ask whether the caller prefers morning, afternoon, or evening, "
@@ -632,6 +683,11 @@ async def book_appointment(
         # read — an "appointment" key here would silently vanish, saved
         # nowhere and shown nowhere.
         lead_data["site_visit"] = {"date": date, "time": time, "purpose": purpose}
+    # Spoken form of the date for the model to read back, so a booking
+    # confirmation cannot invent "38 August" the way the slot offer did.
+    _bk_lang = getattr(context.session.current_agent, "_reply_language", "en-IN")
+    _bk_spoken = _spoken_date(date, _bk_lang)
+    _bk_date = date if _bk_spoken == date else f'{date} (say: "{_bk_spoken}")'
     async with context.with_filler(_TOOL_FILLER_TEXT, delay=0.6):
         result = await _calendar_book(context, date, time, duration_minutes, name, phone, purpose)
         event = {
@@ -649,7 +705,7 @@ async def book_appointment(
         # Recorded on the lead + pushed to integrations, but the native
         # calendar DB call failed — be honest rather than claim a slot exists.
         return (
-            f"Noted the appointment request for {name} on {date} at {time}. "
+            f"Noted the appointment request for {name} on {_bk_date} at {time}. "
             "Tell the caller the team will confirm it shortly."
         )
     if not result.get("ok", True):
@@ -658,7 +714,9 @@ async def book_appointment(
             "Offer the caller another time."
         )
     context.session.current_agent._booking_confirmed_this_turn = True
-    return f"Appointment confirmed for {name} on {date} at {time}. Confirm it warmly to the caller."
+    return (
+        f"Appointment confirmed for {name} on {_bk_date} at {time}. Confirm it warmly to the caller."
+    )
 
 
 @function_tool

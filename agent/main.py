@@ -1131,7 +1131,17 @@ class RealEstateAgent(Agent):
                         "forward — that is always better than an invented answer.\n"
                         "- Your general real-estate expertise is still fine for generic concepts "
                         "(what RERA is, how home loans work); strictness applies to THIS "
-                        "business's specific facts.\n\n" + kb
+                        "business's specific facts.\n"
+                        "- OPENING HOURS AND WORKING DAYS are facts like any other. Asked the same "
+                        "question twice, give the SAME answer — a real call answered \"Monday, "
+                        "Wednesday, Friday 10-1\" (correct, from the knowledge base) and then, asked "
+                        "again, \"Monday to Friday 10-1 and 4-7, Saturday 10-1\", which appears "
+                        "nowhere in it. Never widen hours, add an evening session, or add a day.\n"
+                        "- check_calendar_availability returns the BUSINESS's open slots. It does "
+                        "not know which staff member works which days. If the knowledge base gives "
+                        "a specific person's days or hours, a slot outside them is NOT bookable "
+                        "with that person — say which days they actually work and offer one of "
+                        "those instead.\n\n" + kb
                     )
                 else:
                     instructions += (
