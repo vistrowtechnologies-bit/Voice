@@ -294,6 +294,27 @@ _FACT_LOOKUP_PATTERN = re.compile(
 # This does not itself perform the lookup; it adds a last-moment instruction
 # that makes the model call check_calendar_availability instead of treating a
 # doctor's published working hours as proof that a real slot is free.
+# A caller asking to be spoken to in another language. Same reinforcement
+# pattern as _APPOINTMENT_INTENT_PATTERN below, for a failure confirmed three
+# times in one day: the prompt says never to claim a fixed number of
+# languages and never to fall back to Hindi or English, and the model refused
+# anyway — "I'm sorry, but I can only respond in Hindi" to a caller asking for
+# ENGLISH, which is one of the eleven native languages, on a voice that
+# speaks 87. Instructions did not carry it; a last-moment instruction on the
+# exact turn does.
+_LANGUAGE_REQUEST_PATTERN = re.compile(
+    r"\b(speak|talk|say|reply|respond|switch)\b[^.?!]{0,30}\b(in|to)\b[^.?!]{0,20}"
+    r"(english|hindi|marathi|tamil|telugu|kannada|malayalam|gujarati|bengali|bangla|"
+    r"punjabi|odia|french|german|spanish|japanese|korean|arabic|mandarin|chinese|"
+    r"russian|italian|portuguese|dutch|urdu|nepali)\b|"
+    r"\b(in|into)\s+(english|hindi|marathi|french|japanese|bengali|marathi)\b|"
+    r"में\s*(बात|बोल)|"
+    r"(अंग्रेज़ी|अंग्रेजी|हिंदी|हिन्दी|मराठी|तमिल|तेलुगु|कन्नड़|मलयालम|गुजराती|बंगाली|बांग्ला|"
+    r"पंजाबी|उड़िया|फ्रेंच|जर्मन|स्पेनिश|जापानी|अरबी|चीनी|रूसी)|"
+    r"मध्ये\s*बोला|বলুন|பேசு",
+    re.IGNORECASE,
+)
+
 _APPOINTMENT_INTENT_PATTERN = re.compile(
     r"\b(appointment|availability|available|slot|book|booking|schedule|site visit|"
     r"come at|visit at|doctor available)\b|"
@@ -1137,6 +1158,15 @@ class RealEstateAgent(Agent):
                         "Wednesday, Friday 10-1\" (correct, from the knowledge base) and then, asked "
                         "again, \"Monday to Friday 10-1 and 4-7, Saturday 10-1\", which appears "
                         "nowhere in it. Never widen hours, add an evening session, or add a day.\n"
+                        "- Asked which doctors, staff, services or departments exist, name ALL of "
+                        "them from the knowledge base, not only the one you already suggested — a "
+                        "real call answered \"Dr Meera Joshi\" to \"which other doctors do you "
+                        "have\", then produced a dermatologist one turn later when asked about "
+                        "skin. Withholding what you know reads as not having it.\n"
+                        "- Never add an opinion the knowledge base does not contain. Declining to "
+                        "give a doctor's experience and then calling her \"a good doctor\" in the "
+                        "same breath is still inventing a fact. Distances and travel times are "
+                        "facts too — do not state them unless they are written down.\n"
                         "- check_calendar_availability returns the BUSINESS's open slots. It does "
                         "not know which staff member works which days. If the knowledge base gives "
                         "a specific person's days or hours, a slot outside them is NOT bookable "
@@ -1758,6 +1788,16 @@ class RealEstateAgent(Agent):
             if _appointment_turn
             else ""
         )
+        _language_request_instruction = (
+            "The caller's last message asks you to speak a different language. Call "
+            "switch_reply_language with that language's plain English name BEFORE your next "
+            "reply, then answer in it. You speak every language listed in your prompt — do NOT "
+            "say you can only speak Hindi, do not claim a limited set, and do not offer to "
+            "continue in the current language instead. If you genuinely cannot, the tool tells "
+            "you so; you do not decide that yourself."
+            if _LANGUAGE_REQUEST_PATTERN.search(text)
+            else ""
+        )
         _healthcare_safety_instruction = (
             "This healthcare caller has already described pain or symptoms. Treat that as the active "
             "reason for the visit: do not suggest unrelated specialties, and do not make them repeat it. "
@@ -1798,6 +1838,7 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _personality_instruction if _personality_instruction else "")
             + ("\n\n" + _industry_turn_instruction if _industry_turn_instruction else "")
             + ("\n\n" + _industry_empathy_instruction if _industry_empathy_instruction else "")
+            + ("\n\n" + _language_request_instruction if _language_request_instruction else "")
             + ("\n\n" + _appointment_instruction if _appointment_instruction else "")
             + ("\n\n" + _healthcare_safety_instruction if _healthcare_safety_instruction else "")
             + ("\n\n" + _search_instruction if _search_instruction else ""),

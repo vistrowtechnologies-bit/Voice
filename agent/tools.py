@@ -525,6 +525,33 @@ async def check_calendar_availability(
     Call this before offering times so you only offer slots that are actually
     free. Works for any business (clinic, salon, property visit, consultation).
 
+    # A clinic asks what is wrong BEFORE reading out appointment times.
+    # This runs FIRST, ahead of the spoken filler and the calendar lookup:
+    # placed after them the agent said "डॉक्टर के स्लॉट्स चेक कर रही हूँ"
+    # and THEN asked what the problem was, which is incoherent — and it
+    # queried the calendar for an answer it was about to throw away. The
+    # prompt has said so for two deploys and the model ignored it both times:
+    # call 720 answered "अपॉइंटमेंट के लिए" with "एक मिनट—डॉक्टर के स्लॉट्स
+    # चेक कर रही हूँ" and three times, and the caller had to ask twice to be
+    # asked what was actually wrong. Instruction alone does not carry it, so
+    # the tool refuses once instead: the first availability check of a
+    # healthcare call returns the question to ask rather than the slots.
+    #
+    # One-shot by design. The flag is set as it fires, so the next call goes
+    # through whatever the caller said — a patient who will not describe their
+    # problem still gets an appointment, they just get asked first.
+    _agent = context.session.current_agent
+    if getattr(_agent, "_public_demo_slug", "") == "healthcare" and not getattr(
+        _agent, "_asked_visit_reason", False
+    ):
+        _agent._asked_visit_reason = True
+        return (
+            "STOP — do not offer any times yet, and do not mention slots or availability. "
+            "You have not asked why they are coming in. Ask exactly one short, plain, "
+            "non-diagnostic question now — \"क्या परेशानी हो रही है?\" — wait for their answer, "
+            "and only then call this tool again to offer times."
+        )
+
     Args:
         date: The date to check, in YYYY-MM-DD format.
         duration_minutes: How long the appointment needs to be. Default 30.
@@ -558,29 +585,6 @@ async def check_calendar_availability(
         except BaseException:
             pass
         raise
-    # A clinic asks what is wrong BEFORE reading out appointment times. The
-    # prompt has said so for two deploys and the model ignored it both times:
-    # call 720 answered "अपॉइंटमेंट के लिए" with "एक मिनट—डॉक्टर के स्लॉट्स
-    # चेक कर रही हूँ" and three times, and the caller had to ask twice to be
-    # asked what was actually wrong. Instruction alone does not carry it, so
-    # the tool refuses once instead: the first availability check of a
-    # healthcare call returns the question to ask rather than the slots.
-    #
-    # One-shot by design. The flag is set as it fires, so the next call goes
-    # through whatever the caller said — a patient who will not describe their
-    # problem still gets an appointment, they just get asked first.
-    _agent = context.session.current_agent
-    if getattr(_agent, "_public_demo_slug", "") == "healthcare" and not getattr(
-        _agent, "_asked_visit_reason", False
-    ):
-        _agent._asked_visit_reason = True
-        return (
-            "STOP — do not offer any times yet, and do not mention slots or availability. "
-            "You have not asked why they are coming in. Ask exactly one short, plain, "
-            "non-diagnostic question now — \"क्या परेशानी हो रही है?\" — wait for their answer, "
-            "and only then call this tool again to offer times."
-        )
-
     if slots is None:
         # A native calendar always exists now — None here means the DB call
         # itself failed. Don't invent slots; hand off honestly.
@@ -644,6 +648,16 @@ async def check_calendar_availability(
     else:
         choices = [slots[0], slots[len(slots) // 2], slots[-1]]
     return (
+        # These are the BUSINESS's open times. The tool has no idea which
+        # staff member works which days, and the prompt rule saying so was
+        # ignored: call 721 correctly stated Dr Meera works Mon/Wed/Fri 10-1,
+        # then offered 3pm and 6:30pm and booked Saturday. Carrying the
+        # constraint in the tool result puts it in front of the model at the
+        # moment it chooses, not paragraphs earlier.
+        f"These are the BUSINESS's open times, not any one person's. If you have named a "
+        f"specific doctor or staff member, offer ONLY times that fall inside that person's days "
+        f"and hours as written in the knowledge base — if none of these do, say which days they "
+        f"actually work and offer one of those instead of booking one of these. "
         f"Offer ONLY these open choices on {date_phrase}: {', '.join(_say(c) for c in choices)}. "
         "Where a \"(say: ...)\" phrase is given, speak that phrase, not the raw digits before it — "
         "it's there so the time is pronounced correctly. Do not mention any other time or read a "
