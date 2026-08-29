@@ -201,6 +201,126 @@ _HINDI_WEEKDAYS = [
 ]
 
 
+_WEEKDAY_NAMES = {
+    "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+    "friday": 4, "saturday": 5, "sunday": 6,
+}
+# "General Physician — Dr. Meera Joshi. Monday, Wednesday, Friday, 10 AM-1 PM."
+_PRACTITIONER_LINE = re.compile(
+    r"(?:Dr\.?|Doctor)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[.\-—:]\s*(.+?)(?:\.|$)",
+    re.MULTILINE,
+)
+_TIME_RANGE = re.compile(
+    r"(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*[-–—to]+\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)",
+    re.IGNORECASE,
+)
+
+
+def _to_24h(hour: str, minute: str | None, meridiem: str) -> int:
+    h = int(hour) % 12
+    if meridiem.upper() == "PM":
+        h += 12
+    return h * 60 + int(minute or 0)
+
+
+def _parse_practitioners(kb_text: str) -> dict[str, dict]:
+    """{surname_lower: {"name", "days": set[int], "start": mins, "end": mins}}
+
+    Parsed from the knowledge base rather than configured, because the
+    calendar genuinely does not model per-person hours and the operator
+    writes them in the handbook. Only lines that carry BOTH weekday names and
+    a time range are used; anything else is skipped rather than guessed at.
+    """
+    out: dict[str, dict] = {}
+    for m in _PRACTITIONER_LINE.finditer(kb_text or ""):
+        name, rest = m.group(1).strip(), m.group(2)
+        days = {v for k, v in _WEEKDAY_NAMES.items() if k in rest.lower()}
+        if "every day" in rest.lower():
+            days = set(range(7))
+        tr = _TIME_RANGE.search(rest)
+        if not days or not tr:
+            continue
+        entry = {
+            "name": name,
+            "days": days,
+            "start": _to_24h(tr.group(1), tr.group(2), tr.group(3)),
+            "end": _to_24h(tr.group(4), tr.group(5), tr.group(6)),
+        }
+        for key in name.lower().split():
+            out.setdefault(key, entry)
+        out[name.lower()] = entry
+    return out
+
+
+# The agent speaks Hindi, so it writes the doctor's name in Devanagari
+# ("डॉ. मीरा जोशी") while the knowledge base spells it in Latin ("Dr. Meera
+# Joshi"). Matching the two by string fails every time on a Hindi call, which
+# would leave the hours check dead exactly where it is needed. Comparing
+# consonant skeletons ("मीरा" -> mr, "Meera" -> mr) crosses the scripts
+# without needing a real transliterator.
+_DEVA_CONSONANTS = {
+    "क": "k", "ख": "k", "ग": "g", "घ": "g", "च": "c", "छ": "c", "ज": "j",
+    "झ": "j", "ट": "t", "ठ": "t", "ड": "d", "ढ": "d", "ण": "n", "त": "t",
+    "थ": "t", "द": "d", "ध": "d", "न": "n", "प": "p", "फ": "p", "ब": "b",
+    "भ": "b", "म": "m", "य": "y", "र": "r", "ल": "l", "व": "v", "श": "s",
+    "ष": "s", "स": "s", "ह": "h", "ज़": "j", "ड़": "d", "फ़": "f",
+}
+_LATIN_DIGRAPHS = (
+    ("sh", "s"), ("ch", "c"), ("th", "t"), ("ph", "p"), ("kh", "k"),
+    ("gh", "g"), ("jh", "j"), ("dh", "d"), ("bh", "b"),
+)
+
+
+def _name_skeleton(word: str) -> str:
+    """Consonants only, script-independent, so a Devanagari spelling and a
+    Latin one for the same name collapse to the same key."""
+    if any(ch in _DEVA_CONSONANTS for ch in word):
+        out = "".join(_DEVA_CONSONANTS.get(ch, "") for ch in word)
+    else:
+        w = word.lower()
+        for a, b in _LATIN_DIGRAPHS:
+            w = w.replace(a, b)
+        out = "".join(ch for ch in w if ch.isalpha() and ch not in "aeiou")
+    # Collapse runs so "joshi"/"जोशी" don't diverge on a doubled consonant.
+    squashed = ""
+    for ch in out:
+        if not squashed or squashed[-1] != ch:
+            squashed += ch
+    return squashed
+
+
+def _named_practitioner(context, table: dict[str, dict]) -> dict | None:
+    """Whichever practitioner this conversation is actually about.
+
+    Read from the recent turns rather than asked of the model: putting the
+    constraint in the tool's own reply was ignored in 0/4 replays of the real
+    call, so nothing here may depend on the model volunteering a name.
+    """
+    try:
+        items = context.session.history.items
+    except Exception:
+        return None
+    skeletons: dict[str, dict] = {}
+    for entry in table.values():
+        for part in entry["name"].split():
+            sk = _name_skeleton(part)
+            if len(sk) >= 2:
+                skeletons.setdefault(sk, entry)
+    for item in reversed(items[-8:]):
+        raw = getattr(item, "text_content", None) or ""
+        text = raw.lower()
+        for key, entry in table.items():
+            if key in text:
+                return entry
+        for word in re.split(r"[\s,.।:;()]+", raw):
+            if len(word) < 3:
+                continue
+            hit = skeletons.get(_name_skeleton(word))
+            if hit:
+                return hit
+    return None
+
+
 def _spoken_date(iso_date: str, language: str) -> str:
     """A ready-made spoken phrase for a "YYYY-MM-DD" date, for exactly the
     same reason _spoken_slot_time exists below.
@@ -594,6 +714,42 @@ async def check_calendar_availability(
         )
     if not slots:
         return f"No open slots on {date}. Offer the caller a different day."
+
+    # The calendar is business-wide and knows nothing about who works when,
+    # so a clinic will happily offer Saturday 6:30pm for a doctor who works
+    # Mon/Wed/Fri 10-1 — which is exactly what call 721 booked. Saying so in
+    # the prompt did not hold, and saying so in this tool's own reply did not
+    # either: replayed against the real prompt and model, it offered the
+    # out-of-hours slots in 4 of 4 attempts. So the impossible times are
+    # removed here instead of being described, and never reach the model.
+    _kb_id = getattr(_agent, "_kb_id", None)
+    if _kb_id:
+        try:
+            _who = _named_practitioner(context, _parse_practitioners(db.get_kb_content(_kb_id)))
+        except Exception:
+            logger.warning("practitioner-hours check failed", exc_info=True)
+            _who = None
+        if _who:
+            _names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            _wd = datetime.strptime(date, "%Y-%m-%d").date().weekday()
+            _days = ", ".join(_names[d] for d in sorted(_who["days"]))
+            if _wd not in _who["days"]:
+                return (
+                    f"Dr. {_who['name']} does NOT work on {_names[_wd]}. Do not offer any time on "
+                    f"{date} for them. Tell the caller Dr. {_who['name']} sees patients on "
+                    f"{_days}, and ask which of those days suits — then check that day."
+                )
+            _within = [
+                t for t in slots
+                if _who["start"] <= int(t[:2]) * 60 + int(t[3:5]) < _who["end"]
+            ]
+            if not _within:
+                return (
+                    f"Dr. {_who['name']} works {_days}, {_who['start'] // 60}:00-"
+                    f"{_who['end'] // 60}:00, and nothing inside those hours is free on {date}. "
+                    f"Say so and offer another of their days."
+                )
+            slots = _within
     # Confirmed real failure: a caller who hadn't named a time got all
     # sixteen open slots for the day read out in one breath ("10, 10:30,
     # 11, 11:30, 12, 12:30..."), which is the exact IVR-menu monologue this

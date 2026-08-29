@@ -1042,6 +1042,9 @@ class RealEstateAgent(Agent):
         voice_value = config.get("voice") or "shubh"
         self._is_platform_demo = bool(config.get("is_platform_demo"))
         self._public_demo_slug = (config.get("public_demo_slug") or "").strip().lower()
+        # tools.py needs the knowledge base to enforce a named practitioner's
+        # working days against the calendar's business-wide slots.
+        self._kb_id = config.get("kb_id")
         self._healthcare_symptom_mentioned = False
         self._booking_confirmed_this_turn = False
         self._agent_name = agent_name
