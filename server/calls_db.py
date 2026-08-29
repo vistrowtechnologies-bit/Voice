@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS agents (
     account_id INTEGER,
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
-    model TEXT DEFAULT 'gpt-4.1',
+    model TEXT DEFAULT 'gpt-4.1-mini',
     voice TEXT DEFAULT 'pooja',
     language TEXT DEFAULT 'hi-IN',
     status TEXT DEFAULT 'live',
@@ -2654,7 +2654,16 @@ def create_agent(data: dict, account_id: int) -> dict:
                     account_id,
                     data.get("name", "Unnamed agent"),
                     data.get("description", ""),
-                    data.get("model", "gpt-4.1"),
+                    # gpt-4.1 was the default and is the worst choice on every
+                    # axis that matters here: 30,000 TPM against gpt-4.1-mini's
+                    # 200,000 (about three conversational turns a minute before
+                    # OpenAI starts refusing, on the tier this account is on),
+                    # five times the vendor cost per call, and premium_plus, so
+                    # it burns the tenant's credits at 4x instead of 2x. Cloned
+                    # agents already defaulted to gpt-4.1-mini a few hundred
+                    # lines up; the two paths just disagreed. Existing agents
+                    # keep whatever they were configured with.
+                    data.get("model", "gpt-4.1-mini"),
                     data.get("voice", "shubh"),
                     data.get("language", "hi-IN"),
                     data.get("systemPrompt", ""),
