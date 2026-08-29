@@ -315,6 +315,34 @@ _LANGUAGE_REQUEST_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Which department a complaint belongs to. Deterministic because the prompt
+# got this exactly backwards: the healthcare nudge below used to end with
+# "offer the one relevant general physician ... not a directory of
+# pediatrics, dermatology, or orthopedics", written to stop the agent
+# reciting a specialty list, and it read as "always send them to the GP".
+# Call 725: a caller with two days of lower-tooth pain was told to see the
+# general physician, mid-way through a dental booking he had already chosen.
+_DEPARTMENT_PATTERNS: list[tuple[str, "re.Pattern[str]"]] = [
+    ("Dentistry", re.compile(
+        r"\b(tooth|teeth|dental|dentist|gum|cavity|molar)\b|दांत|दाँत|दात|मसूड़|डेंट", re.I)),
+    ("Dermatology", re.compile(
+        r"\b(skin|rash|acne|eczema|derma|pimple|itch)\b|त्वचा|स्किन|खुजली|दाने|मुँहासे", re.I)),
+    ("Orthopaedics", re.compile(
+        r"\b(bone|joint|knee|back pain|fracture|sprain|ortho|shoulder)\b|"
+        r"हड्डी|घुटन|जोड़|कमर दर्द|कंधा|मोच", re.I)),
+    ("Paediatrics", re.compile(
+        r"\b(child|kid|baby|infant|paediatric|pediatric|son|daughter)\b|"
+        r"बच्च|बेटा|बेटी|शिशु", re.I)),
+]
+
+
+def _department_for(text: str) -> str | None:
+    for name, pattern in _DEPARTMENT_PATTERNS:
+        if pattern.search(text or ""):
+            return name
+    return None
+
+
 _APPOINTMENT_INTENT_PATTERN = re.compile(
     r"\b(appointment|availability|available|slot|book|booking|schedule|site visit|"
     r"come at|visit at|doctor available)\b|"
@@ -1046,6 +1074,12 @@ class RealEstateAgent(Agent):
         # working days against the calendar's business-wide slots.
         self._kb_id = config.get("kb_id")
         self._healthcare_symptom_mentioned = False
+        # Set from the caller's first recognisable complaint; see the capture
+        # in on_user_turn_completed.
+        self._chosen_department: str | None = None
+        # Set by book_appointment. Once true the booking is done and the
+        # call closes: no more clinical questions.
+        self._appointment_booked = False
         self._booking_confirmed_this_turn = False
         self._agent_name = agent_name
         self._visitor_first_name = visitor_name.strip().split()[0] if visitor_name else None
@@ -1621,6 +1655,12 @@ class RealEstateAgent(Agent):
 
         if self._public_demo_slug == "healthcare" and _HEALTHCARE_SYMPTOM_PATTERN.search(text):
             self._healthcare_symptom_mentioned = True
+        # First department wins and then never changes. Call 725 took a dental
+        # booking and three turns later talked the caller into a general
+        # physician; a caller who has chosen a department should not be moved
+        # out of it by anything said afterwards.
+        if self._public_demo_slug == "healthcare" and self._chosen_department is None:
+            self._chosen_department = _department_for(text)
 
         detected_gender = _detect_caller_gender(text)
         if detected_gender:
@@ -1801,13 +1841,35 @@ class RealEstateAgent(Agent):
             if _LANGUAGE_REQUEST_PATTERN.search(text)
             else ""
         )
+        # After the booking there is nothing clinical left to ask. Call 725
+        # confirmed the appointment and then asked "क्या यह दर्द ज्यादा गंभीर
+        # है?" three more times, which is what made it sound like a machine.
+        _post_booking_instruction = (
+            "The appointment is CONFIRMED. Stop asking clinical questions — no more asking whether "
+            "the pain is severe, what the symptoms are, or which department they need; that is all "
+            "settled. Do not re-open the booking or offer another department. Confirm once in this "
+            "shape: thank them by name, state the department, the day and the time, ask them to "
+            "arrive ten minutes early, and ask if there is anything else you can help with. If "
+            "they say no, close the call warmly and stop."
+            if self._appointment_booked
+            else ""
+        )
         _healthcare_safety_instruction = (
             "This healthcare caller has already described pain or symptoms. Treat that as the active "
             "reason for the visit: do not suggest unrelated specialties, and do not make them repeat it. "
             "Use one brief, calm acknowledgment; ask only whether it is severe/urgent or whether there "
-            "are emergency warning signs if that has not been established. For ordinary clinic routing, "
-            "offer the one relevant general physician from verified clinic knowledge—not a directory of "
-            "pediatrics, dermatology, or orthopedics. Never diagnose."
+            "are emergency warning signs if that has not been established. Route to the department "
+            "the COMPLAINT belongs to, taken from the knowledge base — never default everyone to the "
+            "general physician, and never read out a list of specialties. Once a department is "
+            "chosen, it is fixed for the rest of the call: do not move the caller to another one "
+            "later, and never after an appointment is booked. Never diagnose."
+            + (
+                f"\nThis caller's complaint is a {self._chosen_department} matter. Book them with "
+                f"the {self._chosen_department} doctor named in the knowledge base and with nobody "
+                f"else, however the conversation continues."
+                if self._chosen_department
+                else ""
+            )
             if self._public_demo_slug == "healthcare" and self._healthcare_symptom_mentioned
             else ""
         )
@@ -1844,6 +1906,7 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _language_request_instruction if _language_request_instruction else "")
             + ("\n\n" + _appointment_instruction if _appointment_instruction else "")
             + ("\n\n" + _healthcare_safety_instruction if _healthcare_safety_instruction else "")
+            + ("\n\n" + _post_booking_instruction if _post_booking_instruction else "")
             + ("\n\n" + _search_instruction if _search_instruction else ""),
         )
 

@@ -706,6 +706,21 @@ async def check_calendar_availability(
             "and only then call this tool again to offer times."
         )
 
+    # Once a set of times has been offered for a date, that IS the set. Call
+    # 725 offered "10:00, 11:30, 12:30" for Monday and then, asked for an
+    # evening slot, came back with "10:00, 10:30, 11:00" — a different list
+    # for the same day, which reads as the agent making them up. Re-asking
+    # about the same date now returns the same times and says so.
+    _offered = getattr(_agent, "_offered_slots", {})
+    if not requested_time and date in _offered:
+        _same = _offered[date]
+        return (
+            f"You have ALREADY offered these times for {date}: {', '.join(_same)}. They have not "
+            f"changed. Do not list them a third time and do not produce a different set. Say once "
+            f"that nothing else is open that day, and ask them to pick one of those or name a "
+            f"different day."
+        )
+
     logger.info(
         "checking calendar availability for %s (%smin, requested=%s)", date, duration_minutes, requested_time or "-"
     )
@@ -827,6 +842,11 @@ async def check_calendar_availability(
     _spoken_day = _spoken_date(date, reply_language)
     date_phrase = date if _spoken_day == date else f"{date} (say: \"{_spoken_day}\")"
 
+    _remember = getattr(_agent, "_offered_slots", None)
+    if _remember is None:
+        _remember = {}
+        _agent._offered_slots = _remember
+
     if requested_time:
         # Deterministic exact-match check instead of leaving the model to
         # scan a long comma list itself — a 2026-08-03 real call had the
@@ -854,6 +874,9 @@ async def check_calendar_availability(
         choices = slots
     else:
         choices = [slots[0], slots[len(slots) // 2], slots[-1]]
+    # Record what was actually offered so a second question about the same
+    # day cannot come back with a different list (see the guard above).
+    _remember[date] = list(choices)
     return (
         # These are the BUSINESS's open times. The tool has no idea which
         # staff member works which days, and the prompt rule saying so was
@@ -958,8 +981,17 @@ async def book_appointment(
             "Offer the caller another time."
         )
     context.session.current_agent._booking_confirmed_this_turn = True
+    # Flag the agent so the per-turn rules stop the clinical questioning that
+    # followed the confirmation in call 725.
+    try:
+        context.session.current_agent._appointment_booked = True
+    except Exception:
+        pass
     return (
-        f"Appointment confirmed for {name} on {_bk_date} at {time}. Confirm it warmly to the caller."
+        f"Appointment confirmed for {name} on {_bk_date} at {time}. Say it back in exactly this "
+        f"shape and then stop: thank them by name, name the department, give the day and the time, "
+        f"ask them to arrive ten minutes early, and ask whether there is anything else you can "
+        f"help with. Ask NO further clinical questions — the booking is done."
     )
 
 
