@@ -5,7 +5,7 @@ import os
 import random
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import aiohttp
 from livekit.agents import RunContext
@@ -203,12 +203,29 @@ _HINDI_WEEKDAYS = [
 
 
 # Example times for the published demos only, so a demo never dead-ends on an
-# empty calendar. Spread across the day so the practitioner-hours filter still
-# has something to keep for a morning-only or evening-only doctor.
-_DEMO_FALLBACK_SLOTS = ("10:00", "10:30", "11:30", "12:30", "16:30", "17:30", "18:30")
+# empty calendar. Real tenant calendars are never faked. Specified by the
+# operator as today 4:30pm and 6pm, tomorrow 10:30am, 12pm and 5:30pm — a
+# demo should show a same-day option and a next-day spread rather than a
+# generic grid.
+_DEMO_SLOTS_TODAY = ("16:30", "18:00")
+_DEMO_SLOTS_TOMORROW = ("10:30", "12:00", "17:30")
+# Any other date the caller names still has to answer with something.
+_DEMO_SLOTS_OTHER = ("10:30", "12:00", "16:30", "18:00")
+_IST = timezone(timedelta(hours=5, minutes=30))
 
-# One waiting line per stretch of calendar checking (see the call site).
-_CALENDAR_FILLER_COOLDOWN_S = 25.0
+
+def _demo_slots_for(date: str) -> list[str]:
+    """The operator's example times, keyed off how far out the date is."""
+    try:
+        d = datetime.strptime(date, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return list(_DEMO_SLOTS_OTHER)
+    today = datetime.now(_IST).date()
+    if d == today:
+        return list(_DEMO_SLOTS_TODAY)
+    if d == today + timedelta(days=1):
+        return list(_DEMO_SLOTS_TOMORROW)
+    return list(_DEMO_SLOTS_OTHER)
 
 _WEEKDAY_NAMES = {
     "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
@@ -707,12 +724,13 @@ async def check_calendar_availability(
     # a front-desk person says "one moment" once, not every time they look at
     # the book, and hearing it repeatedly is what made that call sound like a
     # machine stuck in a loop.
-    _now = time.monotonic()
-    _last_filler = getattr(_agent, "_last_calendar_filler_at", 0.0)
-    _say_filler = (_now - _last_filler) > _CALENDAR_FILLER_COOLDOWN_S
+    # Once per CALL, not once per lookup. The operator's rule is that a
+    # waiting phrase is never repeated: hearing "one moment" a second time is
+    # already what made call 723 sound like a machine.
+    _say_filler = not getattr(_agent, "_said_calendar_filler", False)
     try:
         if _say_filler:
-            _agent._last_calendar_filler_at = _now
+            _agent._said_calendar_filler = True
             filler = context.session.say(_calendar_check_filler(context), allow_interruptions=False)
             await filler.wait_for_playout()
         slots = await slots_task
@@ -730,9 +748,11 @@ async def check_calendar_availability(
         return (
             "The calendar could not be reached. Do NOT say you are checking again, and do not "
             "call this tool again for this date — that is what turned a real call into six "
-            "'one moment' lines and no answer. Say plainly that you cannot see live times right "
-            "now, ask for their name and phone number, tell them the clinic will call back to "
-            "confirm the slot, and log it with log_lead. One apology, then move forward."
+            "'one moment' lines and no answer. Say exactly this, in the caller's own language: "
+            "\"I'm not able to confirm live availability right now, but I can take your details "
+            "and have the clinic team confirm the nearest available slot. May I have the "
+            "patient's name and preferred time?\" Then ask for the name, then the preferred "
+            "time, then the phone number — one question at a time — and log it with log_lead."
         )
     if not slots and getattr(_agent, "_public_demo_slug", ""):
         # The public demos are a shop window: an empty calendar there is not
@@ -741,7 +761,7 @@ async def check_calendar_availability(
         # lines. Real tenant calendars are never faked — this only ever fires
         # for a published demo agent, and the practitioner filter below still
         # applies, so the times stay consistent with the demo's own KB.
-        slots = list(_DEMO_FALLBACK_SLOTS)
+        slots = _demo_slots_for(date)
         logger.info("demo agent: calendar empty for %s, using example slots", date)
     if not slots:
         return f"No open slots on {date}. Offer the caller a different day."
