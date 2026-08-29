@@ -2747,8 +2747,21 @@ async def entrypoint(ctx: JobContext) -> None:
 
     async def log_call() -> None:
         ended_at = datetime.now(timezone.utc)
+        # The caller-directed gender guard runs as a TTS text transform, so
+        # the AUDIO has always been correct — but the stored transcript is the
+        # model's raw text, which still reads "आप ... बता सकती हैं" to a male
+        # caller. Every review of a call is done on the transcript, so it read
+        # as a live bug that had in fact only ever existed on the page. Same
+        # function, so the record now matches what was actually said.
         transcript = [
-            {"role": item.role, "text": item.text_content}
+            {
+                "role": item.role,
+                "text": (
+                    item.text_content
+                    if item.role != "assistant" or agent._caller_gender == "female"
+                    else _neutralize_caller_directed_gender(item.text_content)
+                ),
+            }
             for item in session.history.items
             if getattr(item, "text_content", None)
         ]
