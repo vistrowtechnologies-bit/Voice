@@ -643,6 +643,14 @@ async def _publish_event(context: RunContext, payload: dict) -> None:
     await room.local_participant.publish_data(json.dumps(payload), topic="lead-events")
 
 
+def _is_demo(context: RunContext) -> bool:
+    """Whether this call is one of the published marketing demos."""
+    try:
+        return bool(getattr(context.session.current_agent, "_public_demo_slug", ""))
+    except Exception:
+        return False
+
+
 async def _calendar_check(context: RunContext, date: str, duration_minutes: int) -> list[str] | None:
     """Real open HH:MM slots for `date` from the native appointments system
     (server/calls_db.py's counterpart is the source of truth for the
@@ -650,6 +658,11 @@ async def _calendar_check(context: RunContext, date: str, duration_minutes: int)
     only on a genuine DB error — a native calendar always exists, so unlike
     the old Google-Calendar-backed version this no longer means "not
     connected"."""
+    # Demos read their example times rather than the real calendar, so a
+    # visitor never sees (or takes) a genuine slot, and the times shown are
+    # the ones the operator chose.
+    if _is_demo(context):
+        return _demo_slots_for(date)
     account_id = (context.userdata or {}).get("account_id")
     return db.check_appointment_availability(account_id, date, duration_minutes)
 
@@ -658,6 +671,14 @@ async def _calendar_book(
     context: RunContext, date: str, time: str, duration_minutes: int, name: str, phone: str, purpose: str
 ) -> dict | None:
     """{"ok": bool, "error"?: str}, or None only on a genuine DB error."""
+    # A published demo is a shop window, not a clinic. It was writing real
+    # rows into the operator's own Appointments calendar — ten of them, from
+    # people trying the marketing site, sitting alongside genuine bookings
+    # with no way to tell them apart. The conversation still behaves exactly
+    # as if the booking succeeded; nothing is persisted.
+    if _is_demo(context):
+        logger.info("demo agent: simulating booking for %s on %s at %s (nothing written)", name, date, time)
+        return {"ok": True}
     account_id = (context.userdata or {}).get("account_id")
     agent_id = (context.userdata or {}).get("agent_id")
     return db.book_native_appointment(account_id, agent_id, date, time, duration_minutes, name, phone, purpose)
