@@ -4,6 +4,7 @@ import logging
 import os
 import random
 import re
+import time
 from datetime import datetime
 
 import aiohttp
@@ -200,6 +201,14 @@ _HINDI_WEEKDAYS = [
     "सोमवार", "मंगलवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार", "रविवार",
 ]
 
+
+# Example times for the published demos only, so a demo never dead-ends on an
+# empty calendar. Spread across the day so the practitioner-hours filter still
+# has something to keep for a morning-only or evening-only doctor.
+_DEMO_FALLBACK_SLOTS = ("10:00", "10:30", "11:30", "12:30", "16:30", "17:30", "18:30")
+
+# One waiting line per stretch of calendar checking (see the call site).
+_CALENDAR_FILLER_COOLDOWN_S = 25.0
 
 _WEEKDAY_NAMES = {
     "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
@@ -645,6 +654,14 @@ async def check_calendar_availability(
     Call this before offering times so you only offer slots that are actually
     free. Works for any business (clinic, salon, property visit, consultation).
 
+    Args:
+        date: The date to check, in YYYY-MM-DD format.
+        duration_minutes: How long the appointment needs to be. Default 30.
+        requested_time: If the caller already named a specific time (24-hour
+            "HH:MM", e.g. "13:00"), pass it here so the tool tells you
+            directly whether THAT exact time is free — don't try to
+            eyeball-match it against the slot list yourself.
+    """
     # A clinic asks what is wrong BEFORE reading out appointment times.
     # This runs FIRST, ahead of the spoken filler and the calendar lookup:
     # placed after them the agent said "डॉक्टर के स्लॉट्स चेक कर रही हूँ"
@@ -672,14 +689,6 @@ async def check_calendar_availability(
             "and only then call this tool again to offer times."
         )
 
-    Args:
-        date: The date to check, in YYYY-MM-DD format.
-        duration_minutes: How long the appointment needs to be. Default 30.
-        requested_time: If the caller already named a specific time (24-hour
-            "HH:MM", e.g. "13:00"), pass it here so the tool tells you
-            directly whether THAT exact time is free — don't try to
-            eyeball-match it against the slot list yourself.
-    """
     logger.info(
         "checking calendar availability for %s (%smin, requested=%s)", date, duration_minutes, requested_time or "-"
     )
@@ -693,9 +702,19 @@ async def check_calendar_availability(
     # short and deliberately non-interruptible so it cannot disappear from
     # playout when the caller makes a small acknowledgement such as "हाँ".
     slots_task = asyncio.create_task(_calendar_check(context, date, duration_minutes))
+    # Say the waiting line at most once per stretch of checking. Call 723 was
+    # six "एक मिनट—डॉक्टर के स्लॉट्स चेक कर रही हूँ" in a row and no answer:
+    # a front-desk person says "one moment" once, not every time they look at
+    # the book, and hearing it repeatedly is what made that call sound like a
+    # machine stuck in a loop.
+    _now = time.monotonic()
+    _last_filler = getattr(_agent, "_last_calendar_filler_at", 0.0)
+    _say_filler = (_now - _last_filler) > _CALENDAR_FILLER_COOLDOWN_S
     try:
-        filler = context.session.say(_calendar_check_filler(context), allow_interruptions=False)
-        await filler.wait_for_playout()
+        if _say_filler:
+            _agent._last_calendar_filler_at = _now
+            filler = context.session.say(_calendar_check_filler(context), allow_interruptions=False)
+            await filler.wait_for_playout()
         slots = await slots_task
     except BaseException:
         if not slots_task.done():
@@ -709,9 +728,21 @@ async def check_calendar_availability(
         # A native calendar always exists now — None here means the DB call
         # itself failed. Don't invent slots; hand off honestly.
         return (
-            "No live calendar is connected, so I can't confirm exact open times. "
-            "Note the caller's preferred date and time and tell them the team will confirm."
+            "The calendar could not be reached. Do NOT say you are checking again, and do not "
+            "call this tool again for this date — that is what turned a real call into six "
+            "'one moment' lines and no answer. Say plainly that you cannot see live times right "
+            "now, ask for their name and phone number, tell them the clinic will call back to "
+            "confirm the slot, and log it with log_lead. One apology, then move forward."
         )
+    if not slots and getattr(_agent, "_public_demo_slug", ""):
+        # The public demos are a shop window: an empty calendar there is not
+        # an honest "we are fully booked", it is the demo failing to show the
+        # product. Call 723 hit exactly this and produced nothing but waiting
+        # lines. Real tenant calendars are never faked — this only ever fires
+        # for a published demo agent, and the practitioner filter below still
+        # applies, so the times stay consistent with the demo's own KB.
+        slots = list(_DEMO_FALLBACK_SLOTS)
+        logger.info("demo agent: calendar empty for %s, using example slots", date)
     if not slots:
         return f"No open slots on {date}. Offer the caller a different day."
 
