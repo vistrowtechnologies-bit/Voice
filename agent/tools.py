@@ -644,11 +644,21 @@ async def _publish_event(context: RunContext, payload: dict) -> None:
 
 
 def _is_demo(context: RunContext) -> bool:
-    """Whether this call is one of the published marketing demos."""
+    """Whether this call is one of the published marketing demos.
+
+    Both markers are needed. The five industry demos carry a
+    public_demo_slug, but the "Talk to Artha" agent behind the marketing
+    site's own widget has is_platform_demo set and NO slug — checking the
+    slug alone left the single most-used demo still writing real rows, which
+    is exactly the agent whose bookings turned up on the operator's calendar.
+    """
     try:
-        return bool(getattr(context.session.current_agent, "_public_demo_slug", ""))
+        agent = context.session.current_agent
     except Exception:
         return False
+    return bool(
+        getattr(agent, "_public_demo_slug", "") or getattr(agent, "_is_platform_demo", False)
+    )
 
 
 async def _calendar_check(context: RunContext, date: str, duration_minutes: int) -> list[str] | None:

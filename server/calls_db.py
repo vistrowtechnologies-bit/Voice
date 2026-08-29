@@ -2875,12 +2875,23 @@ def _sync_contacts_from_calls(conn: dbconn.Conn, account_id: int) -> None:
     """Upsert a contact for every call that captured a phone number."""
     rows = conn.execute(
         """
-        SELECT lead_phone,
-               (ARRAY_AGG(lead_name ORDER BY started_at DESC))[1] lead_name,
-               MAX(started_at) last_call,
-               MAX(CASE WHEN site_visit_json IS NOT NULL THEN 1 ELSE 0 END) visited
-        FROM calls WHERE account_id = ? AND lead_phone IS NOT NULL AND lead_phone != ''
-        GROUP BY lead_phone
+        SELECT c.lead_phone,
+               (ARRAY_AGG(c.lead_name ORDER BY c.started_at DESC))[1] lead_name,
+               MAX(c.started_at) last_call,
+               MAX(CASE WHEN c.site_visit_json IS NOT NULL THEN 1 ELSE 0 END) visited
+        FROM calls c
+        WHERE c.account_id = ? AND c.lead_phone IS NOT NULL AND c.lead_phone != ''
+          -- A published demo is a shop window. Someone trying the marketing
+          -- site is not a lead in the operator's CRM, and their name and
+          -- number were arriving here as a real contact indistinguishable
+          -- from a genuine one. The call row itself is kept (transcripts and
+          -- billing need it); only the CRM propagation stops.
+          AND NOT EXISTS (
+              SELECT 1 FROM agents a
+              WHERE a.id = c.agent_id
+                AND (a.is_platform_demo = 1 OR COALESCE(a.public_demo_slug, '') <> '')
+          )
+        GROUP BY c.lead_phone
         """,
         (account_id,),
     ).fetchall()

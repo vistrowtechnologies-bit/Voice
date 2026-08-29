@@ -2766,7 +2766,13 @@ async def entrypoint(ctx: JobContext) -> None:
             if getattr(item, "text_content", None)
         ]
         resolved_agent_id = call_context["agent_id"] or cfg.get("id")
-        want_memory = agent._memory_enabled and bool(agent._caller_phone)
+        # A demo caller is not someone to remember between visits — that is
+        # CRM state about a real customer, and the demos are a shop window.
+        want_memory = (
+            agent._memory_enabled
+            and bool(agent._caller_phone)
+            and not (agent._public_demo_slug or agent._is_platform_demo)
+        )
         # The post-call LLM pass used to run HERE, before save_call, and gate
         # it. It is an optional enrichment (operator-defined fields + a
         # returning-caller summary) but an un-timeouted OpenAI request, so a
