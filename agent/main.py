@@ -2280,6 +2280,14 @@ async def entrypoint(ctx: JobContext) -> None:
     # SIP calls from greeting into ringing before the callee picks up.
     try:
         first_participant = await asyncio.wait_for(ctx.wait_for_participant(), timeout=90)
+    except RuntimeError:
+        # "room disconnected while waiting for participant" — the room went
+        # away before anyone joined: the visitor closed the tab, or the room
+        # was deleted underneath us. Only TimeoutError was caught here, so
+        # this escaped as an unhandled exception and crashed the job. Nothing
+        # is wrong and there is nothing to tear down; the room is already gone.
+        logger.info("room %s disconnected before anyone joined — nothing to do", ctx.room.name)
+        return
     except asyncio.TimeoutError:
         # Returning here drops the agent out of the room but leaves the room
         # itself alive until LiveKit's empty_timeout expires — and every one
