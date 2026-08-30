@@ -5,13 +5,25 @@
 # Calls are dispatched BY NAME, and the dispatch name comes from the
 # LIVEKIT_AGENT_NAME secret on the agent:
 #
-#   CA_53d8HgBktjZ7  dispatch name "platform-demo"  <- serves ALL live calls
-#   CA_TGdpVhSdxDyS  no dispatch name               <- receives no traffic
+#   CA_53d8HgBktjZ7  dispatch name "platform-demo"  <- the demos
+#   CA_TGdpVhSdxDyS  no dispatch name               <- EVERY tenant call
+#
+# The line above used to read "receives no traffic" for the second agent.
+# That was wrong, and it cost three days. _demo_dispatch_kwargs in
+# server/token_api.py names "platform-demo" for demo rooms and returns {}
+# for everything else; an empty dispatch is IMPLICIT dispatch, which goes to
+# the agent that has no dispatch name. So every tenant call — Shapoorji
+# Pallonji, Treetopia, Prophunt — lands on CA_TGdpVhSdxDyS, and nobody had
+# deployed to it since 26 August while fix after fix shipped to the demos.
+#
+# A change that affects real calls therefore needs BOTH:
+#   lk agent deploy                                # demos (this file)
+#   lk agent deploy --config livekit.tenant.toml   # tenants
 #
 # This file used to point at CA_TGdpVhSdxDyS, so `lk agent deploy` silently
-# published to the agent nobody calls: six days of prompt/code changes sat
-# "successfully deployed" while every real call ran the old build. Verify a
-# deploy with `lk agent list` (check Deployed At on the platform-demo row) —
+# published to the agent the demos do not use: six days of prompt/code
+# changes sat "successfully deployed" while every demo ran the old build.
+# Verify with `lk agent list` and check Deployed At on BOTH rows —
 # `lk agent status` alone will happily report Running for the wrong agent.
 [project]
   subdomain = "artha-voice-i8fimsza"

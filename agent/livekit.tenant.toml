@@ -1,0 +1,30 @@
+# Deploy target for the TENANT agent. Use with:
+#
+#   lk agent deploy --config livekit.tenant.toml
+#
+# Both agents run this same code and BOTH take calls — which is the opposite
+# of what livekit.toml used to say. Dispatch decides which one:
+#
+#   CA_53d8HgBktjZ7  dispatch name "platform-demo"  <- the demos
+#   CA_TGdpVhSdxDyS  no dispatch name               <- EVERY tenant call
+#
+# server/token_api.py's _demo_dispatch_kwargs names "platform-demo"
+# explicitly for demo rooms and returns {} for everything else. An empty
+# dispatch means implicit dispatch, and implicit dispatch goes to the agent
+# with no dispatch name — so all tenant traffic lands on CA_TGdpVhSdxDyS.
+#
+# Nobody deployed to it for three days because livekit.toml (correctly, for
+# demos) pins the other one, and its comment said this agent "receives no
+# traffic". It does. Tenant calls ran a 26 August build while every fix
+# shipped to the demos only.
+#
+# So a change that affects real calls needs BOTH:
+#   lk agent deploy                                # demos
+#   lk agent deploy --config livekit.tenant.toml   # tenants
+#
+# Verify with `lk agent list` and check Deployed At on BOTH rows.
+[project]
+  subdomain = "artha-voice-i8fimsza"
+
+[agent]
+  id = "CA_TGdpVhSdxDyS"
