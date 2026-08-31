@@ -82,7 +82,13 @@ _PUBLIC_PATHS = {
     "/telephony/enablex/inbound-event",  # EnableX inbound webhook (their server calls it)
     "/telephony/enablex/outbound-test-event",  # EnableX outbound/test-call webhook (their server calls it — no session)
 }
-_PUBLIC_PREFIXES = ("/auth/", "/invite/", "/widget-avatars/")  # signup/login/logout/me + invite-preview/accept handle their own logic; avatar images run on third-party sites, no session
+_PUBLIC_PREFIXES = (
+    "/auth/", "/invite/", "/widget-avatars/",
+    # Third-party webhook sender (Zapier et al) — no session; the route
+    # itself checks the ?token= query param via
+    # calls_db.account_id_for_lead_webhook_token instead.
+    "/leads/inbound/",
+)  # signup/login/logout/me + invite-preview/accept handle their own logic; avatar images run on third-party sites, no session
 
 
 @app.middleware("http")
