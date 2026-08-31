@@ -1077,6 +1077,8 @@ class RealEstateAgent(Agent):
         # Set from the caller's first recognisable complaint; see the capture
         # in on_user_turn_completed.
         self._chosen_department: str | None = None
+        # The severity/urgency question is a one-shot; see the per-turn block.
+        self._severity_asked = False
         # Set by book_appointment. Once true the booking is done and the
         # call closes: no more clinical questions.
         self._appointment_booked = False
@@ -1885,11 +1887,30 @@ class RealEstateAgent(Agent):
             )
             else ""
         )
+        # The severity question is asked ONCE and then never again. This block
+        # fires on every turn while a symptom is on the record, and the clause
+        # that used to guard it — "if that has not been established" — is
+        # prose the model does not act on: a live call asked whether the pain
+        # was severe five times running, until the caller said "मैंने दो बार
+        # तो बता दिया आपको" and then had to ask to be booked. The flag makes
+        # it structural instead of a request.
+        _ask_severity = self._healthcare_symptom_mentioned and not self._severity_asked
+        if _ask_severity:
+            self._severity_asked = True
         _healthcare_safety_instruction = (
             "This healthcare caller has already described pain or symptoms. Treat that as the active "
             "reason for the visit: do not suggest unrelated specialties, and do not make them repeat it. "
-            "Use one brief, calm acknowledgment; ask only whether it is severe/urgent or whether there "
-            "are emergency warning signs if that has not been established. Route to the department "
+            "Use one brief, calm acknowledgment. "
+            + (
+                "Ask ONE question about whether it is severe or urgent — this is the only turn on "
+                "which you may ask that."
+                if _ask_severity
+                else "You have ALREADY asked whether it is severe or urgent and they answered. Do "
+                     "NOT ask again in any form — not about severity, not about urgency, not "
+                     "whether it is an emergency, not whether there is any other problem. Move to "
+                     "the booking: offer a time, or ask for the next detail you still need."
+            )
+            + " Route to the department "
             "the COMPLAINT belongs to, taken from the knowledge base — never default everyone to the "
             "general physician, and never read out a list of specialties. Once a department is "
             "chosen, it is fixed for the rest of the call: do not move the caller to another one "
