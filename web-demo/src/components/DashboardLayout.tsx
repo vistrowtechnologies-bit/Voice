@@ -195,9 +195,14 @@ function SidebarContent({
             onClick={onToggleCollapse}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-text-muted transition-colors hover:border-border hover:bg-surface-high hover:text-primary ${collapsed ? 'absolute right-0 top-full mt-2 border-border bg-surface shadow-sm' : 'ml-auto'}`}
+            className={`group relative flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-text-muted transition-colors hover:border-border hover:bg-surface-high hover:text-primary ${collapsed ? 'absolute right-0 top-full mt-2 border-border bg-surface shadow-sm' : 'ml-auto'}`}
           >
             <Icon name={collapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'} className="text-[17px]" />
+            {collapsed && (
+              <span role="tooltip" className="pointer-events-none absolute left-full ml-3 hidden whitespace-nowrap rounded-lg bg-text px-3 py-2 text-xs font-semibold text-bg shadow-lg group-hover:block group-focus-visible:block">
+                Open sidebar
+              </span>
+            )}
           </button>
         )}
       </div>
@@ -320,7 +325,6 @@ function ImpersonationBanner({ accountName }: { accountName: string }) {
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const [sidebarHoverExpanded, setSidebarHoverExpanded] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => typeof window !== 'undefined' && localStorage.getItem('vistrow.sidebar.collapsed') === 'true',
   )
@@ -331,13 +335,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       if (typeof window !== 'undefined') localStorage.setItem('vistrow.sidebar.collapsed', String(next))
       return next
     })
-  }
-
-  const closeHoverSidebar = (nextTarget: EventTarget | null) => {
-    // Keep the expanded rail available while moving between its controls.
-    // It only returns to icons after the pointer/focus actually leaves it.
-    if (nextTarget instanceof Element && nextTarget.closest('[data-dashboard-sidebar]')) return
-    setSidebarHoverExpanded(false)
   }
 
   // Theme is a dashboard-only preference - apply the stored choice on mount
@@ -353,15 +350,11 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {user?.impersonating && <ImpersonationBanner accountName={user.accountName} />}
       <aside
         data-dashboard-sidebar
-        onMouseEnter={() => sidebarCollapsed && setSidebarHoverExpanded(true)}
-        onMouseLeave={(event) => closeHoverSidebar(event.relatedTarget)}
-        onFocusCapture={() => sidebarCollapsed && setSidebarHoverExpanded(true)}
-        onBlurCapture={(event) => closeHoverSidebar(event.relatedTarget)}
-        className={`fixed left-0 hidden flex-col border-r border-border bg-surface transition-[width,box-shadow] duration-200 ease-out lg:flex ${sidebarCollapsed && !sidebarHoverExpanded ? 'w-[76px] p-3' : 'z-30 w-60 p-4 shadow-2xl'} ${
+        className={`fixed left-0 hidden flex-col border-r border-border bg-surface transition-[width] duration-200 ease-out lg:flex ${sidebarCollapsed ? 'w-20 p-3' : 'w-[280px] p-4'} ${
           user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'
         }`}
       >
-        <SidebarContent collapsed={sidebarCollapsed && !sidebarHoverExpanded} onToggleCollapse={toggleSidebar} />
+        <SidebarContent collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
       </aside>
 
       {mobileNavOpen && (
@@ -377,7 +370,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className={`min-w-0 transition-[margin] duration-200 ease-out ${sidebarCollapsed ? 'lg:ml-[76px]' : 'lg:ml-60'} ${user?.impersonating ? 'pt-9' : ''}`}>
+      <div className={`min-w-0 transition-[margin] duration-200 ease-out ${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-[280px]'} ${user?.impersonating ? 'pt-9' : ''}`}>
         <div className="flex items-center gap-3 border-b border-border px-4 py-3 lg:hidden">
           <button
             aria-label="Open navigation"
