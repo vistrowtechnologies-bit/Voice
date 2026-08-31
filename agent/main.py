@@ -417,9 +417,27 @@ def _detect_caller_gender(text: str) -> str | None:
 # (e.g. "वो", "उनकी") — confirmed live: an earlier version of this exact
 # regex used \b and let "वो बहुत अच्छी हैं" (a legitimate third-person
 # reference) slip past the "is this third-person" check entirely.
-_THIRD_PERSON_SUBJECT = re.compile(r"(?:वो|वह|वे|उसकी|उसका|उसके|उनकी|उनका|उनके|उस|उन)")
+# "डॉक्टर मीरा आएंगी" is about her, not the caller, but carries none of the
+# pronouns below — so it was being rewritten to "आएंगे" and misgendering a
+# named female doctor. A title is as good a third-person marker as a
+# pronoun, and this clinic talks about its doctors constantly.
+_THIRD_PERSON_SUBJECT = re.compile(
+    r"(?:वो|वह|वे|उसकी|उसका|उसके|उनकी|उनका|उनके|उस|उन|डॉक्टर|डाक्टर|डॉ\.?|Dr\.?|Doctor)",
+    re.IGNORECASE,
+)
 _APP_SUBJECT = re.compile(r"आप")
 _GENDERED_VERB = re.compile(r"(\S*)ी(\s+(?:हैं|थीं))")
+# Future tense is the other half, and it was missed entirely: the pattern
+# above needs "ी" followed by हैं/थीं, so "क्या आप बुक करना चाहेंगी?" — no
+# हैं anywhere — reached the caller unchanged. Matching the inflection
+# itself (ेंगी / एंगी / ोगी) catches चाहेंगी, चुनेंगी, पाएंगी, करेंगी and
+# the rest, while leaving nouns that merely end in गी alone: ज़िंदगी and
+# सादगी have no े or ए before the गी, so they never match.
+# No \\b — this codebase already learned that it silently fails after a
+# Devanagari combining vowel sign (see emotion.py). With \\b appended these
+# patterns matched nothing at all.
+_GENDERED_FUTURE = re.compile(r"(ेंगी|एंगी|ोगी)")
+_FUTURE_MASCULINE = {"ेंगी": "ेंगे", "एंगी": "एंगे", "ोगी": "ोगे"}
 
 
 def _neutralize_caller_directed_gender(text: str) -> str:
@@ -435,7 +453,19 @@ def _neutralize_caller_directed_gender(text: str) -> str:
             return m.group(0)
         return f"{m.group(1)}े{m.group(2)}"
 
-    return _GENDERED_VERB.sub(_repl, text)
+    text = _GENDERED_VERB.sub(_repl, text)
+
+    def _repl_future(m: re.Match) -> str:
+        prefix = text[: m.start()]
+        last_third = max((tm.end() for tm in _THIRD_PERSON_SUBJECT.finditer(prefix)), default=None)
+        last_app = max((am.end() for am in _APP_SUBJECT.finditer(prefix)), default=None)
+        # Same subject test as above: "वो कल आएंगी" is about her, not the
+        # caller, and must not be touched.
+        if last_third is not None and (last_app is None or last_third > last_app):
+            return m.group(0)
+        return _FUTURE_MASCULINE[m.group(1)]
+
+    return _GENDERED_FUTURE.sub(_repl_future, text)
 
 
 def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
