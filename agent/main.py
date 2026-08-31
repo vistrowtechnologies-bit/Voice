@@ -1876,8 +1876,9 @@ class RealEstateAgent(Agent):
             "They want an appointment and have not said what is wrong yet. Your NEXT question "
             "is what the problem is, ASKED IN THE LANGUAGE THEY JUST USED — an English caller "
             "gets \"what seems to be the trouble?\", a Hindi caller gets \"क्या परेशानी हो रही "
-            "है?\". Replayed live, an English caller was answered in Hindi. Then since when, "
-            "then whether it feels urgent, one at a time. Do NOT ask "
+            "है?\". Replayed live, an English caller was answered in Hindi. Ask ONLY that one "
+            "question in this turn — not what it is AND since when, not the problem AND how "
+            "severe. Since-when and urgency come on LATER turns, one per turn. Do NOT ask "
             "which department or which doctor they want: a patient does not know that, and "
             "working it out from the complaint is your job."
             if (
@@ -1894,7 +1895,15 @@ class RealEstateAgent(Agent):
         # was severe five times running, until the caller said "मैंने दो बार
         # तो बता दिया आपको" and then had to ask to be booked. The flag makes
         # it structural instead of a request.
-        _ask_severity = self._healthcare_symptom_mentioned and not self._severity_asked
+        # Never on the same turn as the intake nudge. Both fired together and the
+        # model merged them — "ये कब से है और क्या ये ज्यादा तेज़ है?" — two
+        # questions in one breath, in 2 of 6 replays. Each nudge asks for one
+        # question; the collision was what produced two.
+        _ask_severity = (
+            self._healthcare_symptom_mentioned
+            and not self._severity_asked
+            and not _intake_instruction
+        )
         if _ask_severity:
             self._severity_asked = True
         _healthcare_safety_instruction = (
@@ -1902,8 +1911,10 @@ class RealEstateAgent(Agent):
             "reason for the visit: do not suggest unrelated specialties, and do not make them repeat it. "
             "Use one brief, calm acknowledgment. "
             + (
-                "Ask ONE question about whether it is severe or urgent — this is the only turn on "
-                "which you may ask that."
+                "Ask exactly one short question: how bad it is. Nothing else in the same breath — "
+                "not how bad AND whether it is urgent, not how bad AND whether anything else "
+                "is wrong. Naming two things is how a live turn became \"कितना तेज है? क्या ये "
+                "जल्दी देखना जरूरी है?\". This is the only turn on which you may ask it at all."
                 if _ask_severity
                 else "You have ALREADY asked whether it is severe or urgent and they answered. Do "
                      "NOT ask again in any form — not about severity, not about urgency, not "
