@@ -317,6 +317,8 @@ export const updateIntegration = (key: string, status: string, config: Record<st
 export const testIntegration = (key: string) =>
   send<{ ok: boolean; detail: string }>('POST', `/integrations/${key}/test`)
 export const slackIntegrationStartUrl = '/api/integrations/slack/start'
+export const fetchLeadWebhook = () =>
+  get<{ url: string | null; accountId: number; token: string }>('/integrations/lead-webhook')
 
 // --------------------------------------------------------------- billing
 

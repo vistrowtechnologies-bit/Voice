@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
-import { fetchIntegrations, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateIntegration } from '../lib/api'
+import { fetchIntegrations, fetchLeadWebhook, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateIntegration } from '../lib/api'
 import type { Integration } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import arthaleadsIcon from '../assets/arthaleads-logo.png'
@@ -55,12 +55,23 @@ export function Integrations() {
   const [displayName, setDisplayName] = useState('')
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, string>>({})
+  const [leadWebhookUrl, setLeadWebhookUrl] = useState<string | null | undefined>(undefined)
+  const [leadWebhookShown, setLeadWebhookShown] = useState(false)
+  const [leadWebhookCopied, setLeadWebhookCopied] = useState(false)
 
   const reload = () => fetchIntegrations().then((list) => setIntegrations(sortIntegrations(list))).catch(() => setIntegrations([]))
 
   useEffect(() => {
     reload()
+    fetchLeadWebhook().then((r) => setLeadWebhookUrl(r.url)).catch(() => setLeadWebhookUrl(null))
   }, [])
+
+  const copyLeadWebhook = async () => {
+    if (!leadWebhookUrl) return
+    await navigator.clipboard.writeText(leadWebhookUrl)
+    setLeadWebhookCopied(true)
+    setTimeout(() => setLeadWebhookCopied(false), 1500)
+  }
 
   const connected = integrations.filter((i) => i.status === 'connected').length
 
@@ -120,6 +131,46 @@ export function Integrations() {
           <StatCard icon="apps" label="Available Integrations" value={String(integrations.length)} hint="Ready to connect" />
           <StatCard icon="monitoring" label="Sync Status" value={connected > 0 ? 'Live' : 'Idle'} hint={connected > 0 ? 'events push in real time' : 'No integrations connected yet'} />
         </div>
+
+        <Card>
+          <div className="mb-3 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 text-primary">
+              <Icon name="bolt" className="text-[20px]" />
+            </div>
+            <div>
+              <p className="font-semibold">Instant Lead Follow-up</p>
+              <p className="text-[11px] text-text-muted">Call a new lead within minutes of it arriving</p>
+            </div>
+          </div>
+          <p className="mb-4 text-xs text-text-muted">
+            POST a lead to this URL and it's queued for a call within about 15-30 seconds - no dashboard action
+            needed. Works with Facebook Lead Ads via a Zapier "Webhooks by Zapier" step (its native "New Lead"
+            trigger needs no approval process on our end), or any other source that can send a webhook. Every
+            queued call still goes through your compliance settings - DNC and calling-window rules apply exactly
+            as they do for a regular campaign.
+          </p>
+          {leadWebhookUrl === undefined ? (
+            <p className="text-xs text-text-muted">Loading…</p>
+          ) : leadWebhookUrl === null ? (
+            <p className="text-xs text-text-muted">Not available in this environment.</p>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-high/40 p-3 text-xs">
+              <span className="flex-1 truncate font-mono">
+                {leadWebhookShown ? leadWebhookUrl : `${leadWebhookUrl.split('?')[0]}?token=${'•'.repeat(20)}`}
+              </span>
+              <button
+                onClick={() => setLeadWebhookShown((v) => !v)}
+                className="shrink-0 text-text-muted hover:text-text"
+                aria-label={leadWebhookShown ? 'Hide webhook URL' : 'Show webhook URL'}
+              >
+                <Icon name={leadWebhookShown ? 'visibility_off' : 'visibility'} className="text-[15px]" />
+              </button>
+              <button onClick={copyLeadWebhook} className="shrink-0 text-text-muted hover:text-text" aria-label="Copy webhook URL">
+                <Icon name={leadWebhookCopied ? 'check' : 'content_copy'} className="text-[15px]" />
+              </button>
+            </div>
+          )}
+        </Card>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {integrations.map((integration) => (

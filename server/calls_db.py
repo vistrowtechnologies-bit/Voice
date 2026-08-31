@@ -3935,6 +3935,164 @@ def create_campaign(data: dict, account_id: int) -> int:
         conn.close()
 
 
+_LEAD_WEBHOOK_TOKEN_SETTING = "lead_webhook_token"
+
+
+def get_or_create_lead_webhook_token(account_id: int) -> str:
+    """Per-account secret for the generic inbound-lead webhook (POST
+    /api/leads/inbound/{account_id}?token=...) — this is what a Zapier
+    'Webhooks by Zapier' step (bridging Facebook Lead Ads, or any other
+    source) authenticates with. Generated once and stable, same shape as
+    livekit_sip.ensure_inbound_auth's username/password bootstrap."""
+    conn = _connect()
+    try:
+        existing = _get_setting(conn, account_id, _LEAD_WEBHOOK_TOKEN_SETTING)
+        if existing:
+            return existing
+        token = secrets.token_urlsafe(24)
+        with conn:
+            conn.execute(
+                "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
+                "ON CONFLICT(account_id, key) DO UPDATE SET value = excluded.value",
+                (account_id, _LEAD_WEBHOOK_TOKEN_SETTING, token),
+            )
+        return token
+    finally:
+        conn.close()
+
+
+def account_id_for_lead_webhook_token(token: str) -> int | None:
+    """Reverse lookup for the webhook route: which account does this secret
+    belong to. Constant-time compare against every stored token rather than
+    a plain WHERE value = ? — this secret is the sole gate on an endpoint
+    that queues real outbound calls, so a timing side-channel on it is worth
+    closing even though the table is small."""
+    if not token:
+        return None
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT account_id, value FROM settings WHERE key = ?",
+            (_LEAD_WEBHOOK_TOKEN_SETTING,),
+        ).fetchall()
+        for row in rows:
+            if secrets.compare_digest(row["value"], token):
+                return row["account_id"]
+        return None
+    finally:
+        conn.close()
+
+
+_INSTANT_LEAD_CAMPAIGN_ID_SETTING = "instant_lead_campaign_id"
+_INSTANT_LEAD_CAMPAIGN_NAME = "Instant Lead Follow-up"
+
+
+def get_or_create_instant_campaign(account_id: int) -> int | None:
+    """The always-on destination for leads arriving from an external source
+    (Facebook Lead Ads, WhatsApp, or any other inbound webhook) — a single
+    campaign per account, kept permanently 'running' so a freshly-inserted
+    'pending' contact is picked up by campaign_dialer.py's next 15s tick
+    rather than waiting for someone to open the dashboard and press Run.
+    Idempotent: returns the existing campaign if the setting still points at
+    a live one, otherwise creates it. Returns None if the account has no
+    live agent yet — an instant-followup campaign with nothing to answer the
+    call would be worse than no campaign at all, so this refuses rather than
+    silently creating one aimed at nothing."""
+    conn = _connect()
+    try:
+        existing_id = _get_setting(conn, account_id, _INSTANT_LEAD_CAMPAIGN_ID_SETTING)
+        if existing_id:
+            row = conn.execute(
+                "SELECT id, status FROM campaigns WHERE id = ? AND account_id = ?",
+                (int(existing_id), account_id),
+            ).fetchone()
+            if row:
+                if row["status"] != "running":
+                    with conn:
+                        conn.execute(
+                            "UPDATE campaigns SET status = 'running', "
+                            f"started_at = COALESCE(started_at, {_NOW}) WHERE id = ?",
+                            (row["id"],),
+                        )
+                return row["id"]
+        agent_row = conn.execute(
+            "SELECT id FROM agents WHERE account_id = ? AND status = 'live' "
+            "AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL) "
+            "ORDER BY id LIMIT 1",
+            (account_id,),
+        ).fetchone()
+        if not agent_row:
+            return None
+        with conn:
+            cur = conn.execute(
+                "INSERT INTO campaigns (account_id, name, agent_id, from_number, status, "
+                f"started_at, max_attempts, retry_minutes, concurrency) "
+                f"VALUES (?, ?, ?, '', 'running', {_NOW}, ?, ?, ?) RETURNING id",
+                (account_id, _INSTANT_LEAD_CAMPAIGN_NAME, agent_row["id"], 3, 30, 2),
+            )
+            campaign_id = cur.fetchone()["id"]
+            conn.execute(
+                "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
+                "ON CONFLICT(account_id, key) DO UPDATE SET value = excluded.value",
+                (account_id, _INSTANT_LEAD_CAMPAIGN_ID_SETTING, str(campaign_id)),
+            )
+        return campaign_id
+    finally:
+        conn.close()
+
+
+def ingest_inbound_lead(
+    account_id: int, name: str, phone: str, source: str,
+    external_id: str = "", custom_fields: dict | None = None,
+) -> dict:
+    """Entry point for every external lead source (Facebook Lead Ads via
+    Zapier or a native Meta webhook, WhatsApp Cloud API, or any other
+    inbound integration) — deliberately source-agnostic so a new channel is
+    a new adapter calling this, not a new dialing path. Queues the lead on
+    the account's instant-followup campaign as a 'pending' contact, which
+    campaign_dialer.py's next tick (<=15s) picks up ahead of any retry —
+    compliance (DNC/calling-window) and concurrency are enforced there, not
+    here, so this function only ever decides WHETHER to queue, never whether
+    it's safe to call.
+
+    Deduped against the SAME campaign's still-open contacts (pending or
+    currently calling) by normalized phone, so a webhook retry (Meta retries
+    for up to 7 days on a non-200) or someone messaging twice in a minute
+    doesn't queue a second call on top of one already in flight. A contact
+    that already reached a terminal state (done/blocked/exhausted retries)
+    gets a fresh row — a new inbound signal from that number is a new lead,
+    not noise from the old one."""
+    norm = _normalize_phone(phone)
+    if not norm:
+        return {"ok": False, "reason": "invalid_phone"}
+    campaign_id = get_or_create_instant_campaign(account_id)
+    if campaign_id is None:
+        return {"ok": False, "reason": "no_live_agent"}
+    fields = dict(custom_fields or {})
+    fields["source"] = source
+    if external_id:
+        fields["external_id"] = external_id
+    conn = _connect()
+    try:
+        with conn:
+            dup = conn.execute(
+                "SELECT id FROM campaign_contacts WHERE campaign_id = ? AND phone_norm = ? "
+                "AND status IN ('pending', 'calling') LIMIT 1",
+                (campaign_id, norm),
+            ).fetchone()
+            if dup:
+                return {"ok": True, "campaign_id": campaign_id, "contact_id": dup["id"], "deduped": True}
+            cur = conn.execute(
+                "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, "
+                "company, custom_fields) VALUES (?, ?, ?, ?, ?, '', ?) RETURNING id",
+                (campaign_id, account_id, (name or "").strip(), phone.strip(), norm, json.dumps(fields)),
+            )
+            contact_id = cur.fetchone()["id"]
+        return {"ok": True, "campaign_id": campaign_id, "contact_id": contact_id, "deduped": False}
+    finally:
+        conn.close()
+
+
 def set_campaign_status(campaign_id: int, status: str, account_id: int) -> None:
     """Lifecycle transitions: draft -> running -> paused/completed/cancelled.
     Stamps started_at the first time it runs and completed_at when it finishes

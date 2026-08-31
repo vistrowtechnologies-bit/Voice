@@ -3276,6 +3276,78 @@ async def billing_razorpay_webhook(request: Request) -> dict:
     return {"ok": True}
 
 
+@app.post("/leads/inbound/{account_id}")
+async def leads_inbound(account_id: int, token: str, request: Request) -> dict:
+    """Generic entry point for any external lead source that can POST JSON —
+    a Zapier 'Webhooks by Zapier' step bridging Facebook Lead Ads' native
+    'New Lead' trigger is the first one wired up, and it needs no Meta App
+    Review: Zapier already holds the Facebook permissions on its own side,
+    we just receive whatever it forwards. The same route works for any other
+    lead source later (a different ad platform, a form tool, a BSP).
+
+    Auth is the per-account token from calls_db.get_or_create_lead_webhook_token
+    (shown on the Integrations page), not a session — this is called by a
+    third-party service, not a logged-in user. Deliberately tolerant of
+    payload shape: accepts a plain {"name", "phone"} body (what we ask
+    Zapier's custom-request step to send) as well as Zapier's raw
+    passthrough of Facebook's own field_data array, so a misconfigured Zap
+    that forwards the unmodified Facebook payload still queues a call
+    instead of silently dropping the lead.
+
+    Always returns 200 once the token checks out, even when the payload has
+    no usable phone number — the caller is a webhook sender that will retry
+    on anything else, and a malformed one-off payload isn't worth a retry
+    storm."""
+    if calls_db.account_id_for_lead_webhook_token(token) != account_id:
+        raise HTTPException(404, "Not found")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    name = str(body.get("name") or body.get("full_name") or "").strip()
+    phone = str(body.get("phone") or body.get("phone_number") or "").strip()
+    if not phone:
+        # Zapier's raw Facebook Lead Ads passthrough: field_data is a list of
+        # {"name": <question label>, "values": [<answer>]} pairs — the
+        # question labels vary per form, so match by common phone/name
+        # aliases rather than assuming an exact key.
+        for entry in body.get("field_data") or []:
+            label = str((entry or {}).get("name") or "").strip().lower()
+            values = (entry or {}).get("values") or []
+            value = str(values[0]).strip() if values else ""
+            if not value:
+                continue
+            if not phone and label in ("phone_number", "phone", "mobile", "contact_number"):
+                phone = value
+            elif not name and label in ("full_name", "name", "first_name"):
+                name = value
+    if not phone:
+        logger.warning("leads_inbound: no phone number in payload for account %s", account_id)
+        return {"ok": False, "reason": "no_phone_in_payload"}
+    result = calls_db.ingest_inbound_lead(
+        account_id, name, phone, source="facebook_lead_ads",
+        external_id=str(body.get("leadgen_id") or body.get("id") or ""),
+    )
+    if not result.get("ok"):
+        logger.warning("leads_inbound: could not queue lead for account %s: %s", account_id, result.get("reason"))
+    return result
+
+
+@app.get("/integrations/lead-webhook")
+def integrations_lead_webhook(user: dict = Depends(current_user)) -> dict:
+    """The URL + token an operator pastes into a Zapier 'Webhooks by Zapier'
+    step (or any other lead source) so POSTing to it queues an instant call.
+    Session-authenticated, unlike the webhook route itself — this is read by
+    the logged-in dashboard, not by the third-party sender. base is null
+    (same as /widget/backend-url) when neither RAILWAY_PUBLIC_DOMAIN nor
+    PUBLIC_BASE_URL is set, e.g. local dev with no public URL to hand out."""
+    account_id = user["account_id"]
+    token = calls_db.get_or_create_lead_webhook_token(account_id)
+    base = calls_db.public_base_url()
+    url = f"{base}/leads/inbound/{account_id}?token={token}" if base else None
+    return {"url": url, "accountId": account_id, "token": token}
+
+
 def _epoch_to_iso(epoch: int | None) -> str | None:
     if epoch is None:
         return None
