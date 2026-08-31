@@ -523,7 +523,25 @@ def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
 # the very next turn carries the instruction again.
 _GENDERED_VERB_LANGUAGES = {"hi-IN", "mr-IN", "gu-IN", "pa-IN"}
 
-_EOT_HINDI_THRESHOLD = 0.3050
+# Lowered from LiveKit's tuned Hindi value (0.3050) to 0.25 on measurement:
+# across 368 real turns since 25 August, end-of-utterance is BINARY — 82.3%
+# finish at ~400ms and 17.7% pay the full 4s ceiling, with literally nothing
+# in between. So max_delay only controls how long the bad case lasts; this
+# threshold controls how OFTEN it happens, and moving a turn out of the
+# ceiling bucket saves 3.6s rather than the ~1.5s that lowering max_delay
+# could offer.
+#
+# 0.25 is not invented: LiveKit ships thresholds from 0.2 (Dutch) to 0.4
+# (Korean), so this sits inside their own tuned range, between German (0.245)
+# and Turkish (0.255), rather than below anything they consider safe.
+#
+# Direction of failure matters here. Too low means replying a shade early,
+# which a caller talks over and recovers from. Lowering max_delay instead
+# reintroduces the STT-finalization race that dropped whole transcripts twice
+# in production (see EndpointingOptions below) — the caller's question never
+# reaches the LLM and they get "are you still there?". That is why max_delay
+# stays at 4.0.
+_EOT_HINDI_THRESHOLD = 0.25
 _EOT_UNLIKELY_THRESHOLDS = {
     lang: _EOT_HINDI_THRESHOLD
     for lang in ("hi", "mr", "bn", "ta", "te", "kn", "ml", "gu", "pa", "or")
