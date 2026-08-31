@@ -69,6 +69,7 @@ from tools import (
     check_calendar_availability,
     end_call,
     log_lead,
+    request_callback,
     switch_reply_language,
     transfer_call,
     web_search,
@@ -1081,6 +1082,9 @@ def _build_tools(config: dict) -> list:
     tools = [
         check_calendar_availability,
         book_appointment,
+        # Always on, never optional: it is the only thing standing between a
+        # caller who could not be given a slot and being forgotten entirely.
+        request_callback,
         log_lead,
         capture_platform_lead,
         switch_reply_language,

@@ -632,6 +632,49 @@ def book_native_appointment(
         conn.close()
 
 
+def record_callback_request(
+    account_id: int | None,
+    agent_id: int | None,
+    name: str,
+    phone: str,
+    preferred_date: str,
+    preferred_time: str,
+    reason: str,
+) -> dict | None:
+    """A caller who wanted an appointment and could not have one.
+
+    Written into `appointments` with status 'callback_requested' rather than a
+    separate table, because that is where the team already looks and it keeps
+    the caller's preferred day and time next to the real bookings for that
+    day. Deliberately does NOT take the slot: no advisory lock and no conflict
+    check, because this is a request to be called back, not a reservation, and
+    it must never block a slot someone else could book.
+
+    Without this a caller who rang to book and found nothing free left no
+    trace at all — the whole point of taking their number was that somebody
+    rings them when a slot frees up.
+    """
+    if account_id is None:
+        return None
+    conn = dbconn.connect()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO appointments (account_id, agent_id, call_id, contact_name, "
+                "contact_phone, contact_email, purpose, appt_date, start_time, duration_minutes, "
+                "status, source, notes) "
+                "VALUES (?, ?, NULL, ?, ?, '', ?, ?, ?, 0, 'callback_requested', 'agent', ?)",
+                (account_id, agent_id, name, phone, reason or "callback requested",
+                 preferred_date or None, preferred_time or None,
+                 f"Wanted {preferred_date or 'any day'} {preferred_time or ''}".strip()),
+            )
+            return {"ok": True}
+    except psycopg.Error:
+        return None
+    finally:
+        conn.close()
+
+
 def get_delivery_integrations(account_id: int | None) -> list[dict]:
     """This tenant's connected lead-delivery integrations (Slack/Sheets/
     WhatsApp/CRM/ArthaLeads), account-scoped, as [{key, config}]. Empty on any

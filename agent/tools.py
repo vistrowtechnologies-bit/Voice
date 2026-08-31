@@ -961,6 +961,69 @@ async def check_calendar_availability(
 
 
 @function_tool
+async def request_callback(
+    context: RunContext,
+    name: str,
+    phone: str,
+    preferred_date: str = "",
+    preferred_time: str = "",
+    reason: str = "",
+) -> str:
+    """Take a caller's details so the team can ring them back when a slot opens.
+
+    Call this whenever someone wanted an appointment and could not have one —
+    nothing free on their day, nothing at their preferred time, the calendar
+    unreachable, or the right doctor not working when they need. Do NOT end
+    such a call without either a booking or one of these.
+
+    Args:
+        name: Caller's name.
+        phone: Their phone number, digits only, as they gave it.
+        preferred_date: The day they wanted, YYYY-MM-DD, if they named one.
+        preferred_time: The time they wanted, "HH:MM", if they named one.
+        reason: Why they are coming in — the complaint or the department.
+    """
+    if not name or not phone:
+        return (
+            "You do not have both a name and a phone number yet. Ask for whichever is missing — "
+            "one at a time — and call this again once you have both."
+        )
+    if _is_demo(context):
+        logger.info("demo agent: simulating callback request for %s (%s)", name, phone)
+        result = {"ok": True}
+    else:
+        result = db.record_callback_request(
+            (context.userdata or {}).get("account_id"),
+            (context.userdata or {}).get("agent_id"),
+            name, phone, preferred_date, preferred_time, reason,
+        )
+    event = {
+        "type": "callback_requested",
+        "name": name,
+        "phone": phone,
+        "date": preferred_date,
+        "time": preferred_time,
+        "purpose": reason,
+    }
+    await _publish_event(context, event)
+    await _post_webhook(event)
+    # Same fan-out a booking gets: this is the lead the clinic would otherwise
+    # have lost, so it needs to reach Slack/Sheets/CRM, not just the database.
+    await _fan_out_integrations(context, event)
+    if result is None:
+        logger.warning("callback request could not be stored for %s", name)
+        return (
+            f"Noted {name}'s details and passed them to the team. Confirm to the caller that "
+            f"someone will call back about a slot, then close warmly."
+        )
+    return (
+        f"Callback recorded for {name} on {phone}. Tell them the clinic will call back as soon as "
+        f"a suitable slot opens, ask if there is anything else, and close warmly. Do not keep "
+        f"offering times they have already turned down."
+    )
+
+
+@function_tool
 async def book_appointment(
     context: RunContext,
     date: str,
