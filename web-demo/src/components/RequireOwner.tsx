@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { AdminLayout } from './AdminLayout'
+import { AppLoadingScreen } from './AppLoadingScreen'
 
 /** Gate around every /admin/* route. Only the platform owner (accounts
  * .is_platform_owner) reaches it; everyone else - including logged-in tenants
@@ -13,11 +14,7 @@ export function RequireOwner({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-bg text-text-muted">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    )
+    return <AppLoadingScreen message="Loading the admin workspace…" />
   }
 
   if (!user) return <Navigate to="/login" replace />

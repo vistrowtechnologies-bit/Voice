@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { AppLoadingScreen } from './AppLoadingScreen'
 
 /** Gate around every /dashboard/* route. While the session is still being
  * probed it shows a neutral splash (avoids a login-flash for returning
@@ -11,11 +12,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const location = useLocation()
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-bg text-text-muted">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    )
+    return <AppLoadingScreen />
   }
 
   if (!user) {

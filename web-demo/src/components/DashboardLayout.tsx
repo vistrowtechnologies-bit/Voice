@@ -184,7 +184,7 @@ function SidebarContent({
   const { user } = useAuth()
   return (
     <>
-      <div className={`mb-6 flex items-center ${collapsed ? 'justify-center' : 'gap-2 px-2'}`}>
+      <div className={`relative flex items-center ${collapsed ? 'mb-12 justify-center' : 'mb-6 gap-2 px-2'}`}>
         <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
         <div className={collapsed ? 'hidden' : ''}>
           <span className="block text-base font-semibold leading-tight tracking-tight">{BRAND.name}</span>
@@ -195,7 +195,7 @@ function SidebarContent({
             onClick={onToggleCollapse}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-text-muted transition-colors hover:border-border hover:bg-surface-high hover:text-primary ${collapsed ? 'absolute top-14 -right-3 z-10 bg-surface shadow-sm' : 'ml-auto'}`}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-text-muted transition-colors hover:border-border hover:bg-surface-high hover:text-primary ${collapsed ? 'absolute right-0 top-full mt-2 border-border bg-surface shadow-sm' : 'ml-auto'}`}
           >
             <Icon name={collapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'} className="text-[17px]" />
           </button>
