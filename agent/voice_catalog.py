@@ -206,7 +206,12 @@ def sample_text(lang: str, gender: str | None = None) -> str | None:
 # points at one keeps working - correct gender for the prompt's gendered
 # verb forms, correct credit tier for billing - rather than silently
 # degrading. Nothing is deleted; clearing this tuple restores them.
-_HIDDEN_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:")
+# Only the v3 prefix stays hidden: its realtime streaming endpoint 403s in
+# production (see agent/main.py's _build_tts), so those voices cannot be
+# sold. The Flash v2.5 voices under "elevenlabs:" work and are back in the
+# picker — ElevenLabs is the vendor behind Razorpay's own Hinglish outbound
+# agent, which makes them a credibility argument as much as a quality one.
+_HIDDEN_VOICE_PREFIXES = ("elevenlabs-v3:",)
 
 
 # Which languages a voice can actually SPEAK, and whether it can switch
