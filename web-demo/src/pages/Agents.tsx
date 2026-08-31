@@ -17,6 +17,53 @@ import {
 import type { AgentConfig, KnowledgeBase, PhoneNumber, LaunchReadiness } from '../lib/types'
 import { modelLabel, voiceLabel } from '../lib/agentOptions'
 
+type AgentFilter = 'all' | 'live' | 'needs-setup' | 'paused' | 'draft'
+
+type ReadinessGap = {
+  key: 'active' | 'voice' | 'model' | 'knowledge' | 'persona' | 'channel'
+  label: string
+  to: string
+}
+
+type AgentReadiness = {
+  score: number
+  total: number
+  ready: boolean
+  gaps: ReadinessGap[]
+}
+
+function getAgentReadiness(agent: AgentConfig, readiness: LaunchReadiness | null, numbers: PhoneNumber[]): AgentReadiness {
+  const serverChecks = readiness?.agents.find((item) => item.id === agent.id)?.checks
+  const checks = serverChecks ?? {
+    active: agent.status === 'live',
+    voice: Boolean(agent.voice),
+    model: Boolean(agent.model),
+    knowledge: Boolean(agent.kbId),
+    persona: Boolean(agent.systemPrompt.trim() || agent.welcomeMessage.trim()),
+    channel: numbers.some((number) => number.agentId === agent.id),
+  }
+  const gaps: ReadinessGap[] = [
+    !checks.active && { key: 'active', label: 'Activate this agent', to: `/dashboard/agents/${agent.id}` },
+    !checks.voice && { key: 'voice', label: 'Choose a voice', to: `/dashboard/agents/${agent.id}` },
+    !checks.model && { key: 'model', label: 'Choose a model', to: `/dashboard/agents/${agent.id}` },
+    !checks.persona && { key: 'persona', label: 'Add a persona or welcome', to: `/dashboard/agents/${agent.id}` },
+    !checks.knowledge && { key: 'knowledge', label: 'Attach knowledge', to: `/dashboard/agents/${agent.id}` },
+    !checks.channel && { key: 'channel', label: 'Assign a phone number or website', to: '/dashboard/numbers' },
+  ].filter(Boolean) as ReadinessGap[]
+
+  const total = Object.keys(checks).length
+  const score = Object.values(checks).filter(Boolean).length
+  return { score, total, ready: score === total, gaps }
+}
+
+function isDraftAgent(agent: AgentConfig) {
+  return agent.status !== 'live'
+    && !agent.description.trim()
+    && !agent.systemPrompt.trim()
+    && !agent.welcomeMessage.trim()
+    && !agent.kbId
+}
+
 export function Agents() {
   const navigate = useNavigate()
   const [agents, setAgents] = useState<AgentConfig[]>([])
@@ -26,6 +73,8 @@ export function Agents() {
   const [browserTestAgent, setBrowserTestAgent] = useState<AgentConfig | null>(null)
   const [readiness, setReadiness] = useState<LaunchReadiness | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<AgentFilter>('all')
 
   const reload = () => fetchAgents().then(setAgents).catch(() => setAgents([]))
 
@@ -56,6 +105,36 @@ export function Agents() {
     reload()
   }
 
+  const filteredAgents = agents.filter((agent) => {
+    const agentReadiness = getAgentReadiness(agent, readiness, numbers)
+    const knowledgeName = kbs.find((kb) => kb.id === agent.kbId)?.name ?? ''
+    const query = search.trim().toLowerCase()
+    const matchesSearch = !query || [agent.name, agent.description, knowledgeName, agent.language]
+      .some((value) => value.toLowerCase().includes(query))
+    const matchesFilter = filter === 'all'
+      || (filter === 'live' && agent.status === 'live')
+      || (filter === 'needs-setup' && !agentReadiness.ready)
+      || (filter === 'paused' && agent.status === 'paused')
+      || (filter === 'draft' && isDraftAgent(agent))
+    return matchesSearch && matchesFilter
+  })
+
+  const filterCounts: Record<AgentFilter, number> = {
+    all: agents.length,
+    live: agents.filter((agent) => agent.status === 'live').length,
+    'needs-setup': agents.filter((agent) => !getAgentReadiness(agent, readiness, numbers).ready).length,
+    paused: agents.filter((agent) => agent.status === 'paused').length,
+    draft: agents.filter(isDraftAgent).length,
+  }
+
+  const filters: { key: AgentFilter; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'live', label: 'Live' },
+    { key: 'needs-setup', label: 'Needs setup' },
+    { key: 'paused', label: 'Paused' },
+    { key: 'draft', label: 'Draft' },
+  ]
+
   return (
     <DashboardLayout>
       <PageHeader title="Agents" subtitle={`${agents.length} total ${agents.length === 1 ? 'agent' : 'agents'}`} />
@@ -67,8 +146,39 @@ export function Agents() {
           pause) apply from the very next call - no redeploy needed.
         </div>
 
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-3 lg:flex-row lg:items-center lg:justify-between">
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-surface-high/30 px-3 py-2 text-sm focus-within:border-primary">
+            <Icon name="search" className="text-[18px] text-text-muted" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search agents, knowledge, or language"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-text-muted"
+            />
+          </label>
+          <div className="flex gap-1 overflow-x-auto pb-0.5 lg:flex-none" aria-label="Filter agents by status">
+            {filters.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setFilter(item.key)}
+                className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${filter === item.key ? 'bg-primary text-bg' : 'text-text-muted hover:bg-surface-high hover:text-text'}`}
+              >
+                {item.label} <span className="ml-1 opacity-75">{filterCounts[item.key]}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {agents.map((agent) => (
+          {filteredAgents.map((agent) => {
+            const agentReadiness = getAgentReadiness(agent, readiness, numbers)
+            const primaryAction = !agentReadiness.ready
+              ? { label: 'Finish setup', icon: 'build', onClick: () => navigate(agentReadiness.gaps[0]?.to ?? `/dashboard/agents/${agent.id}`) }
+              : agent.status === 'live'
+                ? { label: 'Test agent', icon: 'mic', onClick: () => setBrowserTestAgent(agent) }
+                : { label: 'Resume agent', icon: 'play_arrow', onClick: () => togglePause(agent) }
+            return (
             <Card key={agent.id} className="flex flex-col">
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3">
@@ -110,46 +220,50 @@ export function Agents() {
                 <InfoRow icon="update" label="Updated" value={formatDateTime(agent.updatedAt)} />
               </dl>
 
-              {(() => {
-                const serverChecks = readiness?.agents.find((item) => item.id === agent.id)?.checks
-                const checks = serverChecks ? Object.values(serverChecks) : [
-                  agent.status === 'live', Boolean(agent.voice && agent.model),
-                  Boolean(agent.systemPrompt.trim() || agent.welcomeMessage.trim()), Boolean(agent.kbId),
-                  numbers.some((n) => n.agentId === agent.id),
-                ]
-                const score = checks.filter(Boolean).length
-                return (
-                  <div className={`mb-4 rounded-lg border px-3 py-2 text-xs ${score === checks.length ? 'border-success/30 bg-success/5' : 'border-amber/30 bg-amber/5'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">Agent readiness</span>
-                      <span className={score === checks.length ? 'text-success' : 'text-amber'}>{score}/{checks.length}</span>
-                    </div>
-                    {score < checks.length && (
-                      <p className="mt-1 text-text-muted">
-                        {!agent.systemPrompt.trim() && !agent.welcomeMessage.trim() ? 'Add a persona or welcome message. ' : ''}
-                        {!agent.kbId ? 'Attach knowledge. ' : ''}
-                        {serverChecks ? (!serverChecks.channel ? 'Assign a phone number or website. ' : '') : (!numbers.some((n) => n.agentId === agent.id) ? 'Assign a phone number or website. ' : '')}
-                        {serverChecks && !serverChecks.active ? 'Activate the agent.' : ''}
-                      </p>
-                    )}
+              <div className={`mb-4 rounded-lg border px-3 py-2 text-xs ${agentReadiness.ready ? 'border-success/30 bg-success/5' : 'border-amber/30 bg-amber/5'}`}>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Agent readiness</span>
+                  <span className={agentReadiness.ready ? 'text-success' : 'text-amber'}>{agentReadiness.score}/{agentReadiness.total}</span>
+                </div>
+                {agentReadiness.gaps.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {agentReadiness.gaps.map((gap) => (
+                      <button
+                        key={gap.key}
+                        type="button"
+                        onClick={() => gap.key === 'active' ? togglePause(agent) : navigate(gap.to)}
+                        className="rounded-md border border-amber/30 bg-surface px-2 py-1 text-left text-[11px] text-text-muted transition-colors hover:border-primary hover:text-text"
+                      >
+                        {gap.label} →
+                      </button>
+                    ))}
                   </div>
-                )
-              })()}
+                ) : <p className="mt-1 text-text-muted">Ready to handle conversations.</p>}
+              </div>
 
               <div className="mt-auto flex gap-2">
                 <button
-                  onClick={() => togglePause(agent)}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs font-bold hover:border-primary"
+                  onClick={primaryAction.onClick}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary py-2 text-xs font-bold text-bg hover:opacity-90"
                 >
-                  <Icon name={agent.status === 'live' ? 'pause' : 'play_arrow'} className="text-[16px]" />
-                  {agent.status === 'live' ? 'Pause' : 'Resume'}
+                  <Icon name={primaryAction.icon} className="text-[16px]" />
+                  {primaryAction.label}
                 </button>
                 <button
                   onClick={() => navigate(`/dashboard/agents/${agent.id}`)}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary py-2 text-xs font-bold text-bg hover:opacity-90"
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 text-xs font-bold hover:border-primary"
+                  aria-label={`Edit ${agent.name}`}
+                  title="Edit agent"
                 >
                   <Icon name="edit" className="text-[16px]" />
-                  Edit
+                </button>
+                <button
+                  onClick={() => togglePause(agent)}
+                  className="flex items-center justify-center rounded-lg border border-border px-3 hover:border-primary"
+                  aria-label={`${agent.status === 'live' ? 'Pause' : 'Resume'} ${agent.name}`}
+                  title={agent.status === 'live' ? 'Pause agent' : 'Resume agent'}
+                >
+                  <Icon name={agent.status === 'live' ? 'pause' : 'play_arrow'} className="text-[16px]" />
                 </button>
                 <button
                   onClick={() => setDialTestAgent(agent)}
@@ -169,8 +283,18 @@ export function Agents() {
                 </button>
               </div>
             </Card>
-          ))}
+            )
+          })}
         </div>
+
+        {filteredAgents.length === 0 && (
+          <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center">
+            <Icon name="search_off" className="mb-2 text-[28px] text-text-muted" />
+            <p className="font-semibold">No agents found</p>
+            <p className="mt-1 text-sm text-text-muted">Try a different search or status filter.</p>
+            {(search || filter !== 'all') && <button type="button" onClick={() => { setSearch(''); setFilter('all') }} className="mt-3 text-sm font-semibold text-primary hover:underline">Clear filters</button>}
+          </div>
+        )}
 
         {dialTestAgent && (
           <DialTestModal
