@@ -197,34 +197,37 @@ function SidebarContent({
   onNavigate,
   collapsed = false,
   onToggleCollapse,
+  toggleLabel,
 }: {
   onNavigate?: () => void
   collapsed?: boolean
   onToggleCollapse?: () => void
+  toggleLabel?: string
 }) {
   const { user } = useAuth()
   return (
     <>
-      <div className={`relative flex items-center ${collapsed ? 'mb-12 justify-center' : 'mb-6 gap-2 px-2'}`}>
-        <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
-        <div className={collapsed ? 'hidden' : ''}>
-          <span className="block text-base font-semibold leading-tight tracking-tight">{BRAND.name}</span>
-          <span className="block text-[10px] uppercase tracking-widest text-text-muted">Enterprise</span>
-        </div>
-        {onToggleCollapse && (
-          <button
-            onClick={onToggleCollapse}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={`group relative flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-text-muted transition-colors hover:border-border hover:bg-surface-high hover:text-primary ${collapsed ? 'absolute right-0 top-full mt-2 border-border bg-surface shadow-sm' : 'ml-auto'}`}
-          >
-            <Icon name={collapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'} className="text-[17px]" />
-            {collapsed && (
-              <span role="tooltip" className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-lg bg-text px-3 py-2 text-xs font-semibold text-bg shadow-lg group-hover:block group-focus-visible:block">
-                Open sidebar
-              </span>
+      <div className={`relative mb-6 flex items-center ${collapsed ? 'justify-center' : 'gap-2 px-2'}`}>
+        {collapsed ? (
+          <img src={vistrowMark} alt={BRAND.name} className="h-8 w-8 rounded-lg" />
+        ) : (
+          <>
+            <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
+            <div className="min-w-0 flex-1">
+              <span className="block truncate text-base font-semibold leading-tight tracking-tight">{BRAND.name}</span>
+              <span className="block text-[10px] uppercase tracking-widest text-text-muted">Enterprise</span>
+            </div>
+            {onToggleCollapse && (
+              <button
+                onClick={onToggleCollapse}
+                aria-label={toggleLabel ?? 'Collapse sidebar'}
+                title={toggleLabel}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-text-muted transition-colors hover:border-border hover:bg-surface-high hover:text-primary"
+              >
+                <Icon name="view_sidebar" className="text-[19px]" />
+              </button>
             )}
-          </button>
+          </>
         )}
       </div>
       <nav className={`flex flex-1 flex-col overflow-y-auto pb-4 ${collapsed ? 'gap-3' : 'gap-4'}`}>
@@ -346,6 +349,7 @@ function ImpersonationBanner({ accountName }: { accountName: string }) {
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [sidebarHovered, setSidebarHovered] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => typeof window !== 'undefined' && localStorage.getItem('vistrow.sidebar.collapsed') === 'true',
   )
@@ -357,6 +361,17 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       return next
     })
   }
+
+  const sidebarExpanded = !sidebarCollapsed || sidebarHovered
+
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [mobileNavOpen])
 
   // Theme is a dashboard-only preference - apply the stored choice on mount
   // and revert to the designed dark look on unmount so the public
@@ -371,11 +386,22 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {user?.impersonating && <ImpersonationBanner accountName={user.accountName} />}
       <aside
         data-dashboard-sidebar
-        className={`fixed left-0 z-30 hidden flex-col border-r border-border bg-surface transition-[width] duration-200 ease-out lg:flex ${sidebarCollapsed ? 'w-20 p-3' : 'w-[280px] p-4'} ${
+        onMouseEnter={() => sidebarCollapsed && setSidebarHovered(true)}
+        onMouseLeave={() => setSidebarHovered(false)}
+        onFocusCapture={() => sidebarCollapsed && setSidebarHovered(true)}
+        onBlurCapture={(event) => {
+          if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+          setSidebarHovered(false)
+        }}
+        className={`fixed left-0 z-30 hidden flex-col border-r border-border bg-surface transition-[width,box-shadow] duration-200 ease-out lg:flex ${sidebarExpanded ? 'w-[280px] p-4' : 'w-20 p-3'} ${sidebarCollapsed && sidebarHovered ? 'shadow-2xl' : ''} ${
           user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'
         }`}
       >
-        <SidebarContent collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
+        <SidebarContent
+          collapsed={!sidebarExpanded}
+          onToggleCollapse={toggleSidebar}
+          toggleLabel={sidebarCollapsed ? 'Keep sidebar open' : 'Collapse sidebar'}
+        />
       </aside>
 
       {mobileNavOpen && (
