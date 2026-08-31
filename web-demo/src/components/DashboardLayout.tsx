@@ -320,6 +320,7 @@ function ImpersonationBanner({ accountName }: { accountName: string }) {
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [sidebarHoverExpanded, setSidebarHoverExpanded] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => typeof window !== 'undefined' && localStorage.getItem('vistrow.sidebar.collapsed') === 'true',
   )
@@ -330,6 +331,13 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       if (typeof window !== 'undefined') localStorage.setItem('vistrow.sidebar.collapsed', String(next))
       return next
     })
+  }
+
+  const closeHoverSidebar = (nextTarget: EventTarget | null) => {
+    // Keep the expanded rail available while moving between its controls.
+    // It only returns to icons after the pointer/focus actually leaves it.
+    if (nextTarget instanceof Element && nextTarget.closest('[data-dashboard-sidebar]')) return
+    setSidebarHoverExpanded(false)
   }
 
   // Theme is a dashboard-only preference - apply the stored choice on mount
@@ -344,11 +352,16 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-bg text-text">
       {user?.impersonating && <ImpersonationBanner accountName={user.accountName} />}
       <aside
-        className={`fixed left-0 hidden flex-col border-r border-border bg-surface transition-[width] duration-200 ease-out lg:flex ${sidebarCollapsed ? 'w-[76px] p-3' : 'w-60 p-4'} ${
+        data-dashboard-sidebar
+        onMouseEnter={() => sidebarCollapsed && setSidebarHoverExpanded(true)}
+        onMouseLeave={(event) => closeHoverSidebar(event.relatedTarget)}
+        onFocusCapture={() => sidebarCollapsed && setSidebarHoverExpanded(true)}
+        onBlurCapture={(event) => closeHoverSidebar(event.relatedTarget)}
+        className={`fixed left-0 hidden flex-col border-r border-border bg-surface transition-[width,box-shadow] duration-200 ease-out lg:flex ${sidebarCollapsed && !sidebarHoverExpanded ? 'w-[76px] p-3' : 'z-30 w-60 p-4 shadow-2xl'} ${
           user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'
         }`}
       >
-        <SidebarContent collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
+        <SidebarContent collapsed={sidebarCollapsed && !sidebarHoverExpanded} onToggleCollapse={toggleSidebar} />
       </aside>
 
       {mobileNavOpen && (
