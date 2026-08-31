@@ -71,7 +71,7 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
   },
 ]
 
-function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
+function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const workspace = user?.accountName || BRAND.defaultWorkspace
@@ -102,7 +102,9 @@ function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
     <div ref={rootRef} className="relative border-t border-border pt-3">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-surface-high"
+        aria-label={collapsed ? `${workspace} account menu` : undefined}
+        title={collapsed ? `${workspace} account menu` : undefined}
+        className={`flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-surface-high ${collapsed ? 'justify-center' : ''}`}
       >
         {user?.avatarUrl ? (
           <img src={user.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full border border-primary/30 object-cover" />
@@ -111,15 +113,15 @@ function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
             {initials(workspace)}
           </div>
         )}
-        <div className="min-w-0 flex-1">
+        <div className={`min-w-0 flex-1 ${collapsed ? 'hidden' : ''}`}>
           <p className="truncate text-sm font-semibold">{workspace}</p>
           <p className="truncate text-[11px] text-text-muted">{user?.name || 'Admin'}</p>
         </div>
-        <Icon name={open ? 'expand_more' : 'expand_less'} className="text-[18px] text-text-muted" />
+        <Icon name={open ? 'expand_more' : 'expand_less'} className={`text-[18px] text-text-muted ${collapsed ? 'hidden' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 z-20 mb-2 w-full overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
+        <div className={`absolute bottom-full z-20 mb-2 overflow-hidden rounded-xl border border-border bg-surface shadow-lg ${collapsed ? 'left-0 w-60' : 'left-0 w-full'}`}>
           <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
             {user?.avatarUrl ? (
               <img src={user.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full border border-primary/30 object-cover" />
@@ -170,24 +172,42 @@ function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({
+  onNavigate,
+  collapsed = false,
+  onToggleCollapse,
+}: {
+  onNavigate?: () => void
+  collapsed?: boolean
+  onToggleCollapse?: () => void
+}) {
   const { user } = useAuth()
   return (
     <>
-      <div className="mb-6 flex items-center gap-2 px-2">
+      <div className={`mb-6 flex items-center ${collapsed ? 'justify-center' : 'gap-2 px-2'}`}>
         <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
-        <div>
+        <div className={collapsed ? 'hidden' : ''}>
           <span className="block text-base font-semibold leading-tight tracking-tight">{BRAND.name}</span>
           <span className="block text-[10px] uppercase tracking-widest text-text-muted">Enterprise</span>
         </div>
+        {onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-text-muted transition-colors hover:border-border hover:bg-surface-high hover:text-primary ${collapsed ? 'absolute top-14 -right-3 z-10 bg-surface shadow-sm' : 'ml-auto'}`}
+          >
+            <Icon name={collapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'} className="text-[17px]" />
+          </button>
+        )}
       </div>
-      <nav className="flex flex-1 flex-col gap-4 overflow-y-auto pb-4">
+      <nav className={`flex flex-1 flex-col overflow-y-auto pb-4 ${collapsed ? 'gap-3' : 'gap-4'}`}>
         {NAV_GROUPS.map((group) => (
           <div key={group.title}>
-            <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-text-muted">
+            <p className={`mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-text-muted ${collapsed ? 'sr-only' : ''}`}>
               {group.title}
             </p>
-            <div className="flex flex-col gap-0.5">
+            <div className={`flex flex-col gap-0.5 ${collapsed ? 'border-t border-border pt-2 first:border-t-0 first:pt-0' : ''}`}>
               {group.items.map((item) => (
                 <NavLink
                   key={item.to}
@@ -195,8 +215,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   end={item.to === '/dashboard'}
                   onClick={onNavigate}
                   data-tour={item.tour}
+                  aria-label={collapsed ? item.label : undefined}
+                  title={collapsed ? item.label : undefined}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    `flex items-center rounded-lg py-2 text-sm transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${
                       isActive
                         ? 'border-l-[3px] border-primary bg-surface-high text-text'
                         : 'text-text-muted hover:bg-surface-high'
@@ -204,7 +226,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   }
                 >
                   <Icon name={item.icon} className="text-[19px]" />
-                  {item.label}
+                  <span className={collapsed ? 'sr-only' : ''}>{item.label}</span>
                 </NavLink>
               ))}
             </div>
@@ -215,13 +237,15 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <NavLink
           to="/admin"
           onClick={onNavigate}
-          className="mb-3 flex items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20"
+          aria-label={collapsed ? 'Admin panel' : undefined}
+          title={collapsed ? 'Admin panel' : undefined}
+          className={`mb-3 flex items-center rounded-lg border border-destructive/40 bg-destructive/10 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'}`}
         >
           <Icon name="shield_person" className="text-[19px]" />
-          Admin panel
+          <span className={collapsed ? 'sr-only' : ''}>Admin panel</span>
         </NavLink>
       )}
-      <AccountMenu onNavigate={onNavigate} />
+      <AccountMenu onNavigate={onNavigate} collapsed={collapsed} />
     </>
   )
 }
@@ -296,6 +320,17 @@ function ImpersonationBanner({ accountName }: { accountName: string }) {
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => typeof window !== 'undefined' && localStorage.getItem('vistrow.sidebar.collapsed') === 'true',
+  )
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current
+      if (typeof window !== 'undefined') localStorage.setItem('vistrow.sidebar.collapsed', String(next))
+      return next
+    })
+  }
 
   // Theme is a dashboard-only preference - apply the stored choice on mount
   // and revert to the designed dark look on unmount so the public
@@ -309,11 +344,11 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-bg text-text">
       {user?.impersonating && <ImpersonationBanner accountName={user.accountName} />}
       <aside
-        className={`fixed left-0 hidden w-60 flex-col border-r border-border bg-surface p-4 lg:flex ${
+        className={`fixed left-0 hidden flex-col border-r border-border bg-surface transition-[width] duration-200 ease-out lg:flex ${sidebarCollapsed ? 'w-[76px] p-3' : 'w-60 p-4'} ${
           user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'
         }`}
       >
-        <SidebarContent />
+        <SidebarContent collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
       </aside>
 
       {mobileNavOpen && (
@@ -329,7 +364,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className={`min-w-0 lg:ml-60 ${user?.impersonating ? 'pt-9' : ''}`}>
+      <div className={`min-w-0 transition-[margin] duration-200 ease-out ${sidebarCollapsed ? 'lg:ml-[76px]' : 'lg:ml-60'} ${user?.impersonating ? 'pt-9' : ''}`}>
         <div className="flex items-center gap-3 border-b border-border px-4 py-3 lg:hidden">
           <button
             aria-label="Open navigation"
