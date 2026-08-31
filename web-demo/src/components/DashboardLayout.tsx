@@ -117,7 +117,7 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
         aria-expanded={open}
         aria-label={collapsed ? `${workspace} account menu` : undefined}
         title={collapsed ? `${workspace} account menu` : undefined}
-        className={`flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-surface-high ${collapsed ? 'justify-center' : ''}`}
+        className={`flex w-full items-center gap-2 rounded-lg py-1 text-left transition-colors hover:bg-surface-high ${collapsed ? 'justify-center px-1' : 'px-2'}`}
       >
         {user?.avatarUrl ? (
           <img src={user.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full border border-primary/30 object-cover" />
@@ -207,7 +207,7 @@ function SidebarContent({
   const { user } = useAuth()
   return (
     <>
-      <div className={`relative mb-6 flex items-center ${collapsed ? 'justify-center' : 'gap-2 px-2'}`}>
+      <div className={`relative mb-6 flex h-10 items-center ${collapsed ? 'justify-center' : 'gap-2 px-3'}`}>
         {collapsed ? (
           <img src={vistrowMark} alt={BRAND.name} className="h-8 w-8 rounded-lg" />
         ) : (
@@ -233,7 +233,7 @@ function SidebarContent({
       <nav className="flex flex-1 flex-col gap-3 overflow-y-auto pb-4">
         {NAV_GROUPS.map((group) => (
           <div key={group.title}>
-            <div className="mb-1 flex h-6 items-center px-3" aria-hidden={collapsed || undefined}>
+            <div className={`mb-1 flex h-6 items-center ${collapsed ? 'px-3' : 'px-4'}`} aria-hidden={collapsed || undefined}>
               {collapsed ? (
                 <span className="h-px w-full bg-border" />
               ) : (
@@ -251,7 +251,7 @@ function SidebarContent({
                   aria-label={collapsed ? item.label : undefined}
                   title={collapsed ? item.label : undefined}
                   className={({ isActive }) =>
-                    `flex items-center rounded-lg py-2 text-sm transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${
+                    `flex items-center rounded-lg py-2 text-sm transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-4'} ${
                       isActive
                         ? 'border-l-[3px] border-primary bg-surface-high text-text'
                         : 'text-text-muted hover:bg-surface-high'
@@ -272,7 +272,7 @@ function SidebarContent({
           onClick={onNavigate}
           aria-label={collapsed ? 'Admin panel' : undefined}
           title={collapsed ? 'Admin panel' : undefined}
-          className={`mb-3 flex items-center rounded-lg border border-destructive/40 bg-destructive/10 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'}`}
+          className={`mb-3 flex items-center rounded-lg border border-destructive/40 bg-destructive/10 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 ${collapsed ? 'justify-center px-2' : 'gap-3 px-4'}`}
         >
           <Icon name="shield_person" className="text-[19px]" />
           <span className={collapsed ? 'sr-only' : ''}>Admin panel</span>
@@ -397,7 +397,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
           setSidebarHovered(false)
         }}
-        className={`fixed left-0 z-30 hidden flex-col border-r border-border bg-surface transition-[width,box-shadow] duration-200 ease-out lg:flex ${sidebarExpanded ? 'w-[280px] p-4' : 'w-20 p-3'} ${sidebarCollapsed && sidebarHovered ? 'shadow-2xl' : ''} ${
+        className={`fixed left-0 z-30 hidden flex-col border-r border-border bg-surface p-3 transition-[width,box-shadow] duration-200 ease-out lg:flex ${sidebarExpanded ? 'w-[280px]' : 'w-20'} ${sidebarCollapsed && sidebarHovered ? 'shadow-2xl' : ''} ${
           user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'
         }`}
       >
