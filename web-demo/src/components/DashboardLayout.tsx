@@ -230,13 +230,17 @@ function SidebarContent({
           </>
         )}
       </div>
-      <nav className={`flex flex-1 flex-col overflow-y-auto pb-4 ${collapsed ? 'gap-3' : 'gap-4'}`}>
+      <nav className="flex flex-1 flex-col gap-3 overflow-y-auto pb-4">
         {NAV_GROUPS.map((group) => (
           <div key={group.title}>
-            <p className={`mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-text-muted ${collapsed ? 'sr-only' : ''}`}>
-              {group.title}
-            </p>
-            <div className={`flex flex-col gap-0.5 ${collapsed ? 'border-t border-border pt-2 first:border-t-0 first:pt-0' : ''}`}>
+            <div className="mb-1 flex h-6 items-center px-3" aria-hidden={collapsed || undefined}>
+              {collapsed ? (
+                <span className="h-px w-full bg-border" />
+              ) : (
+                <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{group.title}</span>
+              )}
+            </div>
+            <div className="flex flex-col gap-0.5">
               {group.items.map((item) => (
                 <NavLink
                   key={item.to}
