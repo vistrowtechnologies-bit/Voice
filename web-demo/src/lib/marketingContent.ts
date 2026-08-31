@@ -569,6 +569,9 @@ export const FOOTER_COLUMNS = [
 /** Company phone, shown in the footer's tel: link. */
 export const CONTACT_PHONE = '+91 80801 97945'
 
+/** Company email, shown in the footer's mailto: link and on the Contact page. */
+export const CONTACT_EMAIL = 'info@vistrowvoice.com'
+
 /** Headline stats shown under the hero. */
 /** A handful of global greetings for the homepage chip strip. Deliberately
  *  short: this is a visual signal that the agent goes past India, not the
