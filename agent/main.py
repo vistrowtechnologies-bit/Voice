@@ -1823,8 +1823,10 @@ class RealEstateAgent(Agent):
         )
         _appointment_instruction = (
             "The caller's last message is about appointment availability, choosing a time, or "
-            "booking. You MUST use check_calendar_availability before claiming any time is open; "
-            "do not answer availability from working hours or memory. The tool itself immediately "
+            "booking. You MUST call check_calendar_availability before saying ANYTHING about whether a "
+            "time is free — including saying it is NOT free. Replayed live, the agent answered "
+            "\"that time is not free\" and offered two invented alternatives without ever "
+            "calling the tool. Do not answer availability from working hours or memory. The tool itself immediately "
             "speaks a natural checking line to the caller, so call it silently without adding a "
             "second filler. If they are trying to finalize a slot, do not say it is booked until "
             "you have their name, phone number, and purpose and book_appointment returns success. "
@@ -1853,6 +1855,26 @@ class RealEstateAgent(Agent):
             "arrive ten minutes early, and ask if there is anything else you can help with. If "
             "they say no, close the call warmly and stop."
             if self._appointment_booked
+            else ""
+        )
+        # The intake order is prose in the industry block and the model does not
+        # follow it: asked to book, it replies "which department or doctor do you
+        # need?" in 3 of 3 replays, in both languages. The caller does not know
+        # the department — that is the clinic's job to work out from the
+        # complaint. Fired only while no symptom has been captured yet.
+        _intake_instruction = (
+            "They want an appointment and have not said what is wrong yet. Your NEXT question "
+            "is what the problem is, ASKED IN THE LANGUAGE THEY JUST USED — an English caller "
+            "gets \"what seems to be the trouble?\", a Hindi caller gets \"क्या परेशानी हो रही "
+            "है?\". Replayed live, an English caller was answered in Hindi. Then since when, "
+            "then whether it feels urgent, one at a time. Do NOT ask "
+            "which department or which doctor they want: a patient does not know that, and "
+            "working it out from the complaint is your job."
+            if (
+                self._public_demo_slug == "healthcare"
+                and not self._healthcare_symptom_mentioned
+                and _APPOINTMENT_INTENT_PATTERN.search(text)
+            )
             else ""
         )
         _healthcare_safety_instruction = (
@@ -1906,6 +1928,7 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _industry_empathy_instruction if _industry_empathy_instruction else "")
             + ("\n\n" + _language_request_instruction if _language_request_instruction else "")
             + ("\n\n" + _appointment_instruction if _appointment_instruction else "")
+            + ("\n\n" + _intake_instruction if _intake_instruction else "")
             + ("\n\n" + _healthcare_safety_instruction if _healthcare_safety_instruction else "")
             + ("\n\n" + _post_booking_instruction if _post_booking_instruction else "")
             + ("\n\n" + _search_instruction if _search_instruction else ""),
