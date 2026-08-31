@@ -315,6 +315,28 @@ def _name_skeleton(word: str) -> str:
     return squashed
 
 
+def _next_working_dates(days: set[int], after: str, count: int = 2) -> list[str]:
+    """The next real dates a practitioner works, as YYYY-MM-DD.
+
+    The model must never work these out itself. Asked for a day the doctor
+    does not work, it answered "बुधवार, एक सितंबर" — 1 September 2026 is a
+    Tuesday, and the next Wednesday was the 2nd. Same failure as the
+    "38 August" slot: arithmetic done in the model instead of in code.
+    """
+    try:
+        start = datetime.strptime(after, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return []
+    out: list[str] = []
+    for step in range(1, 15):
+        d = start + timedelta(days=step)
+        if d.weekday() in days:
+            out.append(d.isoformat())
+            if len(out) >= count:
+                break
+    return out
+
+
 def _named_practitioner(context, table: dict[str, dict]) -> dict | None:
     """Whichever practitioner this conversation is actually about.
 
@@ -831,20 +853,31 @@ async def check_calendar_availability(
             _wd = datetime.strptime(date, "%Y-%m-%d").date().weekday()
             _days = ", ".join(_names[d] for d in sorted(_who["days"]))
             if _wd not in _who["days"]:
+                _next = _next_working_dates(_who["days"], date)
+                _spoken_next = ", ".join(
+                    f"{d} (say: \"{_spoken_date(d, reply_language)}\")" for d in _next
+                ) or "none in the next two weeks"
                 return (
                     f"Dr. {_who['name']} does NOT work on {_names[_wd]}. Do not offer any time on "
-                    f"{date} for them. Tell the caller Dr. {_who['name']} sees patients on "
-                    f"{_days}, and ask which of those days suits — then check that day."
+                    f"{date} for them. Their next working dates are: {_spoken_next}. Use those "
+                    f"EXACT dates — do not work out a date yourself, and do not pair a weekday "
+                    f"with a number of your own. Offer one and ask if it suits."
                 )
             _within = [
                 t for t in slots
                 if _who["start"] <= int(t[:2]) * 60 + int(t[3:5]) < _who["end"]
             ]
             if not _within:
+                _next = _next_working_dates(_who["days"], date)
+                _spoken_next = ", ".join(
+                    f"{d} (say: \"{_spoken_date(d, reply_language)}\")" for d in _next
+                ) or "none in the next two weeks"
                 return (
                     f"Dr. {_who['name']} works {_days}, {_who['start'] // 60}:00-"
                     f"{_who['end'] // 60}:00, and nothing inside those hours is free on {date}. "
-                    f"Say so and offer another of their days."
+                    f"Their next working dates are: {_spoken_next}. Use those EXACT dates — never "
+                    f"work one out yourself. Offer one, or take the caller's name and number for a "
+                    f"callback if none suit."
                 )
             slots = _within
     # Confirmed real failure: a caller who hadn't named a time got all

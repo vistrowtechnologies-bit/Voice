@@ -1661,7 +1661,15 @@ class RealEstateAgent(Agent):
         # physician; a caller who has chosen a department should not be moved
         # out of it by anything said afterwards.
         if self._public_demo_slug == "healthcare" and self._chosen_department is None:
-            self._chosen_department = _department_for(text)
+            # A complaint that matches no specialty is a general-medicine
+            # complaint — it is not "no department". A headache returned None,
+            # nothing locked, and the agent then offered a dermatologist and
+            # then a paediatrician to an adult with a headache, purely because
+            # they happened to be free. Anything unmatched pins to the general
+            # physician instead.
+            self._chosen_department = _department_for(text) or (
+                "General Physician" if self._healthcare_symptom_mentioned else None
+            )
 
         detected_gender = _detect_caller_gender(text)
         if detected_gender:
@@ -1885,7 +1893,11 @@ class RealEstateAgent(Agent):
             "the COMPLAINT belongs to, taken from the knowledge base — never default everyone to the "
             "general physician, and never read out a list of specialties. Once a department is "
             "chosen, it is fixed for the rest of the call: do not move the caller to another one "
-            "later, and never after an appointment is booked. Never diagnose."
+            "later, and never after an appointment is booked. NEVER offer a doctor from a "
+            "different department because they happen to be free — a real call offered a "
+            "dermatologist, and then a paediatrician, to an adult with a headache, and the caller "
+            "had to ask why. If the right doctor has nothing free, the honest answer is their next "
+            "working day, or taking a name and number for a callback. Never diagnose."
             + (
                 f"\nThis caller's complaint is a {self._chosen_department} matter. Book them with "
                 f"the {self._chosen_department} doctor named in the knowledge base and with nobody "
