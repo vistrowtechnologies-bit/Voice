@@ -721,6 +721,13 @@ _SEED_INTEGRATIONS = [
         "Reporting",
         "Append every qualified lead as a row via a Google Apps Script web-app URL (no OAuth).",
     ),
+    (
+        "facebook",
+        "Facebook Lead Ads",
+        "Lead Sources",
+        "Connect your Facebook Page and every new Lead Ads submission is queued for a call within "
+        "about 15-30 seconds. Click Connect and choose your Page - no webhook URLs to configure.",
+    ),
 ]
 
 # Same Hinglish-aware frustration cues the live agent uses for its calm-voice
@@ -3978,6 +3985,34 @@ def account_id_for_lead_webhook_token(token: str) -> int | None:
         for row in rows:
             if secrets.compare_digest(row["value"], token):
                 return row["account_id"]
+        return None
+    finally:
+        conn.close()
+
+
+def facebook_page_connection(page_id: str) -> dict | None:
+    """Which account owns this Facebook Page, and the Page access token to
+    fetch lead data with — looked up by page_id since Meta's leadgen webhook
+    is one shared URL for every connected account, routed by whichever page
+    the lead came from. Config shape is whatever
+    update_integration('facebook', ...) stored: {pageId, pageName,
+    pageAccessToken}. A full scan of the (small) integrations table rather
+    than an indexed column — fine at this scale, revisit if the connected-
+    Page count ever grows past a handful of accounts."""
+    if not page_id:
+        return None
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT account_id, config_json FROM integrations WHERE key = 'facebook' AND status = 'connected'"
+        ).fetchall()
+        for row in rows:
+            try:
+                config = json.loads(row["config_json"] or "{}")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if config.get("pageId") == page_id:
+                return {"account_id": row["account_id"], **config}
         return None
     finally:
         conn.close()

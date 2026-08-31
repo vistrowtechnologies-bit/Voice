@@ -1,4 +1,6 @@
 import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -6,6 +8,7 @@ import re
 import secrets
 import subprocess
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -81,6 +84,7 @@ _PUBLIC_PATHS = {
     "/public/contact",                 # marketing site's "Book a Demo" form (anonymous visitors)
     "/telephony/enablex/inbound-event",  # EnableX inbound webhook (their server calls it)
     "/telephony/enablex/outbound-test-event",  # EnableX outbound/test-call webhook (their server calls it — no session)
+    "/webhooks/meta",                  # Meta's leadgen/WhatsApp webhook (GET verify + POST events — no session)
 }
 _PUBLIC_PREFIXES = (
     "/auth/", "/invite/", "/widget-avatars/",
@@ -815,6 +819,126 @@ def integration_slack_callback(
     user: dict = Depends(require_role("admin")),
 ) -> RedirectResponse:
     return _complete_slack_integration_oauth(request, code, state, error, user)
+
+
+_FACEBOOK_INTEGRATION_STATE_COOKIE = "vv_facebook_integration_state"
+_META_GRAPH_VERSION = "v25.0"  # v20.0 sunsets 2026-09-24; stay current explicitly rather than drift.
+
+
+@app.get("/integrations/facebook/start")
+def integration_facebook_start(user: dict = Depends(require_role("admin"))) -> RedirectResponse:
+    """Same shape as Slack's start route: redirect to the provider's own
+    OAuth screen, no form on our side. Scopes are the minimum Meta requires
+    to list a Page and subscribe it to lead-gen events — pages_show_list to
+    find it, leads_retrieval + pages_manage_metadata to read leads and
+    subscribe the webhook, pages_read_engagement because Meta's own docs
+    list it alongside leads_retrieval for this exact flow."""
+    client_id = os.environ.get("META_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("META_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("META_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        raise HTTPException(404, "Facebook integration is not configured on this server")
+
+    state = secrets.token_urlsafe(24)
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": "pages_show_list,pages_manage_metadata,pages_read_engagement,leads_retrieval",
+        "state": state,
+    }
+    redirect = RedirectResponse(
+        f"https://www.facebook.com/{_META_GRAPH_VERSION}/dialog/oauth?{urllib.parse.urlencode(params)}"
+    )
+    redirect.set_cookie(
+        _FACEBOOK_INTEGRATION_STATE_COOKIE, state, max_age=600,
+        httponly=True, secure=_COOKIE_SECURE, samesite="lax", path="/",
+    )
+    return redirect
+
+
+@app.get("/integrations/facebook/callback")
+def integration_facebook_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    user: dict = Depends(require_role("admin")),
+) -> RedirectResponse:
+    """Exchanges the code for a user token, lists the Pages this user
+    manages, and auto-connects if there's exactly one. Deliberately refuses
+    to guess when there's more than one — Business accounts running several
+    Pages are common, and silently wiring leads from the wrong Page to the
+    wrong campaign is worse than asking for help. Always subscribes the
+    connected Page to the leadgen webhook field itself (not a separate
+    manual step), so "Connected" here means leads actually flow, not just
+    that a token is stored."""
+    base_url = _app_base_url(request)
+
+    def _finish(query: str = "") -> RedirectResponse:
+        response = RedirectResponse(f"{base_url}/dashboard/integrations{query}")
+        response.delete_cookie(_FACEBOOK_INTEGRATION_STATE_COOKIE, path="/")
+        return response
+
+    expected_state = request.cookies.get(_FACEBOOK_INTEGRATION_STATE_COOKIE)
+    if error or not code or not expected_state or not secrets.compare_digest(state or "", expected_state):
+        return _finish("?facebook=failed")
+
+    client_id = os.environ.get("META_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("META_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("META_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        return _finish("?facebook=failed")
+
+    try:
+        token_params = urllib.parse.urlencode(
+            {"client_id": client_id, "client_secret": client_secret, "redirect_uri": redirect_uri, "code": code}
+        )
+        with urllib.request.urlopen(
+            f"https://graph.facebook.com/{_META_GRAPH_VERSION}/oauth/access_token?{token_params}", timeout=10
+        ) as resp:
+            user_token = json.loads(resp.read()).get("access_token")
+        if not user_token:
+            return _finish("?facebook=failed")
+
+        pages_params = urllib.parse.urlencode({"access_token": user_token})
+        with urllib.request.urlopen(
+            f"https://graph.facebook.com/{_META_GRAPH_VERSION}/me/accounts?{pages_params}", timeout=10
+        ) as resp:
+            pages = json.loads(resp.read()).get("data") or []
+    except Exception:
+        logger.exception("Facebook integration OAuth failed")
+        return _finish("?facebook=failed")
+
+    if not pages:
+        return _finish("?facebook=no_pages")
+    if len(pages) > 1:
+        return _finish("?facebook=multiple_pages")
+
+    page = pages[0]
+    page_id = str(page.get("id") or "")
+    page_access_token = page.get("access_token") or ""
+    if not page_id or not page_access_token:
+        return _finish("?facebook=failed")
+
+    try:
+        subscribe_params = urllib.parse.urlencode(
+            {"subscribed_fields": "leadgen", "access_token": page_access_token}
+        ).encode()
+        subscribe_req = urllib.request.Request(
+            f"https://graph.facebook.com/{_META_GRAPH_VERSION}/{page_id}/subscribed_apps",
+            data=subscribe_params, method="POST",
+        )
+        urllib.request.urlopen(subscribe_req, timeout=10)
+    except Exception:
+        logger.exception("Facebook page webhook subscription failed for page %s", page_id)
+        return _finish("?facebook=subscribe_failed")
+
+    calls_db.update_integration(
+        "facebook", "connected",
+        {"pageId": page_id, "pageName": str(page.get("name") or ""), "pageAccessToken": page_access_token},
+        user["account_id"],
+    )
+    return _finish()
 
 
 @app.get("/auth/oauth/github/start")
@@ -3282,6 +3406,28 @@ async def billing_razorpay_webhook(request: Request) -> dict:
     return {"ok": True}
 
 
+def _parse_facebook_field_data(field_data: list) -> tuple[str, str]:
+    """(name, phone) out of Facebook Lead Ads' field_data shape — a list of
+    {"name": <question label>, "values": [<answer>]} pairs. Question labels
+    vary per form, so this matches by common phone/name aliases rather than
+    assuming an exact key. Shared by the Zapier-passthrough path (leads_inbound)
+    and the native Graph API leadgen lookup (facebook_leadgen_lead), since
+    both eventually hold the same shape — one from Zapier forwarding it
+    unmodified, the other from calling Meta directly."""
+    name, phone = "", ""
+    for entry in field_data or []:
+        label = str((entry or {}).get("name") or "").strip().lower()
+        values = (entry or {}).get("values") or []
+        value = str(values[0]).strip() if values else ""
+        if not value:
+            continue
+        if not phone and label in ("phone_number", "phone", "mobile", "contact_number"):
+            phone = value
+        elif not name and label in ("full_name", "name", "first_name"):
+            name = value
+    return name, phone
+
+
 @app.post("/leads/inbound/{account_id}")
 async def leads_inbound(account_id: int, token: str, request: Request) -> dict:
     """Generic entry point for any external lead source that can POST JSON —
@@ -3313,20 +3459,9 @@ async def leads_inbound(account_id: int, token: str, request: Request) -> dict:
     name = str(body.get("name") or body.get("full_name") or "").strip()
     phone = str(body.get("phone") or body.get("phone_number") or "").strip()
     if not phone:
-        # Zapier's raw Facebook Lead Ads passthrough: field_data is a list of
-        # {"name": <question label>, "values": [<answer>]} pairs — the
-        # question labels vary per form, so match by common phone/name
-        # aliases rather than assuming an exact key.
-        for entry in body.get("field_data") or []:
-            label = str((entry or {}).get("name") or "").strip().lower()
-            values = (entry or {}).get("values") or []
-            value = str(values[0]).strip() if values else ""
-            if not value:
-                continue
-            if not phone and label in ("phone_number", "phone", "mobile", "contact_number"):
-                phone = value
-            elif not name and label in ("full_name", "name", "first_name"):
-                name = value
+        # Zapier's raw Facebook Lead Ads passthrough — see _parse_facebook_field_data.
+        parsed_name, parsed_phone = _parse_facebook_field_data(body.get("field_data") or [])
+        name, phone = name or parsed_name, phone or parsed_phone
     if not phone:
         logger.warning("leads_inbound: no phone number in payload for account %s", account_id)
         return {"ok": False, "reason": "no_phone_in_payload"}
@@ -3337,6 +3472,98 @@ async def leads_inbound(account_id: int, token: str, request: Request) -> dict:
     if not result.get("ok"):
         logger.warning("leads_inbound: could not queue lead for account %s: %s", account_id, result.get("reason"))
     return result
+
+
+@app.get("/webhooks/meta")
+def webhooks_meta_verify(request: Request) -> PlainTextResponse:
+    """Meta's one-time webhook verification handshake, run once when the
+    URL is registered in the Meta App dashboard (or re-verified): it GETs
+    this URL with hub.mode=subscribe, hub.verify_token, and hub.challenge,
+    and expects the challenge echoed back as plain text if the verify token
+    matches — otherwise it refuses to save the subscription. One webhook
+    URL serves every connected account; routing to the right one happens
+    per-event in webhooks_meta_event, by page_id."""
+    params = request.query_params
+    verify_token = os.environ.get("META_WEBHOOK_VERIFY_TOKEN", "")
+    if (
+        params.get("hub.mode") == "subscribe"
+        and verify_token
+        and secrets.compare_digest(params.get("hub.verify_token", ""), verify_token)
+    ):
+        return PlainTextResponse(params.get("hub.challenge", ""))
+    raise HTTPException(403, "Verification failed")
+
+
+def _fetch_facebook_lead_fields(leadgen_id: str, page_access_token: str) -> list:
+    url = (
+        f"https://graph.facebook.com/{_META_GRAPH_VERSION}/{leadgen_id}"
+        f"?fields=field_data&access_token={urllib.parse.quote(page_access_token)}"
+    )
+    with urllib.request.urlopen(url, timeout=10) as resp:
+        return json.loads(resp.read()).get("field_data") or []
+
+
+@app.post("/webhooks/meta")
+async def webhooks_meta_event(request: Request) -> dict:
+    """The real-time receiver for every Meta product this app is subscribed
+    to — today just Facebook Lead Ads ('page' object, 'leadgen' field);
+    WhatsApp inbound messages land here too once that's wired up
+    ('whatsapp_business_account' object), same URL, same signature check,
+    branching on `object`.
+
+    Every request is signature-verified against META_OAUTH_CLIENT_SECRET
+    (X-Hub-Signature-256, HMAC-SHA256 over the raw body) before the payload
+    is trusted at all — this is a public URL with no per-account secret in
+    it, so the signature is the only thing standing between "real Meta
+    event" and "anyone who found this URL can inject a fake lead." Always
+    returns 200 once the signature checks out, even for an object/field we
+    don't act on — Meta retries a non-200 for up to 7 days, and there's
+    nothing to gain from that on an event we intentionally ignore."""
+    raw_body = await request.body()
+    app_secret = os.environ.get("META_OAUTH_CLIENT_SECRET", "")
+    signature = request.headers.get("x-hub-signature-256", "")
+    if not app_secret or not signature.startswith("sha256="):
+        raise HTTPException(403, "Missing signature")
+    expected = "sha256=" + hmac.new(app_secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        raise HTTPException(403, "Invalid signature")
+
+    try:
+        payload = json.loads(raw_body)
+    except json.JSONDecodeError:
+        return {"ok": False, "reason": "invalid_json"}
+
+    if payload.get("object") != "page":
+        return {"ok": True, "reason": "ignored_object"}  # e.g. whatsapp_business_account, not built yet
+
+    for entry in payload.get("entry") or []:
+        for change in entry.get("changes") or []:
+            if change.get("field") != "leadgen":
+                continue
+            value = change.get("value") or {}
+            leadgen_id = str(value.get("leadgen_id") or "")
+            page_id = str(value.get("page_id") or "")
+            if not leadgen_id or not page_id:
+                continue
+            connection = calls_db.facebook_page_connection(page_id)
+            if not connection:
+                logger.warning("webhooks_meta_event: leadgen event for unconnected page %s", page_id)
+                continue
+            try:
+                field_data = _fetch_facebook_lead_fields(leadgen_id, connection["pageAccessToken"])
+            except Exception:
+                logger.exception("webhooks_meta_event: failed to fetch lead %s for page %s", leadgen_id, page_id)
+                continue
+            name, phone = _parse_facebook_field_data(field_data)
+            if not phone:
+                logger.warning("webhooks_meta_event: lead %s had no phone field", leadgen_id)
+                continue
+            result = calls_db.ingest_inbound_lead(
+                connection["account_id"], name, phone, source="facebook_lead_ads_native", external_id=leadgen_id,
+            )
+            if not result.get("ok"):
+                logger.warning("webhooks_meta_event: could not queue lead %s: %s", leadgen_id, result.get("reason"))
+    return {"ok": True}
 
 
 @app.get("/integrations/lead-webhook")

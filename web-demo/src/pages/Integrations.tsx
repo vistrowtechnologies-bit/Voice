@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
-import { fetchIntegrations, fetchLeadWebhook, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateIntegration } from '../lib/api'
+import { facebookIntegrationStartUrl, fetchIntegrations, fetchLeadWebhook, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateIntegration } from '../lib/api'
 import type { Integration } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import arthaleadsIcon from '../assets/arthaleads-logo.png'
@@ -11,16 +11,19 @@ const ICONS: Record<string, string> = {
   webhook: 'webhook',
   whatsapp: 'chat',
   sheets: 'table_chart',
+  facebook: 'ads_click',
 }
 
-// Integrations that open a local config form. Slack has its own OAuth install
-// flow so operators can choose a channel without hunting for webhook URLs.
+// Integrations that open a local config form. Slack and Facebook have their
+// own OAuth install flow so operators can connect without hunting for
+// webhook URLs or tokens.
 const CONNECTABLE = new Set(['arthaleads', 'webhook', 'whatsapp', 'sheets'])
 
 // The API returns integrations in undefined DB row order - pin a deliberate
-// display order instead (ArthaLeads first, since it's the flagship CRM)
-// rather than leaving card position to chance.
-const DISPLAY_ORDER = ['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets']
+// display order instead (ArthaLeads first, since it's the flagship CRM;
+// Facebook right after it since it's a lead SOURCE, not a delivery target
+// like the rest of this list) rather than leaving card position to chance.
+const DISPLAY_ORDER = ['arthaleads', 'facebook', 'webhook', 'slack', 'whatsapp', 'sheets']
 const sortIntegrations = (list: Integration[]) =>
   [...list].sort((a, b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key))
 
@@ -78,6 +81,10 @@ export function Integrations() {
   const handleConnect = async (key: string) => {
     if (key === 'slack') {
       window.location.href = slackIntegrationStartUrl
+      return
+    }
+    if (key === 'facebook') {
+      window.location.href = facebookIntegrationStartUrl
       return
     }
     if (key === 'arthaleads') {
@@ -219,6 +226,8 @@ export function Integrations() {
                   <InfoRow label="Endpoint" value="api.arthaleads.com" />
                 ) : integration.key === 'slack' ? (
                   <InfoRow label="Channel" value={integration.config.channel || '-'} />
+                ) : integration.key === 'facebook' ? (
+                  <InfoRow label="Page" value={integration.config.pageName || '-'} />
                 ) : (
                   <InfoRow label="Endpoint" value={integration.config.url ? integration.config.url.slice(0, 40) : '-'} />
                 )}
@@ -327,6 +336,14 @@ export function Integrations() {
                 >
                   <Icon name="link" className="text-[15px]" />
                   Connect Slack
+                </button>
+              ) : integration.key === 'facebook' ? (
+                <button
+                  onClick={() => handleConnect('facebook')}
+                  className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-cyan/40 py-2 text-xs font-bold text-cyan hover:bg-cyan/10"
+                >
+                  <Icon name="link" className="text-[15px]" />
+                  Connect Facebook
                 </button>
               ) : CONNECTABLE.has(integration.key) ? (
                 <button
