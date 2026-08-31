@@ -204,13 +204,16 @@ _HINDI_WEEKDAYS = [
 
 # Example times for the published demos only, so a demo never dead-ends on an
 # empty calendar. Real tenant calendars are never faked. Specified by the
-# operator as today 4:30pm and 6pm, tomorrow 10:30am, 12pm and 5:30pm — a
-# demo should show a same-day option and a next-day spread rather than a
-# generic grid.
-_DEMO_SLOTS_TODAY = ("16:30", "18:00")
+# operator as today 4:30pm, 6pm and 7:30pm, tomorrow 10:30am, 12pm and 5:30pm
+# — a demo should show a same-day option and a next-day spread rather than a
+# generic grid. The healthcare demo KB states clinic hours as 10 AM-8 PM, so
+# today's/other's last slot has to land before that close, not at 6pm — a
+# caller testing an evening slot like 6:30/7pm was getting refused even
+# though the KB they'd been told promised availability that late.
+_DEMO_SLOTS_TODAY = ("16:30", "18:00", "19:30")
 _DEMO_SLOTS_TOMORROW = ("10:30", "12:00", "17:30")
 # Any other date the caller names still has to answer with something.
-_DEMO_SLOTS_OTHER = ("10:30", "12:00", "16:30", "18:00")
+_DEMO_SLOTS_OTHER = ("10:30", "12:00", "16:30", "18:00", "19:30")
 _IST = timezone(timedelta(hours=5, minutes=30))
 
 

@@ -271,6 +271,23 @@ def _looks_like_farewell(text: str) -> bool:
     return any(word in lowered for word in _FAREWELL_WORDS)
 
 
+# The cadence cap ("max one filler every 3-5 turns") only holds if something
+# counts fillers used, since "use fillers sparingly" is prose the model does
+# not reliably self-track over a multi-turn call — the same lesson as the
+# severity-once and post-booking rules elsewhere in this file. Checked
+# against the START of the reply, where a filler actually lands; mid-sentence
+# words like "actually" inside an unrelated sentence would false-positive.
+_FILLER_MARKERS = (
+    "हम्म", "हाँ,", "अच्छा", "मतलब", "देखिए", "अरे वाह", "अरे",
+    "right,", "got it", "honestly", "actually", "well,", "so,",
+)
+
+
+def _reply_used_filler(text: str) -> bool:
+    lowered = (text or "").strip().lower()
+    return any(lowered.startswith(marker.lower()) for marker in _FILLER_MARKERS)
+
+
 # Explicit self-identification only — deliberately not inferring gender from
 # a name, tone, or anything indirect, since a wrong guess is worse than no
 # guess at all. Covers common phrasing across English/Hindi/Hinglish.
@@ -1135,6 +1152,12 @@ class RealEstateAgent(Agent):
         # call closes: no more clinical questions.
         self._appointment_booked = False
         self._booking_confirmed_this_turn = False
+        # Starts allowed (>=4) so the opening line isn't penalised for having
+        # no prior turn to compare against. Updated once per turn in
+        # on_user_turn_completed from the previous reply, then read by the
+        # personality instruction below to gate whether a filler is allowed
+        # this turn — "use fillers sparingly" alone did not hold a cadence.
+        self._turns_since_filler = 4
         self._agent_name = agent_name
         self._visitor_first_name = visitor_name.strip().split()[0] if visitor_name else None
         # Resolve this before choosing built-in vs custom instructions. Public
@@ -1708,6 +1731,12 @@ class RealEstateAgent(Agent):
                 _last_assistant_text = getattr(item, "text_content", None) or ""
                 break
 
+        if _last_assistant_text:
+            if _reply_used_filler(_last_assistant_text):
+                self._turns_since_filler = 0
+            else:
+                self._turns_since_filler += 1
+
         if self._public_demo_slug == "healthcare" and _HEALTHCARE_SYMPTOM_PATTERN.search(text):
             self._healthcare_symptom_mentioned = True
         # First department wins and then never changes. Call 725 took a dental
@@ -1834,6 +1863,18 @@ class RealEstateAgent(Agent):
                 if any(opener in _last_assistant_text.lower() for opener in ("अरे वाह", "wow", "honestly", "actually"))
                 else ""
             )
+            # A same-turn duplicate check alone let fillers land on every OTHER
+            # turn instead of every 3-5, since each individual reply looked
+            # fine on its own. This tracks actual spacing instead of asking
+            # the model to remember it.
+            _filler_cadence_warning = (
+                f"\nDo NOT start this reply with any filler, reaction, or aside (हम्म, अच्छा, "
+                f"actually, right, etc.) — begin directly with the content. One was already used "
+                f"{self._turns_since_filler} turn(s) ago; the next is allowed only after turn "
+                f"{4 - self._turns_since_filler} from now."
+                if self._turns_since_filler < 4
+                else ""
+            )
             _personality_instruction = (
                 "HARD TURN LIMIT: reply with ONE short sentence by default and never more than TWO "
                 "short sentences or about thirty-five spoken words. This limit overrides discovery, "
@@ -1868,6 +1909,7 @@ class RealEstateAgent(Agent):
                 "as gleeful about their problem, not listening to it. The correct reaction there is "
                 "empathetic acknowledgment (\"अरे, ये तो सच में टाइम खा जाता है\"), not delight."
                 + _repeat_filler_warning
+                + _filler_cadence_warning
             )
         else:
             _personality_instruction = ""
@@ -1912,10 +1954,16 @@ class RealEstateAgent(Agent):
         _post_booking_instruction = (
             "The appointment is CONFIRMED. Stop asking clinical questions — no more asking whether "
             "the pain is severe, what the symptoms are, or which department they need; that is all "
-            "settled. Do not re-open the booking or offer another department. Confirm once in this "
-            "shape: thank them by name, state the department, the day and the time, ask them to "
-            "arrive ten minutes early, and ask if there is anything else you can help with. If "
-            "they say no, close the call warmly and stop."
+            "settled. Do not re-open the booking or offer another department. Say EXACTLY this "
+            "shape, filled in with the real name/department/day/date/time, and nothing more — "
+            "describing the shape in prose was not holding, so this is the literal line: "
+            "\"Thank you, {name}. Your {department} appointment is confirmed for {day}, {date} at "
+            "{time}. Please arrive ten minutes early.\" — Hindi: \"धन्यवाद, {name}। आपकी {department} "
+            "अपॉइंटमेंट {day}, {date} को {time} बजे के लिए कन्फर्म है। कृपया दस मिनट पहले पहुँचें।\" "
+            "Do not add anything else to that turn — no 'anything else I can help with', no further "
+            "questions. If the caller then says something themselves (a thanks, a new question), "
+            "respond to that normally; otherwise this line IS the end of the call — treat it as the "
+            "goodbye and call end_call once it's spoken."
             if self._appointment_booked
             else ""
         )
@@ -1936,6 +1984,7 @@ class RealEstateAgent(Agent):
             if (
                 self._public_demo_slug == "healthcare"
                 and not self._healthcare_symptom_mentioned
+                and self._chosen_department is None
                 and _APPOINTMENT_INTENT_PATTERN.search(text)
             )
             else ""
