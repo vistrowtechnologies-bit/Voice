@@ -83,9 +83,20 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
     const onClickOutside = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
     document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
+    document.addEventListener('keydown', onEscape)
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside)
+      document.removeEventListener('keydown', onEscape)
+    }
   }, [open])
+
+  // A width/anchor change while the menu is open can leave the popup in the
+  // wrong place. Close it whenever the persistent sidebar mode changes.
+  useEffect(() => setOpen(false), [collapsed])
 
   const go = (to: string) => {
     setOpen(false)
@@ -102,6 +113,8 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
     <div ref={rootRef} className="relative border-t border-border pt-3">
       <button
         onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
         aria-label={collapsed ? `${workspace} account menu` : undefined}
         title={collapsed ? `${workspace} account menu` : undefined}
         className={`flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-surface-high ${collapsed ? 'justify-center' : ''}`}
@@ -121,7 +134,11 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
       </button>
 
       {open && (
-        <div className={`absolute bottom-full z-20 mb-2 overflow-hidden rounded-xl border border-border bg-surface shadow-lg ${collapsed ? 'left-0 w-60' : 'left-0 w-full'}`}>
+        <div
+          role="menu"
+          aria-label={`${workspace} account actions`}
+          className={`absolute z-50 overflow-hidden rounded-xl border border-border bg-surface shadow-xl ${collapsed ? 'bottom-0 left-full ml-3 w-64' : 'bottom-full left-0 mb-2 w-full'}`}
+        >
           <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
             {user?.avatarUrl ? (
               <img src={user.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full border border-primary/30 object-cover" />
@@ -136,6 +153,7 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
           </div>
           <div className="flex flex-col py-1">
             <button
+              role="menuitem"
               onClick={() => go('/dashboard/settings?tab=profile')}
               className="flex items-center gap-2.5 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-surface-high"
             >
@@ -143,6 +161,7 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
               My profile
             </button>
             <button
+              role="menuitem"
               onClick={() => go('/dashboard/settings?tab=general')}
               className="flex items-center gap-2.5 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-surface-high"
             >
@@ -150,6 +169,7 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
               Workspace settings
             </button>
             <button
+              role="menuitem"
               onClick={() => go('/dashboard/settings?tab=team')}
               className="flex items-center gap-2.5 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-surface-high"
             >
@@ -159,6 +179,7 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
           </div>
           <div className="border-t border-border py-1">
             <button
+              role="menuitem"
               onClick={handleLogout}
               className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10"
             >
@@ -199,7 +220,7 @@ function SidebarContent({
           >
             <Icon name={collapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'} className="text-[17px]" />
             {collapsed && (
-              <span role="tooltip" className="pointer-events-none absolute left-full ml-3 hidden whitespace-nowrap rounded-lg bg-text px-3 py-2 text-xs font-semibold text-bg shadow-lg group-hover:block group-focus-visible:block">
+              <span role="tooltip" className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-lg bg-text px-3 py-2 text-xs font-semibold text-bg shadow-lg group-hover:block group-focus-visible:block">
                 Open sidebar
               </span>
             )}
@@ -350,7 +371,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {user?.impersonating && <ImpersonationBanner accountName={user.accountName} />}
       <aside
         data-dashboard-sidebar
-        className={`fixed left-0 hidden flex-col border-r border-border bg-surface transition-[width] duration-200 ease-out lg:flex ${sidebarCollapsed ? 'w-20 p-3' : 'w-[280px] p-4'} ${
+        className={`fixed left-0 z-30 hidden flex-col border-r border-border bg-surface transition-[width] duration-200 ease-out lg:flex ${sidebarCollapsed ? 'w-20 p-3' : 'w-[280px] p-4'} ${
           user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'
         }`}
       >
