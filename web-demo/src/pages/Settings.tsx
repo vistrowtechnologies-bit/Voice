@@ -318,7 +318,8 @@ function ProfileTab() {
         <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Full name
           <input autoComplete="name" value={profileName} onChange={(e) => setProfileName(e.target.value)} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary" />
         </label>
-        <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Phone number <span className="font-normal">(optional)</span>
+        <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">
+          <span className="flex items-baseline gap-1">Phone number <span className="font-normal">(optional)</span></span>
           <input type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 202 555 0123" className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary" />
         </label>
       </div>
