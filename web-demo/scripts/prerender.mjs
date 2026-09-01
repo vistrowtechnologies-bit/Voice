@@ -27,51 +27,11 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.dirname(fileURLToPath(import.meta.url)) + '/..'
 const { render } = await import('../dist-ssr/entry-server.js')
 
-const { PRODUCT_DETAIL, SOLUTIONS, LANGUAGES } = await import('../src/lib/marketingContent.ts')
-
-const SUFFIX = ' - Vistrow Voice'
-
-// Static pages: {path, title, description} exactly matching each page's own <Seo> props.
-const STATIC_PAGES = [
-  { path: '/', title: 'Multilingual AI Voice Agents | Vistrow Voice', description: 'Artha answers, qualifies, and books appointments in 10 Indian languages plus English, across inbound, outbound, and web conversations - 24/7.' },
-  { path: '/product', title: `Product Overview${SUFFIX}`, description: 'Voice Agents, Inbound Calling, Outbound Campaigns, Knowledge Base, Website Call Widget, and Integrations - one platform for every AI voice conversation.' },
-  { path: '/solutions', title: `Solutions by Industry${SUFFIX}`, description: 'Voice AI tuned to how your business takes calls - Real Estate, Healthcare, E-commerce, Finance & Collections, and Support & Helpdesk.' },
-  { path: '/pricing', title: `Pricing${SUFFIX}`, description: 'Simple, credit-based plans for AI voice agents. Every plan includes the web call widget, call history, and analytics - scale up as your call volume grows.' },
-  { path: '/about', title: `About${SUFFIX}`, description: "Vistrow Voice puts a capable AI agent on every call - in your customers' own language, at any hour. Voice AI, built for Bharat." },
-  { path: '/contact', title: `Book a Demo${SUFFIX}`, description: 'See Vistrow Voice on a live call. Get a walkthrough tuned to your use case, watch Artha qualify a call in your language, and get a pricing and rollout plan.' },
-  { path: '/languages', title: `AI Voice Agents in 10 Indian Languages + English${SUFFIX}`, description: 'Artha answers in Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, Odia, and English - switching mid-call with the caller.' },
-  { path: '/integrations', title: `Integrations${SUFFIX}`, description: 'Connect Vistrow Voice to your CRM, Slack, WhatsApp, Google Sheets, Zapier, n8n, Make, or any webhook endpoint.' },
-  { path: '/vs-ivr', title: `AI Voice Agent vs. Traditional IVR${SUFFIX}`, description: 'Compare AI voice agents with phone menus and call desks across availability, languages, answer quality, records, and cost.' },
-  { path: '/security', title: `Security & Trust${SUFFIX}`, description: 'How Vistrow Voice protects call data with workspace scoping, DNC enforcement, access controls, configurable retention, and clearly stated security limits.' },
-  { path: '/careers', title: `Careers${SUFFIX}`, description: 'Work on real-time AI voice agents for Indian languages at Vistrow Voice. See open roles, or send us your CV.' },
-  { path: '/changelog', title: `Changelog${SUFFIX}`, description: "What's new in Vistrow Voice: new voices, faster call connection, native appointment booking, compliance controls, and more." },
-  { path: '/resources/docs', title: `Docs & Help${SUFFIX}`, description: 'Set up a Vistrow Voice AI agent: create an agent, add a knowledge base, connect a phone number or website widget, book appointments, and push leads to your CRM.' },
-  { path: '/resources/blog', title: `Blog - Coming Soon${SUFFIX}`, description: 'Articles and practical guides from Vistrow Voice are coming soon.', noindex: true },
-  { path: '/privacy', title: `Privacy Policy${SUFFIX}`, description: 'How Vistrow Voice collects, uses, shares, retains, and protects account, call, and integration data.' },
-  { path: '/terms', title: `Terms of Service${SUFFIX}`, description: 'The terms that govern business use of Vistrow Voice, including acceptable use, billing, data, and compliance responsibilities.' },
-]
-
-const PRODUCT_ROUTES = Object.entries(PRODUCT_DETAIL).map(([route, page]) => ({
-  path: route,
-  title: `${page.headline}${SUFFIX}`,
-  description: page.subhead,
-}))
-
-const SOLUTION_ROUTES = SOLUTIONS.map((s) => ({
-  path: s.to,
-  title: `${s.headline}${SUFFIX}`,
-  description: s.subhead,
-}))
-
-const LANGUAGE_ROUTES = LANGUAGES.map((lang) => ({
-  path: `/languages/${lang.slug}`,
-  title: `AI Voice Agent in ${lang.name}${SUFFIX}`,
-  description: `AI voice agents for ${lang.name} customer calls, with natural code-switching, qualification, and appointment booking - available 24/7.`,
-}))
-
-const PAGES = [...STATIC_PAGES, ...PRODUCT_ROUTES, ...SOLUTION_ROUTES, ...LANGUAGE_ROUTES]
-
-const CANONICAL_ORIGIN = 'https://www.vistrowvoice.com'
+const {
+  SEO_ORIGIN: CANONICAL_ORIGIN,
+  SEO_LAST_SIGNIFICANT_UPDATE,
+  SEO_PAGES: PAGES,
+} = await import('../src/lib/seoPages.ts')
 
 function escapeHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -85,6 +45,8 @@ function applyPage(template, page, bodyHtml) {
   const url = `${CANONICAL_ORIGIN}${page.path}`
   const title = escapeHtml(page.title)
   const description = escapeAttr(page.description)
+  const image = escapeAttr(page.image)
+  const imageAlt = escapeAttr(page.imageAlt)
 
   return template
     .replace(/<title>.*?<\/title>/, `<title>${title}</title>`)
@@ -94,9 +56,29 @@ function applyPage(template, page, bodyHtml) {
     .replace(/(<meta property="og:title" content=")[^"]*(")/, `$1${title}$2`)
     .replace(/(<meta\s*\n?\s*property="og:description"\s*\n?\s*content=")[^"]*(")/, `$1${description}$2`)
     .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${url}$2`)
+    .replace(/(<meta property="og:image" content=")[^"]*(")/, `$1${image}$2`)
+    .replace(/(<meta property="og:image:secure_url" content=")[^"]*(")/, `$1${image}$2`)
+    .replace(/(<meta property="og:image:alt" content=")[^"]*(")/, `$1${imageAlt}$2`)
     .replace(/(<meta name="twitter:title" content=")[^"]*(")/, `$1${title}$2`)
     .replace(/(<meta\s*\n?\s*name="twitter:description"\s*\n?\s*content=")[^"]*(")/, `$1${description}$2`)
+    .replace(/(<meta name="twitter:image" content=")[^"]*(")/, `$1${image}$2`)
+    .replace(/(<meta name="twitter:image:alt" content=")[^"]*(")/, `$1${imageAlt}$2`)
     .replace('<div id="root"></div>', `<div id="root">${bodyHtml}</div>`)
+}
+
+function applyAppShell(template) {
+  return template
+    .replace(/<title>.*?<\/title>/, '<title>Vistrow Voice App</title>')
+    .replace(/(<meta\s+name="description"\s+content=")[^"]*(")/, '$1Secure Vistrow Voice account and workspace application.$2')
+    .replace(/(<meta\s+name="robots"\s+content=")[^"]*(")/, '$1noindex, nofollow, noarchive$2')
+    .replace(/\s*<link rel="canonical" href="[^"]*"\s*\/>/, '')
+}
+
+function sitemapXml() {
+  const rows = PAGES.filter((page) => !page.noindex)
+    .map((page) => `  <url><loc>${CANONICAL_ORIGIN}${page.path}</loc><lastmod>${SEO_LAST_SIGNIFICANT_UPDATE}</lastmod></url>`)
+    .join('\n')
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`
 }
 
 function outputPathFor(route) {
@@ -117,7 +99,7 @@ async function main() {
   // before the loop below bakes '/' into dist/index.html, so app routes
   // have a plain shell to fall back to instead. See vercel.json's rewrite
   // for app-bucket paths (kept in sync with hostBuckets.ts's APP_PREFIXES).
-  await writeFile(path.join(ROOT, 'dist', 'app-shell.html'), template)
+  await writeFile(path.join(ROOT, 'dist', 'app-shell.html'), applyAppShell(template))
 
   for (const page of PAGES) {
     const bodyHtml = render(page.path)
@@ -128,6 +110,22 @@ async function main() {
     await writeFile(outPath, html)
     console.log(`prerendered ${page.path} -> ${path.relative(ROOT, outPath)}`)
   }
+
+  // A direct unknown marketing URL must be a real static-host 404, not a
+  // 200 response containing the homepage. Vercel automatically serves this
+  // file for filesystem misses once the catch-all SPA rewrite is removed.
+  const notFound = {
+    path: '/404',
+    title: 'Page Not Found | Vistrow Voice',
+    description: 'The page you requested could not be found.',
+    image: `${CANONICAL_ORIGIN}/og/home.png`,
+    imageAlt: 'Vistrow Voice multilingual AI voice agent orb',
+    noindex: true,
+  }
+  const notFoundHtml = applyPage(template, notFound, render('/__vistrow-not-found__'))
+    .replace(/\s*<link rel="canonical" href="[^"]*"\s*\/>/, '')
+  await writeFile(path.join(ROOT, 'dist', '404.html'), notFoundHtml)
+  await writeFile(path.join(ROOT, 'dist', 'sitemap.xml'), sitemapXml())
 }
 
 main()

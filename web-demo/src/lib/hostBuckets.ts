@@ -14,6 +14,8 @@ export const APP_PREFIXES = [
   '/signup',
   '/forgot-password',
   '/reset-password',
+  '/verify-email',
+  '/confirm-email-change',
   '/invite',
 ]
 

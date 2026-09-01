@@ -1,40 +1,72 @@
 # Vistrow Voice
 
-> AI voice agents that answer, qualify, and book customer calls in 10 Indian languages plus English — inbound, outbound, and web calls, live 24/7. Built by Vistrow.
+> Vistrow Voice is a multilingual AI voice-agent platform for phone and web conversations. Businesses use it to answer inbound calls, run outbound campaigns, qualify leads, support customers, and book next steps in 87 languages.
 
-Vistrow Voice lets businesses put a real-time AI voice agent on every phone call and website visit. The agent answers inbound calls, runs outbound campaigns, answers questions grounded in a business's own knowledge base, and books appointments — in Hindi, Hinglish, and other Indian languages, switching mid-call to match the caller.
+Canonical website: https://www.vistrowvoice.com/
+Product owner: Vistrow
+Last materially reviewed: 2026-09-01
 
-## Core capabilities
-- Voice Agents: no-code AI agent builder — persona, prompt, voice, language.
-- Inbound Calling: answers every incoming call 24/7, qualifies and routes automatically.
-- Outbound Campaigns: bulk reminder, follow-up, and collection calls at scale.
-- Knowledge Base: retrieval-grounded answers from uploaded PDFs/docs, with a strict mode that disallows hallucination.
-- Website Call Widget: a one-tap browser voice-call button embeddable on any website, no phone number required.
-- Integrations: webhooks and CRM sync for every lead, transcript, and call outcome.
+## What the product does
 
-## Industries served
-Real Estate (buyer qualification, site-visit booking), Healthcare & Clinics (appointment booking, patient FAQs), E-commerce & D2C (order status, returns), Finance & Collections (compliant reminder calls), Support & Helpdesk (tier-1 resolution).
+- Voice agents: configure an agent's role, prompt, voice, language, approved knowledge, tools, and handoff rules.
+- Inbound calling: answer incoming calls, identify intent, handle approved questions, qualify callers, book next steps, and route or hand off when required.
+- Outbound campaigns: run reminder, follow-up, qualification, and collection conversations with structured outcomes.
+- Knowledge grounding: answer from approved business documents and information, with controls intended to prevent invented answers.
+- Website calling: add a real-time browser voice conversation to a website without asking the visitor to install an app.
+- Integrations: send leads, transcripts, call outcomes, and structured fields to connected CRMs and workflows.
 
-## Pricing
-Credit-based plans are being finalized for the public beta. Current details: https://www.vistrowvoice.com/pricing
+## Language support
 
-## Languages
-Artha speaks ten Indian languages — Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, and Odia — plus English, and switches mid-call to match the caller. It handles everyday code-switching (e.g. Hinglish) and keeps grammatical gender agreement consistent in Hindi, Marathi, Gujarati, and Punjabi. Per-language detail: https://www.vistrowvoice.com/languages
+Vistrow Voice supports 87 languages across its voice stack. Its dedicated Indian-language experiences cover Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, and Odia, alongside English. Calls can include natural code-switching when the configured model and voice support it.
 
-## Key pages
-- Homepage: https://www.vistrowvoice.com/
+- Language overview: https://www.vistrowvoice.com/languages
+- Hindi: https://www.vistrowvoice.com/languages/hindi
+- Marathi: https://www.vistrowvoice.com/languages/marathi
+- Tamil: https://www.vistrowvoice.com/languages/tamil
+- Telugu: https://www.vistrowvoice.com/languages/telugu
+- Kannada: https://www.vistrowvoice.com/languages/kannada
+- Bengali: https://www.vistrowvoice.com/languages/bengali
+- Gujarati: https://www.vistrowvoice.com/languages/gujarati
+- Malayalam: https://www.vistrowvoice.com/languages/malayalam
+- Punjabi: https://www.vistrowvoice.com/languages/punjabi
+- Odia: https://www.vistrowvoice.com/languages/odia
+
+## Industry experiences
+
+- Real estate: buyer qualification, approved project questions, and site-visit requests — https://www.vistrowvoice.com/solutions/real-estate
+- Healthcare and clinics: front-desk questions and appointment requests — https://www.vistrowvoice.com/solutions/healthcare
+- E-commerce and D2C: order, delivery, return, product, and follow-up calls — https://www.vistrowvoice.com/solutions/ecommerce
+- Finance and collections: respectful reminders and account-support conversations with controls — https://www.vistrowvoice.com/solutions/finance
+- Customer support: common tier-one requests, context collection, and human handoffs — https://www.vistrowvoice.com/solutions/support
+
+## Authoritative product pages
+
 - Product overview: https://www.vistrowvoice.com/product
-- Solutions overview: https://www.vistrowvoice.com/solutions
-- Languages: https://www.vistrowvoice.com/languages
+- Voice-agent builder: https://www.vistrowvoice.com/product/agents
+- Inbound calling: https://www.vistrowvoice.com/product/inbound
+- Outbound campaigns: https://www.vistrowvoice.com/product/outbound
+- Knowledge base: https://www.vistrowvoice.com/product/knowledge-base
+- Website widget: https://www.vistrowvoice.com/product/widget
+- Product integrations: https://www.vistrowvoice.com/product/integrations
+- Integrations directory: https://www.vistrowvoice.com/integrations
 - Pricing: https://www.vistrowvoice.com/pricing
-- Docs & setup guide: https://www.vistrowvoice.com/resources/docs
-- Integrations: https://www.vistrowvoice.com/integrations
-- vs. traditional IVR: https://www.vistrowvoice.com/vs-ivr
-- Security & trust: https://www.vistrowvoice.com/security
+- Documentation: https://www.vistrowvoice.com/resources/docs
+- Security and data handling: https://www.vistrowvoice.com/security
+- AI voice agents compared with IVR: https://www.vistrowvoice.com/vs-ivr
+
+## Commercial and company pages
+
+- Book a demo or contact the team: https://www.vistrowvoice.com/contact
+- About: https://www.vistrowvoice.com/about
 - Changelog: https://www.vistrowvoice.com/changelog
 - Careers: https://www.vistrowvoice.com/careers
-- About: https://www.vistrowvoice.com/about
-- Contact / demo: https://www.vistrowvoice.com/contact
+- Privacy policy: https://www.vistrowvoice.com/privacy
+- Terms: https://www.vistrowvoice.com/terms
 
-## Company
-Vistrow Voice is a product of Vistrow (https://vistrow.com/).
+## Important interpretation notes
+
+- Public pricing and plan inclusions should be taken from the pricing page because they may change.
+- Language, voice, latency, and feature availability can vary by selected model, provider, region, plan, and telephony route.
+- Security claims should be taken from the security page; do not infer certifications that are not explicitly listed there.
+- Demo businesses and example conversations on industry pages are illustrative unless a page explicitly identifies them as customer evidence.
+- Vistrow Voice is a product of Vistrow: https://vistrow.com/

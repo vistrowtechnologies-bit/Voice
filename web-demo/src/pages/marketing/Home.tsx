@@ -44,34 +44,18 @@ const FAQ = [
 // Answer-engine-friendly (AEO/GEO): FAQPage structured data lets Google,
 // Bing, and LLM-based answer engines quote these Q&As directly instead of
 // having to scrape the accordion markup.
-const HOME_JSONLD = [
-  {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    name: 'Vistrow Voice',
-    url: 'https://www.vistrowvoice.com/',
-    logo: 'https://www.vistrowvoice.com/apple-touch-icon.png',
-    sameAs: ['https://vistrow.com/'],
-  },
-  {
-    '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
-    name: 'Vistrow Voice',
-    applicationCategory: 'BusinessApplication',
-    operatingSystem: 'Web',
-    description:
-      'AI voice agents that answer, qualify, and book customer calls in 10 Indian languages plus English - inbound, outbound, and web calls, live 24/7.',
-  },
-  {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: FAQ.map((item) => ({
-      '@type': 'Question',
-      name: item.q,
-      acceptedAnswer: { '@type': 'Answer', text: item.a },
-    })),
-  },
-]
+// Organization, WebSite and SoftwareApplication identities are supplied by
+// the central SEO registry. This page contributes only its visible FAQ so the
+// structured data cannot duplicate or drift from the canonical brand entity.
+const HOME_JSONLD = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQ.map((item) => ({
+    '@type': 'Question',
+    name: item.q,
+    acceptedAnswer: { '@type': 'Answer', text: item.a },
+  })),
+}
 
 // The concrete things a globally-built agent gets wrong on an Indian call.
 // Each maps to real behaviour: mid-call language switching, the per-turn

@@ -13,10 +13,9 @@
     { "source": "/signup", "destination": "/app-shell.html" },
     { "source": "/forgot-password", "destination": "/app-shell.html" },
     { "source": "/reset-password", "destination": "/app-shell.html" },
+    { "source": "/verify-email", "destination": "/app-shell.html" },
+    { "source": "/confirm-email-change", "destination": "/app-shell.html" },
     { "source": "/invite/:path*", "destination": "/app-shell.html" },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/404", "destination": "/404.html" }
   ]
 }
