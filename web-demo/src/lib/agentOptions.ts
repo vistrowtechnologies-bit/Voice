@@ -88,6 +88,7 @@ export const ELEVENLABS_VOICES = [
 // stored agent might still carry (e.g. a google: voice), so the dropdown's
 // fallback option shows a friendly name instead of the raw string.
 export const voiceLabel = (voice: string) =>
+  ({ 'google31:kore': 'Mira Next (Preview)', 'google31:charon': 'Arin Next (Preview)' } as Record<string, string>)[voice] ??
   GOOGLE_VOICES.find((v) => v.value === voice)?.label ??
   ELEVENLABS_VOICES.find((v) => v.value === voice)?.label ??
   SARVAM_V2_VOICES.find((v) => v.value === voice)?.label ??

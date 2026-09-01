@@ -30,7 +30,7 @@ function Card({ title, subtitle, children }: { title: string; subtitle: string; 
   )
 }
 
-function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+function Toggle({ on, onChange, label, disabled }: { on: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
     <button
       type="button"
@@ -40,6 +40,7 @@ function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean
         on ? 'bg-primary' : 'bg-surface-high border border-border'
       }`}
       aria-pressed={on}
+      aria-label={label}
     >
       <span
         className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 ${
@@ -161,7 +162,7 @@ export function Compliance() {
 
             <Card title="Calling window" subtitle="TRAI norms limit unsolicited calls to 9am–9pm, Mon–Sat. Dials outside this window are blocked automatically.">
               <Row label="Enforce calling window" hint="Block outbound dials outside the hours/days below">
-                <Toggle on={cfg.enforce_window} onChange={(v) => patch({ enforce_window: v })} disabled={!canManage} />
+                <Toggle label="Enforce calling window" on={cfg.enforce_window} onChange={(v) => patch({ enforce_window: v })} disabled={!canManage} />
               </Row>
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
@@ -225,13 +226,13 @@ export function Compliance() {
 
             <Card title="Consent, recording & retention" subtitle="Controls that keep you on the right side of DPDP and telecom consent rules.">
               <Row label="Honor Do-Not-Call list" hint="Never dial a number on your DNC registry">
-                <Toggle on={cfg.honor_dnc} onChange={(v) => patch({ honor_dnc: v })} disabled={!canManage} />
+                <Toggle label="Honor Do-Not-Call list" on={cfg.honor_dnc} onChange={(v) => patch({ honor_dnc: v })} disabled={!canManage} />
               </Row>
               <Row label="Require spoken consent" hint="Agent opens with a consent line and logs the reply">
-                <Toggle on={cfg.require_consent} onChange={(v) => patch({ require_consent: v })} disabled={!canManage} />
+                <Toggle label="Require spoken consent" on={cfg.require_consent} onChange={(v) => patch({ require_consent: v })} disabled={!canManage} />
               </Row>
               <Row label="Record calls" hint="Store call audio alongside transcripts">
-                <Toggle on={cfg.record_calls} onChange={(v) => patch({ record_calls: v })} disabled={!canManage} />
+                <Toggle label="Record calls" on={cfg.record_calls} onChange={(v) => patch({ record_calls: v })} disabled={!canManage} />
               </Row>
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold text-text-muted">Data retention (days)</span>

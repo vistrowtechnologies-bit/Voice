@@ -75,11 +75,12 @@ export function Agents() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<AgentFilter>('all')
+  const [loading, setLoading] = useState(true)
 
   const reload = () => fetchAgents().then(setAgents).catch(() => setAgents([]))
 
   useEffect(() => {
-    reload()
+    fetchAgents().then(setAgents).catch(() => setAgents([])).finally(() => setLoading(false))
     fetchKnowledgeBases().then(setKbs).catch(() => setKbs([]))
     fetchPhoneNumbers().then(setNumbers).catch(() => setNumbers([]))
     fetchLaunchReadiness().then(setReadiness).catch(() => setReadiness(null))
@@ -129,8 +130,8 @@ export function Agents() {
 
   const filters: { key: AgentFilter; label: string }[] = [
     { key: 'all', label: 'All' },
-    { key: 'live', label: 'Live' },
-    { key: 'needs-setup', label: 'Needs setup' },
+    { key: 'live', label: 'Active' },
+    { key: 'needs-setup', label: 'Setup incomplete' },
     { key: 'paused', label: 'Paused' },
     { key: 'draft', label: 'Draft' },
   ]
@@ -142,8 +143,8 @@ export function Agents() {
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="rounded-lg border border-border bg-surface px-4 py-3 text-xs text-text-muted">
           <Icon name="info" className="mr-1.5 align-[-3px] text-[15px] text-cyan" />
-          The first live agent takes all web calls. Changes here (prompt, voice, model, knowledge base,
-          pause) apply from the very next call - no redeploy needed.
+          Assign each website to its intended agent from Website Widget. Unassigned web calls use the first active agent.
+          Prompt, voice, model, knowledge, and pause changes apply from the next call without a redeploy.
         </div>
 
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-3 lg:flex-row lg:items-center lg:justify-between">
@@ -170,7 +171,11 @@ export function Agents() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {loading ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Loading agents">
+            {[0, 1, 2].map((item) => <div key={item} className="h-80 animate-pulse rounded-xl border border-border bg-surface" />)}
+          </div>
+        ) : <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredAgents.map((agent) => {
             const agentReadiness = getAgentReadiness(agent, readiness, numbers)
             const primaryAction = !agentReadiness.ready
@@ -195,7 +200,7 @@ export function Agents() {
                       }`}
                     >
                       <span className={`h-1.5 w-1.5 rounded-full ${agent.status === 'live' ? 'bg-cyan' : 'bg-amber'}`} />
-                      {agent.status === 'live' ? 'Live' : 'Paused'}
+                      {agent.status === 'live' ? 'Active' : 'Paused'}
                     </span>
                   </div>
                 </div>
@@ -285,9 +290,9 @@ export function Agents() {
             </Card>
             )
           })}
-        </div>
+        </div>}
 
-        {filteredAgents.length === 0 && (
+        {!loading && filteredAgents.length === 0 && (
           <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center">
             <Icon name="search_off" className="mb-2 text-[28px] text-text-muted" />
             <p className="font-semibold">No agents found</p>

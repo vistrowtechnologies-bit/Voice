@@ -82,6 +82,8 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 
 export function KnowledgeBasePage() {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expandedQa, setExpandedQa] = useState<Set<number>>(new Set())
   const [newName, setNewName] = useState('')
   const [addingTo, setAddingTo] = useState<number | null>(null)
   const [sourceMode, setSourceMode] = useState<'text' | 'url'>('text')
@@ -128,7 +130,7 @@ export function KnowledgeBasePage() {
   const reload = () => fetchKnowledgeBases().then(setKbs).catch(() => setKbs([]))
 
   useEffect(() => {
-    reload()
+    fetchKnowledgeBases().then(setKbs).catch(() => setKbs([])).finally(() => setLoading(false))
   }, [])
 
   const handleCreate = async () => {
@@ -331,7 +333,13 @@ export function KnowledgeBasePage() {
           </button>
         </div>
 
-        {kbs.length === 0 && (
+        {loading && (
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2" aria-label="Loading knowledge bases">
+            {[0, 1].map((item) => <div key={item} className="h-72 animate-pulse rounded-xl border border-border bg-surface" />)}
+          </div>
+        )}
+
+        {!loading && kbs.length === 0 && (
           <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border text-text-muted">
             <Icon name="menu_book" className="text-[36px]" />
             <p className="text-sm font-bold">No knowledge bases yet</p>
@@ -339,7 +347,7 @@ export function KnowledgeBasePage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {!loading && <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {kbs.map((kb) => {
             const used = kbCharsUsed(kb)
             const pct = Math.min(100, Math.round((used / PROMPT_BUDGET_CHARS) * 100))
@@ -483,7 +491,23 @@ export function KnowledgeBasePage() {
                 )}
 
                 {/* Q&A pairs */}
-                <div className="flex flex-col gap-2">
+                {kb.qa.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setExpandedQa((current) => {
+                      const next = new Set(current)
+                      if (next.has(kb.id)) next.delete(kb.id)
+                      else next.add(kb.id)
+                      return next
+                    })}
+                    aria-expanded={expandedQa.has(kb.id)}
+                    className="flex items-center justify-between rounded-lg border border-border bg-surface-high/30 px-3 py-2 text-sm font-semibold hover:border-primary/50"
+                  >
+                    <span>{kb.qa.length} approved Q&amp;A {kb.qa.length === 1 ? 'pair' : 'pairs'}</span>
+                    <Icon name={expandedQa.has(kb.id) ? 'expand_less' : 'expand_more'} className="text-[18px] text-text-muted" />
+                  </button>
+                )}
+                {expandedQa.has(kb.id) && <div className="flex flex-col gap-2">
                   {kb.qa.map((qa) =>
                     editingQa === qa.id ? (
                       <div key={qa.id} className="flex flex-col gap-2 rounded-lg border border-primary bg-surface-high/40 p-3">
@@ -535,7 +559,7 @@ export function KnowledgeBasePage() {
                       </button>
                     ),
                   )}
-                </div>
+                </div>}
 
                 {/* Add Q&A pair */}
                 {addingQaTo === kb.id ? (
@@ -761,7 +785,7 @@ export function KnowledgeBasePage() {
               </Card>
             )
           })}
-        </div>
+        </div>}
       </section>
 
       {/* Auto-extract review overlay - drafts are editable and nothing is

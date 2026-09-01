@@ -224,12 +224,12 @@ export function Outbound() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 rounded-lg border border-border p-0.5">
+          <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-border p-0.5">
             {FILTERS.map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold ${
                   filter === f ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
                 }`}
               >

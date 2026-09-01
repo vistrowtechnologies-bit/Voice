@@ -84,13 +84,13 @@ export function Settings() {
     <DashboardLayout>
       <PageHeader title="Settings" subtitle="Manage your account, team, security, and workspace controls." />
 
-      <section className="grid max-w-6xl gap-5 p-4 sm:p-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="rounded-xl border border-border bg-surface p-2 lg:self-start">
+      <section className="grid w-full min-w-0 max-w-6xl gap-5 overflow-hidden p-4 sm:p-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-surface p-2 lg:self-start">
           <div className="border-b border-border px-2 pb-3 pt-1">
             <p className="text-sm font-bold">Settings centre</p>
             <p className="mt-0.5 text-xs text-text-muted">Everything for your workspace and account.</p>
           </div>
-          <div className="flex gap-1 overflow-x-auto py-2 lg:flex-col lg:overflow-visible">
+          <div className="flex w-full min-w-0 gap-1 overflow-x-auto py-2 lg:flex-col lg:overflow-visible">
             {TAB_GROUPS.map((group) => (
               <div key={group.label} className="shrink-0 lg:mt-2">
                 <p className="hidden px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-text-muted lg:block">{group.label}</p>
@@ -454,7 +454,7 @@ function SecurityTab() {
         )}
       </SettingsCard>
 
-      <SettingsCard title="Sessions & recent security activity" subtitle="End other browser sessions if you no longer recognise a device.">
+      <SettingsCard title="Recent security activity" subtitle="Review recent sign-ins and end other sessions when something looks unfamiliar.">
         <button onClick={signOutOthers} disabled={endingSessions} className="self-start rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-destructive hover:text-destructive disabled:opacity-40">
           {endingSessions ? 'Signing out…' : 'Sign out of other sessions'}
         </button>
@@ -462,7 +462,7 @@ function SecurityTab() {
           {events.length === 0 ? <p className="px-3 py-3 text-xs text-text-muted">No security activity recorded yet.</p> : events.map((event, index) => (
             <div key={`${event.event}-${event.created_at}-${index}`} className="flex items-start gap-2 px-3 py-2.5">
               <Icon name="security" className="mt-0.5 text-[16px] text-text-muted" />
-              <div className="min-w-0"><p className="text-xs font-semibold">{event.event.replaceAll('_', ' ')}</p><p className="text-[11px] text-text-muted">{formatDateTime(event.created_at)}{event.provider ? ` · ${event.provider}` : ''}</p></div>
+              <div className="min-w-0"><p className="text-xs font-semibold">{event.event.replaceAll('_', ' ')}</p><p className="text-[11px] text-text-muted">{formatDateTime(event.created_at)}{event.provider && (event.provider !== 'password' || hasPassword) ? ` · ${event.provider}` : ''}</p></div>
             </div>
           ))}
         </div>

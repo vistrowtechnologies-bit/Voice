@@ -34,7 +34,7 @@ export function PhoneNumbers() {
       <PageHeader title="Phone Numbers" subtitle="Connect a provider, add numbers, and route calls to AI agents" />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row">
-        <aside className="flex shrink-0 flex-row gap-2 overflow-x-auto lg:w-56 lg:flex-col">
+        <aside className="flex w-full min-w-0 shrink-0 flex-row gap-2 overflow-x-auto pb-1 lg:w-56 lg:flex-col lg:pb-0">
           <p className="hidden px-2 text-[10px] font-bold uppercase tracking-widest text-text-muted lg:block">
             Providers
           </p>
@@ -48,7 +48,7 @@ export function PhoneNumbers() {
             >
               <Icon name={p.icon} className="text-[18px]" />
               {p.name}
-              {p.live && <span className="rounded bg-cyan/15 px-1.5 py-0.5 text-[9px] font-bold text-cyan">LIVE</span>}
+              {p.live && <span className="rounded bg-cyan/15 px-1.5 py-0.5 text-[9px] font-bold text-cyan">AVAILABLE</span>}
               {provider === p.key && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-cyan" />}
             </button>
           ))}

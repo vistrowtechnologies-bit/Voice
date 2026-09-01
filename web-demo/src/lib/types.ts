@@ -93,6 +93,9 @@ export interface CallRecord {
   // computed from today's credit rates, so it reflects current pricing even
   // for an old call rather than what was charged at the time.
   creditsUsed?: number
+  creditsPerMinute?: number
+  voiceTier?: 'economy' | 'standard' | 'premium'
+  modelTier?: 'standard' | 'premium' | 'premium_plus'
 }
 
 export type Lead = CallRecord
@@ -425,6 +428,7 @@ export interface BillingSummary {
   creditRates: Partial<Record<'browser' | 'widget' | 'phone', number>>
   minutesByVoiceTier: Partial<Record<'economy' | 'standard' | 'premium', number>>
   voiceTierRates: Partial<Record<'economy' | 'standard' | 'premium', number>>
+  modelTierRates?: Partial<Record<'standard' | 'premium' | 'premium_plus', number>>
   plan: string
   planPriceInr: number
   subscriptionStatus: 'inactive' | 'created' | 'active' | 'cancelled' | string

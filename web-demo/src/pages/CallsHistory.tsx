@@ -15,6 +15,7 @@ import type { ActiveCallInfo, CallRecord, Sentiment } from '../lib/types'
 // silently showed zero results forever, and had no tab for widget calls at
 // all (only visible under "All").
 const CHANNELS = ['All', 'Web', 'Website Widget', 'Phone']
+const PAGE_SIZE = 25
 
 const SENTIMENT_STYLES: Record<Sentiment, string> = {
   positive: 'bg-cyan/20 text-cyan border-cyan/30',
@@ -74,9 +75,11 @@ export function CallsHistory() {
   const [sortDesc, setSortDesc] = useState(true)
   const [feedbackFilter, setFeedbackFilter] = useState(searchParams.get('feedback') || 'all')
   const [directionFilter, setDirectionFilter] = useState(searchParams.get('direction') || 'all')
+  const [page, setPage] = useState(1)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchCalls().then(setCalls).catch(() => setCalls([]))
+    fetchCalls().then(setCalls).catch(() => setCalls([])).finally(() => setLoading(false))
     fetchActiveCalls().then(setActiveCalls).catch(() => setActiveCalls([]))
   }, [])
 
@@ -94,6 +97,11 @@ export function CallsHistory() {
       sortDesc ? b.callDate.localeCompare(a.callDate) : a.callDate.localeCompare(b.callDate),
     )
   }, [calls, channel, feedbackFilter, directionFilter, search, sortDesc])
+
+  useEffect(() => setPage(1), [channel, feedbackFilter, directionFilter, search, sortDesc])
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount)
+  const visibleRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   const completed = calls.filter((c) => c.callStatus === 'completed').length
   const failed = calls.filter((c) => c.callStatus === 'failed').length
@@ -283,13 +291,47 @@ export function CallsHistory() {
           </button>
         </div>
 
-        <DataTable
-          columns={columns}
-          rows={filtered}
-          rowKey={(call) => call.id}
-          emptyMessage={emptyMessage}
-          footer={`Showing ${filtered.length} caller${filtered.length === 1 ? '' : 's'} · ${calls.length} calls total`}
-        />
+        {loading ? (
+          <div className="flex min-h-48 items-center justify-center rounded-xl border border-border bg-surface" aria-live="polite">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <span className="sr-only">Loading calls</span>
+          </div>
+        ) : (
+          <DataTable
+            columns={columns}
+            rows={visibleRows}
+            rowKey={(call) => call.id}
+            emptyMessage={emptyMessage}
+            footer={
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span>
+                  {filtered.length === 0 ? 'No callers' : `Showing ${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filtered.length)} of ${filtered.length} callers`} · {calls.length} calls total
+                </span>
+                {pageCount > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPage((current) => Math.max(1, current - 1))}
+                      disabled={safePage === 1}
+                      className="rounded-md border border-border px-2.5 py-1 font-semibold text-text disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    <span className="tabular-nums">Page {safePage} of {pageCount}</span>
+                    <button
+                      type="button"
+                      onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                      disabled={safePage === pageCount}
+                      className="rounded-md border border-border px-2.5 py-1 font-semibold text-text disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            }
+          />
+        )}
       </section>
     </DashboardLayout>
   )

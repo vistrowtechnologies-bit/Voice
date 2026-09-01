@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { fetchBilling } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
 import { BRAND } from '../lib/brand'
@@ -293,6 +293,8 @@ export function PageHeader({
   children?: ReactNode
 }) {
   const [credits, setCredits] = useState<number | null>(null)
+  const { pathname } = useLocation()
+  const showNewAgent = pathname === '/dashboard' || pathname === '/dashboard/agents'
 
   useEffect(() => {
     fetchBilling()
@@ -315,13 +317,15 @@ export function PageHeader({
         )}
         <ThemeSwitcher />
         {children}
-        <Link
-          to="/dashboard/agents?new=1"
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90"
-        >
-          <Icon name="add" className="text-[18px]" />
-          New Agent
-        </Link>
+        {showNewAgent && (
+          <Link
+            to="/dashboard/agents?new=1"
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90"
+          >
+            <Icon name="add" className="text-[18px]" />
+            New Agent
+          </Link>
+        )}
       </div>
     </header>
   )

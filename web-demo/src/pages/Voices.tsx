@@ -78,8 +78,10 @@ function TierGroup({
   onAdd: (v: string) => void
   onRemove: (v: string) => void
 }) {
+  const [expanded, setExpanded] = useState(false)
   if (entries.length === 0) return null
   const { tierLabel, tierNote } = entries[0]
+  const visibleEntries = expanded ? entries : entries.slice(0, 6)
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-baseline gap-2">
@@ -87,7 +89,7 @@ function TierGroup({
         <span className="text-[11px] text-text-muted">{note ?? tierNote}</span>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-        {entries.map((entry) => (
+        {visibleEntries.map((entry) => (
           <VoiceCard
             key={entry.value}
             entry={entry}
@@ -98,6 +100,15 @@ function TierGroup({
           />
         ))}
       </div>
+      {entries.length > 6 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          className="self-center rounded-lg border border-border px-4 py-2 text-xs font-bold text-text-muted hover:border-primary hover:text-primary"
+        >
+          {expanded ? 'Show fewer voices' : `Show ${entries.length - 6} more voices`}
+        </button>
+      )}
     </section>
   )
 }
@@ -213,6 +224,7 @@ export function Voices() {
   const [lang, setLang] = useState<string>('hi')
   const [busyVoice, setBusyVoice] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
 
   async function load() {
     try {
@@ -255,9 +267,13 @@ export function Voices() {
     }
   }
 
-  const byTier = (tier: VoiceTier) => (data?.voices ?? []).filter((v) => v.tier === tier)
+  const query = search.trim().toLowerCase()
+  const matchesSearch = (voice: VoiceEntry) => !query || [voice.name, voice.note, voice.tierLabel, ...voice.languageLabels]
+    .filter(Boolean)
+    .some((value) => value.toLowerCase().includes(query))
+  const byTier = (tier: VoiceTier) => (data?.voices ?? []).filter((v) => v.tier === tier && matchesSearch(v))
   const stableByTier = (tier: VoiceTier) => byTier(tier).filter((v) => !v.preview)
-  const previewVoices = () => (data?.voices ?? []).filter((v) => v.preview)
+  const previewVoices = () => (data?.voices ?? []).filter((v) => v.preview && matchesSearch(v))
   const sarvamLite = () => byTier('lite').filter((v) => !v.value.startsWith('google:') && !v.value.startsWith('google31:'))
   const multilingualPremium = () => stableByTier('premium').filter((v) => v.multilingual)
   const premiumSolo = () => stableByTier('premium').filter((v) => !v.multilingual)
@@ -303,6 +319,21 @@ export function Voices() {
               </span>
             </Card>
 
+            <label className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 focus-within:border-primary">
+              <Icon name="search" className="text-[18px] text-text-muted" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search voices by name, language, or tier"
+                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-text-muted"
+              />
+              {search && (
+                <button type="button" onClick={() => setSearch('')} aria-label="Clear voice search" className="text-text-muted hover:text-text">
+                  <Icon name="close" className="text-[17px]" />
+                </button>
+              )}
+            </label>
+
             {error && (
               <div className="rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">
                 {error}
@@ -323,6 +354,11 @@ export function Voices() {
               onAdd={onAdd}
               onRemove={onRemove}
             />
+            {query && (data?.voices ?? []).filter(matchesSearch).length === 0 && (
+              <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center text-sm text-text-muted">
+                No voices match “{search}”.
+              </div>
+            )}
             <TierGroup
               entries={sarvamLite()}
               label="Vistrow Lite v2"

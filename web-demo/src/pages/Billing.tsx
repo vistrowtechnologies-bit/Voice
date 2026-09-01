@@ -179,7 +179,7 @@ export function Billing() {
               />
             </div>
             <p className="mt-2 text-xs text-text-muted">
-              {billing ? `${billing.minutesUsed} call minutes used this cycle (1 credit ≈ 1 minute)` : 'Loading usage…'}
+              {billing ? `${billing.minutesUsed} call minutes used this cycle. Final credits include call type, voice tier, and model tier.` : 'Loading usage…'}
             </p>
             {billing && billing.overageCredits > 0 && (
               <p className="mt-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
@@ -201,7 +201,7 @@ export function Billing() {
             <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Current plan</p>
             <p className="mt-1 text-xl font-bold">{currentPlanName}</p>
             <p className="mt-1 text-xs text-text-muted">
-              Billed {billing?.billingCycle || 'monthly'}
+              {billing?.subscriptionStatus === 'active' ? `Billed ${billing.billingCycle}` : 'Workspace plan allocation'}
               {billing?.currentPeriodEnd ? ` · renews ${new Date(billing.currentPeriodEnd).toLocaleDateString()}` : ''}
             </p>
             <p className="mt-1 flex items-center gap-1.5 text-xs">
@@ -213,7 +213,7 @@ export function Billing() {
                 ? 'Subscription active'
                 : billing?.subscriptionStatus === 'cancelled'
                   ? 'Subscription cancelled'
-                  : 'No active subscription yet'}
+                  : 'No recurring subscription connected'}
             </p>
           </Card>
         </div>
@@ -221,7 +221,7 @@ export function Billing() {
         {billing && (
           <SectionCard
             title="Usage by call type"
-            subtitle="Phone calls burn more credits/min than browser or widget calls - they carry a telephony cost the others don't."
+            subtitle="Credits = call minutes × channel rate × voice multiplier × model multiplier. The figures below are base units before the two multipliers."
           >
             <div className="divide-y divide-border">
               {(
@@ -239,11 +239,11 @@ export function Billing() {
                       <Icon name={icon} className="text-[16px] text-text-muted" />
                       <span>{label}</span>
                       <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-text-muted">
-                        {rate} credit/min
+                        {rate} base credit/min
                       </span>
                     </div>
                     <span className="text-text-muted">
-                      {minutes} min · {Math.round(minutes * rate * 10) / 10} credits
+                      {minutes} min · {Math.round(minutes * rate * 10) / 10} base units
                     </span>
                   </div>
                 )
@@ -255,7 +255,7 @@ export function Billing() {
         {billing && (
           <SectionCard
             title="Usage by voice tier"
-            subtitle="Premium voices burn more credits/min than Standard or Economy - they're pricier to run, but sound more expressive and react live to caller emotion."
+            subtitle="Voice multipliers are one part of the final credit formula. Channel and model rates still apply."
           >
             <div className="divide-y divide-border">
               {(
@@ -277,11 +277,33 @@ export function Billing() {
                       </span>
                     </div>
                     <span className="text-text-muted">
-                      {minutes} min · {Math.round(minutes * rate * 10) / 10} credits
+                      {minutes} min · {rate}× voice multiplier
                     </span>
                   </div>
                 )
               })}
+            </div>
+          </SectionCard>
+        )}
+
+        {billing && (
+          <SectionCard
+            title="Model multipliers"
+            subtitle="The selected AI model applies this multiplier after the channel and voice rates. Each call detail shows the exact final credits per minute."
+          >
+            <div className="grid gap-3 p-4 sm:grid-cols-3 sm:p-5">
+              {(
+                [
+                  ['standard', 'Standard'],
+                  ['premium', 'Premium'],
+                  ['premium_plus', 'Premium Plus'],
+                ] as const
+              ).map(([tier, label]) => (
+                <div key={tier} className="rounded-lg border border-border bg-surface-high/30 px-4 py-3">
+                  <p className="text-xs text-text-muted">{label}</p>
+                  <p className="mt-1 text-lg font-bold">{billing.modelTierRates?.[tier] ?? 1}×</p>
+                </div>
+              ))}
             </div>
           </SectionCard>
         )}

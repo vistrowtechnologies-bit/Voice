@@ -289,6 +289,9 @@ export function LeadDetail() {
                     : 'self-start border border-border bg-surface-high text-text'
                 }`}
               >
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${line.speaker === 'visitor' ? 'text-bg/70' : 'text-text-muted'}`}>
+                  {line.speaker === 'visitor' ? 'Caller' : call.agent}
+                </span>
                 <span>{line.text}</span>
               </div>
             ))}
@@ -447,8 +450,8 @@ export function LeadDetail() {
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Call details</h2>
             <dl className="flex flex-col gap-2 text-sm">
-              <Row label="Status" value={call.status} />
-              <Row label="Outcome" value={call.callStatus} />
+              <Row label="Lead stage" value={call.status} />
+              <Row label="Call outcome" value={call.callStatus} />
               <Row label="Sentiment" value={call.sentiment} />
               <Row label="Channel" value={call.channel} />
               {call.website && <Row label="Website" value={call.website} />}
@@ -462,7 +465,14 @@ export function LeadDetail() {
               {call.agentJoinLatencyMs != null && <Row label="Agent joined" value={`${(call.agentJoinLatencyMs / 1000).toFixed(1)}s`} />}
               {call.firstResponseLatencyMs != null && <Row label="First response" value={`${(call.firstResponseLatencyMs / 1000).toFixed(1)}s`} />}
               {call.failureReason && <Row label="Failure reason" value={call.failureReason} />}
-              {call.creditsUsed != null && <Row label="Credits used" value={String(call.creditsUsed)} />}
+              {call.creditsUsed != null && (
+                <Row
+                  label="Credits used"
+                  value={`${call.creditsUsed}${call.creditsPerMinute != null ? ` (${call.creditsPerMinute}/min)` : ''}`}
+                />
+              )}
+              {call.voiceTier && <Row label="Voice billing tier" value={call.voiceTier} />}
+              {call.modelTier && <Row label="Model billing tier" value={call.modelTier.replace('_', ' ')} />}
               <Row label="Language" value={call.replyLanguage ? (LANGUAGE_NAMES[call.replyLanguage] ?? call.replyLanguage) : '-'} />
               <Row label="Time" value={formatDateTime(call.callDate)} />
             </dl>

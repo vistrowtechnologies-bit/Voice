@@ -36,6 +36,14 @@ const STATUS_STYLES: Record<string, string> = {
   customer: 'bg-amber/20 text-amber border-amber/30',
 }
 
+const PLACEHOLDER_VALUES = new Set(['', '-', 'na', 'n/a', 'not applicable', 'not provided', 'not provided yet', 'pending'])
+function needsContactReview(contact: Contact) {
+  const name = contact.name.trim().toLowerCase()
+  const phone = contact.phone.trim().toLowerCase()
+  const email = contact.email.trim().toLowerCase()
+  return PLACEHOLDER_VALUES.has(name) || (PLACEHOLDER_VALUES.has(phone) && PLACEHOLDER_VALUES.has(email))
+}
+
 export function Contacts() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [search, setSearch] = useState('')
@@ -52,11 +60,12 @@ export function Contacts() {
   const [importing, setImporting] = useState(false)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const reload = () => fetchContacts().then(setContacts).catch(() => setContacts([]))
 
   useEffect(() => {
-    reload()
+    fetchContacts().then(setContacts).catch(() => setContacts([])).finally(() => setLoading(false))
   }, [])
 
   const filtered = useMemo(() => {
@@ -198,6 +207,7 @@ export function Contacts() {
           </div>
           <div>
             <span className="text-sm font-semibold">{c.name}</span>
+            {needsContactReview(c) && <span className="ml-2 rounded bg-amber/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber">Needs review</span>}
             {c.company && <p className="text-[11px] text-text-muted">{c.company}</p>}
           </div>
         </Link>
@@ -249,7 +259,7 @@ export function Contacts() {
       render: (c) => (
         <div className="flex justify-center opacity-60 transition-opacity group-hover:opacity-100">
           <button
-            onClick={() => deleteContact(c.id).then(reload)}
+            onClick={() => window.confirm(`Delete ${c.name}?`) && deleteContact(c.id).then(reload)}
             aria-label={`Delete ${c.name}`}
             className="flex h-8 w-8 items-center justify-center rounded bg-surface-high text-destructive hover:bg-destructive hover:text-bg"
           >
@@ -436,13 +446,17 @@ export function Contacts() {
           </Card>
         )}
 
-        <DataTable
-          columns={columns}
-          rows={filtered}
-          rowKey={(c) => c.id}
-          emptyMessage="No contacts yet. They appear here automatically when the agent qualifies a caller, or add/import them manually."
-          footer={`Showing ${filtered.length} of ${contacts.length} contacts`}
-        />
+        {loading ? (
+          <div className="h-64 animate-pulse rounded-xl border border-border bg-surface" aria-label="Loading contacts" />
+        ) : (
+          <DataTable
+            columns={columns}
+            rows={filtered}
+            rowKey={(c) => c.id}
+            emptyMessage="No contacts yet. They appear here automatically when the agent qualifies a caller, or add/import them manually."
+            footer={`Showing ${filtered.length} of ${contacts.length} contacts · ${contacts.filter(needsContactReview).length} need review`}
+          />
+        )}
       </section>
     </DashboardLayout>
   )

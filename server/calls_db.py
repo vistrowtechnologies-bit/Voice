@@ -2004,11 +2004,16 @@ def _call_dict(
         rate = credit_rates_by_type.get(call_type, 1.0)
         tier = voice_tier(row["voice"])
         mtier = model_tier(_row_get(row, "model"))
+        credits_per_minute = _credits_per_minute(
+            rate, _VOICE_TIER_MULTIPLIERS[tier], _MODEL_TIER_MULTIPLIERS[mtier]
+        )
         out["creditsUsed"] = round(
-            minutes
-            * _credits_per_minute(rate, _VOICE_TIER_MULTIPLIERS[tier], _MODEL_TIER_MULTIPLIERS[mtier]),
+            minutes * credits_per_minute,
             2,
         )
+        out["creditsPerMinute"] = round(credits_per_minute, 2)
+        out["voiceTier"] = tier
+        out["modelTier"] = mtier
     if include_transcript:
         out["transcript"] = [
             {
