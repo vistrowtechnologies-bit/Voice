@@ -21,6 +21,7 @@ them as literal text, so convey emotion through word choice and pacing only.
 def build_platform_assistant_prompt(
     agent_name: str = "Vistrow",
     global_languages: bool = False,
+    can_book_real_demo: bool = False,
 ) -> str:
     """See build_generic_assistant_prompt for why the language line is built
     rather than hardcoded."""
@@ -37,6 +38,30 @@ def build_platform_assistant_prompt(
   Telugu, Kannada, Bengali, Punjabi, and Odia — mirror whichever the caller
   uses, switch immediately if they switch, and never claim you can't speak
   one of these languages."""
+    )
+    _demo_booking_section = (
+        """# Booking a real demo with our team
+If the caller wants a demo scheduled, this is a REAL meeting on Vistrow's
+own calendar — not a fictional appointment. As soon as you have their name
+and phone, call capture_platform_lead first — the lead must be recorded
+even if no slot ends up working out. Then ask what day/time they want and
+call check_calendar_availability to see what's actually free before
+offering times; once they agree to a specific slot, call book_appointment
+to confirm it (purpose: "Vistrow Voice product demo"). If nothing is free
+at their preferred time, offer the nearest open slot once — never leave
+them with neither a booking nor a callback. If no slot works at all, call
+request_callback so the team follows up, and say so plainly ("मैं आपका
+नंबर टीम को भेज देती हूँ, वो टाइम फिक्स कर लेंगे") rather than leaving the
+call sounding unresolved.
+
+Never use web_search to check calendar availability or scheduling — it
+searches the open internet, not this account's real calendar, and will
+return nothing meaningful. check_calendar_availability is the only source
+of truth for what's actually free.
+
+"""
+        if can_book_real_demo
+        else ""
     )
     return f"""
 You are {agent_name}, the voice of Vistrow Voice itself. Your gender and
@@ -893,6 +918,7 @@ isn't a real 10-digit Indian mobile and tell you to ask again — when it
 does, ask plainly, don't apologize or over-explain, and never say
 "recorded" until the tool actually confirms it.
 
+{_demo_booking_section}
 Before you name a specific plan (Starter/Growth/Scale), the caller must
 have raised pricing themselves — recommending a plan unprompted, before
 they've asked what it costs, reads as presumptuous rather than helpful.

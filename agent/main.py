@@ -1100,29 +1100,49 @@ def _build_tools(config: dict) -> list:
     optional built-ins (end_call, transfer_call). Custom webhook tools and a
     transfer tool (only if a transfer number is set) are appended.
 
-    The appointment/booking tools are for a TENANT business's own real
-    calendar — check_calendar_availability, book_appointment, request_callback,
-    and log_lead (the real-estate-shaped budget/location/timeline capture)
-    all assume that context. platform_assistant.py, the persona for the
-    platform-demo sales call, never once mentions any of them — its entire
-    close is capture_platform_lead. Registering them anyway let the model
-    call check_calendar_availability on its own initiative mid-pitch
-    (confirmed live, call 762: customer was still describing their use case,
-    never asked about a demo or next step, and got offered specific calendar
-    slots out of nowhere — a tool available with nothing in the prompt
-    telling it not to use it). Excluding them here is the actual fix; no
-    prompt wording can out-argue a tool that's simply sitting there.
+    The appointment/booking tools are for a real calendar — either a real
+    TENANT business's own (check_calendar_availability, book_appointment,
+    request_callback, log_lead — the real-estate-shaped budget/location/
+    timeline capture), or Vistrow's own sales calendar for the plain
+    marketing demo booking an actual product-demo meeting. An industry
+    ROLE-PLAY demo (is_platform_demo AND a public_demo_slug — healthcare,
+    real estate, etc., answering as a fictional business) must never get
+    them: registering them let the model call check_calendar_availability on
+    its own initiative mid-pitch (confirmed live, call 762: customer was
+    still describing their use case, never asked about a demo or next step,
+    and got offered specific calendar slots out of nowhere), and any
+    booking it DID make would land on Vistrow's real calendar under a made-up
+    business's name. The plain marketing demo (is_platform_demo, no slug —
+    the actual homepage Artha) has no such fictional-business problem: "book
+    my demo" there means a real meeting with Vistrow's own sales team, so it
+    keeps the real booking tools, just without log_lead (the budget/
+    location/timeline shape doesn't fit a product-demo booking).
     """
-    tools = [capture_platform_lead, switch_reply_language] if config.get("is_platform_demo") else [
-        check_calendar_availability,
-        book_appointment,
-        # Always on, never optional: it is the only thing standing between a
-        # caller who could not be given a slot and being forgotten entirely.
-        request_callback,
-        log_lead,
-        capture_platform_lead,
-        switch_reply_language,
-    ]
+    is_industry_roleplay_demo = bool(config.get("is_platform_demo")) and bool(
+        (config.get("public_demo_slug") or "").strip()
+    )
+    is_plain_platform_demo = bool(config.get("is_platform_demo")) and not is_industry_roleplay_demo
+    if is_industry_roleplay_demo:
+        tools = [capture_platform_lead, switch_reply_language]
+    elif is_plain_platform_demo:
+        tools = [
+            check_calendar_availability,
+            book_appointment,
+            request_callback,
+            capture_platform_lead,
+            switch_reply_language,
+        ]
+    else:
+        tools = [
+            check_calendar_availability,
+            book_appointment,
+            # Always on, never optional: it is the only thing standing between a
+            # caller who could not be given a slot and being forgotten entirely.
+            request_callback,
+            log_lead,
+            capture_platform_lead,
+            switch_reply_language,
+        ]
     enabled_raw = (config.get("enabled_functions") or "").strip()
     enabled = {e.strip() for e in enabled_raw.split(",") if e.strip()} if enabled_raw else None
 
@@ -1211,7 +1231,9 @@ class RealEstateAgent(Agent):
         if config.get("system_prompt"):
             instructions = config["system_prompt"]
         elif config.get("is_platform_demo"):
-            instructions = build_platform_assistant_prompt(agent_name, speaks_global)
+            instructions = build_platform_assistant_prompt(
+                agent_name, speaks_global, can_book_real_demo=not self._public_demo_slug
+            )
         else:
             # build_generic_assistant_prompt has always taken a business_name,
             # but nothing ever passed one — so every tenant on the built-in
