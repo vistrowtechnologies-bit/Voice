@@ -1169,7 +1169,6 @@ async def log_lead(
     return "Lead details recorded."
 
 
-@function_tool
 def _looks_like_valid_indian_mobile(digits: str) -> bool:
     """10 digits, first digit 6-9 — the actual shape of a real Indian mobile
     number once a leading +91/91/0 is stripped. Deliberately strict: this
@@ -1182,6 +1181,7 @@ def _looks_like_valid_indian_mobile(digits: str) -> bool:
     return len(digits) == 10 and digits[0] in "6789"
 
 
+@function_tool
 async def capture_platform_lead(
     context: RunContext,
     name: str,
