@@ -1,0 +1,44 @@
+[
+  {
+    "voice": "google31:kore",
+    "language": "hi-IN",
+    "gender": "female",
+    "text": "हे, आपने क्लिक किया है, तो अब मुझे प्रूव करना पड़ेगा कि मैं रोबोट जैसी साउंड नहीं करती। मैं आर्था हूँ, विस्ट्रो वॉइस से। आप इंग्लिश, हिंदी या हिंग्लिश में बात कर सकते हैं—बताइए, आपका बिज़नेस किस इंडस्ट्री में है?",
+    "file": "hi-IN_0.wav"
+  },
+  {
+    "voice": "google31:kore",
+    "language": "hi-IN",
+    "gender": "female",
+    "text": "हे, आपने 'टॉक टू आर्था' क्लिक किया, तो मैं ऑफिशियली ड्यूटी पर आ गई। बताइए, आपका बिज़नेस क्या करता है?",
+    "file": "hi-IN_1.wav"
+  },
+  {
+    "voice": "google31:kore",
+    "language": "hi-IN",
+    "gender": "female",
+    "text": "हाय, मैं आर्था हूँ, विस्ट्रो वॉइस से। मुझे 30 सेकंड्स दीजिए, मैं दिखाती हूँ कि एआई कन्वर्सेशन कितनी नैचुरल हो सकती है। आप किस बिज़नेस में हैं?",
+    "file": "hi-IN_2.wav"
+  },
+  {
+    "voice": "google31:kore",
+    "language": "en-IN",
+    "gender": "female",
+    "text": "Hey, you clicked the button, so now I have to prove I don't sound like a robot. I'm Artha, from Vistrow Voice. What industry is your business in?",
+    "file": "en-IN_0.wav"
+  },
+  {
+    "voice": "google31:kore",
+    "language": "en-IN",
+    "gender": "female",
+    "text": "Hey, you hit 'Talk to Artha,' so I'm officially on duty now. So, what does your business do?",
+    "file": "en-IN_1.wav"
+  },
+  {
+    "voice": "google31:kore",
+    "language": "en-IN",
+    "gender": "female",
+    "text": "Hi, I'm Artha, from Vistrow Voice. Give me 30 seconds and I'll show you how natural an AI conversation can sound. What business are you in?",
+    "file": "en-IN_2.wav"
+  }
+]

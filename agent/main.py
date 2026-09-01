@@ -6,7 +6,9 @@ import random
 import re
 import threading
 import time
+import wave
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from dotenv import load_dotenv
 from livekit import api, rtc
@@ -3306,24 +3308,33 @@ def _prewarm(proc: JobProcess) -> None:
 
 
 # Confirmed live (2026-09-01): with num_idle_processes=4, a fresh deploy
-# spins all 4 idle processes up together, and each independently starts its
-# 6-call (2 languages x 3 openers) warm-up at the same instant — 24
-# concurrent Gemini TTS requests, hit Google's own rate limit
-# (429 RESOURCE_EXHAUSTED) on most of them. Not a stability problem
-# (cached_greeting() misses fall through to normal synthesis exactly as
-# before), but it meant most processes cached 0-1 of 6 intended clips
-# instead of 6. Spreading each process's OWN start time across this window
-# means the 4 processes' bursts mostly don't overlap in the first place,
-# rather than relying on the TTS plugin's own per-request retry/backoff
-# (already visible in logs: "retrying in 2.0s") to dig out from under one.
+# spins all 4 idle processes up together, and each independently started its
+# opener warm-up at the same instant — enough concurrent Gemini TTS requests
+# to hit Google's own rate limit (429 RESOURCE_EXHAUSTED) on most of them.
+# The openers themselves now load from disk (see _load_cached_greetings,
+# no API call, no rate limit possible), but this stagger is kept for the
+# one remaining live call below (warming the gRPC/credential connection) —
+# even a single request per process can still collide if all 4 fire at once.
 _TTS_PREWARM_STAGGER_MAX_S = 20.0
 
 
+async def _warm_google_tts_client() -> None:
+    """Pays the Google Cloud TTS client/credential/gRPC connection setup
+    cost (measured ~10.5s on a fresh process) via one throwaway synthesis,
+    so a real call's first live Google TTS request — a greeting-cache miss,
+    or any mid-call turn — doesn't pay that setup cost itself."""
+    tts = PatchedGeminiTTS(
+        language="hi-IN", voice_name="Kore", model_name=_GOOGLE_31_MODEL, credentials_info=_GOOGLE_CREDENTIALS
+    )
+    await _synthesize_frames(tts, "ठीक है")
+
+
 def _run_google_tts_prewarm(pid: int) -> None:
+    _load_cached_greetings()
     time.sleep(random.uniform(0, _TTS_PREWARM_STAGGER_MAX_S))
     try:
-        asyncio.run(_prewarm_google_tts())
-        logger.info("prewarm: Google TTS client warmed + greetings cached (pid=%s)", pid)
+        asyncio.run(_warm_google_tts_client())
+        logger.info("prewarm: Google TTS client warmed (pid=%s)", pid)
     except Exception:
         logger.exception("prewarm: Google TTS warm-up failed — first real call pays the cost instead")
 
@@ -3385,50 +3396,44 @@ async def _synthesize_frames(tts, text: str) -> list[rtc.AudioFrame]:
     return frames
 
 
-async def _prewarm_google_tts() -> None:
-    """Warms the Google TTS client AND banks the resulting audio.
+_GREETING_CACHE_DIR = Path(__file__).resolve().parent / "greeting_cache"
 
-    This used to synthesize a throwaway "ठीक है" purely to pay the client/
-    credential/gRPC setup cost off the call path. It now spends that same
-    warm-up on the actual opening lines the platform demo speaks, so the
-    first real caller gets both the warm client and audio that is already
-    rendered. Gemini/Kore matches the platform demo agent's own configured
-    voice ("google31:kore"); every other agent simply misses the cache.
 
-    Runs on a background thread (see _run_google_tts_prewarm) — nothing
-    about being slower here costs a real caller anything, unlike the first
-    version of this that ran inline inside LiveKit's bounded init window.
+def _load_cached_greetings() -> None:
+    """Loads the platform demo's opener clips from disk into
+    _GREETING_AUDIO_CACHE, rendered once offline by scripts/render_greetings.py.
+
+    This used to synthesize these same lines live, via Google TTS, on every
+    idle process at every deploy — with num_idle_processes=4, that's several
+    processes independently firing the same handful of TTS requests at once,
+    which reliably hit Google's per-minute rate limit (429 RESOURCE_EXHAUSTED)
+    and left most processes with 0-1 of the intended clips cached. Loading
+    pre-rendered WAV files from disk has no such ceiling and is effectively
+    instant, so there's no need to stagger or thread this off any more.
     """
-    for language, opener_set in (("hi-IN", _PLATFORM_DEMO_OPENERS), ("en-IN", _PLATFORM_DEMO_OPENERS_EN)):
-        tts = PatchedGeminiTTS(
-            language=language,
-            voice_name="Kore",
-            model_name=_GOOGLE_31_MODEL,
-            credentials_info=_GOOGLE_CREDENTIALS,
-        )
-        # Kore is a female voice, so only the female lines are ever spoken
-        # with it — rendering the male set here would be wasted work and
-        # wasted memory in every idle process.
-        for i, text in enumerate((opener_set.get("female") or [])[:_GREETING_CACHE_PER_SET]):
-            if i > 0:
-                # Confirmed live: even ONE process's requests fired back-to-
-                # back (109, 113, 273, 118 above each started at a different,
-                # already-staggered moment) still hit Google's 429
-                # RESOURCE_EXHAUSTED on all but the first — a requests-per-
-                # minute ceiling, not just a same-instant burst across
-                # processes. Staggering process START times alone doesn't
-                # touch that; spacing requests within one process's own
-                # loop does.
-                await asyncio.sleep(3.0)
-            try:
-                frames = await _synthesize_frames(tts, text)
-            except Exception:
-                logger.exception("prewarm: could not pre-render an opener (%s)", language)
-                continue
-            if frames:
-                _GREETING_AUDIO_CACHE.setdefault(("google31:kore", language, "female"), []).append((text, frames))
+    manifest_path = _GREETING_CACHE_DIR / "manifest.json"
+    if not manifest_path.exists():
+        logger.warning("prewarm: no greeting_cache/manifest.json — run scripts/render_greetings.py")
+        return
+    manifest = json.loads(manifest_path.read_text())
+    for entry in manifest:
+        wav_path = _GREETING_CACHE_DIR / entry["file"]
+        try:
+            with wave.open(str(wav_path), "rb") as wf:
+                num_channels = wf.getnchannels()
+                sample_rate = wf.getframerate()
+                data = wf.readframes(wf.getnframes())
+            samples_per_channel = len(data) // (2 * num_channels)
+            frame = rtc.AudioFrame(
+                data=data, sample_rate=sample_rate, num_channels=num_channels, samples_per_channel=samples_per_channel
+            )
+        except Exception:
+            logger.exception("prewarm: could not load cached greeting %s", wav_path)
+            continue
+        key = (entry["voice"], entry["language"], entry["gender"])
+        _GREETING_AUDIO_CACHE.setdefault(key, []).append((entry["text"], [frame]))
     logger.info(
-        "prewarm: cached %s greeting clip(s)",
+        "prewarm: loaded %s greeting clip(s) from disk",
         sum(len(v) for v in _GREETING_AUDIO_CACHE.values()),
     )
 
