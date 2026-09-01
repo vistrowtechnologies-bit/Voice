@@ -23,10 +23,18 @@ WORKDIR /app
 # unsupported and can fail outright, so this has to track the server, not
 # just "whatever's in the base image's apt repo". Installed from the
 # official PGDG repo, which is where versioned releases actually live.
+#
+# The PGDG apt suite has to match this base image's Debian codename exactly
+# (e.g. bookworm vs trixie) — a mismatch pulls a libpq5 built against a
+# different libldap than what's actually on the image and apt fails with
+# "unmet dependencies" rather than anything obviously about the codename.
+# Read it from /etc/os-release instead of hardcoding a guess, so a future
+# python:3.12-slim base bump can't silently break this again.
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl gnupg \
     && install -d /usr/share/postgresql-common/pgdg \
     && curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && . /etc/os-release \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update && apt-get install -y --no-install-recommends postgresql-client-18 \
     && rm -rf /var/lib/apt/lists/*
 
