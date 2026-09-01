@@ -285,8 +285,22 @@ def get_kb(kb_id: int, max_chars: int = 8000) -> tuple[str, bool]:
     return result
 
 
+# Confirmed live (2026-09-01): a one-shot prewarm at process boot doesn't
+# help a process whose first real call arrives later than the cache TTL —
+# measured on a real call that landed 17.5 minutes after its process booted,
+# well past _KB_CACHE_TTL_S (600s/10min), so get_kb_content() paid the full
+# 1.46s lookup live despite having prewarmed at boot. Idle demo-agent
+# processes routinely sit far longer than 10 minutes between calls, so this
+# was not an edge case. Re-running the warm periodically, well inside the
+# TTL, keeps every idle process's cache fresh regardless of how long it sits
+# — the alternative (just raising the TTL) only shifts the same failure to a
+# longer idle window instead of removing it.
+_CACHE_PREWARM_INTERVAL_S = 240.0
+
+
 def start_cache_prewarm() -> None:
-    """Kick off the cache warm in a background thread and return immediately.
+    """Kick off the cache warm in a background thread and return immediately,
+    then keep re-warming on an interval for as long as the process lives.
 
     MUST NOT BLOCK. LiveKit gives each job subprocess a bounded initialization
     window and kills the process when prewarm overruns it. Calling the
@@ -298,11 +312,18 @@ def start_cache_prewarm() -> None:
     process is registered as ready straight away and the cache fills a moment
     later while nothing is waiting on it.
 
-    A call arriving before the warm finishes is not a problem: get_agent_config
-    and get_kb simply miss and do their own lookup, exactly as before. The
-    caches are plain dicts written under the GIL, so the racing write is safe.
+    A call arriving before the first warm finishes is not a problem:
+    get_agent_config and get_kb simply miss and do their own lookup, exactly
+    as before. The caches are plain dicts written under the GIL, so the
+    racing write is safe.
     """
-    threading.Thread(target=prewarm_caches, name="cache-prewarm", daemon=True).start()
+
+    def _loop() -> None:
+        while True:
+            prewarm_caches()
+            time.sleep(_CACHE_PREWARM_INTERVAL_S)
+
+    threading.Thread(target=_loop, name="cache-prewarm", daemon=True).start()
 
 
 def prewarm_caches() -> None:
