@@ -863,6 +863,123 @@ def integration_slack_callback(
     return _complete_slack_integration_oauth(request, code, state, error, user)
 
 
+_ZOHO_INTEGRATION_STATE_COOKIE = "vv_zoho_integration_state"
+
+
+@app.get("/integrations/zoho_crm/start")
+def integration_zoho_start(user: dict = Depends(require_role("admin"))) -> RedirectResponse:
+    """A tenant admin connects Zoho CRM by logging into Zoho, not by pasting a
+    webhook URL or API token — same shape as /integrations/slack/start."""
+    client_id = os.environ.get("ZOHO_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("ZOHO_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("ZOHO_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        raise HTTPException(404, "Zoho integration is not configured on this server")
+    accounts_base = os.environ.get("ZOHO_ACCOUNTS_BASE_URL", "https://accounts.zoho.com")
+    state = secrets.token_urlsafe(24)
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        # CREATE lets us push a lead in; READ lets a future "test connection"
+        # verify the token actually works against the tenant's own org.
+        "scope": "ZohoCRM.modules.leads.CREATE,ZohoCRM.modules.leads.READ",
+        "access_type": "offline",  # required to receive a refresh_token
+        "prompt": "consent",  # forces a fresh refresh_token even on a re-connect
+        "state": state,
+    }
+    redirect = RedirectResponse(f"{accounts_base}/oauth/v2/auth?{urllib.parse.urlencode(params)}")
+    redirect.set_cookie(
+        _ZOHO_INTEGRATION_STATE_COOKIE, state, max_age=600, httponly=True, secure=_COOKIE_SECURE, samesite="lax", path="/"
+    )
+    return redirect
+
+
+@app.get("/auth/oauth/zoho/callback")
+def auth_oauth_zoho_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    """Registered as this client's sole redirect_uri in Zoho's API Console —
+    unlike Slack's callback, this only ever completes the integration-connect
+    flow (there's no separate "log into Vistrow with Zoho" identity flow), so
+    it doesn't need Slack's dual-dispatch. Reads the session cookie directly
+    rather than via Depends(require_role) so a missing/expired session redirects
+    back to the integrations page with an error instead of a bare 401."""
+    base_url = _app_base_url(request)
+    expected_state = request.cookies.get(_ZOHO_INTEGRATION_STATE_COOKIE)
+
+    def _finish(query: str = "") -> RedirectResponse:
+        response = RedirectResponse(f"{base_url}/dashboard/integrations{query}")
+        response.delete_cookie(_ZOHO_INTEGRATION_STATE_COOKIE, path="/")
+        return response
+
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if error or not code or not expected_state or not secrets.compare_digest(state or "", expected_state) or not session:
+        return _finish("?zoho=failed")
+
+    full_user = calls_db.get_user_by_id(session["uid"])
+    if full_user is None or calls_db.ROLE_RANK.get(full_user["role"], 0) < calls_db.ROLE_RANK["admin"]:
+        return _finish("?zoho=failed")
+
+    client_id = os.environ.get("ZOHO_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("ZOHO_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("ZOHO_OAUTH_REDIRECT_URI")
+    accounts_base = os.environ.get("ZOHO_ACCOUNTS_BASE_URL", "https://accounts.zoho.com")
+    if not client_id or not client_secret or not redirect_uri:
+        return _finish("?zoho=failed")
+
+    token_body = urllib.parse.urlencode(
+        {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+    ).encode()
+    try:
+        token_req = urllib.request.Request(f"{accounts_base}/oauth/v2/token", data=token_body, method="POST")
+        with urllib.request.urlopen(token_req, timeout=10) as resp:
+            token_data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode()
+        except Exception:
+            detail = "<no body>"
+        logger.error("Zoho integration OAuth failed: HTTP %s %s - %s", e.code, e.reason, detail)
+        return _finish("?zoho=failed")
+    except Exception:
+        logger.exception("Zoho integration OAuth failed")
+        return _finish("?zoho=failed")
+
+    access_token = token_data.get("access_token")
+    refresh_token = token_data.get("refresh_token")
+    # Zoho's accounts server tells us which regional CRM API host to call
+    # (crm.zoho.com / crm.zoho.eu / crm.zoho.in / ...) - hardcoding one would
+    # break for a tenant on a different data center than ours.
+    api_domain = token_data.get("api_domain") or "https://www.zohoapis.com"
+    if not access_token or not refresh_token:
+        logger.error("Zoho integration OAuth returned no usable tokens: %s", token_data.get("error", "missing tokens"))
+        return _finish("?zoho=failed")
+
+    calls_db.update_integration(
+        "zoho_crm",
+        "connected",
+        {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "api_domain": api_domain,
+            "accounts_base": accounts_base,
+            "expires_at": time.time() + float(token_data.get("expires_in") or 3600),
+        },
+        full_user["account_id"],
+    )
+    return _finish()
+
+
 _FACEBOOK_INTEGRATION_STATE_COOKIE = "vv_facebook_integration_state"
 _META_GRAPH_VERSION = "v25.0"  # v20.0 sunsets 2026-09-24; stay current explicitly rather than drift.
 

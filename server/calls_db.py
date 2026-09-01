@@ -745,6 +745,13 @@ _SEED_INTEGRATIONS = [
         "Connect your Facebook Page and every new Lead Ads submission is queued for a call within "
         "about 15-30 seconds. Click Connect and choose your Page - no webhook URLs to configure.",
     ),
+    (
+        "zoho_crm",
+        "Zoho CRM",
+        "CRM",
+        "Connect with Zoho and every qualified lead is pushed straight into your Leads module - "
+        "no webhook URL or field mapping to set up.",
+    ),
 ]
 
 # Same Hinglish-aware frustration cues the live agent uses for its calm-voice

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
-import { facebookIntegrationStartUrl, fetchIntegrations, fetchLeadWebhook, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateIntegration } from '../lib/api'
+import { facebookIntegrationStartUrl, fetchIntegrations, fetchLeadWebhook, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateIntegration, zohoIntegrationStartUrl } from '../lib/api'
 import type { Integration } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import arthaleadsIcon from '../assets/arthaleads-logo.png'
@@ -12,25 +12,26 @@ const ICONS: Record<string, string> = {
   whatsapp: 'chat',
   sheets: 'table_chart',
   facebook: 'ads_click',
+  zoho_crm: 'sync',
 }
 
-// Integrations that open a local config form. Slack and Facebook have their
-// own OAuth install flow so operators can connect without hunting for
-// webhook URLs or tokens.
+// Integrations that open a local config form. Slack, Facebook, and Zoho CRM
+// have their own OAuth install flow so operators can connect without
+// hunting for webhook URLs or tokens.
 const CONNECTABLE = new Set(['arthaleads', 'webhook', 'whatsapp', 'sheets'])
 
 // The API returns integrations in undefined DB row order - pin a deliberate
 // display order instead (ArthaLeads first, since it's the flagship CRM;
 // Facebook right after it since it's a lead SOURCE, not a delivery target
 // like the rest of this list) rather than leaving card position to chance.
-const DISPLAY_ORDER = ['arthaleads', 'facebook', 'webhook', 'slack', 'whatsapp', 'sheets']
+const DISPLAY_ORDER = ['arthaleads', 'zoho_crm', 'facebook', 'webhook', 'slack', 'whatsapp', 'sheets']
 const sortIntegrations = (list: Integration[]) =>
   [...list].sort((a, b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key))
 
 // Lead-delivery integrations - a qualified lead is POSTed to each connected
 // one when a call captures it (agent/tools.py fan-out) and they support a
 // "Send test" from here.
-const DELIVERY = new Set(['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets'])
+const DELIVERY = new Set(['arthaleads', 'webhook', 'slack', 'whatsapp', 'sheets', 'zoho_crm'])
 
 // arthaleads has no URL field - its endpoint is fixed server-side, so it's
 // intentionally absent here (see the token-only form below).
@@ -85,6 +86,10 @@ export function Integrations() {
     }
     if (key === 'facebook') {
       window.location.href = facebookIntegrationStartUrl
+      return
+    }
+    if (key === 'zoho_crm') {
+      window.location.href = zohoIntegrationStartUrl
       return
     }
     if (key === 'arthaleads') {
@@ -228,6 +233,8 @@ export function Integrations() {
                   <InfoRow label="Channel" value={integration.config.channel || '-'} />
                 ) : integration.key === 'facebook' ? (
                   <InfoRow label="Page" value={integration.config.pageName || '-'} />
+                ) : integration.key === 'zoho_crm' ? (
+                  <InfoRow label="Zoho org" value={integration.config.api_domain || '-'} />
                 ) : (
                   <InfoRow label="Endpoint" value={integration.config.url ? integration.config.url.slice(0, 40) : '-'} />
                 )}
@@ -344,6 +351,14 @@ export function Integrations() {
                 >
                   <Icon name="link" className="text-[15px]" />
                   Connect Facebook
+                </button>
+              ) : integration.key === 'zoho_crm' ? (
+                <button
+                  onClick={() => handleConnect('zoho_crm')}
+                  className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-cyan/40 py-2 text-xs font-bold text-cyan hover:bg-cyan/10"
+                >
+                  <Icon name="link" className="text-[15px]" />
+                  Connect with Zoho
                 </button>
               ) : CONNECTABLE.has(integration.key) ? (
                 <button

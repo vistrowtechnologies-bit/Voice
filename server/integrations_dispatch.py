@@ -2,25 +2,30 @@
 
 When a call qualifies a lead, fan it out to whichever destinations the tenant
 has connected on the Integrations page — CRM/webhook, Slack, WhatsApp, Google
-Sheets, ArthaLeads. Delivery is still just HTTPS POST once configured. Slack
-stores the Incoming Webhook URL returned by its OAuth install flow; generic
-webhooks, WhatsApp providers, and Google Apps Script endpoints are pasted by
-the operator. ArthaLeads is the one exception —
-its endpoint is fixed, so the operator only pastes a token. Same
-stdlib-urllib, best-effort, never-raise philosophy as email_sender — a broken
-integration must never break a call.
+Sheets, ArthaLeads, Zoho CRM. Delivery is still just HTTPS POST once
+configured. Slack stores the Incoming Webhook URL returned by its OAuth
+install flow; generic webhooks, WhatsApp providers, and Google Apps Script
+endpoints are pasted by the operator. ArthaLeads is the one exception — its
+endpoint is fixed, so the operator only pastes a token. Zoho CRM is the other
+exception — it needs an authenticated API call (token_api.py's OAuth flow
+stores the access/refresh token pair), not a plain JSON POST to an operator-
+pasted URL. Same stdlib-urllib, best-effort, never-raise philosophy as
+email_sender — a broken integration must never break a call.
 """
 
 import json
 import logging
+import os
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import calls_db
 
 logger = logging.getLogger("vistrow-integrations")
 
-_DELIVERY_KEYS = {"webhook", "slack", "whatsapp", "sheets", "arthaleads"}
+_DELIVERY_KEYS = {"webhook", "slack", "whatsapp", "sheets", "arthaleads", "zoho_crm"}
 
 _ARTHALEADS_URL = "https://api.arthaleads.com/webhook/lead"
 
@@ -206,7 +211,104 @@ def _body_for(key: str, config: dict, lead: dict) -> dict | None:
     return {"_url": url, **lead}
 
 
-def _deliver_one(key: str, config: dict, lead: dict) -> tuple[bool, str]:
+def _zoho_refresh_access_token(config: dict) -> tuple[str, dict] | None:
+    """Exchanges the stored refresh_token for a fresh access_token. Returns
+    (access_token, updated_config) on success, or None on failure — callers
+    just fall back to the existing (possibly stale) access_token and let the
+    API call itself fail, rather than treating a refresh hiccup as fatal."""
+    client_id = os.environ.get("ZOHO_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("ZOHO_OAUTH_CLIENT_SECRET")
+    refresh_token = config.get("refresh_token")
+    accounts_base = config.get("accounts_base") or "https://accounts.zoho.com"
+    if not client_id or not client_secret or not refresh_token:
+        return None
+    body = urllib.parse.urlencode(
+        {
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "grant_type": "refresh_token",
+        }
+    ).encode()
+    try:
+        req = urllib.request.Request(f"{accounts_base}/oauth/v2/token", data=body, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+    except Exception:
+        logger.exception("zoho_crm: token refresh failed")
+        return None
+    access_token = data.get("access_token")
+    if not access_token:
+        logger.error("zoho_crm: token refresh returned no access_token: %s", data.get("error"))
+        return None
+    updated = {**config, "access_token": access_token, "expires_at": time.time() + float(data.get("expires_in") or 3600)}
+    return access_token, updated
+
+
+def _zoho_lead_body(lead: dict) -> dict:
+    # Zoho's Leads module requires Last_Name (and Company, on most default
+    # layouts) — there's no single "name" field to map onto, so the full
+    # caller name goes in Last_Name and doubles as Company when none was
+    # captured, rather than failing the whole record over a missing field.
+    name = str(lead.get("name") or "Unknown caller").strip()
+    return {
+        "data": [
+            {
+                "Last_Name": name,
+                "Company": lead.get("company") or name,
+                "Phone": lead.get("phone", ""),
+                "Email": lead.get("email", ""),
+                "Description": lead.get("summary") or _lead_summary_line(lead),
+                "Lead_Source": _human_channel(lead),
+            }
+        ]
+    }
+
+
+def _deliver_zoho_crm(account_id: int, config: dict, lead: dict) -> tuple[bool, str]:
+    access_token = config.get("access_token")
+    api_domain = (config.get("api_domain") or "https://www.zohoapis.com").rstrip("/")
+    if not access_token or not config.get("refresh_token"):
+        return False, "not configured"
+
+    def _post(token: str) -> tuple[bool, str, int | None]:
+        req = urllib.request.Request(
+            f"{api_domain}/crm/v2/Leads",
+            data=json.dumps(_zoho_lead_body(lead)).encode(),
+            headers={"Authorization": f"Zoho-oauthtoken {token}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                return True, f"HTTP {resp.status}", resp.status
+        except urllib.error.HTTPError as e:
+            return False, f"HTTP {e.code}", e.code
+        except (urllib.error.URLError, TimeoutError, ValueError) as e:
+            return False, str(e), None
+
+    # Access tokens live ~1hr; refresh proactively when we're at or past the
+    # stored expiry so a normal delivery doesn't eat the extra round-trip.
+    if time.time() >= float(config.get("expires_at") or 0) - 60:
+        refreshed = _zoho_refresh_access_token(config)
+        if refreshed:
+            access_token, config = refreshed
+            calls_db.update_integration("zoho_crm", "connected", config, account_id)
+
+    ok, detail, status = _post(access_token)
+    if not ok and status == 401:
+        # Expired sooner than our own bookkeeping expected (clock drift, or
+        # revoked/reissued elsewhere) — one forced refresh-and-retry.
+        refreshed = _zoho_refresh_access_token(config)
+        if refreshed:
+            access_token, config = refreshed
+            calls_db.update_integration("zoho_crm", "connected", config, account_id)
+            ok, detail, status = _post(access_token)
+    return ok, detail
+
+
+def _deliver_one(key: str, config: dict, lead: dict, account_id: int | None = None) -> tuple[bool, str]:
+    if key == "zoho_crm":
+        return _deliver_zoho_crm(account_id, config, lead)
     body = _body_for(key, config, lead)
     if body is None:
         return False, "not configured"
@@ -224,7 +326,7 @@ def deliver_lead(account_id: int, lead: dict) -> dict:
         if key not in _DELIVERY_KEYS or integ.get("status") != "connected":
             continue
         try:
-            ok, detail = _deliver_one(key, integ.get("config") or {}, lead)
+            ok, detail = _deliver_one(key, integ.get("config") or {}, lead, account_id)
         except Exception:
             logger.exception("integration %s delivery crashed", key)
             ok, detail = False, "error"
@@ -267,7 +369,7 @@ def test_integration(account_id: int, key: str) -> tuple[bool, str]:
         "language": "en",
         "agent_name": "Test Agent",
     }
-    ok, detail = _deliver_one(key, integ.get("config") or {}, sample)
+    ok, detail = _deliver_one(key, integ.get("config") or {}, sample, account_id)
     try:
         if ok:
             calls_db.touch_integration_sync(account_id, key)
