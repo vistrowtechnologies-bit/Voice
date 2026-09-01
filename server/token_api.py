@@ -69,6 +69,7 @@ db_backup.start_backup_scheduler()
 # own origin and Vercel rewrites /api to the backend, so the session cookie
 # is same-site either way (no cross-origin cookie needed).
 _COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "").lower() in ("1", "true", "yes")
+_DEVICE_COOKIE_NAME = "vv_device"
 
 # Routes reachable without a session. Everything else (the dashboard/admin
 # API) requires a valid session cookie, enforced by the middleware below.
@@ -123,9 +124,12 @@ async def require_session(request: Request, call_next):
         profile = calls_db.get_user_by_id(session["uid"])
         if profile is None or int(profile.get("session_version") or 1) != int(session.get("sv") or 1):
             return JSONResponse({"detail": "Session expired — please sign in again"}, status_code=401)
+        if session.get("sid") and not calls_db.validate_user_session(session["sid"], session["uid"]):
+            return JSONResponse({"detail": "This device was signed out"}, status_code=401)
         # Stash for downstream handlers/dependencies (Phase 3 scopes queries by it).
         request.state.user_id = session["uid"]
         request.state.account_id = session["aid"]
+        request.state.session_id = session.get("sid")
         # imp is set only in a super-admin support session — carries the real
         # platform-owner user id so admin routes can attribute audit entries to
         # them even while uid/aid point at the tenant being viewed.
@@ -409,17 +413,48 @@ class ResendEmailVerificationRequest(BaseModel):
     email: str
 
 
-def _set_session_cookie(response: Response, user_id: int, account_id: int) -> None:
+def _set_session_cookie(
+    response: Response,
+    user_id: int,
+    account_id: int,
+    request: Request | None = None,
+    provider: str = "",
+) -> str:
     profile = calls_db.get_user_by_id(user_id)
+    device_id = request.cookies.get(_DEVICE_COOKIE_NAME, "") if request is not None else ""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{20,160}", device_id):
+        device_id = secrets.token_urlsafe(32)
+    session_id = calls_db.create_user_session(
+        user_id,
+        device_id,
+        request.headers.get("user-agent", "") if request is not None else "",
+        provider or str((profile or {}).get("auth_provider") or ""),
+        auth.SESSION_TTL_SECONDS,
+    )
     response.set_cookie(
         auth.COOKIE_NAME,
-        auth.make_session_token(user_id, account_id, session_version=int((profile or {}).get("session_version") or 1)),
+        auth.make_session_token(
+            user_id,
+            account_id,
+            session_version=int((profile or {}).get("session_version") or 1),
+            session_id=session_id,
+        ),
         max_age=auth.SESSION_TTL_SECONDS,
         httponly=True,
         secure=_COOKIE_SECURE,
         samesite="lax",
         path="/",
     )
+    response.set_cookie(
+        _DEVICE_COOKIE_NAME,
+        device_id,
+        max_age=365 * 24 * 3600,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
+    return session_id
 
 
 def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
@@ -586,7 +621,7 @@ def auth_oauth_google_callback(request: Request, code: str | None = None, state:
     account = _oauth_or_create_user(email, userinfo.get("name", ""), provider="google")
     redirect = RedirectResponse(f"{base_url}/dashboard")
     redirect.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
-    _set_session_cookie(redirect, account["user_id"], account["account_id"])
+    _set_session_cookie(redirect, account["user_id"], account["account_id"], request, "google")
     return redirect
 
 
@@ -704,7 +739,7 @@ def auth_oauth_slack_callback(
     redirect = RedirectResponse(f"{base_url}/dashboard")
     redirect.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
     redirect.delete_cookie(_OAUTH_NONCE_COOKIE, path="/")
-    _set_session_cookie(redirect, account["user_id"], account["account_id"])
+    _set_session_cookie(redirect, account["user_id"], account["account_id"], request, "slack")
     return redirect
 
 
@@ -1029,7 +1064,7 @@ def auth_oauth_github_callback(request: Request, code: str | None = None, state:
     account = _oauth_or_create_user(primary["email"], gh_user.get("name") or gh_user.get("login") or "", provider="github")
     redirect = RedirectResponse(f"{base_url}/dashboard")
     redirect.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
-    _set_session_cookie(redirect, account["user_id"], account["account_id"])
+    _set_session_cookie(redirect, account["user_id"], account["account_id"], request, "github")
     return redirect
 
 
@@ -1089,7 +1124,7 @@ def auth_signup(req: SignupRequest, request: Request) -> dict:
 
 
 @app.post("/auth/verify-email")
-def auth_verify_email(req: VerifyEmailRequest, response: Response) -> dict:
+def auth_verify_email(req: VerifyEmailRequest, response: Response, request: Request) -> dict:
     email = req.email.strip().lower()
     code = re.sub(r"\D", "", req.code)
     if len(code) != 6:
@@ -1100,7 +1135,7 @@ def auth_verify_email(req: VerifyEmailRequest, response: Response) -> dict:
     user = calls_db.get_user_by_id(user_id)
     if user is None:
         raise HTTPException(400, "This account is no longer available")
-    _set_session_cookie(response, user_id, user["account_id"])
+    _set_session_cookie(response, user_id, user["account_id"], request, "password")
     calls_db.record_login(user_id, "password")
     calls_db.record_security_event(user_id, "email_verified")
     return {"ok": True, "user": _me_payload(user_id)}
@@ -1141,7 +1176,7 @@ def auth_login(req: LoginRequest, response: Response, request: Request) -> dict:
         raise HTTPException(401, "Incorrect email or password")
     if not user.get("email_verified_at"):
         raise HTTPException(403, "Verify your email before signing in. You can request a new code from the verification page")
-    _set_session_cookie(response, user["id"], user["account_id"])
+    _set_session_cookie(response, user["id"], user["account_id"], request, "password")
     calls_db.record_login(user["id"])
     return {"ok": True, "user": _me_payload(user["id"])}
 
@@ -1258,7 +1293,7 @@ def auth_request_password_reset(req: RequestResetRequest, request: Request) -> d
 
 
 @app.post("/auth/reset-password")
-def auth_reset_password(req: ResetPasswordRequest, response: Response) -> dict:
+def auth_reset_password(req: ResetPasswordRequest, response: Response, request: Request) -> dict:
     if len(req.password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
     user_id = calls_db.consume_password_reset(req.token)
@@ -1270,13 +1305,16 @@ def auth_reset_password(req: ResetPasswordRequest, response: Response) -> dict:
     # Log them straight in on success.
     user = calls_db.get_user_by_id(user_id)
     if user is not None:
-        _set_session_cookie(response, user["id"], user["account_id"])
+        _set_session_cookie(response, user["id"], user["account_id"], request, "password")
         return {"ok": True, "user": _me_payload(user_id)}
     return {"ok": True}
 
 
 @app.post("/auth/logout")
-def auth_logout(response: Response) -> dict:
+def auth_logout(request: Request, response: Response) -> dict:
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if session and session.get("sid"):
+        calls_db.revoke_user_session(session["sid"], session["uid"])
     response.delete_cookie(auth.COOKIE_NAME, path="/")
     return {"ok": True}
 
@@ -1303,7 +1341,7 @@ class AcceptInviteRequest(BaseModel):
 
 
 @app.post("/invite/accept")
-def accept_invite(req: AcceptInviteRequest, response: Response) -> dict:
+def accept_invite(req: AcceptInviteRequest, response: Response, request: Request) -> dict:
     if len(req.password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
     invite = calls_db.get_invite_by_token(req.token)
@@ -1312,19 +1350,25 @@ def accept_invite(req: AcceptInviteRequest, response: Response) -> dict:
     if calls_db.email_exists(invite["email"]):
         raise HTTPException(409, "An account with this email already exists — sign in instead")
     result = calls_db.accept_invite(invite["id"], auth.hash_password(req.password))
-    _set_session_cookie(response, result["user_id"], result["account_id"])
+    _set_session_cookie(response, result["user_id"], result["account_id"], request, "password")
     calls_db.record_login(result["user_id"], "password")
     return {"ok": True, "user": _me_payload(result["user_id"])}
 
 
 @app.get("/auth/me")
-def auth_me(request: Request) -> dict:
+def auth_me(request: Request, response: Response) -> dict:
     session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
     if session is None:
         raise HTTPException(401, "Not authenticated")
     profile = calls_db.get_user_by_id(session["uid"])
     if profile is None or int(profile.get("session_version") or 1) != int(session.get("sv") or 1):
         raise HTTPException(401, "Session expired — please sign in again")
+    if session.get("sid"):
+        if not calls_db.validate_user_session(session["sid"], session["uid"]):
+            raise HTTPException(401, "This device was signed out")
+    else:
+        # Transparently upgrade pre-device-management cookies after deploy.
+        _set_session_cookie(response, session["uid"], session["aid"], request)
     return {"user": _me_payload(session["uid"], session.get("imp"))}
 
 
@@ -1336,7 +1380,7 @@ class UpdateProfileRequest(BaseModel):
 
 
 @app.patch("/profile")
-def update_profile(req: UpdateProfileRequest, response: Response, user: dict = Depends(current_user)) -> dict:
+def update_profile(req: UpdateProfileRequest, response: Response, request: Request, user: dict = Depends(current_user)) -> dict:
     name = req.name.strip() if req.name is not None else None
     if name is not None and not name:
         raise HTTPException(400, "Name can't be empty")
@@ -1369,7 +1413,7 @@ def update_profile(req: UpdateProfileRequest, response: Response, user: dict = D
     if password_hash is not None:
         calls_db.invalidate_other_sessions(user["user_id"])
         calls_db.record_security_event(user["user_id"], "password_changed")
-        _set_session_cookie(response, user["user_id"], user["account_id"])
+        _set_session_cookie(response, user["user_id"], user["account_id"], request, "password")
     return {"user": _me_payload(user["user_id"])}
 
 
@@ -1493,7 +1537,7 @@ def request_email_change(req: EmailChangeRequest, request: Request, user: dict =
 
 
 @app.get("/auth/confirm-email-change")
-def confirm_email_change(token: str, response: Response) -> dict:
+def confirm_email_change(token: str, response: Response, request: Request) -> dict:
     result = calls_db.consume_email_change_request(token)
     if result is None:
         raise HTTPException(400, "This email-change link is invalid or has expired")
@@ -1506,7 +1550,7 @@ def confirm_email_change(token: str, response: Response) -> dict:
     calls_db.update_user_email(user_id, email)
     calls_db.invalidate_other_sessions(user_id)
     calls_db.record_security_event(user_id, "email_changed")
-    _set_session_cookie(response, user_id, profile["account_id"])
+    _set_session_cookie(response, user_id, profile["account_id"], request)
     return {"ok": True, "user": _me_payload(user_id)}
 
 
@@ -1550,11 +1594,97 @@ def profile_security_events(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_security_events(user["user_id"])
 
 
+def _device_summary(user_agent: str) -> dict:
+    ua = user_agent or ""
+    if "Edg/" in ua:
+        browser = "Microsoft Edge"
+    elif "OPR/" in ua or "Opera" in ua:
+        browser = "Opera"
+    elif "Firefox/" in ua or "FxiOS/" in ua:
+        browser = "Firefox"
+    elif "Chrome/" in ua or "CriOS/" in ua:
+        browser = "Chrome"
+    elif "Safari/" in ua:
+        browser = "Safari"
+    else:
+        browser = "Web browser"
+
+    if "Android" in ua:
+        operating_system = "Android"
+    elif "iPhone" in ua:
+        operating_system = "iPhone"
+    elif "iPad" in ua:
+        operating_system = "iPad"
+    elif "Windows" in ua:
+        operating_system = "Windows"
+    elif "Mac OS X" in ua or "Macintosh" in ua:
+        operating_system = "macOS"
+    elif "Linux" in ua:
+        operating_system = "Linux"
+    else:
+        operating_system = "Unknown device"
+
+    if "iPad" in ua or "Tablet" in ua:
+        device_type = "tablet"
+    elif any(marker in ua for marker in ("Mobile", "Android", "iPhone")):
+        device_type = "mobile"
+    else:
+        device_type = "desktop"
+    return {"browser": browser, "operatingSystem": operating_system, "deviceType": device_type}
+
+
+@app.get("/profile/devices")
+def profile_devices(request: Request, response: Response, user: dict = Depends(current_user)) -> dict:
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    current_session_id = session.get("sid") if session else None
+    if not current_session_id:
+        current_session_id = _set_session_cookie(response, user["user_id"], user["account_id"], request)
+
+    # Several sign-ins from one browser intentionally collapse into one device.
+    grouped: dict[str, dict] = {}
+    for row in calls_db.list_user_sessions(user["user_id"]):
+        device_id = row["device_id"]
+        existing = grouped.get(device_id)
+        is_current = row["id"] == current_session_id
+        if existing is None:
+            grouped[device_id] = {
+                "id": device_id,
+                **_device_summary(row.get("user_agent") or ""),
+                "provider": row.get("provider") or "",
+                "firstSignedInAt": row["created_at"],
+                "lastActiveAt": row["last_seen_at"],
+                "current": is_current,
+            }
+        else:
+            existing["current"] = existing["current"] or is_current
+            if row["created_at"] < existing["firstSignedInAt"]:
+                existing["firstSignedInAt"] = row["created_at"]
+    devices = sorted(grouped.values(), key=lambda item: item["lastActiveAt"], reverse=True)
+    devices.sort(key=lambda item: item["current"], reverse=True)
+    return {"devices": devices}
+
+
+@app.delete("/profile/devices/{device_id}")
+def sign_out_device(device_id: str, request: Request, response: Response, user: dict = Depends(current_user)) -> dict:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{20,160}", device_id):
+        raise HTTPException(400, "Invalid device")
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    rows = calls_db.list_user_sessions(user["user_id"])
+    current_device_id = next((row["device_id"] for row in rows if session and row["id"] == session.get("sid")), None)
+    if not calls_db.revoke_device_sessions(user["user_id"], device_id):
+        raise HTTPException(404, "Device is no longer signed in")
+    calls_db.record_security_event(user["user_id"], "device_signed_out")
+    signed_out_current = device_id == current_device_id
+    if signed_out_current:
+        response.delete_cookie(auth.COOKIE_NAME, path="/")
+    return {"ok": True, "signedOutCurrent": signed_out_current}
+
+
 @app.post("/profile/sign-out-others")
 def sign_out_other_sessions(response: Response, request: Request, user: dict = Depends(current_user)) -> dict:
     calls_db.invalidate_other_sessions(user["user_id"])
     calls_db.record_security_event(user["user_id"], "signed_out_other_sessions", user_agent=request.headers.get("user-agent", ""))
-    _set_session_cookie(response, user["user_id"], user["account_id"])
+    _set_session_cookie(response, user["user_id"], user["account_id"], request)
     return {"ok": True, "user": _me_payload(user["user_id"])}
 
 
@@ -2094,7 +2224,7 @@ def admin_impersonate_exit(request: Request, response: Response) -> dict:
     owner = calls_db.get_user_by_id(session["imp"])
     if owner is None or not owner["is_platform_owner"]:
         raise HTTPException(403, "Not permitted")
-    _set_session_cookie(response, owner["id"], owner["account_id"])
+    _set_session_cookie(response, owner["id"], owner["account_id"], request)
     return {"ok": True}
 
 

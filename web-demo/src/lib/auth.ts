@@ -111,7 +111,19 @@ export interface UserPreferences {
 }
 export const apiProfilePreferences = () => authFetch<UserPreferences>('/profile/preferences')
 export const apiUpdateProfilePreferences = (data: Partial<UserPreferences>) => authFetch<UserPreferences>('/profile/preferences', data, 'PATCH')
-export const apiSecurityEvents = () => authFetch<{ event: string; provider: string; user_agent: string; created_at: string }[]>('/profile/security-events')
+export interface SignedInDevice {
+  id: string
+  browser: string
+  operatingSystem: string
+  deviceType: 'desktop' | 'mobile' | 'tablet'
+  provider: string
+  firstSignedInAt: string
+  lastActiveAt: string
+  current: boolean
+}
+export const apiSignedInDevices = () => authFetch<{ devices: SignedInDevice[] }>('/profile/devices')
+export const apiSignOutDevice = (deviceId: string) =>
+  authFetch<{ ok: boolean; signedOutCurrent: boolean }>(`/profile/devices/${encodeURIComponent(deviceId)}`, undefined, 'DELETE')
 export const apiSignOutOthers = () => authFetch<{ ok: boolean; user: AuthUser }>('/profile/sign-out-others', {})
 export const apiDownloadDataExport = async () => {
   const res = await fetch('/api/profile/request-data-export', { method: 'POST', credentials: 'include' })

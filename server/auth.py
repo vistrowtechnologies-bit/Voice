@@ -88,7 +88,13 @@ def _secret() -> bytes:
     return _DEV_FALLBACK_SECRET.encode()
 
 
-def make_session_token(user_id: int, account_id: int, impersonator_id: int | None = None, session_version: int = 1) -> str:
+def make_session_token(
+    user_id: int,
+    account_id: int,
+    impersonator_id: int | None = None,
+    session_version: int = 1,
+    session_id: str | None = None,
+) -> str:
     """`impersonator_id`, when set, marks this as a super-admin support session:
     uid/aid point at the TARGET tenant (so every tenant route works unchanged),
     while `imp` records the real platform-owner user driving it. read_session_token
@@ -96,6 +102,8 @@ def make_session_token(user_id: int, account_id: int, impersonator_id: int | Non
     payload = {"uid": user_id, "aid": account_id, "sv": session_version, "exp": int(time.time()) + SESSION_TTL_SECONDS}
     if impersonator_id is not None:
         payload["imp"] = impersonator_id
+    if session_id is not None:
+        payload["sid"] = session_id
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
     sig = _b64(hmac.new(_secret(), body.encode(), hashlib.sha256).digest())
     return f"{body}.{sig}"
@@ -116,7 +124,13 @@ def read_session_token(token: str | None) -> dict | None:
         return None
     if payload.get("exp", 0) < int(time.time()):
         return None
-    return {"uid": payload.get("uid"), "aid": payload.get("aid"), "imp": payload.get("imp"), "sv": payload.get("sv", 1)}
+    return {
+        "uid": payload.get("uid"),
+        "aid": payload.get("aid"),
+        "imp": payload.get("imp"),
+        "sv": payload.get("sv", 1),
+        "sid": payload.get("sid"),
+    }
 
 
 # --- helpers ----------------------------------------------------------

@@ -18,7 +18,8 @@ import {
   apiRequestAccountDeletion,
   apiCancelAccountDeletion,
   apiPrivacyRequests,
-  apiSecurityEvents,
+  apiSignedInDevices,
+  apiSignOutDevice,
   apiSignOutOthers,
   apiUpdateProfilePreferences,
   apiUpdateMemberRole,
@@ -27,6 +28,7 @@ import {
   useAuth,
   type PendingInvite,
   type PrivacyRequest,
+  type SignedInDevice,
   type TeamMember,
   type UserPreferences,
 } from '../lib/auth'
@@ -352,11 +354,23 @@ function SecurityTab() {
   const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
-  const [events, setEvents] = useState<{ event: string; provider: string; user_agent: string; created_at: string }[]>([])
+  const [devices, setDevices] = useState<SignedInDevice[]>([])
+  const [devicesLoading, setDevicesLoading] = useState(true)
   const [endingSessions, setEndingSessions] = useState(false)
+  const [endingDevice, setEndingDevice] = useState<string | null>(null)
 
   const hasPassword = user?.passwordSet !== false
-  useEffect(() => { apiSecurityEvents().then(setEvents).catch(() => setEvents([])) }, [])
+  const loadDevices = async () => {
+    try {
+      const result = await apiSignedInDevices()
+      setDevices(result.devices)
+    } catch {
+      setDevices([])
+    } finally {
+      setDevicesLoading(false)
+    }
+  }
+  useEffect(() => { void loadDevices() }, [])
   const save = async () => {
     if ((hasPassword && !currentPassword) || newPassword.length < 8) return
     setSaving(true)
@@ -379,16 +393,39 @@ function SecurityTab() {
     try {
       const { user: updated } = await apiSignOutOthers()
       setUser(updated)
-      const next = await apiSecurityEvents()
-      setEvents(next)
-      setMsg({ type: 'ok', text: 'Other sessions were signed out.' })
+      await loadDevices()
+      setMsg({ type: 'ok', text: 'Other devices were logged out.' })
     } catch (err) {
-      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Could not sign out other sessions.' })
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Could not log out other devices.' })
     } finally { setEndingSessions(false) }
+  }
+
+  const signOutDevice = async (device: SignedInDevice) => {
+    setEndingDevice(device.id)
+    setMsg(null)
+    try {
+      const result = await apiSignOutDevice(device.id)
+      if (result.signedOutCurrent) {
+        window.location.assign('/login')
+        return
+      }
+      await loadDevices()
+      setMsg({ type: 'ok', text: `${device.browser} on ${device.operatingSystem} was logged out.` })
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Could not log out this device.' })
+    } finally {
+      setEndingDevice(null)
+    }
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {msg && (
+        <p role="status" className={`flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-xs ${msg.type === 'ok' ? 'text-success' : 'text-destructive'}`}>
+          <Icon name={msg.type === 'ok' ? 'check_circle' : 'error'} className="text-[15px]" />
+          {msg.text}
+        </p>
+      )}
       <SettingsCard
         title={hasPassword ? 'Password' : 'Create a password'}
         subtitle={hasPassword ? 'Change the password used to sign in.' : `You currently sign in with ${user?.authProvider || 'your connected account'}. Create a password to also sign in with email.`}
@@ -425,12 +462,6 @@ function SecurityTab() {
       >
         {saving ? 'Saving…' : hasPassword ? 'Update password' : 'Create password'}
       </button>
-      {msg && (
-        <p className={`flex items-center gap-1.5 text-xs ${msg.type === 'ok' ? 'text-success' : 'text-destructive'}`}>
-          <Icon name={msg.type === 'ok' ? 'check_circle' : 'error'} className="text-[15px]" />
-          {msg.text}
-        </p>
-      )}
       </SettingsCard>
 
       <SettingsCard title="Forgot your password?" subtitle="We’ll send a secure reset link to your sign-in email. You can use it even while you are signed in.">
@@ -455,15 +486,37 @@ function SecurityTab() {
         )}
       </SettingsCard>
 
-      <SettingsCard title="Recent security activity" subtitle="Review recent sign-ins and end other sessions when something looks unfamiliar.">
-        <button onClick={signOutOthers} disabled={endingSessions} className="self-start rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-destructive hover:text-destructive disabled:opacity-40">
-          {endingSessions ? 'Signing out…' : 'Sign out of other sessions'}
-        </button>
-        <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
-          {events.length === 0 ? <p className="px-3 py-3 text-xs text-text-muted">No security activity recorded yet.</p> : events.map((event, index) => (
-            <div key={`${event.event}-${event.created_at}-${index}`} className="flex items-start gap-2 px-3 py-2.5">
-              <Icon name="security" className="mt-0.5 text-[16px] text-text-muted" />
-              <div className="min-w-0"><p className="text-xs font-semibold">{event.event.replaceAll('_', ' ')}</p><p className="text-[11px] text-text-muted">{formatDateTime(event.created_at)}{event.provider && (event.provider !== 'password' || hasPassword) ? ` · ${event.provider}` : ''}</p></div>
+      <SettingsCard title="Your devices" subtitle="Browsers and devices currently signed in to your account.">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-text-muted">If you don’t recognize a device, log it out and change your password.</p>
+          {devices.some((device) => !device.current) && (
+            <button onClick={signOutOthers} disabled={endingSessions} className="shrink-0 self-start rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-destructive hover:text-destructive disabled:opacity-40">
+              {endingSessions ? 'Logging out…' : 'Log out all other devices'}
+            </button>
+          )}
+        </div>
+        <div className="flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border">
+          {devicesLoading ? (
+            <p className="px-4 py-4 text-xs text-text-muted">Loading devices…</p>
+          ) : devices.length === 0 ? (
+            <p className="px-4 py-4 text-xs text-text-muted">No signed-in devices found.</p>
+          ) : devices.map((device) => (
+            <div key={device.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Icon name={device.deviceType === 'mobile' ? 'smartphone' : device.deviceType === 'tablet' ? 'tablet_mac' : 'computer'} className="text-[21px]" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-bold">{device.browser} on {device.operatingSystem}</p>
+                  {device.current && <span className="rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-bold uppercase text-success">Current device</span>}
+                </div>
+                <p className="text-[11px] text-text-muted">Last active {formatDateTime(device.lastActiveAt)}{device.provider ? ` · ${device.provider}` : ''}</p>
+              </div>
+              {!device.current && (
+                <button onClick={() => signOutDevice(device)} disabled={endingDevice === device.id || endingSessions} className="self-start rounded-lg border border-border px-3 py-2 text-xs font-bold hover:border-destructive hover:text-destructive disabled:opacity-40 sm:self-auto">
+                  {endingDevice === device.id ? 'Logging out…' : 'Log out'}
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -479,21 +532,25 @@ function PreferencesTab() {
 
   useEffect(() => { apiProfilePreferences().then(setPrefs).catch(() => setPrefs(null)) }, [])
   const save = async (next: NonNullable<typeof prefs>) => {
+    const previous = prefs
     setPrefs(next); setSaving(true); setMessage(null)
     try {
       const updated = await apiUpdateProfilePreferences(next)
       setPrefs(updated)
       window.localStorage.setItem('vv-timezone', updated.timezone || 'UTC')
-      setMessage('Preferences saved. Dates and times now use this timezone across your dashboard.')
+      setMessage('Preferences saved.')
     }
-    catch (err) { setMessage(err instanceof Error ? err.message : 'Could not save preferences.') }
+    catch (err) {
+      setPrefs(previous)
+      setMessage(err instanceof Error ? err.message : 'Could not save preferences.')
+    }
     finally { setSaving(false) }
   }
   if (!prefs) return <SettingsCard title="Preferences" subtitle="Personal dashboard settings."><p className="text-xs text-text-muted">Loading…</p></SettingsCard>
   const Toggle = ({ field, label, description }: { field: 'notify_leads' | 'notify_calls' | 'notify_billing' | 'notify_product'; label: string; description: string }) => (
     <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border px-3 py-2.5">
       <span><span className="block text-sm font-semibold">{label}</span><span className="block text-xs text-text-muted">{description}</span></span>
-      <input type="checkbox" checked={prefs[field]} onChange={(e) => save({ ...prefs, [field]: e.target.checked })} className="h-4 w-4 accent-primary" />
+      <input type="checkbox" checked={prefs[field]} disabled={saving} onChange={(e) => save({ ...prefs, [field]: e.target.checked })} className="h-4 w-4 accent-primary disabled:opacity-50" />
     </label>
   )
   return <div className="flex flex-col gap-4">

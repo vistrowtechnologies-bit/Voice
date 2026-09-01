@@ -314,6 +314,23 @@ CREATE TABLE IF NOT EXISTS user_security_events (
 );
 CREATE INDEX IF NOT EXISTS idx_user_security_events_user ON user_security_events(user_id, id DESC);
 
+-- Revocable dashboard sessions grouped by a durable, anonymous device cookie.
+-- A user can therefore see one row per browser/device and revoke only that
+-- device without turning the settings page into a noisy sign-in audit log.
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    device_id TEXT NOT NULL,
+    user_agent TEXT DEFAULT '',
+    provider TEXT DEFAULT '',
+    created_at TEXT DEFAULT {_NOW},
+    last_seen_at TEXT DEFAULT {_NOW},
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id, revoked_at, expires_at);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_device ON user_sessions(user_id, device_id);
+
 -- User-initiated privacy operations. Export requests are completed
 -- immediately after the download is generated; deletion requests remain
 -- pending until a platform admin verifies and processes them.
@@ -1385,6 +1402,97 @@ def list_security_events(user_id: int, limit: int = 12) -> list[dict]:
         conn.close()
 
 
+def create_user_session(
+    user_id: int,
+    device_id: str,
+    user_agent: str = "",
+    provider: str = "",
+    ttl_seconds: int = 30 * 24 * 3600,
+) -> str:
+    session_id = secrets.token_urlsafe(32)
+    expires_at = (
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=ttl_seconds)
+    ).strftime("%Y-%m-%d %H:%M:%S")
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO user_sessions (id, user_id, device_id, user_agent, provider, expires_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (session_id, user_id, device_id[:120], user_agent[:500], provider[:40], expires_at),
+            )
+        return session_id
+    finally:
+        conn.close()
+
+
+def validate_user_session(session_id: str, user_id: int) -> bool:
+    """Validate a revocable session and refresh activity at most every 5 min."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    now_text = now.strftime("%Y-%m-%d %H:%M:%S")
+    touch_before = (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id FROM user_sessions WHERE id = ? AND user_id = ? AND revoked_at IS NULL AND expires_at > ?",
+            (session_id, user_id, now_text),
+        ).fetchone()
+        if row is None:
+            return False
+        with conn:
+            conn.execute(
+                f"UPDATE user_sessions SET last_seen_at = {_NOW} "
+                "WHERE id = ? AND user_id = ? AND last_seen_at < ?",
+                (session_id, user_id, touch_before),
+            )
+        return True
+    finally:
+        conn.close()
+
+
+def list_user_sessions(user_id: int) -> list[dict]:
+    now_text = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, device_id, user_agent, provider, created_at, last_seen_at "
+            "FROM user_sessions WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ? "
+            "ORDER BY last_seen_at DESC",
+            (user_id, now_text),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def revoke_user_session(session_id: str, user_id: int) -> bool:
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                f"UPDATE user_sessions SET revoked_at = {_NOW} "
+                "WHERE id = ? AND user_id = ? AND revoked_at IS NULL",
+                (session_id, user_id),
+            )
+        return bool(cur.rowcount)
+    finally:
+        conn.close()
+
+
+def revoke_device_sessions(user_id: int, device_id: str) -> bool:
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                f"UPDATE user_sessions SET revoked_at = {_NOW} "
+                "WHERE user_id = ? AND device_id = ? AND revoked_at IS NULL",
+                (user_id, device_id),
+            )
+        return bool(cur.rowcount)
+    finally:
+        conn.close()
+
+
 def create_privacy_request(user_id: int, account_id: int, request_type: str, status: str = "pending") -> dict:
     if request_type not in ("export", "deletion"):
         raise ValueError("invalid privacy request type")
@@ -1446,6 +1554,10 @@ def invalidate_other_sessions(user_id: int) -> None:
     try:
         with conn:
             conn.execute("UPDATE users SET session_version = session_version + 1 WHERE id = ?", (user_id,))
+            conn.execute(
+                f"UPDATE user_sessions SET revoked_at = {_NOW} WHERE user_id = ? AND revoked_at IS NULL",
+                (user_id,),
+            )
     finally:
         conn.close()
 
@@ -1456,7 +1568,17 @@ def get_user_preferences(user_id: int) -> dict:
         with conn:
             conn.execute("INSERT INTO user_preferences (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING", (user_id,))
         row = conn.execute("SELECT * FROM user_preferences WHERE user_id = ?", (user_id,)).fetchone()
-        return dict(row) if row else {}
+        result = dict(row) if row else {}
+        for key in (
+            "notify_leads",
+            "notify_calls",
+            "notify_billing",
+            "notify_product",
+            "dashboard_checklist_dismissed",
+        ):
+            if key in result:
+                result[key] = bool(result[key])
+        return result
     finally:
         conn.close()
 
@@ -1473,6 +1595,19 @@ def update_user_preferences(user_id: int, values: dict) -> dict:
         "dashboard_hidden_cards",
     }
     updates = {key: value for key, value in values.items() if key in allowed and value is not None}
+    # These columns predate Postgres and intentionally remain INTEGER 0/1.
+    # psycopg correctly refuses to assign a JSON/Pydantic boolean directly to
+    # an integer column, which previously surfaced as a generic 500 whenever a
+    # notification checkbox was changed.
+    for key in (
+        "notify_leads",
+        "notify_calls",
+        "notify_billing",
+        "notify_product",
+        "dashboard_checklist_dismissed",
+    ):
+        if key in updates:
+            updates[key] = int(bool(updates[key]))
     if not updates:
         return get_user_preferences(user_id)
     conn = _connect()
