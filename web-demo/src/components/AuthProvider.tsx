@@ -4,19 +4,25 @@ import { AuthContext, apiLogin, apiLogout, apiMe, apiSignup } from '../lib/auth'
 import type { AuthUser } from '../lib/auth'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null)
+  const [user, setUserState] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const setUser = useCallback((next: AuthUser) => {
+    setUserState(next)
+    window.localStorage.setItem('vv-timezone', next.timezone || 'UTC')
+  }, [])
 
   const refresh = useCallback(async () => {
     try {
       const { user } = await apiMe()
       setUser(user)
     } catch {
-      setUser(null)
+      setUserState(null)
+      window.localStorage.removeItem('vv-timezone')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [setUser])
 
   // Probe the session once on load so a returning user with a valid cookie
   // lands straight in the dashboard without re-logging-in.
@@ -27,7 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // A 401 from any data call (session expired mid-use) drops the user, which
   // makes RequireAuth bounce to /login on the next render.
   useEffect(() => {
-    const onUnauthorized = () => setUser(null)
+    const onUnauthorized = () => {
+      setUserState(null)
+      window.localStorage.removeItem('vv-timezone')
+    }
     window.addEventListener('vv-unauthorized', onUnauthorized)
     return () => window.removeEventListener('vv-unauthorized', onUnauthorized)
   }, [])
@@ -35,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const { user } = await apiLogin(email, password)
     setUser(user)
-  }, [])
+  }, [setUser])
 
   const signup = useCallback(
     async (data: {
@@ -55,7 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await apiLogout()
     } finally {
-      setUser(null)
+      setUserState(null)
+      window.localStorage.removeItem('vv-timezone')
     }
   }, [])
 

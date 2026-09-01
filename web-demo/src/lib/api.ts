@@ -412,12 +412,19 @@ export function formatDuration(seconds: number | null): string {
 }
 
 export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
+  let timeZone: string | undefined
+  if (typeof window !== 'undefined') {
+    try { timeZone = window.localStorage.getItem('vv-timezone') || undefined } catch { timeZone = undefined }
+  }
+  const options: Intl.DateTimeFormatOptions = {
     day: 'numeric',
     month: 'short',
     hour: 'numeric',
     minute: '2-digit',
-  })
+    timeZone,
+  }
+  try { return new Date(iso).toLocaleString(undefined, options) }
+  catch { delete options.timeZone; return new Date(iso).toLocaleString(undefined, options) }
 }
 
 /** Appointment times are stored/passed around as 24h "HH:MM" (matching what

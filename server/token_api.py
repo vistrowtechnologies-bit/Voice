@@ -426,10 +426,14 @@ def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
     user = calls_db.get_user_by_id(user_id)
     if user is None:
         raise HTTPException(401, "Session user no longer exists")
+    avatar_key = user.get("avatar_url") or ""
+    preferences = calls_db.get_user_preferences(user_id)
     payload = {
         "id": user["id"],
         "name": user["name"],
         "email": user["email"],
+        "phone": user.get("phone") or "",
+        "timezone": preferences.get("timezone") or "UTC",
         "role": user["role"],
         "accountId": user["account_id"],
         "accountName": user["account_name"],
@@ -444,7 +448,7 @@ def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
         # The database holds an opaque object-storage key, never a direct
         # storage URL. The dashboard fetches it through an authenticated API
         # route, keeping account photos private.
-        "avatarUrl": "/api/profile/avatar" if user.get("avatar_url") else "",
+        "avatarUrl": f"/api/profile/avatar?v={hashlib.sha256(avatar_key.encode()).hexdigest()[:12]}" if avatar_key else "",
     }
     if impersonator_id:
         # Support session: the panel shows the "viewing as" banner and the
@@ -1326,6 +1330,7 @@ def auth_me(request: Request) -> dict:
 
 class UpdateProfileRequest(BaseModel):
     name: str | None = None
+    phone: str | None = None
     currentPassword: str | None = None
     newPassword: str | None = None
 
@@ -1335,6 +1340,11 @@ def update_profile(req: UpdateProfileRequest, response: Response, user: dict = D
     name = req.name.strip() if req.name is not None else None
     if name is not None and not name:
         raise HTTPException(400, "Name can't be empty")
+    phone = req.phone.strip() if req.phone is not None else None
+    if phone:
+        phone = re.sub(r"[\s().-]", "", phone)
+        if not re.fullmatch(r"\+?\d{7,15}", phone):
+            raise HTTPException(400, "Enter a valid phone number with country code")
 
     password_hash = None
     if req.newPassword is not None:
@@ -1353,7 +1363,7 @@ def update_profile(req: UpdateProfileRequest, response: Response, user: dict = D
         password_hash = auth.hash_password(req.newPassword)
 
     calls_db.update_user_profile(
-        user["user_id"], name=name, password_hash=password_hash,
+        user["user_id"], name=name, phone=phone, password_hash=password_hash,
         password_set=True if password_hash is not None else None,
     )
     if password_hash is not None:
@@ -1414,6 +1424,21 @@ def get_profile_avatar(user: dict = Depends(current_user)) -> StreamingResponse:
     except Exception:
         logger.exception("Profile avatar read failed")
         raise HTTPException(404, "Profile photo not found")
+
+
+@app.delete("/profile/avatar")
+def delete_profile_avatar(user: dict = Depends(current_user)) -> dict:
+    key = calls_db.get_user_avatar_key(user["user_id"])
+    if key:
+        client, bucket = _b2_client()
+        if client is not None and bucket is not None:
+            try:
+                client.delete_object(Bucket=bucket, Key=key)
+            except Exception:
+                logger.warning("Could not remove profile avatar for user %s", user["user_id"])
+    calls_db.update_user_profile(user["user_id"], avatar_url="")
+    calls_db.record_security_event(user["user_id"], "profile_photo_removed")
+    return {"user": _me_payload(user["user_id"])}
 
 
 class UpdateAccountRequest(BaseModel):
@@ -1543,23 +1568,30 @@ def request_data_export(user: dict = Depends(current_user)) -> StreamingResponse
         "profile": {
             "name": profile["name"],
             "email": profile["email"],
+            "phone": profile.get("phone") or "",
             "role": profile["role"],
             "workspace": profile["account_name"],
             "plan": profile["account_plan"],
         },
         "preferences": calls_db.get_user_preferences(user["user_id"]),
         "securityEvents": calls_db.list_security_events(user["user_id"], 100),
-        "agents": calls_db.list_agents(user["account_id"]),
-        "calls": calls_db.list_calls(user["account_id"], limit=10000),
-        "contacts": calls_db.list_contacts(user["account_id"]),
-        "appointments": calls_db.list_appointments(user["account_id"]),
-        "knowledgeBases": calls_db.list_knowledge_bases(user["account_id"]),
-        "integrations": [
-            {k: v for k, v in item.items() if k != "config"}
-            for item in calls_db.list_integrations(user["account_id"])
-        ],
-        "billing": calls_db.billing_summary(user["account_id"]),
     }
+    # Shared customer/call data belongs to the tenant, not every individual
+    # user. Only workspace admins may export that scope; members and viewers
+    # receive their own profile/preferences/security data.
+    if profile["role"] in ("owner", "admin"):
+        export["workspaceData"] = {
+            "agents": calls_db.list_agents(user["account_id"]),
+            "calls": calls_db.list_calls(user["account_id"], limit=10000),
+            "contacts": calls_db.list_contacts(user["account_id"]),
+            "appointments": calls_db.list_appointments(user["account_id"]),
+            "knowledgeBases": calls_db.list_knowledge_bases(user["account_id"]),
+            "integrations": [
+                {k: v for k, v in item.items() if k != "config"}
+                for item in calls_db.list_integrations(user["account_id"])
+            ],
+            "billing": calls_db.billing_summary(user["account_id"]),
+        }
     calls_db.create_privacy_request(user["user_id"], user["account_id"], "export", status="completed")
     calls_db.record_security_event(user["user_id"], "data_export_requested")
     content = json.dumps(export, ensure_ascii=False, indent=2, default=str).encode("utf-8")
@@ -1571,9 +1603,23 @@ def request_data_export(user: dict = Depends(current_user)) -> StreamingResponse
     )
 
 
+class AccountDeletionRequest(BaseModel):
+    email: str
+    confirmation: str
+
+
+@app.get("/profile/privacy-requests")
+def profile_privacy_requests(user: dict = Depends(current_user)) -> dict:
+    return {"requests": calls_db.list_user_privacy_requests(user["user_id"])}
+
+
 @app.post("/profile/request-account-deletion")
-def request_account_deletion(user: dict = Depends(current_user)) -> dict:
+def request_account_deletion(req: AccountDeletionRequest, user: dict = Depends(current_user)) -> dict:
     profile = calls_db.get_user_by_id(user["user_id"])
+    if profile is None:
+        raise HTTPException(404, "Account not found")
+    if req.email.strip().lower() != profile["email"].lower() or req.confirmation.strip() != "DELETE":
+        raise HTTPException(400, "Enter your sign-in email and type DELETE to confirm")
     if profile:
         html = email_sender.render_email(
             preheader="Vistrow Voice account deletion request",
@@ -1584,6 +1630,17 @@ def request_account_deletion(user: dict = Depends(current_user)) -> dict:
     calls_db.record_security_event(user["user_id"], "account_deletion_requested")
     request_row = calls_db.create_privacy_request(user["user_id"], user["account_id"], "deletion")
     return {"ok": True, "requestId": request_row["id"], "status": request_row["status"]}
+
+
+@app.delete("/profile/account-deletion-request/{request_id}")
+def cancel_account_deletion_request(request_id: int, user: dict = Depends(current_user)) -> dict:
+    request_row = calls_db.cancel_privacy_request(request_id, user["user_id"])
+    if request_row is None:
+        raise HTTPException(404, "Deletion request not found")
+    if request_row["status"] != "cancelled":
+        raise HTTPException(409, "This request is already being processed and can no longer be cancelled here")
+    calls_db.record_security_event(user["user_id"], "account_deletion_cancelled")
+    return {"ok": True, "request": request_row}
 
 
 @app.post("/onboarding/consent")

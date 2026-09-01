@@ -4,6 +4,8 @@ export interface AuthUser {
   id: number
   name: string
   email: string
+  phone: string
+  timezone: string
   role: string
   accountId: number
   accountName: string
@@ -84,7 +86,7 @@ export const apiVerifyEmail = (email: string, code: string) =>
 export const apiResendEmailVerification = (email: string) =>
   authFetch<{ ok: boolean; resendAfter: number }>('/auth/resend-email-verification', { email })
 export const apiLogout = () => authFetch<{ ok: boolean }>('/auth/logout', {})
-export const apiUpdateProfile = (data: { name?: string; currentPassword?: string; newPassword?: string }) =>
+export const apiUpdateProfile = (data: { name?: string; phone?: string; currentPassword?: string; newPassword?: string }) =>
   authFetch<{ user: AuthUser }>('/profile', data, 'PATCH')
 export const apiUpdateProfileAvatar = async (image: File) => {
   const form = new FormData()
@@ -94,6 +96,7 @@ export const apiUpdateProfileAvatar = async (image: File) => {
   if (!res.ok) throw new Error(data?.detail || `Request failed (${res.status})`)
   return data as { user: AuthUser }
 }
+export const apiRemoveProfileAvatar = () => authFetch<{ user: AuthUser }>('/profile/avatar', undefined, 'DELETE')
 export const apiRequestEmailChange = (email: string) => authFetch<{ ok: boolean }>('/profile/request-email-change', { email })
 export const apiConfirmEmailChange = (token: string) => authFetch<{ ok: boolean; user: AuthUser }>(`/auth/confirm-email-change?token=${encodeURIComponent(token)}`)
 export interface UserPreferences {
@@ -128,7 +131,18 @@ export const apiDownloadDataExport = async () => {
   anchor.remove()
   URL.revokeObjectURL(url)
 }
-export const apiRequestAccountDeletion = () => authFetch<{ ok: boolean }>('/profile/request-account-deletion', {})
+export interface PrivacyRequest {
+  id: number
+  request_type: 'export' | 'deletion'
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'rejected'
+  created_at: string
+  updated_at: string
+}
+export const apiPrivacyRequests = () => authFetch<{ requests: PrivacyRequest[] }>('/profile/privacy-requests')
+export const apiRequestAccountDeletion = (email: string, confirmation: string) =>
+  authFetch<{ ok: boolean; requestId: number; status: string }>('/profile/request-account-deletion', { email, confirmation })
+export const apiCancelAccountDeletion = (requestId: number) =>
+  authFetch<{ ok: boolean; request: PrivacyRequest }>(`/profile/account-deletion-request/${requestId}`, undefined, 'DELETE')
 export const apiUpdateAccount = (name: string) => authFetch<{ user: AuthUser }>('/account', { name }, 'PATCH')
 export const apiAcceptConsent = (version: string) =>
   authFetch<{ user: AuthUser }>('/onboarding/consent', { version })

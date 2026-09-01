@@ -11,10 +11,13 @@ import {
   apiTeamMembers,
   apiUpdateAccount,
   apiUpdateProfileAvatar,
+  apiRemoveProfileAvatar,
   apiRequestEmailChange,
   apiProfilePreferences,
   apiDownloadDataExport,
   apiRequestAccountDeletion,
+  apiCancelAccountDeletion,
+  apiPrivacyRequests,
   apiSecurityEvents,
   apiSignOutOthers,
   apiUpdateProfilePreferences,
@@ -23,7 +26,9 @@ import {
   hasRole,
   useAuth,
   type PendingInvite,
+  type PrivacyRequest,
   type TeamMember,
+  type UserPreferences,
 } from '../lib/auth'
 import { fetchAvailabilitySettings, formatDateTime, updateAvailabilitySettings } from '../lib/api'
 import type { AvailabilityConfig } from '../lib/types'
@@ -40,7 +45,7 @@ function SettingsCard({ title, subtitle, children }: { title: string; subtitle: 
   )
 }
 
-type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'team' | 'availability'
+type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'privacy' | 'team' | 'availability'
 type TabGroup = { label: string; tabs: { id: Tab; label: string; description: string; icon: string }[] }
 
 const TAB_GROUPS: TabGroup[] = [
@@ -58,6 +63,7 @@ const TAB_GROUPS: TabGroup[] = [
       { id: 'profile', label: 'My profile', description: 'Your name and sign-in email', icon: 'person' },
       { id: 'security', label: 'Sign-in & security', description: 'Password and account protection', icon: 'lock' },
       { id: 'preferences', label: 'Preferences', description: 'Personal timezone, language and alerts', icon: 'tune' },
+      { id: 'privacy', label: 'Data & privacy', description: 'Export data or delete your account', icon: 'privacy_tip' },
     ],
   },
 ]
@@ -121,6 +127,7 @@ export function Settings() {
           {tab === 'profile' && <ProfileTab />}
           {tab === 'security' && <SecurityTab />}
           {tab === 'preferences' && <PreferencesTab />}
+          {tab === 'privacy' && <DataPrivacyTab />}
           {tab === 'team' && <TeamTab canManage={hasRole(user, 'admin')} />}
           {tab === 'availability' && <AvailabilityTab canManage={hasRole(user, 'admin')} />}
         </div>
@@ -201,8 +208,10 @@ function GeneralTab() {
 function ProfileTab() {
   const { user, setUser } = useAuth()
   const [profileName, setProfileName] = useState(user?.name || '')
+  const [phone, setPhone] = useState(user?.phone || '')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [removingPhoto, setRemovingPhoto] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [emailBusy, setEmailBusy] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
@@ -213,13 +222,28 @@ function ProfileTab() {
     setSaving(true)
     setMsg(null)
     try {
-      const { user: updated } = await apiUpdateProfile({ name: profileName.trim() })
+      const { user: updated } = await apiUpdateProfile({ name: profileName.trim(), phone: phone.trim() })
       setUser(updated)
-      setMsg({ type: 'ok', text: 'Saved.' })
+      setMsg({ type: 'ok', text: 'Profile saved.' })
     } catch (err) {
       setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Could not save.' })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const removeAvatar = async () => {
+    if (!window.confirm('Remove your profile photo?')) return
+    setRemovingPhoto(true)
+    setMsg(null)
+    try {
+      const { user: updated } = await apiRemoveProfileAvatar()
+      setUser(updated)
+      setMsg({ type: 'ok', text: 'Profile photo removed.' })
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Could not remove your photo.' })
+    } finally {
+      setRemovingPhoto(false)
     }
   }
 
@@ -258,91 +282,67 @@ function ProfileTab() {
     }
   }
 
-  return (
-    <SettingsCard title="Your profile" subtitle="Your personal details and photo for this account.">
-      <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-high/40 p-3">
+  const profileChanged = profileName.trim() !== user?.name || phone.trim() !== (user?.phone || '')
+
+  return <div className="flex flex-col gap-4">
+    <SettingsCard title="Profile overview" subtitle="How you appear to teammates in this workspace.">
+      <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface-high/30 p-4 sm:flex-row sm:items-center">
         {user?.avatarUrl ? (
-          <img src={user.avatarUrl} alt="Your profile" className="h-14 w-14 rounded-full border-2 border-primary/30 object-cover" />
+          <img src={user.avatarUrl} alt="Your profile" className="h-20 w-20 shrink-0 rounded-full border-2 border-primary/30 object-cover" />
         ) : (
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/15 text-lg font-bold text-primary">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-primary/15 text-2xl font-bold text-primary">
             {(user?.name || '?').trim().slice(0, 1).toUpperCase()}
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold">Profile photo</p>
-          <p className="text-xs text-text-muted">JPG, PNG, or WebP · up to 2 MB</p>
+          <p className="truncate text-lg font-bold">{user?.name}</p>
+          <p className="truncate text-sm text-text-muted">{user?.email}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <span className="rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">{user?.role}</span>
+            <span className="max-w-full truncate rounded-full border border-border px-2 py-0.5 text-[10px] text-text-muted">{user?.accountName}</span>
+          </div>
         </div>
-        <input
-          ref={avatarInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          onChange={(e) => uploadAvatar(e.target.files?.[0])}
-        />
-        <button
-          type="button"
-          onClick={() => avatarInputRef.current?.click()}
-          disabled={uploading}
-          className="rounded-lg border border-border px-3 py-2 text-xs font-bold transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
-        >
-          {uploading ? 'Uploading…' : 'Change photo'}
-        </button>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-semibold text-text-muted">Email</span>
-        <input
-          value={user?.email || ''}
-          disabled
-          className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text-muted outline-none"
-        />
-      </div>
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-high/30 p-3">
-        <div>
-          <p className="text-sm font-bold">Change sign-in email</p>
-          <p className="text-xs text-text-muted">A confirmation link will be sent to the new address before anything changes.</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            type="email"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            placeholder="new@company.com"
-            className="flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
-          />
-          <button
-            onClick={requestEmailChange}
-            disabled={emailBusy || !newEmail.trim()}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-bold transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
-          >
-            {emailBusy ? 'Sending…' : 'Verify new email'}
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => uploadAvatar(e.target.files?.[0])} />
+          <button type="button" onClick={() => avatarInputRef.current?.click()} disabled={uploading || removingPhoto} className="rounded-lg border border-border px-3 py-2 text-xs font-bold hover:border-primary hover:text-primary disabled:opacity-50">
+            {uploading ? 'Uploading…' : user?.avatarUrl ? 'Change photo' : 'Add photo'}
           </button>
+          {user?.avatarUrl && <button type="button" onClick={removeAvatar} disabled={uploading || removingPhoto} className="rounded-lg border border-border px-3 py-2 text-xs font-bold text-text-muted hover:border-destructive hover:text-destructive disabled:opacity-50">{removingPhoto ? 'Removing…' : 'Remove'}</button>}
         </div>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-semibold text-text-muted">Name</span>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            value={profileName}
-            onChange={(e) => setProfileName(e.target.value)}
-            className="flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
-          />
-          <button
-            onClick={save}
-            disabled={saving || !profileName.trim() || profileName.trim() === user?.name}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </div>
-      {msg && (
-        <p className={`flex items-center gap-1.5 text-xs ${msg.type === 'ok' ? 'text-success' : 'text-destructive'}`}>
-          <Icon name={msg.type === 'ok' ? 'check_circle' : 'error'} className="text-[15px]" />
-          {msg.text}
-        </p>
-      )}
+      <p className="text-[11px] text-text-muted">JPG, PNG, or WebP · maximum 2 MB. Your photo is private to your authenticated workspace.</p>
     </SettingsCard>
-  )
+
+    <SettingsCard title="Personal details" subtitle="Keep the contact details associated with your own login up to date.">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Full name
+          <input autoComplete="name" value={profileName} onChange={(e) => setProfileName(e.target.value)} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary" />
+        </label>
+        <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Phone number <span className="font-normal">(optional)</span>
+          <input type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 202 555 0123" className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary" />
+        </label>
+      </div>
+      <p className="text-[11px] text-text-muted">For international numbers, include the country calling code. This is your account contact number, not an AI calling number.</p>
+      <button onClick={save} disabled={saving || !profileName.trim() || !profileChanged} className="self-start rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40">{saving ? 'Saving…' : 'Save profile'}</button>
+    </SettingsCard>
+
+    <SettingsCard title="Sign-in email" subtitle="This address identifies your account and receives security messages.">
+      <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Current email
+        <input value={user?.email || ''} disabled className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text-muted outline-none" />
+      </label>
+      {user?.passwordSet === false ? (
+        <p className="flex items-start gap-2 rounded-lg border border-cyan/30 bg-cyan/5 p-3 text-xs text-text-muted"><Icon name="info" className="mt-0.5 shrink-0 text-[16px] text-cyan" /><span>Create a password in <Link to="/dashboard/settings?tab=security" className="font-bold text-primary hover:underline">Sign-in &amp; security</Link> before changing an OAuth sign-in email.</span></p>
+      ) : (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input type="email" autoComplete="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="new@company.com" aria-label="New sign-in email" className="min-w-0 flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary" />
+          <button onClick={requestEmailChange} disabled={emailBusy || !newEmail.trim()} className="rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary hover:text-primary disabled:opacity-40">{emailBusy ? 'Sending…' : 'Send verification'}</button>
+        </div>
+      )}
+      <p className="text-[11px] text-text-muted">The address changes only after you open the verification link sent to the new inbox.</p>
+    </SettingsCard>
+
+    {msg && <p role="status" className={`flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-xs ${msg.type === 'ok' ? 'text-success' : 'text-destructive'}`}><Icon name={msg.type === 'ok' ? 'check_circle' : 'error'} className="text-[15px]" />{msg.text}</p>}
+  </div>
 }
 
 function SecurityTab() {
@@ -472,25 +472,21 @@ function SecurityTab() {
 }
 
 function PreferencesTab() {
-  const [prefs, setPrefs] = useState<{ timezone: string; language: 'en' | 'hi'; notify_leads: boolean; notify_calls: boolean; notify_billing: boolean; notify_product: boolean } | null>(null)
+  const [prefs, setPrefs] = useState<UserPreferences | null>(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const [action, setAction] = useState<'export' | 'delete' | null>(null)
 
   useEffect(() => { apiProfilePreferences().then(setPrefs).catch(() => setPrefs(null)) }, [])
   const save = async (next: NonNullable<typeof prefs>) => {
     setPrefs(next); setSaving(true); setMessage(null)
-    try { setPrefs(await apiUpdateProfilePreferences(next)); setMessage('Preferences saved.') }
+    try {
+      const updated = await apiUpdateProfilePreferences(next)
+      setPrefs(updated)
+      window.localStorage.setItem('vv-timezone', updated.timezone || 'UTC')
+      setMessage('Preferences saved. Dates and times now use this timezone across your dashboard.')
+    }
     catch (err) { setMessage(err instanceof Error ? err.message : 'Could not save preferences.') }
     finally { setSaving(false) }
-  }
-  const request = async (kind: 'export' | 'delete') => {
-    setAction(kind); setMessage(null)
-    try {
-      if (kind === 'export') await apiDownloadDataExport(); else await apiRequestAccountDeletion()
-      setMessage(kind === 'export' ? 'Your data export was downloaded.' : 'Deletion request submitted. Our privacy team will review it within 2 business days; no data has been removed yet.')
-    } catch (err) { setMessage(err instanceof Error ? err.message : 'Could not send request.') }
-    finally { setAction(null) }
   }
   if (!prefs) return <SettingsCard title="Preferences" subtitle="Personal dashboard settings."><p className="text-xs text-text-muted">Loading…</p></SettingsCard>
   const Toggle = ({ field, label, description }: { field: 'notify_leads' | 'notify_calls' | 'notify_billing' | 'notify_product'; label: string; description: string }) => (
@@ -502,7 +498,7 @@ function PreferencesTab() {
   return <div className="flex flex-col gap-4">
     <SettingsCard title="Personal preferences" subtitle="These settings affect your own dashboard experience, not your team’s shared booking schedule.">
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Preferred language<select value={prefs.language} onChange={(e) => save({ ...prefs, language: e.target.value as 'en' | 'hi' })} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary"><option value="en">English</option><option value="hi">Hindi</option></select><span className="font-normal text-[11px]">Used for your account communication preferences.</span></label>
+        <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Communication language<select value={prefs.language} onChange={(e) => save({ ...prefs, language: e.target.value as 'en' | 'hi' })} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary"><option value="en">English</option><option value="hi">Hindi</option></select><span className="font-normal text-[11px]">Used for account emails where a translation is available.</span></label>
         <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Your timezone<TimezoneSelect value={prefs.timezone} onChange={(timezone) => save({ ...prefs, timezone })} /></label>
       </div>
       {saving && <p className="text-xs text-text-muted">Saving…</p>}
@@ -510,11 +506,105 @@ function PreferencesTab() {
     <SettingsCard title="Notifications" subtitle="Choose the operational emails you receive personally.">
       <div className="flex flex-col gap-2"><Toggle field="notify_leads" label="Qualified leads" description="New lead and follow-up alerts." /><Toggle field="notify_calls" label="Call issues" description="Important failed-call and delivery alerts." /><Toggle field="notify_billing" label="Billing" description="Credit, invoice, and plan notices." /><Toggle field="notify_product" label="Product updates" description="Occasional Vistrow Voice release updates." /></div>
     </SettingsCard>
-    <SettingsCard title="Your data" subtitle="Download your workspace data immediately or submit a verified deletion request for admin review.">
-      <div className="flex flex-wrap gap-2"><button onClick={() => request('export')} disabled={action !== null} className="rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary hover:text-primary">{action === 'export' ? 'Preparing…' : 'Download my data'}</button><button onClick={() => { if (window.confirm('Request deletion of this account and workspace? Nothing is deleted immediately; our privacy team reviews the request first.')) request('delete') }} disabled={action !== null} className="rounded-lg border border-destructive/50 px-4 py-2 text-sm font-bold text-destructive hover:bg-destructive/10">{action === 'delete' ? 'Submitting…' : 'Request account deletion'}</button></div>
-      <p className="text-[11px] text-text-muted">Exports include profile, preferences, agents, calls, contacts, appointments, knowledge-base metadata, integration status, and billing usage. Secrets and stored integration credentials are excluded.</p>
-    </SettingsCard>
     {message && <p className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-muted">{message}</p>}
+  </div>
+}
+
+function DataPrivacyTab() {
+  const { user } = useAuth()
+  const [requests, setRequests] = useState<PrivacyRequest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [action, setAction] = useState<'export' | 'delete' | 'cancel' | null>(null)
+  const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [confirmEmail, setConfirmEmail] = useState('')
+  const [confirmPhrase, setConfirmPhrase] = useState('')
+
+  const load = () => apiPrivacyRequests().then((data) => setRequests(data.requests)).catch(() => setRequests([])).finally(() => setLoading(false))
+  useEffect(() => { void load() }, [])
+
+  const latestDeletion = requests.find((item) => item.request_type === 'deletion')
+  const activeDeletion = latestDeletion && ['pending', 'in_progress'].includes(latestDeletion.status) ? latestDeletion : null
+  const latestExport = requests.find((item) => item.request_type === 'export')
+
+  const download = async () => {
+    setAction('export'); setMessage(null)
+    try {
+      await apiDownloadDataExport()
+      setMessage({ type: 'ok', text: 'Your data export was downloaded.' })
+      await load()
+    } catch (err) { setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Could not prepare your export.' }) }
+    finally { setAction(null) }
+  }
+
+  const submitDeletion = async () => {
+    if (!user || confirmEmail.trim().toLowerCase() !== user.email.toLowerCase() || confirmPhrase !== 'DELETE') return
+    setAction('delete'); setMessage(null)
+    try {
+      await apiRequestAccountDeletion(confirmEmail, confirmPhrase)
+      setDeleteOpen(false); setConfirmEmail(''); setConfirmPhrase('')
+      setMessage({ type: 'ok', text: 'Deletion request submitted. No data has been removed yet; we sent a receipt to your sign-in email.' })
+      await load()
+    } catch (err) { setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Could not submit the deletion request.' }) }
+    finally { setAction(null) }
+  }
+
+  const cancelDeletion = async () => {
+    if (!activeDeletion) return
+    setAction('cancel'); setMessage(null)
+    try {
+      await apiCancelAccountDeletion(activeDeletion.id)
+      setMessage({ type: 'ok', text: 'Your account deletion request was cancelled.' })
+      await load()
+    } catch (err) { setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Could not cancel the deletion request.' }) }
+    finally { setAction(null) }
+  }
+
+  if (loading) return <SettingsCard title="Data & privacy" subtitle="Manage your personal data and account lifecycle."><div className="h-32 animate-pulse rounded-lg bg-surface-high" /></SettingsCard>
+
+  return <div className="flex flex-col gap-4">
+    <SettingsCard title="Download your data" subtitle="Get a portable copy of the information connected to your workspace.">
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-high/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3"><Icon name="download" className="mt-0.5 text-[20px] text-primary" /><div><p className="text-sm font-bold">JSON data export</p><p className="text-xs text-text-muted">{hasRole(user, 'admin') ? 'Includes your profile and authorized workspace data: agents, calls, contacts, appointments, knowledge metadata, integration status, and billing usage.' : 'Includes your profile, personal preferences, and security activity. Shared customer and workspace data remains available only to workspace administrators.'}</p>{latestExport && <p className="mt-1 text-[11px] text-text-muted">Last downloaded {formatDateTime(latestExport.created_at)}</p>}</div></div>
+        <button onClick={download} disabled={action !== null} className="shrink-0 rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary hover:text-primary disabled:opacity-40">{action === 'export' ? 'Preparing…' : 'Download my data'}</button>
+      </div>
+      <p className="text-[11px] text-text-muted">Passwords, API keys, access tokens, and stored integration credentials are never included.</p>
+    </SettingsCard>
+
+    <SettingsCard title="Delete my account" subtitle="Request permanent removal of your account and the data in scope.">
+      {activeDeletion ? (
+        <div className="rounded-lg border border-amber/40 bg-amber/5 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div><p className="flex items-center gap-2 text-sm font-bold"><Icon name="schedule" className="text-[18px] text-amber" />Deletion request {activeDeletion.status === 'in_progress' ? 'in progress' : 'pending'}</p><p className="mt-1 text-xs text-text-muted">Submitted {formatDateTime(activeDeletion.created_at)}. No data has been deleted yet.</p></div>
+            {activeDeletion.status === 'pending' && <button onClick={cancelDeletion} disabled={action !== null} className="rounded-lg border border-border px-3 py-2 text-xs font-bold hover:border-primary hover:text-primary disabled:opacity-40">{action === 'cancel' ? 'Cancelling…' : 'Cancel request'}</button>}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4 rounded-lg border border-destructive/30 bg-destructive/[0.03] p-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="max-w-2xl"><p className="text-sm font-bold text-destructive">This action is permanent after verification</p><p className="mt-1 text-xs text-text-muted">{user?.role === 'owner' ? 'Because you own this workspace, our privacy team will verify workspace ownership, active subscriptions, and which shared customer records must be retained or removed before processing.' : 'Your personal profile and workspace access will be reviewed for deletion without removing data that belongs to other workspace members.'}</p></div>
+          <button onClick={() => { setMessage(null); setDeleteOpen(true) }} className="shrink-0 rounded-lg border border-destructive/60 px-4 py-2 text-sm font-bold text-destructive hover:bg-destructive/10">Request deletion</button>
+        </div>
+      )}
+      <p className="text-[11px] text-text-muted">You can cancel a pending request here. Once processing begins, contact support@vistroevoice.com and reference the receipt sent to your email.</p>
+    </SettingsCard>
+
+    {message && <p role="status" className={`rounded-lg border border-border bg-surface px-3 py-2 text-xs ${message.type === 'ok' ? 'text-success' : 'text-destructive'}`}>{message.text}</p>}
+
+    {deleteOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget && action !== 'delete') setDeleteOpen(false) }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="delete-account-title" className="w-full max-w-lg rounded-2xl border border-border bg-surface p-5 shadow-2xl sm:p-6">
+        <div className="flex items-start justify-between gap-4"><div><h2 id="delete-account-title" className="text-lg font-bold">Request account deletion</h2><p className="mt-1 text-sm text-text-muted">No data is deleted immediately. We verify the request and email you before processing.</p></div><button type="button" aria-label="Close deletion dialog" onClick={() => setDeleteOpen(false)} disabled={action === 'delete'} className="rounded-lg p-1 text-text-muted hover:bg-surface-high hover:text-text"><Icon name="close" className="text-[20px]" /></button></div>
+        <div className="mt-5 flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Enter your sign-in email
+            <input type="email" autoComplete="off" value={confirmEmail} onChange={(e) => setConfirmEmail(e.target.value)} placeholder={user?.email} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-destructive" />
+          </label>
+          <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Type <span className="font-mono text-text">DELETE</span> to confirm
+            <input value={confirmPhrase} onChange={(e) => setConfirmPhrase(e.target.value)} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-destructive" />
+          </label>
+          {message?.type === 'error' && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">{message.text}</p>}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setDeleteOpen(false)} disabled={action === 'delete'} className="rounded-lg border border-border px-4 py-2 text-sm font-bold">Cancel</button><button type="button" onClick={submitDeletion} disabled={action !== null || confirmEmail.trim().toLowerCase() !== user?.email.toLowerCase() || confirmPhrase !== 'DELETE'} className="rounded-lg bg-destructive px-4 py-2 text-sm font-bold text-white disabled:opacity-40">{action === 'delete' ? 'Submitting…' : 'Submit deletion request'}</button></div>
+        </div>
+      </div>
+    </div>}
   </div>
 }
 

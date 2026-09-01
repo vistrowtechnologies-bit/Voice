@@ -1338,7 +1338,7 @@ def get_user_by_id(user_id: int) -> dict | None:
     try:
         row = conn.execute(
             """
-            SELECT u.id, u.email, u.name, u.role, u.account_id, u.tour_completed_at,
+            SELECT u.id, u.email, u.name, u.phone, u.role, u.account_id, u.tour_completed_at,
                    u.auth_provider, u.password_set, u.avatar_url, u.session_version, u.email_verified_at,
                    a.name AS account_name, a.plan AS account_plan,
                    a.is_platform_owner, a.onboarded_at
@@ -1405,6 +1405,38 @@ def create_privacy_request(user_id: int, account_id: int, request_type: str, sta
             )
         row = conn.execute("SELECT * FROM privacy_requests WHERE id = ?", (cur.lastrowid,)).fetchone()
         return dict(row)
+    finally:
+        conn.close()
+
+
+def list_user_privacy_requests(user_id: int, limit: int = 20) -> list[dict]:
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, request_type, status, created_at, updated_at FROM privacy_requests "
+            "WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def cancel_privacy_request(request_id: int, user_id: int) -> dict | None:
+    """Cancel a request only while it is still waiting for admin review."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE privacy_requests SET status = 'cancelled', updated_at = {_NOW} "
+                "WHERE id = ? AND user_id = ? AND request_type = 'deletion' AND status = 'pending'",
+                (request_id, user_id),
+            )
+        row = conn.execute(
+            "SELECT id, request_type, status, created_at, updated_at FROM privacy_requests WHERE id = ? AND user_id = ?",
+            (request_id, user_id),
+        ).fetchone()
+        return dict(row) if row else None
     finally:
         conn.close()
 
@@ -1677,6 +1709,7 @@ def get_password_hash(user_id: int) -> str | None:
 def update_user_profile(
     user_id: int,
     name: str | None = None,
+    phone: str | None = None,
     password_hash: str | None = None,
     password_set: bool | None = None,
     avatar_url: str | None = None,
@@ -1686,6 +1719,8 @@ def update_user_profile(
         with conn:
             if name is not None:
                 conn.execute("UPDATE users SET name = ? WHERE id = ?", (name, user_id))
+            if phone is not None:
+                conn.execute("UPDATE users SET phone = ? WHERE id = ?", (phone, user_id))
             if password_hash is not None:
                 conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
             if password_set is not None:
