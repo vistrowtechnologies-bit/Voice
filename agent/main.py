@@ -3281,7 +3281,22 @@ def _prewarm(proc: JobProcess) -> None:
     logger.info("prewarm: Google TTS warm-up started in background (pid=%s)", proc.pid)
 
 
+# Confirmed live (2026-09-01): with num_idle_processes=4, a fresh deploy
+# spins all 4 idle processes up together, and each independently starts its
+# 6-call (2 languages x 3 openers) warm-up at the same instant — 24
+# concurrent Gemini TTS requests, hit Google's own rate limit
+# (429 RESOURCE_EXHAUSTED) on most of them. Not a stability problem
+# (cached_greeting() misses fall through to normal synthesis exactly as
+# before), but it meant most processes cached 0-1 of 6 intended clips
+# instead of 6. Spreading each process's OWN start time across this window
+# means the 4 processes' bursts mostly don't overlap in the first place,
+# rather than relying on the TTS plugin's own per-request retry/backoff
+# (already visible in logs: "retrying in 2.0s") to dig out from under one.
+_TTS_PREWARM_STAGGER_MAX_S = 20.0
+
+
 def _run_google_tts_prewarm(pid: int) -> None:
+    time.sleep(random.uniform(0, _TTS_PREWARM_STAGGER_MAX_S))
     try:
         asyncio.run(_prewarm_google_tts())
         logger.info("prewarm: Google TTS client warmed + greetings cached (pid=%s)", pid)
