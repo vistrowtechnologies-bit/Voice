@@ -3385,7 +3385,17 @@ async def _prewarm_google_tts() -> None:
         # Kore is a female voice, so only the female lines are ever spoken
         # with it — rendering the male set here would be wasted work and
         # wasted memory in every idle process.
-        for text in (opener_set.get("female") or [])[:_GREETING_CACHE_PER_SET]:
+        for i, text in enumerate((opener_set.get("female") or [])[:_GREETING_CACHE_PER_SET]):
+            if i > 0:
+                # Confirmed live: even ONE process's requests fired back-to-
+                # back (109, 113, 273, 118 above each started at a different,
+                # already-staggered moment) still hit Google's 429
+                # RESOURCE_EXHAUSTED on all but the first — a requests-per-
+                # minute ceiling, not just a same-instant burst across
+                # processes. Staggering process START times alone doesn't
+                # touch that; spacing requests within one process's own
+                # loop does.
+                await asyncio.sleep(3.0)
             try:
                 frames = await _synthesize_frames(tts, text)
             except Exception:
