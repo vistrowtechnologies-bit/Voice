@@ -5,10 +5,15 @@
       "source": "/api/:path*",
       "destination": "https://voice-production-2950.up.railway.app/:path*"
     },
-    {
-      "source": "/(dashboard|admin|login|signup|forgot-password|reset-password|invite)(/.*)?",
-      "destination": "/app-shell.html"
-    },
+    { "source": "/dashboard", "destination": "/app-shell.html" },
+    { "source": "/dashboard/:path*", "destination": "/app-shell.html" },
+    { "source": "/admin", "destination": "/app-shell.html" },
+    { "source": "/admin/:path*", "destination": "/app-shell.html" },
+    { "source": "/login", "destination": "/app-shell.html" },
+    { "source": "/signup", "destination": "/app-shell.html" },
+    { "source": "/forgot-password", "destination": "/app-shell.html" },
+    { "source": "/reset-password", "destination": "/app-shell.html" },
+    { "source": "/invite/:path*", "destination": "/app-shell.html" },
     {
       "source": "/(.*)",
       "destination": "/index.html"
