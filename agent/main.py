@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
-from livekit import api
+from livekit import api, rtc
 from livekit.agents.inference import eot
 from livekit.agents import (
     Agent,
@@ -1137,6 +1137,9 @@ class RealEstateAgent(Agent):
         config = config or {}
         agent_name = config.get("name") or "Artha"
         voice_value = config.get("voice") or "shubh"
+        # Kept for the greeting audio cache's key — a cached clip is only ever
+        # replayed for the exact voice it was synthesized with.
+        self._voice_value = voice_value
         self._is_platform_demo = bool(config.get("is_platform_demo"))
         self._public_demo_slug = (config.get("public_demo_slug") or "").strip().lower()
         # tools.py needs the knowledge base to enforce a named practitioner's
@@ -1674,6 +1677,16 @@ class RealEstateAgent(Agent):
                 # wasn't expecting. Speaking a fixed line via say() skips
                 # straight to TTS. Picked at random per call so repeat
                 # visitors don't hear the same line every time.
+                # Prefer a clip prewarm already rendered for this exact
+                # voice/language/gender — same fixed lines, but skipping the
+                # ~5.4s of synthesis that otherwise sits between the agent
+                # joining and the visitor hearing anything.
+                cached = cached_greeting(self._voice_value, self._reply_language, self._voice_gender)
+                if cached is not None:
+                    text, frames = cached
+                    logger.info("[latency] greeting served from pre-rendered cache (%s chars)", len(text))
+                    await self.session.say(text, audio=_replay_frames(frames))
+                    return
                 opener_set = (
                     _PLATFORM_DEMO_OPENERS_EN if self._reply_language.startswith("en") else _PLATFORM_DEMO_OPENERS
                 )
@@ -3256,21 +3269,94 @@ def _prewarm(proc: JobProcess) -> None:
         logger.exception("prewarm: Google TTS warm-up failed — first real call pays the cost instead")
 
 
-async def _prewarm_google_tts() -> None:
-    tts = PatchedGeminiTTS(
-        language="hi-IN",
-        voice_name="Kore",
-        model_name=_GOOGLE_31_MODEL,
-        credentials_info=_GOOGLE_CREDENTIALS,
-    )
+# Pre-synthesized opening lines, keyed by (voice_value, language, gender) ->
+# [(text, [audio frames])].
+#
+# The platform demo's openers are a FIXED, finite set of strings (see
+# _PLATFORM_DEMO_OPENERS above) — the same handful of lines, synthesized
+# from scratch on every single call. Measured on real widget calls: the
+# agent joins the room ~0.75s after the visitor clicks, then the first word
+# doesn't land for another ~5.4s, essentially all of it TTS for one of these
+# known lines. Synthesizing them once per process during prewarm and
+# replaying the frames turns that into playback of audio that already
+# exists.
+#
+# Only ever used on an EXACT (voice, language, gender, text) match, so an
+# agent on a different voice can never be handed another voice's audio —
+# it just misses the cache and synthesizes normally, exactly as before.
+_GREETING_AUDIO_CACHE: dict[tuple[str, str, str], list[tuple[str, list[rtc.AudioFrame]]]] = {}
+
+# How many of the openers to pre-render per (voice, language, gender). The
+# random pick that keeps repeat visitors from hearing the same line every
+# time still works, just across the cached subset — synthesizing all ~11
+# would cost proportionally more prewarm time and per-process memory for a
+# variety nobody notices inside one visit.
+_GREETING_CACHE_PER_SET = 3
+
+
+async def _replay_frames(frames: list[rtc.AudioFrame]):
+    """A fresh async iterator over already-synthesized frames — session.say()
+    consumes its `audio` argument, so each call needs its own iterator over
+    the same underlying (immutable, reusable) frame list."""
+    for frame in frames:
+        yield frame
+
+
+def cached_greeting(voice_value: str, language: str, gender: str) -> tuple[str, list[rtc.AudioFrame]] | None:
+    """A random pre-rendered opener for this exact voice/language/gender, or
+    None when nothing was cached for it (any non-demo agent, an unwarmed
+    process, or a prewarm that failed) — callers fall back to normal TTS."""
+    entries = _GREETING_AUDIO_CACHE.get((voice_value, language, gender))
+    if not entries:
+        return None
+    return random.choice(entries)
+
+
+async def _synthesize_frames(tts, text: str) -> list[rtc.AudioFrame]:
     stream = tts.stream()
-    stream.push_text("ठीक है")
+    stream.push_text(text)
     stream.end_input()
+    frames: list[rtc.AudioFrame] = []
     try:
-        async for _ in stream:
-            pass
+        async for event in stream:
+            frames.append(event.frame)
     finally:
         await stream.aclose()
+    return frames
+
+
+async def _prewarm_google_tts() -> None:
+    """Warms the Google TTS client AND banks the resulting audio.
+
+    This used to synthesize a throwaway "ठीक है" purely to pay the client/
+    credential/gRPC setup cost off the call path. It now spends that same
+    warm-up on the actual opening lines the platform demo speaks, so the
+    first real caller gets both the warm client and audio that is already
+    rendered. Gemini/Kore matches the platform demo agent's own configured
+    voice ("google31:kore"); every other agent simply misses the cache.
+    """
+    for language, opener_set in (("hi-IN", _PLATFORM_DEMO_OPENERS), ("en-IN", _PLATFORM_DEMO_OPENERS_EN)):
+        tts = PatchedGeminiTTS(
+            language=language,
+            voice_name="Kore",
+            model_name=_GOOGLE_31_MODEL,
+            credentials_info=_GOOGLE_CREDENTIALS,
+        )
+        # Kore is a female voice, so only the female lines are ever spoken
+        # with it — rendering the male set here would be wasted work and
+        # wasted memory in every idle process.
+        for text in (opener_set.get("female") or [])[:_GREETING_CACHE_PER_SET]:
+            try:
+                frames = await _synthesize_frames(tts, text)
+            except Exception:
+                logger.exception("prewarm: could not pre-render an opener (%s)", language)
+                continue
+            if frames:
+                _GREETING_AUDIO_CACHE.setdefault(("google31:kore", language, "female"), []).append((text, frames))
+    logger.info(
+        "prewarm: cached %s greeting clip(s)",
+        sum(len(v) for v in _GREETING_AUDIO_CACHE.values()),
+    )
 
 
 if __name__ == "__main__":
