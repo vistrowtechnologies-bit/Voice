@@ -19,6 +19,7 @@ import jwt
 import call_intelligence
 import calls_db
 import campaign_dialer
+import db_backup
 import email_sender
 import disposable_email
 import help_chat
@@ -60,6 +61,8 @@ calls_db.init_tables()
 # Background worker that places due campaign calls (compliance-gated). Daemon
 # thread, idempotent start — no-op until a campaign is set 'running'.
 campaign_dialer.start_dialer()
+# Daily Postgres backup to B2 (see db_backup.py) — same daemon-thread shape.
+db_backup.start_backup_scheduler()
 
 # Cookie is Secure in production (HTTPS) and not in local http dev — set
 # AUTH_COOKIE_SECURE=1 on the deployment. In prod the browser hits the app's
@@ -1872,6 +1875,16 @@ async def admin_health(admin: dict = Depends(require_platform_owner)) -> dict:
 @app.get("/admin/vendor-credits")
 def admin_vendor_credits(admin: dict = Depends(require_platform_owner)) -> dict:
     return {"vendors": admin_db.list_vendor_credits()}
+
+
+@app.post("/admin/db-backup/run")
+def admin_db_backup_run(admin: dict = Depends(require_platform_owner)) -> dict:
+    """Manual trigger for db_backup.run_backup_now() — for verifying the
+    backup actually works (and that its email receipt arrives) without
+    waiting for the daily 3am UTC window. Synchronous: a full pg_dump +
+    upload takes a few seconds to a minute at this database's current
+    size, well inside a normal request timeout."""
+    return db_backup.run_backup_now()
 
 
 class AdminPrivacyRequestUpdate(BaseModel):

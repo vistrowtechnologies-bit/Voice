@@ -15,7 +15,19 @@ WORKDIR /app
 # ffmpeg — transcodes a call recording from its stored WAV to MP3 on download
 # (see /calls/{id}/recording/download in token_api.py). Nothing else in this
 # image needs it.
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+#
+# postgresql-client-18 — pg_dump for server/db_backup.py's daily backup.
+# Pinned to 18 (not Debian slim's default, older client) to match the
+# production Postgres server's actual version (confirmed via SELECT
+# version()) — pg_dump against a newer server than its own version is
+# unsupported and can fail outright, so this has to track the server, not
+# just "whatever's in the base image's apt repo". Installed from the
+# official PGDG repo, which is where versioned releases actually live.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl gnupg \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-18 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install both requirement sets — verified conflict-free together.
