@@ -1903,7 +1903,17 @@ class RealEstateAgent(Agent):
                 f"{self._turns_since_filler} turn(s) ago; the next is allowed only after turn "
                 f"{4 - self._turns_since_filler} from now."
                 if self._turns_since_filler < 4
-                else ""
+                # Cadence alone only ever suppresses — it never nudges once spacing
+                # clears, and a real call (762, real-estate demo) went the full 38
+                # turns with zero fillers as a direct result: nothing was ever
+                # pushing TOWARD one, only capping overuse that never happened.
+                # This fires only when spacing allows it, and only asks for one on
+                # a turn that's actually earned it (an objection, a comparison, an
+                # explanation) — a plain fact-recall turn should still stay clean.
+                else "\nIt's been a few turns since you used any natural hesitation or filler. "
+                "If this reply is handling an objection, a comparison, or an explanation, a brief "
+                "one now (हम्म, मतलब, actually) would sound more natural — skip it if this is a "
+                "plain fact-recall answer."
             )
             _personality_instruction = (
                 "HARD TURN LIMIT: reply with ONE short sentence by default and never more than TWO "
