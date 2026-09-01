@@ -1096,8 +1096,22 @@ def _build_tools(config: dict) -> list:
     """The agent's live tool set. Core lead-capture + KB tools are always on
     (they're how the call does its job); enabled_functions only gates the
     optional built-ins (end_call, transfer_call). Custom webhook tools and a
-    transfer tool (only if a transfer number is set) are appended."""
-    tools = [
+    transfer tool (only if a transfer number is set) are appended.
+
+    The appointment/booking tools are for a TENANT business's own real
+    calendar — check_calendar_availability, book_appointment, request_callback,
+    and log_lead (the real-estate-shaped budget/location/timeline capture)
+    all assume that context. platform_assistant.py, the persona for the
+    platform-demo sales call, never once mentions any of them — its entire
+    close is capture_platform_lead. Registering them anyway let the model
+    call check_calendar_availability on its own initiative mid-pitch
+    (confirmed live, call 762: customer was still describing their use case,
+    never asked about a demo or next step, and got offered specific calendar
+    slots out of nowhere — a tool available with nothing in the prompt
+    telling it not to use it). Excluding them here is the actual fix; no
+    prompt wording can out-argue a tool that's simply sitting there.
+    """
+    tools = [capture_platform_lead, switch_reply_language] if config.get("is_platform_demo") else [
         check_calendar_availability,
         book_appointment,
         # Always on, never optional: it is the only thing standing between a

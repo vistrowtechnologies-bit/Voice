@@ -1170,6 +1170,18 @@ async def log_lead(
 
 
 @function_tool
+def _looks_like_valid_indian_mobile(digits: str) -> bool:
+    """10 digits, first digit 6-9 — the actual shape of a real Indian mobile
+    number once a leading +91/91/0 is stripped. Deliberately strict: this
+    gates whether a captured lead is actually reachable, not just whether
+    the caller said something number-shaped."""
+    if digits.startswith("91") and len(digits) == 12:
+        digits = digits[2:]
+    elif digits.startswith("0") and len(digits) == 11:
+        digits = digits[1:]
+    return len(digits) == 10 and digits[0] in "6789"
+
+
 async def capture_platform_lead(
     context: RunContext,
     name: str,
@@ -1189,6 +1201,20 @@ async def capture_platform_lead(
             qualification for a real-estate brokerage".
         team_size: Rough team/company size the lead mentioned, e.g. "11-50".
     """
+    # Confirmed real failure (call 762): caller said "808019794" - nine
+    # digits, not a real Indian mobile number - and it was recorded and
+    # thanked without question. An unreachable number defeats the entire
+    # point of capturing a lead. Only phone-shaped contacts are checked;
+    # an email address (has an "@") is accepted as-is.
+    contact_stripped = (contact or "").strip()
+    if "@" not in contact_stripped:
+        digits = re.sub(r"\D", "", contact_stripped)
+        if digits and not _looks_like_valid_indian_mobile(digits):
+            return (
+                f"That number ('{contact}') doesn't look like a complete 10-digit Indian mobile number - "
+                "nothing was recorded. Ask the caller to repeat their phone number, digit by digit if "
+                "needed, then call this tool again with the corrected number."
+            )
     logger.info(
         "platform lead captured: name=%s company=%s contact=%s use_case=%s team_size=%s",
         name, company, contact, use_case, team_size,
