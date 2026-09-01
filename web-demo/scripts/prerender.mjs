@@ -106,6 +106,19 @@ function outputPathFor(route) {
 
 async function main() {
   const template = await readFile(path.join(ROOT, 'dist', 'index.html'), 'utf8')
+
+  // '/' prerenders straight into dist/index.html below (outputPathFor), but
+  // that exact file doubles as vercel.json's SPA-fallback shell for every
+  // OTHER client-routed path — dashboard, admin, login, etc. Without this,
+  // the fallback a dashboard hard-refresh gets back is the home page's own
+  // SSR'd HTML (nav, hero, orb, the lot), visible until the JS bundle loads
+  // and React replaces it: a multi-second flash of the marketing site on
+  // every authenticated page. Snapshot the clean, empty-root shell here,
+  // before the loop below bakes '/' into dist/index.html, so app routes
+  // have a plain shell to fall back to instead. See vercel.json's rewrite
+  // for app-bucket paths (kept in sync with hostBuckets.ts's APP_PREFIXES).
+  await writeFile(path.join(ROOT, 'dist', 'app-shell.html'), template)
+
   for (const page of PAGES) {
     const bodyHtml = render(page.path)
     if (!bodyHtml) throw new Error(`SSR render for ${page.path} produced no HTML`)
