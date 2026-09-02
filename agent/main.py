@@ -317,8 +317,20 @@ _FUNNEL_STAGES = [
     ("OPENING", "Just started — greeting only so far."),
     ("DISCOVERY", "Still learning what they need. Ask, don't pitch yet."),
     ("PAIN", "They've named a use case — dig into what's actually costing them time or money today."),
-    ("IMPACT", "You know roughly their scale (team/budget/location) — connect that to real cost/effort, don't just log the number."),
-    ("SOLUTION_FIT", "Enough is known to explain specifically how Vistrow Voice fits THEIR situation — not a generic feature list."),
+    (
+        "IMPACT",
+        "You know roughly their scale (team/budget/location) — connect that to real cost/effort, "
+        "don't just log the number. You do NOT yet have their name or a way to reach them — do not "
+        "let the call end here. Confirmed real failure: a caller gave their team size and the call "
+        "just ended right after with a goodbye, name and phone never asked for at all.",
+    ),
+    (
+        "SOLUTION_FIT",
+        "Enough is known to explain specifically how Vistrow Voice fits THEIR situation — not a "
+        "generic feature list. Once you've made that case, the next thing you need is their name and "
+        "a way to reach them — start working toward asking, one at a time. Ending the call here "
+        "without ever asking is the same failure as ending it at IMPACT.",
+    ),
     ("INTEREST", "They've asked about cost or plans, or sounded genuinely enthusiastic — this is the moment to offer a next step, don't keep pitching."),
     ("DEMO", "A demo/appointment is being discussed — check real availability, don't invent times."),
     ("CONTACT", "You have their name and a way to reach them — capture_platform_lead/log_lead now if you have not already this call."),

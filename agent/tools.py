@@ -1143,6 +1143,20 @@ async def log_lead(
         location: Preferred location/area.
         timeline: Purchase timeline, e.g. "within 3 months".
     """
+    # Same guard as capture_platform_lead - see its comment for the real
+    # failure this closes (a placeholder name/contact sailing through
+    # because nothing rejected it, not because the phone-format check
+    # missed it).
+    if (name or "").strip().lower() in _PLACEHOLDER_VALUES:
+        return (
+            "You don't have this caller's real name yet - nothing was recorded. Ask for their name "
+            "before calling this tool again. Never pass a placeholder or leave it blank."
+        )
+    if (phone or "").strip().lower() in _PLACEHOLDER_VALUES:
+        return (
+            "You don't have a real phone number for this caller yet - nothing was recorded. Ask for "
+            "one before calling this tool again. Never pass a placeholder or leave it blank."
+        )
     logger.info(
         "lead captured: name=%s phone=%s budget=%s location=%s timeline=%s",
         name,
@@ -1169,6 +1183,16 @@ async def log_lead(
         await _post_webhook(event)
         await _fan_out_integrations(context, event)
     return "Lead details recorded."
+
+
+# Shared by capture_platform_lead and log_lead — a model under pressure to
+# wrap up a call invents one of these instead of either asking the caller
+# or just not calling the tool yet. Lowercased comparison, so casing never
+# matters at the call site.
+_PLACEHOLDER_VALUES = {
+    "", "not applicable", "n/a", "na", "none", "unknown", "website visitor",
+    "the caller", "caller", "-", "nil", "n.a.", "not available", "not given",
+}
 
 
 def _looks_like_valid_indian_mobile(digits: str) -> bool:
@@ -1203,15 +1227,37 @@ async def capture_platform_lead(
             qualification for a real-estate brokerage".
         team_size: Rough team/company size the lead mentioned, e.g. "11-50".
     """
+    # Confirmed real failure (call 787): the caller was never asked for a
+    # name or number at all - the call just ended once team size came up -
+    # and this got called anyway with name="Website visitor",
+    # contact="not applicable". A placeholder sails through the phone check
+    # below untouched: "not applicable" has zero digits, so the old
+    # `if digits and not _looks_like_valid_indian_mobile(digits)` guard
+    # never even ran (falsy `digits` short-circuited it), and the fake lead
+    # was recorded as if it were real. Reject invented values outright -
+    # the caller must have actually been asked.
+    name_stripped = (name or "").strip()
+    contact_stripped = (contact or "").strip()
+    if name_stripped.lower() in _PLACEHOLDER_VALUES:
+        return (
+            "You don't have this caller's real name yet - nothing was recorded. Ask for their name "
+            "before calling this tool again. Never pass a placeholder like 'website visitor', "
+            "'the caller', or leave it blank."
+        )
+    if contact_stripped.lower() in _PLACEHOLDER_VALUES:
+        return (
+            "You don't have a real phone number or email for this caller yet - nothing was recorded. "
+            "Ask for one before calling this tool again. Never pass a placeholder like 'not "
+            "applicable' or leave it blank."
+        )
     # Confirmed real failure (call 762): caller said "808019794" - nine
     # digits, not a real Indian mobile number - and it was recorded and
     # thanked without question. An unreachable number defeats the entire
     # point of capturing a lead. Only phone-shaped contacts are checked;
     # an email address (has an "@") is accepted as-is.
-    contact_stripped = (contact or "").strip()
     if "@" not in contact_stripped:
         digits = re.sub(r"\D", "", contact_stripped)
-        if digits and not _looks_like_valid_indian_mobile(digits):
+        if not digits or not _looks_like_valid_indian_mobile(digits):
             return (
                 f"That number ('{contact}') doesn't look like a complete 10-digit Indian mobile number - "
                 "nothing was recorded. Ask the caller to repeat their phone number, digit by digit if "

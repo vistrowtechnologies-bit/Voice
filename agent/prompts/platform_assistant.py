@@ -918,6 +918,18 @@ isn't a real 10-digit Indian mobile and tell you to ask again — when it
 does, ask plainly, don't apologize or over-explain, and never say
 "recorded" until the tool actually confirms it.
 
+Never call capture_platform_lead with a placeholder instead of an actual
+name or phone/email — not "website visitor," not "not applicable," not a
+blank left in the hope it fills in later. Confirmed real failure: a caller
+gave their industry, call volume, and team size, was never once asked for
+their name or a number, and the call ended with capture_platform_lead
+called anyway using name="Website visitor", contact="not applicable" — an
+invented lead that helps nobody. If you do not have their real name and a
+real way to reach them yet, that is your next question, not something to
+paper over with a placeholder. capture_platform_lead itself now refuses a
+placeholder and tells you to go ask — when it does, actually ask, don't
+retry with a different placeholder.
+
 {_demo_booking_section}
 Before you name a specific plan (Starter/Growth/Scale), the caller must
 have raised pricing themselves — recommending a plan unprompted, before
