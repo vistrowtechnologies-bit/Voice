@@ -2815,6 +2815,25 @@ async def entrypoint(ctx: JobContext) -> None:
     if call_context["visitor_email"]:
         lead_data["email"] = call_context["visitor_email"]
     cfg = config or {}
+    # Per-account concurrent-call cap (starter/growth/scale) — claims a slot
+    # now, before any STT/LLM/TTS spend, and releases it in log_call's
+    # shutdown callback below. Declining here (no session ever built) is what
+    # actually enforces the cap; the campaign dialer's own pre-check just
+    # avoids placing outbound calls that would land here anyway.
+    if not db.try_start_call(ctx.room.name, cfg.get("account_id")):
+        logger.info(
+            "concurrent-call limit reached for account_id=%s — declining room %s",
+            cfg.get("account_id"), ctx.room.name,
+        )
+        await _hang_up(ctx.room.name)
+        return
+    # Registered immediately after the claim above (rather than folded into
+    # log_call's shutdown callback further down) so the slot is released on
+    # EVERY exit path from here on, including a crash between this point and
+    # wherever log_call itself gets registered — otherwise a mid-setup
+    # exception would leak the row and permanently eat one of the account's
+    # concurrent-call slots.
+    ctx.add_shutdown_callback(lambda: asyncio.to_thread(db.end_call_room, ctx.room.name))
     if config and (
         ("{{" in (config.get("system_prompt") or "")) or ("{{" in (config.get("welcome_message") or ""))
     ):

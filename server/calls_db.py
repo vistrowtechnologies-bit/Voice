@@ -235,6 +235,20 @@ CREATE TABLE IF NOT EXISTS caller_memory (
     UNIQUE(agent_id, caller_phone)
 );
 
+-- One row per live call (inbound, outbound, widget, browser) for the
+-- duration of that call only — inserted when agent/main.py's entrypoint
+-- commits to running a session, deleted in its shutdown callback. Lets both
+-- the agent (inbound) and the campaign dialer/test-call path (outbound)
+-- enforce a per-account concurrent-call cap without an in-memory counter,
+-- which wouldn't work across multiple worker processes/regions. Mirrored in
+-- agent/db.py for the same "whichever boots first" reason as caller_memory.
+CREATE TABLE IF NOT EXISTS active_calls (
+    room_name TEXT PRIMARY KEY,
+    account_id INTEGER NOT NULL,
+    started_at TEXT DEFAULT {_NOW}
+);
+CREATE INDEX IF NOT EXISTS idx_active_calls_account ON active_calls(account_id);
+
 -- Programmatic API keys, scoped to a tenant account. We store only the
 -- SHA-256 of the full key (it's shown to the operator exactly once at
 -- creation); prefix is the human-readable leading chunk kept for the list.
@@ -2844,6 +2858,31 @@ def get_account_plan(account_id: int) -> str:
         conn.close()
 
 
+def count_active_calls(account_id: int) -> int:
+    """How many calls this account has live right now, per the active_calls
+    table (see its schema comment). Used by the campaign dialer to skip
+    dialling a contact when the account is already at its plan's concurrent-
+    call cap — the agent-side check in agent/db.py is the authoritative
+    enforcement; this is a pre-check to avoid placing a real outbound call
+    (real carrier cost) only to have the agent immediately decline it."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) c FROM active_calls WHERE account_id = ?", (account_id,)
+        ).fetchone()
+        return row["c"] if row else 0
+    finally:
+        conn.close()
+
+
+def concurrent_call_limit(account_id: int) -> int:
+    # Same exemption as AGENT_LIMITS — Vistrow's own account is never capped.
+    if is_platform_owner(account_id):
+        return 10**9
+    plan = get_account_plan(account_id)
+    return CONCURRENT_CALL_LIMITS.get(plan, CONCURRENT_CALL_LIMITS["starter"])
+
+
 def is_platform_owner(account_id: int) -> bool:
     """Whether this account may flag one of its agents as
     agents.is_platform_demo — every other tenant must not be able to redirect
@@ -5419,6 +5458,15 @@ PLAN_PRICING = {
 # Scale. Mirrors web-demo/src/lib/plans.ts's PLANS[].features counts -
 # keep both in sync by hand.
 AGENT_LIMITS = {"starter": 1, "growth": 5, "scale": 20}
+# Same real gap as AGENT_LIMITS: the pricing page advertises "~N concurrent
+# calls" per plan (web-demo/src/lib/plans.ts PLANS[].features — keep both in
+# sync by hand) but nothing enforced it — an account could run unlimited
+# simultaneous AI conversations regardless of plan, which is a direct margin
+# risk once real billing goes live (every concurrent call is live STT/LLM/TTS
+# spend). Counts BOTH directions — inbound and outbound calls share the same
+# cap, since the cost driver is the conversation itself, not which side
+# dialled.
+CONCURRENT_CALL_LIMITS = {"starter": 5, "growth": 15, "scale": 30}
 # Standard India GST rate on SaaS/digital services. Added on TOP of every
 # figure above (and the overage/phone-number/top-up rates derived from
 # them) - PLAN_PRICING etc. stay tax-exclusive so the credit/overage math

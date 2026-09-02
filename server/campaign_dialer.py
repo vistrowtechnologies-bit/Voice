@@ -100,6 +100,15 @@ def _dial_one(campaign: dict) -> None:
     inflight = calls_db.campaign_inflight(cid)
     slots = max(0, int(campaign.get("concurrency", 1) or 1) - inflight)
 
+    # Account-wide plan cap, separate from (and often tighter than) the
+    # campaign's own concurrency setting — a campaign can't dial past it even
+    # if other campaigns/inbound calls are already using up the account's
+    # headroom. The agent's own check (agent/main.py) is what actually
+    # enforces this; skipping the dial here just avoids placing a real
+    # outbound call only to have the agent immediately decline it.
+    headroom = calls_db.concurrent_call_limit(account_id) - calls_db.count_active_calls(account_id)
+    slots = min(slots, max(0, headroom))
+
     for _ in range(slots):
         contact = calls_db.claim_next_campaign_contact(cid)
         if contact is None:

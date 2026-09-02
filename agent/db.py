@@ -65,7 +65,22 @@ CREATE TABLE IF NOT EXISTS caller_memory (
     updated_at TEXT DEFAULT (now() AT TIME ZONE 'utc')::text,
     UNIQUE(agent_id, caller_phone)
 );
+
+-- Mirrors server/calls_db.py's active_calls — see its schema comment.
+-- One row per live call, used to enforce the per-account concurrent-call cap.
+CREATE TABLE IF NOT EXISTS active_calls (
+    room_name TEXT PRIMARY KEY,
+    account_id INTEGER NOT NULL,
+    started_at TEXT DEFAULT (now() AT TIME ZONE 'utc')::text
+);
+CREATE INDEX IF NOT EXISTS idx_active_calls_account ON active_calls(account_id);
 """
+
+# Same numbers as web-demo/src/lib/plans.ts PLANS[].features ("~N concurrent
+# calls") and server/calls_db.py's CONCURRENT_CALL_LIMITS — keep all three in
+# sync by hand. Duplicated rather than imported: agent/ and server/ are
+# separate deployables with separate venvs (see module docstring above).
+CONCURRENT_CALL_LIMITS = {"starter": 5, "growth": 15, "scale": 30}
 
 
 def init_db() -> None:
@@ -724,6 +739,67 @@ def get_delivery_integrations(
         return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
     except psycopg.Error:
         return []
+    finally:
+        conn.close()
+
+
+def try_start_call(room_name: str, account_id: int | None) -> bool:
+    """Claims a concurrent-call slot for this account, if one is free.
+    Returns False (call the entrypoint must decline) once the account is at
+    its plan's CONCURRENT_CALL_LIMITS cap. account_id is None for demo/
+    platform calls with no owning tenant — always allowed, since there's no
+    account to bill or protect. Not race-hardened against two calls landing
+    in the same instant on separate worker processes (same rigor level as
+    AGENT_LIMITS in server/calls_db.py) — acceptable for a human-paced cap,
+    not a hard resource limit.
+
+    Never blocks a call on its own failure: a DB hiccup here must not be able
+    to drop a real caller, so any error is treated as "slot granted"."""
+    if account_id is None:
+        return True
+    conn = dbconn.connect()
+    try:
+        row = conn.execute(
+            "SELECT plan, is_platform_owner FROM accounts WHERE id = ?", (account_id,)
+        ).fetchone()
+        # Same exemption as AGENT_LIMITS in server/calls_db.py — Vistrow's own
+        # account runs the marketing site's live demo, whose traffic must
+        # never be capped by an arbitrary plan tier.
+        if row and row["is_platform_owner"]:
+            limit = None
+        else:
+            plan = (row["plan"] if row else None) or "starter"
+            limit = CONCURRENT_CALL_LIMITS.get(plan, CONCURRENT_CALL_LIMITS["starter"])
+        if limit is not None:
+            current = conn.execute(
+                "SELECT COUNT(*) c FROM active_calls WHERE account_id = ?", (account_id,)
+            ).fetchone()["c"]
+            if current >= limit:
+                return False
+        with conn:
+            conn.execute(
+                "INSERT INTO active_calls (room_name, account_id) VALUES (?, ?) "
+                "ON CONFLICT (room_name) DO NOTHING",
+                (room_name, account_id),
+            )
+        return True
+    except psycopg.Error:
+        logger.warning("try_start_call: DB error for account_id=%s — granting slot", account_id, exc_info=True)
+        return True
+    finally:
+        conn.close()
+
+
+def end_call_room(room_name: str) -> None:
+    """Releases the concurrent-call slot claimed by try_start_call. Called
+    from the shutdown callback, so it must never raise — best-effort, same as
+    every other teardown step there."""
+    conn = dbconn.connect()
+    try:
+        with conn:
+            conn.execute("DELETE FROM active_calls WHERE room_name = ?", (room_name,))
+    except psycopg.Error:
+        logger.warning("end_call_room: DB error releasing room %s", room_name, exc_info=True)
     finally:
         conn.close()
 
