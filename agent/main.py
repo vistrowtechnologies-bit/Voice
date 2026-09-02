@@ -305,16 +305,59 @@ def _facts_reminder(lead_data: dict) -> str:
     )
 
 
-def _current_objective(lead_data: dict, appointment_booked: bool) -> str:
-    if appointment_booked:
-        return "# Current objective\nClosing — the appointment is confirmed. Wrap up, don't reopen discovery."
+# A label + one line of guidance per funnel stage. Deliberately advisory,
+# not enforced — nothing blocks a tool call or a reply based on this; it's
+# read the same way _appointment_instruction/_intake_instruction etc. are,
+# as one more thing the model sees, not a gate. Stored as an index in
+# userdata["funnel_stage"] (see _advance_funnel_stage below) so a call
+# never regresses to an earlier-sounding stage just because one turn's
+# signals happened to be weaker than the turn before it — same "first
+# department wins, then never changes" reasoning as self._chosen_department.
+_FUNNEL_STAGES = [
+    ("OPENING", "Just started — greeting only so far."),
+    ("DISCOVERY", "Still learning what they need. Ask, don't pitch yet."),
+    ("PAIN", "They've named a use case — dig into what's actually costing them time or money today."),
+    ("IMPACT", "You know roughly their scale (team/budget/location) — connect that to real cost/effort, don't just log the number."),
+    ("SOLUTION_FIT", "Enough is known to explain specifically how Vistrow Voice fits THEIR situation — not a generic feature list."),
+    ("INTEREST", "They've asked about cost or plans, or sounded genuinely enthusiastic — this is the moment to offer a next step, don't keep pitching."),
+    ("DEMO", "A demo/appointment is being discussed — check real availability, don't invent times."),
+    ("CONTACT", "You have their name and a way to reach them — capture_platform_lead/log_lead now if you have not already this call."),
+    ("CLOSE", "The appointment is confirmed. Wrap up, don't reopen discovery."),
+]
+
+
+def _advance_funnel_stage(
+    userdata: dict,
+    lead_data: dict,
+    text: str,
+    emotion: str | None,
+    appointment_turn: bool,
+    appointment_booked: bool,
+    lead_captured: bool,
+) -> int:
+    """Computes the furthest stage THIS turn's signals reach, then stores
+    the max ever seen this call — monotonic, so it only moves forward."""
+    stage = 1  # any turn reaching on_user_turn_completed is past the opening
+    if lead_data.get("use_case"):
+        stage = 2
+    if lead_data.get("team_size") or lead_data.get("budget") or lead_data.get("location"):
+        stage = 4  # impact known implies solution-fit territory the same turn
+    if _PRICING_INTEREST_PATTERN.search(text or "") or emotion == "excited":
+        stage = max(stage, 5)
+    if appointment_turn:
+        stage = max(stage, 6)
     if lead_data.get("name") and (lead_data.get("phone") or lead_data.get("email")):
-        return (
-            "# Current objective\nYou have this caller's name and a way to reach them — call "
-            "capture_platform_lead or log_lead now if you have not already this call, then move "
-            "toward scheduling or closing. Do not let this sit uncaptured."
-        )
-    return "# Current objective\nDiscovery — you don't yet have enough to capture this as a lead."
+        stage = max(stage, 7)
+    if appointment_booked or lead_captured:
+        stage = 8
+    prior = userdata.get("funnel_stage", 0)
+    userdata["funnel_stage"] = max(prior, stage)
+    return userdata["funnel_stage"]
+
+
+def _current_objective(stage_index: int) -> str:
+    name, guidance = _FUNNEL_STAGES[stage_index]
+    return f"# Current objective: {name}\n{guidance}"
 
 
 # The cadence cap ("max one filler every 3-5 turns") only holds if something
@@ -433,6 +476,17 @@ _HEALTHCARE_SYMPTOM_PATTERN = re.compile(
     r"pain|hurt|ache|symptom|fever|bleed|vomit|dizzy|breath|"
     r"दर्द|तकलीफ|पेट|बुखार|खून|उल्टी|चक्कर|साँस|सांस|"
     r"वेदना|ताप|रक्त|வலி|காய்ச்சல்|నొప్పి|ಜ್ವರ|വേദന|പനി|ব্যথা|জ্বর|ਦਰਦ|ਬੁਖਾਰ|ଦରଦ|ଜ୍ୱର",
+    re.IGNORECASE,
+)
+
+# Marks the funnel's DISCOVERY->PAIN->IMPACT->SOLUTION_FIT->INTEREST jump in
+# _current_objective below — a caller asking about cost/plans is the
+# clearest signal they've moved from "understanding the product" to
+# "considering buying it," same idea as _APPOINTMENT_INTENT_PATTERN marking
+# the DEMO jump.
+_PRICING_INTEREST_PATTERN = re.compile(
+    r"\b(price|pricing|cost|costly|costs|plan|plans|discount|expensive|afford|budget)\b|"
+    r"कीमत|दाम|प्लान|खर्च|महंगा|सस्ता|छूट|डिस्काउंट",
     re.IGNORECASE,
 )
 
@@ -2194,7 +2248,16 @@ class RealEstateAgent(Agent):
             else ""
         )
         _facts_reminder_text = _facts_reminder(_lead_data)
-        _objective_text = _current_objective(_lead_data, self._appointment_booked)
+        _funnel_stage = _advance_funnel_stage(
+            _userdata,
+            _lead_data,
+            text,
+            emotion,
+            _appointment_turn,
+            self._appointment_booked,
+            bool(_userdata.get("lead_captured")),
+        )
+        _objective_text = _current_objective(_funnel_stage)
         turn_ctx.add_message(
             role="system",
             content=_language_instruction
