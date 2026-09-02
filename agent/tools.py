@@ -701,7 +701,9 @@ async def _deliver_to_integrations(account_id: int | None, lead: dict, call_id: 
     try:
         integrations = db.get_delivery_integrations(account_id)
     except Exception:
+        logger.warning("get_delivery_integrations raised for account_id=%s", account_id, exc_info=True)
         return
+    logger.info("integration fan-out: account_id=%s integrations=%s", account_id, [i["key"] for i in integrations])
     if not integrations:
         return
     try:
