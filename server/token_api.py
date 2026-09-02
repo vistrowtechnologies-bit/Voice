@@ -1930,8 +1930,13 @@ def list_api_keys(user: dict = Depends(current_user)) -> list[dict]:
 
 @app.post("/api-keys")
 def create_api_key(req: CreateApiKeyRequest, user: dict = Depends(require_role("admin"))) -> dict:
-    # Full API access via a key is an admin-level grant. Returns the full key
-    # exactly once; the client must copy it immediately.
+    # Full API access via a key is an admin-level grant, and (per the
+    # pricing page) a Scale-only one - confirmed real gap: this previously
+    # had no plan check at all, so any admin on any plan could mint keys.
+    # Platform owner bypasses, same as every other plan gate in this file.
+    if not calls_db.is_platform_owner(user["account_id"]) and calls_db.get_account_plan(user["account_id"]) != "scale":
+        raise HTTPException(403, "API access is available on the Scale plan - upgrade to create API keys.")
+    # Returns the full key exactly once; the client must copy it immediately.
     return calls_db.create_api_key(user["account_id"], req.name)
 
 
@@ -2571,7 +2576,10 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
     if entry and entry.get("preview") and not calls_db.is_platform_owner(user["account_id"]):
         raise HTTPException(400, "That preview voice is available only to the Vistrow admin account.")
     _guard_admin_only_model(data, user["account_id"])
-    return calls_db.create_agent(data, user["account_id"])
+    try:
+        return calls_db.create_agent(data, user["account_id"])
+    except calls_db.AgentLimitError as e:
+        raise HTTPException(status_code=400, detail=e.message) from e
 
 
 @app.patch("/agents/{agent_id}")

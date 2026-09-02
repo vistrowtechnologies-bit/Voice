@@ -2813,6 +2813,18 @@ def agent_account_id(agent_id: int) -> int | None:
         conn.close()
 
 
+def get_account_plan(account_id: int) -> str:
+    """Public counterpart to _account_plan_and_owner (voice-menu section,
+    below) for callers outside this module - e.g. gating API key creation
+    to the Scale plan."""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT plan FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        return (row["plan"] if row else None) or "starter"
+    finally:
+        conn.close()
+
+
 def is_platform_owner(account_id: int) -> bool:
     """Whether this account may flag one of its agents as
     agents.is_platform_demo — every other tenant must not be able to redirect
@@ -2837,9 +2849,27 @@ def list_agents(account_id: int) -> list[dict]:
         conn.close()
 
 
+class AgentLimitError(Exception):
+    """Raised when creating this agent would exceed the account's plan
+    limit. token_api maps this to a 400 with .message."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
 def create_agent(data: dict, account_id: int) -> dict:
     conn = _connect()
     try:
+        plan, is_owner = _account_plan_and_owner(conn, account_id)
+        if not is_owner:
+            limit = AGENT_LIMITS.get(plan, AGENT_LIMITS["starter"])
+            current = conn.execute("SELECT COUNT(*) c FROM agents WHERE account_id = ?", (account_id,)).fetchone()["c"]
+            if current >= limit:
+                raise AgentLimitError(
+                    f"Your {plan} plan includes {limit} agent{'s' if limit != 1 else ''} - "
+                    "upgrade to add more."
+                )
         with conn:
             cur = conn.execute(
                 "INSERT INTO agents (account_id, name, description, model, voice, language, system_prompt) "
@@ -5364,6 +5394,12 @@ PLAN_PRICING = {
     "growth": {"price_inr": 5999, "credits": 1000},
     "scale": {"price_inr": 12999, "credits": 2500},
 }
+# Confirmed real gap: the pricing page has always advertised these agent
+# counts as a plan differentiator, but create_agent() enforced nothing -
+# a Starter account could create an unlimited number of agents same as
+# Scale. Mirrors web-demo/src/lib/plans.ts's PLANS[].features counts -
+# keep both in sync by hand.
+AGENT_LIMITS = {"starter": 1, "growth": 5, "scale": 20}
 # Standard India GST rate on SaaS/digital services. Added on TOP of every
 # figure above (and the overage/phone-number/top-up rates derived from
 # them) - PLAN_PRICING etc. stay tax-exclusive so the credit/overage math
