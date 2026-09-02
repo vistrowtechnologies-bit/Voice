@@ -124,10 +124,14 @@ export function ActiveCallUI({
   // never explicitly turned on, in agent/main.py) and its default
   // text_input_cb feeds this straight into session.generate_reply(), the
   // same path a transcribed voice turn takes — so typing here talks to the
-  // real agent, not a separate chatbot. "lk.chat" is LiveKit's own
-  // well-known topic for this (agents.TOPIC_CHAT); useTranscriptions above
-  // already renders whatever lands on it, so the sent text shows up in the
-  // same transcript feed as the agent's spoken replies with no extra state.
+  // real agent, not a separate chatbot. It does NOT show up via
+  // useTranscriptions below, though: that hook only listens on the
+  // "lk.transcription" topic (voice-to-text), while sendText publishes on
+  // the separate "lk.chat" topic — so a typed message reached and was
+  // answered by the agent but never appeared as a bubble here. Echo it
+  // into sentTexts locally instead of relying on the SDK to reflect it back.
+  const [sentTexts, setSentTexts] = useState<{ id: string; text: string }[]>([])
+
   const handleSendText = () => {
     const value = textInput.trim()
     if (!value) return
@@ -135,20 +139,40 @@ export function ActiveCallUI({
       // Best-effort — a failed send just leaves the caller's draft in the
       // box to retry, same as a dropped mic packet would.
     })
+    setSentTexts((prev) => [...prev, { id: `local-text-${prev.length}-${value.slice(0, 20)}`, text: value }])
     setTextInput('')
   }
 
   const transcriptions = useTranscriptions()
-  const transcriptEntries: TranscriptEntry[] = useMemo(
-    () =>
-      transcriptions.map((t) => ({
-        id: t.streamInfo.id,
-        identity: t.participantInfo.identity,
-        text: t.text,
-        isLocal: t.participantInfo.identity === localParticipant.identity,
-      })),
-    [transcriptions, localParticipant.identity],
-  )
+  // Sequence local text sends and live transcription events into a single
+  // stable order (append-order, since neither source carries a timestamp)
+  // so a typed message lands where it was actually sent relative to the
+  // rest of the conversation, not always trailing behind it.
+  const seqRef = useRef(new Map<string, number>())
+  const nextSeqRef = useRef(0)
+  const seqFor = (id: string) => {
+    let seq = seqRef.current.get(id)
+    if (seq === undefined) {
+      seq = nextSeqRef.current++
+      seqRef.current.set(id, seq)
+    }
+    return seq
+  }
+  const transcriptEntries: TranscriptEntry[] = useMemo(() => {
+    const fromVoice = transcriptions.map((t) => ({
+      id: t.streamInfo.id,
+      identity: t.participantInfo.identity,
+      text: t.text,
+      isLocal: t.participantInfo.identity === localParticipant.identity,
+    }))
+    const fromTyped = sentTexts.map((t) => ({
+      id: t.id,
+      identity: localParticipant.identity,
+      text: t.text,
+      isLocal: true,
+    }))
+    return [...fromVoice, ...fromTyped].sort((a, b) => seqFor(a.id) - seqFor(b.id))
+  }, [transcriptions, sentTexts, localParticipant.identity])
 
   useEffect(() => {
     onTranscriptUpdate(transcriptEntries)
