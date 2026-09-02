@@ -660,34 +660,57 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose?: () 
 
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Extracted lead</h2>
-            <dl className="flex flex-col gap-2 text-sm">
-              {call.email && <Row label="Email" value={call.email} />}
-              {call.company || call.useCase || call.teamSize ? (
-                <>
-                  <Row label="Company" value={call.company || '-'} />
-                  <Row label="Use case" value={call.useCase || '-'} />
-                  <Row label="Team size" value={call.teamSize || '-'} />
-                </>
-              ) : (
-                <>
-                  <Row label="Budget" value={call.budget || '-'} />
-                  <Row label="Location" value={call.location || '-'} />
-                  <Row label="Timeline" value={call.timeline || '-'} />
-                </>
-              )}
-              {/* Whatever this agent's own Post-call fields config
-                  (Agents → edit → Post-call fields) asked the LLM to pull
-                  from the transcript - the generic per-business version of
-                  the fixed fields above, e.g. a real-estate agent's "plot
-                  size interest" or a clinic's "preferred doctor". */}
-              {Object.entries(call.extractedData ?? {}).map(([key, value]) => (
-                <Row key={key} label={titleCase(key)} value={String(value) || '-'} />
-              ))}
-            </dl>
+            {/* Only fields this call actually captured. The fixed columns
+                below are leftovers from when the product was real-estate
+                only (budget/location/timeline) and later SaaS
+                (company/use case/team size) - the old code picked ONE of
+                those two sets and rendered it with "-" placeholders, so a
+                clinic or a school saw three empty real-estate rows that mean
+                nothing to them. Every business's real fields come from the
+                agent's own Post-call fields config (extractedData), which is
+                the generic mechanism; the fixed ones now just show up when
+                populated, like any other field. */}
+            {(() => {
+              const captured: [string, string][] = [
+                ['Email', call.email],
+                ['Company', call.company],
+                ['Use case', call.useCase],
+                ['Team size', call.teamSize],
+                ['Budget', call.budget],
+                ['Location', call.location],
+                ['Timeline', call.timeline],
+              ].filter((entry): entry is [string, string] => Boolean(entry[1]?.trim()))
+
+              const custom = Object.entries(call.extractedData ?? {}).filter(([, v]) =>
+                String(v ?? '').trim(),
+              )
+
+              if (!captured.length && !custom.length) {
+                return (
+                  <p className="text-xs text-text-muted">
+                    Nothing was captured from this call. Define what to pull out in the agent's
+                    Post-call fields.
+                  </p>
+                )
+              }
+
+              return (
+                <dl className="flex flex-col gap-2 text-sm">
+                  {captured.map(([label, value]) => (
+                    <Row key={label} label={label} value={value} />
+                  ))}
+                  {custom.map(([key, value]) => (
+                    <Row key={key} label={titleCase(key)} value={String(value)} />
+                  ))}
+                </dl>
+              )
+            })()}
             {call.siteVisit && (
               <div className="mt-3 flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
                 <Icon name="event_available" className="text-[16px]" />
-                Site visit · {call.siteVisit.date} at {call.siteVisit.time}
+                {/* "Site visit" was the real-estate name for this; it is the
+                    generic booking any agent can make via book_appointment. */}
+                Appointment · {call.siteVisit.date} at {call.siteVisit.time}
               </div>
             )}
           </Card>

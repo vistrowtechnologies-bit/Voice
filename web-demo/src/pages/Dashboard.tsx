@@ -547,7 +547,7 @@ export function Dashboard() {
                       <div className="h-[150px] w-[150px]">
                         <Doughnut
                           data={{
-                            labels: ['Site visit booked', 'Qualified', 'Not qualified'],
+                            labels: ['Appointment booked', 'Qualified', 'Not qualified'],
                             datasets: [
                               {
                                 data: [
@@ -566,7 +566,7 @@ export function Dashboard() {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-col gap-1.5 text-[11px] text-text-muted">
-                      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" />Site visit booked · {summary.siteVisits}</span>
+                      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" />Appointment booked · {summary.siteVisits}</span>
                       <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-cyan" />Qualified · {summary.qualifiedCalls - summary.siteVisits}</span>
                       <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-muted" />Not qualified · {summary.totalCalls - summary.qualifiedCalls}</span>
                     </div>
@@ -740,7 +740,7 @@ export function Dashboard() {
                   <FunnelBar label="Answered" value={analytics.funnel.answered} max={analytics.funnel.answered} color="#6B647F" />
                   <FunnelBar label="Engaged (4+ turns)" value={analytics.funnel.engaged} max={analytics.funnel.answered} color="#A855F7" />
                   <FunnelBar label="Qualified" value={analytics.funnel.qualified} max={analytics.funnel.answered} color="#22D3EE" />
-                  <FunnelBar label="Site visit booked" value={analytics.funnel.visitBooked} max={analytics.funnel.answered} color="#FBBF24" />
+                  <FunnelBar label="Appointment booked" value={analytics.funnel.visitBooked} max={analytics.funnel.answered} color="#FBBF24" />
                 </div>
               ) : (
                 <EmptyState icon="filter_alt" text="Funnel appears after the first calls." />

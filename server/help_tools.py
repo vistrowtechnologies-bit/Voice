@@ -105,7 +105,7 @@ def calls_on_date(account_id: int, date: str = "", **_ignored) -> dict:
 def hottest_leads(account_id: int, limit: int = 5, **_ignored) -> dict:
     limit = max(1, min(int(limit or 5), 20))
     calls = calls_db.list_calls(account_id, limit=100)
-    hot = [c for c in calls if c["status"] in ("Qualified", "Site Visit Booked")][:limit]
+    hot = [c for c in calls if c["status"] in ("Qualified", "Appointment Booked")][:limit]
     return {
         "leads": [
             {"name": c["name"], "phone": c["phone"], "status": c["status"], "callDate": c["callDate"]}

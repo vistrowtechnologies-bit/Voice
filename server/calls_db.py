@@ -2100,8 +2100,12 @@ def _status(row: dict, transcript: list[dict]) -> str:
 
 
 def _lead_status(row: dict) -> str:
+    # "Appointment Booked", not the old "Site Visit Booked": the column name
+    # (site_visit_json) is real-estate-era and left alone, but the label is
+    # shown to every tenant - a clinic or a law firm books appointments, not
+    # site visits. Computed per request, never stored, so no migration.
     if row["site_visit_json"]:
-        return "Site Visit Booked"
+        return "Appointment Booked"
     if row["lead_name"]:
         return "Qualified"
     return "New"

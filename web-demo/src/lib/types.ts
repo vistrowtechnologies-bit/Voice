@@ -24,7 +24,7 @@ export interface TranscriptEntry {
 }
 
 // Only statuses we can actually derive from a completed call row (calls.db).
-export type LeadStatus = 'New' | 'Qualified' | 'Site Visit Booked'
+export type LeadStatus = 'New' | 'Qualified' | 'Appointment Booked'
 export type CallStatus = 'completed' | 'failed'
 export type Sentiment = 'positive' | 'neutral' | 'negative'
 

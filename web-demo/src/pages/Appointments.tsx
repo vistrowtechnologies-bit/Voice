@@ -141,7 +141,7 @@ export function Appointments() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Appointments" subtitle="Meetings and site visits your AI agent - or your team - has booked">
+      <PageHeader title="Appointments" subtitle="Meetings your AI agent - or your team - has booked">
         <button
           onClick={() => setShowAdd((v) => !v)}
           className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90"
