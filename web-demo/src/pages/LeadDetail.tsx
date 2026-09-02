@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -93,6 +93,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose?: () 
   const id = callId ?? params.id
   const isModal = Boolean(onClose)
   const navigate = useNavigate()
+  const location = useLocation()
   const [call, setCall] = useState<CallRecord | null | undefined>(undefined)
   const [notes, setNotes] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
@@ -340,7 +341,18 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose?: () 
                 {filteredHistory.map((c) => (
                   <button
                     key={c.id}
-                    onClick={() => navigate(`/dashboard/calls/${c.id}`)}
+                    // Carry the current location.state forward so switching
+                    // calls from inside the modal STAYS in the modal - without
+                    // this the backgroundLocation is dropped and the next call
+                    // renders as the standalone page, kicking you out of the
+                    // overlay. `replace` keeps the modal one level deep, so
+                    // Back still means "close", not "previous sibling call".
+                    onClick={() =>
+                      navigate(
+                        `/dashboard/calls/${c.id}`,
+                        isModal ? { state: location.state, replace: true } : undefined,
+                      )
+                    }
                     className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-high"
                   >
                     <div className="min-w-0">
