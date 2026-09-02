@@ -12,6 +12,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from livekit import api, rtc
+from livekit.agents.beta.tools import send_dtmf_events
 from livekit.agents.inference import eot
 from livekit.agents import (
     Agent,
@@ -1284,6 +1285,15 @@ def _build_tools(config: dict) -> list:
         tools.append(transfer_call)
     if TAVILY_API_KEY and _on("web_search"):
         tools.append(web_search)
+    if _on("send_dtmf"):
+        # Lets the agent press digits when it reaches an automated phone
+        # tree instead of the person it dialled — an outbound call to a
+        # business landline before a personal cell. Built into the LiveKit
+        # SDK (livekit.agents.beta.tools) — publishes real DTMF tones over
+        # the SIP leg via room.local_participant.publish_dtmf, a no-op on a
+        # browser/widget call (the tool's own try/except returns an error
+        # string rather than raising), so no call-type gating is needed here.
+        tools.append(send_dtmf_events)
     tools.extend(build_custom_function_tools(_parse_json_config(config.get("custom_functions"), [])))
     return tools
 

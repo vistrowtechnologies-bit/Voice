@@ -167,14 +167,20 @@ function AgentEditorForm({
     setForm((f) => ({ ...f, [key]: value }))
 
   // enabledFunctions is a comma list of the OPTIONAL built-ins that are on;
-  // empty string means "all default on". end_call and web_search are toggled
-  // here - transfer_call is governed by whether a transfer number is set.
-  const OPTIONAL_FUNCTIONS = ['end_call', 'transfer_call', 'web_search']
+  // empty string means "all default on". end_call, web_search and send_dtmf
+  // are toggled here - transfer_call is governed by whether a transfer
+  // number is set. Every name here MUST stay in sync with agent/main.py's
+  // _build_tools - setOptionalFunction below recomputes the full list on
+  // every toggle, so a name missing here would silently drop out of
+  // enabledFunctions (and therefore get disabled) the next time an operator
+  // toggles ANY other function.
+  const OPTIONAL_FUNCTIONS = ['end_call', 'transfer_call', 'web_search', 'send_dtmf']
   const enabledSet = (name: string) =>
     form.enabledFunctions.trim() === '' ||
     form.enabledFunctions.split(',').map((s) => s.trim()).includes(name)
   const endCallEnabled = enabledSet('end_call')
   const webSearchEnabled = enabledSet('web_search')
+  const sendDtmfEnabled = enabledSet('send_dtmf')
   const setOptionalFunction = (name: string, on: boolean) => {
     const current =
       form.enabledFunctions.trim() === ''
@@ -187,6 +193,7 @@ function AgentEditorForm({
   }
   const setEndCall = (on: boolean) => setOptionalFunction('end_call', on)
   const setWebSearch = (on: boolean) => setOptionalFunction('web_search', on)
+  const setSendDtmf = (on: boolean) => setOptionalFunction('send_dtmf', on)
 
   const promptTokens = Math.max(0, Math.ceil(form.systemPrompt.length / 4))
 
@@ -414,6 +421,12 @@ function AgentEditorForm({
               onChange={setWebSearch}
               label="Let the agent search the web"
               hint="Looks up current facts, prices, or news that aren't in the knowledge base."
+            />
+            <Toggle
+              checked={sendDtmfEnabled}
+              onChange={setSendDtmf}
+              label="Let the agent press phone keys (DTMF)"
+              hint="Useful on outbound calls that may reach a business's automated phone menu before a person - the agent can press digits to navigate it."
             />
             <Field label="Transfer to a human - number to dial (blank = disabled)">
               <input
