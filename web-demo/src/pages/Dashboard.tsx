@@ -20,6 +20,7 @@ import {
   fetchFeedbackSummary,
   fetchIntelligence,
   fetchIntegrations,
+  fetchNotifications,
   fetchLaunchReadiness,
   fetchPeriodComparison,
   fetchUsageTrends,
@@ -29,7 +30,7 @@ import {
 } from '../lib/api'
 import { apiProfilePreferences, apiUpdateProfilePreferences, useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
-import type { ActiveCallInfo, Analytics, Appointment, BillingSummary, CallRecord, Contact, DashboardPeriodComparison, DashboardSummary, FeedbackSummary, Integration, LaunchReadiness, UsageTrends } from '../lib/types'
+import type { ActiveCallInfo, Analytics, AppNotification, Appointment, BillingSummary, CallRecord, Contact, DashboardPeriodComparison, DashboardSummary, FeedbackSummary, Integration, LaunchReadiness, UsageTrends } from '../lib/types'
 
 const AGENT_STATE_STYLES: Record<string, string> = {
   listening: 'bg-cyan/20 text-cyan border-cyan/30',
@@ -87,7 +88,6 @@ export function Dashboard() {
   const [intel, setIntel] = useState<IntelligenceSummary | null>(null)
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
   const [recentCalls, setRecentCalls] = useState<CallRecord[]>([])
-  const [allCalls, setAllCalls] = useState<CallRecord[]>([])
   const [rangeDays, setRangeDays] = useState(14)
   const [recentCallsCollapsed, setRecentCallsCollapsed] = useState(true)
   const [checklistDismissed, setChecklistDismissed] = useState<boolean | null>(null)
@@ -97,6 +97,11 @@ export function Dashboard() {
   const [comparison, setComparison] = useState<DashboardPeriodComparison | null>(null)
   const [billing, setBilling] = useState<BillingSummary | null>(null)
   const [integrations, setIntegrations] = useState<Integration[]>([])
+  // Same derived feed the header's notification bell reads (GET
+  // /notifications) - this panel used to compute its own failed-call/
+  // integration-error/low-credit/feedback counts client-side, which could
+  // show a different total than the bell on the same screen. One source now.
+  const [attentionItems, setAttentionItems] = useState<AppNotification[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [hiddenCards, setHiddenCards] = useState<Set<string>>(new Set())
@@ -114,11 +119,12 @@ export function Dashboard() {
     fetchDashboardSummary().then(setSummary).catch(() => setSummary(null))
     fetchAnalytics().then(setAnalytics).catch(() => setAnalytics(null))
     fetchIntelligence(30).then(setIntel).catch(() => setIntel(null))
-    fetchCalls().then((calls) => { setAllCalls(calls); setRecentCalls(calls.slice(0, 5)) }).catch(() => { setAllCalls([]); setRecentCalls([]) })
+    fetchCalls().then((calls) => setRecentCalls(calls.slice(0, 5))).catch(() => setRecentCalls([]))
     fetchLaunchReadiness().then(setReadiness).catch(() => setReadiness(null))
     fetchFeedbackSummary().then(setFeedback).catch(() => setFeedback(null))
     fetchBilling().then(setBilling).catch(() => setBilling(null))
     fetchIntegrations().then(setIntegrations).catch(() => setIntegrations([]))
+    fetchNotifications().then(setAttentionItems).catch(() => setAttentionItems([]))
     fetchContacts().then(setContacts).catch(() => setContacts([]))
     fetchAppointments().then(setAppointments).catch(() => setAppointments([]))
     apiProfilePreferences()
@@ -156,17 +162,18 @@ export function Dashboard() {
   const showingLive = activeCalls.length > 0
   const callsCollapsed = !showingLive && recentCallsCollapsed
   const isVisible = (key: string) => !hiddenCards.has(key)
-  const failedCalls = allCalls.filter((call) => call.callStatus === 'failed')
-  const integrationErrors = integrations.filter((integration) => Boolean(integration.lastError))
   const connectedIntegrations = integrations.filter((integration) => integration.status === 'connected')
-  const lowCredits = billing ? billing.creditsRemaining <= Math.max(20, billing.creditsTotal * 0.15) : false
+  // billing.creditsRemaining is still used directly below (the credits pill
+  // in the header, etc.) - only the "is this low enough to flag" judgment
+  // moves server-side, to the same threshold /notifications applies.
+  const lowCredits = attentionItems.some((item) => item.id.startsWith('credits:'))
   const followUps = contacts
     .filter((contact) => ['new', 'qualified'].includes(contact.status.toLowerCase()))
     .sort((a, b) => String(b.lastCalledAt || b.createdAt).localeCompare(String(a.lastCalledAt || a.createdAt)))
     .slice(0, 5)
   const upcomingAppointments = appointments
     .filter((appointment) => appointment.status === 'confirmed' && appointment.date >= new Date().toISOString().slice(0, 10))
-  const attentionCount = failedCalls.length + integrationErrors.length + (lowCredits ? 1 : 0) + (feedback?.notHelpful ?? 0)
+  const attentionCount = attentionItems.length
 
   const toggleCard = async (key: string) => {
     const next = new Set(hiddenCards)
@@ -284,10 +291,16 @@ export function Dashboard() {
                   <div className="flex items-center gap-3 p-4 text-sm text-text-muted"><Icon name="verified" className="text-success" /> No failed calls, integration errors, low-credit warnings, or negative feedback.</div>
                 ) : (
                   <div className="grid gap-2 p-4 md:grid-cols-2 xl:grid-cols-4">
-                    {failedCalls.length > 0 && <AttentionLink to="/dashboard/calls?status=failed" icon="call_missed" label={`${failedCalls.length} failed call${failedCalls.length === 1 ? '' : 's'}`} detail="Review failure reasons" tone="destructive" />}
-                    {integrationErrors.length > 0 && <AttentionLink to="/dashboard/integrations" icon="sync_problem" label={`${integrationErrors.length} integration error${integrationErrors.length === 1 ? '' : 's'}`} detail="Reconnect or retry delivery" tone="amber" />}
-                    {lowCredits && <AttentionLink to="/dashboard/billing" icon="account_balance_wallet" label={`${billing?.creditsRemaining ?? 0} credits left`} detail="Top up before calls are affected" tone="amber" />}
-                    {(feedback?.notHelpful ?? 0) > 0 && <AttentionLink to="/dashboard/calls?feedback=not_helpful" icon="thumb_down" label={`${feedback?.notHelpful} conversation${feedback?.notHelpful === 1 ? '' : 's'} ${feedback?.notHelpful === 1 ? 'needs' : 'need'} review`} detail="Inspect customer feedback" tone="destructive" />}
+                    {attentionItems.map((item) => (
+                      <AttentionLink
+                        key={item.id}
+                        to={item.to}
+                        icon={ATTENTION_ICON[item.id.split(':')[0]] ?? 'info'}
+                        label={item.title}
+                        detail={item.body}
+                        tone={item.severity === 'critical' ? 'destructive' : 'amber'}
+                      />
+                    ))}
                   </div>
                 )}
               </SectionCard>
@@ -825,6 +838,18 @@ function IntelStat({ label, value, tone = 'text-text' }: { label: string; value:
 
 function QuickAction({ to, icon, label }: { to: string; icon: string; label: string }) {
   return <Link to={to} className="group flex min-h-24 flex-col justify-between rounded-xl border border-border bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-primary"><Icon name={icon} className="text-[22px] text-primary" /><span className="mt-4 text-sm font-semibold group-hover:text-primary">{label} →</span></Link>
+}
+
+// Keyed by the id prefix each /notifications item is generated with (see
+// calls_db.notifications) - kept here rather than sent from the server
+// because it's presentation, not data.
+const ATTENTION_ICON: Record<string, string> = {
+  credits: 'account_balance_wallet',
+  integration: 'sync_problem',
+  'failed-calls': 'error',
+  'dropped-calls': 'call_missed',
+  'negative-feedback': 'thumb_down',
+  'campaign-complete': 'campaign',
 }
 
 function AttentionLink({ to, icon, label, detail, tone }: { to: string; icon: string; label: string; detail: string; tone: 'destructive' | 'amber' }) {

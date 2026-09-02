@@ -6079,11 +6079,38 @@ def notifications(account_id: int) -> list[dict]:
         except psycopg.Error:
             logger.warning("notifications: failed-calls section failed", exc_info=True)
 
-        # --- negative feedback in the last 24h --------------------------
+        # --- calls that dropped without a real conversation -------------
+        # Mirrors _status()'s "failed" heuristic (under 10s, no lead
+        # captured, fewer than two transcript turns) so this feed is a
+        # superset of what the dashboard's own attention panel used to
+        # compute client-side - that panel now renders from here, and
+        # dropping this category would have silently lost a signal.
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) c FROM calls WHERE account_id = ? "
+                "AND COALESCE(duration_seconds, 0) < 10 AND lead_name IS NULL "
+                "AND COALESCE(json_array_length(NULLIF(transcript_json, '')::json), 0) < 2 "
+                "AND started_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '7 days'",
+                (account_id,),
+            ).fetchone()
+            if row and row["c"]:
+                week = conn.execute("SELECT (now() AT TIME ZONE 'UTC')::date::text d").fetchone()["d"]
+                items.append({
+                    "id": f"dropped-calls:{week}",
+                    "severity": "warning",
+                    "title": f"{row['c']} call{'s' if row['c'] != 1 else ''} ended without a conversation",
+                    "body": "Under 10 seconds with nothing captured - usually a hang-up on pickup or a connection problem.",
+                    "to": "/dashboard/calls?status=failed",
+                    "at": None,
+                })
+        except psycopg.Error:
+            logger.warning("notifications: dropped-calls section failed", exc_info=True)
+
+        # --- negative feedback in the last 7 days -----------------------
         try:
             row = conn.execute(
                 "SELECT COUNT(*) c FROM calls WHERE account_id = ? AND feedback = 'not_helpful' "
-                "AND started_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '24 hours'",
+                "AND started_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '7 days'",
                 (account_id,),
             ).fetchone()
             if row and row["c"]:
