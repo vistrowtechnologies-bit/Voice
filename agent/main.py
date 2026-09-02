@@ -3007,12 +3007,53 @@ async def entrypoint(ctx: JobContext) -> None:
 
         silence_task["handle"] = asyncio.create_task(_watch())
 
+    # Separate from the watchdog above: livekit-agents' own user_away_timeout
+    # (default 15s) fires "away" exactly ONCE per silence stretch — it is an
+    # edge, not a level, and re-arms only once the caller speaks again (see
+    # AgentSession._update_user_state: "if self._user_state == state:
+    # return"). So a caller who goes quiet and never speaks again produces
+    # exactly one "away" event, ever — a second "still nothing back" branch
+    # keyed off a second "away" event is unreachable dead code (confirmed
+    # live: the call sat at "Listening…" for 2+ minutes after the one
+    # check-in with no further action). This timer is what actually detects
+    # "checked in and STILL silent": armed right after the check-in line is
+    # sent, cancelled the moment the caller speaks.
+    post_checkin_task: dict = {"handle": None}
+    _POST_CHECKIN_TIMEOUT_S = 12.0
+
+    def _cancel_post_checkin_timeout() -> None:
+        if post_checkin_task["handle"]:
+            post_checkin_task["handle"].cancel()
+            post_checkin_task["handle"] = None
+
+    def _arm_post_checkin_timeout() -> None:
+        _cancel_post_checkin_timeout()
+
+        async def _watch() -> None:
+            try:
+                await asyncio.sleep(_POST_CHECKIN_TIMEOUT_S)
+                logger.info("hanging up room %s — silent after check-in", ctx.room.name)
+                userdata["ending_call"] = True
+                session.generate_reply(
+                    instructions=(
+                        "The caller still hasn't responded after you already checked in. Say one "
+                        "short, warm line explaining you can't hear them so you'll go ahead and end "
+                        "the call here — e.g. something like \"लगता है आवाज़ नहीं आ रही, मैं कॉल यहीं "
+                        "खत्म करती हूँ\" — then stop. Do not ask another question."
+                    )
+                )
+            except asyncio.CancelledError:
+                pass
+
+        post_checkin_task["handle"] = asyncio.create_task(_watch())
+
     def _on_user_state_changed(ev) -> None:
         if ev.new_state == "speaking":
-            # Caller is talking again — reset both the reminder count and the
-            # end-of-call silence timer.
+            # Caller is talking again — reset the reminder count and both
+            # silence timers.
             userdata["silence_reminders"] = 0
             _reset_silence_hangup()
+            _cancel_post_checkin_timeout()
         elif ev.new_state == "away":
             if not userdata.get("greeting_played", False):
                 # Away fired before the opening line finished playing (slow
@@ -3047,24 +3088,11 @@ async def entrypoint(ctx: JobContext) -> None:
                         "earlier in this call."
                     )
                 )
-            else:
-                # Already checked in once (or more) and still nothing back —
-                # confirmed real gap: with end_call_on_silence_ms unset (the
-                # demo/test-call default), the call just sat at "Listening…"
-                # indefinitely once the reminder cap was hit, since nothing
-                # else was watching for continued silence. Say why the call
-                # is ending, then let _on_agent_state_changed's existing
-                # "wait for the goodbye to finish, then hang up" logic (the
-                # same path end_call uses) close it out cleanly.
-                userdata["ending_call"] = True
-                session.generate_reply(
-                    instructions=(
-                        "The caller still hasn't responded after you already checked in. Say one short, "
-                        "warm line explaining you can't hear them so you'll go ahead and end the call "
-                        "here — e.g. something like \"लगता है आवाज़ नहीं आ रही, मैं कॉल यहीं खत्म करती हूँ\" "
-                        "— then stop. Do not ask another question."
-                    )
-                )
+                # If the caller is still silent _POST_CHECKIN_TIMEOUT_S after
+                # this check-in finishes, hang up with a spoken reason —
+                # see _arm_post_checkin_timeout for why a second "away"
+                # event can't be relied on to catch this instead.
+                _arm_post_checkin_timeout()
 
     def _on_agent_state_changed(ev) -> None:
         # Read by _on_user_state_changed's "away" branch above, so the
