@@ -4,6 +4,7 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
+import { StatTile } from '../components/ui/StatTile'
 import {
   LANGUAGE_NAMES,
   analyzeCall,
@@ -301,6 +302,34 @@ export function LeadDetail() {
           </Card>
         </section>
       ) : (
+      <>
+      {/* At-a-glance strip - the outcome/duration/credits/sentiment an
+          operator scans for first, pulled out of the long Call details list
+          below rather than duplicated there. */}
+      <section className="grid grid-cols-2 gap-3 px-4 pt-4 sm:grid-cols-4 sm:px-6">
+        <StatTile
+          label="Call outcome"
+          value={call.callStatus === 'failed' ? 'Failed' : 'Completed'}
+          icon={call.callStatus === 'failed' ? 'error' : 'check_circle'}
+          tone={call.callStatus === 'failed' ? 'destructive' : 'success'}
+          compact
+        />
+        <StatTile label="Duration" value={formatDuration(call.durationSeconds)} icon="schedule" tone="cyan" compact />
+        <StatTile
+          label="Credits used"
+          value={call.creditsUsed != null ? String(call.creditsUsed) : '—'}
+          icon="toll"
+          tone="primary"
+          compact
+        />
+        <StatTile
+          label="Sentiment"
+          value={call.sentiment.charAt(0).toUpperCase() + call.sentiment.slice(1)}
+          icon="mood"
+          tone={call.sentiment === 'negative' ? 'destructive' : call.sentiment === 'positive' ? 'success' : 'muted'}
+          compact
+        />
+      </section>
       <section className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:grid-cols-3">
         <Card className="flex flex-col gap-3 lg:col-span-2">
           <div className="flex items-center justify-between">
@@ -486,14 +515,13 @@ export function LeadDetail() {
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Call details</h2>
             <dl className="flex flex-col gap-2 text-sm">
+              {/* Outcome, sentiment and duration are the stat tiles above the
+                  transcript now - kept out of this list rather than repeated. */}
               <Row label="Lead stage" value={call.status} />
-              <Row label="Call outcome" value={call.callStatus} />
-              <Row label="Sentiment" value={call.sentiment} />
               <Row label="Channel" value={call.channel} />
               {call.website && <Row label="Website" value={call.website} />}
               {call.pagePath && <Row label="Page" value={call.pagePath} raw />}
               <Row label="Agent" value={call.agent} />
-              <Row label="Duration" value={formatDuration(call.durationSeconds)} />
               {call.feedback && (
                 <Row label="Visitor feedback" value={call.feedback === 'helpful' ? '👍 Helpful' : '👎 Not helpful'} />
               )}
@@ -582,6 +610,7 @@ export function LeadDetail() {
           </Card>
         </div>
       </section>
+      </>
       )}
     </DashboardLayout>
   )
