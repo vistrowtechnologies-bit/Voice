@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { NAV_GROUPS } from './navGroups'
+import { CommandPalette } from './CommandPalette'
 import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { fetchBilling } from '../lib/api'
@@ -33,43 +35,6 @@ export function ThemeSwitcher() {
   )
 }
 
-const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: string; tour?: string }[] }[] = [
-  {
-    title: 'Platform',
-    items: [
-      { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', tour: 'nav-dashboard' },
-      { to: '/dashboard/agents', label: 'Agents', icon: 'smart_toy', tour: 'nav-agents' },
-      { to: '/dashboard/voices', label: 'Voices', icon: 'graphic_eq', tour: 'nav-voices' },
-      { to: '/dashboard/knowledge', label: 'Knowledge Base', icon: 'menu_book', tour: 'nav-knowledge' },
-    ],
-  },
-  {
-    title: 'Campaigns',
-    items: [
-      { to: '/dashboard/inbound', label: 'Inbound', icon: 'phone_callback' },
-      { to: '/dashboard/outbound', label: 'Outbound', icon: 'campaign' },
-    ],
-  },
-  {
-    title: 'Management',
-    items: [
-      { to: '/dashboard/calls', label: 'All Calls History', icon: 'history' },
-      { to: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
-      { to: '/dashboard/appointments', label: 'Appointments', icon: 'event' },
-      { to: '/dashboard/integrations', label: 'Integrations', icon: 'extension', tour: 'nav-integrations' },
-      { to: '/dashboard/website-widget', label: 'Website Widget', icon: 'widgets' },
-    ],
-  },
-  {
-    title: 'Operations',
-    items: [
-      { to: '/dashboard/numbers', label: 'Phone Numbers', icon: 'dialpad' },
-      { to: '/dashboard/compliance', label: 'Compliance', icon: 'verified_user' },
-      { to: '/dashboard/billing', label: 'Billing', icon: 'credit_card' },
-      { to: '/dashboard/settings', label: 'Settings', icon: 'settings', tour: 'nav-settings' },
-    ],
-  },
-]
 
 function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
   const { user, logout } = useAuth()
@@ -391,6 +356,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-bg text-text">
+      {/* Mounted once for the whole dashboard - it is keyboard-summoned, so
+          it has no trigger in the layout and renders nothing until opened. */}
+      <CommandPalette />
       {user?.impersonating && <ImpersonationBanner accountName={user.accountName} />}
       <aside
         data-dashboard-sidebar
