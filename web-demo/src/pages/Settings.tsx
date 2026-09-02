@@ -643,7 +643,7 @@ function DataPrivacyTab() {
           <button onClick={() => { setMessage(null); setDeleteOpen(true) }} className="shrink-0 rounded-lg border border-destructive/60 px-4 py-2 text-sm font-bold text-destructive hover:bg-destructive/10">Request deletion</button>
         </div>
       )}
-      <p className="text-[11px] text-text-muted">You can cancel a pending request here. Once processing begins, contact support@vistroevoice.com and reference the receipt sent to your email.</p>
+      <p className="text-[11px] text-text-muted">You can cancel a pending request here. Once processing begins, contact support@vistrowvoice.com and reference the receipt sent to your email.</p>
     </SettingsCard>
 
     {message && <p role="status" className={`rounded-lg border border-border bg-surface px-3 py-2 text-xs ${message.type === 'ok' ? 'text-success' : 'text-destructive'}`}>{message.text}</p>}

@@ -427,7 +427,7 @@ function ReasonModal({
       <AdminCard className="w-full max-w-md p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold">{title}</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text">
+          <button onClick={onClose} aria-label="Close" className="text-text-muted hover:text-text">
             <Icon name="close" className="text-[20px]" />
           </button>
         </div>
@@ -514,7 +514,7 @@ function ResetModal({ accountId, ownerEmail, onClose, onDone }: { accountId: num
       <AdminCard className="w-full max-w-md p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold">Reset owner password</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text">
+          <button onClick={onClose} aria-label="Close" className="text-text-muted hover:text-text">
             <Icon name="close" className="text-[20px]" />
           </button>
         </div>

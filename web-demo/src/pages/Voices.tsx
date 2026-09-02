@@ -61,6 +61,38 @@ function avatarGradient(value: string, name: string): string {
   )
 }
 
+// Mirrors the loaded layout (summary card, search field, then two tier grids
+// on the same responsive column counts) so the catalogue does not paint as an
+// empty page during the fetch, which was long enough to read as "no voices".
+function VoicesSkeleton() {
+  const cards = Array.from({ length: 6 }, (_, i) => i)
+  return (
+    <div className="flex flex-col gap-6 animate-pulse" aria-hidden="true">
+      <Card padding="sm" className="flex items-center gap-3">
+        <div className="h-10 w-10 shrink-0 rounded-lg bg-surface-high" />
+        <div className="flex flex-1 flex-col gap-2">
+          <span className="block h-3 w-32 rounded bg-surface-high" />
+          <span className="block h-3 w-56 max-w-full rounded bg-surface-high" />
+        </div>
+      </Card>
+      <div className="h-9 rounded-lg border border-border bg-surface" />
+      {[0, 1].map((group) => (
+        <section key={group} className="flex flex-col gap-3">
+          <span className="block h-3 w-28 rounded bg-surface-high" />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            {cards.map((c) => (
+              <div key={c} className="h-[104px] rounded-xl border border-border bg-surface" />
+            ))}
+          </div>
+        </section>
+      ))}
+      <span className="sr-only" aria-live="polite">
+        Loading voices
+      </span>
+    </div>
+  )
+}
+
 function TierGroup({
   entries,
   label,
@@ -299,9 +331,7 @@ export function Voices() {
 
       <div className="flex w-full flex-col gap-6 p-4 sm:p-6">
         {!data ? (
-          <div className="flex justify-center py-16">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          </div>
+          <VoicesSkeleton />
         ) : (
           <>
             <Card padding="sm" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

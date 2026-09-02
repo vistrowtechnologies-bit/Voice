@@ -292,10 +292,13 @@ export function CallsHistory() {
         </div>
 
         {loading ? (
-          <div className="flex min-h-48 items-center justify-center rounded-xl border border-border bg-surface" aria-live="polite">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            <span className="sr-only">Loading calls</span>
-          </div>
+          <DataTable
+            columns={columns}
+            rows={[]}
+            rowKey={(call) => call.id}
+            emptyMessage={emptyMessage}
+            loading
+          />
         ) : (
           <DataTable
             columns={columns}

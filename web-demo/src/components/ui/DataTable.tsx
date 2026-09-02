@@ -19,15 +19,94 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string | number
   emptyMessage: ReactNode
   footer?: ReactNode
+  /** Render placeholder rows instead of `rows`/`emptyMessage` while the first
+   * fetch is in flight. Reuses the real column definitions, so the header and
+   * column widths are identical to the loaded table and nothing shifts when
+   * the data lands - a centered spinner in a fixed-height box could not do
+   * that. Defaults to false, so existing call sites are unaffected. */
+  loading?: boolean
+  skeletonRows?: number
+}
+
+/** One shimmering placeholder bar. Widths vary per column so a loading table
+ * reads as text of differing lengths rather than a uniform grid. */
+function SkeletonBar({ index }: { index: number }) {
+  const widths = ['w-3/4', 'w-1/2', 'w-2/3', 'w-5/6', 'w-1/3']
+  return <span className={`block h-3 rounded bg-surface-high ${widths[index % widths.length]}`} />
 }
 
 // Responsive table: a real <table> at md: and above, the same rows as
 // stacked info-cards below md: - replaces the raw <table> + overflow-x-auto
 // pattern (CallsHistory.tsx, Contacts.tsx), which just scrolled sideways on
 // narrow screens instead of actually adapting.
-export function DataTable<T>({ columns, rows, rowKey, emptyMessage, footer }: DataTableProps<T>) {
+export function DataTable<T>({
+  columns,
+  rows,
+  rowKey,
+  emptyMessage,
+  footer,
+  loading = false,
+  skeletonRows = 6,
+}: DataTableProps<T>) {
   const primaryCol = columns.find((c) => c.primary) ?? columns[0]
   const cardCols = columns.filter((c) => c !== primaryCol && !c.hideOnCard)
+
+  if (loading) {
+    const placeholders = Array.from({ length: skeletonRows }, (_, i) => i)
+    return (
+      <Card variant="default" padding="none">
+        <div className="animate-pulse" aria-hidden="true">
+          {/* Desktop/tablet: same table, same columns, placeholder cells */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-surface-high/30 text-[11px] font-bold uppercase tracking-widest text-text-muted">
+                  {columns.map((col) => (
+                    <th key={col.key} className={`py-3 px-3 first:pl-5 ${col.className ?? ''}`}>
+                      {col.header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {placeholders.map((r) => (
+                  <tr key={r}>
+                    {columns.map((col, c) => (
+                      <td key={col.key} className={`py-3 px-3 first:pl-5 ${col.className ?? ''}`}>
+                        <SkeletonBar index={r + c} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile: same stacked-card shape */}
+          <div className="flex flex-col divide-y divide-border md:hidden">
+            {placeholders.map((r) => (
+              <div key={r} className="flex flex-col gap-2 px-4 py-3">
+                <SkeletonBar index={r} />
+                {cardCols.map((col, c) => (
+                  <div key={col.key} className="flex items-center justify-between gap-3">
+                    <span className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-text-muted">
+                      {col.header}
+                    </span>
+                    <span className="min-w-0 flex-1 pl-6">
+                      <SkeletonBar index={r + c + 1} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+        <span className="sr-only" aria-live="polite">
+          Loading
+        </span>
+      </Card>
+    )
+  }
 
   return (
     <Card variant="default" padding="none">

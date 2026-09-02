@@ -18,11 +18,39 @@ import {
 import { isE164 } from '../lib/phone'
 import type { AgentConfig, PhoneNumber, TelephonyStatus } from '../lib/types'
 
-const PROVIDERS = [
-  { key: 'enablex', name: 'EnableX', icon: 'bolt', note: 'Indian & global voice - our telephony provider', live: true },
-  { key: 'twilio', name: 'Twilio', icon: 'public', note: 'Global coverage', live: false },
-  { key: 'exotel', name: 'Exotel', icon: 'call', note: 'Indian telephony', live: false },
-  { key: 'plivo', name: 'Plivo', icon: 'sip', note: 'Competitive rates', live: false },
+// Every provider carries an explicit, truthful status rather than a boolean
+// "live" flag - a card with no badge at all read as available-by-default next
+// to the one badged provider. Only 'available' actually accepts numbers and
+// routes calls today; anything else must not imply it can be switched on.
+// 'beta' and 'awaiting_access' exist so a provider can move partway without a
+// code change to the badge logic.
+type ProviderStatus = 'available' | 'beta' | 'awaiting_access' | 'coming_soon'
+
+const PROVIDER_STATUS_LABEL: Record<ProviderStatus, string> = {
+  available: 'Available',
+  beta: 'Beta',
+  awaiting_access: 'Awaiting access',
+  coming_soon: 'Coming soon',
+}
+
+const PROVIDER_STATUS_CLASS: Record<ProviderStatus, string> = {
+  available: 'bg-cyan/15 text-cyan',
+  beta: 'bg-amber-400/15 text-amber-400',
+  awaiting_access: 'bg-amber-400/15 text-amber-400',
+  coming_soon: 'bg-surface-high text-text-muted',
+}
+
+const PROVIDERS: {
+  key: string
+  name: string
+  icon: string
+  note: string
+  status: ProviderStatus
+}[] = [
+  { key: 'enablex', name: 'EnableX', icon: 'bolt', note: 'Indian & global voice - our telephony provider', status: 'available' },
+  { key: 'twilio', name: 'Twilio', icon: 'public', note: 'Global coverage', status: 'coming_soon' },
+  { key: 'exotel', name: 'Exotel', icon: 'call', note: 'Indian telephony', status: 'coming_soon' },
+  { key: 'plivo', name: 'Plivo', icon: 'sip', note: 'Competitive rates', status: 'coming_soon' },
 ]
 
 export function PhoneNumbers() {
@@ -48,15 +76,23 @@ export function PhoneNumbers() {
             >
               <Icon name={p.icon} className="text-[18px]" />
               {p.name}
-              {p.live && <span className="rounded bg-cyan/15 px-1.5 py-0.5 text-[9px] font-bold text-cyan">AVAILABLE</span>}
+              <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${PROVIDER_STATUS_CLASS[p.status]}`}>
+                {PROVIDER_STATUS_LABEL[p.status]}
+              </span>
               {provider === p.key && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-cyan" />}
             </button>
           ))}
-          <p className="hidden px-2 pt-2 text-[11px] text-text-muted lg:block">More providers coming soon</p>
+          <p className="hidden px-2 pt-2 text-[11px] text-text-muted lg:block">
+            Only providers marked Available can take calls today.
+          </p>
         </aside>
 
         <div className="min-w-0 flex-1">
-          {provider === 'enablex' ? <EnableXPanel /> : <ComingSoonPanel name={active.name} note={active.note} icon={active.icon} />}
+          {provider === 'enablex' ? (
+            <EnableXPanel />
+          ) : (
+            <ComingSoonPanel name={active.name} note={active.note} icon={active.icon} status={active.status} />
+          )}
         </div>
       </section>
     </DashboardLayout>
@@ -343,13 +379,25 @@ function NumberRow({
   )
 }
 
-function ComingSoonPanel({ name, note, icon }: { name: string; note: string; icon: string }) {
+function ComingSoonPanel({
+  name,
+  note,
+  icon,
+  status,
+}: {
+  name: string
+  note: string
+  icon: string
+  status: ProviderStatus
+}) {
   return (
     <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border p-6 text-center text-text-muted">
       <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border">
         <Icon name={icon} className="text-[24px]" />
       </div>
-      <p className="text-sm font-bold">{name} - coming soon</p>
+      <p className="text-sm font-bold">
+        {name} - {PROVIDER_STATUS_LABEL[status].toLowerCase()}
+      </p>
       <p className="max-w-sm text-xs">
         {note}. We're standardising on EnableX first; ask us to prioritise {name} if you need it.
       </p>
