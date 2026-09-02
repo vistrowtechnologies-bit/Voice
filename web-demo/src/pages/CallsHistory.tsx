@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { DataTable } from '../components/ui/DataTable'
@@ -67,6 +67,9 @@ function groupByCaller(rows: CallRecord[]): GroupedCall[] {
 }
 
 export function CallsHistory() {
+  // Stashed into each row link's state so opening a call overlays it on
+  // this list instead of navigating away from it (see App.tsx).
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [calls, setCalls] = useState<CallRecord[]>([])
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
@@ -111,8 +114,15 @@ export function CallsHistory() {
       key: 'caller',
       header: 'Caller',
       primary: true,
+      // state.backgroundLocation makes App.tsx keep THIS list rendered and
+      // overlay the call as a modal (see App.tsx). Still a real <Link>, so
+      // middle-click / open-in-new-tab still gets the standalone full page.
       render: (call) => (
-        <Link to={`/dashboard/calls/${call.id}`} className="group flex items-center gap-2">
+        <Link
+          to={`/dashboard/calls/${call.id}`}
+          state={{ backgroundLocation: location }}
+          className="group flex items-center gap-2"
+        >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
             {call.initials}
           </div>

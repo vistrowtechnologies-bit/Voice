@@ -61,7 +61,7 @@ import { LeadDetail } from './pages/LeadDetail'
 import { WebsiteWidget } from './pages/WebsiteWidget'
 import { Settings } from './pages/Settings'
 import { useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { trackPageView } from './lib/analytics'
 
 // Wrap every dashboard route in the auth gate - one helper keeps App.tsx
@@ -108,10 +108,23 @@ function AnalyticsListener() {
 }
 
 function App() {
+  const location = useLocation()
+  // Set by the calls list when it opens a call (see CallsHistory): the list's
+  // own location is stashed so <Routes> keeps rendering the LIST while the
+  // URL points at the call. That gives the overlay flow a real, linkable URL
+  // and makes Back close it - opening a call from the list must not lose your
+  // place in the list, but a bookmarked/refreshed call URL still has to work.
+  // With no backgroundLocation (direct hit, refresh, shared link) the normal
+  // route renders the full page instead.
+  // ReturnType<typeof useLocation>, not the DOM's global Location - they are
+  // structurally similar enough that TS accepts the wrong one silently.
+  const state = location.state as { backgroundLocation?: ReturnType<typeof useLocation> } | null
+  const backgroundLocation = state?.backgroundLocation
+
   return (
     <AuthProvider>
       <AnalyticsListener />
-      <Routes>
+      <Routes location={backgroundLocation ?? location}>
         {/* Public - marketing site */}
         <Route path="/" element={<Home />} />
         <Route path="/product" element={<ProductOverview />} />
@@ -179,8 +192,25 @@ function App() {
         <Route path="/admin/settings" element={<RequireOwner><AdminSettings /></RequireOwner>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+
+      {/* Rendered ON TOP of the routes above, only when a call was opened
+          from a list that stashed its own location. Same component as the
+          full page, in modal mode. */}
+      {backgroundLocation && (
+        <Routes>
+          <Route path="/dashboard/calls/:id" element={guard(<CallDetailModalRoute />)} />
+          <Route path="/dashboard/leads/:id" element={guard(<CallDetailModalRoute />)} />
+        </Routes>
+      )}
     </AuthProvider>
   )
+}
+
+/** Bridges the route to LeadDetail's modal mode: closing goes Back, which
+ * pops the call URL off history and returns to the list underneath. */
+function CallDetailModalRoute() {
+  const navigate = useNavigate()
+  return <LeadDetail onClose={() => navigate(-1)} />
 }
 
 export default App

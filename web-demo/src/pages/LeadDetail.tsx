@@ -78,8 +78,20 @@ function downloadTranscript(call: CallRecord): void {
   URL.revokeObjectURL(url)
 }
 
-export function LeadDetail() {
-  const { id } = useParams<{ id: string }>()
+/** Renders in two modes from ONE implementation, rather than a page and a
+ * near-duplicate modal that drift apart:
+ *  - page  (default): full route at /dashboard/calls/:id. What a deep link,
+ *    a bookmark, or a hard refresh lands on.
+ *  - modal (onClose passed): overlaid on the calls list, which stays mounted
+ *    behind it. This is the flow being matched from Agni - open a call in
+ *    context, close, keep your place in the list.
+ * The URL changes in BOTH modes (see App.tsx's backgroundLocation routing),
+ * so the modal is still linkable and Back still closes it - a plain overlay
+ * would have thrown that away. */
+export function LeadDetail({ callId, onClose }: { callId?: string; onClose?: () => void } = {}) {
+  const params = useParams<{ id: string }>()
+  const id = callId ?? params.id
+  const isModal = Boolean(onClose)
   const navigate = useNavigate()
   const [call, setCall] = useState<CallRecord | null | undefined>(undefined)
   const [notes, setNotes] = useState('')
@@ -173,50 +185,99 @@ export function LeadDetail() {
     }
   }
 
+  // One wrapper for both modes so every early return below (loading, not
+  // found, loaded) renders correctly in a modal as well as a page.
+  const Shell = ({ children }: { children: React.ReactNode }) =>
+    isModal ? <ModalShell onClose={onClose!}>{children}</ModalShell> : <DashboardLayout>{children}</DashboardLayout>
+
   if (call === undefined) {
     return (
-      <DashboardLayout>
+      <Shell>
         <div className="p-6 text-sm text-text-muted">Loading call…</div>
-      </DashboardLayout>
+      </Shell>
     )
   }
 
   if (call === null) {
     return (
-      <DashboardLayout>
+      <Shell>
         <div className="p-6">
-          <button
-            onClick={() => navigate('/dashboard/calls')}
-            className="mb-2 flex items-center gap-1 text-xs text-text-muted hover:text-text"
-          >
-            <Icon name="chevron_left" className="text-[16px]" /> Back
-          </button>
+          {!isModal && (
+            <button
+              onClick={() => navigate('/dashboard/calls')}
+              className="mb-2 flex items-center gap-1 text-xs text-text-muted hover:text-text"
+            >
+              <Icon name="chevron_left" className="text-[16px]" /> Back
+            </button>
+          )}
           <p className="text-sm text-text-muted">Call not found.</p>
         </div>
-      </DashboardLayout>
+      </Shell>
     )
   }
 
   return (
-    <DashboardLayout>
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 pt-4 sm:px-6">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1 text-xs text-text-muted hover:text-text"
-        >
-          <Icon name="chevron_left" className="text-[16px]" /> Back
-        </button>
-        <button
-          type="button"
-          onClick={() => navigator.clipboard?.writeText(call.id)}
-          title="Copy call ID"
-          className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 font-mono text-[11px] text-text-muted hover:border-primary hover:text-primary"
-        >
-          Call #{call.id}
-          <Icon name="content_copy" className="text-[13px]" />
-        </button>
-      </div>
-      <PageHeader title={call.name} subtitle={call.phone || 'no phone captured'} />
+    <Shell>
+      {isModal ? (
+        // Identity block: who the call was with, its id, and how it ended -
+        // the three things you check before reading a transcript.
+        <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3 sm:px-5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Icon name="call" className="text-[20px]" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold">{call.name}</p>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard?.writeText(call.id)}
+              title="Copy call ID"
+              className="flex items-center gap-1.5 font-mono text-[11px] text-text-muted hover:text-primary"
+            >
+              #{call.id} · {call.phone || 'no phone'}
+              <Icon name="content_copy" className="text-[12px]" />
+            </button>
+          </div>
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+              call.callStatus === 'failed'
+                ? 'bg-destructive/10 text-destructive'
+                : 'bg-success/10 text-success'
+            }`}
+          >
+            {call.callStatus === 'failed' ? 'Failed' : 'Completed'}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 rounded-lg border border-border p-1.5 text-text-muted hover:text-text"
+          >
+            <Icon name="close" className="text-[18px]" />
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-3 border-b border-border px-4 pt-4 sm:px-6">
+            <button
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-1 text-xs text-text-muted hover:text-text"
+            >
+              <Icon name="chevron_left" className="text-[16px]" /> Back
+            </button>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard?.writeText(call.id)}
+              title="Copy call ID"
+              className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 font-mono text-[11px] text-text-muted hover:border-primary hover:text-primary"
+            >
+              Call #{call.id}
+              <Icon name="content_copy" className="text-[13px]" />
+            </button>
+          </div>
+          <PageHeader title={call.name} subtitle={call.phone || 'no phone captured'} />
+        </>
+      )}
+      <div className={isModal ? 'min-h-0 flex-1 overflow-y-auto' : ''}>
 
       <div className="flex gap-1 rounded-lg border border-border p-0.5 self-start mx-4 mt-4 sm:mx-6">
         <button
@@ -632,7 +693,42 @@ export function LeadDetail() {
       </section>
       </>
       )}
-    </DashboardLayout>
+      </div>
+    </Shell>
+  )
+}
+
+/** Overlay chrome for the modal mode. Closes on Escape and on backdrop
+ * click; the calls list stays mounted underneath, which is the whole point
+ * of opening a call this way rather than navigating away from it. */
+function ModalShell({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-6"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Call details"
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-full w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-border bg-bg shadow-2xl"
+      >
+        {children}
+      </div>
+    </div>
   )
 }
 
