@@ -356,6 +356,13 @@ export function Billing() {
               // Matching the plan key is the only thing a buyer should need
               // to see "Current plan" here.
               const isCurrent = plan.key === currentPlanKey
+              // PLANS is authored low-to-high (Starter/Growth/Scale), so
+              // index doubles as tier rank - confirmed real bug: every
+              // non-current card said "Upgrade to X" even for a tier BELOW
+              // the current plan (e.g. "Upgrade to Growth" while on Scale),
+              // which is actually a downgrade.
+              const currentRank = PLANS.findIndex((p) => p.key === currentPlanKey)
+              const isDowngrade = PLANS.findIndex((p) => p.key === plan.key) < currentRank
               const displayPrice =
                 cycle === 'annual' ? `₹${(plan.priceInr * ANNUAL_MONTHS_CHARGED).toLocaleString('en-IN')}` : plan.price
               return (
@@ -414,7 +421,11 @@ export function Billing() {
                       disabled={!razorpayConfigured || !PRICING_FINALIZED || busyPlan === plan.key}
                       className="mt-auto rounded-lg bg-primary py-2 text-center text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40"
                     >
-                      {busyPlan === plan.key ? 'Opening checkout…' : !PRICING_FINALIZED ? 'Coming soon' : `Upgrade to ${plan.name}`}
+                      {busyPlan === plan.key
+                        ? 'Opening checkout…'
+                        : !PRICING_FINALIZED
+                          ? 'Coming soon'
+                          : `${isDowngrade ? 'Downgrade' : 'Upgrade'} to ${plan.name}`}
                     </button>
                   )}
                 </div>
