@@ -593,6 +593,96 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
     return url, body
 
 
+def _zoho_lead_body(lead: dict) -> dict:
+    # Mirrors server/integrations_dispatch.py's _zoho_lead_body exactly —
+    # Zoho's Leads module requires Last_Name (and Company, on most default
+    # layouts), so the caller's full name goes in Last_Name and doubles as
+    # Company when none was captured, rather than failing the whole record
+    # over a missing field. The two files can't share code (agent/ and
+    # server/ are separate deployments with separate venvs), so keep any
+    # future change to one mirrored in the other.
+    name = str(lead.get("name") or "Unknown caller").strip()
+    return {
+        "data": [
+            {
+                "Last_Name": name,
+                "Company": lead.get("company") or name,
+                "Phone": lead.get("phone", ""),
+                "Email": lead.get("email", ""),
+                "Description": lead.get("use_case") or lead.get("message") or "",
+                "Lead_Source": _CHANNEL_LABELS.get(lead.get("channel"), lead.get("channel") or "") or "Call",
+            }
+        ]
+    }
+
+
+async def _zoho_refresh_access_token(http: aiohttp.ClientSession, config: dict) -> tuple[str, dict] | None:
+    client_id = os.environ.get("ZOHO_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("ZOHO_OAUTH_CLIENT_SECRET")
+    refresh_token = config.get("refresh_token")
+    accounts_base = config.get("accounts_base") or "https://accounts.zoho.com"
+    if not client_id or not client_secret or not refresh_token:
+        return None
+    try:
+        async with http.post(
+            f"{accounts_base}/oauth/v2/token",
+            data={
+                "refresh_token": refresh_token,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "grant_type": "refresh_token",
+            },
+        ) as resp:
+            data = await resp.json()
+    except Exception:
+        logger.warning("zoho_crm: token refresh failed", exc_info=True)
+        return None
+    access_token = data.get("access_token")
+    if not access_token:
+        logger.warning("zoho_crm: token refresh returned no access_token: %s", data.get("error"))
+        return None
+    updated = {**config, "access_token": access_token, "expires_at": time.time() + float(data.get("expires_in") or 3600)}
+    return access_token, updated
+
+
+async def _deliver_zoho_crm_lead(http: aiohttp.ClientSession, account_id: int | None, config: dict, lead: dict) -> bool:
+    """Same authenticated-API shape as server/integrations_dispatch.py's
+    _deliver_zoho_crm, reimplemented here because this is a separate
+    process (agent/, not server/) with its own venv and its own DB
+    connection — the two can't share a Python module directly."""
+    access_token = config.get("access_token")
+    api_domain = (config.get("api_domain") or "https://www.zohoapis.com").rstrip("/")
+    if not access_token or not config.get("refresh_token"):
+        return False
+
+    async def _post(token: str) -> tuple[bool, int | None]:
+        try:
+            async with http.post(
+                f"{api_domain}/crm/v2/Leads",
+                json=_zoho_lead_body(lead),
+                headers={"Authorization": f"Zoho-oauthtoken {token}"},
+            ) as resp:
+                return (200 <= resp.status < 300), resp.status
+        except Exception:
+            logger.warning("zoho_crm delivery failed", exc_info=True)
+            return False, None
+
+    if time.time() >= float(config.get("expires_at") or 0) - 60:
+        refreshed = await _zoho_refresh_access_token(http, config)
+        if refreshed:
+            access_token, config = refreshed
+            db.update_integration_config(account_id, "zoho_crm", config)
+
+    ok, status = await _post(access_token)
+    if not ok and status == 401:
+        refreshed = await _zoho_refresh_access_token(http, config)
+        if refreshed:
+            access_token, config = refreshed
+            db.update_integration_config(account_id, "zoho_crm", config)
+            ok, status = await _post(access_token)
+    return ok
+
+
 async def _deliver_to_integrations(account_id: int | None, lead: dict, call_id: int | None = None) -> None:
     """Deliver an event to every connected integration for this tenant.
     Best-effort and heavily guarded — never lets a bad integration disturb the
@@ -618,6 +708,21 @@ async def _deliver_to_integrations(account_id: int | None, lead: dict, call_id: 
         timeout = aiohttp.ClientTimeout(total=5)
         async with aiohttp.ClientSession(timeout=timeout) as http:
             for integ in integrations:
+                if integ["key"] == "zoho_crm":
+                    # Authenticated API call, not a plain webhook POST — its
+                    # own path, same on/error bookkeeping as the generic one
+                    # below.
+                    try:
+                        ok = await _deliver_zoho_crm_lead(http, account_id, integ.get("config") or {}, lead)
+                    except Exception:
+                        logger.warning("zoho_crm delivery failed", exc_info=True)
+                        ok = False
+                    if ok:
+                        logger.info("delivered lead to zoho_crm integration")
+                        db.touch_integration_sync(account_id, "zoho_crm")
+                    else:
+                        db.mark_integration_error(account_id, "zoho_crm", "Delivery failed — check connection")
+                    continue
                 shaped = _integration_body(integ["key"], integ.get("config") or {}, lead)
                 if shaped is None:
                     continue

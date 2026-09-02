@@ -708,7 +708,7 @@ def get_delivery_integrations(account_id: int | None) -> list[dict]:
         rows = conn.execute(
             "SELECT key, config_json FROM integrations "
             "WHERE account_id = ? AND status = 'connected' "
-            "AND key IN ('webhook', 'slack', 'whatsapp', 'sheets', 'arthaleads')",
+            "AND key IN ('webhook', 'slack', 'whatsapp', 'sheets', 'arthaleads', 'zoho_crm')",
             (account_id,),
         ).fetchall()
         return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
@@ -742,6 +742,28 @@ def touch_integration_sync(account_id: int | None, key: str) -> None:
         # Catches Exception, not psycopg.Error: the connection pool raises
         # PoolTimeout, which is not a psycopg.Error and slipped past entirely.
         logger.exception("could not persist integration sync timestamp")
+    finally:
+        conn.close()
+
+
+def update_integration_config(account_id: int | None, key: str, config: dict) -> None:
+    """Persist a refreshed config value — currently only Zoho CRM's rotated
+    access_token/expires_at, written back mid-call after a live delivery
+    forces a token refresh — without touching status/last_sync/last_error.
+    Best-effort, same reasoning as touch_integration_sync: a failed write
+    here just means the next call pays for another refresh, never that the
+    call itself should fail."""
+    if account_id is None:
+        return
+    conn = dbconn.connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE integrations SET config_json = ? WHERE key = ? AND account_id = ?",
+                (json.dumps(config), key, account_id),
+            )
+    except Exception:
+        logger.exception("could not persist refreshed integration config")
     finally:
         conn.close()
 
