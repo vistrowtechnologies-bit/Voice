@@ -459,6 +459,7 @@ export interface Invoice {
   account_id: number
   kind: 'subscription' | 'overage' | 'topup' | 'phone_number'
   amount_inr: number
+  gst_inr: number
   status: string
   period_start: string | null
   period_end: string | null

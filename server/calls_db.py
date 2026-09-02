@@ -1029,6 +1029,11 @@ def init_tables() -> None:
             conn.execute(
                 f"ALTER TABLE phone_numbers ADD COLUMN IF NOT EXISTS monthly_fee_inr NUMERIC DEFAULT {PHONE_NUMBER_MONTHLY_FEE_INR}"
             )
+            # GST portion of amount_inr, tracked separately so an invoice can
+            # show "₹2,999 + ₹539.82 GST = ₹3,538.82" instead of one opaque
+            # total. amount_inr stays the TOTAL actually charged (unchanged
+            # meaning for every existing row/caller) - this is purely additive.
+            conn.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS gst_inr NUMERIC DEFAULT 0")
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_platform_owner INTEGER DEFAULT 0")
             # NULL until the first-run onboarding modal is dismissed. Every
             # pre-existing account (created before onboarding existed) should
@@ -5359,6 +5364,33 @@ PLAN_PRICING = {
     "growth": {"price_inr": 5999, "credits": 1000},
     "scale": {"price_inr": 12999, "credits": 2500},
 }
+# Standard India GST rate on SaaS/digital services. Added on TOP of every
+# figure above (and the overage/phone-number/top-up rates derived from
+# them) - PLAN_PRICING etc. stay tax-exclusive so the credit/overage math
+# doesn't have tax baked into it, and GST is computed once at the point a
+# real charge is created (Razorpay Plan amounts, top-up orders, addons).
+GST_RATE = 0.18
+
+
+def with_gst(base_inr: float) -> dict:
+    """base/gst/total breakdown for one real charge - gst_inr and total_inr
+    are what actually gets billed and shown; base_inr is what plan cards/
+    credit-rate math already quote."""
+    base_inr = round(base_inr, 2)
+    gst_inr = round(base_inr * GST_RATE, 2)
+    return {"base_inr": base_inr, "gst_inr": gst_inr, "total_inr": round(base_inr + gst_inr, 2)}
+
+
+def gst_from_total(total_inr: float) -> dict:
+    """Same breakdown, worked backwards from a total we already know was
+    charged (e.g. what Razorpay's subscription.charged webhook reports) —
+    the Plan itself is GST-inclusive, so this recovers the split for
+    display without re-deriving the charge."""
+    total_inr = round(total_inr, 2)
+    base_inr = round(total_inr / (1 + GST_RATE), 2)
+    return {"base_inr": base_inr, "gst_inr": round(total_inr - base_inr, 2), "total_inr": total_inr}
+
+
 # Annual billing pays 10 months' worth up front for 12 months of service —
 # matches the "-15%"-ish framing on the marketing pricing page without
 # hardcoding a percentage that drifts from the actual monthly price.
@@ -5938,17 +5970,20 @@ def record_invoice(
     period_end: str | None = None,
     credits: int | None = None,
     notes: str = "",
+    gst_inr: float = 0,
 ) -> int:
+    """amount_inr is the TOTAL actually charged (GST included, if any) —
+    gst_inr is just the tax portion within it, for display (see with_gst)."""
     conn = _connect()
     try:
         with conn:
             cur = conn.execute(
                 "INSERT INTO invoices (account_id, kind, amount_inr, status, razorpay_order_id, "
-                "razorpay_payment_id, period_start, period_end, credits, notes) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "razorpay_payment_id, period_start, period_end, credits, notes, gst_inr) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                 (
                     account_id, kind, amount_inr, status, razorpay_order_id,
-                    razorpay_payment_id, period_start, period_end, credits, notes,
+                    razorpay_payment_id, period_start, period_end, credits, notes, gst_inr,
                 ),
             )
             return cur.lastrowid

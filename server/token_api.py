@@ -3561,25 +3561,27 @@ def billing_topup(req: TopupRequest, user: dict = Depends(current_user)) -> dict
     summary = calls_db.billing_summary(user["account_id"])
     plan_pricing = calls_db.PLAN_PRICING.get(summary["plan"], calls_db.PLAN_PRICING["starter"])
     per_credit_rate = plan_pricing["price_inr"] / plan_pricing["credits"]
-    amount_inr = round(req.credits * per_credit_rate, 2)
+    pricing = calls_db.with_gst(req.credits * per_credit_rate)
 
     try:
         order = razorpay_client.create_order(
-            amount_inr, receipt=f"topup-{user['account_id']}-{int(time.time())}",
+            pricing["total_inr"], receipt=f"topup-{user['account_id']}-{int(time.time())}",
             notes={"account_id": str(user["account_id"]), "credits": str(req.credits)},
         )
     except razorpay_client.RazorpayError as e:
         raise HTTPException(502, f"Could not start top-up: {e}") from e
 
     calls_db.record_invoice(
-        user["account_id"], kind="topup", amount_inr=amount_inr, status="created",
-        razorpay_order_id=order["id"], credits=req.credits,
-        notes=f"{req.credits} credits at {per_credit_rate:.2f}/credit",
+        user["account_id"], kind="topup", amount_inr=pricing["total_inr"], status="created",
+        razorpay_order_id=order["id"], credits=req.credits, gst_inr=pricing["gst_inr"],
+        notes=f"{req.credits} credits at {per_credit_rate:.2f}/credit + GST",
     )
     return {
         "razorpayKeyId": os.environ.get("RAZORPAY_KEY_ID"),
         "orderId": order["id"],
-        "amountInr": amount_inr,
+        "amountInr": pricing["total_inr"],
+        "baseInr": pricing["base_inr"],
+        "gstInr": pricing["gst_inr"],
         "credits": req.credits,
     }
 
@@ -3656,10 +3658,15 @@ async def billing_razorpay_webhook(request: Request) -> dict:
             new_period_start = _epoch_to_iso(sub.get("current_start"))
             new_period_end = _epoch_to_iso(sub.get("current_end"))
 
-            # Record the plan charge itself.
+            # Record the plan charge itself. The amount Razorpay actually
+            # charged already includes GST (the Plan itself is GST-inclusive
+            # - see the plan-provisioning notes), so recover the split for
+            # display rather than re-deriving the charge.
+            charged_total = (payment.get("amount") or 0) / 100
+            pricing = calls_db.gst_from_total(charged_total)
             calls_db.record_invoice(
                 account_id, kind="subscription",
-                amount_inr=(payment.get("amount") or 0) / 100,
+                amount_inr=pricing["total_inr"], gst_inr=pricing["gst_inr"],
                 status="paid", razorpay_payment_id=payment.get("id"),
                 period_start=new_period_start, period_end=new_period_end,
                 notes=f"{plan} plan renewal",
@@ -3674,19 +3681,20 @@ async def billing_razorpay_webhook(request: Request) -> dict:
                     account_id, plan, existing["current_period_start"], existing["current_period_end"]
                 )
                 phone_fees = calls_db.active_phone_number_fees(account_id)
-                addon_total = overage["overageAmountInr"] + phone_fees
-                if addon_total > 0:
+                addon_pricing = calls_db.with_gst(overage["overageAmountInr"] + phone_fees)
+                if addon_pricing["total_inr"] > 0:
                     try:
                         razorpay_client.create_subscription_addon(
-                            sub["id"], addon_total,
+                            sub["id"], addon_pricing["total_inr"],
                             f"Overage ({overage['overageCredits']} credits) + phone number fees for "
-                            f"{existing['current_period_start'][:10]}–{existing['current_period_end'][:10]}",
+                            f"{existing['current_period_start'][:10]}–{existing['current_period_end'][:10]} + GST",
                         )
                         calls_db.record_invoice(
-                            account_id, kind="overage", amount_inr=addon_total, status="pending_next_cycle",
+                            account_id, kind="overage", amount_inr=addon_pricing["total_inr"],
+                            gst_inr=addon_pricing["gst_inr"], status="pending_next_cycle",
                             period_start=existing["current_period_start"], period_end=existing["current_period_end"],
                             credits=int(overage["overageCredits"]),
-                            notes=f"{overage['overageCredits']} credits over plan + {phone_fees} phone number fees",
+                            notes=f"{overage['overageCredits']} credits over plan + {phone_fees} phone number fees + GST",
                         )
                     except razorpay_client.RazorpayError:
                         logger.exception("failed to add overage addon for account %s", account_id)

@@ -31,6 +31,7 @@ interface RazorpayCheckoutOptions {
   order_id?: string
   name: string
   description: string
+  image?: string
   theme?: { color: string }
   handler: (response: { razorpay_payment_id: string; razorpay_order_id?: string; razorpay_signature?: string }) => void
   modal?: { ondismiss?: () => void }
@@ -95,6 +96,7 @@ export function Billing() {
         subscription_id: session.subscriptionId,
         name: 'Vistrow Voice',
         description: `${planName} plan · ${cycle === 'annual' ? 'annual' : 'monthly'} billing`,
+        image: 'https://app.vistrowvoice.com/apple-touch-icon.png',
         theme: { color: '#a855f7' },
         handler: () => {
           // The subscription.activated/charged webhook is what actually
@@ -123,6 +125,7 @@ export function Billing() {
         order_id: session.orderId,
         name: 'Vistrow Voice',
         description: `${session.credits} extra credits`,
+        image: 'https://app.vistrowvoice.com/apple-touch-icon.png',
         theme: { color: '#a855f7' },
         handler: async (response) => {
           if (response.razorpay_order_id && response.razorpay_signature) {
@@ -345,7 +348,14 @@ export function Billing() {
           )}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {PLANS.map((plan) => {
-              const isCurrent = plan.key === currentPlanKey && billing?.subscriptionStatus === 'active'
+              // Confirmed real bug: requiring subscriptionStatus === 'active'
+              // meant an account whose plan was set without a Razorpay
+              // subscription behind it yet (e.g. assigned by an admin - see
+              // the "No recurring subscription connected" note above) saw
+              // "Upgrade to Scale" on the Scale card while already on Scale.
+              // Matching the plan key is the only thing a buyer should need
+              // to see "Current plan" here.
+              const isCurrent = plan.key === currentPlanKey
               const displayPrice =
                 cycle === 'annual' ? `₹${(plan.priceInr * ANNUAL_MONTHS_CHARGED).toLocaleString('en-IN')}` : plan.price
               return (
@@ -426,10 +436,30 @@ export function Billing() {
                 onChange={(e) => setTopupCredits(Math.max(10, Number(e.target.value)))}
                 className="mb-4 w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm"
               />
-              <p className="mb-4 text-xs text-text-muted">
+              <p className="mb-2 text-xs text-text-muted">
                 Billed at your plan's own rate ({perCreditRate.toFixed(2)}/credit) — credits apply to this billing
                 cycle immediately once payment confirms.
               </p>
+              {(() => {
+                const base = topupCredits * perCreditRate
+                const gst = base * 0.18
+                return (
+                  <div className="mb-4 flex flex-col gap-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-xs">
+                    <div className="flex justify-between text-text-muted">
+                      <span>Subtotal</span>
+                      <span>₹{base.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-text-muted">
+                      <span>GST (18%)</span>
+                      <span>₹{gst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-border pt-1 font-bold text-text">
+                      <span>Total</span>
+                      <span>₹{(base + gst).toFixed(2)}</span>
+                    </div>
+                  </div>
+                )
+              })()}
               <div className="flex gap-2">
                 <button
                   onClick={() => setTopupOpen(false)}
@@ -461,7 +491,14 @@ export function Billing() {
                     <p className="text-xs text-text-muted">{new Date(inv.created_at).toLocaleDateString()}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    {PRICING_FINALIZED && <span className="text-text-muted">₹{inv.amount_inr}</span>}
+                    {PRICING_FINALIZED && (
+                      <span className="text-text-muted">
+                        ₹{inv.amount_inr}
+                        {inv.gst_inr > 0 && (
+                          <span className="text-[10px] text-text-muted/70"> (incl. ₹{inv.gst_inr} GST)</span>
+                        )}
+                      </span>
+                    )}
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
                         inv.status === 'paid'
