@@ -3642,7 +3642,8 @@ async def billing_razorpay_webhook(request: Request) -> dict:
     every event (see https://razorpay.com/docs/webhooks/). Configure this
     URL (…/billing/razorpay/webhook) as a webhook in the Razorpay dashboard
     for: subscription.activated, subscription.charged, subscription.cancelled,
-    payment.captured, payment.failed. Always returns 200 once the signature
+    subscription.halted, payment.captured, payment.failed. Always returns 200
+    once the signature
     checks out (even for events we don't act on) so Razorpay doesn't retry
     forever on an event we simply don't need."""
     raw_body = await request.body()
@@ -3758,6 +3759,31 @@ async def billing_razorpay_webhook(request: Request) -> dict:
             admin_db.change_plan(account_id, "starter")
         else:
             logger.warning("razorpay subscription.cancelled: no account for subscription %s", sub.get("id"))
+
+    elif event_type == "subscription.halted":
+        # A separate terminal state from subscription.cancelled - Razorpay
+        # halts a subscription after repeated failed renewal charges rather
+        # than cancelling it outright, and may never send
+        # subscription.cancelled for it. Without this, a lapsed-payment
+        # account would keep its paid-tier gates open forever, same bug as
+        # the cancelled case above just reached a different way.
+        sub = payload.get("subscription", {}).get("entity", {})
+        account_id = calls_db.find_account_id_by_razorpay_subscription(sub.get("id", ""))
+        if account_id:
+            existing = calls_db.get_subscription(account_id)
+            if existing:
+                calls_db.upsert_subscription(
+                    account_id, existing["plan"], existing["billing_cycle"],
+                    existing["razorpay_customer_id"], existing["razorpay_subscription_id"],
+                    status="halted",
+                    current_period_start=existing["current_period_start"],
+                    current_period_end=existing["current_period_end"],
+                )
+            else:
+                logger.warning("razorpay subscription.halted: account %s has no subscription row", account_id)
+            admin_db.change_plan(account_id, "starter")
+        else:
+            logger.warning("razorpay subscription.halted: no account for subscription %s", sub.get("id"))
 
     elif event_type == "payment.captured":
         # Only relevant for one-off orders (top-ups) — subscription charges
