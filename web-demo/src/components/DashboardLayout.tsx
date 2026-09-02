@@ -437,7 +437,13 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <img src={vistrowMark} alt="" className="h-7 w-7 rounded-lg" />
           <span className="font-semibold tracking-tight">{BRAND.name}</span>
         </div>
-        <main>{children}</main>
+        {/* HelpChatWidget floats fixed bottom-right on every dashboard page
+            (bottom-3/right-3, sm:bottom-6/right-6) - without reserved space
+            here, whatever a page happens to render in that corner (a
+            status badge, a stat, a form's action buttons) sits directly
+            under it. This padding is sized to clear the widget's launcher
+            button plus its own margin at both breakpoints. */}
+        <main className="pb-24 sm:pb-28">{children}</main>
       </div>
       {user && !user.onboarded && <OnboardingModal />}
       {user && user.onboarded && !user.tourCompleted && <DashboardTour />}
