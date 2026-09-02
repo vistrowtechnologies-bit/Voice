@@ -339,18 +339,11 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
         </section>
       ) : (
       <>
-      {/* At-a-glance strip - the outcome/duration/credits/sentiment an
-          operator scans for first, pulled out of the long Call details list
-          below rather than duplicated there. */}
-      <section className="grid grid-cols-2 gap-3 px-4 pt-4 sm:grid-cols-4 sm:px-6">
-        <StatTile
-          label="Call outcome"
-          value={call.callStatus === 'failed' ? 'Failed' : 'Completed'}
-          icon={call.callStatus === 'failed' ? 'error' : 'check_circle'}
-          tone={call.callStatus === 'failed' ? 'destructive' : 'success'}
-          compact
-        />
-        <StatTile label="Duration" value={formatDuration(call.durationSeconds)} icon="schedule" tone="cyan" compact />
+      {/* Call outcome is NOT a tile here: the dialog header already carries
+          the Completed/Failed pill right above this strip, and showing the
+          same verdict twice in one glance is noise. Duration moved down into
+          Call details with the other per-call facts. */}
+      <section className="grid grid-cols-2 gap-3 px-4 pt-4 sm:px-6">
         <StatTile
           label="Credits used"
           value={call.creditsUsed != null ? String(call.creditsUsed) : '—'}
@@ -557,6 +550,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
                 being matched here. Free-text facts (website, page, feedback
                 notes) don't fit a fixed-width box and stay as rows below. */}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <MiniStat icon="schedule" label="Duration" value={formatDuration(call.durationSeconds)} />
               <MiniStat icon="flag" label="Lead stage" value={call.status} />
               <MiniStat icon="call_split" label="Channel" value={call.channel} />
               <MiniStat icon="support_agent" label="Agent" value={call.agent} />
