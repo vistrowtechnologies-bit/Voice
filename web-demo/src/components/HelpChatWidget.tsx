@@ -113,7 +113,12 @@ export function HelpChatWidget() {
   }
 
   return (
-    <div className="fixed bottom-3 right-3 z-50 flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+    // z-60, above the call modal's z-50 overlay: at the same z-index the two
+    // tied and DOM order decided, so the modal (rendered after the routes in
+    // App.tsx) covered and blurred the help launcher. Help has to stay
+    // reachable from on top of a dialog - that is often exactly when someone
+    // needs it.
+    <div className="fixed bottom-3 right-3 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
       {open && (
         <div className="help-chat-panel-in flex h-[min(520px,calc(100dvh-6rem))] w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl sm:w-[380px]">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -78,20 +77,14 @@ function downloadTranscript(call: CallRecord): void {
   URL.revokeObjectURL(url)
 }
 
-/** Renders in two modes from ONE implementation, rather than a page and a
- * near-duplicate modal that drift apart:
- *  - page  (default): full route at /dashboard/calls/:id. What a deep link,
- *    a bookmark, or a hard refresh lands on.
- *  - modal (onClose passed): overlaid on the calls list, which stays mounted
- *    behind it. This is the flow being matched from Agni - open a call in
- *    context, close, keep your place in the list.
- * The URL changes in BOTH modes (see App.tsx's backgroundLocation routing),
- * so the modal is still linkable and Back still closes it - a plain overlay
- * would have thrown that away. */
-export function LeadDetail({ callId, onClose }: { callId?: string; onClose?: () => void } = {}) {
+/** A call is always shown as an overlay on the calls list - there is no
+ * separate standalone page. Both entry points (clicking a row, and opening a
+ * call URL directly) route through App.tsx to render this same modal over the
+ * list, so a shared link looks exactly like what the sender saw. The URL is
+ * real either way, so the overlay stays linkable and Back still closes it. */
+export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () => void }) {
   const params = useParams<{ id: string }>()
   const id = callId ?? params.id
-  const isModal = Boolean(onClose)
   const navigate = useNavigate()
   const location = useLocation()
   const [call, setCall] = useState<CallRecord | null | undefined>(undefined)
@@ -186,43 +179,29 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose?: () 
     }
   }
 
-  // One wrapper for both modes so every early return below (loading, not
-  // found, loaded) renders correctly in a modal as well as a page.
-  const Shell = ({ children }: { children: React.ReactNode }) =>
-    isModal ? <ModalShell onClose={onClose!}>{children}</ModalShell> : <DashboardLayout>{children}</DashboardLayout>
-
   if (call === undefined) {
     return (
-      <Shell>
+      <ModalShell onClose={onClose}>
         <div className="p-6 text-sm text-text-muted">Loading call…</div>
-      </Shell>
+      </ModalShell>
     )
   }
 
   if (call === null) {
     return (
-      <Shell>
+      <ModalShell onClose={onClose}>
         <div className="p-6">
-          {!isModal && (
-            <button
-              onClick={() => navigate('/dashboard/calls')}
-              className="mb-2 flex items-center gap-1 text-xs text-text-muted hover:text-text"
-            >
-              <Icon name="chevron_left" className="text-[16px]" /> Back
-            </button>
-          )}
           <p className="text-sm text-text-muted">Call not found.</p>
         </div>
-      </Shell>
+      </ModalShell>
     )
   }
 
   return (
-    <Shell>
-      {isModal ? (
-        // Identity block: who the call was with, its id, and how it ended -
-        // the three things you check before reading a transcript.
-        <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3 sm:px-5">
+    <ModalShell onClose={onClose}>
+      {/* Identity block: who the call was with, its id, and how it ended -
+          the three things you check before reading a transcript. */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3 sm:px-5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Icon name="call" className="text-[20px]" />
           </div>
@@ -256,29 +235,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose?: () 
             <Icon name="close" className="text-[18px]" />
           </button>
         </div>
-      ) : (
-        <>
-          <div className="flex items-center justify-between gap-3 border-b border-border px-4 pt-4 sm:px-6">
-            <button
-              onClick={() => navigate(-1)}
-              className="flex items-center gap-1 text-xs text-text-muted hover:text-text"
-            >
-              <Icon name="chevron_left" className="text-[16px]" /> Back
-            </button>
-            <button
-              type="button"
-              onClick={() => navigator.clipboard?.writeText(call.id)}
-              title="Copy call ID"
-              className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 font-mono text-[11px] text-text-muted hover:border-primary hover:text-primary"
-            >
-              Call #{call.id}
-              <Icon name="content_copy" className="text-[13px]" />
-            </button>
-          </div>
-          <PageHeader title={call.name} subtitle={call.phone || 'no phone captured'} />
-        </>
-      )}
-      <div className={isModal ? 'min-h-0 flex-1 overflow-y-auto' : ''}>
+      <div className="min-h-0 flex-1 overflow-y-auto">
 
       <div className="flex gap-1 rounded-lg border border-border p-0.5 self-start mx-4 mt-4 sm:mx-6">
         <button
@@ -348,10 +305,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose?: () 
                     // overlay. `replace` keeps the modal one level deep, so
                     // Back still means "close", not "previous sibling call".
                     onClick={() =>
-                      navigate(
-                        `/dashboard/calls/${c.id}`,
-                        isModal ? { state: location.state, replace: true } : undefined,
-                      )
+                      navigate(`/dashboard/calls/${c.id}`, { state: location.state, replace: true })
                     }
                     className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-high"
                   >
@@ -672,6 +626,12 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose?: () 
                 populated, like any other field. */}
             {(() => {
               const captured: [string, string][] = [
+                // Name and phone are the lead's actual identity - they belong
+                // in the captured-lead record itself, not only in the dialog
+                // header, since this card is what gets read as "what did we
+                // learn about this person".
+                ['Name', call.name],
+                ['Phone', call.phone],
                 ['Email', call.email],
                 ['Company', call.company],
                 ['Use case', call.useCase],
@@ -729,7 +689,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose?: () 
       </>
       )}
       </div>
-    </Shell>
+    </ModalShell>
   )
 }
 
@@ -761,7 +721,11 @@ function ModalShell({ onClose, children }: { onClose: () => void; children: Reac
         aria-modal="true"
         aria-label="Call details"
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-full w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-border bg-bg shadow-2xl"
+        // Fixed height, not max-h: with max-h the panel shrank to its content,
+        // so switching Details -> Other calls (a much shorter tab) collapsed
+        // the whole dialog and jumped it around the screen. A stable frame
+        // means only the inner region scrolls.
+        className="flex h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-border bg-bg shadow-2xl"
       >
         {children}
       </div>

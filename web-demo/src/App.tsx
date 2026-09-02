@@ -163,7 +163,11 @@ function App() {
         <Route path="/dashboard/inbound" element={guard(<Inbound />)} />
         <Route path="/dashboard/outbound" element={guard(<Outbound />)} />
         <Route path="/dashboard/calls" element={guard(<CallsHistory />)} />
-        <Route path="/dashboard/calls/:id" element={guard(<LeadDetail />)} />
+        {/* A call URL renders the LIST here; the call itself is the overlay
+            below. So a shared link, a bookmark or a refresh lands on exactly
+            what clicking from the list gives you - one presentation of a
+            call, never a separate standalone page that looks different. */}
+        <Route path="/dashboard/calls/:id" element={guard(<CallsHistory />)} />
         <Route path="/dashboard/contacts" element={guard(<Contacts />)} />
         <Route path="/dashboard/contacts/:id" element={guard(<ContactDetail />)} />
         <Route path="/dashboard/appointments" element={guard(<Appointments />)} />
@@ -173,8 +177,8 @@ function App() {
         <Route path="/dashboard/website-widget" element={guard(<WebsiteWidget />)} />
         <Route path="/dashboard/billing" element={guard(<Billing />)} />
         <Route path="/dashboard/settings" element={guard(<Settings />)} />
-        {/* Old bookmark path - same detail page as /dashboard/calls/:id */}
-        <Route path="/dashboard/leads/:id" element={guard(<LeadDetail />)} />
+        {/* Old bookmark path - same treatment as /dashboard/calls/:id */}
+        <Route path="/dashboard/leads/:id" element={guard(<CallsHistory />)} />
 
         {/* Platform-owner-only super-admin panel (RequireOwner wraps each in AdminLayout) */}
         <Route path="/admin" element={<RequireOwner><AdminDashboard /></RequireOwner>} />
@@ -193,24 +197,30 @@ function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
 
-      {/* Rendered ON TOP of the routes above, only when a call was opened
-          from a list that stashed its own location. Same component as the
-          full page, in modal mode. */}
-      {backgroundLocation && (
-        <Routes>
-          <Route path="/dashboard/calls/:id" element={guard(<CallDetailModalRoute />)} />
-          <Route path="/dashboard/leads/:id" element={guard(<CallDetailModalRoute />)} />
-        </Routes>
-      )}
+      {/* Rendered ON TOP of the routes above whenever the URL names a call -
+          whether it was opened from the list or hit directly. Unconditional
+          so both entry points look identical. */}
+      <Routes>
+        <Route
+          path="/dashboard/calls/:id"
+          element={guard(<CallDetailModalRoute cameFromList={Boolean(backgroundLocation)} />)}
+        />
+        <Route
+          path="/dashboard/leads/:id"
+          element={guard(<CallDetailModalRoute cameFromList={Boolean(backgroundLocation)} />)}
+        />
+      </Routes>
     </AuthProvider>
   )
 }
 
-/** Bridges the route to LeadDetail's modal mode: closing goes Back, which
- * pops the call URL off history and returns to the list underneath. */
-function CallDetailModalRoute() {
+/** Closing goes Back when the call was opened from the list (popping the call
+ * URL and restoring the list's scroll/filters). On a direct hit there is no
+ * in-app history to pop - Back would leave the site - so close navigates to
+ * the list instead. */
+function CallDetailModalRoute({ cameFromList }: { cameFromList: boolean }) {
   const navigate = useNavigate()
-  return <LeadDetail onClose={() => navigate(-1)} />
+  return <LeadDetail onClose={() => (cameFromList ? navigate(-1) : navigate('/dashboard/calls'))} />
 }
 
 export default App
