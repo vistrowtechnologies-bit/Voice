@@ -727,7 +727,9 @@ function ModalShell({ onClose, children }: { onClose: () => void; children: Reac
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-6"
+      // Blurred rather than merely dimmed: the list behind is dense text, and
+      // at 50% dim it still competed for attention with the transcript.
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 backdrop-blur-md sm:p-6"
       onClick={onClose}
       role="presentation"
     >
