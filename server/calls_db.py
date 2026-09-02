@@ -2242,6 +2242,12 @@ def _call_dict(
         out["creditsPerMinute"] = round(credits_per_minute, 2)
         out["voiceTier"] = tier
         out["modelTier"] = mtier
+        # The literal strings this call ran on, beside the billing tiers they
+        # map to - "premium_plus" alone doesn't tell an operator WHICH model
+        # produced a bad answer. Detail fetch only, to keep the list payload
+        # unchanged. NULL on calls that predate the columns.
+        out["voice"] = _row_get(row, "voice") or ""
+        out["model"] = _row_get(row, "model") or ""
     if include_transcript:
         out["transcript"] = [
             {

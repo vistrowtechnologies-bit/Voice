@@ -35,8 +35,8 @@ const PROVIDER_STATUS_LABEL: Record<ProviderStatus, string> = {
 
 const PROVIDER_STATUS_CLASS: Record<ProviderStatus, string> = {
   available: 'bg-cyan/15 text-cyan',
-  beta: 'bg-amber-400/15 text-amber-400',
-  awaiting_access: 'bg-amber-400/15 text-amber-400',
+  beta: 'bg-amber-500/15 text-amber-500',
+  awaiting_access: 'bg-amber-500/15 text-amber-500',
   coming_soon: 'bg-surface-high text-text-muted',
 }
 

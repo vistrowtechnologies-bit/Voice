@@ -23,6 +23,40 @@ const SENTIMENT_STYLE: Record<string, string> = {
   negative: 'text-destructive',
 }
 
+// LiveKit's CloseReason, translated into what an operator should actually
+// conclude. Wording is taken from where each reason is emitted in the SDK,
+// not guessed: USER_INITIATED comes from the agent side calling aclose()
+// (an end-call tool or a silence rule), NOT from the caller hanging up -
+// that is PARTICIPANT_DISCONNECTED.
+const DISCONNECT_REASONS: Record<string, { label: string; help: string; bad?: boolean }> = {
+  participant_disconnected: {
+    label: 'Caller hung up',
+    help: 'The caller ended the call or closed the tab. Normal ending.',
+  },
+  user_initiated: {
+    label: 'Agent ended the call',
+    help: "The agent closed the call from its side - the end-call tool, or one of this agent's hang-up rules such as end-after-silence.",
+  },
+  task_completed: {
+    label: 'Task completed',
+    help: 'The agent finished what it was handling and closed the session itself.',
+  },
+  job_shutdown: {
+    label: 'Worker shut down',
+    help: 'The agent worker stopped mid-call, usually a deploy or scale-down. Not caused by anything in the conversation.',
+    bad: true,
+  },
+  error: {
+    label: 'Ended by an error',
+    help: 'An unrecoverable speech or AI provider error ended the call, after its fallback chain was already exhausted.',
+    bad: true,
+  },
+}
+
+// A tool that keeps the caller waiting this long is worth an operator's
+// attention - it is dead air in the middle of a conversation.
+const SLOW_TOOL_MS = 1500
+
 // extractedData keys are operator-authored snake_case ("plot_configuration")
 // - turn that into a readable label the same way the fixed fields above do.
 function titleCase(key: string): string {
@@ -473,10 +507,78 @@ export function LeadDetail() {
               )}
               {call.voiceTier && <Row label="Voice billing tier" value={call.voiceTier} />}
               {call.modelTier && <Row label="Model billing tier" value={call.modelTier.replace('_', ' ')} />}
+              {call.model && <Row label="Model" value={call.model} raw />}
+              {call.voice && <Row label="Voice" value={call.voice} raw />}
               <Row label="Language" value={call.replyLanguage ? (LANGUAGE_NAMES[call.replyLanguage] ?? call.replyLanguage) : '-'} />
               <Row label="Time" value={formatDateTime(call.callDate)} />
             </dl>
+
+            {/* Why the call ended. Unlike "Failure reason" above (browser
+                -reported, widget calls only) this is recorded for every
+                channel, so a phone call finally has an end-of-call answer. */}
+            {call.disconnectReason && (
+              <div className="mt-4 border-t border-border pt-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <dt className="text-text-muted">How it ended</dt>
+                  <dd
+                    className={`text-right font-medium ${
+                      DISCONNECT_REASONS[call.disconnectReason]?.bad ? 'text-destructive' : ''
+                    }`}
+                  >
+                    {DISCONNECT_REASONS[call.disconnectReason]?.label ?? call.disconnectReason}
+                  </dd>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
+                  {DISCONNECT_REASONS[call.disconnectReason]?.help ??
+                    'Reported by the call runtime; no description available for this reason yet.'}
+                </p>
+              </div>
+            )}
           </Card>
+
+          {call.toolCalls && call.toolCalls.length > 0 && (
+            <Card>
+              <h2 className="mb-1 text-sm font-semibold text-text-muted">Tool calls</h2>
+              <p className="mb-3 text-[11px] text-text-muted">
+                In the order the agent ran them. Time shown is how long the caller waited for that
+                step.
+              </p>
+              <ul className="flex flex-col gap-1.5">
+                {call.toolCalls.map((tool, i) => {
+                  const slow = typeof tool.ms === 'number' && tool.ms >= SLOW_TOOL_MS
+                  return (
+                    <li key={`${tool.name}-${i}`} className="flex flex-col gap-0.5 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Icon
+                            name={tool.ok ? 'check_circle' : 'error'}
+                            className={`text-[15px] ${tool.ok ? 'text-success' : 'text-destructive'}`}
+                          />
+                          <span className="truncate font-mono text-xs">{tool.name}</span>
+                        </span>
+                        {typeof tool.ms === 'number' && (
+                          <span
+                            className={`shrink-0 text-xs font-medium ${slow ? 'text-amber-500' : 'text-text-muted'}`}
+                          >
+                            {tool.ms >= 1000 ? `${(tool.ms / 1000).toFixed(1)}s` : `${tool.ms}ms`}
+                          </span>
+                        )}
+                      </div>
+                      {tool.error && <p className="pl-6 text-[11px] text-destructive">{tool.error}</p>}
+                      {tool.note && <p className="pl-6 text-[11px] text-text-muted">{tool.note}</p>}
+                    </li>
+                  )
+                })}
+              </ul>
+              {call.toolCalls.some((t) => typeof t.ms === 'number' && t.ms >= SLOW_TOOL_MS) && (
+                <p className="mt-3 border-t border-border pt-2 text-[11px] text-text-muted">
+                  Steps shown in amber kept the caller waiting over{' '}
+                  {(SLOW_TOOL_MS / 1000).toFixed(1)}s — usually a slow external lookup rather than
+                  the agent itself.
+                </p>
+              )}
+            </Card>
+          )}
 
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Extracted lead</h2>
@@ -528,11 +630,16 @@ export function LeadDetail() {
   )
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, raw = false }: { label: string; value: string; raw?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <dt className="text-text-muted">{label}</dt>
-      <dd className="text-right font-medium capitalize">{value}</dd>
+      <dt className="shrink-0 text-text-muted">{label}</dt>
+      {/* `raw` keeps machine identifiers verbatim - the default `capitalize`
+          would render "gpt-4.1-mini" as "Gpt-4.1-mini", which is not the
+          model you would search for in a provider dashboard. */}
+      <dd className={`min-w-0 break-words text-right font-medium ${raw ? 'font-mono text-xs' : 'capitalize'}`}>
+        {value}
+      </dd>
     </div>
   )
 }

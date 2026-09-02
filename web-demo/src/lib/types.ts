@@ -104,6 +104,10 @@ export interface CallRecord {
   creditsPerMinute?: number
   voiceTier?: 'economy' | 'standard' | 'premium'
   modelTier?: 'standard' | 'premium' | 'premium_plus'
+  // Literal voice/model identifiers this call ran on, beside the billing
+  // tiers above. Detail fetch only; '' on calls predating the columns.
+  voice?: string
+  model?: string
 }
 
 export type Lead = CallRecord
