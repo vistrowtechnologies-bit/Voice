@@ -5791,7 +5791,16 @@ def billing_summary(account_id: int) -> dict:
         used, by_type, by_voice_tier = _credits_used_in_period(conn, account_id, rates, period_start)
 
         account_row = conn.execute("SELECT plan FROM accounts WHERE id = ?", (account_id,)).fetchone()
-        plan = (sub["plan"] if sub else None) or (account_row["plan"] if account_row else "starter")
+        # Confirmed real bug: this used to trust sub["plan"] for ANY
+        # subscription row, including one billing_checkout() just created
+        # with status="created" the instant checkout opens - never paid,
+        # never activated. Opening (and abandoning) checkout for a lower
+        # tier silently overrode the account's actual plan everywhere this
+        # summary is shown. Only a subscription Razorpay has actually
+        # confirmed (webhook-set to "active") should override account_row.
+        plan = (sub["plan"] if sub and sub["status"] == "active" else None) or (
+            account_row["plan"] if account_row else "starter"
+        )
         plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
         overage_credits = max(0.0, round(used - credits_total, 1))
         per_credit_rate = plan_pricing["price_inr"] / plan_pricing["credits"]
