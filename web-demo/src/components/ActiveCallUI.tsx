@@ -116,7 +116,27 @@ export function ActiveCallUI({
   const [startedAt] = useState(() => Date.now())
   const [elapsedMs, setElapsedMs] = useState(0)
   const [slowJoin, setSlowJoin] = useState(false)
+  const [textInput, setTextInput] = useState('')
   const transcriptEndRef = useRef<HTMLDivElement>(null)
+
+  // LiveKit's own RoomInputOptions has text input enabled by default
+  // (livekit.agents.voice.room_io — text_enabled is only ever turned off,
+  // never explicitly turned on, in agent/main.py) and its default
+  // text_input_cb feeds this straight into session.generate_reply(), the
+  // same path a transcribed voice turn takes — so typing here talks to the
+  // real agent, not a separate chatbot. "lk.chat" is LiveKit's own
+  // well-known topic for this (agents.TOPIC_CHAT); useTranscriptions above
+  // already renders whatever lands on it, so the sent text shows up in the
+  // same transcript feed as the agent's spoken replies with no extra state.
+  const handleSendText = () => {
+    const value = textInput.trim()
+    if (!value) return
+    localParticipant.sendText(value, { topic: 'lk.chat' }).catch(() => {
+      // Best-effort — a failed send just leaves the caller's draft in the
+      // box to retry, same as a dropped mic packet would.
+    })
+    setTextInput('')
+  }
 
   const transcriptions = useTranscriptions()
   const transcriptEntries: TranscriptEntry[] = useMemo(
@@ -230,6 +250,30 @@ export function ActiveCallUI({
             <div ref={transcriptEndRef} />
           </div>
         )}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2 border-t border-border bg-surface px-4 py-3 sm:px-6">
+        <input
+          type="text"
+          value={textInput}
+          onChange={(e) => setTextInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              handleSendText()
+            }
+          }}
+          placeholder="Or type here instead…"
+          className="flex-1 rounded-full border border-border bg-surface-high px-4 py-2 text-sm outline-none focus:border-primary"
+        />
+        <button
+          aria-label="Send message"
+          onClick={handleSendText}
+          disabled={!textInput.trim()}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-bg disabled:opacity-40"
+        >
+          <Icon name="send" className="text-[18px]" />
+        </button>
       </div>
 
       <div className="flex shrink-0 items-center justify-center gap-6 border-t border-border bg-surface px-4 py-4 sm:px-6">
