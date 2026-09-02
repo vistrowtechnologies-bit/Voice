@@ -4744,11 +4744,31 @@ def get_agent_by_id_unscoped(agent_id: int) -> dict | None:
     """Unscoped by design, same reasoning as get_site_by_key above — called
     from the public /widget/chat endpoint after a site_key has already
     proven the caller is allowed to talk to whichever agent that site
-    names. No account_id available at that point (no dashboard session)."""
+    names. No account_id available at that point (no dashboard session).
+
+    That reasoning only holds if the site->agent_id link itself was
+    verified to belong to the same tenant when it was created — see
+    agent_belongs_to_account, used at both write sites (create_site_page_route,
+    assign_phone_number) to guarantee that."""
     conn = _connect()
     try:
         row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
         return _agent_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def agent_belongs_to_account(agent_id: int, account_id: int) -> bool:
+    """Confirmed real gap: neither create_site_page_route nor
+    assign_phone_number checked this before writing a caller-supplied
+    agent_id, so any tenant could point their own site/phone number at
+    another tenant's agent_id (small sequential ints) and have the
+    unscoped widget/call lookups above serve that agent's private prompt
+    and knowledge base to them. Call this at every such write site."""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT 1 FROM agents WHERE id = ? AND account_id = ?", (agent_id, account_id)).fetchone()
+        return row is not None
     finally:
         conn.close()
 
@@ -5073,6 +5093,8 @@ def create_site_page_route(
         return None
     if avatar_override and not is_valid_avatar_key(avatar_override):
         avatar_override = ""
+    if agent_id is not None and not agent_belongs_to_account(agent_id, account_id):
+        return None
     conn = _connect()
     try:
         site_row = conn.execute("SELECT id FROM sites WHERE id = ? AND account_id = ?", (site_id, account_id)).fetchone()
@@ -6127,7 +6149,11 @@ def add_phone_number(number: str, account_id: int, label: str = "", agent_id: in
         conn.close()
 
 
-def assign_phone_number(number_id: int, agent_id: int | None, account_id: int) -> None:
+def assign_phone_number(number_id: int, agent_id: int | None, account_id: int) -> bool:
+    """Returns False (no write performed) if agent_id was given but doesn't
+    belong to this account — see agent_belongs_to_account."""
+    if agent_id is not None and not agent_belongs_to_account(agent_id, account_id):
+        return False
     conn = _connect()
     try:
         with conn:
@@ -6135,6 +6161,7 @@ def assign_phone_number(number_id: int, agent_id: int | None, account_id: int) -
                 "UPDATE phone_numbers SET agent_id = ? WHERE id = ? AND account_id = ?",
                 (agent_id, number_id, account_id),
             )
+        return True
     finally:
         conn.close()
 

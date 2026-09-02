@@ -3199,7 +3199,8 @@ async def add_phone_number(data: dict = Body(...), user: dict = Depends(current_
 
 @app.patch("/telephony/numbers/{number_id}")
 async def assign_phone_number(number_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
-    calls_db.assign_phone_number(number_id, data.get("agentId"), user["account_id"])
+    if not calls_db.assign_phone_number(number_id, data.get("agentId"), user["account_id"]):
+        raise HTTPException(400, "Agent not found")
     lk_sync_error = await _sync_dispatch_rule(number_id, user["account_id"])
     return {"ok": True, "lkSyncError": lk_sync_error}
 
