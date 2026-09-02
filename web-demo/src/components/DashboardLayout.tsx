@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { NAV_GROUPS } from './navGroups'
 import { CommandPalette } from './CommandPalette'
+import { NotificationBell } from './NotificationBell'
 import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { fetchBilling } from '../lib/api'
@@ -280,6 +281,7 @@ export function PageHeader({
             {credits} credits
           </span>
         )}
+        <NotificationBell />
         <ThemeSwitcher />
         {children}
         {showNewAgent && (

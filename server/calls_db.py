@@ -5976,6 +5976,156 @@ def billing_summary(account_id: int) -> dict:
         conn.close()
 
 
+def notifications(account_id: int) -> list[dict]:
+    """The account's current attention list, DERIVED on every read from the
+    same tables the rest of the dashboard renders - never stored.
+
+    Deliberately not a `notifications` table. A stored feed would become a
+    second source of truth for values like the credit balance, and the two
+    drift: that is exactly the defect Agni ships, where its header and its
+    dashboard show different credit numbers. Deriving means a notification
+    can never disagree with the page it links to, and an item disappears by
+    itself the moment the underlying problem is fixed.
+
+    The tradeoff is that "I dismissed this" cannot live here. The frontend
+    keeps dismissals in localStorage keyed by the stable `id` below, which
+    is per-browser but costs no correctness. Ids are content-derived, so a
+    NEW occurrence (a fresh integration error, a lower credit threshold)
+    produces a new id and notifies again rather than staying silently
+    dismissed.
+
+    Best-effort by section: one failing query must not blank the whole feed.
+    """
+    items: list[dict] = []
+
+    # --- credits -------------------------------------------------------
+    # Bucketed rather than continuous so an operator who dismisses the 20%
+    # warning still hears about 10% and exhaustion.
+    try:
+        billing = billing_summary(account_id)
+        total = billing.get("creditsTotal") or 0
+        remaining = billing.get("creditsRemaining") or 0
+        period = (billing.get("currentPeriodStart") or "")[:10]
+        if total > 0:
+            pct = remaining / total * 100
+            bucket = None
+            if remaining <= 0:
+                bucket = ("exhausted", "critical", "Credits exhausted",
+                          "Calls will fail until you top up or your plan renews.")
+            elif pct <= 10:
+                bucket = ("10", "critical", "Under 10% of credits left",
+                          f"{int(remaining)} of {int(total)} credits remaining this cycle.")
+            elif pct <= 20:
+                bucket = ("20", "warning", "Running low on credits",
+                          f"{int(remaining)} of {int(total)} credits remaining this cycle.")
+            if bucket:
+                key, severity, title, body = bucket
+                items.append({
+                    "id": f"credits:{period}:{key}",
+                    "severity": severity,
+                    "title": title,
+                    "body": body,
+                    "to": "/dashboard/billing",
+                    "at": None,
+                })
+    except Exception:
+        logger.warning("notifications: credits section failed for account %s", account_id, exc_info=True)
+
+    conn = _connect()
+    try:
+        # --- integration delivery failures ------------------------------
+        # last_error is cleared on the next successful delivery (see
+        # touch_integration_sync), so a stale error cannot linger here.
+        try:
+            for r in conn.execute(
+                "SELECT key, name, last_error FROM integrations "
+                "WHERE account_id = ? AND status = 'connected' AND last_error IS NOT NULL AND last_error <> ''",
+                (account_id,),
+            ).fetchall():
+                err = (r["last_error"] or "")[:160]
+                items.append({
+                    # Hashing the message means a DIFFERENT failure re-notifies
+                    # even if the operator dismissed the previous one.
+                    "id": f"integration:{r['key']}:{hashlib.sha256(err.encode()).hexdigest()[:8]}",
+                    "severity": "warning",
+                    "title": f"{r['name']} delivery failing",
+                    "body": err,
+                    "to": "/dashboard/integrations",
+                    "at": None,
+                })
+        except psycopg.Error:
+            logger.warning("notifications: integrations section failed", exc_info=True)
+
+        # --- calls that ended badly in the last 24h ---------------------
+        # Grouped per day, not per call: one row per failed call would bury
+        # everything else the moment a provider has a bad afternoon.
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) c FROM calls WHERE account_id = ? "
+                "AND disconnect_reason = 'error' "
+                "AND started_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '24 hours'",
+                (account_id,),
+            ).fetchone()
+            if row and row["c"]:
+                today = conn.execute("SELECT (now() AT TIME ZONE 'UTC')::date::text d").fetchone()["d"]
+                items.append({
+                    "id": f"failed-calls:{today}",
+                    "severity": "critical",
+                    "title": f"{row['c']} call{'s' if row['c'] != 1 else ''} ended with an error",
+                    "body": "These ended from a speech or AI provider failure, not by the caller.",
+                    "to": "/dashboard/calls",
+                    "at": None,
+                })
+        except psycopg.Error:
+            logger.warning("notifications: failed-calls section failed", exc_info=True)
+
+        # --- negative feedback in the last 24h --------------------------
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) c FROM calls WHERE account_id = ? AND feedback = 'not_helpful' "
+                "AND started_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '24 hours'",
+                (account_id,),
+            ).fetchone()
+            if row and row["c"]:
+                today = conn.execute("SELECT (now() AT TIME ZONE 'UTC')::date::text d").fetchone()["d"]
+                items.append({
+                    "id": f"negative-feedback:{today}",
+                    "severity": "warning",
+                    "title": f"{row['c']} caller{'s' if row['c'] != 1 else ''} marked a call unhelpful",
+                    "body": "Worth reading the transcripts to see what the agent missed.",
+                    "to": "/dashboard/calls?feedback=not_helpful",
+                    "at": None,
+                })
+        except psycopg.Error:
+            logger.warning("notifications: feedback section failed", exc_info=True)
+
+        # --- campaigns finished in the last 7 days ----------------------
+        try:
+            for r in conn.execute(
+                "SELECT id, name, completed_at FROM campaigns WHERE account_id = ? "
+                "AND status = 'completed' AND completed_at IS NOT NULL "
+                "AND completed_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '7 days' "
+                "ORDER BY completed_at DESC LIMIT 5",
+                (account_id,),
+            ).fetchall():
+                items.append({
+                    "id": f"campaign-complete:{r['id']}",
+                    "severity": "info",
+                    "title": f"Campaign finished: {r['name']}",
+                    "body": "Every contact in this campaign has been dialled.",
+                    "to": "/dashboard/outbound",
+                    "at": r["completed_at"],
+                })
+        except psycopg.Error:
+            logger.warning("notifications: campaigns section failed", exc_info=True)
+    finally:
+        conn.close()
+
+    order = {"critical": 0, "warning": 1, "info": 2}
+    items.sort(key=lambda i: order.get(i["severity"], 3))
+    return items
+
+
 def add_topup_credits(account_id: int, credits: int) -> None:
     """Applied immediately once a top-up payment is verified — bumps this
     cycle's credits_total so creditsRemaining reflects it right away instead

@@ -3498,6 +3498,14 @@ def enablex_outbound_test_event(request: Request, event: dict = Body(...)) -> di
 # ------------------------------------------------------------- billing
 
 
+@app.get("/notifications")
+def notifications(user: dict = Depends(current_user)) -> list[dict]:
+    """Derived on every read, never stored - see calls_db.notifications for
+    why. Read-only, so there is no matching mark-read/dismiss route: the
+    frontend remembers dismissals locally."""
+    return calls_db.notifications(user["account_id"])
+
+
 @app.get("/billing/summary")
 def billing(user: dict = Depends(current_user)) -> dict:
     return calls_db.billing_summary(user["account_id"])

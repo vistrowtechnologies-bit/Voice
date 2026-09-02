@@ -595,3 +595,17 @@ export interface VoiceCatalog {
   voices: VoiceEntry[]
   selectedCount: number
 }
+
+// One item in the derived attention feed (GET /notifications). Computed
+// server-side from live data on every read rather than stored, so an item
+// vanishes on its own once the underlying problem is fixed. `id` is stable
+// and content-derived: a new occurrence yields a new id, so a previously
+// dismissed condition re-notifies instead of staying silent.
+export interface AppNotification {
+  id: string
+  severity: 'critical' | 'warning' | 'info'
+  title: string
+  body: string
+  to: string
+  at: string | null
+}
