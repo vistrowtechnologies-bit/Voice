@@ -175,6 +175,13 @@ export interface AdminCallDetail extends AdminCallRow {
     ttsTtfbMs?: number[]
     providers?: string[]
   }
+  // Owner-only. Withheld from the tenant API on purpose - see
+  // calls_db._call_dict: the raw model/voice name our upstream vendors, and
+  // the tool timings are mostly our own infrastructure.
+  model: string | null
+  voice: string | null
+  disconnect_reason: string | null
+  tool_calls: { name: string; ok: boolean; ms?: number; error?: string; note?: string }[]
 }
 
 export interface AdminAnalytics {

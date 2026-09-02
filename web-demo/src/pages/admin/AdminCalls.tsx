@@ -167,10 +167,44 @@ export function AdminCallDetailPage() {
             <Field label="LLM first token" value={latencySummary(c.latency_metrics?.llmTtftMs)} />
             <Field label="TTS first audio" value={latencySummary(c.latency_metrics?.ttsTtfbMs)} />
             <Field label="Providers" value={c.latency_metrics?.providers?.join(', ') || null} />
+            <Field label="Model" value={c.model} mono />
+            <Field label="Voice" value={c.voice} mono />
             <Field label="Failure reason" value={c.failure_reason} />
+            <Field label="Disconnect reason" value={c.disconnect_reason} mono />
             <Field label="Credits" value={String(c.credits)} />
             <Field label="Room" value={c.room_name} mono />
           </dl>
+
+          {/* Owner-only: tenants never see this (see calls_db._call_dict).
+              Tool names are our internal implementation and most of the
+              latency here is our own infrastructure, which makes it our
+              problem to fix rather than a customer's to worry about. */}
+          {c.tool_calls?.length > 0 && (
+            <div className="mt-4 border-t border-border pt-3">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-text-muted">
+                Tool calls
+              </p>
+              <ul className="flex flex-col gap-1">
+                {c.tool_calls.map((tool, i) => (
+                  <li key={`${tool.name}-${i}`} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className={tool.ok ? 'text-success' : 'text-destructive'}>
+                        {tool.ok ? '✓' : '✕'}
+                      </span>
+                      <span className="truncate font-mono text-xs">{tool.name}</span>
+                    </span>
+                    {typeof tool.ms === 'number' && (
+                      <span
+                        className={`shrink-0 text-xs ${tool.ms >= 1500 ? 'text-amber-500' : 'text-text-muted'}`}
+                      >
+                        {tool.ms >= 1000 ? `${(tool.ms / 1000).toFixed(1)}s` : `${tool.ms}ms`}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </AdminCard>
       </div>
     </>

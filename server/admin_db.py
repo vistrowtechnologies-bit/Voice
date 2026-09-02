@@ -424,6 +424,14 @@ def call_detail(call_id: int) -> dict | None:
             d["latency_metrics"] = json.loads(d.pop("latency_metrics_json") or "{}")
         except (TypeError, ValueError):
             d["latency_metrics"] = {}
+        # Owner-only on purpose: the tool names are our internal
+        # implementation and the timings are largely our own infrastructure,
+        # so calls_db._call_dict withholds both from tenants. This is the
+        # view where they are actually actionable.
+        try:
+            d["tool_calls"] = json.loads(d.pop("tool_calls_json") or "[]")
+        except (TypeError, ValueError):
+            d["tool_calls"] = []
         return d
     finally:
         conn.close()

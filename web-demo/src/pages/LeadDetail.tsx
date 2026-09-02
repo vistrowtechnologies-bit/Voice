@@ -53,10 +53,6 @@ const DISCONNECT_REASONS: Record<string, { label: string; help: string; bad?: bo
   },
 }
 
-// A tool that keeps the caller waiting this long is worth an operator's
-// attention - it is dead air in the middle of a conversation.
-const SLOW_TOOL_MS = 1500
-
 // extractedData keys are operator-authored snake_case ("plot_configuration")
 // - turn that into a readable label the same way the fixed fields above do.
 function titleCase(key: string): string {
@@ -507,8 +503,6 @@ export function LeadDetail() {
               )}
               {call.voiceTier && <Row label="Voice billing tier" value={call.voiceTier} />}
               {call.modelTier && <Row label="Model billing tier" value={call.modelTier.replace('_', ' ')} />}
-              {call.model && <Row label="Model" value={call.model} raw />}
-              {call.voice && <Row label="Voice" value={call.voice} raw />}
               <Row label="Language" value={call.replyLanguage ? (LANGUAGE_NAMES[call.replyLanguage] ?? call.replyLanguage) : '-'} />
               <Row label="Time" value={formatDateTime(call.callDate)} />
             </dl>
@@ -535,50 +529,6 @@ export function LeadDetail() {
               </div>
             )}
           </Card>
-
-          {call.toolCalls && call.toolCalls.length > 0 && (
-            <Card>
-              <h2 className="mb-1 text-sm font-semibold text-text-muted">Tool calls</h2>
-              <p className="mb-3 text-[11px] text-text-muted">
-                In the order the agent ran them. Time shown is how long the caller waited for that
-                step.
-              </p>
-              <ul className="flex flex-col gap-1.5">
-                {call.toolCalls.map((tool, i) => {
-                  const slow = typeof tool.ms === 'number' && tool.ms >= SLOW_TOOL_MS
-                  return (
-                    <li key={`${tool.name}-${i}`} className="flex flex-col gap-0.5 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <Icon
-                            name={tool.ok ? 'check_circle' : 'error'}
-                            className={`text-[15px] ${tool.ok ? 'text-success' : 'text-destructive'}`}
-                          />
-                          <span className="truncate font-mono text-xs">{tool.name}</span>
-                        </span>
-                        {typeof tool.ms === 'number' && (
-                          <span
-                            className={`shrink-0 text-xs font-medium ${slow ? 'text-amber-500' : 'text-text-muted'}`}
-                          >
-                            {tool.ms >= 1000 ? `${(tool.ms / 1000).toFixed(1)}s` : `${tool.ms}ms`}
-                          </span>
-                        )}
-                      </div>
-                      {tool.error && <p className="pl-6 text-[11px] text-destructive">{tool.error}</p>}
-                      {tool.note && <p className="pl-6 text-[11px] text-text-muted">{tool.note}</p>}
-                    </li>
-                  )
-                })}
-              </ul>
-              {call.toolCalls.some((t) => typeof t.ms === 'number' && t.ms >= SLOW_TOOL_MS) && (
-                <p className="mt-3 border-t border-border pt-2 text-[11px] text-text-muted">
-                  Steps shown in amber kept the caller waiting over{' '}
-                  {(SLOW_TOOL_MS / 1000).toFixed(1)}s — usually a slow external lookup rather than
-                  the agent itself.
-                </p>
-              )}
-            </Card>
-          )}
 
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Extracted lead</h2>

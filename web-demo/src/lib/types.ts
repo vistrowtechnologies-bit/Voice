@@ -88,9 +88,6 @@ export interface CallRecord {
   // LiveKit's CloseReason for this session. '' on calls recorded before the
   // column existed, so treat empty as "not recorded" rather than "unknown".
   disconnectReason: string
-  // Tool invocations during the call, in execution order. ms is a real
-  // measurement (LiveKit stamps both the call and its output).
-  toolCalls: { name: string; ok: boolean; ms?: number; error?: string; note?: string }[]
   // Operator-defined fields (agent.postCallFields) the post-call LLM pass
   // pulled from this specific call's transcript - the generic, per-business
   // extraction system underneath the fixed budget/location/timeline and
@@ -104,10 +101,6 @@ export interface CallRecord {
   creditsPerMinute?: number
   voiceTier?: 'economy' | 'standard' | 'premium'
   modelTier?: 'standard' | 'premium' | 'premium_plus'
-  // Literal voice/model identifiers this call ran on, beside the billing
-  // tiers above. Detail fetch only; '' on calls predating the columns.
-  voice?: string
-  model?: string
 }
 
 export type Lead = CallRecord

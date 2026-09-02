@@ -2221,7 +2221,13 @@ def _call_dict(
         # which only widget calls ever set. Empty string on calls recorded
         # before the column existed.
         "disconnectReason": _row_get(row, "disconnect_reason") or "",
-        "toolCalls": _load_json_field(_row_get(row, "tool_calls_json"), []),
+        # tool_calls_json is deliberately NOT exposed to tenants. The names
+        # are our internal tool implementation, and the timings are mostly
+        # OUR latency (calendar lookups, lead writes) rather than anything a
+        # tenant configured or can fix - showing a customer dead air they are
+        # powerless to act on invites churn rather than trust. It stays
+        # owner-only via admin_db.call_detail, where it is genuinely
+        # actionable for us.
     }
     if credit_rates_by_type is not None:
         # Only computed for the single-call detail fetch (get_call) — using
@@ -2242,12 +2248,14 @@ def _call_dict(
         out["creditsPerMinute"] = round(credits_per_minute, 2)
         out["voiceTier"] = tier
         out["modelTier"] = mtier
-        # The literal strings this call ran on, beside the billing tiers they
-        # map to - "premium_plus" alone doesn't tell an operator WHICH model
-        # produced a bad answer. Detail fetch only, to keep the list payload
-        # unchanged. NULL on calls that predate the columns.
-        out["voice"] = _row_get(row, "voice") or ""
-        out["model"] = _row_get(row, "model") or ""
+        # The raw `voice`/`model` strings are deliberately NOT exposed to
+        # tenants. They name our upstream vendors ("gpt-4o-mini",
+        # "google31:kore"), which undercuts selling stable branded tiers - a
+        # tenant who can read the vendor model can price it themselves and
+        # conclude they are overpaying. The billing tier above is what a
+        # tenant needs; the literal strings stay owner-only via
+        # admin_db.call_detail. Not just hidden in the UI: anything returned
+        # here is readable in devtools.
     if include_transcript:
         out["transcript"] = [
             {
