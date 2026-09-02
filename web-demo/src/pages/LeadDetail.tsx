@@ -199,12 +199,21 @@ export function LeadDetail() {
 
   return (
     <DashboardLayout>
-      <div className="flex items-center gap-3 border-b border-border px-4 pt-4 sm:px-6">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 pt-4 sm:px-6">
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-1 text-xs text-text-muted hover:text-text"
         >
           <Icon name="chevron_left" className="text-[16px]" /> Back
+        </button>
+        <button
+          type="button"
+          onClick={() => navigator.clipboard?.writeText(call.id)}
+          title="Copy call ID"
+          className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 font-mono text-[11px] text-text-muted hover:border-primary hover:text-primary"
+        >
+          Call #{call.id}
+          <Icon name="content_copy" className="text-[13px]" />
         </button>
       </div>
       <PageHeader title={call.name} subtitle={call.phone || 'no phone captured'} />
@@ -514,14 +523,28 @@ export function LeadDetail() {
 
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Call details</h2>
-            <dl className="flex flex-col gap-2 text-sm">
-              {/* Outcome, sentiment and duration are the stat tiles above the
-                  transcript now - kept out of this list rather than repeated. */}
-              <Row label="Lead stage" value={call.status} />
-              <Row label="Channel" value={call.channel} />
+
+            {/* Dense bordered boxes for the facts an operator scans for
+                first - Agent/tiers were plain text rows before, which read
+                as a long list rather than the boxed, at-a-glance layout
+                being matched here. Free-text facts (website, page, feedback
+                notes) don't fit a fixed-width box and stay as rows below. */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <MiniStat icon="flag" label="Lead stage" value={call.status} />
+              <MiniStat icon="call_split" label="Channel" value={call.channel} />
+              <MiniStat icon="support_agent" label="Agent" value={call.agent} />
+              {call.voiceTier && <MiniStat icon="graphic_eq" label="Voice tier" value={call.voiceTier} />}
+              {call.modelTier && <MiniStat icon="memory" label="Model tier" value={call.modelTier.replace('_', ' ')} />}
+              <MiniStat
+                icon="translate"
+                label="Language"
+                value={call.replyLanguage ? (LANGUAGE_NAMES[call.replyLanguage] ?? call.replyLanguage) : '-'}
+              />
+            </div>
+
+            <dl className="mt-3 flex flex-col gap-2 text-sm">
               {call.website && <Row label="Website" value={call.website} />}
               {call.pagePath && <Row label="Page" value={call.pagePath} raw />}
-              <Row label="Agent" value={call.agent} />
               {call.feedback && (
                 <Row label="Visitor feedback" value={call.feedback === 'helpful' ? '👍 Helpful' : '👎 Not helpful'} />
               )}
@@ -532,14 +555,11 @@ export function LeadDetail() {
               {call.failureReason && <Row label="Failure reason" value={call.failureReason} />}
               {call.creditsUsed != null && (
                 <Row
-                  label="Credits used"
+                  label="Credits breakdown"
                   value={`${call.creditsUsed}${call.creditsPerMinute != null ? ` (${call.creditsPerMinute}/min)` : ''}`}
                 />
               )}
-              {call.voiceTier && <Row label="Voice billing tier" value={call.voiceTier} />}
-              {call.modelTier && <Row label="Model billing tier" value={call.modelTier.replace('_', ' ')} />}
-              <Row label="Language" value={call.replyLanguage ? (LANGUAGE_NAMES[call.replyLanguage] ?? call.replyLanguage) : '-'} />
-              <Row label="Time" value={formatDateTime(call.callDate)} />
+              <Row label="Created" value={formatDateTime(call.callDate)} />
             </dl>
 
             {/* Why the call ended. Unlike "Failure reason" above (browser
@@ -613,6 +633,23 @@ export function LeadDetail() {
       </>
       )}
     </DashboardLayout>
+  )
+}
+
+// Small bordered fact box - the reference's dense AGENT/MODEL/CHANNEL
+// treatment, structurally: an icon, an uppercase label, a value. Reserved
+// for short, fixed-width facts; longer/free-text ones (a URL, a feedback
+// note) stay as plain Row lines below since they'd wrap awkwardly in a box
+// this narrow.
+function MiniStat({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-2">
+      <Icon name={icon} className="shrink-0 text-[16px] text-text-muted" />
+      <div className="min-w-0">
+        <p className="truncate text-[10px] font-bold uppercase tracking-wide text-text-muted">{label}</p>
+        <p className="truncate text-xs font-semibold capitalize text-text">{value}</p>
+      </div>
+    </div>
   )
 }
 
