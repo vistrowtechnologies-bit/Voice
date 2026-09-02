@@ -110,6 +110,7 @@ def init_db() -> None:
             # Mirrors server/calls_db.py — see its migration for what each holds.
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS disconnect_reason TEXT DEFAULT ''")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS tool_calls_json TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS page_path TEXT DEFAULT ''")
     finally:
         conn.close()
 
@@ -423,7 +424,18 @@ def prewarm_caches() -> None:
 # on the call path: an uncached read here would put a fresh connection round
 # trip in front of the caller, which is what the prewarm work removed.
 _compliance_cache: dict[int | None, tuple[float, dict]] = {}
-_COMPLIANCE_CACHE_TTL_S = 600.0
+# Deliberately much shorter than the other prewarmed caches (agent config,
+# KB) at 600s. Confirmed live 2026-09-02: a tenant flipped Compliance ->
+# Record calls ON, then placed two test calls six minutes apart from the
+# dashboard - the first landed on a worker process whose cache still held
+# the pre-toggle "off" value (recorded nothing), the second landed on a
+# process that read fresh (recorded). Record-calls is consent-sensitive in
+# both directions - a tenant turning it OFF for a legal reason must not keep
+# recording on stale workers either - so the propagation window matters more
+# here than the DB round-trip this cache is otherwise saving. 30s still
+# fully covers the case the cache exists for (a burst of calls seconds
+# apart on the same process, e.g. the campaign dialer).
+_COMPLIANCE_CACHE_TTL_S = 30.0
 
 # Mirrors _COMPLIANCE_DEFAULTS in server/calls_db.py. Kept conservative: if the
 # row is missing or unreadable we must NOT invent permission to record.
@@ -913,8 +925,9 @@ def save_call(record: dict) -> int | None:
                     lead_email, lead_budget, lead_location, lead_timeline, lead_company,
                     lead_use_case, lead_team_size, site_visit_json,
                     transcript_json, call_type, direction, site_id, agent_id, account_id,
-                    extracted_data, latency_metrics_json, disconnect_reason, tool_calls_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    extracted_data, latency_metrics_json, disconnect_reason, tool_calls_json,
+                    page_path
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -950,6 +963,7 @@ def save_call(record: dict) -> int | None:
                     json.dumps(record["tool_calls"], ensure_ascii=False)
                     if record.get("tool_calls")
                     else "",
+                    record.get("page_path") or "",
                 ),
             )
             return cur.lastrowid

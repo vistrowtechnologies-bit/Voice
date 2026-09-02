@@ -223,7 +223,13 @@ export function LeadDetail() {
             tab === 'history' ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
           }`}
         >
-          History
+          {/* "History" read as "should list every call including this one" -
+              the count only ever counts the OTHER calls (see the fetchCalls
+              effect above), so a lead with exactly 2 calls showed "1" while
+              viewing one of them. Renamed rather than changing what's
+              counted - the exclusion is correct, the old label just implied
+              a different definition than the one being used. */}
+          Other calls
           {!!history?.length && (
             <span
               className={`rounded-full px-1.5 text-[10px] ${
@@ -485,6 +491,7 @@ export function LeadDetail() {
               <Row label="Sentiment" value={call.sentiment} />
               <Row label="Channel" value={call.channel} />
               {call.website && <Row label="Website" value={call.website} />}
+              {call.pagePath && <Row label="Page" value={call.pagePath} raw />}
               <Row label="Agent" value={call.agent} />
               <Row label="Duration" value={formatDuration(call.durationSeconds)} />
               {call.feedback && (

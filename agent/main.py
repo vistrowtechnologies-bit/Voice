@@ -2542,6 +2542,7 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "visitor_name": None,
         "visitor_phone": None,
         "visitor_email": None,
+        "visitor_path": None,
         "company": "",
         "custom_fields": {},
         "demo_language": None,
@@ -2577,6 +2578,9 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "visitor_name": meta.get("visitor_name"),
         "visitor_phone": meta.get("visitor_phone"),
         "visitor_email": meta.get("visitor_email"),
+        # location.pathname at widget-open time — stamped by /widget/token,
+        # used only to answer "which page did this lead come from" later.
+        "visitor_path": meta.get("visitor_path"),
         # Campaign-dial personalization (see livekit_sip.tag_newest_room) —
         # substituted into {{company}}/{{custom.X}} tokens in the agent's own
         # prompt below, right before RealEstateAgent is constructed.
@@ -3427,6 +3431,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     "call_type": call_context["call_type"],
                     "direction": call_context.get("direction"),
                     "site_id": call_context["site_id"],
+                    "page_path": call_context.get("visitor_path") or "",
                     # Which dashboard agent took the call — explicit from room
                     # metadata when routed, otherwise whichever agent config
                     # actually loaded (the default/first one).

@@ -4602,6 +4602,12 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
             "visitor_name": name,
             "visitor_phone": req.phone.strip(),
             "visitor_email": email,
+            # Already used above to pick the agent (resolve_site_page) but
+            # previously discarded after that — an operator asking "which
+            # page did this lead come from" had no answer. Capped: this is
+            # visitor-supplied (location.pathname), not sanitized beyond
+            # being JSON-safe.
+            "visitor_path": (req.path or "")[:300],
         }
     )
     # Reuse the room /widget/warm pre-created (and the agent may already be

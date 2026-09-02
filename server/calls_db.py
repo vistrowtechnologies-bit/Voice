@@ -993,6 +993,12 @@ def init_tables() -> None:
                 # FunctionCall/FunctionCallOutput created_at pair, so it is a
                 # real measurement rather than an estimate.
                 ("tool_calls_json", "TEXT DEFAULT ''"),
+                # location.pathname the widget visitor was on when they opened
+                # the call - resolve_site_page already used this to pick the
+                # agent, but previously discarded it once resolved, leaving
+                # no way to answer "which page did this lead come from".
+                # Widget calls only; '' for phone/browser.
+                ("page_path", "TEXT DEFAULT ''"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
@@ -2221,6 +2227,7 @@ def _call_dict(
         # which only widget calls ever set. Empty string on calls recorded
         # before the column existed.
         "disconnectReason": _row_get(row, "disconnect_reason") or "",
+        "pagePath": _row_get(row, "page_path") or "",
         # tool_calls_json is deliberately NOT exposed to tenants. The names
         # are our internal tool implementation, and the timings are mostly
         # OUR latency (calendar lookups, lead writes) rather than anything a

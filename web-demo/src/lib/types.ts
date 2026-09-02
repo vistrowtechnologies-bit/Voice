@@ -88,6 +88,10 @@ export interface CallRecord {
   // LiveKit's CloseReason for this session. '' on calls recorded before the
   // column existed, so treat empty as "not recorded" rather than "unknown".
   disconnectReason: string
+  // Widget calls only: location.pathname the visitor was on when they
+  // opened the call. '' for phone/browser calls, or widget calls that
+  // predate this column.
+  pagePath: string
   // Operator-defined fields (agent.postCallFields) the post-call LLM pass
   // pulled from this specific call's transcript - the generic, per-business
   // extraction system underneath the fixed budget/location/timeline and
