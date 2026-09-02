@@ -5,7 +5,7 @@ import { Icon } from '../components/Icon'
 import { DataTable } from '../components/ui/DataTable'
 import type { DataTableColumn } from '../components/ui/DataTable'
 import { StatTile } from '../components/ui/StatTile'
-import { callsExportUrl, fetchActiveCalls, fetchCalls, formatDateTime } from '../lib/api'
+import { callsExportUrl, fetchActiveCalls, fetchCalls, formatDateTime, formatDuration } from '../lib/api'
 import type { ActiveCallInfo, CallRecord, Sentiment } from '../lib/types'
 
 // Must match the exact channel labels calls_db.py's _CHANNEL_LABELS produces
@@ -114,10 +114,9 @@ export function CallsHistory() {
       key: 'caller',
       header: 'Caller',
       primary: true,
-      // state.backgroundLocation tells App.tsx to keep THIS list rendered and
-      // overlay the call on it, preserving scroll/filters. Kept as a real
-      // <Link> so middle-click and open-in-new-tab still work - that path has
-      // no state, so App.tsx renders the list fresh with the call over it.
+      // state.backgroundLocation makes App.tsx keep THIS list rendered and
+      // overlay the call as a modal (see App.tsx). Still a real <Link>, so
+      // middle-click / open-in-new-tab still gets the standalone full page.
       render: (call) => (
         <Link
           to={`/dashboard/calls/${call.id}`}
@@ -141,10 +140,21 @@ export function CallsHistory() {
         </Link>
       ),
     },
-    // Call outcome and Duration are deliberately NOT columns here: both are
-    // stat tiles at the top of the call modal, one click away, and the
-    // outcome split is already summarised in the Completed / Failed cards
-    // above this table. Repeating them per row only widened the table.
+    {
+      key: 'status',
+      header: 'Status',
+      render: (call) => (
+        <span
+          className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${
+            call.callStatus === 'completed'
+              ? 'bg-cyan/20 text-cyan border-cyan/30'
+              : 'bg-destructive/20 text-destructive border-destructive/30'
+          }`}
+        >
+          {call.callStatus}
+        </span>
+      ),
+    },
     { key: 'channel', header: 'Channel', render: (call) => <span className="text-sm text-text-muted">{call.channel}</span> },
     {
       key: 'direction',
@@ -162,6 +172,7 @@ export function CallsHistory() {
         ),
     },
     { key: 'website', header: 'Website', render: (call) => <span className="text-sm text-text-muted">{call.website || '-'}</span> },
+    { key: 'duration', header: 'Duration', render: (call) => <span className="text-sm">{formatDuration(call.durationSeconds)}</span> },
     {
       key: 'feedback',
       header: 'Feedback',
