@@ -19,6 +19,7 @@ from livekit.agents import (
     AudioConfig,
     BackgroundAudioPlayer,
     BuiltinAudioClip,
+    CloseReason,
     EndpointingOptions,
     JobContext,
     JobProcess,
@@ -66,6 +67,7 @@ from prompts.voice_style import ELEVENLABS_EXPRESSIVE_PROMPT, VOICE_STYLE_PROMPT
 from tools import (
     TAVILY_API_KEY,
     _deliver_to_integrations,
+    _find_sip_participant,
     book_appointment,
     build_custom_function_tools,
     capture_platform_lead,
@@ -2879,6 +2881,12 @@ async def entrypoint(ctx: JobContext) -> None:
     silence_reminder_max = int(cfg.get("silence_reminder_max") or 1)
     end_call_on_silence_ms = int(cfg.get("end_call_on_silence_ms") or 0)
     max_call_duration_s = int(cfg.get("max_call_duration_s") or 0)
+    # Dialed by _on_session_close below when AgentSession itself reports the
+    # call died from a pipeline error (CloseReason.ERROR) - a genuinely
+    # unhandled STT/LLM/TTS/RealtimeModel failure that would otherwise just
+    # silently end the call with no warning to the caller. Blank means no
+    # fallback attempt, same as today.
+    emergency_fallback_number = (cfg.get("emergency_fallback_number") or "").strip()
 
     session = AgentSession(
         userdata=userdata,
@@ -3107,6 +3115,54 @@ async def entrypoint(ctx: JobContext) -> None:
             userdata["ending_call"] = False
             asyncio.create_task(_hang_up(ctx.room.name))
 
+    def _on_session_close(ev) -> None:
+        # ev.reason == CloseReason.ERROR is AgentSession's own signal that
+        # the call died from a genuine pipeline failure (an unrecoverable
+        # STT/LLM/TTS/RealtimeModel error) — every provider already has its
+        # own fallback/retry chain (TtsFallbackAdapter etc.), so by the time
+        # this fires those have already been exhausted. Deliberately does
+        # NOT trigger on the other CloseReason values (job_shutdown,
+        # participant_disconnected, user_initiated, task_completed) — those
+        # are normal call endings, not failures, and transferring on one
+        # would hand a caller who simply hung up to a human for no reason.
+        if ev.reason != CloseReason.ERROR or not emergency_fallback_number:
+            return
+        sip_identity = _find_sip_participant(ctx.room)
+        if sip_identity is None:
+            logger.warning(
+                "emergency fallback: session closed with error but no SIP participant to transfer "
+                "(room=%s, error=%s)", ctx.room.name, ev.error,
+            )
+            return
+        transfer_to = (
+            emergency_fallback_number
+            if emergency_fallback_number.startswith(("tel:", "sip:"))
+            else f"tel:{emergency_fallback_number}"
+        )
+
+        async def _do_transfer() -> None:
+            try:
+                lkapi = api.LiveKitAPI()
+                try:
+                    await lkapi.sip.transfer_sip_participant(
+                        api.TransferSIPParticipantRequest(
+                            participant_identity=sip_identity,
+                            room_name=ctx.room.name,
+                            transfer_to=transfer_to,
+                            play_dialtone=True,
+                        )
+                    )
+                finally:
+                    await lkapi.aclose()
+                logger.info(
+                    "emergency fallback: transferred caller %s to %s after session error "
+                    "(room=%s, error=%s)", sip_identity, transfer_to, ctx.room.name, ev.error,
+                )
+            except Exception:
+                logger.exception("emergency fallback: transfer to %s failed (room=%s)", transfer_to, ctx.room.name)
+
+        asyncio.create_task(_do_transfer())
+
     # Belt-and-suspenders for the OTHER direction of the same end-call bug:
     # on_user_turn_completed's _looks_like_farewell nudge only helps when
     # the CALLER says goodbye first. Observed live on a real tenant call —
@@ -3170,6 +3226,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session.on("user_state_changed", _on_user_state_changed)
     session.on("agent_state_changed", _on_agent_state_changed)
+    session.on("close", _on_session_close)
     session.on("conversation_item_added", _on_conversation_item_added)
     # Deprecated only for usage accounting; it remains LiveKit 1.6's public
     # event for detailed per-stage latency.  session_usage_updated does not

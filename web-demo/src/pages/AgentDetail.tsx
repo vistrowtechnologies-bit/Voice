@@ -133,6 +133,7 @@ function AgentEditorForm({
     maxCallDurationS: agent.maxCallDurationS ?? 0,
     enabledFunctions: agent.enabledFunctions ?? '',
     transferPhone: agent.transferPhone ?? '',
+    emergencyFallbackNumber: agent.emergencyFallbackNumber ?? '',
     customFunctions: agent.customFunctions ?? [],
     postCallFields: agent.postCallFields ?? [],
     webhookUrl: agent.webhookUrl ?? '',
@@ -410,6 +411,18 @@ function AgentEditorForm({
               <span className="text-[10px] text-text-muted">
                 When set, the agent can transfer a phone caller to this number on request. Web/demo calls
                 can't be transferred to a phone.
+              </span>
+            </Field>
+            <Field label="Emergency fallback - backup number if the call breaks (blank = disabled)">
+              <input
+                value={form.emergencyFallbackNumber}
+                onChange={(e) => set('emergencyFallbackNumber', e.target.value)}
+                placeholder="+91 98765 43210"
+                className={inputCls}
+              />
+              <span className="text-[10px] text-text-muted">
+                Separate from the transfer number above - this only fires if the call itself breaks (an
+                unrecoverable speech/AI error), not when a caller asks for a human.
               </span>
             </Field>
             <CustomFunctionsEditor

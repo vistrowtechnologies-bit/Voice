@@ -1019,6 +1019,15 @@ def init_tables() -> None:
                 # side so agent ids are never enumerable from the public
                 # endpoint - the slug set IS the allowlist.
                 ("public_demo_slug", "TEXT DEFAULT ''"),
+                # Deliberately separate from transfer_phone (the number the
+                # agent dials when a CALLER asks for a human) - this is
+                # dialed by main.py's own session-level error boundary when
+                # something crashes the call outright, not by an LLM tool
+                # decision. An operator may want a different line (e.g. an
+                # on-call engineer) for "the system broke" than for routine
+                # human handoff requests. Blank means no fallback attempt -
+                # a crashed call just ends, same as today.
+                ("emergency_fallback_number", "TEXT DEFAULT ''"),
             ):
                 conn.execute(f"ALTER TABLE agents ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # Per-number monthly line item — EnableX charges Vistrow for every
@@ -2718,6 +2727,7 @@ _AGENT_FIELDS = (
     "max_call_duration_s", "enabled_functions", "transfer_phone",
     "custom_functions", "post_call_fields", "webhook_url", "memory_enabled",
     "emotion_intensity", "ambient_noise", "business_name", "public_demo_slug",
+    "emergency_fallback_number",
 )
 # INTEGER columns fed from a JSON bool (Postgres has no bool->int cast).
 _AGENT_BOOL_FIELDS = frozenset({"is_platform_demo", "memory_enabled"})
@@ -2746,6 +2756,7 @@ _AGENT_CAMEL_TO_SNAKE = {
     "ambientNoise": "ambient_noise",
     "businessName": "business_name",
     "publicDemoSlug": "public_demo_slug",
+    "emergencyFallbackNumber": "emergency_fallback_number",
 }
 
 
@@ -2793,6 +2804,7 @@ def _agent_dict(row: dict) -> dict:
         "maxCallDurationS": row["max_call_duration_s"] or 0,
         "enabledFunctions": row["enabled_functions"] or "",
         "transferPhone": row["transfer_phone"] or "",
+        "emergencyFallbackNumber": _row_get(row, "emergency_fallback_number") or "",
         "customFunctions": _load_json_field(row["custom_functions"], []),
         "postCallFields": _load_json_field(row["post_call_fields"], []),
         "webhookUrl": row["webhook_url"] or "",

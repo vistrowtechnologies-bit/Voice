@@ -259,6 +259,7 @@ export interface AgentConfig {
   // Functions
   enabledFunctions: string
   transferPhone: string
+  emergencyFallbackNumber: string
   customFunctions: CustomFunction[]
   // Post-call + integrations
   postCallFields: PostCallField[]
