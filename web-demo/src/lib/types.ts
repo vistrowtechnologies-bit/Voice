@@ -82,7 +82,15 @@ export interface CallRecord {
   connectLatencyMs: number | null
   agentJoinLatencyMs: number | null
   firstResponseLatencyMs: number | null
+  // Browser-reported, widget calls only. For why a call of ANY channel
+  // ended, use disconnectReason below.
   failureReason: string | null
+  // LiveKit's CloseReason for this session. '' on calls recorded before the
+  // column existed, so treat empty as "not recorded" rather than "unknown".
+  disconnectReason: string
+  // Tool invocations during the call, in execution order. ms is a real
+  // measurement (LiveKit stamps both the call and its output).
+  toolCalls: { name: string; ok: boolean; ms?: number; error?: string; note?: string }[]
   // Operator-defined fields (agent.postCallFields) the post-call LLM pass
   // pulled from this specific call's transcript - the generic, per-business
   // extraction system underneath the fixed budget/location/timeline and

@@ -2912,6 +2912,11 @@ async def entrypoint(ctx: JobContext) -> None:
         # "inbound"/"outbound"/None — read by on_user_turn_completed's
         # voicemail check, which only makes sense on a call WE placed.
         "direction": call_context.get("direction"),
+        # Call diagnostics, both flushed into the durable row by log_call.
+        # Empty defaults mean "never recorded", which is what a call that
+        # crashed before the close event should persist.
+        "disconnect_reason": "",
+        "tool_calls": [],
         # First user turn on an outbound call hasn't been checked for a
         # voicemail greeting yet.
         "voicemail_checked": False,
@@ -3196,7 +3201,51 @@ async def entrypoint(ctx: JobContext) -> None:
             userdata["ending_call"] = False
             asyncio.create_task(_hang_up(ctx.room.name))
 
+    def _on_function_tools_executed(ev) -> None:
+        # One row per tool the agent actually invoked, with a real measured
+        # latency: LiveKit stamps created_at on both the FunctionCall and its
+        # FunctionCallOutput, so the difference is the true execution time
+        # rather than an estimate. The event fires once per BATCH (parallel
+        # tool calls arrive together), hence the loop over zipped pairs.
+        # Wrapped whole: diagnostics must never be able to disturb a live call.
+        try:
+            for call, output in ev.zipped():
+                entry = {"name": getattr(call, "name", "") or "unknown"}
+                if output is not None:
+                    entry["ok"] = not getattr(output, "is_error", False)
+                    started = getattr(call, "created_at", None)
+                    finished = getattr(output, "created_at", None)
+                    if started and finished and finished >= started:
+                        entry["ms"] = round((finished - started) * 1000)
+                    if entry["ok"] is False:
+                        # Truncated: a tool's error text can be a full
+                        # provider payload, and this is stored per call.
+                        entry["error"] = (getattr(output, "output", "") or "")[:200]
+                else:
+                    # A None output means the call produced nothing to send
+                    # back to the LLM (e.g. it raised StopResponse) — that is
+                    # not a failure, so don't record it as one.
+                    entry["ok"] = True
+                    entry["note"] = "no output returned to model"
+                userdata.setdefault("tool_calls", []).append(entry)
+        except Exception:
+            logger.warning("could not record tool-call diagnostics", exc_info=True)
+
     def _on_session_close(ev) -> None:
+        # Record why this call ended for EVERY reason, not just failures —
+        # this runs before the emergency-fallback early-return below, which
+        # only cares about CloseReason.ERROR. Read back by log_call when it
+        # writes the durable row. CloseReason is a str Enum, so .value is the
+        # stable wire string ("user_initiated", "error", …) rather than
+        # "CloseReason.USER_INITIATED".
+        try:
+            userdata["disconnect_reason"] = getattr(ev.reason, "value", None) or str(ev.reason)
+            if ev.error is not None:
+                # Class name only — the message can carry provider payloads.
+                userdata["disconnect_error"] = type(ev.error).__name__
+        except Exception:
+            logger.warning("could not record disconnect reason", exc_info=True)
+
         # ev.reason == CloseReason.ERROR is AgentSession's own signal that
         # the call died from a genuine pipeline failure (an unrecoverable
         # STT/LLM/TTS/RealtimeModel error) — every provider already has its
@@ -3308,6 +3357,7 @@ async def entrypoint(ctx: JobContext) -> None:
     session.on("user_state_changed", _on_user_state_changed)
     session.on("agent_state_changed", _on_agent_state_changed)
     session.on("close", _on_session_close)
+    session.on("function_tools_executed", _on_function_tools_executed)
     session.on("conversation_item_added", _on_conversation_item_added)
     # Deprecated only for usage accounting; it remains LiveKit 1.6's public
     # event for detailed per-stage latency.  session_usage_updated does not
@@ -3384,6 +3434,11 @@ async def entrypoint(ctx: JobContext) -> None:
                     "account_id": cfg.get("account_id"),
                     "extracted_data": extracted,
                     "latency_metrics": userdata["latency_metrics"],
+                    # Diagnostics collected during the call. .get() rather
+                    # than [] — a call that died before userdata was fully
+                    # populated must still save its transcript.
+                    "disconnect_reason": userdata.get("disconnect_reason") or "",
+                    "tool_calls": userdata.get("tool_calls") or [],
                     **lead_data,
                 }
             )

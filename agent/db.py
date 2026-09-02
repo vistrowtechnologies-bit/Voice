@@ -107,6 +107,9 @@ def init_db() -> None:
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} TEXT")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS extracted_data TEXT DEFAULT ''")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS latency_metrics_json TEXT DEFAULT ''")
+            # Mirrors server/calls_db.py — see its migration for what each holds.
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS disconnect_reason TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS tool_calls_json TEXT DEFAULT ''")
     finally:
         conn.close()
 
@@ -890,7 +893,9 @@ def save_call(record: dict) -> int | None:
     ('phone'/'widget'/'browser'), direction ('inbound'/'outbound', phone
     calls only — see agent/main.py's _call_context_from_job), site_id (for
     'widget' calls), agent_id, account_id (which tenant this call belongs
-    to), and optionally
+    to), disconnect_reason (LiveKit's CloseReason for why the session ended),
+    tool_calls (list of {name, ok, ms, error} for this call's tool
+    invocations), and optionally
     name/phone/email/budget/location/timeline/site_visit (dict with
     property_id/date/time) — matching the keys tools.py's log_lead and
     book_appointment write into the shared lead_data dict — or
@@ -908,8 +913,8 @@ def save_call(record: dict) -> int | None:
                     lead_email, lead_budget, lead_location, lead_timeline, lead_company,
                     lead_use_case, lead_team_size, site_visit_json,
                     transcript_json, call_type, direction, site_id, agent_id, account_id,
-                    extracted_data, latency_metrics_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    extracted_data, latency_metrics_json, disconnect_reason, tool_calls_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -941,6 +946,10 @@ def save_call(record: dict) -> int | None:
                     if record.get("extracted_data")
                     else "",
                     json.dumps(record.get("latency_metrics") or {}, ensure_ascii=False),
+                    record.get("disconnect_reason") or "",
+                    json.dumps(record["tool_calls"], ensure_ascii=False)
+                    if record.get("tool_calls")
+                    else "",
                 ),
             )
             return cur.lastrowid

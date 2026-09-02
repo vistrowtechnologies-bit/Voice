@@ -980,6 +980,19 @@ def init_tables() -> None:
                 # phone-only concept). See _call_context_from_job's docstring
                 # for how it's actually detected.
                 ("direction", "TEXT"),
+                # Why the session actually ended, as LiveKit's CloseReason
+                # ("user_initiated", "participant_disconnected", "error",
+                # "task_completed", "job_shutdown"). Distinct from
+                # failure_reason above, which is a browser-reported string
+                # written only for widget calls by /widget/telemetry - phone
+                # calls previously had no end-of-call reason at all. Empty
+                # for every call recorded before this column existed.
+                ("disconnect_reason", "TEXT DEFAULT ''"),
+                # JSON array of this call's tool invocations:
+                # [{name, ok, ms, error}]. Latency comes from LiveKit's
+                # FunctionCall/FunctionCallOutput created_at pair, so it is a
+                # real measurement rather than an estimate.
+                ("tool_calls_json", "TEXT DEFAULT ''"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
@@ -2204,6 +2217,11 @@ def _call_dict(
         "failureReason": _row_get(row, "failure_reason"),
         "feedbackComment": _row_get(row, "feedback_comment"),
         "latencyMetrics": _load_json_field(_row_get(row, "latency_metrics_json"), {}),
+        # Why the call ended, for every channel — unlike failureReason above,
+        # which only widget calls ever set. Empty string on calls recorded
+        # before the column existed.
+        "disconnectReason": _row_get(row, "disconnect_reason") or "",
+        "toolCalls": _load_json_field(_row_get(row, "tool_calls_json"), []),
     }
     if credit_rates_by_type is not None:
         # Only computed for the single-call detail fetch (get_call) — using
