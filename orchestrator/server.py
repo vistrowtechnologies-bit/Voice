@@ -153,7 +153,12 @@ _PHONE_BARGE_IN_ENERGY_MULTIPLIER = 7.0
 # this to very possibly reproduce the same failure; that's fine, the goal
 # this time is evidence, not success. Revert to False after the test call
 # unless the evidence says otherwise.
-_PHONE_BARGE_IN_ENABLED = True
+# Keep the PSTN leg stable until we have a production-grade nonlinear echo
+# suppressor. The current linear/anchored canceller has repeatedly mistaken
+# the agent's own returned audio for caller speech on real EnableX calls,
+# cancelling replies and producing an apparent one-way-audio failure. Browser
+# calls still retain barge-in through their client-side AEC/VAD path.
+_PHONE_BARGE_IN_ENABLED = False
 # Suppress barge-in detection for this long after audio actually starts
 # going out (NOT from when the turn task started - the first ~2s of a turn
 # are STT/LLM/TTS with nothing playing at all). Covers the echo's round trip
@@ -182,11 +187,11 @@ _PLAYBACK_GAP_S = 0.25
 # still reset normally.
 _BARGE_IN_STREAK_DECAY = 5
 
-# voice_id -> account_id, populated on `incomingcall` so the `connected`
-# event (which doesn't repeat the dialed number reliably enough to re-derive
-# this) knows which tenant's EnableX credentials to use. Single-instance,
-# in-memory — fine as long as this service runs as one Railway replica (not
-# horizontally scaled); revisit as Postgres-backed if that ever changes.
+# voice_id -> account_id, populated as early as possible from any call event.
+# Normally that is `incomingcall`/`initiated`; the connected handler can also
+# recover it from either call leg when earlier callbacks are missing. Kept
+# in-memory while this service runs as one Railway replica; move to Postgres
+# before horizontally scaling.
 _PENDING_ACCOUNT_BY_VOICE_ID: dict[str, int] = {}
 # voice_id -> agent_id, populated alongside _PENDING_ACCOUNT_BY_VOICE_ID on
 # both the inbound (real phone-number lookup) and outbound (explicit
@@ -194,15 +199,88 @@ _PENDING_ACCOUNT_BY_VOICE_ID: dict[str, int] = {}
 # session for the right dashboard agent instead of always TEST_AGENT_ID.
 _PENDING_AGENT_BY_VOICE_ID: dict[str, int] = {}
 
-# voice_id -> (Session, greeting-synthesis Task) — started the moment the
-# `connected` webhook fires, running concurrently with start_stream()'s
-# retry loop and the EnableX->us WebSocket handshake instead of only
-# starting once `start_media` arrives. TTS synthesis was previously the
-# last step before any audio reached the caller, stacking on top of the
-# handshake latency as several extra seconds of dead air; overlapping it
-# here means the greeting is usually already synthesized by the time
-# start_media shows up.
+# voice_id -> (Session, greeting-synthesis Task) — started on the earliest
+# usable lifecycle event, overlapping ringing/accept, start_stream() and the
+# EnableX->us WebSocket handshake instead of waiting for `start_media`.
 _PENDING_GREETING_BY_VOICE_ID: dict[str, tuple[session_module.Session, asyncio.Task]] = {}
+
+
+def _event_number_candidates(event: dict) -> list[str]:
+    """Return likely tenant-owned numbers in the safest lookup order.
+
+    EnableX documents ``to`` as the owned DID for inbound calls and ``from``
+    as the owned CLI for outbound calls. In practice some portal-created test
+    calls omit ``direction`` and we have also observed callbacks arriving
+    without the initial ``incomingcall`` state, so keep the other leg as a
+    recovery candidate instead of dropping an already-connected call.
+    """
+    direction = str(event.get("direction") or "").strip().lower()
+    field_order = ("from", "to") if direction == "outbound" else ("to", "from")
+    candidates: list[str] = []
+    for field in field_order:
+        value = str(event.get(field) or "").strip()
+        if value and value not in candidates:
+            candidates.append(value)
+    return candidates
+
+
+async def _ensure_pending_call_context(event: dict) -> int | None:
+    """Resolve and prebuild call context from any lifecycle callback.
+
+    ``incomingcall`` is normally first, but real EnableX deliveries have
+    reached us as ``initiated``/``connected`` with no preceding inbound event.
+    Previously the connected handler returned early in that case and never
+    requested media streaming, guaranteeing silence. Deriving the tenant from
+    either call leg makes callback ordering non-fatal while preserving the
+    per-account orchestrator feature gate.
+    """
+    voice_id = str(event.get("voice_id") or "").strip()
+    if not voice_id:
+        return None
+
+    existing = _PENDING_ACCOUNT_BY_VOICE_ID.get(voice_id)
+    if existing is not None:
+        return existing
+
+    number_row = None
+    matched_number = ""
+    for candidate in _event_number_candidates(event):
+        number_row = await asyncio.to_thread(db.get_phone_number_by_number, candidate)
+        if number_row is not None:
+            matched_number = candidate
+            break
+
+    if number_row is None:
+        test_digits = "".join(c for c in TEST_PHONE_NUMBER if c.isdigit())
+        if test_digits and any(
+            "".join(c for c in candidate if c.isdigit()) == test_digits
+            for candidate in _event_number_candidates(event)
+        ):
+            account_id, agent_id = TEST_ACCOUNT_ID, TEST_AGENT_ID
+            matched_number = TEST_PHONE_NUMBER
+        else:
+            return None
+    else:
+        account_id, agent_id = number_row["account_id"], number_row["agent_id"]
+
+    if not account_id:
+        return None
+    if not await asyncio.to_thread(db.is_on_orchestrator_pipeline, account_id) and account_id != TEST_ACCOUNT_ID:
+        return None
+
+    _PENDING_ACCOUNT_BY_VOICE_ID[voice_id] = account_id
+    _PENDING_AGENT_BY_VOICE_ID[voice_id] = agent_id
+    if voice_id not in _PENDING_GREETING_BY_VOICE_ID:
+        sess = await _build_session_for_test_call(account_id=account_id, agent_id=agent_id)
+        _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
+            sess,
+            asyncio.create_task(session_module.build_greeting_audio(sess)),
+        )
+    logger.info(
+        "resolved EnableX call context: voice_id=%s account_id=%s agent_id=%s matched_number=%s state=%s direction=%s",
+        voice_id, account_id, agent_id, matched_number, event.get("state"), event.get("direction"),
+    )
+    return account_id
 
 
 async def _build_session_for_test_call(
@@ -365,71 +443,35 @@ async def enablex_inbound_event(event: dict = Body(...)) -> dict:
     )
 
     if state == "incomingcall":
-        # Real per-tenant routing: whichever account registered this exact
-        # number (any digit format - db.get_phone_number_by_number
-        # normalizes the lookup, same fix already applied here once before
-        # for the single-test-number comparison this replaces) owns the
-        # call. Falls back to the single feature-flagged test number only
-        # if it isn't found in phone_numbers at all, so the original
-        # Phase 2 test account keeps working even before it's ever been
-        # registered as a real phone_numbers row.
-        number_row = await asyncio.to_thread(db.get_phone_number_by_number, dialed_number or "")
-        if number_row is None:
-            dialed_digits = "".join(c for c in (dialed_number or "") if c.isdigit())
-            test_digits = "".join(c for c in TEST_PHONE_NUMBER if c.isdigit())
-            if not test_digits or dialed_digits != test_digits:
-                logger.info("ignoring call to %s — no registered tenant number", dialed_number)
-                return {"ok": True}
-            account_id, agent_id = TEST_ACCOUNT_ID, TEST_AGENT_ID
-        else:
-            account_id, agent_id = number_row["account_id"], number_row["agent_id"]
-        if not account_id:
-            logger.warning("no account_id resolved for call to %s — cannot accept", dialed_number)
+        account_id = await _ensure_pending_call_context(event)
+        if account_id is None:
+            logger.info("ignoring incoming call to %s — no eligible registered tenant number", dialed_number)
             return {"ok": True}
-        if not await asyncio.to_thread(db.is_on_orchestrator_pipeline, account_id) and account_id != TEST_ACCOUNT_ID:
-            logger.info("account %s not on orchestrator pipeline — ignoring call to %s", account_id, dialed_number)
-            return {"ok": True}
-        _PENDING_ACCOUNT_BY_VOICE_ID[voice_id] = account_id
-        _PENDING_AGENT_BY_VOICE_ID[voice_id] = agent_id
-        # Start building the session and synthesizing the greeting right
-        # now, overlapping with accept_call's round trip and the gap before
-        # `connected` fires - not just after. Inbound has no earlier "call
-        # placed" moment to hide this behind the way outbound does (ringing
-        # time absorbs it there); `incomingcall` is the earliest point we
-        # have, and skipping this head start was reported live as a
-        # 10-11s gap between the call connecting and the agent's voice
-        # actually starting - almost entirely the greeting TTS call itself
-        # (~6-8s measured), previously only ever kicked off once `connected`
-        # already fired. The `connected` handler below reuses this instead
-        # of rebuilding when it's already here.
-        sess = await _build_session_for_test_call(account_id=account_id, agent_id=agent_id)
-        _PENDING_GREETING_BY_VOICE_ID[voice_id] = (
-            sess,
-            asyncio.create_task(session_module.build_greeting_audio(sess)),
-        )
         result = await enablex.accept_call(voice_id, account_id)
         if not result.get("ok"):
             logger.warning("accept_call failed: %s", result.get("error"))
             _pop_pending_greeting(voice_id)
         return {"ok": True}
 
+    if state in ("initiated", "ringing"):
+        # Normally outbound calls placed through our endpoint are already in
+        # the pending maps. This also pre-warms direct portal/provider test
+        # calls and recovers inbound deliveries whose `incomingcall` event was
+        # omitted, reducing post-answer silence on the connected callback.
+        await _ensure_pending_call_context(event)
+        return {"ok": True}
+
     if state == "connected":
         account_id = _PENDING_ACCOUNT_BY_VOICE_ID.get(voice_id)
         if account_id is None:
-            # Normally means the call isn't ours (another app on the same
-            # EnableX account). But it also fires when the `incomingcall`
-            # event that populates this map never arrived at all — which is
-            # exactly what happened on 2026-08-21, when every inbound call
-            # went connected -> disconnected in silence. Returning quietly
-            # made a total inbound outage produce no error line anywhere,
-            # so it read as "no traffic" rather than "every call dropped".
-            # Log it so the next occurrence is visible in one grep.
+            account_id = await _ensure_pending_call_context(event)
+        if account_id is None:
             logger.info(
-                "connected for unknown voice_id=%s (to=%s) — no pending call context, "
-                "not streaming; expected an earlier `incomingcall` event for this call",
-                voice_id, dialed_number,
+                "connected for unknown voice_id=%s (from=%s to=%s direction=%s) — "
+                "neither leg belongs to an eligible registered tenant; not streaming",
+                voice_id, event.get("from"), dialed_number, event.get("direction"),
             )
-            return {"ok": True}  # not one of ours
+            return {"ok": True}
         wss_base = enablex.public_wss_host()
         if not wss_base:
             logger.warning("PUBLIC_BASE_URL/WSS_PUBLIC_HOST not set — cannot start streaming")

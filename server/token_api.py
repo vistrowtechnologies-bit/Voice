@@ -33,7 +33,7 @@ import widget_chat
 import voice_catalog
 from help_content import FAQS
 from dotenv import load_dotenv
-from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from livekit import api
@@ -3346,7 +3346,7 @@ def _verify_enablex_webhook(request: Request) -> bool:
 
 
 @app.post("/telephony/enablex/inbound-event")
-async def enablex_inbound_event(request: Request) -> dict:
+async def enablex_inbound_event(request: Request, background_tasks: BackgroundTasks) -> dict:
     """Webhook EnableX calls for inbound-call lifecycle events.
 
     Set this URL (…/telephony/enablex/inbound-event) as the webhook on your
@@ -3402,23 +3402,38 @@ async def enablex_inbound_event(request: Request) -> dict:
     caller = event.get("from")
     logger.info("EnableX inbound event: state=%s voice_id=%s to=%s from=%s raw=%s", state, voice_id, dialed_number, caller, event)
 
-    if dialed_number:
-        number_row = calls_db.get_phone_number_by_number(dialed_number)
-        if number_row is not None:
-            orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
-            if orchestrator_url and calls_db.is_on_orchestrator_pipeline(number_row["accountId"]):
+    # Inbound callbacks identify our DID in `to`; outbound callbacks identify
+    # our CLI in `from`. Checking both also covers EnableX portal test calls
+    # that omit a `direction` field. Previously those connected events were
+    # swallowed here and could never reach the media orchestrator.
+    number_row = None
+    for candidate in (dialed_number, caller):
+        if candidate:
+            number_row = calls_db.get_phone_number_by_number(candidate)
+            if number_row is not None:
+                break
+    if number_row is not None:
+        orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
+        if orchestrator_url and calls_db.is_on_orchestrator_pipeline(number_row["accountId"]):
+            # EnableX requires a quick 200 acknowledgment. Do the potentially
+            # slow cross-service request only after this response is sent;
+            # the orchestrator is callback-order tolerant and derives its
+            # tenant context from either call leg.
+            def _proxy_event() -> None:
                 try:
-                    request = urllib.request.Request(
+                    proxy_request = urllib.request.Request(
                         f"{orchestrator_url.rstrip('/')}/telephony/enablex/inbound-event",
                         data=json.dumps(event).encode(),
                         headers={"Content-Type": "application/json"},
                         method="POST",
                     )
-                    with urllib.request.urlopen(request, timeout=15) as resp:
-                        return json.loads(resp.read().decode())
-                except Exception as e:
+                    with urllib.request.urlopen(proxy_request, timeout=15) as resp:
+                        resp.read()
+                except Exception:
                     logger.exception("orchestrator inbound-event proxy failed")
-                    return {"ok": False, "error": f"Could not reach orchestrator: {e}"}
+
+            background_tasks.add_task(_proxy_event)
+            return {"ok": True}
 
     if state in _ENABLEX_TERMINAL_STATES:
         logger.info("EnableX inbound call %s ended: state=%s", voice_id, state)
