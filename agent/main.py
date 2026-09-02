@@ -3644,7 +3644,14 @@ async def entrypoint(ctx: JobContext) -> None:
     # reads as "someone in an office" rather than drawing attention to
     # itself. Off by default - unproven on real calls, so existing agents
     # don't change behavior until an operator turns it on.
-    if cfg.get("ambient_noise") == "on":
+    # A SIP participant has one telephone audio leg. BackgroundAudioPlayer
+    # publishes ambience as a *second* room track; on real inbound calls the
+    # SIP bridge subscribed to that track immediately after roomio_audio.
+    # Providers can then relay the second (very quiet) stream instead of the
+    # agent voice, producing a connected but apparently muted PSTN call.
+    # Keep ambience for WebRTC/widget experiences, where multiple audio
+    # tracks are supported, and keep the phone leg to one unambiguous track.
+    if cfg.get("ambient_noise") == "on" and call_context["call_type"] != "phone":
         try:
             background_audio = BackgroundAudioPlayer(
                 # volume here is a raw gain multiplier, NOT the 0.0-1.0 range
@@ -3665,6 +3672,11 @@ async def entrypoint(ctx: JobContext) -> None:
             background_audio_holder["player"] = background_audio
         except Exception:
             logger.exception("failed to start background audio for room %s", ctx.room.name)
+    elif cfg.get("ambient_noise") == "on":
+        logger.info(
+            "background ambience disabled for SIP phone call (room=%s)",
+            ctx.room.name,
+        )
 
 
 def _prewarm(proc: JobProcess) -> None:
