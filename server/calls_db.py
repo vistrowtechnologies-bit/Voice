@@ -5344,15 +5344,11 @@ _CREDIT_RATE_SETTINGS = {
     "phone": "credit_rate_phone",
 }
 
-# Hard gate on real money movement — flip to True only once introductory
-# prices are actually decided (after EnableX/LiveKit/Railway cost accounting
-# is done). PLAN_PRICING below stays populated regardless (billing_summary's
-# usage math needs *some* numbers to divide by), but /billing/checkout and
-# /billing/topup in token_api.py both refuse to run while this is False, so
-# no real Razorpay charge can happen at these placeholder rates no matter
-# what the frontend shows. Mirrors web-demo/src/lib/plans.ts's
-# PRICING_FINALIZED — keep both in sync.
-PRICING_FINALIZED = False
+# Hard gate on real money movement. /billing/checkout and /billing/topup in
+# token_api.py both refuse to run while this is False. Now True: introductory
+# prices are decided. Mirrors web-demo/src/lib/plans.ts's PRICING_FINALIZED
+# — keep both in sync.
+PRICING_FINALIZED = True
 
 # Mirrors web-demo/src/lib/plans.ts's PLANS array — the two can't share a
 # module (Python backend / TS frontend), so keep them in sync by hand. This
