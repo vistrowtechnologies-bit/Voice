@@ -264,6 +264,8 @@ export interface AgentConfig {
   // Post-call + integrations
   postCallFields: PostCallField[]
   webhookUrl: string
+  // Connected integration keys this agent fans out to (empty = all connected)
+  crmIntegrationKeys: string[]
   memoryEnabled: boolean
   createdAt: string
   updatedAt: string

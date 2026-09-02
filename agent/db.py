@@ -696,11 +696,18 @@ def record_callback_request(
         conn.close()
 
 
-def get_delivery_integrations(account_id: int | None) -> list[dict]:
+def get_delivery_integrations(
+    account_id: int | None, allowed_keys: list[str] | None = None
+) -> list[dict]:
     """This tenant's connected lead-delivery integrations (Slack/Sheets/
     WhatsApp/CRM/ArthaLeads), account-scoped, as [{key, config}]. Empty on any
     error — integration delivery is best-effort and must never break a live
-    call."""
+    call.
+
+    allowed_keys, when non-empty, further restricts delivery to just those
+    integration keys (an agent's crm_integration_keys) — an empty/None list
+    means "all connected", the behavior every agent had before this field
+    existed."""
     if account_id is None:
         return []
     conn = dbconn.connect()
@@ -711,6 +718,9 @@ def get_delivery_integrations(account_id: int | None) -> list[dict]:
             "AND key IN ('webhook', 'slack', 'whatsapp', 'sheets', 'arthaleads', 'zoho_crm')",
             (account_id,),
         ).fetchall()
+        if allowed_keys:
+            allowed = set(allowed_keys)
+            rows = [r for r in rows if r["key"] in allowed]
         return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
     except psycopg.Error:
         return []

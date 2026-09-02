@@ -684,7 +684,12 @@ async def _deliver_zoho_crm_lead(http: aiohttp.ClientSession, account_id: int | 
     return ok
 
 
-async def _deliver_to_integrations(account_id: int | None, lead: dict, call_id: int | None = None) -> None:
+async def _deliver_to_integrations(
+    account_id: int | None,
+    lead: dict,
+    call_id: int | None = None,
+    allowed_keys: list[str] | None = None,
+) -> None:
     """Deliver an event to every connected integration for this tenant.
     Best-effort and heavily guarded — never lets a bad integration disturb the
     live call. The per-agent CRM webhook (_post_webhook) still fires separately.
@@ -698,9 +703,12 @@ async def _deliver_to_integrations(account_id: int | None, lead: dict, call_id: 
     from the integration-level last_sync/last_error, which only reflect the
     most recent attempt across every call and can't answer "did THIS lead
     make it to the CRM?" from the call's own detail page.
+
+    allowed_keys restricts delivery to this agent's own crm_integration_keys
+    (empty/None = every connected integration, unchanged default behavior).
     """
     try:
-        integrations = db.get_delivery_integrations(account_id)
+        integrations = db.get_delivery_integrations(account_id, allowed_keys)
     except Exception:
         logger.warning("get_delivery_integrations raised for account_id=%s", account_id, exc_info=True)
         return
@@ -759,10 +767,13 @@ async def _deliver_to_integrations(account_id: int | None, lead: dict, call_id: 
 
 
 async def _fan_out_integrations(context: RunContext, lead: dict) -> None:
-    """Mid-call convenience wrapper — pulls account_id from the function
-    tool's RunContext.userdata. See _deliver_to_integrations for the actual
-    delivery logic."""
-    await _deliver_to_integrations((context.userdata or {}).get("account_id"), lead)
+    """Mid-call convenience wrapper — pulls account_id/crm_integration_keys
+    from the function tool's RunContext.userdata. See _deliver_to_integrations
+    for the actual delivery logic."""
+    userdata = context.userdata or {}
+    await _deliver_to_integrations(
+        userdata.get("account_id"), lead, allowed_keys=userdata.get("crm_integration_keys")
+    )
 
 
 async def _publish_event(context: RunContext, payload: dict) -> None:

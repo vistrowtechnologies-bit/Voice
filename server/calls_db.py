@@ -1028,6 +1028,11 @@ def init_tables() -> None:
                 # human handoff requests. Blank means no fallback attempt -
                 # a crashed call just ends, same as today.
                 ("emergency_fallback_number", "TEXT DEFAULT ''"),
+                # Which of this account's connected lead-delivery integrations
+                # (integrations.key values) this agent fans out to. Empty
+                # array = "all connected" (today's behavior, unchanged for
+                # every agent created before this field existed).
+                ("crm_integration_keys", "TEXT DEFAULT '[]'"),
             ):
                 conn.execute(f"ALTER TABLE agents ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # Per-number monthly line item — EnableX charges Vistrow for every
@@ -2727,13 +2732,13 @@ _AGENT_FIELDS = (
     "max_call_duration_s", "enabled_functions", "transfer_phone",
     "custom_functions", "post_call_fields", "webhook_url", "memory_enabled",
     "emotion_intensity", "ambient_noise", "business_name", "public_demo_slug",
-    "emergency_fallback_number",
+    "emergency_fallback_number", "crm_integration_keys",
 )
 # INTEGER columns fed from a JSON bool (Postgres has no bool->int cast).
 _AGENT_BOOL_FIELDS = frozenset({"is_platform_demo", "memory_enabled"})
 # TEXT columns that hold a JSON array — the frontend sends a real
 # array/object, stored as a JSON string, parsed back out in _agent_dict.
-_AGENT_JSON_FIELDS = frozenset({"custom_functions", "post_call_fields"})
+_AGENT_JSON_FIELDS = frozenset({"custom_functions", "post_call_fields", "crm_integration_keys"})
 # camelCase (API) -> snake_case (column) for every field whose names differ.
 _AGENT_CAMEL_TO_SNAKE = {
     "systemPrompt": "system_prompt",
@@ -2757,6 +2762,7 @@ _AGENT_CAMEL_TO_SNAKE = {
     "businessName": "business_name",
     "publicDemoSlug": "public_demo_slug",
     "emergencyFallbackNumber": "emergency_fallback_number",
+    "crmIntegrationKeys": "crm_integration_keys",
 }
 
 
@@ -2805,6 +2811,7 @@ def _agent_dict(row: dict) -> dict:
         "enabledFunctions": row["enabled_functions"] or "",
         "transferPhone": row["transfer_phone"] or "",
         "emergencyFallbackNumber": _row_get(row, "emergency_fallback_number") or "",
+        "crmIntegrationKeys": _load_json_field(_row_get(row, "crm_integration_keys"), []),
         "customFunctions": _load_json_field(row["custom_functions"], []),
         "postCallFields": _load_json_field(row["post_call_fields"], []),
         "webhookUrl": row["webhook_url"] or "",

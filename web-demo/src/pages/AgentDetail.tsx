@@ -8,6 +8,7 @@ import { useAuth } from '../lib/auth'
 import {
   deleteAgent,
   fetchAgents,
+  fetchIntegrations,
   fetchKnowledgeBases,
   fetchMyVoices,
   updateAgent,
@@ -21,9 +22,14 @@ import {
   voiceLabel,
   voicePickerGroups,
 } from '../lib/agentOptions'
-import type { AgentConfig, CustomFunction, KnowledgeBase, PostCallField, VoiceEntry } from '../lib/types'
+import type { AgentConfig, CustomFunction, Integration, KnowledgeBase, PostCallField, VoiceEntry } from '../lib/types'
 
 type AgentForm = Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>
+
+// Same set agent/db.py's get_delivery_integrations() will actually deliver
+// to - keeps this picker from offering integrations that can never receive
+// a lead (e.g. facebook, which isn't a delivery target).
+const DELIVERY_KEYS = new Set(['webhook', 'slack', 'whatsapp', 'sheets', 'arthaleads', 'zoho_crm'])
 
 // Its own routed page (/dashboard/agents/:id) rather than an inline panel on
 // the Agents list - editing a specific agent is a distinct enough task (and
@@ -138,6 +144,7 @@ function AgentEditorForm({
     postCallFields: agent.postCallFields ?? [],
     webhookUrl: agent.webhookUrl ?? '',
     memoryEnabled: agent.memoryEnabled ?? false,
+    crmIntegrationKeys: agent.crmIntegrationKeys ?? [],
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -147,6 +154,13 @@ function AgentEditorForm({
   const [myVoices, setMyVoices] = useState<VoiceEntry[]>([])
   useEffect(() => {
     fetchMyVoices().then(setMyVoices).catch(() => setMyVoices([]))
+  }, [])
+  // Connected lead-delivery integrations this agent can be scoped to.
+  const [connectedIntegrations, setConnectedIntegrations] = useState<Integration[]>([])
+  useEffect(() => {
+    fetchIntegrations()
+      .then((list) => setConnectedIntegrations(list.filter((i) => i.status === 'connected' && DELIVERY_KEYS.has(i.key))))
+      .catch(() => setConnectedIntegrations([]))
   }, [])
 
   const set = <K extends keyof AgentForm>(key: K, value: AgentForm[K]) =>
@@ -519,6 +533,46 @@ function AgentEditorForm({
               className={inputCls}
             />
           </Field>
+        </Panel>
+
+        <Panel icon="hub" title="CRM routing" subtitle="Which connected integrations this agent delivers leads to">
+          {connectedIntegrations.length === 0 ? (
+            <p className="text-xs text-text-muted">
+              No connected integrations yet.{' '}
+              <Link to="/dashboard/integrations" className="text-primary hover:underline">
+                Connect one
+              </Link>{' '}
+              to route leads from this agent.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <p className="text-[10px] text-text-muted">
+                None selected = deliver to every connected integration (default). Select specific ones to
+                limit this agent to only those.
+              </p>
+              {connectedIntegrations.map((integ) => {
+                const checked = form.crmIntegrationKeys.includes(integ.key)
+                return (
+                  <label key={integ.key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) =>
+                        set(
+                          'crmIntegrationKeys',
+                          e.target.checked
+                            ? [...form.crmIntegrationKeys, integ.key]
+                            : form.crmIntegrationKeys.filter((k) => k !== integ.key)
+                        )
+                      }
+                      className="accent-primary"
+                    />
+                    {integ.name}
+                  </label>
+                )
+              })}
+            </div>
+          )}
         </Panel>
 
         <Panel icon="psychology" title="Memory" subtitle="Recognize returning callers">

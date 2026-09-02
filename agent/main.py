@@ -2834,6 +2834,9 @@ async def entrypoint(ctx: JobContext) -> None:
         # This agent's own id, so book_appointment can attribute the booking
         # to it (appointments.agent_id).
         "agent_id": cfg.get("id"),
+        # Which of the tenant's connected integrations THIS agent fans out
+        # to (empty = all connected, unchanged default behavior).
+        "crm_integration_keys": cfg.get("crm_integration_keys") or [],
         # Raw per-turn timings are captured from LiveKit's provider metrics
         # below and persisted with the call for tenant/admin p50/p95 tuning.
         "latency_metrics": {
@@ -3369,7 +3372,8 @@ async def entrypoint(ctx: JobContext) -> None:
         # the full transcript, which is only known once the call is over.
         await _deliver_to_integrations(
             cfg.get("account_id"),
-            {
+            allowed_keys=cfg.get("crm_integration_keys") or None,
+            lead={
                 "type": "call_completed",
                 "name": lead_data.get("name"),
                 "phone": lead_data.get("phone"),
