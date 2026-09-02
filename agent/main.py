@@ -24,6 +24,7 @@ from livekit.agents import (
     JobContext,
     JobProcess,
     RoomInputOptions,
+    StopResponse,
     TurnHandlingOptions,
     WorkerOptions,
     cli,
@@ -490,6 +491,22 @@ _HEALTHCARE_SYMPTOM_PATTERN = re.compile(
     r"pain|hurt|ache|symptom|fever|bleed|vomit|dizzy|breath|"
     r"दर्द|तकलीफ|पेट|बुखार|खून|उल्टी|चक्कर|साँस|सांस|"
     r"वेदना|ताप|रक्त|வலி|காய்ச்சல்|నొప్పి|ಜ್ವರ|വേദന|പനി|ব্যথা|জ্বর|ਦਰਦ|ਬੁਖਾਰ|ଦରଦ|ଜ୍ୱର",
+    re.IGNORECASE,
+)
+# Deliberately narrow and high-precision: an outbound call's first "user"
+# turn is the callee's own line, which on a real answer is a live human,
+# but on an unanswered/forwarded line is an answering machine/carrier
+# voicemail box reciting its own greeting. False positives here would cut
+# the agent off on a live prospect mid-greeting, so this only fires on
+# phrasing that's essentially unique to a recorded voicemail prompt (never
+# said by a live human in casual conversation) rather than loose overlap
+# terms like "not available" that a real person says constantly.
+_VOICEMAIL_GREETING_PATTERN = re.compile(
+    r"(leave|record).{0,25}(a\s+)?message.{0,25}(after the (tone|beep)|at the (tone|beep))|"
+    r"after the (tone|beep).{0,25}(leave|record)|"
+    r"voice ?mail(box)?|voicemail|"
+    r"mailbox is full|"
+    r"वॉइस ?मेल|आवाज़ संदेश|संदेश छोड़ें|टोन के बाद",
     re.IGNORECASE,
 )
 
@@ -1892,6 +1909,32 @@ class RealEstateAgent(Agent):
         _userdata = self.session.userdata
         _lead_data = _userdata.get("lead_data") or {}
 
+        # Voicemail detection — only checked once, on the FIRST thing the
+        # other party says on a call WE placed (an inbound caller is by
+        # definition a live human who dialled us). If it reads like a
+        # recorded voicemail prompt, skip the normal LLM pitch entirely:
+        # leave one short line and hang up rather than talking to a
+        # machine for the rest of the call.
+        if not _userdata.get("voicemail_checked") and _userdata.get("direction") == "outbound":
+            _userdata["voicemail_checked"] = True
+            if text and _VOICEMAIL_GREETING_PATTERN.search(text):
+                _room = _userdata.get("room")
+                logger.info("voicemail detected on outbound call (room=%s)", getattr(_room, "name", None))
+                business_name = getattr(self, "_business_name", "") or ""
+                closing = (
+                    f"Hi, this is a call from {business_name}. Sorry we missed you — please call us back "
+                    "when you're free, or we'll try again soon. Thanks, have a great day!"
+                    if business_name and business_name != "this business"
+                    else "Hi, sorry we missed you — we'll try reaching you again soon. Have a great day!"
+                )
+                # Set BEFORE speaking (not after) — _on_agent_state_changed's
+                # hang-up watches for the "speaking" -> not-speaking edge, and
+                # say() below can complete that transition before the line
+                # after it would otherwise run.
+                _userdata["ending_call"] = True
+                await self.session.say(closing)
+                raise StopResponse()
+
         _last_assistant_text = ""
         for item in reversed(turn_ctx.items):
             if getattr(item, "role", None) == "assistant":
@@ -2837,6 +2880,12 @@ async def entrypoint(ctx: JobContext) -> None:
         # Which of the tenant's connected integrations THIS agent fans out
         # to (empty = all connected, unchanged default behavior).
         "crm_integration_keys": cfg.get("crm_integration_keys") or [],
+        # "inbound"/"outbound"/None — read by on_user_turn_completed's
+        # voicemail check, which only makes sense on a call WE placed.
+        "direction": call_context.get("direction"),
+        # First user turn on an outbound call hasn't been checked for a
+        # voicemail greeting yet.
+        "voicemail_checked": False,
         # Raw per-turn timings are captured from LiveKit's provider metrics
         # below and persisted with the call for tenant/admin p50/p95 tuning.
         "latency_metrics": {
