@@ -2569,12 +2569,34 @@ def _guard_admin_only_model(data: dict | None, account_id: int) -> None:
         raise HTTPException(400, "That model is available only to the Vistrow admin account.")
 
 
+def _guard_voice_tier(data: dict | None, account_id: int) -> None:
+    # Confirmed real gap: add_account_voice (the /voices/mine "add to my
+    # menu" route) checks allowed_tiers_for_plan, but create_agent and
+    # update_agent only ever checked the preview flag - a direct API call
+    # setting an agent's voice straight to a Premium string, never going
+    # through the account's curated menu, sailed through untouched. The
+    # dashboard's own voice picker only offers voices already in that
+    # menu (see AgentDetail.tsx's "the only voices this picker offers"),
+    # so this was unreachable from the UI, but the backend must not rely
+    # on that.
+    requested_voice = str((data or {}).get("voice") or "")
+    if not requested_voice:
+        return
+    entry = voice_catalog.get_voice(requested_voice)
+    if entry is None:
+        return
+    is_owner = calls_db.is_platform_owner(account_id)
+    if entry.get("preview") and not is_owner:
+        raise HTTPException(400, "That preview voice is available only to the Vistrow admin account.")
+    allowed = voice_catalog.allowed_tiers_for_plan(calls_db.get_account_plan(account_id), is_owner)
+    if entry["tier"] not in allowed:
+        label = voice_catalog.TIER_META[entry["tier"]]["label"]
+        raise HTTPException(400, f"{label} voices aren't available on your plan - upgrade to use this voice.")
+
+
 @app.post("/agents")
 def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
-    requested_voice = str((data or {}).get("voice") or "")
-    entry = voice_catalog.get_voice(requested_voice) if requested_voice else None
-    if entry and entry.get("preview") and not calls_db.is_platform_owner(user["account_id"]):
-        raise HTTPException(400, "That preview voice is available only to the Vistrow admin account.")
+    _guard_voice_tier(data, user["account_id"])
     _guard_admin_only_model(data, user["account_id"])
     try:
         return calls_db.create_agent(data, user["account_id"])
@@ -2584,10 +2606,7 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
 
 @app.patch("/agents/{agent_id}")
 def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
-    requested_voice = str((data or {}).get("voice") or "")
-    entry = voice_catalog.get_voice(requested_voice) if requested_voice else None
-    if entry and entry.get("preview") and not calls_db.is_platform_owner(user["account_id"]):
-        raise HTTPException(400, "That preview voice is available only to the Vistrow admin account.")
+    _guard_voice_tier(data, user["account_id"])
     _guard_admin_only_model(data, user["account_id"])
     # Both of these decide what the PUBLIC marketing site talks to, so only
     # the platform operator's own account may set them: isPlatformDemo
