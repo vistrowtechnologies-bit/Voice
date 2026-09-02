@@ -406,20 +406,32 @@ export function Billing() {
                       <Icon name="bolt" className="text-[14px]" />
                       {plan.credits}
                     </div>
-                    <ul className="mb-4 mt-3 flex flex-col gap-1.5 text-xs text-text-muted">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-center gap-1.5">
-                        <Icon name="check" className="text-[14px] text-cyan" />
-                        {f}
-                      </li>
-                    ))}
-                    {plan.lockedFeatures?.map((f) => (
-                      <li key={f} className="flex items-center gap-1.5 text-text-muted/50">
-                        <Icon name="lock" className="text-[14px]" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
+                    <ul className="mt-3 flex flex-col gap-1.5 text-xs text-text-muted">
+                      {plan.features.map((f) => (
+                        <li key={f} className="flex items-center gap-1.5">
+                          <Icon name="check" className="text-[14px] text-cyan" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                    {plan.lockedFeatures && plan.lockedFeatures.length > 0 && (
+                      <div className="mb-4 mt-4 border-t border-border pt-3">
+                        <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-text-muted">
+                          <Icon name="lock" className="text-[13px]" />
+                          Premium features
+                        </p>
+                        <ul className="flex flex-col gap-1.5 text-xs">
+                          {plan.lockedFeatures.map((f) => (
+                            <li key={f} className="flex items-center justify-between gap-2 text-text-muted/60">
+                              <span>{f}</span>
+                              <span className="rounded-full border border-border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-text-muted/60">
+                                Scale only
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     {isCurrent ? (
                       <button
                         disabled
