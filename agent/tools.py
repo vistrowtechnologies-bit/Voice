@@ -653,6 +653,7 @@ async def _deliver_zoho_crm_lead(http: aiohttp.ClientSession, account_id: int | 
     access_token = config.get("access_token")
     api_domain = (config.get("api_domain") or "https://www.zohoapis.com").rstrip("/")
     if not access_token or not config.get("refresh_token"):
+        logger.warning("zoho_crm: config missing token fields, keys=%s", sorted(config.keys()))
         return False
 
     async def _post(token: str) -> tuple[bool, int | None]:
@@ -723,6 +724,7 @@ async def _deliver_to_integrations(account_id: int | None, lead: dict, call_id: 
                         logger.info("delivered lead to zoho_crm integration")
                         db.touch_integration_sync(account_id, "zoho_crm")
                     else:
+                        logger.warning("zoho_crm delivery returned falsy — marking integration error")
                         db.mark_integration_error(account_id, "zoho_crm", "Delivery failed — check connection")
                     continue
                 shaped = _integration_body(integ["key"], integ.get("config") or {}, lead)
