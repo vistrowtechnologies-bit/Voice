@@ -274,6 +274,49 @@ def _looks_like_farewell(text: str) -> bool:
     return any(word in lowered for word in _FAREWELL_WORDS)
 
 
+# capture_platform_lead/log_lead (tools.py) both write into userdata["lead_data"]
+# already — this just reflects that dict back into the model's own context each
+# turn instead of leaving it to re-derive "what did I already ask" from
+# scrollback. Confirmed real failures this fixes: a caller's team-size answer
+# landed across three fragmented turns and got asked again; a caller confirmed
+# their sales focus in Hindi and got asked again in Marathi after a language
+# switch — cross-language re-asking scrollback can't catch, a structured
+# snapshot can.
+_LEAD_FACT_LABELS = {
+    "name": "name",
+    "phone": "phone",
+    "email": "email",
+    "company": "company",
+    "use_case": "use case",
+    "team_size": "team size",
+    "budget": "budget",
+    "location": "location",
+    "timeline": "timeline",
+}
+
+
+def _facts_reminder(lead_data: dict) -> str:
+    known = [f"{label}: {lead_data[key]}" for key, label in _LEAD_FACT_LABELS.items() if lead_data.get(key)]
+    if not known:
+        return ""
+    return (
+        "# What you already know about this caller — do not ask for any of this again\n"
+        + "\n".join(known)
+    )
+
+
+def _current_objective(lead_data: dict, appointment_booked: bool) -> str:
+    if appointment_booked:
+        return "# Current objective\nClosing — the appointment is confirmed. Wrap up, don't reopen discovery."
+    if lead_data.get("name") and (lead_data.get("phone") or lead_data.get("email")):
+        return (
+            "# Current objective\nYou have this caller's name and a way to reach them — call "
+            "capture_platform_lead or log_lead now if you have not already this call, then move "
+            "toward scheduling or closing. Do not let this sit uncaptured."
+        )
+    return "# Current objective\nDiscovery — you don't yet have enough to capture this as a lead."
+
+
 # The cadence cap ("max one filler every 3-5 turns") only holds if something
 # counts fillers used, since "use fillers sparingly" is prose the model does
 # not reliably self-track over a multi-turn call — the same lesson as the
@@ -1778,6 +1821,8 @@ class RealEstateAgent(Agent):
     ) -> None:
         text = new_message.text_content
         self._booking_confirmed_this_turn = False
+        _userdata = self.session.userdata
+        _lead_data = _userdata.get("lead_data") or {}
 
         _last_assistant_text = ""
         for item in reversed(turn_ctx.items):
@@ -1831,6 +1876,26 @@ class RealEstateAgent(Agent):
                     "reply with a goodbye in plain text without calling it."
                 ),
             )
+            if (
+                (_lead_data.get("name") and (_lead_data.get("phone") or _lead_data.get("email")))
+                and not _userdata.get("lead_captured")
+            ):
+                # Confirmed real failure (call 779): name and phone were both
+                # given and read back to confirm, the caller asked to book a
+                # demo — and the call ended with neither captured nor booked.
+                # The farewell nudge above only reminds about end_call; this
+                # is the same belt-and-suspenders shape for the tool that
+                # actually saves the lead, which is useless to add AFTER the
+                # call is already over.
+                turn_ctx.add_message(
+                    role="system",
+                    content=(
+                        "This caller looks like they're wrapping up, but you have their name and "
+                        "contact info and have NOT saved it yet. Call capture_platform_lead or "
+                        "log_lead THIS turn, before end_call — do not let this call close with an "
+                        "uncaptured lead."
+                    ),
+                )
 
         # Language + gender are combined into ONE system message per turn,
         # deliberately, with gender LAST. Two earlier attempts added these as
@@ -2128,6 +2193,8 @@ class RealEstateAgent(Agent):
             if self._has_web_search and _FACT_LOOKUP_PATTERN.search(text)
             else ""
         )
+        _facts_reminder_text = _facts_reminder(_lead_data)
+        _objective_text = _current_objective(_lead_data, self._appointment_booked)
         turn_ctx.add_message(
             role="system",
             content=_language_instruction
@@ -2140,7 +2207,10 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _intake_instruction if _intake_instruction else "")
             + ("\n\n" + _healthcare_safety_instruction if _healthcare_safety_instruction else "")
             + ("\n\n" + _post_booking_instruction if _post_booking_instruction else "")
-            + ("\n\n" + _search_instruction if _search_instruction else ""),
+            + ("\n\n" + _search_instruction if _search_instruction else "")
+            + ("\n\n" + _facts_reminder_text if _facts_reminder_text else "")
+            + "\n\n"
+            + _objective_text,
         )
 
         if emotion != self._current_emotion:
@@ -2668,6 +2738,10 @@ async def entrypoint(ctx: JobContext) -> None:
     userdata = {
         "room": ctx.room,
         "lead_data": lead_data,
+        # Set True by capture_platform_lead/log_lead once either succeeds —
+        # lets on_user_turn_completed's farewell check tell a captured lead
+        # apart from one that's known but never got saved (call 779).
+        "lead_captured": False,
         "ending_call": False,
         # Read by the transfer_call tool.
         "transfer_phone": (cfg.get("transfer_phone") or "").strip(),

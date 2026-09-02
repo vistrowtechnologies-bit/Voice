@@ -1154,6 +1154,8 @@ async def log_lead(
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is not None:
         lead_data.update(name=name, phone=phone, budget=budget, location=location, timeline=timeline)
+        if context.userdata is not None:
+            context.userdata["lead_captured"] = True
     event = {
         "type": "lead_update",
         "name": name,
@@ -1222,6 +1224,8 @@ async def capture_platform_lead(
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is not None:
         lead_data.update(name=name, phone=contact, company=company, use_case=use_case, team_size=team_size)
+        if context.userdata is not None:
+            context.userdata["lead_captured"] = True
     event = {
         "type": "platform_lead_update",
         "name": name,
