@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
-import { StatTile } from '../components/ui/StatTile'
 import {
   LANGUAGE_NAMES,
   analyzeCall,
@@ -339,26 +338,10 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
         </section>
       ) : (
       <>
-      {/* Call outcome is NOT a tile here: the dialog header already carries
-          the Completed/Failed pill right above this strip, and showing the
-          same verdict twice in one glance is noise. Duration moved down into
-          Call details with the other per-call facts. */}
-      <section className="grid grid-cols-2 gap-3 px-4 pt-4 sm:px-6">
-        <StatTile
-          label="Credits used"
-          value={call.creditsUsed != null ? String(call.creditsUsed) : '—'}
-          icon="toll"
-          tone="primary"
-          compact
-        />
-        <StatTile
-          label="Sentiment"
-          value={call.sentiment.charAt(0).toUpperCase() + call.sentiment.slice(1)}
-          icon="mood"
-          tone={call.sentiment === 'negative' ? 'destructive' : call.sentiment === 'positive' ? 'success' : 'muted'}
-          compact
-        />
-      </section>
+      {/* No headline stat strip at all now. Outcome duplicated the header
+          pill, and credits/sentiment/duration are per-call facts that belong
+          with the rest of them in Call details - a two-tile band spanning the
+          full dialog gave them more weight than the transcript underneath. */}
       <section className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:grid-cols-3">
         <Card className="flex flex-col gap-3 lg:col-span-2">
           <div className="flex items-center justify-between">
@@ -549,8 +532,17 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
                 as a long list rather than the boxed, at-a-glance layout
                 being matched here. Free-text facts (website, page, feedback
                 notes) don't fit a fixed-width box and stay as rows below. */}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {/* Two columns, not three: this card sits in the dialog's narrow
+                right rail, and at three-up every box was ~110px wide, which
+                truncated both the label AND the value ("DURATI…" / "Websit…").
+                Two-up gives each box room to show its text in full. */}
+            <div className="grid grid-cols-2 gap-2">
               <MiniStat icon="schedule" label="Duration" value={formatDuration(call.durationSeconds)} />
+              <MiniStat
+                icon="mood"
+                label="Sentiment"
+                value={call.sentiment.charAt(0).toUpperCase() + call.sentiment.slice(1)}
+              />
               <MiniStat icon="flag" label="Lead stage" value={call.status} />
               <MiniStat icon="call_split" label="Channel" value={call.channel} />
               <MiniStat icon="support_agent" label="Agent" value={call.agent} />
@@ -734,11 +726,15 @@ function ModalShell({ onClose, children }: { onClose: () => void; children: Reac
 // this narrow.
 function MiniStat({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-2">
-      <Icon name={icon} className="shrink-0 text-[16px] text-text-muted" />
+    <div className="flex items-start gap-2 rounded-lg border border-border px-2.5 py-2">
+      <Icon name={icon} className="mt-0.5 shrink-0 text-[15px] text-text-muted" />
+      {/* Wraps rather than truncates. These are short facts an operator needs
+          to actually read - a clipped "MODEL …" or "Websit…" is worse than a
+          box one line taller, and the boxes are in a fixed grid so an extra
+          line does not push anything sideways. */}
       <div className="min-w-0">
-        <p className="truncate text-[10px] font-bold uppercase tracking-wide text-text-muted">{label}</p>
-        <p className="truncate text-xs font-semibold capitalize text-text">{value}</p>
+        <p className="text-[10px] font-bold uppercase leading-tight tracking-wide text-text-muted">{label}</p>
+        <p className="break-words text-xs font-semibold capitalize leading-snug text-text">{value}</p>
       </div>
     </div>
   )
