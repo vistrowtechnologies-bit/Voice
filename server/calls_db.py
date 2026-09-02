@@ -5984,14 +5984,17 @@ def mark_invoice_paid(razorpay_order_id: str | None = None, razorpay_payment_id:
         conn.close()
 
 
-def mark_invoice_failed(razorpay_order_id: str) -> None:
+def mark_invoice_failed(razorpay_order_id: str) -> bool:
+    """Returns whether a matching invoice was actually found, so the
+    webhook handler can log a lookup miss instead of assuming success."""
     conn = _connect()
     try:
         with conn:
-            conn.execute(
+            cur = conn.execute(
                 "UPDATE invoices SET status = 'failed' WHERE razorpay_order_id = ? AND status != 'paid'",
                 (razorpay_order_id,),
             )
+            return cur.rowcount > 0
     finally:
         conn.close()
 

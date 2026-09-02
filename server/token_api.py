@@ -3639,6 +3639,12 @@ async def billing_razorpay_webhook(request: Request) -> dict:
                 current_period_end=_epoch_to_iso(sub.get("current_end")),
             )
             admin_db.change_plan(account_id, plan)
+        else:
+            # Confirmed real gap: this used to fall through silently — a real
+            # subscription activating with no matching account_id (stale
+            # subscription id, race with checkout) produced zero trace,
+            # while Razorpay still got 200 OK and never retried.
+            logger.warning("razorpay %s: no account for subscription %s", event_type, sub.get("id"))
 
     elif event_type == "subscription.charged":
         sub = payload.get("subscription", {}).get("entity", {})
@@ -3691,6 +3697,8 @@ async def billing_razorpay_webhook(request: Request) -> dict:
                 current_period_start=new_period_start, current_period_end=new_period_end,
             )
             admin_db.change_plan(account_id, plan)
+        else:
+            logger.warning("razorpay subscription.charged: no account for subscription %s", sub.get("id"))
 
     elif event_type == "subscription.cancelled":
         sub = payload.get("subscription", {}).get("entity", {})
@@ -3705,6 +3713,10 @@ async def billing_razorpay_webhook(request: Request) -> dict:
                     current_period_start=existing["current_period_start"],
                     current_period_end=existing["current_period_end"],
                 )
+            else:
+                logger.warning("razorpay subscription.cancelled: account %s has no subscription row", account_id)
+        else:
+            logger.warning("razorpay subscription.cancelled: no account for subscription %s", sub.get("id"))
 
     elif event_type == "payment.captured":
         # Only relevant for one-off orders (top-ups) — subscription charges
@@ -3713,14 +3725,22 @@ async def billing_razorpay_webhook(request: Request) -> dict:
         order_id = payment.get("order_id")
         if order_id:
             invoice = calls_db.mark_invoice_paid(razorpay_order_id=order_id, razorpay_payment_id=payment.get("id"))
-            if invoice and invoice["kind"] == "topup" and invoice["credits"]:
-                calls_db.add_topup_credits(invoice["account_id"], invoice["credits"])
+            if invoice:
+                if invoice["kind"] == "topup" and invoice["credits"]:
+                    calls_db.add_topup_credits(invoice["account_id"], invoice["credits"])
+            else:
+                logger.warning("razorpay payment.captured: no invoice for order %s (payment %s)", order_id, payment.get("id"))
+        else:
+            logger.warning("razorpay payment.captured: payment %s has no order_id", payment.get("id"))
 
     elif event_type == "payment.failed":
         payment = payload.get("payment", {}).get("entity", {})
         order_id = payment.get("order_id")
         if order_id:
-            calls_db.mark_invoice_failed(order_id)
+            if not calls_db.mark_invoice_failed(order_id):
+                logger.warning("razorpay payment.failed: no invoice for order %s", order_id)
+        else:
+            logger.warning("razorpay payment.failed: payment %s has no order_id", payment.get("id"))
     return {"ok": True}
 
 
