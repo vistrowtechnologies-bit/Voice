@@ -6,6 +6,7 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
 import { fetchBilling, fetchSubscription, startCheckout, startTopup, verifyTopupPayment } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { CONTACT_EMAIL } from '../lib/marketingContent'
 import { ANNUAL_MONTHS_CHARGED, PLANS, PRICING_FINALIZED } from '../lib/plans'
 import type { BillingSummary, Invoice } from '../lib/types'
 
@@ -365,36 +366,47 @@ export function Billing() {
               const isDowngrade = PLANS.findIndex((p) => p.key === plan.key) < currentRank
               const displayPrice =
                 cycle === 'annual' ? `₹${(plan.priceInr * ANNUAL_MONTHS_CHARGED).toLocaleString('en-IN')}` : plan.price
+              const gstInr = plan.priceInr * (cycle === 'annual' ? ANNUAL_MONTHS_CHARGED : 1) * 0.18
               return (
                 <div
                   key={plan.name}
-                  className={`flex flex-col rounded-xl border bg-surface p-5 ${
+                  className={`flex flex-col overflow-hidden rounded-xl border bg-surface ${
                     plan.tag === 'Recommended' ? 'border-cyan/50' : plan.tag === 'Most Popular' ? 'border-amber/50' : 'border-border'
                   }`}
                 >
-                  {plan.tag && (
-                    <span
-                      className={`mb-2 self-start rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${
+                  {plan.tag ? (
+                    <div
+                      className={`flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold uppercase tracking-widest ${
                         plan.tag === 'Recommended' ? 'bg-cyan/15 text-cyan' : 'bg-amber/15 text-amber'
                       }`}
                     >
+                      <Icon name="auto_awesome" className="text-[13px]" />
                       {plan.tag}
-                    </span>
-                  )}
-                  <h3 className="text-lg font-bold uppercase tracking-wide">{plan.name}</h3>
-                  {PRICING_FINALIZED ? (
-                    <p className="mt-1 text-2xl font-bold">
-                      {displayPrice}
-                      <span className="text-xs font-normal text-text-muted"> {cycle === 'annual' ? '/year' : '/month'} + GST</span>
-                    </p>
+                    </div>
                   ) : (
-                    <p className="mt-1 text-lg font-bold text-text-muted">Pricing coming soon</p>
+                    <div className="h-[30px]" />
                   )}
-                  <p className="mt-1 flex items-center gap-1.5 text-xs text-cyan">
-                    <Icon name="bolt" className="text-[14px]" />
-                    {plan.credits}
-                  </p>
-                  <ul className="mb-4 mt-3 flex flex-col gap-1.5 text-xs text-text-muted">
+                  <div className="flex flex-1 flex-col p-5 pt-4">
+                    <h3 className="text-lg font-bold uppercase tracking-wide">{plan.name}</h3>
+                    <p className="mt-1 text-xs text-text-muted">{plan.description}</p>
+                    {PRICING_FINALIZED ? (
+                      <>
+                        <p className="mt-3 text-2xl font-bold">
+                          {displayPrice}
+                          <span className="text-xs font-normal text-text-muted"> {cycle === 'annual' ? '/year' : '/month'}</span>
+                        </p>
+                        <p className="text-xs text-text-muted">
+                          + ₹{gstInr.toLocaleString('en-IN', { maximumFractionDigits: 0 })} GST (18%)
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-3 text-lg font-bold text-text-muted">Pricing coming soon</p>
+                    )}
+                    <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-surface-high px-3 py-2 text-xs font-semibold text-cyan">
+                      <Icon name="bolt" className="text-[14px]" />
+                      {plan.credits}
+                    </div>
+                    <ul className="mb-4 mt-3 flex flex-col gap-1.5 text-xs text-text-muted">
                     {plan.features.map((f) => (
                       <li key={f} className="flex items-center gap-1.5">
                         <Icon name="check" className="text-[14px] text-cyan" />
@@ -408,29 +420,50 @@ export function Billing() {
                       </li>
                     ))}
                   </ul>
-                  {isCurrent ? (
-                    <button
-                      disabled
-                      className="mt-auto rounded-lg border border-cyan/40 py-2 text-sm font-bold text-cyan opacity-90"
-                    >
-                      Current plan
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleUpgrade(plan.key, plan.name)}
-                      disabled={!razorpayConfigured || !PRICING_FINALIZED || busyPlan === plan.key}
-                      className="mt-auto rounded-lg bg-primary py-2 text-center text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40"
-                    >
-                      {busyPlan === plan.key
-                        ? 'Opening checkout…'
-                        : !PRICING_FINALIZED
-                          ? 'Coming soon'
-                          : `${isDowngrade ? 'Downgrade' : 'Upgrade'} to ${plan.name}`}
-                    </button>
-                  )}
+                    {isCurrent ? (
+                      <button
+                        disabled
+                        className="mt-auto rounded-lg border border-cyan/40 py-2 text-sm font-bold text-cyan opacity-90"
+                      >
+                        Current plan
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleUpgrade(plan.key, plan.name)}
+                        disabled={!razorpayConfigured || !PRICING_FINALIZED || busyPlan === plan.key}
+                        className="mt-auto rounded-lg bg-primary py-2 text-center text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40"
+                      >
+                        {busyPlan === plan.key
+                          ? 'Opening checkout…'
+                          : !PRICING_FINALIZED
+                            ? 'Coming soon'
+                            : `${isDowngrade ? 'Downgrade' : 'Upgrade'} to ${plan.name}`}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}
+          </div>
+
+          <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-border bg-surface p-5 sm:flex-row sm:items-center">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <Icon name="workspace_premium" className="text-[20px]" />
+              </div>
+              <div>
+                <p className="text-sm font-bold">Need more than Scale?</p>
+                <p className="text-xs text-text-muted">
+                  Higher concurrency, custom integrations, and a dedicated rollout plan for large deployments.
+                </p>
+              </div>
+            </div>
+            <a
+              href={`mailto:${CONTACT_EMAIL}?subject=Vistrow Voice Enterprise`}
+              className="shrink-0 rounded-lg border border-primary/40 px-4 py-2 text-center text-sm font-bold text-primary hover:bg-primary/10"
+            >
+              Contact sales
+            </a>
           </div>
         </div>
 

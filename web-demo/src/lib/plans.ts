@@ -8,6 +8,8 @@ export interface Plan {
   // values and the Razorpay plan-id env vars in server/razorpay_client.py.
   key: 'starter' | 'growth' | 'scale'
   price: string
+  // One line, shown under the plan name - who this tier is actually for.
+  description: string
   // Mirrors server/calls_db.py's PLAN_PRICING - keep both in sync by hand
   // (see that dict's own comment for why they can't share a module).
   priceInr: number
@@ -36,6 +38,7 @@ export const PLANS: Plan[] = [
     name: 'Starter',
     key: 'starter',
     price: '₹2,999',
+    description: 'For trying voice AI on one real use case before you scale it up.',
     priceInr: 2999,
     creditsNum: 300,
     credits: '300 credits/mo',
@@ -47,6 +50,7 @@ export const PLANS: Plan[] = [
     name: 'Growth',
     key: 'growth',
     price: '₹5,999',
+    description: 'For teams running inbound and outbound campaigns across India.',
     priceInr: 5999,
     creditsNum: 1000,
     credits: '1,000 credits/mo',
@@ -58,6 +62,7 @@ export const PLANS: Plan[] = [
     name: 'Scale',
     key: 'scale',
     price: '₹12,999',
+    description: 'Full API access and integrations, built for production volume.',
     priceInr: 12999,
     creditsNum: 2500,
     credits: '2,500 credits/mo',
