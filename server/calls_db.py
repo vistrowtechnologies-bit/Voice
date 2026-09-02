@@ -6118,12 +6118,20 @@ def notifications(account_id: int) -> list[dict]:
             logger.warning("notifications: dropped-calls section failed", exc_info=True)
 
         # --- negative feedback in the last 7 days -----------------------
+        # Platform owner only. The thumbs-up/down prompt lives in our public
+        # marketing-site widget, so a "not helpful" rates Vistrow, not the
+        # tenant - and the tenant UI no longer surfaces feedback at all, so
+        # alerting them about it would link to something they cannot see.
         try:
-            row = conn.execute(
-                "SELECT COUNT(*) c FROM calls WHERE account_id = ? AND feedback = 'not_helpful' "
-                "AND started_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '7 days'",
-                (account_id,),
-            ).fetchone()
+            row = (
+                conn.execute(
+                    "SELECT COUNT(*) c FROM calls WHERE account_id = ? AND feedback = 'not_helpful' "
+                    "AND started_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '7 days'",
+                    (account_id,),
+                ).fetchone()
+                if is_platform_owner(account_id)
+                else None
+            )
             if row and row["c"]:
                 today = conn.execute("SELECT (now() AT TIME ZONE 'UTC')::date::text d").fetchone()["d"]
                 items.append({

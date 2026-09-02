@@ -482,7 +482,9 @@ export function Dashboard() {
               </SectionCard>
             )}
 
-            {isVisible('feedback') && (
+            {/* Owner-only: visitor feedback is collected by our public
+                marketing-site widget, so it measures US, not the tenant. */}
+            {user?.isPlatformOwner && isVisible('feedback') && (
               <>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <StatTile compact label="Feedback received" value={String(feedback?.total ?? 0)} icon="reviews" tone="primary" />

@@ -14,6 +14,7 @@ import {
   formatDuration,
   pushCallToArthaleads,
 } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import type { CallRecord } from '../lib/types'
 
 const SENTIMENT_STYLE: Record<string, string> = {
@@ -86,6 +87,9 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
   const id = callId ?? params.id
   const navigate = useNavigate()
   const location = useLocation()
+  // Visitor feedback is collected by OUR marketing-site widget, not a
+  // tenant-facing feature - see the rows below.
+  const { user } = useAuth()
   const [call, setCall] = useState<CallRecord | null | undefined>(undefined)
   const [notes, setNotes] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
@@ -558,10 +562,17 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
             <dl className="mt-3 flex flex-col gap-2 text-sm">
               {call.website && <Row label="Website" value={call.website} />}
               {call.pagePath && <Row label="Page" value={call.pagePath} raw />}
-              {call.feedback && (
+              {/* Owner-only: the thumbs-up/down prompt lives in the public
+                  marketing-site widget, so this is OUR product feedback, not
+                  something a tenant collected or can act on. Showing a tenant
+                  "Not helpful / Waste of time" about their own call read as
+                  their customer rating them. */}
+              {user?.isPlatformOwner && call.feedback && (
                 <Row label="Visitor feedback" value={call.feedback === 'helpful' ? '👍 Helpful' : '👎 Not helpful'} />
               )}
-              {call.feedbackComment && <Row label="Feedback note" value={call.feedbackComment} />}
+              {user?.isPlatformOwner && call.feedbackComment && (
+                <Row label="Feedback note" value={call.feedbackComment} />
+              )}
               {call.connectLatencyMs != null && <Row label="Connection" value={`${(call.connectLatencyMs / 1000).toFixed(1)}s`} />}
               {call.agentJoinLatencyMs != null && <Row label="Agent joined" value={`${(call.agentJoinLatencyMs / 1000).toFixed(1)}s`} />}
               {call.firstResponseLatencyMs != null && <Row label="First response" value={`${(call.firstResponseLatencyMs / 1000).toFixed(1)}s`} />}

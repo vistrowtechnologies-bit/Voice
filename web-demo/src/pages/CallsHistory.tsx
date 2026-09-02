@@ -6,6 +6,7 @@ import { DataTable } from '../components/ui/DataTable'
 import type { DataTableColumn } from '../components/ui/DataTable'
 import { StatTile } from '../components/ui/StatTile'
 import { callsExportUrl, fetchActiveCalls, fetchCalls, formatDateTime, formatDuration } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import type { ActiveCallInfo, CallRecord, Sentiment } from '../lib/types'
 
 // Must match the exact channel labels calls_db.py's _CHANNEL_LABELS produces
@@ -70,6 +71,10 @@ export function CallsHistory() {
   // Stashed into each row link's state so opening a call overlays it on
   // this list instead of navigating away from it (see App.tsx).
   const location = useLocation()
+  // Visitor feedback comes from OUR marketing-site widget prompt, so the
+  // column and its filter are owner-only (see LeadDetail for the reasoning).
+  const { user } = useAuth()
+  const isOwner = Boolean(user?.isPlatformOwner)
   const [searchParams, setSearchParams] = useSearchParams()
   const [calls, setCalls] = useState<CallRecord[]>([])
   const [activeCalls, setActiveCalls] = useState<ActiveCallInfo[]>([])
@@ -173,11 +178,21 @@ export function CallsHistory() {
     },
     { key: 'website', header: 'Website', render: (call) => <span className="text-sm text-text-muted">{call.website || '-'}</span> },
     { key: 'duration', header: 'Duration', render: (call) => <span className="text-sm">{formatDuration(call.durationSeconds)}</span> },
-    {
-      key: 'feedback',
-      header: 'Feedback',
-      render: (call) => <span className="text-sm">{call.feedback === 'helpful' ? '👍' : call.feedback === 'not_helpful' ? '👎' : '—'}</span>,
-    },
+    // Owner-only - the thumbs prompt is in our public marketing widget, so
+    // this rates US, not the tenant's own call handling.
+    ...(isOwner
+      ? [
+          {
+            key: 'feedback',
+            header: 'Feedback',
+            render: (call: GroupedCall) => (
+              <span className="text-sm">
+                {call.feedback === 'helpful' ? '👍' : call.feedback === 'not_helpful' ? '👎' : '—'}
+              </span>
+            ),
+          },
+        ]
+      : []),
     {
       key: 'recording',
       header: 'Recording',
@@ -254,25 +269,28 @@ export function CallsHistory() {
               className="w-full rounded-lg border border-border bg-surface py-2 pl-10 pr-3 text-sm outline-none focus:border-primary"
             />
           </div>
-          <select
-            value={feedbackFilter}
-            aria-label="Filter by feedback"
-            onChange={(e) => {
-              const value = e.target.value
-              setFeedbackFilter(value)
-              setSearchParams((current) => {
-                const next = new URLSearchParams(current)
-                if (value === 'all') next.delete('feedback')
-                else next.set('feedback', value)
-                return next
-              })
-            }}
-            className="rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-muted outline-none focus:border-primary"
-          >
-            <option value="all">All feedback</option>
-            <option value="helpful">👍 Helpful</option>
-            <option value="not_helpful">👎 Needs review</option>
-          </select>
+          {/* Owner-only, same reason as the Feedback column above. */}
+          {isOwner && (
+            <select
+              value={feedbackFilter}
+              aria-label="Filter by feedback"
+              onChange={(e) => {
+                const value = e.target.value
+                setFeedbackFilter(value)
+                setSearchParams((current) => {
+                  const next = new URLSearchParams(current)
+                  if (value === 'all') next.delete('feedback')
+                  else next.set('feedback', value)
+                  return next
+                })
+              }}
+              className="rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-muted outline-none focus:border-primary"
+            >
+              <option value="all">All feedback</option>
+              <option value="helpful">👍 Helpful</option>
+              <option value="not_helpful">👎 Needs review</option>
+            </select>
+          )}
           <select
             value={directionFilter}
             aria-label="Filter by direction"
