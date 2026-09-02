@@ -3039,7 +3039,12 @@ async def entrypoint(ctx: JobContext) -> None:
                 session.generate_reply(
                     instructions=(
                         "The caller has gone quiet for a few seconds. Check in warmly and briefly — "
-                        "one short question like asking if they're still there — and nothing else."
+                        "nothing else. Do NOT default to a stock \"are you still there?\" line — vary "
+                        "it like a real person would: a soft filler first (\"हां\", \"तो\", \"अच्छा\"), "
+                        "sometimes just their name with a questioning tone, sometimes referencing what "
+                        "you just said (\"सुन पा रहे हैं?\", \"कुछ पूछना था?\"), sometimes a trailing "
+                        "\"...?\" instead of a full question. Never repeat the same phrasing you used "
+                        "earlier in this call."
                     )
                 )
 
