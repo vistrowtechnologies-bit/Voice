@@ -3750,6 +3750,12 @@ async def billing_razorpay_webhook(request: Request) -> dict:
                 )
             else:
                 logger.warning("razorpay subscription.cancelled: account %s has no subscription row", account_id)
+            # Confirmed real gap: activation/renewal both call change_plan to
+            # sync accounts.plan (the field every plan gate actually reads -
+            # agent limits, concurrent-call cap, voice tier, API access), but
+            # cancellation never did — a churned account kept its paid-tier
+            # gates open indefinitely since accounts.plan was never reset.
+            admin_db.change_plan(account_id, "starter")
         else:
             logger.warning("razorpay subscription.cancelled: no account for subscription %s", sub.get("id"))
 
