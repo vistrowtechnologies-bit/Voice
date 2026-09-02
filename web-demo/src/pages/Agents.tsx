@@ -4,6 +4,7 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { BrowserTestModal, DialTestModal } from '../components/AgentTestCall'
+import { UpgradeRequiredModal } from '../components/UpgradeRequiredModal'
 import {
   createAgent,
   deleteAgent,
@@ -72,6 +73,7 @@ export function Agents() {
   const [dialTestAgent, setDialTestAgent] = useState<AgentConfig | null>(null)
   const [browserTestAgent, setBrowserTestAgent] = useState<AgentConfig | null>(null)
   const [readiness, setReadiness] = useState<LaunchReadiness | null>(null)
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<AgentFilter>('all')
@@ -88,10 +90,28 @@ export function Agents() {
 
   useEffect(() => {
     if (searchParams.get('new') === '1') {
-      createAgent({ name: 'New agent' }).then((agent) => {
-        setSearchParams({})
-        navigate(`/dashboard/agents/${agent.id}`)
-      })
+      // Confirmed real bug: this had no .catch at all - a rejected create
+      // (the agent-limit gate added today) was an unhandled promise
+      // rejection, and ?new=1 stayed in the URL so a remount would just
+      // retry the same failing create in a loop. Clear the param
+      // unconditionally and surface plan-limit rejections through the
+      // same upgrade modal every other gate uses (detected by the
+      // "upgrade" wording every plan-gate error message deliberately
+      // includes - see server/token_api.py's AgentLimitError handling).
+      createAgent({ name: 'New agent' })
+        .then((agent) => {
+          setSearchParams({})
+          navigate(`/dashboard/agents/${agent.id}`)
+        })
+        .catch((e: unknown) => {
+          setSearchParams({})
+          const msg = e instanceof Error ? e.message : 'Could not create agent'
+          if (msg.toLowerCase().includes('upgrade')) {
+            setUpgradeMessage(msg)
+          } else {
+            alert(msg)
+          }
+        })
     }
   }, [searchParams, setSearchParams, navigate])
 
@@ -311,6 +331,10 @@ export function Agents() {
 
         {browserTestAgent && (
           <BrowserTestModal agent={browserTestAgent} onClose={() => setBrowserTestAgent(null)} />
+        )}
+
+        {upgradeMessage && (
+          <UpgradeRequiredModal message={upgradeMessage} onClose={() => setUpgradeMessage(null)} />
         )}
       </section>
     </DashboardLayout>

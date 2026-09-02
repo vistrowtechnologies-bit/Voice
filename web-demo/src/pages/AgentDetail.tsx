@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { UpgradeRequiredModal } from '../components/UpgradeRequiredModal'
 import { VoicePreviewButton } from '../components/VoicePreviewButton'
 import { useAuth } from '../lib/auth'
 import {
@@ -140,6 +141,7 @@ function AgentEditorForm({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null)
   // The account's curated voice menu - the only voices this picker offers.
   const [myVoices, setMyVoices] = useState<VoiceEntry[]>([])
   useEffect(() => {
@@ -181,7 +183,18 @@ function AgentEditorForm({
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Could not save changes. Please try again.')
+      const msg = err instanceof Error ? err.message : 'Could not save changes. Please try again.'
+      // The dashboard's own voice picker only ever offers voices already in
+      // the account's curated menu, so this rarely fires from here in
+      // practice - but update_agent's server-side re-validation (see
+      // server/token_api.py's _guard_voice_tier) is the real backstop, and
+      // when it does reject, it deserves the same upgrade path as every
+      // other plan-gate error rather than a plain inline message.
+      if (msg.toLowerCase().includes('upgrade')) {
+        setUpgradeMessage(msg)
+      } else {
+        setSaveError(msg)
+      }
     } finally {
       setSaving(false)
     }
@@ -528,6 +541,10 @@ function AgentEditorForm({
           </button>
         </div>
       </div>
+
+      {upgradeMessage && (
+        <UpgradeRequiredModal message={upgradeMessage} onClose={() => setUpgradeMessage(null)} />
+      )}
     </div>
   )
 }
