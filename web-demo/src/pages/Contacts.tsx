@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import * as XLSX from 'xlsx'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -62,6 +63,16 @@ export function Contacts() {
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  // XLSX/XLS reuse the same CSV column-mapping pipeline: convert the first
+  // sheet to CSV text client-side so the backend never has to parse
+  // spreadsheet formats itself.
+  const spreadsheetToCsv = async (file: File): Promise<string> => {
+    const buf = await file.arrayBuffer()
+    const workbook = XLSX.read(buf, { type: 'array' })
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    return XLSX.utils.sheet_to_csv(sheet)
+  }
+
   const reload = () => fetchContacts().then(setContacts).catch(() => setContacts([]))
 
   useEffect(() => {
@@ -85,7 +96,8 @@ export function Contacts() {
   }
 
   const handlePickFile = async (file: File) => {
-    const text = await file.text()
+    const isSpreadsheet = /\.xlsx?$/i.test(file.name)
+    const text = isSpreadsheet ? await spreadsheetToCsv(file) : await file.text()
     const preview = await previewContactsImport(text)
     // Best-effort auto-guess so the operator usually just confirms rather
     // than mapping every column by hand - exact matches on common header
@@ -292,7 +304,7 @@ export function Contacts() {
           <input
             ref={fileRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx,.xls"
             className="hidden"
             onChange={(e) => e.target.files?.[0] && handlePickFile(e.target.files[0])}
           />
@@ -301,7 +313,7 @@ export function Contacts() {
             className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary"
           >
             <Icon name="upload" className="text-[18px]" />
-            Import CSV
+            Import contacts
           </button>
           <a
             href={contactsExportUrl}
