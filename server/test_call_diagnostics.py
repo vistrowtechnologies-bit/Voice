@@ -40,6 +40,23 @@ class TenantCallDiagnosticsTests(unittest.TestCase):
         self.assertEqual(events[-1]["offsetMs"], 10_000)
         self.assertEqual(events[-1]["status"], "ok")
 
+    def test_completed_tts_metric_is_anchored_to_first_audio_playout(self) -> None:
+        row = {
+            "diagnostic_events_json": """[
+                {"id":"speaking","kind":"state","stage":"agent","label":"Agent speaking","status":"info","offsetMs":6500},
+                {"id":"tts","kind":"metric","stage":"tts","label":"First audio generated","status":"ok","offsetMs":9700,"durationMs":944},
+                {"id":"response","kind":"turn","stage":"agent","label":"Agent response added","status":"info","offsetMs":16000}
+            ]""",
+            "duration_seconds": 20,
+        }
+
+        events, captured = calls_db._tenant_diagnostic_events(row)
+
+        self.assertTrue(captured)
+        self.assertEqual([event["id"] for event in events], ["speaking", "tts", "response"])
+        self.assertEqual(events[1]["offsetMs"], 6500)
+        self.assertEqual(events[1]["durationMs"], 944)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -414,7 +414,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
               <div>
                 <h2 className="text-sm font-semibold text-text">Call diagnostic timeline</h2>
                 <p className="mt-0.5 text-xs text-text-muted">
-                  Measured from call dispatch. Durations show time spent inside that stage.
+                  Measured from call dispatch. Milestones show when they occurred; durations show measured stage latency.
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
                   <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-high px-2.5 py-1 font-semibold text-text">

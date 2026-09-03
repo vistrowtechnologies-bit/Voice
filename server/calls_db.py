@@ -2237,6 +2237,25 @@ def _tenant_diagnostic_events(row: dict) -> tuple[list[dict], bool]:
             if isinstance(duration, (int, float)):
                 item["durationMs"] = max(0, round(duration))
             safe.append(item)
+
+        # Calls recorded before metric milestones were anchored at the actual
+        # first output time stamped them when LiveKit emitted the completed
+        # metrics object. That produced impossible sequences such as "Agent
+        # speaking +6.5s" followed by "First audio generated +9.7s". For old
+        # rows, the agent speaking transition is the strongest measured audio
+        # playout anchor we have; keep the earlier of the two. New rows already
+        # carry the corrected offset and remain unchanged.
+        speaking_offsets = [
+            event["offsetMs"]
+            for event in safe
+            if event["label"] == "Agent speaking"
+        ]
+        for event in safe:
+            if event["kind"] != "metric" or event["label"] != "First audio generated":
+                continue
+            preceding_speaking = [offset for offset in speaking_offsets if offset <= event["offsetMs"]]
+            if preceding_speaking:
+                event["offsetMs"] = min(event["offsetMs"], max(preceding_speaking))
         safe.sort(key=lambda event: event["offsetMs"])
         return safe, True
 

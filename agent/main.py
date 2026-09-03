@@ -3513,6 +3513,7 @@ async def entrypoint(ctx: JobContext) -> None:
         metric = ev.metrics
         metric_type = getattr(metric, "type", "")
         timings = userdata["latency_metrics"]
+        collected_offset_ms = round((time.monotonic() - _t0) * 1000)
         metadata = getattr(metric, "metadata", None)
         provider = getattr(metadata, "model_provider", None) if metadata else None
         model = getattr(metadata, "model_name", None) if metadata else None
@@ -3530,11 +3531,39 @@ async def entrypoint(ctx: JobContext) -> None:
         elif metric_type == "llm_metrics" and not metric.cancelled:
             duration_ms = round(max(0.0, metric.ttft) * 1000)
             timings["llmTtftMs"].append(duration_ms)
-            _record_diagnostic("metric", "llm", "AI response started", "warning" if duration_ms >= 1500 else "ok", durationMs=duration_ms, provider=provider, model=model)
+            # metrics_collected fires when the whole request completes, not
+            # when the first token arrived. Anchor the milestone at the
+            # measured request start + TTFT; stamping it at collection time
+            # made the tenant timeline claim the response began seconds after
+            # later agent-state events had already happened.
+            request_duration_ms = round(max(0.0, metric.duration) * 1000)
+            first_output_offset_ms = max(0, collected_offset_ms - request_duration_ms + duration_ms)
+            _record_diagnostic(
+                "metric", "llm", "AI response started",
+                "warning" if duration_ms >= 1500 else "ok",
+                durationMs=duration_ms,
+                offsetMs=first_output_offset_ms,
+                observedAtOffsetMs=collected_offset_ms,
+                provider=provider,
+                model=model,
+            )
         elif metric_type == "tts_metrics" and not metric.cancelled:
             duration_ms = round(max(0.0, metric.ttfb) * 1000)
             timings["ttsTtfbMs"].append(duration_ms)
-            _record_diagnostic("metric", "tts", "First audio generated", "warning" if duration_ms >= 1500 else "ok", durationMs=duration_ms, provider=provider, model=model)
+            # Same semantics as LLMMetrics: TTSMetrics is emitted after the
+            # synthesis segment finishes. The first audio occurred at request
+            # start + TTFB, which LiveKit exposes through duration and ttfb.
+            request_duration_ms = round(max(0.0, metric.duration) * 1000)
+            first_audio_offset_ms = max(0, collected_offset_ms - request_duration_ms + duration_ms)
+            _record_diagnostic(
+                "metric", "tts", "First audio generated",
+                "warning" if duration_ms >= 1500 else "ok",
+                durationMs=duration_ms,
+                offsetMs=first_audio_offset_ms,
+                observedAtOffsetMs=collected_offset_ms,
+                provider=provider,
+                model=model,
+            )
         else:
             return
 
