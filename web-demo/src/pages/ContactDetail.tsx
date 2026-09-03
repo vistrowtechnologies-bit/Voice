@@ -141,10 +141,11 @@ export function ContactDetail() {
         </Card>
 
         {/* Stat strip */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">
           <StatTile label="Total calls" value={String(s.total)} />
           <StatTile label="Completed" value={String(s.completed)} tone="success" />
           <StatTile label="No answer" value={String(s.noAnswer)} tone="amber" />
+          <StatTile label="Voicemail" value={String(s.voicemail ?? 0)} tone="amber" />
           <StatTile label="Failed" value={String(s.failed)} tone="destructive" />
           <StatTile label="Avg duration" value={formatDuration(s.avgDurationSeconds)} />
           <StatTile label="Total time" value={formatDuration(s.totalDurationSeconds)} />
@@ -192,6 +193,7 @@ export function ContactDetail() {
               <div className="flex-1 space-y-2">
                 <OutcomeBar label="Completed" n={s.completed} total={s.total} tone="bg-success" />
                 <OutcomeBar label="No answer" n={s.noAnswer} total={s.total} tone="bg-amber" />
+                <OutcomeBar label="Voicemail" n={s.voicemail ?? 0} total={s.total} tone="bg-amber" />
                 <OutcomeBar label="Failed" n={s.failed} total={s.total} tone="bg-destructive" />
               </div>
             </div>

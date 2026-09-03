@@ -129,6 +129,8 @@ async def place_outbound_call(
     custom_fields: str = "{}",
     wait_for_answer: bool = True,
     is_test: bool = False,
+    campaign_contact_id: int | None = None,
+    campaign_id: int | None = None,
 ) -> dict:
     """Place a real outbound call directly through LiveKit's own outbound SIP
     trunk, replacing the EnableX-REST + webhook + reconnect-through-our-OWN-
@@ -191,6 +193,11 @@ async def place_outbound_call(
             "visitor_email": visitor_email,
             "company": company,
             "custom_fields": custom_fields,
+            # Carried so the agent can attribute what it learns mid-call back
+            # to the contact it was dialling. The dialer records "placed" the
+            # instant the dial goes out — it cannot know a machine answered.
+            "campaign_contact_id": campaign_contact_id,
+            "campaign_id": campaign_id,
         }
     )
 

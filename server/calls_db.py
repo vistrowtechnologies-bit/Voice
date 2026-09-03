@@ -3777,7 +3777,7 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
                 campaign_outcome_by_call_id[r["call_id"]] = r["status"]
 
         total_calls = len(calls)
-        completed = no_answer = failed = 0
+        completed = no_answer = failed = voicemail = 0
         total_seconds = 0.0
         for c in calls:
             duration = c["duration_seconds"] or 0
@@ -3785,6 +3785,10 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
             outcome = campaign_outcome_by_call_id.get(c["id"])
             if outcome == "failed":
                 failed += 1
+            elif outcome == "voicemail":
+                # Reached a machine, not the person. Counting these as
+                # completed overstated every campaign's contact rate.
+                voicemail += 1
             elif outcome == "no_answer":
                 no_answer += 1
             elif duration > 0:
@@ -3828,6 +3832,7 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
                 "completed": completed,
                 "noAnswer": no_answer,
                 "failed": failed,
+                "voicemail": voicemail,
                 "avgDurationSeconds": round(total_seconds / completed) if completed else 0,
                 "totalDurationSeconds": round(total_seconds),
             },
@@ -4512,7 +4517,7 @@ def _contacts_for_segment(conn, account_id: int, segment: str, tag: str) -> list
         failed_norms = {
             r["phone_norm"]
             for r in conn.execute(
-                "SELECT DISTINCT phone_norm FROM campaign_contacts WHERE account_id = ? AND status IN ('no_answer', 'failed')",
+                "SELECT DISTINCT phone_norm FROM campaign_contacts WHERE account_id = ? AND status IN ('no_answer', 'failed', 'voicemail')",
                 (account_id,),
             ).fetchall()
         }
@@ -4808,7 +4813,11 @@ def _campaign_stats_map(conn, campaign_id: int) -> dict:
         "SELECT status, COUNT(*) c FROM campaign_contacts WHERE campaign_id = ? GROUP BY status",
         (campaign_id,),
     ).fetchall()
-    stats = {"pending": 0, "calling": 0, "done": 0, "no_answer": 0, "failed": 0, "blocked": 0}
+    # Seeded (rather than relying on the loop below to create keys) so the
+    # dashboard always gets every field, including on a campaign where no
+    # contact has reached that state yet.
+    stats = {"pending": 0, "calling": 0, "done": 0, "no_answer": 0, "failed": 0,
+             "blocked": 0, "voicemail": 0}
     for r in rows:
         stats[r["status"]] = r["c"]
     stats["total"] = sum(stats.values())
@@ -4911,7 +4920,7 @@ def claim_next_campaign_contact(campaign_id: int) -> dict | None:
                 SELECT * FROM campaign_contacts
                 WHERE campaign_id = ?
                   AND (status = 'pending'
-                       OR (status IN ('no_answer', 'failed') AND next_attempt_at IS NOT NULL
+                       OR (status IN ('no_answer', 'failed', 'voicemail') AND next_attempt_at IS NOT NULL
                            AND next_attempt_at <= {_NOW}))
                 ORDER BY (status = 'pending') DESC, id
                 LIMIT 1
@@ -4934,8 +4943,15 @@ def record_campaign_dial_result(contact_id: int, campaign_id: int, outcome: str,
     """Set a contact's terminal/retry state after a dial attempt. 'placed'
     means the call went out (terminal success for the dialer's purposes —
     conversation outcome is attributed later by phone match). 'blocked' is
-    terminal (compliance). 'no_answer'/'failed' schedule a retry if attempts
-    remain, else go terminal."""
+    terminal (compliance). 'no_answer'/'failed'/'voicemail' schedule a retry
+    if attempts remain, else go terminal.
+
+    'voicemail' is reported by the AGENT, not the dialer, and always AFTER a
+    'placed' — the dialer records the dial going out and cannot know a machine
+    picked up. It is deliberately allowed to overwrite a 'done'/'placed' row
+    for that reason: reaching an answering machine is not reaching the person,
+    and counting it as contact both overstates the campaign and denies the
+    contact a retry they should get."""
     conn = _connect()
     try:
         with conn:
@@ -4949,7 +4965,13 @@ def record_campaign_dial_result(contact_id: int, campaign_id: int, outcome: str,
             ).fetchone()
             attempts = contact["attempts"] if contact else 1
 
-            if outcome == "placed":
+            if outcome == "voicemail" and attempts >= max_attempts:
+                conn.execute(
+                    "UPDATE campaign_contacts SET status = 'voicemail', outcome = 'voicemail', "
+                    "next_attempt_at = NULL WHERE id = ?",
+                    (contact_id,),
+                )
+            elif outcome == "placed":
                 conn.execute(
                     "UPDATE campaign_contacts SET status = 'done', outcome = 'placed', next_attempt_at = NULL WHERE id = ?",
                     (contact_id,),
@@ -4988,7 +5010,7 @@ def campaign_has_open_work(campaign_id: int) -> bool:
             SELECT COUNT(*) c FROM campaign_contacts
             WHERE campaign_id = ?
               AND (status IN ('pending', 'calling')
-                   OR (status IN ('no_answer', 'failed') AND next_attempt_at IS NOT NULL))
+                   OR (status IN ('no_answer', 'failed', 'voicemail') AND next_attempt_at IS NOT NULL))
             """,
             (campaign_id,),
         ).fetchone()
@@ -7434,6 +7456,8 @@ def place_outbound_call_direct(
     contact_custom_fields: str = "{}",
     wait_for_answer: bool = True,
     is_test: bool = False,
+    campaign_contact_id: int | None = None,
+    campaign_id: int | None = None,
 ) -> dict:
     """Sync wrapper around livekit_sip.place_outbound_call — the new direct-
     SIP-trunk outbound flow - now the path behind both the dashboard's
@@ -7465,6 +7489,8 @@ def place_outbound_call_direct(
             custom_fields=contact_custom_fields or "{}",
             wait_for_answer=wait_for_answer,
             is_test=is_test,
+            campaign_contact_id=campaign_contact_id,
+            campaign_id=campaign_id,
         )
     )
 

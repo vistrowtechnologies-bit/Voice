@@ -151,6 +151,10 @@ def _dial_one(campaign: dict) -> None:
                     contact_company=contact.get("company", ""),
                     contact_custom_fields=contact.get("custom_fields", "{}"),
                     wait_for_answer=False,
+                    # So the agent can report back that a machine answered —
+                    # "placed" below only means the dial went out.
+                    campaign_contact_id=contact["id"],
+                    campaign_id=cid,
                 )
         except Exception:
             logger.exception("dial failed for contact %s", contact["id"])

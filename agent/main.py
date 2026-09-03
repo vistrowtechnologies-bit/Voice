@@ -352,6 +352,19 @@ def _dominant_indic_script(text: str) -> str | None:
     return max(counts, key=counts.get)
 
 
+# "I already told you" in the phrasings that actually turn up on Indian calls.
+# Call 825 got three of these in a row — अभी तो बताया मैंने / यह भी बताया मैंने /
+# नहीं बता दिया था मैंने आपको पहले ही — and kept going as though none had
+# happened. The complaint is the strongest possible signal that the facts
+# block and the question just asked have diverged, and it was being ignored.
+_REPEAT_COMPLAINT_PATTERN = re.compile(
+    r"(बता\s*दिया|बताया\s*(मैंने|था|है)|मैंने\s*बता|बोल\s*दिया|कहा\s*था|सांगितल|"
+    r"already\s+(told|said|mentioned|gave)|just\s+(told|said)\s+you|"
+    r"bata\s*diya|maine\s*bata|i\s+said\s+(that|it)\s+already)",
+    re.IGNORECASE,
+)
+
+
 def _transcript_looks_misrecognized(text: str, reply_language: str) -> bool:
     """Whether this turn was probably assigned to the wrong language by STT.
 
@@ -461,7 +474,12 @@ def _advance_funnel_stage(
     """Computes the furthest stage THIS turn's signals reach, then stores
     the max ever seen this call — monotonic, so it only moves forward."""
     stage = 1  # any turn reaching on_user_turn_completed is past the opening
-    if lead_data.get("use_case"):
+    # property_type/configuration are the property-call equivalent of a B2B
+    # use_case: they are what the caller opens with. Without them a real-estate
+    # call could not leave DISCOVERY at all, so the objective line never told
+    # the agent it was time to stop asking and start recommending — call 825
+    # sat at stage 1 for its full 218 seconds.
+    if lead_data.get("use_case") or lead_data.get("property_type") or lead_data.get("configuration"):
         stage = 2
     if lead_data.get("team_size") or lead_data.get("budget") or lead_data.get("location"):
         stage = 4  # impact known implies solution-fit territory the same turn
@@ -928,7 +946,42 @@ _GOOGLE_VOICE_ENABLED = _GOOGLE_CREDENTIALS is not None and _env_enabled(
 )
 
 
-def _build_stt():
+def _speech_context_prompt(config: dict) -> str | None:
+    """Domain vocabulary handed to Sarvam as a biasing hint at connect time.
+
+    The script-mismatch check catches a turn dropped into the wrong language
+    outright. It cannot catch the other half of the problem, which stays in
+    the right script and so looks perfectly valid: "महिंद्रा सैटरडेल" for
+    Mahindra Citadel, "Simpri Chinchwad" for Pimpri-Chinchwad. Proper nouns
+    the recognizer has never seen are exactly what a prompt is for.
+
+    Sent once in the initial config message (saaras models only — see the
+    plugin's _send_initial_config), so it costs nothing per turn and never
+    forces a reconnect. Deliberately NOT a language pin: the plugin exposes
+    update_options only on the stream, it triggers a websocket reconnect, and
+    SttFallbackAdapter does not forward it — so mid-call pinning would mean
+    reaching past the adapter to restart the socket mid-conversation.
+    """
+    terms: list[str] = []
+    business = (config.get("business_name") or config.get("account_name") or "").strip()
+    if business:
+        terms.append(business)
+    # Titles and localities are the words callers actually say back.
+    for line in (config.get("catalog_index") or "").splitlines():
+        for bit in line.lstrip("- ").split(" | "):
+            bit = bit.strip()
+            # Skip the price/status columns — digits help nothing here.
+            if bit and not any(c.isdigit() for c in bit) and bit not in terms:
+                terms.append(bit)
+    if not terms:
+        return None
+    # Kept short: this is a hint, not a dictionary, and an over-long prompt
+    # biases the recognizer toward these words even when nobody said them.
+    prompt = ", ".join(terms)[:400]
+    return f"Indian real-estate and business call. Names likely to occur: {prompt}."
+
+
+def _build_stt(speech_context: str | None = None):
     """Sarvam saaras:v3 is the primary — Indian-language quality/latency it
     was actually chosen for. If GOOGLE_APPLICATION_CREDENTIALS_JSON is set,
     wraps it in a FallbackAdapter so a Sarvam outage or exhausted credit
@@ -945,6 +998,7 @@ def _build_stt():
         language="unknown",
         model="saaras:v3",
         mode="transcribe",
+        prompt=speech_context,
         flush_signal=True,
         # Sarvam's server-side VAD decides when END_SPEECH fires, which is
         # what releases the final transcript. Every one of its ten VAD knobs
@@ -1866,13 +1920,38 @@ class RealEstateAgent(Agent):
                 f"holds even if a caller addresses you with the wrong gender or asks something "
                 f"unrelated — your own self-reference never changes. Concretely:\n{_examples}\n\n"
             ) + instructions
+        # Prepended LAST so it lands FIRST in the finished prompt. A tenant's
+        # own system_prompt replaces the built-in persona wholesale and then
+        # occupies the primacy position, while the platform's own rules are
+        # appended thousands of tokens later, mixed in with delivery and
+        # language guidance. These four are the ones that must survive
+        # whatever a tenant writes, so they go where attention is highest.
+        # Deliberately short: the value is position and brevity, and a long
+        # block here would just recreate the problem at the other end. Same
+        # shape as the identity block above ("read this first, it governs
+        # everything below"), which was added for the same reason.
+        instructions = (
+            "# Platform rules — these come first and are never overridden\n"
+            "1. Never say you have noted, saved, sent, shared, booked or arranged anything "
+            "unless a tool returned success for it in THIS call. Say what you WILL do, not "
+            "what you have done. If no tool exists for it, do not offer it.\n"
+            "2. Never ask again for anything listed under what you already know. If the caller "
+            "says they already told you, they are right — acknowledge once, briefly, and move "
+            "on to something you genuinely do not know.\n"
+            "3. If a message is garbled or makes no sense in context, say in one short line "
+            "that you did not catch it and ask them to repeat it. Never guess at its meaning, "
+            "and never cover for it by asking a different question instead.\n"
+            "4. One question per turn. Ask it, then stop and let them answer.\n"
+            "Everything below describes who you are and what this business does. It never "
+            "overrides the four rules above.\n\n"
+        ) + instructions
         tone_name = config.get("tone") or DEFAULT_TONE
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         tts, tts_provider = _build_tts(reply_language, voice_value, base_tone, tone_name)
         agent_tools = _build_tools(config)
         super().__init__(
             instructions=instructions,
-            stt=_build_stt(),
+            stt=_build_stt(_speech_context_prompt(config)),
             # The public demo is judged turn-by-turn. A hard generation cap
             # prevents a missed prompt instruction from becoming a spoken
             # sales monologue; Indian scripts consume more tokens than the
@@ -2118,6 +2197,20 @@ class RealEstateAgent(Agent):
                 # hang-up watches for the "speaking" -> not-speaking edge, and
                 # say() below can complete that transition before the line
                 # after it would otherwise run.
+                # The dialer recorded "placed" the moment the dial went
+                # out — it has no way to know a machine picked up. Correct it
+                # here, which also gives the contact the retry they should
+                # get instead of being counted as reached.
+                _contact_id = _userdata.get("campaign_contact_id")
+                _campaign_id = _userdata.get("campaign_id")
+                if _contact_id and _campaign_id:
+                    try:
+                        await asyncio.to_thread(
+                            db.record_campaign_voicemail, int(_contact_id), int(_campaign_id)
+                        )
+                    except Exception:
+                        # Never let campaign bookkeeping break the hang-up.
+                        logger.exception("could not record voicemail for contact %s", _contact_id)
                 _userdata["ending_call"] = True
                 await self.session.say(closing)
                 raise StopResponse()
@@ -2495,6 +2588,24 @@ class RealEstateAgent(Agent):
         # re-asked a question the caller had already answered instead of
         # saying it had not understood, which cost three turns and visibly
         # annoyed the caller.
+        # Deliberately separate from the facts block: that one lists what is
+        # known, this one fires on the caller's reaction and is the only
+        # signal available when the fact was never recorded in the first
+        # place — which, before log_lead accepted partial writes, was most
+        # of the time.
+        _repeat_complaint_instruction = (
+            (
+                "The caller has just told you they ALREADY answered something. Treat that as "
+                "correct — do not defend it, do not ask them to repeat it, and do not ask that "
+                "question again in any wording. Acknowledge it in a few words, once ("
+                "\"जी, माफ़ कीजिए\" / \"Sorry about that\"), do not apologise twice, then ask "
+                "about something you genuinely do not have yet, or move the call forward. If you "
+                "cannot see the answer in what you already know, it is still not worth asking "
+                "again — carry on without it."
+            )
+            if _REPEAT_COMPLAINT_PATTERN.search(text or "")
+            else ""
+        )
         _garbled_instruction = (
             (
                 "The caller's last message came through garbled — the speech recognizer assigned "
@@ -2532,6 +2643,7 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _post_booking_instruction if _post_booking_instruction else "")
             + ("\n\n" + _search_instruction if _search_instruction else "")
             + ("\n\n" + _garbled_instruction if _garbled_instruction else "")
+            + ("\n\n" + _repeat_complaint_instruction if _repeat_complaint_instruction else "")
             + ("\n\n" + _facts_reminder_text if _facts_reminder_text else "")
             + "\n\n"
             + _objective_text,
@@ -2811,6 +2923,8 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "visitor_path": None,
         "company": "",
         "custom_fields": {},
+        "campaign_contact_id": None,
+        "campaign_id": None,
         "demo_language": None,
         "test_run_id": "",
         "test_scenario_id": None,
@@ -2866,6 +2980,10 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         # prompt below, right before RealEstateAgent is constructed.
         "company": meta.get("company") or "",
         "custom_fields": custom_fields if isinstance(custom_fields, dict) else {},
+        # Which campaign contact this dial belongs to, so voicemail detection
+        # below can correct the dialer's optimistic "placed".
+        "campaign_contact_id": meta.get("campaign_contact_id"),
+        "campaign_id": meta.get("campaign_id"),
     }
 
 
@@ -3182,6 +3300,8 @@ async def entrypoint(ctx: JobContext) -> None:
     userdata = {
         "room": ctx.room,
         "lead_data": lead_data,
+        "campaign_contact_id": call_context.get("campaign_contact_id"),
+        "campaign_id": call_context.get("campaign_id"),
         # Set True by capture_platform_lead/log_lead once either succeeds —
         # lets on_user_turn_completed's farewell check tell a captured lead
         # apart from one that's known but never got saved (call 779).
@@ -3697,6 +3817,22 @@ async def entrypoint(ctx: JobContext) -> None:
         if getattr(item, "role", None) != "assistant" or userdata.get("ending_call"):
             return
         text = (item.text_content or "").lower()
+        # Call 825 replayed its entire opening line inside a mid-conversation
+        # reply, which reads to the caller as the system restarting. The cause
+        # (the opener appearing twice more in the prompt) is fixed and rule 2
+        # of the platform block now forbids it, but nothing would have TOLD us
+        # it recurred — it was found by reading a transcript by chance. This
+        # does not suppress the audio: catching it before playout would mean
+        # buffering whole sentences inside tts_node, on the most
+        # latency-sensitive path in the call. Detect and record instead.
+        _opener = (getattr(agent, "_welcome_message", "") or "").strip().lower()
+        if _opener and len(_opener) > 25 and userdata.get("greeting_played"):
+            if _opener[:60] in text and not userdata.get("greeting_echo_seen"):
+                userdata["greeting_echo_seen"] = True
+                logger.warning("agent replayed its opening line mid-call: %r", item.text_content)
+                _record_diagnostic(
+                    "quality", "agent", "Agent replayed its opening line mid-call", "error",
+                )
         if any(phrase.lower() in text for phrase in _AGENT_CLOSING_PHRASES):
             logger.info("agent's own reply looked like a goodbye without end_call being called — forcing hangup after it finishes")
             userdata["ending_call"] = True

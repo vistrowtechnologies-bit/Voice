@@ -48,6 +48,7 @@ const CONTACT_STATUS_STYLE: Record<string, string> = {
   calling: 'text-cyan',
   done: 'text-success',
   no_answer: 'text-amber',
+  voicemail: 'text-amber',
   failed: 'text-destructive',
   blocked: 'text-destructive',
 }
@@ -182,7 +183,7 @@ export function Outbound() {
     const t = { contacts: 0, attempts: 0, answered: 0, blocked: 0, running: 0 }
     for (const c of campaigns) {
       t.contacts += c.stats.total
-      t.attempts += c.stats.done + c.stats.no_answer + c.stats.failed
+      t.attempts += c.stats.done + c.stats.no_answer + c.stats.failed + (c.stats.voicemail ?? 0)
       t.answered += c.stats.done
       t.blocked += c.stats.blocked
       if (c.status === 'running') t.running += 1
@@ -687,7 +688,10 @@ export function Outbound() {
             <div className="divide-y divide-border">
               {filtered.map((c) => {
                 const s = c.stats
-                const finished = s.done + s.no_answer + s.failed + s.blocked
+                // A voicemail contact that has used up its attempts is
+                // terminal too — leaving it out kept the progress bar short
+                // of 100% forever on any campaign that hit an answerphone.
+                const finished = s.done + s.no_answer + s.failed + s.blocked + (s.voicemail ?? 0)
                 return (
                   <div key={c.id} className="flex flex-col gap-3 px-5 py-4">
                     <div className="flex flex-wrap items-center gap-3">
@@ -776,6 +780,9 @@ export function Outbound() {
                       <span><b className="text-cyan">{s.calling}</b> calling</span>
                       <span><b className="text-text-muted">{s.pending}</b> pending</span>
                       <span><b className="text-amber">{s.no_answer}</b> no-answer</span>
+                      {(s.voicemail ?? 0) > 0 && (
+                        <span><b className="text-amber">{s.voicemail}</b> voicemail</span>
+                      )}
                       <span><b className="text-destructive">{s.failed}</b> failed</span>
                       <span><b className="text-destructive">{s.blocked}</b> blocked</span>
                     </div>

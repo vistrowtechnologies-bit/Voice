@@ -14,6 +14,7 @@ without closing).
 
 import datetime
 import json
+import re
 import logging
 import threading
 import time
@@ -1052,6 +1053,58 @@ def set_call_extracted_data(call_id: int | None, extracted: dict) -> None:
         conn.close()
 
 
+def record_campaign_voicemail(contact_id: int, campaign_id: int) -> None:
+    """Correct a campaign contact from 'placed' to 'voicemail'.
+
+    The dialer records 'placed' the instant the dial goes out, because it
+    deliberately does not wait for an answer (waiting would serialise dials
+    that are meant to overlap). So only the agent, mid-call, ever learns that
+    a machine picked up — and until now that knowledge died with the call: a
+    voicemail counted as a successful contact and the person never got a
+    retry.
+
+    Mirrors server/calls_db.py's record_campaign_dial_result retry rules:
+    schedule another attempt if any remain, otherwise go terminal. Kept as a
+    direct write rather than a call into that module because the agent worker
+    does not import the server package.
+    """
+    conn = dbconn.connect()
+    try:
+        with conn:
+            camp = conn.execute(
+                "SELECT max_attempts, retry_minutes FROM campaigns WHERE id = ?", (campaign_id,)
+            ).fetchone()
+            max_attempts = (camp["max_attempts"] if camp else 1) or 1
+            retry_minutes = (camp["retry_minutes"] if camp else 60) or 60
+            row = conn.execute(
+                "SELECT attempts FROM campaign_contacts WHERE id = ?", (contact_id,)
+            ).fetchone()
+            if row is None:
+                return
+            attempts = row["attempts"] or 1
+            if attempts >= max_attempts:
+                conn.execute(
+                    "UPDATE campaign_contacts SET status = 'voicemail', outcome = 'voicemail', "
+                    "next_attempt_at = NULL WHERE id = ?",
+                    (contact_id,),
+                )
+            else:
+                next_at = (
+                    datetime.datetime.now(datetime.timezone.utc)
+                    + datetime.timedelta(minutes=retry_minutes)
+                ).strftime("%Y-%m-%d %H:%M:%S")
+                conn.execute(
+                    "UPDATE campaign_contacts SET status = 'voicemail', outcome = 'voicemail', "
+                    "next_attempt_at = ? WHERE id = ?",
+                    (next_at, contact_id),
+                )
+        logger.info("recorded voicemail for campaign contact %s", contact_id)
+    except Exception:
+        logger.exception("could not record campaign voicemail for contact %s", contact_id)
+    finally:
+        conn.close()
+
+
 def set_call_recording(call_id: int | None, recording_key: str) -> None:
     """Attaches this call's R2 recording key after upload finishes — same
     save-now-update-later shape as set_call_arthaleads_status above, since
@@ -1105,10 +1158,14 @@ def catalog_index(account_id: int, limit: int = 60) -> str:
 
     lines = []
     for r in rows:
-        price = r["price_label"] or (f"from {_spoken_price(r['price_from'])}" if r["price_from"] else "")
+        price = _normalize_for_speech(r["price_label"]) or (
+            f"from {_spoken_price(r['price_from'])}" if r["price_from"] else ""
+        )
         status_value = r["status"] or ""
         status = "" if status_value in ("", "active") else f" [{status_value}]"
-        bits = [b for b in (r["title"] + status, r["config"], r["location"], price) if b]
+        bits = [
+            b for b in (r["title"] + status, _normalize_for_speech(r["config"]), r["location"], price) if b
+        ]
         lines.append("- " + " | ".join(bits))
     return "\n".join(lines)
 
@@ -1121,6 +1178,41 @@ def _spoken_price(lakhs: float) -> str:
         return f"{lakhs} lakh"
     crore, rem = divmod(lakhs, 100)
     return f"{crore} crore" if not rem else f"{crore} crore {rem} lakh"
+
+
+# Feed values reach the model exactly as the tenant's website wrote them:
+# "₹1.09 Cr*", "₹84 L*", "1,688 sqft". Every one of those is read literally by
+# TTS — "one point zero nine", the asterisk, the comma. The prompt does carry
+# a conversion rule, but a deterministic normalizer is the right layer for a
+# deterministic problem, and it also covers the figures the prompt author
+# never saw because they arrive from a feed at runtime.
+_MONEY_RE = re.compile(
+    r"₹\s*([\d,]+(?:\.\d+)?)\s*(Cr|Crore|L|Lakh|Lac)\b\*?",
+    re.IGNORECASE,
+)
+
+
+def _normalize_for_speech(text: str) -> str:
+    """Rewrite feed strings the way a person would say them aloud."""
+    if not text:
+        return text
+
+    def _money(m: "re.Match[str]") -> str:
+        try:
+            amount = float(m.group(1).replace(",", ""))
+        except ValueError:
+            return m.group(0)
+        unit = m.group(2).lower()
+        lakhs = amount * 100 if unit in ("cr", "crore") else amount
+        return _spoken_price(lakhs)
+
+    text = _MONEY_RE.sub(_money, text)
+    # "1,688 sqft" -> "1688 square feet". The comma makes TTS pause mid-number.
+    text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)
+    text = re.sub(r"\bsq\.?\s?ft\b|\bsqft\b", "square feet", text, flags=re.IGNORECASE)
+    # Ranges: an en/em dash between numbers is read as a dash or skipped.
+    text = re.sub(r"(?<=\d)\s*[–—-]\s*(?=\d)", " to ", text)
+    return text.replace("*", "").strip()
 
 
 def lookup_catalog(account_id: int, query: str) -> str:
@@ -1149,14 +1241,17 @@ def lookup_catalog(account_id: int, query: str) -> str:
             f"{r['title']} ({r['status']})" if r["status"] else r["title"],
             f"Brand/provider: {r['developer']}" if r["developer"] else "",
             f"Location: {r['location']}" if r["location"] else "",
-            f"Summary: {r['config']}" if r["config"] else "",
+            f"Summary: {_normalize_for_speech(r['config'])}" if r["config"] else "",
             f"Reference: {r['rera']}" if r["rera"] else "",
-            f"Price: {r['price_label']}" if r["price_label"] else (
+            f"Price: {_normalize_for_speech(r['price_label'])}" if r["price_label"] else (
                 f"Price from: {_spoken_price(r['price_from'])}" if r["price_from"] else ""
             ),
         ]
         for u in units:
-            parts.append(f"Variant: {u.get('type')} — {u.get('area')} — {u.get('price')}")
+            parts.append(
+                "Variant: "
+                + _normalize_for_speech(f"{u.get('type')} — {u.get('area')} — {u.get('price')}")
+            )
         if amenities:
             parts.append("Features: " + ", ".join(str(a) for a in amenities[:12]))
         if r["overview"]:

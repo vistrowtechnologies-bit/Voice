@@ -357,6 +357,7 @@ export interface ContactDetail extends Contact {
     completed: number
     noAnswer: number
     failed: number
+    voicemail: number
     avgDurationSeconds: number
     totalDurationSeconds: number
   }
@@ -447,6 +448,7 @@ export interface CampaignStats {
   no_answer: number
   failed: number
   blocked: number
+  voicemail: number
   total: number
 }
 
