@@ -1,5 +1,3 @@
-import vistrowMark from '../assets/vistrow-mark.png'
-
 /**
  * Used while we restore a signed-in session. Keeping this intentionally small
  * and on-theme prevents the old dark full-screen spinner from looking like an
@@ -17,8 +15,16 @@ export function AppLoadingScreen({ message = 'Loading your workspace…' }: { me
         <div className="app-loading-signal mx-auto" aria-hidden="true">
           <span className="app-loading-ring app-loading-ring-outer" />
           <span className="app-loading-ring app-loading-ring-inner" />
-          <span className="app-loading-mark-shell">
-            <img src={vistrowMark} alt="" className="h-12 w-12 rounded-[14px]" />
+          <span className="app-loading-orb-shell">
+            <video
+              src="/agent-orb.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              className="app-loading-orb-video"
+            />
           </span>
         </div>
 
