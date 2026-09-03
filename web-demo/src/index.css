@@ -291,6 +291,113 @@ a[class*="border-cyan"]:not([class*=" bg-"]):not([class^="bg-"]) * {
   color: inherit !important;
 }
 
+/* ---------------------------------------------------------------------
+   Dashboard interaction system.
+
+   Dashboard controls grew page-by-page, so many were visually correct but
+   had no shared hover, press, keyboard-focus, or pointer behaviour. Keep the
+   baseline scoped to DashboardLayout: marketing CTAs and the embedded public
+   widget have their own motion language and must not inherit app-shell motion.
+   --------------------------------------------------------------------- */
+[data-dashboard-root] :is(button, a[href], [role="button"]):not(:disabled) {
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 180ms ease,
+    filter 150ms ease,
+    opacity 150ms ease,
+    transform 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+[data-dashboard-root] :is(button, a[href], [role="button"]):disabled,
+[data-dashboard-root] [aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+[data-dashboard-root] :is(button, a[href], input, select, textarea, [role="button"]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 80%, white);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+/* Solid actions should feel raised on hover and physically respond on press.
+   The shadow is token-built, so it remains subtle in both light and dark. */
+[data-dashboard-root] :is(button, a[href])[class*="bg-primary"]:not(:disabled):hover {
+  filter: brightness(1.08) saturate(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px -14px color-mix(in srgb, var(--color-primary) 80%, transparent);
+}
+
+[data-dashboard-root] main button:not(:disabled):hover,
+[data-dashboard-root] header button:not(:disabled):hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+[data-dashboard-root] main a[href][class*="rounded"][class*="border"]:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px -22px color-mix(in srgb, var(--color-primary) 70%, transparent);
+}
+
+[data-dashboard-root] :is(button, a[href], [role="button"]):not(:disabled):active {
+  filter: brightness(0.98);
+  transform: translateY(1px) scale(0.985);
+  transition-duration: 70ms;
+}
+
+/* Sidebar feedback stays horizontal, so it doesn't make a long menu jump up
+   and down as the pointer moves between items. */
+[data-dashboard-root] aside nav a:hover {
+  color: var(--color-text);
+  transform: translateX(2px);
+}
+
+[data-dashboard-root] aside nav a > span:first-child {
+  transition: color 150ms ease, transform 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+[data-dashboard-root] aside nav a:hover > span:first-child {
+  color: var(--color-primary);
+  transform: scale(1.08);
+}
+
+/* Filters and form controls need feedback too; otherwise only their buttons
+   appear interactive. This does not alter dimensions, avoiding form reflow. */
+[data-dashboard-root] :is(input, select, textarea) {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 180ms ease;
+}
+
+[data-dashboard-root] :is(input, select, textarea):not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+}
+
+[data-dashboard-root] tbody tr {
+  transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+
+[data-dashboard-root] tbody tr:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-dashboard-root] :is(button, a[href], [role="button"], input, select, textarea),
+  [data-dashboard-root] tbody tr {
+    transition-duration: 0.01ms !important;
+  }
+
+  [data-dashboard-root] :is(button, a[href], [role="button"]):hover,
+  [data-dashboard-root] :is(button, a[href], [role="button"]):active {
+    transform: none !important;
+  }
+}
+
 /* Indian tricolour wordmark used in the homepage hero. Its centre is white
    on the dark theme, then changes to Ashoka Chakra navy on the light theme
    where white lettering would disappear against the page. */

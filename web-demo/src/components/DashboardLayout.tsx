@@ -357,7 +357,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div data-dashboard-root className="min-h-screen bg-bg text-text">
       {/* Mounted once for the whole dashboard - it is keyboard-summoned, so
           it has no trigger in the layout and renders nothing until opened. */}
       <CommandPalette />
