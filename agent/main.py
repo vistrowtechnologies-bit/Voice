@@ -3933,16 +3933,24 @@ async def entrypoint(ctx: JobContext) -> None:
     # mixer. A synthetic voice with zero room tone is itself one of the
     # tells that gives away an AI caller; kept deliberately quiet (5%) so it
     # reads as "someone in an office" rather than drawing attention to
-    # itself. Off by default - unproven on real calls, so existing agents
-    # don't change behavior until an operator turns it on.
-    # A SIP participant has one telephone audio leg. BackgroundAudioPlayer
-    # publishes ambience as a *second* room track; on real inbound calls the
-    # SIP bridge subscribed to that track immediately after roomio_audio.
-    # Providers can then relay the second (very quiet) stream instead of the
-    # agent voice, producing a connected but apparently muted PSTN call.
-    # Keep ambience for WebRTC/widget experiences, where multiple audio
-    # tracks are supported, and keep the phone leg to one unambiguous track.
-    if cfg.get("ambient_noise") == "on" and call_context["call_type"] != "phone":
+    # itself. Off by default, so existing agents don't change behavior
+    # until an operator turns it on.
+    # Phone calls were excluded here for a real reason: BackgroundAudioPlayer
+    # publishes ambience as a *second* room track, and the SIP bridge used to
+    # subscribe to it right after roomio_audio, relaying the very quiet
+    # ambience instead of the agent's voice - a connected but apparently
+    # muted PSTN call.
+    #
+    # Re-tested on a live inbound call 2026-09-03 against livekit-agents
+    # 1.6.4: both tracks publish (roomio_audio + background_audio) and the
+    # caller hears the agent with ambience underneath, so the bridge now
+    # mixes subscribed tracks correctly. Exclusion removed rather than
+    # writing a custom mixing AudioOutput, which would have put hand-rolled
+    # code in the live audio path for a cosmetic feature.
+    #
+    # If muted-PSTN reports ever come back, this is the first thing to
+    # suspect - re-add `and call_context["call_type"] != "phone"`.
+    if cfg.get("ambient_noise") == "on":
         try:
             background_audio = BackgroundAudioPlayer(
                 # volume here is a raw gain multiplier, NOT the 0.0-1.0 range
@@ -3963,11 +3971,6 @@ async def entrypoint(ctx: JobContext) -> None:
             background_audio_holder["player"] = background_audio
         except Exception:
             logger.exception("failed to start background audio for room %s", ctx.room.name)
-    elif cfg.get("ambient_noise") == "on":
-        logger.info(
-            "background ambience disabled for SIP phone call (room=%s)",
-            ctx.room.name,
-        )
 
 
 def _prewarm(proc: JobProcess) -> None:
