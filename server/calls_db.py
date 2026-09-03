@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS calls (
     call_type TEXT DEFAULT 'browser',
     site_id INTEGER,
     agent_id INTEGER,
-    latency_metrics_json TEXT DEFAULT ''
+    latency_metrics_json TEXT DEFAULT '',
+    diagnostic_events_json TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS sites (
@@ -974,6 +975,11 @@ def init_tables() -> None:
                 # JSON because a call can contain many turns and provider
                 # fallbacks; the admin detail page summarizes it.
                 ("latency_metrics_json", "TEXT DEFAULT ''"),
+                # Ordered, append-only call events captured by the worker.
+                # Kept separate from latency_metrics_json: the latter is an
+                # aggregate used by analytics, while this preserves the
+                # sequence needed to explain one call in the dashboard.
+                ("diagnostic_events_json", "TEXT DEFAULT ''"),
                 # "inbound" | "outbound", phone calls only — set at save time
                 # in agent/main.py. NULL for every call recorded before this
                 # column existed, and for web/widget calls (direction is a
@@ -2152,6 +2158,88 @@ def _visitor_numbers_by_id(conn, account_id: int) -> dict[int, int]:
     return {r["id"]: i + 1 for i, r in enumerate(rows)}
 
 
+_TOOL_EVENT_LABELS = {
+    "check_calendar_availability": "Checked appointment availability",
+    "book_appointment": "Booked an appointment",
+    "log_lead": "Saved caller details",
+    "capture_platform_lead": "Saved caller details",
+    "switch_reply_language": "Changed conversation language",
+    "transfer_call": "Transferred the call",
+    "end_call": "Agent requested call end",
+}
+
+
+def _tenant_diagnostic_events(row: dict) -> tuple[list[dict], bool]:
+    """Return an account-safe event sequence for one call.
+
+    The worker records raw provider/model/tool identifiers because they are
+    useful in the platform-owner console. Tenant operators get the timing and
+    outcome without upstream vendor names, provider payloads, exception text,
+    or internal function names. Older rows predate event capture; for those we
+    build only the milestones that are backed by existing measured columns.
+    """
+    raw = _load_json_field(_row_get(row, "diagnostic_events_json"), [])
+    if isinstance(raw, list) and raw:
+        safe: list[dict] = []
+        for index, event in enumerate(raw[:500]):
+            if not isinstance(event, dict):
+                continue
+            kind = str(event.get("kind") or "lifecycle")
+            stage = str(event.get("stage") or "call")
+            status = str(event.get("status") or "info")
+            if status not in {"info", "ok", "warning", "error"}:
+                status = "info"
+            label = str(event.get("label") or "Call event")[:120]
+            if kind == "tool":
+                label = _TOOL_EVENT_LABELS.get(str(event.get("name") or ""), "Agent action completed")
+            elif kind == "provider_switch":
+                label = f"{stage.upper()} switched to its backup provider"
+            item = {
+                "id": str(event.get("id") or f"event-{index}"),
+                "kind": kind,
+                "stage": stage,
+                "label": label,
+                "status": status,
+                "offsetMs": max(0, int(event.get("offsetMs") or 0)),
+            }
+            duration = event.get("durationMs")
+            if isinstance(duration, (int, float)):
+                item["durationMs"] = max(0, round(duration))
+            safe.append(item)
+        safe.sort(key=lambda event: event["offsetMs"])
+        return safe, True
+
+    # Legacy calls: do not invent per-turn ordering. These are the only
+    # milestones for which the old schema contains a measured value.
+    milestones: list[dict] = [
+        {"id": "legacy-start", "kind": "lifecycle", "stage": "call", "label": "Call started", "status": "ok", "offsetMs": 0}
+    ]
+    for key, stage, label in (
+        ("connect_latency_ms", "connection", "Media connection established"),
+        ("agent_join_latency_ms", "agent", "Voice agent joined"),
+        ("first_response_latency_ms", "voice", "First response started"),
+    ):
+        value = _row_get(row, key)
+        if isinstance(value, (int, float)) and value >= 0:
+            milestones.append(
+                {"id": f"legacy-{stage}", "kind": "milestone", "stage": stage, "label": label, "status": "ok", "offsetMs": round(value)}
+            )
+    duration = row.get("duration_seconds")
+    if isinstance(duration, (int, float)) and duration >= 0:
+        milestones.append(
+            {
+                "id": "legacy-end",
+                "kind": "lifecycle",
+                "stage": "call",
+                "label": "Call ended",
+                "status": "error" if (_row_get(row, "disconnect_reason") or "") in {"error", "job_shutdown"} else "ok",
+                "offsetMs": round(duration * 1000),
+            }
+        )
+    milestones.sort(key=lambda event: event["offsetMs"])
+    return milestones, False
+
+
 def _call_dict(
     row: dict,
     include_transcript: bool = True,
@@ -2268,6 +2356,9 @@ def _call_dict(
         # admin_db.call_detail. Not just hidden in the UI: anything returned
         # here is readable in devtools.
     if include_transcript:
+        diagnostic_events, diagnostics_captured = _tenant_diagnostic_events(row)
+        out["diagnosticEvents"] = diagnostic_events
+        out["diagnosticsCaptured"] = diagnostics_captured
         out["transcript"] = [
             {
                 "speaker": "agent" if t.get("role") == "assistant" else "visitor",
@@ -7073,6 +7164,44 @@ def place_test_call(
             contact_custom_fields or "{}",
         )
     return result
+
+
+def place_outbound_call_direct(
+    to_number: str,
+    from_number: str,
+    account_id: int,
+    agent_id: int,
+    contact_name: str = "",
+    contact_email: str = "",
+    contact_company: str = "",
+    contact_custom_fields: str = "{}",
+) -> dict:
+    """Sync wrapper around livekit_sip.place_outbound_call — the new direct-
+    SIP-trunk outbound flow. NOT yet wired into place_test_call or the
+    campaign dialer; both still call place_test_call above. Blocks on
+    asyncio.run() until the call is answered or fails, same as every other
+    async-LiveKit-API caller in this module (see enablex_test_call_connected).
+
+    Requires EnableX's outbound SBC address to have been passed to
+    ensure_outbound_trunk at least once — until then this returns a clear
+    "not configured" error rather than silently doing nothing.
+    """
+    import asyncio
+
+    import livekit_sip  # local import: livekit_sip imports this module at load time
+
+    return asyncio.run(
+        livekit_sip.place_outbound_call(
+            to_number,
+            from_number,
+            account_id,
+            agent_id,
+            visitor_name=contact_name.strip(),
+            visitor_email=contact_email.strip(),
+            company=contact_company.strip(),
+            custom_fields=contact_custom_fields or "{}",
+        )
+    )
 
 
 def enablex_test_call_connected(voice_id: str) -> dict | None:

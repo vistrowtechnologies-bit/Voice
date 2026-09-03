@@ -2546,6 +2546,11 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "company": "",
         "custom_fields": {},
         "demo_language": None,
+        # Set only by rooms we create directly for a call we ourselves placed
+        # (see the new outbound-dial flow) - a real inbound call arriving via
+        # the shared SIP trunk never has this in its room metadata, so the
+        # dialled-number heuristic below stays authoritative for those.
+        "direction": None,
     }
     try:
         raw = ctx.job.room.metadata
@@ -2581,6 +2586,7 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         # location.pathname at widget-open time — stamped by /widget/token,
         # used only to answer "which page did this lead come from" later.
         "visitor_path": meta.get("visitor_path"),
+        "direction": meta.get("direction"),
         # Campaign-dial personalization (see livekit_sip.tag_newest_room) —
         # substituted into {{company}}/{{custom.X}} tokens in the agent's own
         # prompt below, right before RealEstateAgent is constructed.
@@ -2769,7 +2775,14 @@ async def entrypoint(ctx: JobContext) -> None:
     # callers would reach tenant #1's agent, prompt and knowledge base.
     sip_attrs = dict(getattr(first_participant, "attributes", None) or {})
     dialled_number = sip_attrs.get("sip.trunkPhoneNumber")
-    if dialled_number:
+    # Skipped entirely when room metadata already set direction (a call WE
+    # placed directly, with its own already-correct agent_id/account_id) -
+    # this heuristic exists to resolve the tenant/direction for a call
+    # arriving via the shared INBOUND trunk, which is meaningless for a
+    # room we created ourselves. Whether an outbound-dialed SIP participant
+    # even carries sip.trunkPhoneNumber the same way is unverified, so this
+    # guard also protects against that heuristic misfiring on it.
+    if dialled_number and call_context.get("direction") is None:
         call_context["call_type"] = "phone"
         # Caller ID — otherwise inbound phone leads save with a blank number.
         # Must not be sip.phoneNumber alone: see _caller_number_from_sip, which

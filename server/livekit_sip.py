@@ -19,22 +19,181 @@ import secrets
 
 from livekit import api
 from livekit.api.twirp_client import TwirpError
-from livekit.protocol.room import ListRoomsRequest, RoomConfiguration, UpdateRoomMetadataRequest
+from livekit.protocol.room import (
+    CreateRoomRequest,
+    DeleteRoomRequest,
+    ListRoomsRequest,
+    RoomConfiguration,
+    UpdateRoomMetadataRequest,
+)
 from livekit.protocol.sip import (
     CreateSIPDispatchRuleRequest,
     CreateSIPInboundTrunkRequest,
+    CreateSIPOutboundTrunkRequest,
+    CreateSIPParticipantRequest,
     DeleteSIPDispatchRuleRequest,
     DeleteSIPTrunkRequest,
     ListSIPDispatchRuleRequest,
     ListSIPInboundTrunkRequest,
+    ListSIPOutboundTrunkRequest,
     SIPDispatchRule,
     SIPDispatchRuleIndividual,
     SIPInboundTrunkInfo,
+    SIPOutboundTrunkInfo,
 )
 
 import calls_db
 
 logger = logging.getLogger(__name__)
+
+OUTBOUND_TRUNK_ID_SETTING = "lk_outbound_trunk_id"
+OUTBOUND_TRUNK_NAME = "EnableX outbound"
+
+
+async def ensure_outbound_trunk(address: str, caller_id: str) -> str:
+    """Create/resync the shared outbound trunk LiveKit sends EnableX-bound
+    INVITEs through. address is the bare host/IP EnableX gave us for their
+    SBC (e.g. "35.234.209.8") — LiveKit sends the INVITE's Request-URI
+    straight to this address, no DNS/SRV involved. caller_id is the E.164
+    number stamped as the From header on every outbound call.
+
+    No auth_username/auth_password: EnableX confirmed (2026-08-24, WhatsApp)
+    they don't support username/password on outbound — they authorize by
+    source IP instead, checking the call against LiveKit Cloud's published
+    static ranges. Setting credentials here would just be inert, since
+    EnableX never challenges with a 407.
+    """
+    trunk_id = calls_db.get_setting(OUTBOUND_TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
+    info = SIPOutboundTrunkInfo(name=OUTBOUND_TRUNK_NAME, address=address, numbers=[caller_id])
+
+    async with api.LiveKitAPI() as lkapi:
+        if trunk_id:
+            await lkapi.sip.update_outbound_trunk(trunk_id, info)
+            return trunk_id
+
+        try:
+            trunk = await lkapi.sip.create_outbound_trunk(CreateSIPOutboundTrunkRequest(trunk=info))
+            calls_db.set_setting(OUTBOUND_TRUNK_ID_SETTING, trunk.sip_trunk_id, calls_db.PLATFORM_ACCOUNT_ID)
+            return trunk.sip_trunk_id
+        except TwirpError as exc:
+            if exc.code != "invalid_argument" or "Conflicting" not in exc.message:
+                raise
+            # Same recovery as ensure_inbound_trunk: the setting can go
+            # missing even though LiveKit still has a trunk for this number.
+            existing = await lkapi.sip.list_outbound_trunk(ListSIPOutboundTrunkRequest(numbers=[caller_id]))
+            if not existing.items:
+                raise
+            trunk_id = existing.items[0].sip_trunk_id
+            await lkapi.sip.update_outbound_trunk(trunk_id, info)
+            calls_db.set_setting(OUTBOUND_TRUNK_ID_SETTING, trunk_id, calls_db.PLATFORM_ACCOUNT_ID)
+            return trunk_id
+
+
+# How long an empty outbound room is kept alive before LiveKit reclaims it -
+# only matters if create_sip_participant fails after the room is already
+# created (the normal case deletes the room itself, see below). Same value
+# token_api.py's widget/browser rooms use.
+_OUTBOUND_ROOM_EMPTY_TIMEOUT_S = 120
+
+
+async def place_outbound_call(
+    to_number: str,
+    from_number: str,
+    account_id: int,
+    agent_id: int,
+    *,
+    visitor_name: str = "",
+    visitor_email: str = "",
+    company: str = "",
+    custom_fields: str = "{}",
+) -> dict:
+    """Place a real outbound call directly through LiveKit's own outbound SIP
+    trunk, replacing the EnableX-REST + webhook + reconnect-through-our-OWN-
+    inbound-trunk dance in calls_db.place_test_call.
+
+    The old flow: place the call via EnableX's REST /call, wait for their
+    "connected" webhook, then tell EnableX to bridge the now-answered leg
+    into a SIP URI on our own INBOUND trunk — disguised as an inbound call
+    FROM our own tenant number, which is why agent/main.py's direction-
+    detection heuristic exists at all (caller_number == dialled_number is
+    the only signal that coincidence leaves behind). It also needed an
+    in-memory dict (_TEST_CALL_FROM_BY_VOICE_ID) to survive the webhook round
+    trip, and a best-effort polling loop (tag_newest_room) to guess which
+    room to backfill contact-name personalization onto after the fact,
+    because there was no way to set real metadata before the room existed.
+
+    This flow creates the room ourselves first, with correct metadata from
+    the start (agent_id, account_id, direction="outbound", the contact's
+    name/email/company) - agent/main.py reads it exactly like it already
+    does for a widget or browser call, no heuristics, no polling, no partial
+    in-memory state that a restart would lose. wait_until_answered blocks
+    this call until the destination actually answers (or declines/times
+    out), so the caller gets a real ok/not-answered result synchronously,
+    same contract place_test_call already has.
+
+    Returns {"ok": True, "room": str} or {"ok": False, "error"/"blocked": ...}.
+    """
+    allowed, reason = calls_db.check_call_allowed(account_id, to_number)
+    if not allowed:
+        return {"ok": False, "blocked": True, "error": reason}
+
+    trunk_id = calls_db.get_setting(OUTBOUND_TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
+    if not trunk_id:
+        # Not a bug - the trunk hasn't been provisioned yet (needs EnableX's
+        # confirmed outbound SBC address; see ensure_outbound_trunk). Fails
+        # loudly rather than silently falling through to the old flow, so a
+        # half-migrated deploy can't accidentally run both paths at once.
+        return {
+            "ok": False,
+            "error": "Outbound SIP trunk is not configured yet (ensure_outbound_trunk has not been run).",
+        }
+
+    room_name = f"phone-{to_number.lstrip('+')}_vistrow-{secrets.token_hex(4)}"
+    metadata = json.dumps(
+        {
+            "agent_id": agent_id,
+            "account_id": account_id,
+            # Truthy phone_number is what makes _call_context_from_job
+            # classify this as call_type="phone" (see agent/main.py).
+            "phone_number": from_number,
+            "direction": "outbound",
+            "visitor_name": visitor_name,
+            "visitor_phone": to_number,
+            "visitor_email": visitor_email,
+            "company": company,
+            "custom_fields": custom_fields,
+        }
+    )
+
+    async with api.LiveKitAPI() as lkapi:
+        await lkapi.room.create_room(
+            CreateRoomRequest(name=room_name, metadata=metadata, empty_timeout=_OUTBOUND_ROOM_EMPTY_TIMEOUT_S)
+        )
+        try:
+            await lkapi.sip.create_sip_participant(
+                CreateSIPParticipantRequest(
+                    sip_trunk_id=trunk_id,
+                    sip_call_to=to_number,
+                    room_name=room_name,
+                    participant_identity=f"sip-{to_number.lstrip('+')}",
+                    participant_name=visitor_name or to_number,
+                    wait_until_answered=True,
+                )
+            )
+        except TwirpError as exc:
+            # No answer / declined / trunk rejected it - the room never got a
+            # real participant, so there is nothing for the agent to do with
+            # it. Clean up rather than leaving an empty room for empty_timeout
+            # to eventually reap.
+            try:
+                await lkapi.room.delete_room(DeleteRoomRequest(room=room_name))
+            except TwirpError:
+                pass
+            logger.info("outbound call to %s not connected: %s", to_number, exc.message)
+            return {"ok": False, "error": exc.message}
+
+    return {"ok": True, "room": room_name}
+
 
 TRUNK_ID_SETTING = "lk_inbound_trunk_id"
 AUTH_USERNAME_SETTING = "lk_inbound_auth_username"
