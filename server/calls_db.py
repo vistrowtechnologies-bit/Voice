@@ -6154,18 +6154,25 @@ def _credits_used_in_period(conn, account_id: int, rates: dict, period_start: st
     """Shared by billing_summary (current period) and the overage webhook
     handler (a just-closed period) — credits burned by calls started at or
     after period_start (None = all-time, only used as a display fallback)."""
-    # An operator dialling their own agent from the dashboard's phone-icon
-    # button isn't a billable lead call - same reasoning that already keeps
-    # it out of the call log (see list_calls). Note this exclusion is by
-    # room name, so it only covers the dashboard test call; a campaign dial
-    # or any other real outbound call keeps the plain "phone-" prefix and is
-    # billed normally.
+    # An operator testing their own agent isn't a billable lead call, whether
+    # they used the dashboard's phone-icon button ("test-phone-") or the
+    # in-browser "Test agent" button ("test-agent-"). Both were already
+    # hidden from the call log (see list_calls) but that filter is
+    # display-only - it never touched billing, so browser tests were charged
+    # while being invisible, which is the worst of both. Excluded here too.
+    #
+    # Testing Lab runs (test_run_id set) are deliberately NOT excluded: those
+    # are a paid product feature the operator ran on purpose, not incidental
+    # poking, and list_calls surfaces them separately via list_test_runs.
+    #
+    # Scoped by room-name prefix, so a campaign dial or any other real
+    # outbound call keeps the plain "phone-" prefix and is billed normally.
     query = (
         "SELECT COALESCE(call_type, 'browser') call_type, voice, model, "
         "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls "
-        "WHERE account_id = ? AND room_name NOT LIKE ?"
+        "WHERE account_id = ? AND room_name NOT LIKE ? AND room_name NOT LIKE ?"
     )
-    params: list = [account_id, "test-phone-%"]
+    params: list = [account_id, "test-phone-%", "test-agent-%"]
     if period_start:
         query += " AND started_at >= ?"
         params.append(period_start)
