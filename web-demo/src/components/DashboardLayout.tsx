@@ -253,20 +253,24 @@ export function PageHeader({
   title,
   subtitle,
   children,
+  refreshSignal = 0,
 }: {
   title: string
   subtitle?: string
   children?: ReactNode
+  refreshSignal?: number
 }) {
   const [credits, setCredits] = useState<number | null>(null)
   const { pathname } = useLocation()
-  const showNewAgent = pathname === '/dashboard' || pathname === '/dashboard/agents'
+  // Agent creation belongs to the Agents page. Showing it on the overview
+  // duplicated Quick actions and displaced dashboard-specific controls.
+  const showNewAgent = pathname === '/dashboard/agents'
 
   useEffect(() => {
     fetchBilling()
       .then((b) => setCredits(b.creditsRemaining))
       .catch(() => setCredits(null))
-  }, [])
+  }, [refreshSignal])
 
   return (
     <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/90 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:px-6">
