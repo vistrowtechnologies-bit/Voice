@@ -2593,6 +2593,30 @@ async def _wait_for_sip_answer(ctx: JobContext, participant, t0: float, timeout:
         status = status_of()
         if status == "active":
             logger.info("[latency] callee answered at +%.2fs (room=%s)", time.monotonic() - t0, ctx.room.name)
+            # "active" means the SIP dialog is up (200 OK), NOT that audio is
+            # flowing yet - RTP takes a moment more. Greeting on "active"
+            # alone meant the opener went out before the path carried it:
+            # confirmed on campaign call 820, where the transcript shows the
+            # greeting spoken but the callee heard nothing, answered the
+            # silence with "Hello", and the agent then talked itself into a
+            # goodbye 76s later having never actually connected.
+            #
+            # Wait for their audio track to be subscribed - that is the first
+            # moment we know the media path exists in the receive direction.
+            # Bounded, because a caller who never publishes audio (muted
+            # handset, odd carrier) must still get greeted rather than sit in
+            # silence forever.
+            audio_deadline = time.monotonic() + 3.0
+            while time.monotonic() < audio_deadline:
+                if any(
+                    pub.subscribed and pub.kind == rtc.TrackKind.KIND_AUDIO
+                    for pub in participant.track_publications.values()
+                ):
+                    logger.info("[latency] caller audio live at +%.2fs", time.monotonic() - t0)
+                    break
+                await asyncio.sleep(0.05)
+            else:
+                logger.info("greeting anyway: no caller audio track within 3s of answer")
             return True
         # Declined/hung up before answering, or the SIP leg dropped out of
         # the room entirely — either way there is nobody to greet.
