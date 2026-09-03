@@ -2421,8 +2421,11 @@ def list_calls(account_id: int, limit: int = 200, search: str = "", status: str 
         # Bound param, not a literal '%' in the SQL string — dbconn.execute's
         # "?" -> "%s" rewrite means a raw "%" in the query text collides with
         # psycopg's own placeholder parsing and raises ProgrammingError.
-        query = "SELECT * FROM calls WHERE account_id = ? AND room_name NOT LIKE ? AND COALESCE(test_run_id, '') = ''"
-        params: list = [account_id, "test-agent-%"]
+        query = (
+            "SELECT * FROM calls WHERE account_id = ? AND room_name NOT LIKE ? "
+            "AND room_name NOT LIKE ? AND COALESCE(test_run_id, '') = ''"
+        )
+        params: list = [account_id, "test-agent-%", "test-phone-%"]
         if days:
             query += " AND started_at::date >= (CURRENT_DATE - (? || ' days')::interval)::date"
             params.append(str(days - 1))
@@ -6151,11 +6154,18 @@ def _credits_used_in_period(conn, account_id: int, rates: dict, period_start: st
     """Shared by billing_summary (current period) and the overage webhook
     handler (a just-closed period) — credits burned by calls started at or
     after period_start (None = all-time, only used as a display fallback)."""
+    # An operator dialling their own agent from the dashboard's phone-icon
+    # button isn't a billable lead call - same reasoning that already keeps
+    # it out of the call log (see list_calls). Note this exclusion is by
+    # room name, so it only covers the dashboard test call; a campaign dial
+    # or any other real outbound call keeps the plain "phone-" prefix and is
+    # billed normally.
     query = (
         "SELECT COALESCE(call_type, 'browser') call_type, voice, model, "
-        "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls WHERE account_id = ?"
+        "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls "
+        "WHERE account_id = ? AND room_name NOT LIKE ?"
     )
-    params: list = [account_id]
+    params: list = [account_id, "test-phone-%"]
     if period_start:
         query += " AND started_at >= ?"
         params.append(period_start)
@@ -7356,6 +7366,7 @@ def place_outbound_call_direct(
     contact_company: str = "",
     contact_custom_fields: str = "{}",
     wait_for_answer: bool = True,
+    is_test: bool = False,
 ) -> dict:
     """Sync wrapper around livekit_sip.place_outbound_call — the new direct-
     SIP-trunk outbound flow - now the path behind both the dashboard's
@@ -7386,6 +7397,7 @@ def place_outbound_call_direct(
             company=contact_company.strip(),
             custom_fields=contact_custom_fields or "{}",
             wait_for_answer=wait_for_answer,
+            is_test=is_test,
         )
     )
 

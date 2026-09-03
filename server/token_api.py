@@ -3413,6 +3413,9 @@ def telephony_test_call(data: dict = Body(...), user: dict = Depends(current_use
         from_number,
         user["account_id"],
         agent_id,
+        # Operator testing their own agent — keep it out of the tenant's
+        # call log and credit usage (see list_calls/_credits_used_in_period).
+        is_test=True,
     )
 
 

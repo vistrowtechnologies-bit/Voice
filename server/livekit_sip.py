@@ -128,6 +128,7 @@ async def place_outbound_call(
     company: str = "",
     custom_fields: str = "{}",
     wait_for_answer: bool = True,
+    is_test: bool = False,
 ) -> dict:
     """Place a real outbound call directly through LiveKit's own outbound SIP
     trunk, replacing the EnableX-REST + webhook + reconnect-through-our-OWN-
@@ -170,7 +171,13 @@ async def place_outbound_call(
             "error": "Outbound SIP trunk is not configured yet (ensure_outbound_trunk has not been run).",
         }
 
-    room_name = f"phone-{to_number.lstrip('+')}_vistrow-{secrets.token_hex(4)}"
+    # "test-phone-" marks an operator dialling their own agent from the
+    # dashboard, so it can be kept out of the tenant's call log and their
+    # credit usage the same way browser test calls already are (see
+    # list_calls / _credits_used_in_period). A campaign dial or any other
+    # real outbound call keeps the plain "phone-" prefix and is billed.
+    prefix = "test-phone" if is_test else "phone"
+    room_name = f"{prefix}-{to_number.lstrip('+')}_vistrow-{secrets.token_hex(4)}"
     metadata = json.dumps(
         {
             "agent_id": agent_id,
