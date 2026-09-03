@@ -22,6 +22,7 @@ import io
 import json
 import logging
 import os
+import re
 import secrets
 import time
 from zoneinfo import ZoneInfo
@@ -2440,7 +2441,24 @@ def list_calls(account_id: int, limit: int = 200, search: str = "", status: str 
         ]
         if search:
             s = search.lower()
-            calls = [c for c in calls if s in c["name"].lower() or s in c["phone"]]
+            # Phone match is digits-only and bidirectional-substring, not a
+            # literal match: the same real caller can show up with or
+            # without a "+91" country code depending on where the number was
+            # captured from (e.g. _caller_number_from_sip vs an older/other
+            # source), so "+918080197945" and "8080197945" must still match
+            # each other - a literal substring check missed this and made a
+            # repeat caller's own past calls invisible in their own history.
+            search_digits = re.sub(r"\D", "", search)
+            calls = [
+                c
+                for c in calls
+                if s in c["name"].lower()
+                or (
+                    search_digits
+                    and (phone_digits := re.sub(r"\D", "", c["phone"]))
+                    and (search_digits in phone_digits or phone_digits in search_digits)
+                )
+            ]
         if status:
             calls = [c for c in calls if c["callStatus"] == status or c["status"] == status]
         return calls
