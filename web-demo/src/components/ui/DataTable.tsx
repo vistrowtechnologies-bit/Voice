@@ -29,6 +29,9 @@ interface DataTableProps<T> {
    * that. Defaults to false, so existing call sites are unaffected. */
   loading?: boolean
   skeletonRows?: number
+  /** Disable row background changes when a table uses its own interactive
+   * controls and the hover fill would visually compete with them. */
+  hoverRows?: boolean
 }
 
 /** One shimmering placeholder bar. Widths vary per column so a loading table
@@ -50,6 +53,7 @@ export function DataTable<T>({
   footer,
   loading = false,
   skeletonRows = 6,
+  hoverRows = true,
 }: DataTableProps<T>) {
   const primaryCol = columns.find((c) => c.primary) ?? columns[0]
   const cardCols = columns.filter((c) => c !== primaryCol && !c.hideOnCard)
@@ -131,7 +135,7 @@ export function DataTable<T>({
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.map((row) => (
-                  <tr key={rowKey(row)} className="group hover:bg-surface-high/20">
+                  <tr key={rowKey(row)} className={hoverRows ? 'group hover:bg-surface-high/20' : 'group'}>
                     {columns.map((col) => (
                       <td
                         key={col.key}
