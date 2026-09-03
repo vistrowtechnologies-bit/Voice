@@ -199,7 +199,7 @@ export function Dashboard() {
     <DashboardLayout>
       <PageHeader title="Dashboard" subtitle="Overview of your voice AI platform" />
 
-      <section className="flex flex-col gap-6 p-4 sm:p-6">
+      <section className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
         <div className="flex items-center gap-6 border-b border-border">
           {(['overview', 'analytics'] as const).map((t) => (
             <button
@@ -219,13 +219,13 @@ export function Dashboard() {
           <>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-xl font-bold">{greeting()}, {user?.accountName ?? 'there'}</h2>
+                <h2 className="break-words text-lg font-bold sm:text-xl">{greeting()}, {user?.accountName ?? 'there'}</h2>
                 <p className="mt-1 text-sm text-text-muted">
                   Your agents handled <span className="font-semibold text-text">{summary?.totalCalls ?? 0} calls</span>{' '}
                   with <span className="font-semibold text-cyan">{successPct}% qualified</span>
                 </p>
               </div>
-              <div className="relative">
+              <div className="relative max-w-full">
                 <button
                   type="button"
                   onClick={() => setCustomizing((value) => !value)}
@@ -234,7 +234,7 @@ export function Dashboard() {
                   <Icon name="tune" className="text-[17px]" /> Customize dashboard
                 </button>
                 {customizing && (
-                  <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-border bg-surface p-3 shadow-xl">
+                  <div className="absolute left-0 z-20 mt-2 w-[min(16rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface p-3 shadow-xl sm:left-auto sm:right-0">
                     <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">Visible sections</p>
                     {DASHBOARD_CARDS.map((card) => (
                       <label key={card.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm hover:bg-surface-high/40">
@@ -308,7 +308,7 @@ export function Dashboard() {
 
             {isVisible('quick_actions') && (
               <div>
-                <div className="mb-2 flex items-center justify-between"><h3 className="text-sm font-semibold">Quick actions</h3><span className="text-[11px] text-text-muted">Based on your {user?.role ?? 'member'} access</span></div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-1"><h3 className="text-sm font-semibold">Quick actions</h3><span className="text-[11px] text-text-muted">Based on your {user?.role ?? 'member'} access</span></div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                   <QuickAction to="/dashboard/agents" icon="mic" label="Test an agent" />
                   <QuickAction to="/dashboard/outbound" icon="campaign" label="Start campaign" />
@@ -584,7 +584,7 @@ export function Dashboard() {
         {tab === 'analytics' && (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card className="lg:col-span-2">
-              <div className="mb-4 flex items-center gap-2">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
                 <Icon name="auto_awesome" className="text-[18px] text-cyan" />
                 <h3 className="text-sm font-semibold">Conversation intelligence</h3>
                 <span className="text-xs text-text-muted">· last 30 days</span>

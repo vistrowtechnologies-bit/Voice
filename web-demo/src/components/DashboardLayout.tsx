@@ -28,7 +28,7 @@ export function ThemeSwitcher() {
       onClick={() => applyTheme(next)}
       aria-label={`Switch to ${next} mode`}
       title={`Switch to ${next} mode`}
-      className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-primary"
+      className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-primary sm:h-8 sm:w-8"
     >
       {/* key remount replays the spin-in animation every toggle, not just once. */}
       <Icon key={theme} name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="theme-icon-pop text-[17px]" />
@@ -269,12 +269,12 @@ export function PageHeader({
   }, [])
 
   return (
-    <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/80 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:px-6">
+    <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/90 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:px-6">
       <div className="min-w-0 flex-1">
         <h1 className="text-lg font-semibold leading-tight">{title}</h1>
-        {subtitle && <p className="truncate text-xs text-text-muted">{subtitle}</p>}
+        {subtitle && <p className="mt-0.5 text-xs leading-snug text-text-muted sm:truncate">{subtitle}</p>}
       </div>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
         {credits !== null && (
           <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted">
             <Icon name="toll" className="text-[15px] text-cyan" />
@@ -400,7 +400,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <button
             aria-label="Open navigation"
             onClick={() => setMobileNavOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-muted transition-colors hover:border-primary hover:text-primary"
           >
             <Icon name="menu" />
           </button>

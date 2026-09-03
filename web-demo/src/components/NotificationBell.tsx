@@ -101,7 +101,7 @@ export function NotificationBell() {
         onClick={() => setOpen((v) => !v)}
         aria-label={visible.length ? `Notifications (${visible.length} needing attention)` : 'Notifications'}
         aria-expanded={open}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted hover:text-text"
+        className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-muted transition-colors hover:border-primary hover:text-text sm:h-9 sm:w-9"
       >
         <Icon name="notifications" className="text-[18px]" />
         {visible.length > 0 && (
@@ -112,7 +112,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-surface shadow-2xl">
+        <div className="fixed inset-x-4 top-28 z-40 overflow-hidden rounded-xl border border-border bg-surface shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[min(22rem,calc(100vw-2rem))]">
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
             <p className="text-xs font-bold uppercase tracking-widest text-text-muted">Attention</p>
             {visible.length > 0 && (

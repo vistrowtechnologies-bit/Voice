@@ -64,7 +64,7 @@ export function DataTable<T>({
       <Card variant="default" padding="none">
         <div className="animate-pulse" aria-hidden="true">
           {/* Desktop/tablet: same table, same columns, placeholder cells */}
-          <div className="hidden overflow-x-auto md:block">
+          <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-surface-high/30 text-[11px] font-bold uppercase tracking-widest text-text-muted">
@@ -90,7 +90,7 @@ export function DataTable<T>({
           </div>
 
           {/* Mobile: same stacked-card shape */}
-          <div className="flex flex-col divide-y divide-border md:hidden">
+          <div className="flex flex-col divide-y divide-border lg:hidden">
             {placeholders.map((r) => (
               <div key={r} className="flex flex-col gap-2 px-4 py-3">
                 <SkeletonBar index={r} />
@@ -122,7 +122,7 @@ export function DataTable<T>({
       ) : (
         <>
           {/* Desktop/tablet: real table */}
-          <div className="hidden overflow-x-auto md:block">
+          <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-surface-high/30 text-[11px] font-bold uppercase tracking-widest text-text-muted">
@@ -151,7 +151,7 @@ export function DataTable<T>({
           </div>
 
           {/* Mobile: stacked cards, one per row */}
-          <div className="flex flex-col divide-y divide-border md:hidden">
+          <div className="flex flex-col divide-y divide-border lg:hidden">
             {rows.map((row) => (
               <div key={rowKey(row)} className="flex flex-col gap-2 px-4 py-3">
                 <div className="font-semibold">{primaryCol.render(row)}</div>

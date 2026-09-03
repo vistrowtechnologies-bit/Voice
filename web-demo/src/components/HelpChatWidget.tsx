@@ -266,7 +266,7 @@ export function HelpChatWidget() {
               setShowHint(false)
               setOpen(true)
             }}
-            className="help-chat-hint absolute bottom-2 right-[calc(100%+0.75rem)] whitespace-nowrap rounded-xl border border-primary/25 bg-surface px-3 py-2 text-xs font-medium text-text shadow-xl transition-colors hover:border-primary/60 hover:bg-surface-high"
+            className="help-chat-hint absolute bottom-2 right-[calc(100%+0.75rem)] hidden whitespace-nowrap rounded-xl border border-primary/25 bg-surface px-3 py-2 text-xs font-medium text-text shadow-xl transition-colors hover:border-primary/60 hover:bg-surface-high sm:block"
           >
             Hi! Need help?
           </button>
