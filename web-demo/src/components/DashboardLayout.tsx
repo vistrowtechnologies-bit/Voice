@@ -196,7 +196,7 @@ function SidebarContent({
           </>
         )}
       </div>
-      <nav className="flex flex-1 flex-col gap-3 overflow-y-auto pb-4">
+      <nav className="flex min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-4">
         {NAV_GROUPS.map((group) => (
           <div key={group.title}>
             <div className={`mb-1 flex h-6 items-center ${collapsed ? 'px-3' : 'px-4'}`} aria-hidden={collapsed || undefined}>
@@ -217,15 +217,15 @@ function SidebarContent({
                   aria-label={collapsed ? item.label : undefined}
                   title={collapsed ? item.label : undefined}
                   className={({ isActive }) =>
-                    `flex items-center rounded-lg py-2 text-sm transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-4'} ${
+                    `flex w-full min-w-0 items-center rounded-lg py-2 text-sm transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-4'} ${
                       isActive
                         ? 'border-l-[3px] border-primary bg-surface-high text-text'
                         : 'text-text-muted hover:bg-surface-high'
                     }`
                   }
                 >
-                  <Icon name={item.icon} className="text-[19px]" />
-                  <span className={collapsed ? 'sr-only' : ''}>{item.label}</span>
+                  <Icon name={item.icon} className="shrink-0 text-[19px]" />
+                  <span className={collapsed ? 'sr-only' : 'min-w-0 truncate'}>{item.label}</span>
                 </NavLink>
               ))}
             </div>
@@ -375,7 +375,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
           setSidebarHovered(false)
         }}
-        className={`fixed left-0 z-30 hidden flex-col border-r border-border bg-surface p-3 transition-[width,box-shadow] duration-200 ease-out lg:flex ${sidebarExpanded ? 'w-[280px]' : 'w-20'} ${sidebarCollapsed && sidebarHovered ? 'shadow-2xl' : ''} ${
+        className={`fixed left-0 z-30 hidden flex-col overflow-x-hidden border-r border-border bg-surface p-3 transition-[width,box-shadow] duration-200 ease-out lg:flex ${sidebarExpanded ? 'w-[280px]' : 'w-20'} ${sidebarCollapsed && sidebarHovered ? 'shadow-2xl' : ''} ${
           user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'
         }`}
       >
@@ -388,7 +388,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
       {mobileNavOpen && (
         <div className="fixed inset-0 z-40 flex lg:hidden">
-          <div className="flex w-64 flex-col overflow-y-auto bg-surface p-4">
+          <div className="flex w-64 flex-col overflow-x-hidden overflow-y-auto bg-surface p-4">
             <SidebarContent onNavigate={() => setMobileNavOpen(false)} />
           </div>
           <button
