@@ -38,6 +38,7 @@ from livekit.protocol.sip import (
     ListSIPOutboundTrunkRequest,
     SIPDispatchRule,
     SIPDispatchRuleIndividual,
+    SIPHeaderOptions,
     SIPInboundTrunkInfo,
     SIPOutboundTrunkInfo,
 )
@@ -358,7 +359,8 @@ async def ensure_inbound_trunk() -> str | None:
             await lkapi.sip.update_inbound_trunk(
                 trunk_id,
                 SIPInboundTrunkInfo(
-                    name=TRUNK_NAME, numbers=numbers, auth_username=auth_username, auth_password=auth_password
+                    name=TRUNK_NAME, numbers=numbers, auth_username=auth_username, auth_password=auth_password,
+                    include_headers=SIPHeaderOptions.SIP_ALL_HEADERS,
                 ),
             )
             return trunk_id
@@ -367,7 +369,8 @@ async def ensure_inbound_trunk() -> str | None:
             trunk = await lkapi.sip.create_inbound_trunk(
                 CreateSIPInboundTrunkRequest(
                     trunk=SIPInboundTrunkInfo(
-                        name=TRUNK_NAME, numbers=numbers, auth_username=auth_username, auth_password=auth_password
+                        name=TRUNK_NAME, numbers=numbers, auth_username=auth_username, auth_password=auth_password,
+                        include_headers=SIPHeaderOptions.SIP_ALL_HEADERS,
                     )
                 )
             )
@@ -391,7 +394,8 @@ async def ensure_inbound_trunk() -> str | None:
             await lkapi.sip.update_inbound_trunk(
                 trunk_id,
                 SIPInboundTrunkInfo(
-                    name=TRUNK_NAME, numbers=numbers, auth_username=auth_username, auth_password=auth_password
+                    name=TRUNK_NAME, numbers=numbers, auth_username=auth_username, auth_password=auth_password,
+                    include_headers=SIPHeaderOptions.SIP_ALL_HEADERS,
                 ),
             )
             calls_db.set_setting(TRUNK_ID_SETTING, trunk_id, calls_db.PLATFORM_ACCOUNT_ID)
