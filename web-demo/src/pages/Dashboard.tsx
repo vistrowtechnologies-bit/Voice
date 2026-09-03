@@ -106,8 +106,6 @@ export function Dashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [hiddenCards, setHiddenCards] = useState<Set<string>>(new Set())
   const [customizing, setCustomizing] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-  const [headerRefreshSignal, setHeaderRefreshSignal] = useState(0)
 
   const { user } = useAuth()
   // Re-render (and recompute chart colors) when the header toggles the theme.
@@ -197,50 +195,9 @@ export function Dashboard() {
     }
   }
 
-  const refreshDashboard = async () => {
-    if (refreshing) return
-    setRefreshing(true)
-    try {
-      await Promise.all([
-        fetchDashboardSummary().then(setSummary).catch(() => setSummary(null)),
-        fetchAnalytics().then(setAnalytics).catch(() => setAnalytics(null)),
-        fetchIntelligence(30).then(setIntel).catch(() => setIntel(null)),
-        fetchCalls().then((calls) => setRecentCalls(calls.slice(0, 5))).catch(() => setRecentCalls([])),
-        fetchLaunchReadiness().then(setReadiness).catch(() => setReadiness(null)),
-        fetchFeedbackSummary().then(setFeedback).catch(() => setFeedback(null)),
-        fetchBilling().then(setBilling).catch(() => setBilling(null)),
-        fetchIntegrations().then(setIntegrations).catch(() => setIntegrations([])),
-        fetchNotifications().then(setAttentionItems).catch(() => setAttentionItems([])),
-        fetchContacts().then(setContacts).catch(() => setContacts([])),
-        fetchAppointments().then(setAppointments).catch(() => setAppointments([])),
-        fetchUsageTrends(rangeDays).then(setTrends).catch(() => setTrends(null)),
-        fetchPeriodComparison(rangeDays).then(setComparison).catch(() => setComparison(null)),
-        fetchActiveCalls().then(setActiveCalls).catch(() => setActiveCalls([])),
-      ])
-      setHeaderRefreshSignal((signal) => signal + 1)
-    } finally {
-      setRefreshing(false)
-    }
-  }
-
   return (
     <DashboardLayout>
-      <PageHeader
-        title="Dashboard"
-        subtitle="Overview of your voice AI platform"
-        refreshSignal={headerRefreshSignal}
-      >
-        <button
-          type="button"
-          onClick={refreshDashboard}
-          disabled={refreshing}
-          aria-label={refreshing ? 'Refreshing dashboard' : 'Refresh dashboard'}
-          title={refreshing ? 'Refreshing dashboard' : 'Refresh dashboard'}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-text disabled:cursor-wait disabled:opacity-60"
-        >
-          <Icon name="refresh" className={`text-[18px] ${refreshing ? 'animate-spin' : ''}`} />
-        </button>
-      </PageHeader>
+      <PageHeader title="Dashboard" subtitle="Overview of your voice AI platform" />
 
       <section className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6">
         <div className="flex items-center gap-6 border-b border-border">

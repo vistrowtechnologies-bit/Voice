@@ -98,6 +98,8 @@ export function CallsHistory() {
   const [directionFilter, setDirectionFilter] = useState(searchParams.get('direction') || 'all')
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [headerRefreshSignal, setHeaderRefreshSignal] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const recordingRequestRef = useRef<string | null>(null)
   const [recordingCallId, setRecordingCallId] = useState<string | null>(null)
@@ -115,6 +117,20 @@ export function CallsHistory() {
     },
     [],
   )
+
+  const refreshCalls = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await Promise.all([
+        fetchCalls().then(setCalls).catch(() => setCalls([])),
+        fetchActiveCalls().then(setActiveCalls).catch(() => setActiveCalls([])),
+      ])
+      setHeaderRefreshSignal((signal) => signal + 1)
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const toggleRecording = async (callId: string) => {
     const audio = audioRef.current
@@ -317,7 +333,21 @@ export function CallsHistory() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="All Calls History" subtitle={`${calls.length} calls total`}>
+      <PageHeader
+        title="All Calls History"
+        subtitle={`${calls.length} calls total`}
+        refreshSignal={headerRefreshSignal}
+      >
+        <button
+          type="button"
+          onClick={refreshCalls}
+          disabled={refreshing}
+          aria-label={refreshing ? 'Refreshing call history' : 'Refresh call history'}
+          title={refreshing ? 'Refreshing call history' : 'Refresh call history'}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-text disabled:cursor-wait disabled:opacity-60"
+        >
+          <Icon name="refresh" className={`text-[18px] ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
         <a
           href={callsExportUrl}
           download
