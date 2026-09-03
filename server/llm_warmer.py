@@ -57,7 +57,7 @@ def _recently_active_openai_agents() -> list[dict]:
             (str(_RECENT_CALL_WINDOW_MIN),),
         ).fetchall()
         return [
-            {"id": r["id"], "system_prompt": r["system_prompt"]}
+            {"id": r["id"], "system_prompt": r["system_prompt"], "model": r["model"]}
             for r in rows
             if not (r["model"] or "").startswith(("gemini", "groq/"))
         ]
@@ -65,13 +65,17 @@ def _recently_active_openai_agents() -> list[dict]:
         conn.close()
 
 
-def _ping(agent_id: int, system_prompt: str, api_key: str) -> None:
+def _ping(agent_id: int, system_prompt: str, model: str, api_key: str) -> None:
     # Plain stdlib HTTP - no openai/requests/httpx dependency for a job
     # this small. Same endpoint/shape agent/main.py's _build_llm hits via
     # the openai plugin, just without pulling that package into server/.
+    # The agent's OWN model, not a hardcoded one: OpenAI caches per model, so
+    # warming gpt-4.1-mini for an agent that actually runs gpt-4o-mini spends
+    # money warming a cache that call will never read, and leaves the real one
+    # cold. Three of five agents on this account run gpt-4o-mini.
     body = json.dumps(
         {
-            "model": "gpt-4.1-mini",
+            "model": model,
             "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": "."}],
             "max_completion_tokens": 1,
             "prompt_cache_key": _PROMPT_CACHE_KEY,
@@ -85,9 +89,9 @@ def _ping(agent_id: int, system_prompt: str, api_key: str) -> None:
     try:
         with urllib.request.urlopen(req, timeout=15):
             pass
-        logger.info("warmed prompt cache for agent %s", agent_id)
+        logger.info("warmed prompt cache for agent %s (%s)", agent_id, model)
     except Exception:
-        logger.warning("cache-warm ping failed for agent %s", agent_id, exc_info=True)
+        logger.warning("cache-warm ping failed for agent %s (%s)", agent_id, model, exc_info=True)
 
 
 def _loop() -> None:
@@ -99,7 +103,7 @@ def _loop() -> None:
     while True:
         try:
             for agent in _recently_active_openai_agents():
-                _ping(agent["id"], agent["system_prompt"], api_key)
+                _ping(agent["id"], agent["system_prompt"], agent["model"], api_key)
         except Exception:
             logger.exception("LLM cache warmer tick failed")
         time.sleep(_PING_INTERVAL_S)

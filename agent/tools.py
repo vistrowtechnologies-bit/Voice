@@ -1284,11 +1284,11 @@ async def log_lead(
     # without this check, a mis-heard spoken number would silently
     # overwrite that good number with a bad one.
     digits = re.sub(r"\D", "", phone or "")
-    if not digits or not _looks_like_valid_indian_mobile(digits):
+    if not _looks_like_a_phone_number(digits):
         return (
-            f"That number ('{phone}') doesn't look like a complete 10-digit Indian mobile number - "
-            "nothing was recorded. Ask the caller to repeat their phone number, digit by digit if "
-            "needed, then call this tool again with the corrected number."
+            f"That number ('{phone}') doesn't look like a complete phone number - nothing was "
+            "recorded. Ask the caller to repeat it, digit by digit if needed, then call this tool "
+            "again with the corrected number."
         )
     logger.info(
         "lead captured: name=%s phone=%s budget=%s location=%s timeline=%s",
@@ -1330,14 +1330,38 @@ _PLACEHOLDER_VALUES = {
 
 def _looks_like_valid_indian_mobile(digits: str) -> bool:
     """10 digits, first digit 6-9 — the actual shape of a real Indian mobile
-    number once a leading +91/91/0 is stripped. Deliberately strict: this
-    gates whether a captured lead is actually reachable, not just whether
-    the caller said something number-shaped."""
+    number once a leading +91/91/0 is stripped."""
     if digits.startswith("91") and len(digits) == 12:
         digits = digits[2:]
     elif digits.startswith("0") and len(digits) == 11:
         digits = digits[1:]
     return len(digits) == 10 and digits[0] in "6789"
+
+
+def _looks_like_a_phone_number(digits: str) -> bool:
+    """Whether a captured number is plausibly dialable at all.
+
+    The job here is to reject what a mis-heard dictation produces — "808019794"
+    (nine digits, confirmed live on call 762) — NOT to require an Indian
+    mobile. Requiring one rejected every Indian landline and every
+    international number, which for a business that advertises an NRI desk is
+    exactly the caller you least want to turn away; worse, the rejection told
+    the model to make them re-dictate a number caller ID had already captured
+    correctly.
+
+    Floor is 10 digits, not 8: "808019794" is nine, and anything short in
+    this market is a dropped digit rather than a real subscriber. Every
+    international number carrying its country code clears 10 comfortably
+    (UAE 971+9=12, US 1+10=11, UK 44+10=12), so the floor costs nothing
+    real. Ceiling is E.164's 15. An unprefixed 10-digit number still has to
+    be a real Indian mobile, since one starting 1-5 is not a thing."""
+    if not digits:
+        return False
+    if len(digits) == 10 and not digits.startswith(("0", "91")):
+        # Unprefixed 10-digit numbers in this market are mobiles; anything
+        # starting 1-5 is a misheard digit, not a subscriber.
+        return _looks_like_valid_indian_mobile(digits)
+    return 10 <= len(digits) <= 15
 
 
 @function_tool
