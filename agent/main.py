@@ -3889,8 +3889,18 @@ async def entrypoint(ctx: JobContext) -> None:
     # Everything above (config, KB, agent/session construction) is safe to do
     # while an outbound call is still ringing, and that is exactly the point:
     # it turns ring time into warm-up time. Only the greeting has to wait for
-    # a human to actually be there. No-op for inbound/browser/widget calls.
-    if not await _wait_for_sip_answer(ctx, first_participant, _t0):
+    # a human to actually be there.
+    #
+    # Gated on direction == "outbound" (set in room metadata by
+    # livekit_sip.place_outbound_call, so it is only ever true for a call WE
+    # placed). Waiting on ANY sip.callStatus deadlocked real inbound calls:
+    # an inbound leg can sit at "ringing" until the session answers it, so
+    # holding session.start() until it reached "active" meant each side
+    # waiting on the other - the caller heard ringing for ~28s and the call
+    # then died without ever connecting.
+    if call_context.get("direction") == "outbound" and not await _wait_for_sip_answer(
+        ctx, first_participant, _t0
+    ):
         await _hang_up(ctx.room.name)
         return
     logger.info("[latency] session.start() beginning at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
