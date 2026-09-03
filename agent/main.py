@@ -295,19 +295,125 @@ _LEAD_FACT_LABELS = {
     "use_case": "use case",
     "team_size": "team size",
     "budget": "budget",
-    "location": "location",
+    "location": "preferred location(s)",
     "timeline": "timeline",
+    # The three below were missing entirely, so the facts a property caller
+    # opens with had nowhere to live and could not be reflected back. Call
+    # 825: "वाकड़ में। 2 BHK apartment" in turn 3, dropped on the floor.
+    "property_type": "property type",
+    "configuration": "configuration",
+    "purpose": "purpose",
 }
 
 
-def _facts_reminder(lead_data: dict) -> str:
-    known = [f"{label}: {lead_data[key]}" for key, label in _LEAD_FACT_LABELS.items() if lead_data.get(key)]
-    if not known:
-        return ""
-    return (
-        "# What you already know about this caller — do not ask for any of this again\n"
-        + "\n".join(known)
-    )
+# Unicode blocks for the scripts Sarvam can return. Used to catch the STT
+# assigning a turn to the wrong language outright — confirmed on 4 of the 4
+# longest recent agent-13 calls: Kannada on 825 ("ಹ್ಞೂ. ನೀವು ಎಷ್ಟರಲ್ಲಿ?"), Odia
+# on 805, Bengali on 814, Malayalam on 813, every one of them from a Hindi
+# speaker mid-Hindi call. _build_stt runs language="unknown" for the whole
+# call, so each utterance is re-detected across 20+ languages with no bias
+# toward the one already established, and short turns — the most common ones
+# — carry the least acoustic evidence to detect from.
+_SCRIPT_RANGES = {
+    "devanagari": (0x0900, 0x097F),
+    "bengali": (0x0980, 0x09FF),
+    "gurmukhi": (0x0A00, 0x0A7F),
+    "gujarati": (0x0A80, 0x0AFF),
+    "odia": (0x0B00, 0x0B7F),
+    "tamil": (0x0B80, 0x0BFF),
+    "telugu": (0x0C00, 0x0C7F),
+    "kannada": (0x0C80, 0x0CFF),
+    "malayalam": (0x0D00, 0x0D7F),
+}
+
+_LANGUAGE_SCRIPT = {
+    "hi": "devanagari", "mr": "devanagari", "ne": "devanagari",
+    "bn": "bengali", "pa": "gurmukhi", "gu": "gujarati", "or": "odia",
+    "ta": "tamil", "te": "telugu", "kn": "kannada", "ml": "malayalam",
+}
+
+# A real mid-call language switch by a caller is normally a full sentence; every
+# drift observed in production was a fragment. Capping at 60 characters keeps
+# the check off genuine multilingual switching, which is a product feature and
+# must not be broken to fix an STT bug. Longest observed drift was 20 chars.
+_MAX_SUSPECT_TRANSCRIPT_CHARS = 60
+
+
+def _dominant_indic_script(text: str) -> str | None:
+    counts: dict[str, int] = {}
+    for ch in text or "":
+        code = ord(ch)
+        for script, (lo, hi) in _SCRIPT_RANGES.items():
+            if lo <= code <= hi:
+                counts[script] = counts.get(script, 0) + 1
+                break
+    if not counts:
+        return None
+    return max(counts, key=counts.get)
+
+
+def _transcript_looks_misrecognized(text: str, reply_language: str) -> bool:
+    """Whether this turn was probably assigned to the wrong language by STT.
+
+    Deliberately narrow: only an Indic script that is not the current
+    language's own script counts. Latin is excluded outright — Hinglish
+    code-switching is constant and entirely legitimate.
+    """
+    text = (text or "").strip()
+    if not text or len(text) > _MAX_SUSPECT_TRANSCRIPT_CHARS:
+        return False
+    expected = _LANGUAGE_SCRIPT.get((reply_language or "").split("-")[0].lower())
+    if expected is None:
+        return False
+    found = _dominant_indic_script(text)
+    return found is not None and found != expected
+
+
+# Only name/phone/email/budget/location/timeline/company/use_case/team_size
+# have real `calls` columns (see db.save_call). The property fields log_lead
+# now captures ride along in extracted_data rather than growing the schema
+# for one vertical.
+_EXTRA_LEAD_FACT_KEYS = ("property_type", "configuration", "purpose")
+
+
+def _extra_lead_facts(lead_data: dict) -> dict:
+    return {k: lead_data[k] for k in _EXTRA_LEAD_FACT_KEYS if lead_data.get(k)}
+
+
+def _facts_reminder(lead_data: dict, fact_status: dict | None = None) -> str:
+    """Reflect known facts back into the model's context, split by how much
+    they can be trusted.
+
+    The split exists because the two failure modes need opposite treatment.
+    A fact the caller actually stated must NEVER be asked again — that is the
+    repeated-question bug. A fact captured from a turn the ASR mangled must
+    NOT be asserted back as settled — that is the unsupported-inference bug
+    (call 825 turn 12, where an unintelligible turn became a confident "so
+    you're looking at this for self-use"). One flat list cannot do both.
+    """
+    fact_status = fact_status or {}
+    known, unconfirmed = [], []
+    for key, label in _LEAD_FACT_LABELS.items():
+        value = lead_data.get(key)
+        if not value:
+            continue
+        (unconfirmed if fact_status.get(key) == "unconfirmed" else known).append(f"{label}: {value}")
+    blocks = []
+    if known:
+        blocks.append(
+            "# What you already know about this caller — NEVER ask for any of this again\n"
+            + "\n".join(known)
+            + "\nIf the caller says they already told you something, they are right: it is in "
+            "this list. Acknowledge once, briefly, and move to a fact you do NOT have."
+        )
+    if unconfirmed:
+        blocks.append(
+            "# Heard, but NOT confirmed — you may verify these, and must not state them as fact\n"
+            + "\n".join(unconfirmed)
+            + "\nAsk about these as a question (\"...self-use ke liye?\"), never as a summary "
+            "(\"...so you want self-use.\")."
+        )
+    return "\n\n".join(blocks)
 
 
 # A label + one line of guidance per funnel stage. Deliberately advisory,
@@ -1537,22 +1643,21 @@ class RealEstateAgent(Agent):
             "Use whichever of these tools actually matches what this call is about — "
             "your persona/system prompt above tells you which one applies, and you "
             "only ever need one of the two:\n"
-            "- Any per-tenant business call (this is the default): as the conversation "
-            "naturally reveals the caller's name and a way to reach them, plus whatever "
-            "context is actually relevant (budget/pricing, location, timing/urgency — "
-            "use \"not applicable\" for any of these that don't fit this business), call "
-            "log_lead to record what you've learned so far — call it again with the "
-            "fuller picture EVERY time the caller gives you a new detail (a budget, a "
-            "location preference, a timeline), even seconds later in the same turn — "
-            "don't wait until every field is known, and don't let booking an appointment "
-            "become the end of the call before you've re-logged whatever they just told "
-            "you. This is not optional and not a low-priority background task: the moment "
-            "a number, price, or figure leaves the caller's mouth in answer to a "
-            "budget/pricing question (in any language or unit — \"एक करोड़\", \"50 lakh\", "
-            "\"around 2 crore\" all count), call log_lead with that value in the very next "
-            "tool call you make, before you say anything else back to them. The same rule "
-            "applies the instant they name a location or a timeline — log it immediately, "
-            "don't hold multiple details in your head to log together later.\n"
+            "- Any per-tenant business call (this is the default): call log_lead the MOMENT "
+            "the caller gives you any detail at all. Every one of its fields is optional — "
+            "pass only what you just learned and leave the rest out; anything you omit keeps "
+            "its previous value. You do NOT need their name first, you do NOT need a phone "
+            "number first, and you must NEVER pass a placeholder like \"not applicable\" or "
+            "\"unknown\" to fill a field in. Calling it eight separate times across one call "
+            "with a single field each is exactly right. The moment a number, price, or figure "
+            "leaves the caller's mouth in answer to a budget question (in any language or unit "
+            "— \"एक करोड़\", \"50 lakh\", \"around 2 crore\" all count), call log_lead with "
+            "that value in the very next tool call you make, before you say anything else back "
+            "to them. Same the instant they name a locality, a timeline, a property type or a "
+            "configuration — log it immediately, don't hold details in your head to log "
+            "together later, and don't let booking an appointment end the call before you have "
+            "logged what they just told you. If they name two localities, call it twice: "
+            "locations accumulate, so both are kept.\n"
             "- Booking an appointment (any business — clinic, salon, consultation, "
             "property site visit): when the caller wants to book a time, first call "
             "check_calendar_availability for their preferred date to see real open "
@@ -1572,6 +1677,26 @@ class RealEstateAgent(Agent):
             "call.\n"
             "These tool calls are silent to the caller — never mention or narrate that "
             "you're saving, logging, or recording anything.\n\n"
+            "# Never claim something you have not actually done\n"
+            "Do NOT tell the caller you have noted, saved, recorded, logged, sent, shared, "
+            "forwarded, booked or arranged anything unless a tool returned success for it in "
+            "THIS call. If you have not called the tool, describe what you WILL do, never what "
+            "you have already done. If no tool exists for it at all, do not offer it — in "
+            "particular, never promise to send a brochure, pricing, details or a message over "
+            "WhatsApp, SMS or email unless you have a tool that actually sends it and it "
+            "succeeded. A caller who hangs up waiting for something that will never arrive is "
+            "worse off than one you told the truth to. Confirmed real failure (call 825): the "
+            "agent said it had noted the caller's budget when nothing had been recorded, then "
+            "promised a WhatsApp that no tool on this call could send.\n\n"
+            "# Only state back what they actually said\n"
+            "If the caller plainly told you something, treat it as settled and never ask again. "
+            "If you are filling a gap by inference, put it as a question, not a summary: "
+            "\"...self-use ke liye dekh rahe hain?\" — never \"...self-use ke liye dekh rahe "
+            "hain.\" If they tell you they already answered something, they are right: "
+            "acknowledge it once, briefly, without apologising twice, and move to something you "
+            "genuinely do not know yet. If a message is garbled or makes no sense in context, "
+            "say in one short line that you did not catch it and ask them to repeat it — never "
+            "cover for it by asking a different question instead.\n\n"
             "Call the end_call tool once the caller clearly signals the conversation is "
             "over — they thank you with nothing further to ask, say goodbye, or otherwise "
             "indicate they're done. Don't call it for a mere pause or a one-word \"okay\" "
@@ -1960,6 +2085,16 @@ class RealEstateAgent(Agent):
         self._booking_confirmed_this_turn = False
         _userdata = self.session.userdata
         _lead_data = _userdata.get("lead_data") or {}
+        # Recomputed EVERY turn (not just when true) so a single bad
+        # transcript cannot leave later, good facts marked unconfirmed.
+        # Read by log_lead in tools.py when it decides a fact's status.
+        _transcript_suspect = _transcript_looks_misrecognized(text, self._reply_language)
+        _userdata["turn_transcript_suspect"] = _transcript_suspect
+        if _transcript_suspect:
+            logger.info(
+                "transcript looks misrecognized (reply_language=%s) — turn: %r",
+                self._reply_language, text,
+            )
 
         # Voicemail detection — only checked once, on the FIRST thing the
         # other party says on a call WE placed (an inbound caller is by
@@ -2356,7 +2491,23 @@ class RealEstateAgent(Agent):
             if self._has_web_search and _FACT_LOOKUP_PATTERN.search(text)
             else ""
         )
-        _facts_reminder_text = _facts_reminder(_lead_data)
+        # The recovery the agent did not have on call 825: given nonsense, it
+        # re-asked a question the caller had already answered instead of
+        # saying it had not understood, which cost three turns and visibly
+        # annoyed the caller.
+        _garbled_instruction = (
+            (
+                "The caller's last message came through garbled — the speech recognizer assigned "
+                "it to the wrong language, so the words you are seeing are NOT what they said. Do "
+                "not try to interpret it and do not guess at its meaning. Say in ONE short line "
+                "that you did not catch it and ask them to repeat THAT question. Do NOT ask a "
+                "different question, and do NOT ask again for anything listed under what you "
+                "already know."
+            )
+            if _transcript_suspect
+            else ""
+        )
+        _facts_reminder_text = _facts_reminder(_lead_data, _userdata.get("fact_status"))
         _funnel_stage = _advance_funnel_stage(
             _userdata,
             _lead_data,
@@ -2380,6 +2531,7 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _healthcare_safety_instruction if _healthcare_safety_instruction else "")
             + ("\n\n" + _post_booking_instruction if _post_booking_instruction else "")
             + ("\n\n" + _search_instruction if _search_instruction else "")
+            + ("\n\n" + _garbled_instruction if _garbled_instruction else "")
             + ("\n\n" + _facts_reminder_text if _facts_reminder_text else "")
             + "\n\n"
             + _objective_text,
@@ -3714,7 +3866,9 @@ async def entrypoint(ctx: JobContext) -> None:
                     # actually loaded (the default/first one).
                     "agent_id": resolved_agent_id,
                     "account_id": cfg.get("account_id"),
-                    "extracted_data": extracted,
+                    # Seeded with what log_lead captured during the call, so the
+                    # property fields survive even if post-call analysis times out.
+                    "extracted_data": {**_extra_lead_facts(lead_data), **extracted},
                     "latency_metrics": userdata["latency_metrics"],
                     "diagnostic_events": userdata.get("diagnostic_events") or [],
                     # Diagnostics collected during the call. .get() rather
@@ -3749,7 +3903,11 @@ async def entrypoint(ctx: JobContext) -> None:
             except Exception:
                 logger.exception("post-call analysis failed for room %s — call already saved", ctx.room.name)
             if extracted:
-                db.set_call_extracted_data(saved_call_id, extracted)
+                # Re-merge: this OVERWRITES the column, so dropping the
+                # in-call facts here would silently undo the seed above.
+                db.set_call_extracted_data(
+                    saved_call_id, {**_extra_lead_facts(lead_data), **extracted}
+                )
 
         # ORDER MATTERS. The recorder used to stop AFTER the ambience player
         # was closed, and aclose() can hang: on an ambience-enabled call the

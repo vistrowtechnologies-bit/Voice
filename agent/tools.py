@@ -1245,77 +1245,139 @@ async def book_appointment(
     )
 
 
+# Fields log_lead maintains on the shared lead_data dict. Order is the order
+# they are rendered back to the model. Only name/phone/budget/location/
+# timeline map to real `calls` columns (see db.save_call); the other three are
+# carried in extracted_data — they exist because a real-estate caller leads
+# with them and there was previously nowhere to put them, so they were simply
+# dropped. Confirmed live on call 825: "वाकड़ में। 2 BHK apartment" arrived in
+# turn 3 and none of it could be recorded.
+_LEAD_FIELDS = (
+    "name", "phone", "budget", "location", "timeline",
+    "property_type", "configuration", "purpose",
+)
+
+
+def _merge_lead_field(lead_data: dict, key: str, value: str) -> bool:
+    """Write one field. Returns whether anything actually changed.
+
+    Locations ACCUMULATE rather than overwrite: "Baner or Kharadi" is two
+    real preferences and silently keeping only the last one loses half the
+    caller's requirement. Every other field overwrites, because a second
+    value there is a correction ("actually 1.5 crore, not 1").
+    """
+    value = (value or "").strip()
+    if not value or value.lower() in _PLACEHOLDER_VALUES:
+        return False
+    if key == "location":
+        existing = [p.strip() for p in (lead_data.get("location") or "").split(",") if p.strip()]
+        if any(value.lower() == p.lower() for p in existing):
+            return False
+        existing.append(value)
+        lead_data["location"] = ", ".join(existing)
+        return True
+    if lead_data.get(key) == value:
+        return False
+    lead_data[key] = value
+    return True
+
+
 @function_tool
 async def log_lead(
     context: RunContext,
-    name: str,
-    phone: str,
-    budget: str,
-    location: str,
-    timeline: str,
+    name: str = "",
+    phone: str = "",
+    budget: str = "",
+    location: str = "",
+    timeline: str = "",
+    property_type: str = "",
+    configuration: str = "",
+    purpose: str = "",
 ) -> str:
-    """Log a qualified lead's details captured during the call.
+    """Record what you have learned about this caller so far.
+
+    Call this the MOMENT the caller gives you any detail — a budget, a
+    locality, a timeline, a configuration. You do NOT need their name, you do
+    NOT need a phone number, and you do NOT need the full picture. Pass only
+    the fields you actually just learned; everything you omit is left exactly
+    as it was. Calling it eight times across a call with one field each is
+    correct and expected.
 
     Args:
-        name: Lead's name.
-        phone: Lead's phone number.
-        budget: Budget range the lead mentioned.
-        location: Preferred location/area.
-        timeline: Purchase timeline, e.g. "within 3 months".
+        name: Caller's name, once they give it.
+        phone: Caller's phone number. On an inbound call this is already
+            known from caller ID — do not ask for it.
+        budget: Budget as they expressed it, e.g. "around 1 crore". Keep an
+            approximation approximate.
+        location: One preferred locality. Call again with the second one if
+            they name more than one — they accumulate, they do not replace.
+        timeline: When they want to buy, e.g. "next month".
+        property_type: apartment, plot, villa, commercial, etc.
+        configuration: e.g. "2 BHK", "3 BHK", "2000 sqft plot".
+        purpose: "investment" or "self-use" — ONLY if they actually said it.
     """
-    # Same guard as capture_platform_lead - see its comment for the real
-    # failure this closes (a placeholder name/contact sailing through
-    # because nothing rejected it, not because the phone-format check
-    # missed it).
-    if (name or "").strip().lower() in _PLACEHOLDER_VALUES:
-        return (
-            "You don't have this caller's real name yet - nothing was recorded. Ask for their name "
-            "before calling this tool again. Never pass a placeholder or leave it blank."
-        )
-    if (phone or "").strip().lower() in _PLACEHOLDER_VALUES:
-        return (
-            "You don't have a real phone number for this caller yet - nothing was recorded. Ask for "
-            "one before calling this tool again. Never pass a placeholder or leave it blank."
-        )
-    # Same guard as capture_platform_lead (call 762: "808019794", nine
-    # digits, recorded without question). Matters even more here: an
-    # inbound call may have already pre-seeded a real, caller-ID-verified
-    # phone number into lead_data (see main.py's visitor_phone handling) -
-    # without this check, a mis-heard spoken number would silently
-    # overwrite that good number with a bad one.
-    digits = re.sub(r"\D", "", phone or "")
-    if not _looks_like_a_phone_number(digits):
-        return (
-            f"That number ('{phone}') doesn't look like a complete phone number - nothing was "
-            "recorded. Ask the caller to repeat it, digit by digit if needed, then call this tool "
-            "again with the corrected number."
-        )
-    logger.info(
-        "lead captured: name=%s phone=%s budget=%s location=%s timeline=%s",
-        name,
-        phone,
-        budget,
-        location,
-        timeline,
-    )
     lead_data = (context.userdata or {}).get("lead_data")
-    if lead_data is not None:
-        lead_data.update(name=name, phone=phone, budget=budget, location=location, timeline=timeline)
-        if context.userdata is not None:
-            context.userdata["lead_captured"] = True
-    event = {
-        "type": "lead_update",
-        "name": name,
-        "phone": phone,
-        "budget": budget,
-        "location": location,
-        "timeline": timeline,
+    if lead_data is None:
+        return "Nothing recorded — no active call state."
+
+    incoming = {
+        "name": name, "phone": phone, "budget": budget, "location": location,
+        "timeline": timeline, "property_type": property_type,
+        "configuration": configuration, "purpose": purpose,
     }
+
+    # Per-FIELD validation, not per-call. The previous version validated
+    # name and phone first and returned without writing anything if either
+    # failed, which meant a budget could never be recorded before the caller
+    # had given their name — so on a real call it never was. Rejecting a bad
+    # phone number must cost you the phone number, not the budget.
+    rejected = ""
+    if incoming["phone"] and incoming["phone"].strip().lower() not in _PLACEHOLDER_VALUES:
+        digits = re.sub(r"\D", "", incoming["phone"])
+        if not _looks_like_a_phone_number(digits):
+            incoming["phone"] = ""
+            rejected = (
+                f" The number you passed ('{phone}') isn't a complete phone number, so it was "
+                "NOT saved — everything else was. Ask them to repeat it digit by digit."
+            )
+
+    changed = [k for k in _LEAD_FIELDS if _merge_lead_field(lead_data, k, incoming[k])]
+    if not changed and not rejected:
+        # Covers both "you already knew all of this" and "every field you
+        # passed was empty or a placeholder" — either way nothing moved, and
+        # the model's next move is the same: ask about something else.
+        return "Nothing new recorded — no usable new detail in that call."
+
+    # A turn the ASR could not be trusted on (see main.py's script-mismatch
+    # check) must not produce a fact the agent then treats as settled. Those
+    # land as "unconfirmed" and _facts_reminder invites the model to verify
+    # them, instead of asserting them back to the caller as fact — the
+    # failure on call 825 turn 12, where an unintelligible turn became a
+    # confident "so you're looking for self-use".
+    userdata = context.userdata or {}
+    status = userdata.setdefault("fact_status", {})
+    suspect = bool(userdata.get("turn_transcript_suspect"))
+    for key in changed:
+        status[key] = "unconfirmed" if suspect else "confirmed"
+
+    # Only a lead with BOTH a name and a way to reach them counts as captured
+    # — this flag suppresses the end-of-call "you never saved this lead"
+    # nudge, and a budget-only write must not switch that off.
+    if lead_data.get("name") and (lead_data.get("phone") or lead_data.get("email")):
+        userdata["lead_captured"] = True
+
+    logger.info("lead updated: %s", {k: lead_data.get(k) for k in changed})
+    event = {"type": "lead_update", **{k: lead_data.get(k, "") for k in _LEAD_FIELDS}}
     async with context.with_filler(_TOOL_FILLER_TEXT, delay=0.6):
         await _publish_event(context, event)
         await _post_webhook(event)
         await _fan_out_integrations(context, event)
-    return "Lead details recorded."
+
+    # Hand the merged state back so the model can SEE what is now known
+    # rather than assuming the write landed. This is what it should be
+    # reasoning from when it picks the next question.
+    known = ", ".join(f"{k}={lead_data[k]}" for k in _LEAD_FIELDS if lead_data.get(k))
+    return f"Saved. Known so far — {known}.{rejected}"
 
 
 # Shared by capture_platform_lead and log_lead — a model under pressure to
