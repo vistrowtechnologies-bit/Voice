@@ -24,6 +24,7 @@ import type {
   Invoice,
   KnowledgeBase,
   PhoneNumber,
+  ProjectListingsResponse,
   QaDraft,
   Site,
   SitePageRoute,
@@ -201,6 +202,16 @@ export const importContactsMapped = (csv: string, mapping: Record<string, string
 // -------------------------------------------------------- knowledge base
 
 export const fetchKnowledgeBases = () => get<KnowledgeBase[]>('/knowledge-bases')
+
+export const fetchProjectListings = () => get<ProjectListingsResponse>('/project-listings')
+export const setProjectFeed = (feedUrl: string) =>
+  send<ProjectListingsResponse & { ok?: boolean; error?: string; count?: number }>(
+    'POST', '/project-listings/feed', { feedUrl },
+  )
+export const syncProjectListings = () =>
+  send<ProjectListingsResponse & { ok?: boolean; error?: string; count?: number }>(
+    'POST', '/project-listings/sync',
+  )
 export const createKnowledgeBase = (name: string) => send('POST', '/knowledge-bases', { name })
 export const deleteKnowledgeBase = (id: number) => send('DELETE', `/knowledge-bases/${id}`)
 export const addKnowledgeSource = (kbId: number, name: string, content: string, type = 'text') =>

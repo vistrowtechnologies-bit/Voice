@@ -7519,3 +7519,36 @@ def enablex_connect_to_sip(voice_id: str, from_number: str, sip_uri: str, accoun
         {"from": from_number, "to": sip_uri},
         account_id,
     )
+
+
+def list_project_listings(account_id: int) -> list[dict]:
+    """This account's synced property listings, for the dashboard's Listings
+    card (server/project_sync.py owns writing them)."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT slug, title, developer, location, category, status, config, area, rera, "
+            "price_from, units_json, url, synced_at FROM project_listings "
+            "WHERE account_id = ? ORDER BY status, title",
+            (account_id,),
+        ).fetchall()
+        return [
+            {
+                "slug": r["slug"],
+                "title": r["title"],
+                "developer": r["developer"],
+                "location": r["location"],
+                "category": r["category"],
+                "status": r["status"],
+                "config": r["config"],
+                "area": r["area"],
+                "rera": r["rera"],
+                "priceFrom": r["price_from"],
+                "units": _safe_json_loads(r["units_json"]),
+                "url": r["url"],
+                "syncedAt": r["synced_at"],
+            }
+            for r in rows
+        ]
+    finally:
+        conn.close()

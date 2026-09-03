@@ -13,14 +13,17 @@ import {
   extractQaFromSource,
   fetchKnowledgeBases,
   fetchKnowledgeSource,
+  fetchProjectListings,
   importKnowledgeSourceUrls,
   scanKnowledgeSourceUrl,
   setKnowledgeBaseStrict,
+  setProjectFeed,
+  syncProjectListings,
   updateKbQa,
   updateKnowledgeSource,
 } from '../lib/api'
 import { extractTextFromFile } from '../lib/fileExtract'
-import type { KbQaPair, KnowledgeBase, QaDraft } from '../lib/types'
+import type { KbQaPair, KnowledgeBase, ProjectListing, QaDraft } from '../lib/types'
 
 // Must match agent/db.py get_kb_content's max_chars - everything past this
 // is silently trimmed from the agent's prompt, so the budget bar warns the
@@ -82,6 +85,13 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 
 export function KnowledgeBasePage() {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([])
+  // Property listings synced from the tenant's own site. Kept out of the KB
+  // on purpose: KB text goes into every system prompt under an 8k cap, so a
+  // growing catalogue would silently truncate mid-call.
+  const [listings, setListings] = useState<ProjectListing[]>([])
+  const [feedUrl, setFeedUrl] = useState('')
+  const [feedBusy, setFeedBusy] = useState(false)
+  const [feedMsg, setFeedMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedQa, setExpandedQa] = useState<Set<number>>(new Set())
   const [newName, setNewName] = useState('')
@@ -131,7 +141,49 @@ export function KnowledgeBasePage() {
 
   useEffect(() => {
     fetchKnowledgeBases().then(setKbs).catch(() => setKbs([])).finally(() => setLoading(false))
+    fetchProjectListings()
+      .then((r) => {
+        setFeedUrl(r.feedUrl)
+        setListings(r.listings)
+      })
+      .catch(() => setListings([]))
   }, [])
+
+  // Saving the URL also syncs immediately, so a wrong URL surfaces as an
+  // error here rather than silently importing nothing until the next
+  // 6-hourly run.
+  const applyFeedResult = (r: { ok?: boolean; error?: string; count?: number; listings: ProjectListing[] }) => {
+    setListings(r.listings)
+    setFeedMsg(
+      r.ok === false
+        ? { ok: false, text: r.error || 'Could not read that feed.' }
+        : { ok: true, text: `Synced ${r.count ?? r.listings.length} listing${(r.count ?? r.listings.length) === 1 ? '' : 's'}.` },
+    )
+  }
+
+  const handleSaveFeed = async () => {
+    setFeedBusy(true)
+    setFeedMsg(null)
+    try {
+      applyFeedResult(await setProjectFeed(feedUrl.trim()))
+    } catch {
+      setFeedMsg({ ok: false, text: 'Could not save the feed URL.' })
+    } finally {
+      setFeedBusy(false)
+    }
+  }
+
+  const handleSyncNow = async () => {
+    setFeedBusy(true)
+    setFeedMsg(null)
+    try {
+      applyFeedResult(await syncProjectListings())
+    } catch {
+      setFeedMsg({ ok: false, text: 'Sync failed.' })
+    } finally {
+      setFeedBusy(false)
+    }
+  }
 
   const handleCreate = async () => {
     if (!newName.trim()) return
@@ -314,6 +366,89 @@ export function KnowledgeBasePage() {
           approved answers instead of improvising facts. Attach a knowledge base to an agent from the
           Agents page.
         </div>
+
+        {/* Property listings — separate from the KB on purpose. KB text is
+            stuffed into every system prompt under an 8k cap; listings reach
+            the agent as a short index plus an on-demand lookup instead, so
+            the catalogue can grow without slowing every call down. */}
+        <Card padding="none" className="overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div>
+              <h2 className="text-sm font-bold">Property listings</h2>
+              <p className="text-xs text-text-muted">
+                Synced from your website so the agent always quotes current projects and prices — kept
+                out of the knowledge base, so adding projects never slows your calls down.
+              </p>
+            </div>
+            {!!listings.length && (
+              <span className="rounded-full bg-success/15 px-2.5 py-1 text-xs font-semibold text-success">
+                {listings.length} synced
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={feedUrl}
+                onChange={(e) => setFeedUrl(e.target.value)}
+                placeholder="https://yoursite.com/properties/posts.json"
+                className="min-w-[260px] flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 font-mono text-xs outline-none transition-colors focus:border-primary"
+              />
+              <button
+                onClick={handleSaveFeed}
+                disabled={feedBusy}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+              >
+                {feedBusy ? 'Syncing…' : 'Save & sync'}
+              </button>
+              {!!listings.length && (
+                <button
+                  onClick={handleSyncNow}
+                  disabled={feedBusy}
+                  className="rounded-lg border border-border px-4 py-2 text-sm font-bold transition-colors hover:border-primary disabled:opacity-40"
+                >
+                  Sync now
+                </button>
+              )}
+            </div>
+
+            <p className="text-[11px] text-text-muted">
+              Point this at your site's project feed (a JSON file listing your projects). It re-syncs
+              automatically every 6 hours, so price and inventory changes on your site reach the agent
+              on their own.
+            </p>
+
+            {feedMsg && (
+              <p className={`text-xs ${feedMsg.ok ? 'text-success' : 'text-destructive'}`}>{feedMsg.text}</p>
+            )}
+
+            {!!listings.length && (
+              <div className="divide-y divide-border rounded-lg border border-border">
+                {listings.map((l) => (
+                  <div key={l.slug} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {l.title}
+                        {l.status && l.status !== 'active' && (
+                          <span className="ml-2 rounded bg-amber/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber">
+                            {l.status}
+                          </span>
+                        )}
+                      </p>
+                      <p className="truncate text-[11px] text-text-muted">
+                        {[l.developer, l.config, l.location].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs tabular-nums text-text-muted">
+                      {l.units.length} unit{l.units.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
 
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-4">
           <input

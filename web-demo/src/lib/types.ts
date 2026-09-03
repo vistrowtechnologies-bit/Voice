@@ -389,6 +389,31 @@ export interface QaDraft {
   answer: string
 }
 
+// Property listings synced from the tenant's own website feed. Deliberately
+// separate from the knowledge base: KB text is stuffed into every system
+// prompt under an 8k cap, so a growing catalogue would silently truncate.
+// These reach the agent as a short index plus an on-demand lookup tool.
+export interface ProjectListing {
+  slug: string
+  title: string
+  developer: string
+  location: string
+  category: string
+  status: string
+  config: string
+  area: string
+  rera: string
+  priceFrom: number | null
+  units: { type: string; area: string; price: string }[]
+  url: string
+  syncedAt: string
+}
+
+export interface ProjectListingsResponse {
+  feedUrl: string
+  listings: ProjectListing[]
+}
+
 export interface KnowledgeBase {
   id: number
   name: string

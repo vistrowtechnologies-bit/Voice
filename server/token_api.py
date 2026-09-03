@@ -2833,6 +2833,40 @@ def remove_contact_note(contact_id: int, note_id: int, user: dict = Depends(curr
 # ------------------------------------------------------ knowledge base
 
 
+# ---------------------------------------------------------------- listings
+# Property listings synced from the tenant's own website feed. Kept out of the
+# knowledge base on purpose: KB text is stuffed into every system prompt under
+# an 8k cap, so a growing catalogue would silently truncate. See
+# server/project_sync.py.
+
+
+@app.get("/project-listings")
+def get_project_listings(user: dict = Depends(current_user)) -> dict:
+    return {
+        "feedUrl": calls_db.get_setting(project_sync.FEED_URL_SETTING, user["account_id"]) or "",
+        "listings": calls_db.list_project_listings(user["account_id"]),
+    }
+
+
+@app.post("/project-listings/feed")
+def set_project_feed(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    """Save the feed URL and immediately sync, so the operator sees whether
+    the URL actually works instead of saving and wondering."""
+    feed_url = (data.get("feedUrl") or "").strip()
+    calls_db.set_setting(project_sync.FEED_URL_SETTING, feed_url, user["account_id"])
+    if not feed_url:
+        return {"ok": True, "listings": calls_db.list_project_listings(user["account_id"])}
+    result = project_sync.sync_account(user["account_id"], feed_url)
+    return {**result, "listings": calls_db.list_project_listings(user["account_id"])}
+
+
+@app.post("/project-listings/sync")
+def sync_project_listings(user: dict = Depends(current_user)) -> dict:
+    """Manual "sync now" — the background job also runs every 6 hours."""
+    result = project_sync.sync_account(user["account_id"])
+    return {**result, "listings": calls_db.list_project_listings(user["account_id"])}
+
+
 @app.get("/knowledge-bases")
 def list_knowledge_bases(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_knowledge_bases(user["account_id"])
