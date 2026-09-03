@@ -1880,6 +1880,14 @@ class RealEstateAgent(Agent):
                 # Operator wrote an exact opening line — speak it verbatim
                 # rather than letting the model improvise a greeting.
                 await self.session.say(self._welcome_message)
+                # Same flag the fallback path sets below. Returning without
+                # it left greeting_played False for the whole call on every
+                # agent that has a custom welcome message, which
+                # _on_user_state_changed reads as "the opener is still
+                # playing" — so the away check-in never fired and a caller
+                # who went quiet was met with silence instead of "are you
+                # still there?".
+                self.session.userdata["greeting_played"] = True
                 return
             if self._is_platform_demo:
                 # A dynamic LLM-generated greeting sounds better, but costs a
