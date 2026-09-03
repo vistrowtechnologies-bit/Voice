@@ -255,26 +255,42 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
         </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
 
-      <div className="flex gap-1 rounded-lg border border-border p-0.5 self-start mx-4 mt-4 sm:mx-6">
+      <div
+        role="tablist"
+        aria-label="Call information"
+        className="mx-4 mt-4 flex self-start gap-1.5 rounded-xl border border-border bg-surface-high/45 p-1 sm:mx-6"
+      >
         <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'details'}
           onClick={() => setTab('details')}
-          className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
-            tab === 'details' ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${
+            tab === 'details'
+              ? 'border-primary/50 bg-primary text-bg shadow-sm'
+              : 'border-border bg-surface text-text-muted hover:border-primary/40 hover:bg-surface-high hover:text-text'
           }`}
         >
+          <Icon name="description" className="text-[15px]" />
           Details
         </button>
         <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'diagnostics'}
           onClick={() => setTab('diagnostics')}
-          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${
-            tab === 'diagnostics' ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${
+            tab === 'diagnostics'
+              ? 'border-primary/50 bg-primary text-bg shadow-sm'
+              : 'border-border bg-surface text-text-muted hover:border-primary/40 hover:bg-surface-high hover:text-text'
           }`}
         >
+          <Icon name="monitoring" className="text-[15px]" />
           Diagnostics
           {!!call.diagnosticEvents?.length && (
             <span
               className={`rounded-full px-1.5 text-[10px] ${
-                tab === 'diagnostics' ? 'bg-bg/20' : 'bg-surface-high text-text-muted'
+                tab === 'diagnostics' ? 'bg-bg/20 text-bg' : 'bg-primary/10 text-primary'
               }`}
             >
               {call.diagnosticEvents.length}
@@ -282,11 +298,17 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           )}
         </button>
         <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'history'}
           onClick={() => setTab('history')}
-          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${
-            tab === 'history' ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${
+            tab === 'history'
+              ? 'border-primary/50 bg-primary text-bg shadow-sm'
+              : 'border-border bg-surface text-text-muted hover:border-primary/40 hover:bg-surface-high hover:text-text'
           }`}
         >
+          <Icon name="history" className="text-[15px]" />
           {/* "History" read as "should list every call including this one" -
               the count only ever counts the OTHER calls (see the fetchCalls
               effect above), so a lead with exactly 2 calls showed "1" while
@@ -297,7 +319,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           {!!history?.length && (
             <span
               className={`rounded-full px-1.5 text-[10px] ${
-                tab === 'history' ? 'bg-bg/20' : 'bg-surface-high text-text-muted'
+                tab === 'history' ? 'bg-bg/20 text-bg' : 'bg-primary/10 text-primary'
               }`}
             >
               {history.length}
