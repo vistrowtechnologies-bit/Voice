@@ -678,18 +678,24 @@ def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
 # livekit.agents.inference.eot.languages.LOCAL_LANGUAGES). Hindi is tuned
 # there at 0.3050, but Marathi, Bengali, Tamil, Telugu, Kannada, Malayalam,
 # Gujarati, Punjabi and Odia are absent — 9 of the 11 languages we sell. An
-# unlisted (or unreported) language falls back to the English default of
-# 0.3600, the single most conservative value in the table, which maximises
-# escalation on exactly the calls we care about.
+# unlisted (or unreported) language falls back to LiveKit's OWN English
+# default of 0.3600 — the single most conservative value in their table —
+# which maximises escalation on exactly the calls we care about.
 #
-# So: apply LiveKit's own Indic-tuned Hindi value to the other Indic
-# languages rather than leaving them on an English default. This is not a
-# guessed number — it is the one value LiveKit tuned for an Indian language,
-# applied to its linguistic neighbours. The failure mode if it is slightly
-# too low is the agent replying a shade early, which is recoverable; that is
-# deliberately the opposite direction from lowering max_delay, which
-# previously dropped whole transcripts (see the comment on EndpointingOptions
-# below).
+# English itself is explicitly listed at that same 0.3600, so a caller
+# who code-switches into English (common mid-call — see call 803's
+# transcript, "could you please speak in English?") pays the ceiling too,
+# even though it's not one of the "unlisted" languages this comment
+# originally covered. Confirmed against real call data (calls 802/803, both
+# hit the 4001ms ceiling specifically on English turns) rather than assumed.
+#
+# So: apply LiveKit's own Indic-tuned Hindi value everywhere it doesn't
+# already have deliberate coverage — the 9 unlisted Indic languages AND
+# English. This is not a guessed number — it is the one value LiveKit tuned
+# for an Indian language. The failure mode if it is slightly too low is the
+# agent replying a shade early, which is recoverable; that is deliberately
+# the opposite direction from lowering max_delay, which previously dropped
+# whole transcripts (see the comment on EndpointingOptions below).
 # The self-gender instruction injected every turn (see
 # on_user_turn_completed) only ever talks about Hindi, Marathi, Gujarati and
 # Punjabi verb forms - those are the languages this product speaks where a
@@ -724,7 +730,7 @@ _GENDERED_VERB_LANGUAGES = {"hi-IN", "mr-IN", "gu-IN", "pa-IN"}
 _EOT_HINDI_THRESHOLD = 0.25
 _EOT_UNLIKELY_THRESHOLDS = {
     lang: _EOT_HINDI_THRESHOLD
-    for lang in ("hi", "mr", "bn", "ta", "te", "kn", "ml", "gu", "pa", "or")
+    for lang in ("hi", "mr", "bn", "ta", "te", "kn", "ml", "gu", "pa", "or", "en")
 }
 
 
