@@ -1419,6 +1419,15 @@ class RealEstateAgent(Agent):
                 "already know their name and number, so don't ask for either again unless you need to "
                 "confirm one of them."
             )
+        elif visitor_phone:
+            # Inbound phone call: the caller's number came from caller ID
+            # (see _caller_number_from_sip), not from anything they typed or
+            # said, so there's no name yet — only skip re-asking the number.
+            instructions += (
+                f"\n\n# Caller context\nThis call arrived from {visitor_phone} (caller ID), so you "
+                "already have the caller's phone number — never ask for it. If you need their name "
+                "for the brochure/callback/site-visit, ask for that only."
+            )
         if config.get("kb_id"):
             _kb_t0 = time.monotonic()
             kb = db.get_kb_content(config["kb_id"])

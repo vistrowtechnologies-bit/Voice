@@ -1277,6 +1277,19 @@ async def log_lead(
             "You don't have a real phone number for this caller yet - nothing was recorded. Ask for "
             "one before calling this tool again. Never pass a placeholder or leave it blank."
         )
+    # Same guard as capture_platform_lead (call 762: "808019794", nine
+    # digits, recorded without question). Matters even more here: an
+    # inbound call may have already pre-seeded a real, caller-ID-verified
+    # phone number into lead_data (see main.py's visitor_phone handling) -
+    # without this check, a mis-heard spoken number would silently
+    # overwrite that good number with a bad one.
+    digits = re.sub(r"\D", "", phone or "")
+    if not digits or not _looks_like_valid_indian_mobile(digits):
+        return (
+            f"That number ('{phone}') doesn't look like a complete 10-digit Indian mobile number - "
+            "nothing was recorded. Ask the caller to repeat their phone number, digit by digit if "
+            "needed, then call this tool again with the corrected number."
+        )
     logger.info(
         "lead captured: name=%s phone=%s budget=%s location=%s timeline=%s",
         name,
