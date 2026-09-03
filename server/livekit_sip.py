@@ -194,7 +194,19 @@ async def place_outbound_call(
             await lkapi.sip.create_sip_participant(
                 CreateSIPParticipantRequest(
                     sip_trunk_id=trunk_id,
-                    sip_call_to=to_number,
+                    # Bare digits, NOT +E.164. Verified live against EnableX
+                    # on 2026-09-03: "+918080197945" as the called number is
+                    # what produced every outbound failure we saw that day -
+                    # two instant "603 Declined", one INVITE that reached
+                    # 180 Ringing but never rang the handset, and one that
+                    # answered (200 OK) but carried zero RTP back and got a
+                    # BYE ~4s later. The same call to "918080197945" (their
+                    # own instruction, confirmed on the call that followed)
+                    # connected with two-way audio and stayed up. Note the
+                    # From/caller-ID side is already bare digits via
+                    # ensure_outbound_trunk's numbers list, so this also
+                    # stops the INVITE carrying two different formats.
+                    sip_call_to=to_number.lstrip("+"),
                     room_name=room_name,
                     participant_identity=f"sip-{to_number.lstrip('+')}",
                     participant_name=visitor_name or to_number,
