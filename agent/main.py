@@ -79,7 +79,7 @@ from tools import (
     request_callback,
     switch_reply_language,
     transfer_call,
-    lookup_project,
+    lookup_catalog,
     web_search,
 )
 
@@ -1292,12 +1292,10 @@ def _build_tools(config: dict) -> list:
         tools.append(transfer_call)
     if TAVILY_API_KEY and _on("web_search"):
         tools.append(web_search)
-    # Only offered when this tenant actually has listings synced (see
-    # server/project_sync.py) - handing the model a lookup tool that can only
-    # ever return "nothing found" invites it to call the tool instead of
-    # answering, and costs a round trip mid-call to learn nothing.
-    if config.get("has_project_listings") and _on("lookup_project"):
-        tools.append(lookup_project)
+    # Offered only when this specific agent has been assigned the tenant's
+    # live catalog and the catalog contains data.
+    if config.get("has_live_catalog"):
+        tools.append(lookup_catalog)
     if _on("send_dtmf"):
         # Lets the agent press digits when it reaches an automated phone
         # tree instead of the person it dialled — an outbound call to a
@@ -1441,22 +1439,18 @@ class RealEstateAgent(Agent):
                 "already have the caller's phone number — never ask for it. If you need their name "
                 "for the brochure/callback/site-visit, ask for that only."
             )
-        # Property listings synced from the tenant's own site
-        # (server/project_sync.py). Only the index goes in the prompt - one
-        # short line per project - because prompt text is paid for on every
-        # turn and its size is what drives cold time-to-first-token. Anything
-        # more specific than "what exists" comes from the lookup_project tool
-        # on demand, so the prompt cost stays flat as the catalogue grows.
-        listings_index = config.get("project_index") or ""
-        if listings_index:
+        # Optional structured inventory/service/catalog data assigned to this
+        # agent. Only a compact index enters the prompt; full details are
+        # retrieved on demand so catalog size does not slow every call.
+        catalog_index = config.get("catalog_index") or ""
+        if catalog_index:
             instructions += (
-                "\n\n# This business's property listings\n"
-                "These are the ONLY projects available. Never invent one, and never quote a "
-                "figure that isn't here or from lookup_project.\n"
-                f"{listings_index}\n"
-                "Prices above are already written the way they should be spoken. For unit sizes, "
-                "exact prices per configuration, RERA numbers, amenities or an overview, call "
-                "lookup_project — don't guess, and don't tell the caller you're looking it up "
+                "\n\n# This business's live catalog\n"
+                "These are the catalog items currently available from this business. Never invent an item "
+                "or quote a figure that isn't here or returned by lookup_catalog.\n"
+                f"{catalog_index}\n"
+                "For exact variants, prices, availability, specifications, amenities, or descriptions, call "
+                "lookup_catalog — don't guess, and don't tell the caller you're looking it up "
                 "unless it takes a moment."
             )
         if config.get("kb_id"):

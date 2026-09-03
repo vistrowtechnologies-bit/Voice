@@ -85,13 +85,14 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 
 export function KnowledgeBasePage() {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([])
-  // Property listings synced from the tenant's own site. Kept out of the KB
+  // Optional live catalog synced from the tenant's own site. Kept out of the KB
   // on purpose: KB text goes into every system prompt under an 8k cap, so a
   // growing catalogue would silently truncate mid-call.
   const [listings, setListings] = useState<ProjectListing[]>([])
   const [feedUrl, setFeedUrl] = useState('')
   const [feedBusy, setFeedBusy] = useState(false)
   const [feedMsg, setFeedMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [catalogOpen, setCatalogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [expandedQa, setExpandedQa] = useState<Set<number>>(new Set())
   const [newName, setNewName] = useState('')
@@ -157,7 +158,7 @@ export function KnowledgeBasePage() {
     setFeedMsg(
       r.ok === false
         ? { ok: false, text: r.error || 'Could not read that feed.' }
-        : { ok: true, text: `Synced ${r.count ?? r.listings.length} listing${(r.count ?? r.listings.length) === 1 ? '' : 's'}.` },
+        : { ok: true, text: `Synced ${r.count ?? r.listings.length} catalog item${(r.count ?? r.listings.length) === 1 ? '' : 's'}.` },
     )
   }
 
@@ -367,33 +368,43 @@ export function KnowledgeBasePage() {
           Agents page.
         </div>
 
-        {/* Property listings — separate from the KB on purpose. KB text is
-            stuffed into every system prompt under an 8k cap; listings reach
+        {/* Live catalog — separate from the KB on purpose. KB text is
+            stuffed into every system prompt under an 8k cap; catalog items reach
             the agent as a short index plus an on-demand lookup instead, so
-            the catalogue can grow without slowing every call down. */}
+            the catalog can grow without slowing every call down. */}
         <Card padding="none" className="overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-            <div>
-              <h2 className="text-sm font-bold">Property listings</h2>
-              <p className="text-xs text-text-muted">
-                Synced from your website so the agent always quotes current projects and prices — kept
-                out of the knowledge base, so adding projects never slows your calls down.
-              </p>
+          <button
+            type="button"
+            onClick={() => setCatalogOpen((open) => !open)}
+            aria-expanded={catalogOpen}
+            className={`flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-high/40 ${catalogOpen ? 'border-b border-border' : ''}`}
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <Icon name="inventory_2" className="shrink-0 text-[18px] text-text-muted" />
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold">Live catalog</h2>
+                <p className="text-xs text-text-muted">
+                  Optional structured products, services, inventory, menus, plans, or listings. Only agents
+                  you explicitly enable can use this data.
+                </p>
+              </div>
             </div>
-            {!!listings.length && (
-              <span className="rounded-full bg-success/15 px-2.5 py-1 text-xs font-semibold text-success">
-                {listings.length} synced
+            <span className="flex shrink-0 items-center gap-2">
+              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${listings.length ? 'bg-success/15 text-success' : 'bg-surface-high text-text-muted'}`}>
+                {listings.length ? `${listings.length} synced` : 'Not configured'}
               </span>
-            )}
-          </div>
+              <Icon name={catalogOpen ? 'expand_less' : 'expand_more'} className="text-[20px] text-text-muted" />
+            </span>
+          </button>
 
-          <div className="flex flex-col gap-3 p-4">
+          {catalogOpen && (
+            <div className="flex flex-col gap-3 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <input
                 value={feedUrl}
                 onChange={(e) => setFeedUrl(e.target.value)}
-                placeholder="https://yoursite.com/properties/posts.json"
-                className="min-w-[260px] flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 font-mono text-xs outline-none transition-colors focus:border-primary"
+                placeholder="https://yoursite.com/catalog.json"
+                className="min-w-0 flex-1 basis-[260px] rounded-lg border border-border bg-surface-high px-3 py-2 font-mono text-xs outline-none transition-colors focus:border-primary"
               />
               <button
                 onClick={handleSaveFeed}
@@ -414,9 +425,10 @@ export function KnowledgeBasePage() {
             </div>
 
             <p className="text-[11px] text-text-muted">
-              Point this at your site's project feed (a JSON file listing your projects). It re-syncs
-              automatically every 6 hours, so price and inventory changes on your site reach the agent
-              on their own.
+              Point this at a JSON array on your website. Each item needs a stable <code>id</code>,{' '}
+              <code>sku</code>, or <code>slug</code> and a <code>name</code> or <code>title</code>. Optional
+              fields include category, status, priceLabel, variants, features, description, and URL. It
+              re-syncs every 6 hours.
             </p>
 
             {feedMsg && (
@@ -441,13 +453,15 @@ export function KnowledgeBasePage() {
                       </p>
                     </div>
                     <span className="shrink-0 text-xs tabular-nums text-text-muted">
-                      {l.units.length} unit{l.units.length === 1 ? '' : 's'}
+                      {l.priceLabel ||
+                        (l.units.length ? `${l.units.length} variant${l.units.length === 1 ? '' : 's'}` : '')}
                     </span>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+            </div>
+          )}
         </Card>
 
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-4">

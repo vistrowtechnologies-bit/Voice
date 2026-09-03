@@ -242,6 +242,10 @@ CREATE TABLE IF NOT EXISTS agents (
     -- When 1, the agent recalls prior conversations with a returning caller
     -- (keyed by phone in caller_memory) — inbound/outbound only, not web calls.
     memory_enabled INTEGER DEFAULT 0,
+    -- Opt-in access to the account's structured live catalog. Disabled by
+    -- default: a tenant may sync inventory for one sales agent without
+    -- exposing it to unrelated support or appointment agents.
+    live_catalog_enabled INTEGER DEFAULT 0,
     created_at TEXT DEFAULT {_NOW},
     updated_at TEXT DEFAULT {_NOW}
 );
@@ -449,12 +453,12 @@ CREATE TABLE IF NOT EXISTS kb_qa (
     created_at TEXT DEFAULT {_NOW}
 );
 
--- Property listings synced from the tenant's own website feed (see
--- project_sync.py). Deliberately NOT part of the knowledge base: KB content
+-- Optional structured catalog items synced from the tenant's own website feed
+-- (see project_sync.py). Deliberately NOT part of the knowledge base: KB content
 -- is stuffed verbatim into every system prompt and capped at 8k chars, and
 -- three projects already used 7,251 of it. Listings live here instead and reach
 -- the agent two ways - a tiny generated index in the prompt, and a
--- lookup_project tool that reads full detail on demand - so the prompt stays
+-- lookup_catalog tool that reads full detail on demand - so the prompt stays
 -- small (and fast: prompt size is what drives cold time-to-first-token)
 -- however many projects the tenant lists.
 CREATE TABLE IF NOT EXISTS project_listings (
@@ -469,6 +473,7 @@ CREATE TABLE IF NOT EXISTS project_listings (
     area TEXT DEFAULT '',
     rera TEXT DEFAULT '',
     price_from REAL,
+    price_label TEXT DEFAULT '',
     units_json TEXT DEFAULT '[]',
     amenities_json TEXT DEFAULT '[]',
     overview TEXT DEFAULT '',
@@ -1090,6 +1095,7 @@ def init_tables() -> None:
                 ("emotion_intensity", "TEXT DEFAULT 'strong'"),
                 ("webhook_url", "TEXT DEFAULT ''"),
                 ("memory_enabled", "INTEGER DEFAULT 0"),
+                ("live_catalog_enabled", "INTEGER DEFAULT 0"),
                 # Low-volume looping office-ambience track mixed into the
                 # agent's outbound audio (agent/main.py, via LiveKit's own
                 # BackgroundAudioPlayer) - makes a synthetic voice feel like
@@ -1133,6 +1139,10 @@ def init_tables() -> None:
                 ("crm_integration_keys", "TEXT DEFAULT '[]'"),
             ):
                 conn.execute(f"ALTER TABLE agents ADD COLUMN IF NOT EXISTS {column} {coltype}")
+            # Generic display price for live-catalog feeds (for example
+            # "$49/month" or "Contact us"). price_from remains for backwards
+            # compatibility with the original real-estate feed.
+            conn.execute("ALTER TABLE project_listings ADD COLUMN IF NOT EXISTS price_label TEXT DEFAULT ''")
             # Per-number monthly line item — EnableX charges Vistrow for every
             # provisioned number, previously absorbed with nothing passed to
             # the tenant. Existing rows backfill to PHONE_NUMBER_MONTHLY_FEE_INR
@@ -3016,9 +3026,10 @@ _AGENT_FIELDS = (
     "custom_functions", "post_call_fields", "webhook_url", "memory_enabled",
     "emotion_intensity", "ambient_noise", "business_name", "public_demo_slug",
     "emergency_fallback_number", "crm_integration_keys",
+    "live_catalog_enabled",
 )
 # INTEGER columns fed from a JSON bool (Postgres has no bool->int cast).
-_AGENT_BOOL_FIELDS = frozenset({"is_platform_demo", "memory_enabled"})
+_AGENT_BOOL_FIELDS = frozenset({"is_platform_demo", "memory_enabled", "live_catalog_enabled"})
 # TEXT columns that hold a JSON array — the frontend sends a real
 # array/object, stored as a JSON string, parsed back out in _agent_dict.
 _AGENT_JSON_FIELDS = frozenset({"custom_functions", "post_call_fields", "crm_integration_keys"})
@@ -3046,6 +3057,7 @@ _AGENT_CAMEL_TO_SNAKE = {
     "publicDemoSlug": "public_demo_slug",
     "emergencyFallbackNumber": "emergency_fallback_number",
     "crmIntegrationKeys": "crm_integration_keys",
+    "liveCatalogEnabled": "live_catalog_enabled",
 }
 
 
@@ -3099,6 +3111,7 @@ def _agent_dict(row: dict) -> dict:
         "postCallFields": _load_json_field(row["post_call_fields"], []),
         "webhookUrl": row["webhook_url"] or "",
         "memoryEnabled": bool(row["memory_enabled"]),
+        "liveCatalogEnabled": bool(_row_get(row, "live_catalog_enabled", 0)),
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
@@ -7522,13 +7535,16 @@ def enablex_connect_to_sip(voice_id: str, from_number: str, sip_uri: str, accoun
 
 
 def list_project_listings(account_id: int) -> list[dict]:
-    """This account's synced property listings, for the dashboard's Listings
-    card (server/project_sync.py owns writing them)."""
+    """This account's synced live-catalog items.
+
+    The legacy function/endpoint name is retained so existing clients and
+    configured feeds continue to work during the UI terminology migration.
+    """
     conn = _connect()
     try:
         rows = conn.execute(
             "SELECT slug, title, developer, location, category, status, config, area, rera, "
-            "price_from, units_json, url, synced_at FROM project_listings "
+            "price_from, price_label, units_json, url, synced_at FROM project_listings "
             "WHERE account_id = ? ORDER BY status, title",
             (account_id,),
         ).fetchall()
@@ -7544,6 +7560,7 @@ def list_project_listings(account_id: int) -> list[dict]:
                 "area": r["area"],
                 "rera": r["rera"],
                 "priceFrom": r["price_from"],
+                "priceLabel": r["price_label"] or "",
                 "units": _safe_json_loads(r["units_json"]),
                 "url": r["url"],
                 "syncedAt": r["synced_at"],

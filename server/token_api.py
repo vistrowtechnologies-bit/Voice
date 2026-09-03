@@ -68,8 +68,8 @@ db_backup.start_backup_scheduler()
 # Keeps OpenAI's prompt cache warm for agents actually taking calls right
 # now (see llm_warmer.py) — cuts a measured 2106ms->902ms cold-cache tax.
 llm_warmer.start_llm_warmer()
-# Pulls each tenant's property listings from their own site into
-# project_listings (see project_sync.py) — keeps the agent's catalogue
+# Pulls each tenant's optional live catalog into the legacy project_listings
+# table (see project_sync.py) — keeps the agent's catalog
 # current without any of it being stuffed into the system prompt.
 project_sync.start_project_sync()
 
@@ -2833,8 +2833,8 @@ def remove_contact_note(contact_id: int, note_id: int, user: dict = Depends(curr
 # ------------------------------------------------------ knowledge base
 
 
-# ---------------------------------------------------------------- listings
-# Property listings synced from the tenant's own website feed. Kept out of the
+# ------------------------------------------------------------- live catalog
+# Optional structured offerings synced from the tenant's own website feed. Kept out of the
 # knowledge base on purpose: KB text is stuffed into every system prompt under
 # an 8k cap, so a growing catalogue would silently truncate. See
 # server/project_sync.py.

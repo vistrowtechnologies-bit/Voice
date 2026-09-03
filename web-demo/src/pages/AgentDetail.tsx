@@ -11,6 +11,7 @@ import {
   fetchIntegrations,
   fetchKnowledgeBases,
   fetchMyVoices,
+  fetchProjectListings,
   updateAgent,
 } from '../lib/api'
 import {
@@ -144,6 +145,7 @@ function AgentEditorForm({
     postCallFields: agent.postCallFields ?? [],
     webhookUrl: agent.webhookUrl ?? '',
     memoryEnabled: agent.memoryEnabled ?? false,
+    liveCatalogEnabled: agent.liveCatalogEnabled ?? false,
     crmIntegrationKeys: agent.crmIntegrationKeys ?? [],
   })
   const [saving, setSaving] = useState(false)
@@ -161,6 +163,19 @@ function AgentEditorForm({
     fetchIntegrations()
       .then((list) => setConnectedIntegrations(list.filter((i) => i.status === 'connected' && DELIVERY_KEYS.has(i.key))))
       .catch(() => setConnectedIntegrations([]))
+  }, [])
+  const [catalogCount, setCatalogCount] = useState(0)
+  const [catalogConfigured, setCatalogConfigured] = useState(false)
+  useEffect(() => {
+    fetchProjectListings()
+      .then((result) => {
+        setCatalogCount(result.listings.length)
+        setCatalogConfigured(Boolean(result.feedUrl))
+      })
+      .catch(() => {
+        setCatalogCount(0)
+        setCatalogConfigured(false)
+      })
   }, [])
 
   const set = <K extends keyof AgentForm>(key: K, value: AgentForm[K]) =>
@@ -475,6 +490,33 @@ function AgentEditorForm({
               ))}
             </select>
           </Field>
+        </Panel>
+
+        <Panel
+          icon="inventory_2"
+          title="Live catalog"
+          subtitle="Optional products, services, inventory, menus, plans, or listings"
+        >
+          <div className="flex flex-col gap-3">
+            <Toggle
+              checked={form.liveCatalogEnabled}
+              onChange={(v) => set('liveCatalogEnabled', v)}
+              label="Give this agent access to the live catalog"
+              hint="Only this agent receives the workspace catalog. Other agents remain unaffected."
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-3">
+              <p className="text-xs text-text-muted">
+                {catalogCount > 0
+                  ? `${catalogCount} catalog item${catalogCount === 1 ? '' : 's'} synced.`
+                  : catalogConfigured
+                    ? 'The catalog is configured but currently has no synced items.'
+                    : 'No live catalog is configured for this workspace.'}
+              </p>
+              <Link to="/dashboard/knowledge" className="text-xs font-bold text-primary hover:underline">
+                Manage catalog →
+              </Link>
+            </div>
+          </div>
         </Panel>
 
         <Panel icon="graphic_eq" title="Speech settings" subtitle="Turn-taking and silence handling">

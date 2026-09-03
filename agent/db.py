@@ -232,13 +232,14 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
                 "ORDER BY a.is_platform_demo DESC, a.id LIMIT 1"
             ).fetchone()
         result = dict(row) if row else None
-        # Attached here rather than at call time so it rides the same config
-        # cache: listings change only when the 6-hourly sync runs, and doing
-        # this per call would add a DB round trip to the critical path for
-        # data that is almost always identical.
-        if result and result.get("account_id"):
-            result["project_index"] = project_index(result["account_id"])
-            result["has_project_listings"] = bool(result["project_index"])
+        # A workspace catalog is deliberately agent-scoped. Merely syncing a
+        # feed must never expose its data to every agent in the tenant.
+        if result and result.get("account_id") and result.get("live_catalog_enabled"):
+            result["catalog_index"] = catalog_index(result["account_id"])
+            result["has_live_catalog"] = bool(result["catalog_index"])
+        elif result:
+            result["catalog_index"] = ""
+            result["has_live_catalog"] = False
     except psycopg.Error:
         # A genuine query failure (DB unreachable, etc.) is never cached —
         # caching it would mean a 30s-stale None even after the DB recovers
@@ -1076,24 +1077,24 @@ def set_call_recording(call_id: int | None, recording_key: str) -> None:
         conn.close()
 
 
-# --------------------------------------------------------------- listings
-# Property listings synced from the tenant's own site (server/project_sync.py).
+# ------------------------------------------------------------ live catalog
+# Optional structured offerings synced from the tenant's own site.
 # Deliberately NOT part of get_kb_content: KB text is stuffed verbatim into
 # every system prompt under an 8k cap that three projects already largely
 # filled, so a growing catalogue would silently truncate mid-call. These reach
 # the agent as a short index in the prompt plus a lookup tool for detail.
 
 
-def project_index(account_id: int, limit: int = 60) -> str:
-    """One compact line per project for the system prompt — enough for the
-    agent to know what exists and match a caller's budget/area, but not the
-    full detail (that's what lookup_project is for). Roughly 60-80 chars a
-    project, so a 20-project catalogue costs ~1.5k instead of the ~7k the
-    same thing cost as stuffed KB text."""
+def catalog_index(account_id: int, limit: int = 60) -> str:
+    """One compact line per item for the system prompt.
+
+    Full details stay behind lookup_catalog, keeping call startup fast even
+    when a business has a large catalog.
+    """
     conn = dbconn.connect()
     try:
         rows = conn.execute(
-            "SELECT title, location, category, status, config, price_from FROM project_listings "
+            "SELECT title, location, category, status, config, price_from, price_label FROM project_listings "
             "WHERE account_id = ? ORDER BY status, title LIMIT ?",
             (account_id, limit),
         ).fetchall()
@@ -1104,8 +1105,9 @@ def project_index(account_id: int, limit: int = 60) -> str:
 
     lines = []
     for r in rows:
-        price = f"from {_spoken_price(r['price_from'])}" if r["price_from"] else ""
-        status = "" if (r["status"] or "") == "active" else f" [{r['status']}]"
+        price = r["price_label"] or (f"from {_spoken_price(r['price_from'])}" if r["price_from"] else "")
+        status_value = r["status"] or ""
+        status = "" if status_value in ("", "active") else f" [{status_value}]"
         bits = [b for b in (r["title"] + status, r["config"], r["location"], price) if b]
         lines.append("- " + " | ".join(bits))
     return "\n".join(lines)
@@ -1121,9 +1123,8 @@ def _spoken_price(lakhs: float) -> str:
     return f"{crore} crore" if not rem else f"{crore} crore {rem} lakh"
 
 
-def lookup_project(account_id: int, query: str) -> str:
-    """Full detail for one project, matched loosely on title/location/slug so
-    the model can pass whatever the caller actually said."""
+def lookup_catalog(account_id: int, query: str) -> str:
+    """Full item detail, loosely matched on common catalog fields."""
     q = f"%{(query or '').strip().lower()}%"
     conn = dbconn.connect()
     try:
@@ -1145,16 +1146,19 @@ def lookup_project(account_id: int, query: str) -> str:
         units = json.loads(r["units_json"] or "[]")
         amenities = json.loads(r["amenities_json"] or "[]")
         parts = [
-            f"{r['title']} ({r['status']})",
-            f"Developer: {r['developer']}" if r["developer"] else "",
+            f"{r['title']} ({r['status']})" if r["status"] else r["title"],
+            f"Brand/provider: {r['developer']}" if r["developer"] else "",
             f"Location: {r['location']}" if r["location"] else "",
-            f"Config: {r['config']}" if r["config"] else "",
-            f"RERA: {r['rera']}" if r["rera"] else "",
+            f"Summary: {r['config']}" if r["config"] else "",
+            f"Reference: {r['rera']}" if r["rera"] else "",
+            f"Price: {r['price_label']}" if r["price_label"] else (
+                f"Price from: {_spoken_price(r['price_from'])}" if r["price_from"] else ""
+            ),
         ]
         for u in units:
-            parts.append(f"Unit: {u.get('type')} — {u.get('area')} — {u.get('price')}")
+            parts.append(f"Variant: {u.get('type')} — {u.get('area')} — {u.get('price')}")
         if amenities:
-            parts.append("Amenities: " + ", ".join(amenities[:12]))
+            parts.append("Features: " + ", ".join(str(a) for a in amenities[:12]))
         if r["overview"]:
             parts.append(r["overview"][:600])
         out.append("\n".join(p for p in parts if p))

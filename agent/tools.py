@@ -1609,29 +1609,28 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
 
 
 @function_tool
-async def lookup_project(context: RunContext, project: str) -> str:
-    """Look up full details of one of this business's own property projects —
-    unit types, sizes, prices, RERA number, amenities and an overview.
+async def lookup_catalog(context: RunContext, query: str) -> str:
+    """Look up full details of an item in this business's live catalog —
+    products, services, inventory, projects, variants, prices and availability.
 
-    Use this whenever the caller asks about a specific project, or asks for
-    detail your instructions only summarise (your prompt lists what exists;
-    this returns the actual numbers). Prefer it over web_search for anything
-    about this business's own listings.
+    Use this whenever the caller asks about a specific catalog item or needs
+    detail that the compact catalog index does not contain. Prefer it over
+    web_search for this business's own offerings.
 
     Args:
-        project: What the caller called it — project name, developer,
-            locality, or "plot"/"apartment". Loosely matched.
+        query: What the caller called it — item name, brand/provider,
+            category, location, or variant. Loosely matched.
     """
     account_id = (context.userdata or {}).get("account_id")
     if not account_id:
-        return "Project lookup isn't available on this call — answer from your instructions."
-    detail = await asyncio.to_thread(db.lookup_project, account_id, project)
+        return "Live catalog lookup isn't available on this call — answer from your instructions."
+    detail = await asyncio.to_thread(db.lookup_catalog, account_id, query)
     if not detail:
         return (
-            f"No project matching '{project}' is listed. Say honestly that it isn't something "
-            "currently available, and offer to note what they're looking for."
+            f"No catalog item matching '{query}' is listed. Say honestly that it isn't currently "
+            "available, and offer to note what they're looking for."
         )
-    logger.info("lookup_project '%s' -> %s chars", project, len(detail))
+    logger.info("lookup_catalog '%s' -> %s chars", query, len(detail))
     return detail
 
 

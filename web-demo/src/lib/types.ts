@@ -308,6 +308,7 @@ export interface AgentConfig {
   // Connected integration keys this agent fans out to (empty = all connected)
   crmIntegrationKeys: string[]
   memoryEnabled: boolean
+  liveCatalogEnabled: boolean
   createdAt: string
   updatedAt: string
 }
@@ -389,7 +390,7 @@ export interface QaDraft {
   answer: string
 }
 
-// Property listings synced from the tenant's own website feed. Deliberately
+// Optional live-catalog items synced from the tenant's own website feed. Deliberately
 // separate from the knowledge base: KB text is stuffed into every system
 // prompt under an 8k cap, so a growing catalogue would silently truncate.
 // These reach the agent as a short index plus an on-demand lookup tool.
@@ -404,6 +405,7 @@ export interface ProjectListing {
   area: string
   rera: string
   priceFrom: number | null
+  priceLabel: string
   units: { type: string; area: string; price: string }[]
   url: string
   syncedAt: string
