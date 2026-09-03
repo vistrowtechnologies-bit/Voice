@@ -7,6 +7,9 @@ export interface DataTableColumn<T> {
   render: (row: T) => ReactNode
   /** Extra classes on both the <th> and each row's <td> for this column. */
   className?: string
+  /** Extra classes on loaded-data cells only. Useful when the rendered
+   * control needs to own the full clickable area of the cell. */
+  cellClassName?: string
   /** Rendered as the mobile card's title row instead of a label/value pair. Exactly one column should set this. */
   primary?: boolean
   /** Omit this column from the mobile stacked-card view (e.g. a column that duplicates info already shown, or an actions column better placed inline on the card). */
@@ -130,7 +133,10 @@ export function DataTable<T>({
                 {rows.map((row) => (
                   <tr key={rowKey(row)} className="group hover:bg-surface-high/20">
                     {columns.map((col) => (
-                      <td key={col.key} className={`py-3 px-3 first:pl-5 ${col.className ?? ''}`}>
+                      <td
+                        key={col.key}
+                        className={`py-3 px-3 first:pl-5 ${col.className ?? ''} ${col.cellClassName ?? ''}`}
+                      >
                         {col.render(row)}
                       </td>
                     ))}

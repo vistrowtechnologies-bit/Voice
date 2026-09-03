@@ -1,11 +1,18 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { DataTable } from '../components/ui/DataTable'
 import type { DataTableColumn } from '../components/ui/DataTable'
 import { StatTile } from '../components/ui/StatTile'
-import { callsExportUrl, fetchActiveCalls, fetchCalls, formatDateTime, formatDuration } from '../lib/api'
+import {
+  callsExportUrl,
+  fetchActiveCalls,
+  fetchCallRecordingUrl,
+  fetchCalls,
+  formatDateTime,
+  formatDuration,
+} from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { ActiveCallInfo, CallRecord, Sentiment } from '../lib/types'
 
@@ -91,11 +98,58 @@ export function CallsHistory() {
   const [directionFilter, setDirectionFilter] = useState(searchParams.get('direction') || 'all')
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const recordingRequestRef = useRef<string | null>(null)
+  const [recordingCallId, setRecordingCallId] = useState<string | null>(null)
+  const [recordingState, setRecordingState] = useState<'idle' | 'loading' | 'playing' | 'paused' | 'error'>('idle')
 
   useEffect(() => {
     fetchCalls().then(setCalls).catch(() => setCalls([])).finally(() => setLoading(false))
     fetchActiveCalls().then(setActiveCalls).catch(() => setActiveCalls([]))
   }, [])
+
+  useEffect(
+    () => () => {
+      recordingRequestRef.current = null
+      audioRef.current?.pause()
+    },
+    [],
+  )
+
+  const toggleRecording = async (callId: string) => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    if (recordingCallId === callId && audio.src) {
+      if (audio.paused) {
+        try {
+          await audio.play()
+        } catch {
+          setRecordingState('error')
+        }
+      } else {
+        audio.pause()
+      }
+      return
+    }
+
+    const requestId = `${callId}:${Date.now()}`
+    recordingRequestRef.current = requestId
+    audio.pause()
+    audio.removeAttribute('src')
+    audio.load()
+    setRecordingCallId(callId)
+    setRecordingState('loading')
+
+    try {
+      const { url } = await fetchCallRecordingUrl(callId)
+      if (recordingRequestRef.current !== requestId) return
+      audio.src = url
+      await audio.play()
+    } catch {
+      if (recordingRequestRef.current === requestId) setRecordingState('error')
+    }
+  }
 
   const filtered = useMemo(() => {
     let rows = calls
@@ -125,6 +179,7 @@ export function CallsHistory() {
       key: 'caller',
       header: 'Caller',
       primary: true,
+      cellClassName: '!p-0',
       // state.backgroundLocation makes App.tsx keep THIS list rendered and
       // overlay the call as a modal (see App.tsx). Still a real <Link>, so
       // middle-click / open-in-new-tab still gets the standalone full page.
@@ -132,7 +187,7 @@ export function CallsHistory() {
         <Link
           to={`/dashboard/calls/${call.id}`}
           state={{ backgroundLocation: location }}
-          className="group flex items-center gap-2"
+          className="group -mx-4 flex min-h-[68px] w-[calc(100%+2rem)] items-center gap-2 px-4 py-3 transition-colors hover:bg-primary/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary md:mx-0 md:w-full md:px-5"
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
             {call.initials}
@@ -204,9 +259,38 @@ export function CallsHistory() {
       header: 'Recording',
       render: (call) =>
         call.hasRecording ? (
-          <span className="flex items-center gap-1 text-sm text-cyan">
-            <Icon name="mic" className="text-[15px]" /> Yes
-          </span>
+          <button
+            type="button"
+            onClick={() => void toggleRecording(call.id)}
+            aria-label={`${recordingCallId === call.id && recordingState === 'playing' ? 'Pause' : 'Play'} recording for ${call.name}`}
+            title={
+              recordingCallId === call.id && recordingState === 'error'
+                ? 'Recording could not be loaded. Click to retry.'
+                : recordingCallId === call.id && recordingState === 'playing'
+                  ? 'Pause recording'
+                  : 'Play recording'
+            }
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+              recordingCallId === call.id && recordingState === 'error'
+                ? 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20'
+                : recordingCallId === call.id && recordingState === 'playing'
+                  ? 'border-primary bg-primary text-bg shadow-sm hover:-translate-y-0.5 hover:shadow-md'
+                  : 'border-cyan/30 bg-cyan/10 text-cyan hover:-translate-y-0.5 hover:border-cyan/60 hover:bg-cyan/20 hover:shadow-sm'
+            }`}
+          >
+            <Icon
+              name={
+                recordingCallId === call.id && recordingState === 'loading'
+                  ? 'progress_activity'
+                  : recordingCallId === call.id && recordingState === 'playing'
+                    ? 'pause'
+                    : recordingCallId === call.id && recordingState === 'error'
+                      ? 'error'
+                      : 'play_arrow'
+              }
+              className={`text-[19px] ${recordingCallId === call.id && recordingState === 'loading' ? 'animate-spin' : ''}`}
+            />
+          </button>
         ) : (
           <span className="text-sm text-text-muted">-</span>
         ),
@@ -245,6 +329,21 @@ export function CallsHistory() {
       </PageHeader>
 
       <section className="flex flex-col gap-6 p-4 sm:p-6">
+        <audio
+          ref={audioRef}
+          className="hidden"
+          preload="none"
+          onPlay={() => setRecordingState('playing')}
+          onPause={() => setRecordingState((state) => (state === 'playing' ? 'paused' : state))}
+          onEnded={() => setRecordingState('paused')}
+          onError={() => setRecordingState('error')}
+        />
+        <span className="sr-only" aria-live="polite">
+          {recordingCallId && recordingState === 'loading' ? 'Loading recording' : ''}
+          {recordingCallId && recordingState === 'playing' ? 'Recording playing' : ''}
+          {recordingCallId && recordingState === 'paused' ? 'Recording paused' : ''}
+          {recordingCallId && recordingState === 'error' ? 'Recording could not be loaded' : ''}
+        </span>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile compact label="Total Calls" value={String(calls.length)} icon="call" tone="muted" />
           <StatTile compact label="Completed" value={String(completed)} icon="check_circle" tone="cyan" />
