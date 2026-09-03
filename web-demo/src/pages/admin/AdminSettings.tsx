@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { adminHealth, PLAN_PRICING_REF, CREDIT_RATES_REF, type AdminHealth } from '../../lib/adminApi'
+import {
+  adminHealth,
+  adminOutboundTrunkStatus,
+  adminSyncOutboundTrunk,
+  PLAN_PRICING_REF,
+  CREDIT_RATES_REF,
+  type AdminHealth,
+  type AdminOutboundTrunkStatus,
+} from '../../lib/adminApi'
 import { AdminCard, fmtINR, PageHeader } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
@@ -8,9 +16,37 @@ export function AdminSettings() {
   const [health, setHealth] = useState<AdminHealth | null>(null)
   const navigate = useNavigate()
 
+  const [trunk, setTrunk] = useState<AdminOutboundTrunkStatus | null>(null)
+  const [trunkAddress, setTrunkAddress] = useState('')
+  const [trunkCallerId, setTrunkCallerId] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState('')
+
+  const loadTrunk = () =>
+    adminOutboundTrunkStatus().then((s) => {
+      setTrunk(s)
+      setTrunkAddress((prev) => prev || s.address || '')
+      setTrunkCallerId((prev) => prev || s.callerId || '')
+    })
+
   useEffect(() => {
     adminHealth().then(setHealth).catch(() => setHealth(null))
+    loadTrunk().catch(() => setTrunk(null))
   }, [])
+
+  const handleSyncTrunk = async () => {
+    if (!trunkAddress.trim() || !trunkCallerId.trim()) return
+    setSyncing(true)
+    setSyncError('')
+    try {
+      const s = await adminSyncOutboundTrunk(trunkAddress.trim(), trunkCallerId.trim())
+      setTrunk(s)
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Sync failed')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   return (
     <>
@@ -61,6 +97,56 @@ export function AdminSettings() {
               )}
             </div>
           ))}
+        </div>
+      </AdminCard>
+
+      <AdminCard className="mt-4 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <div className="font-display text-base font-semibold">Outbound SIP trunk (EnableX)</div>
+          {trunk?.configured ? (
+            <span className="flex items-center gap-1 text-xs font-semibold text-success">
+              <Icon name="check_circle" className="text-[16px]" /> Configured
+            </span>
+          ) : (
+            <span className="text-xs font-semibold text-text-muted">Not configured</span>
+          )}
+        </div>
+        <div className="flex flex-col gap-3 p-5">
+          <p className="text-sm text-text-muted">
+            The bare host/IP EnableX gives us for their SBC, plus the E.164 number we place outbound calls
+            from. Once set, this creates or resyncs the shared LiveKit outbound trunk — no deploy needed.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
+              SBC address
+              <input
+                value={trunkAddress}
+                onChange={(e) => setTrunkAddress(e.target.value)}
+                placeholder="e.g. 35.234.209.8"
+                className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm font-normal text-text outline-none focus:border-primary"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
+              Caller ID (E.164)
+              <input
+                value={trunkCallerId}
+                onChange={(e) => setTrunkCallerId(e.target.value)}
+                placeholder="e.g. +917713128715"
+                className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm font-normal text-text outline-none focus:border-primary"
+              />
+            </label>
+          </div>
+          {syncError && <div className="text-sm text-danger">{syncError}</div>}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSyncTrunk}
+              disabled={syncing || !trunkAddress.trim() || !trunkCallerId.trim()}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {syncing ? 'Syncing…' : trunk?.configured ? 'Update trunk' : 'Create trunk'}
+            </button>
+            {trunk?.trunkId && <span className="font-mono text-xs text-text-muted">{trunk.trunkId}</span>}
+          </div>
         </div>
       </AdminCard>
 

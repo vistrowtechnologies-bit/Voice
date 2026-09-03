@@ -275,6 +275,13 @@ export interface AdminPrivacyRequest {
   account_name: string
 }
 
+export interface AdminOutboundTrunkStatus {
+  configured: boolean
+  trunkId: string | null
+  address: string | null
+  callerId: string | null
+}
+
 // ---------------------------------------------------------------- calls
 
 export const adminOverview = (days = 30) => aget<AdminOverview>(`/overview${qs({ days })}`)
@@ -323,6 +330,10 @@ export const adminSetNotes = (id: number, notes: string) => apost<AdminAccountDe
 export const adminResetPassword = (id: number) => apost<{ ok: boolean; emailSent: boolean; resetLink: string }>(`/accounts/${id}/reset-password`)
 export const adminImpersonate = (id: number) => apost<{ ok: boolean }>(`/impersonate/${id}`)
 export const adminExitImpersonation = () => apost<{ ok: boolean }>('/impersonate/exit')
+
+export const adminOutboundTrunkStatus = () => aget<AdminOutboundTrunkStatus>('/outbound-trunk')
+export const adminSyncOutboundTrunk = (address: string, callerId: string) =>
+  apost<AdminOutboundTrunkStatus>('/outbound-trunk', { address, caller_id: callerId })
 
 export const PLAN_LABELS: Record<string, string> = { free: 'Free', starter: 'Starter', growth: 'Growth', scale: 'Scale' }
 

@@ -294,6 +294,28 @@ class TokenRequest(BaseModel):
     # catalog below and only ever applied to a demo agent (see agent/main.py's
     # entrypoint), so this cannot repoint a tenant's configured language.
     language: str | None = None
+    # Conversation Testing Lab correlation. These are accepted only from an
+    # authenticated dashboard session whose account owns agentId; public demo
+    # callers cannot tag themselves as internal tests.
+    testRunId: str | None = None
+    testScenarioId: int | None = None
+    testScenarioKey: str | None = None
+
+
+_BUILTIN_TEST_SCENARIOS = {
+    "impatient": "Impatient customer",
+    "angry": "Angry customer",
+    "silent": "Silent caller",
+    "interrupting": "Frequent interruptions",
+    "hinglish": "Hindi-English switching",
+    "multilingual": "Multiple language changes",
+    "noisy": "Noisy background",
+    "unsupported": "Unsupported question",
+    "booking_conflict": "Booking conflict",
+    "tool_failure": "CRM or API failure",
+    "transfer_unavailable": "Transfer unavailable",
+    "voicemail": "Voicemail",
+}
 
 
 @app.post("/token")
@@ -341,6 +363,30 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         if req.language not in _DEMO_SELECTABLE_LANGUAGES:
             raise HTTPException(400, "That language isn't available on the demo.")
         meta["demo_language"] = req.language
+    if req.testRunId:
+        session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+        if session is None or agent_id is None or calls_db.agent_account_id(agent_id) != session.get("aid"):
+            raise HTTPException(403, "Testing Lab runs require an authenticated workspace agent.")
+        run_id = req.testRunId.strip()
+        if not run_id or len(run_id) > 80:
+            raise HTTPException(400, "Invalid Testing Lab run reference.")
+        scenario_name = "Custom regression"
+        if req.testScenarioId is not None:
+            saved = calls_db.get_test_scenario(req.testScenarioId, session["aid"])
+            if saved is None or (saved.get("agentId") not in (None, agent_id)):
+                raise HTTPException(404, "That saved regression case is not available for this agent.")
+            meta["test_scenario_id"] = saved["id"]
+            scenario_name = saved["name"]
+        elif req.testScenarioKey:
+            key = req.testScenarioKey.strip()
+            if key not in _BUILTIN_TEST_SCENARIOS:
+                raise HTTPException(400, "Unknown Testing Lab scenario.")
+            meta["test_scenario_key"] = key
+            scenario_name = _BUILTIN_TEST_SCENARIOS[key]
+        else:
+            raise HTTPException(400, "Choose a Testing Lab scenario.")
+        meta["test_run_id"] = run_id
+        meta["test_scenario_name"] = scenario_name
     metadata = json.dumps(meta) if meta else None
     async with api.LiveKitAPI() as lkapi:
         await lkapi.room.create_room(
@@ -2186,6 +2232,37 @@ def admin_vendor_credits(admin: dict = Depends(require_platform_owner)) -> dict:
     return {"vendors": admin_db.list_vendor_credits()}
 
 
+@app.get("/admin/outbound-trunk")
+def admin_outbound_trunk_status(admin: dict = Depends(require_platform_owner)) -> dict:
+    return livekit_sip.outbound_trunk_status()
+
+
+class AdminOutboundTrunkRequest(BaseModel):
+    address: str
+    caller_id: str
+
+
+@app.post("/admin/outbound-trunk")
+async def admin_outbound_trunk_sync(req: AdminOutboundTrunkRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    """Runs livekit_sip.ensure_outbound_trunk from the dashboard instead of a
+    one-off script, so wiring up EnableX's outbound SBC address (once they
+    give it to us) doesn't need a code change or a deploy."""
+    address = req.address.strip()
+    caller_id = req.caller_id.strip()
+    if not address or not caller_id:
+        raise HTTPException(400, "address and caller_id are required")
+    try:
+        trunk_id = await livekit_sip.ensure_outbound_trunk(address, caller_id)
+    except Exception as exc:
+        logger.exception("failed to sync LiveKit outbound trunk")
+        raise HTTPException(502, f"LiveKit rejected the trunk config: {exc}") from exc
+    admin_db.write_audit(
+        admin["user_id"], admin["email"], "sync_outbound_trunk", None,
+        detail=f"address={address} caller_id={caller_id} trunk_id={trunk_id}",
+    )
+    return livekit_sip.outbound_trunk_status()
+
+
 @app.post("/admin/db-backup/run")
 def admin_db_backup_run(admin: dict = Depends(require_platform_owner)) -> dict:
     """Manual trigger for db_backup.run_backup_now() — for verifying the
@@ -2632,6 +2709,33 @@ def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(cur
 def delete_agent(agent_id: int, user: dict = Depends(current_user)) -> dict:
     calls_db.delete_agent(agent_id, user["account_id"])
     return {"ok": True}
+
+
+# ------------------------------------------------ conversation testing lab
+
+@app.get("/testing/scenarios")
+def list_testing_scenarios(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_test_scenarios(user["account_id"])
+
+
+@app.post("/testing/scenarios")
+def create_testing_scenario(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    try:
+        return calls_db.create_test_scenario(data, user["account_id"])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.delete("/testing/scenarios/{scenario_id}")
+def delete_testing_scenario(scenario_id: int, user: dict = Depends(current_user)) -> dict:
+    if not calls_db.delete_test_scenario(scenario_id, user["account_id"]):
+        raise HTTPException(404, "Regression case not found")
+    return {"ok": True}
+
+
+@app.get("/testing/runs")
+def list_testing_runs(limit: int = 50, user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_test_runs(user["account_id"], limit=max(1, min(limit, 100)))
 
 
 # ------------------------------------------------------------ contacts

@@ -47,7 +47,21 @@ import calls_db
 logger = logging.getLogger(__name__)
 
 OUTBOUND_TRUNK_ID_SETTING = "lk_outbound_trunk_id"
+OUTBOUND_TRUNK_ADDRESS_SETTING = "lk_outbound_trunk_address"
+OUTBOUND_TRUNK_CALLER_ID_SETTING = "lk_outbound_trunk_caller_id"
 OUTBOUND_TRUNK_NAME = "EnableX outbound"
+
+
+def outbound_trunk_status() -> dict:
+    """What's currently configured, for the admin settings page — so setting
+    up the trunk once EnableX gives us their SBC address doesn't require
+    editing code, just filling in a form."""
+    return {
+        "configured": bool(calls_db.get_setting(OUTBOUND_TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID)),
+        "trunkId": calls_db.get_setting(OUTBOUND_TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID),
+        "address": calls_db.get_setting(OUTBOUND_TRUNK_ADDRESS_SETTING, calls_db.PLATFORM_ACCOUNT_ID),
+        "callerId": calls_db.get_setting(OUTBOUND_TRUNK_CALLER_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID),
+    }
 
 
 async def ensure_outbound_trunk(address: str, caller_id: str) -> str:
@@ -66,14 +80,20 @@ async def ensure_outbound_trunk(address: str, caller_id: str) -> str:
     trunk_id = calls_db.get_setting(OUTBOUND_TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
     info = SIPOutboundTrunkInfo(name=OUTBOUND_TRUNK_NAME, address=address, numbers=[caller_id])
 
+    def _remember(resolved_trunk_id: str) -> None:
+        calls_db.set_setting(OUTBOUND_TRUNK_ID_SETTING, resolved_trunk_id, calls_db.PLATFORM_ACCOUNT_ID)
+        calls_db.set_setting(OUTBOUND_TRUNK_ADDRESS_SETTING, address, calls_db.PLATFORM_ACCOUNT_ID)
+        calls_db.set_setting(OUTBOUND_TRUNK_CALLER_ID_SETTING, caller_id, calls_db.PLATFORM_ACCOUNT_ID)
+
     async with api.LiveKitAPI() as lkapi:
         if trunk_id:
             await lkapi.sip.update_outbound_trunk(trunk_id, info)
+            _remember(trunk_id)
             return trunk_id
 
         try:
             trunk = await lkapi.sip.create_outbound_trunk(CreateSIPOutboundTrunkRequest(trunk=info))
-            calls_db.set_setting(OUTBOUND_TRUNK_ID_SETTING, trunk.sip_trunk_id, calls_db.PLATFORM_ACCOUNT_ID)
+            _remember(trunk.sip_trunk_id)
             return trunk.sip_trunk_id
         except TwirpError as exc:
             if exc.code != "invalid_argument" or "Conflicting" not in exc.message:
@@ -85,7 +105,7 @@ async def ensure_outbound_trunk(address: str, caller_id: str) -> str:
                 raise
             trunk_id = existing.items[0].sip_trunk_id
             await lkapi.sip.update_outbound_trunk(trunk_id, info)
-            calls_db.set_setting(OUTBOUND_TRUNK_ID_SETTING, trunk_id, calls_db.PLATFORM_ACCOUNT_ID)
+            _remember(trunk_id)
             return trunk_id
 
 
