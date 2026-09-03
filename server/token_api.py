@@ -27,6 +27,7 @@ import integrations_dispatch
 import kb_crawl
 import kb_extract
 import livekit_sip
+import llm_warmer
 import razorpay_client
 import widget_avatars
 import widget_chat
@@ -63,6 +64,9 @@ calls_db.init_tables()
 campaign_dialer.start_dialer()
 # Daily Postgres backup to B2 (see db_backup.py) — same daemon-thread shape.
 db_backup.start_backup_scheduler()
+# Keeps OpenAI's prompt cache warm for agents actually taking calls right
+# now (see llm_warmer.py) — cuts a measured 2106ms->902ms cold-cache tax.
+llm_warmer.start_llm_warmer()
 
 # Cookie is Secure in production (HTTPS) and not in local http dev — set
 # AUTH_COOKIE_SECURE=1 on the deployment. In prod the browser hits the app's
