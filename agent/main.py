@@ -2533,6 +2533,52 @@ def _caller_number_from_sip(attrs: dict, participant) -> str | None:
     return None
 
 
+async def _wait_for_sip_answer(ctx: JobContext, participant, t0: float, timeout: float = 90.0) -> bool:
+    """Block until an outbound SIP callee actually picks up.
+
+    ctx.wait_for_participant() returns as soon as the participant EXISTS in
+    the room, which for an outbound call is when dialing starts — not when
+    the phone is answered. Greeting off the back of that meant the opener
+    played into a ringing handset (or, on calls that were declined outright,
+    into nobody at all — confirmed live 2026-09-03: three outbound attempts
+    logged a completed greeting while the SIP leg was still dialing or had
+    already been rejected).
+
+    Waiting here instead means the whole expensive setup above — config
+    fetch, KB load, agent + session construction — happens during the ring,
+    which is dead time anyway, and the greeting fires the moment the callee
+    is actually on the line.
+
+    No-ops for every non-outbound case: a browser/widget participant has no
+    sip.callStatus at all, and an inbound SIP participant is already
+    "active" when it joins (verified against a live inbound call).
+
+    Returns True when the call is answered, False if it ended first or never
+    got there inside the timeout.
+    """
+    def status_of() -> str | None:
+        return dict(getattr(participant, "attributes", None) or {}).get("sip.callStatus")
+
+    if status_of() in (None, "active"):
+        return True
+
+    logger.info("[latency] outbound leg still %s — holding greeting until answered", status_of())
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status = status_of()
+        if status == "active":
+            logger.info("[latency] callee answered at +%.2fs (room=%s)", time.monotonic() - t0, ctx.room.name)
+            return True
+        # Declined/hung up before answering, or the SIP leg dropped out of
+        # the room entirely — either way there is nobody to greet.
+        if status == "hangup" or participant.identity not in ctx.room.remote_participants:
+            logger.info("outbound leg ended before it was answered (status=%s)", status)
+            return False
+        await asyncio.sleep(0.1)
+    logger.warning("outbound leg never answered within %ss (status=%s)", timeout, status_of())
+    return False
+
+
 def _call_context_from_job(ctx: JobContext) -> dict:
     """Room metadata names which dashboard agent should handle this call, and
     (for phone/widget calls) which number or site it came in on:
@@ -3762,6 +3808,13 @@ async def entrypoint(ctx: JobContext) -> None:
 
     ctx.room.on("data_received", _on_data_received)
 
+    # Everything above (config, KB, agent/session construction) is safe to do
+    # while an outbound call is still ringing, and that is exactly the point:
+    # it turns ring time into warm-up time. Only the greeting has to wait for
+    # a human to actually be there. No-op for inbound/browser/widget calls.
+    if not await _wait_for_sip_answer(ctx, first_participant, _t0):
+        await _hang_up(ctx.room.name)
+        return
     logger.info("[latency] session.start() beginning at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     await session.start(
         agent=agent,
