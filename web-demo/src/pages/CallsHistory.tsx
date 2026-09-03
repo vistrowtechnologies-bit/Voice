@@ -179,7 +179,7 @@ export function CallsHistory() {
       key: 'caller',
       header: 'Caller',
       primary: true,
-      cellClassName: '!p-0',
+      cellClassName: 'relative min-w-[180px] !p-0',
       // state.backgroundLocation makes App.tsx keep THIS list rendered and
       // overlay the call as a modal (see App.tsx). Still a real <Link>, so
       // middle-click / open-in-new-tab still gets the standalone full page.
@@ -187,7 +187,7 @@ export function CallsHistory() {
         <Link
           to={`/dashboard/calls/${call.id}`}
           state={{ backgroundLocation: location }}
-          className="group -mx-4 flex min-h-[68px] w-[calc(100%+2rem)] items-center gap-2 px-4 py-3 transition-colors hover:bg-primary/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary md:mx-0 md:w-full md:px-5"
+          className="group -mx-4 flex min-h-[68px] w-[calc(100%+2rem)] items-center gap-2 px-4 py-3 transition-colors hover:bg-primary/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary md:absolute md:inset-0 md:m-0 md:min-h-0 md:w-auto md:px-5"
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
             {call.initials}
