@@ -30,6 +30,7 @@ import type {
   SiteSeenPath,
   Subscription,
   TelephonyStatus,
+  TestScenario,
   UsageTrends,
   VoiceCatalog,
   VoiceEntry,
@@ -157,6 +158,20 @@ export const createAgent = (data: Partial<AgentConfig>) => send<AgentConfig>('PO
 export const updateAgent = (id: number, data: Partial<AgentConfig>) =>
   send<AgentConfig>('PATCH', `/agents/${id}`, data)
 export const deleteAgent = (id: number) => send('DELETE', `/agents/${id}`)
+
+// ------------------------------------------ conversation testing lab
+
+export const fetchTestScenarios = () => get<TestScenario[]>('/testing/scenarios')
+export const createTestScenario = (data: {
+  agentId: number | null
+  name: string
+  category: string
+  description: string
+  callerBrief: string
+  expectedBehaviors: string[]
+}) => send<TestScenario>('POST', '/testing/scenarios', data)
+export const deleteTestScenario = (id: number) => send<{ ok: boolean }>('DELETE', `/testing/scenarios/${id}`)
+export const fetchTestRuns = () => get<CallRecord[]>('/testing/runs')
 
 // -------------------------------------------------------------- api keys
 

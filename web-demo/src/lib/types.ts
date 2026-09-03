@@ -59,6 +59,7 @@ export interface CallRecord {
   callStatus: CallStatus
   sentiment: Sentiment
   channel: string
+  callType: 'phone' | 'widget' | 'browser'
   direction: 'inbound' | 'outbound' | null
   website: string
   agent: string
@@ -120,9 +121,25 @@ export interface CallRecord {
   // only from the older measured latency columns.
   diagnosticEvents?: CallDiagnosticEvent[]
   diagnosticsCaptured?: boolean
+  testRunId: string
+  testScenarioId: number | null
+  testScenarioKey: string
+  testScenarioName: string
 }
 
 export type Lead = CallRecord
+
+export interface TestScenario {
+  id: number
+  agentId: number | null
+  name: string
+  category: string
+  description: string
+  callerBrief: string
+  expectedBehaviors: string[]
+  createdAt: string
+  updatedAt: string
+}
 
 // Native appointment/booking system - replaces Google Calendar/Cal.com.
 export type AppointmentStatus = 'confirmed' | 'cancelled' | 'rescheduled' | 'completed' | 'no_show'

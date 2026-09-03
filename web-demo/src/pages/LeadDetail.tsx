@@ -394,6 +394,17 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
                 <p className="mt-0.5 text-xs text-text-muted">
                   Measured from call dispatch. Durations show time spent inside that stage.
                 </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-high px-2.5 py-1 font-semibold text-text">
+                    <Icon
+                      name={call.callType === 'widget' ? 'widgets' : call.callType === 'phone' ? 'phone' : 'language'}
+                      className="text-[14px] text-primary"
+                    />
+                    {call.channel} call
+                  </span>
+                  {call.website && <span>Website: {call.website}</span>}
+                  {call.pagePath && <span className="font-mono">Page: {call.pagePath}</span>}
+                </div>
               </div>
               <span className="rounded-full border border-border bg-surface-high px-2.5 py-1 text-[11px] font-semibold text-text-muted">
                 {call.diagnosticEvents?.length ?? 0} events

@@ -14,11 +14,21 @@ export async function fetchLiveKitToken(
   /** BCP-47 code the demo should OPEN in ("fr-FR"). Server-validated against
    * the voice catalog, and only honoured for demo agents. */
   language?: string,
+  testContext?: { runId: string; scenarioId?: number; scenarioKey?: string },
 ): Promise<TokenResponse> {
   const res = await fetch('/api/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identity, room, agentId, demoSlug, language }),
+    body: JSON.stringify({
+      identity,
+      room,
+      agentId,
+      demoSlug,
+      language,
+      testRunId: testContext?.runId,
+      testScenarioId: testContext?.scenarioId,
+      testScenarioKey: testContext?.scenarioKey,
+    }),
   })
   if (!res.ok) {
     throw new Error(`token request failed with status ${res.status}`)

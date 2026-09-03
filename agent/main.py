@@ -2528,6 +2528,8 @@ def _call_context_from_job(ctx: JobContext) -> dict:
       "visitor_email"} — stamped by /widget/token in server/token_api.py from
       its pre-call name/phone/email form.
     - Dashboard "Browser test": {"agent_id"} only — from /token.
+    - Testing Lab: {"agent_id", "test_run_id", "test_scenario_*"} — the
+      same browser-call transport, tagged so its result can be correlated.
     - Public demo call page: no metadata at all.
 
     Returns {"agent_id": int|None, "call_type": "phone"|"widget"|"browser",
@@ -2546,6 +2548,10 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "company": "",
         "custom_fields": {},
         "demo_language": None,
+        "test_run_id": "",
+        "test_scenario_id": None,
+        "test_scenario_key": "",
+        "test_scenario_name": "",
         # Set only by rooms we create directly for a call we ourselves placed
         # (see the new outbound-dial flow) - a real inbound call arriving via
         # the shared SIP trunk never has this in its room metadata, so the
@@ -2587,6 +2593,10 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         # used only to answer "which page did this lead come from" later.
         "visitor_path": meta.get("visitor_path"),
         "direction": meta.get("direction"),
+        "test_run_id": str(meta.get("test_run_id") or "")[:80],
+        "test_scenario_id": int(meta["test_scenario_id"]) if meta.get("test_scenario_id") is not None else None,
+        "test_scenario_key": str(meta.get("test_scenario_key") or "")[:80],
+        "test_scenario_name": str(meta.get("test_scenario_name") or "")[:120],
         # Campaign-dial personalization (see livekit_sip.tag_newest_room) —
         # substituted into {{company}}/{{custom.X}} tokens in the agent's own
         # prompt below, right before RealEstateAgent is constructed.
@@ -3571,6 +3581,10 @@ async def entrypoint(ctx: JobContext) -> None:
                     # populated must still save its transcript.
                     "disconnect_reason": userdata.get("disconnect_reason") or "",
                     "tool_calls": userdata.get("tool_calls") or [],
+                    "test_run_id": call_context.get("test_run_id") or "",
+                    "test_scenario_id": call_context.get("test_scenario_id"),
+                    "test_scenario_key": call_context.get("test_scenario_key") or "",
+                    "test_scenario_name": call_context.get("test_scenario_name") or "",
                     **lead_data,
                 }
             )

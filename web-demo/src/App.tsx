@@ -44,6 +44,7 @@ import { VerifyEmail } from './pages/VerifyEmail'
 import { InviteAccept } from './pages/InviteAccept'
 import { Dashboard } from './pages/Dashboard'
 import { Agents } from './pages/Agents'
+import { TestingLab } from './pages/TestingLab'
 import { AgentDetail } from './pages/AgentDetail'
 import { Voices } from './pages/Voices'
 import { KnowledgeBasePage } from './pages/KnowledgeBasePage'
@@ -158,6 +159,7 @@ function App() {
         <Route path="/dashboard" element={guard(<Dashboard />)} />
         <Route path="/dashboard/agents" element={guard(<Agents />)} />
         <Route path="/dashboard/agents/:id" element={guard(<AgentDetail />)} />
+        <Route path="/dashboard/testing" element={guard(<TestingLab />)} />
         <Route path="/dashboard/voices" element={guard(<Voices />)} />
         <Route path="/dashboard/knowledge" element={guard(<KnowledgeBasePage />)} />
         <Route path="/dashboard/inbound" element={guard(<Inbound />)} />

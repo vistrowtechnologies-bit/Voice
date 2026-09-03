@@ -99,13 +99,24 @@ export function DialTestModal({
 /** Embedded, in-dashboard version of the public browser-call demo - talks to
  * THIS specific agent (via the token endpoint's agentId → room metadata),
  * not just whichever agent is first/live. */
-export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClose: () => void }) {
+export function BrowserTestModal({
+  agent,
+  onClose,
+  testContext,
+}: {
+  agent: AgentConfig
+  onClose: () => void
+  testContext?: { runId: string; scenarioId?: number; scenarioKey?: string; scenarioName: string }
+}) {
   const [phase, setPhase] = useState<'checking' | 'connecting' | 'active' | 'error'>('checking')
   const [error, setError] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
   const [useOrchestrator, setUseOrchestrator] = useState(false)
-  const [forceLiveKit, setForceLiveKit] = useState(false)
+  // Lab runs must use LiveKit today because their correlation metadata is
+  // stored on the room and written into the durable call row by that worker.
+  // The ordinary quick-test button keeps its existing orchestrator-first flow.
+  const [forceLiveKit, setForceLiveKit] = useState(() => Boolean(testContext))
   const [status, setStatus] = useState('Checking the fastest available call route')
   const diagnosticId = useState(() => `VV-${Date.now().toString(36).toUpperCase().slice(-6)}`)[0]
 
@@ -148,8 +159,17 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
         await navigator.mediaDevices.getUserMedia({ audio: true })
         setStatus('Preparing agent and secure call room')
         const identity = randomId('operator')
-        const room = randomId(`test-agent-${agent.id}`)
-        const { token: newToken, url } = await fetchLiveKitToken(identity, room, agent.id)
+        const room = randomId(`${testContext ? 'test-lab' : 'test-agent'}-${agent.id}`)
+        const { token: newToken, url } = await fetchLiveKitToken(
+          identity,
+          room,
+          agent.id,
+          undefined,
+          undefined,
+          testContext
+            ? { runId: testContext.runId, scenarioId: testContext.scenarioId, scenarioKey: testContext.scenarioKey }
+            : undefined,
+        )
         if (cancelled) return
         setToken(newToken)
         setServerUrl(url)
@@ -170,7 +190,7 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
     return () => {
       cancelled = true
     }
-  }, [agent.id, forceLiveKit])
+  }, [agent.id, forceLiveKit, testContext])
 
   if (useOrchestrator && phase === 'active') {
     return (
@@ -185,14 +205,14 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
 
   if (phase === 'error') {
     return (
-      <ModalShell title={`Browser test - ${agent.name}`} onClose={onClose}>
+      <ModalShell title={`${testContext ? testContext.scenarioName : 'Browser test'} - ${agent.name}`} onClose={onClose}>
         <div className="flex flex-col gap-3">
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3">
             <p className="text-sm font-semibold text-destructive">Couldn’t start the conversation</p>
             <p className="mt-1 text-xs leading-relaxed text-text-muted">{error ?? 'Could not connect.'}</p>
             <p className="mt-2 font-mono text-[10px] text-text-muted">Reference: {diagnosticId}</p>
           </div>
-          <button onClick={() => { setError(null); setPhase('checking'); setForceLiveKit((v) => !v) }} className="rounded-lg bg-primary py-2 text-sm font-bold text-bg">Retry test</button>
+          <button onClick={() => { setError(null); setPhase('checking'); setForceLiveKit((v) => testContext ? true : !v) }} className="rounded-lg bg-primary py-2 text-sm font-bold text-bg">Retry test</button>
         </div>
       </ModalShell>
     )
@@ -200,7 +220,7 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
 
   if (phase === 'checking' || phase === 'connecting') {
     return (
-      <ModalShell title={`Browser test - ${agent.name}`} onClose={onClose}>
+      <ModalShell title={`${testContext ? testContext.scenarioName : 'Browser test'} - ${agent.name}`} onClose={onClose}>
         <div className="flex items-center gap-3 py-2 text-sm text-cyan">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan border-t-transparent" />
           <span><span className="block font-semibold">{status}</span><span className="mt-0.5 block text-[11px] text-text-muted">This usually takes a few seconds.</span></span>
@@ -220,7 +240,7 @@ export function BrowserTestModal({ agent, onClose }: { agent: AgentConfig; onClo
       >
         <RoomAudioRenderer />
         <ActiveCallUI
-          agentLabel={`${agent.name} · Test Call`}
+          agentLabel={`${agent.name} · ${testContext?.scenarioName ?? 'Test Call'}`}
           onLeadUpdate={() => {}}
           onTranscriptUpdate={() => {}}
         />

@@ -365,7 +365,19 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         meta["demo_language"] = req.language
     if req.testRunId:
         session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
-        if session is None or agent_id is None or calls_db.agent_account_id(agent_id) != session.get("aid"):
+        profile = calls_db.get_user_by_id(session["uid"]) if session is not None else None
+        session_is_valid = bool(
+            session is not None
+            and profile is not None
+            and int(profile.get("session_version") or 1) == int(session.get("sv") or 1)
+            and (not session.get("sid") or calls_db.validate_user_session(session["sid"], session["uid"]))
+        )
+        if (
+            not session_is_valid
+            or agent_id is None
+            or int(profile.get("account_id") or 0) != int(session.get("aid") or 0)
+            or calls_db.agent_account_id(agent_id) != session.get("aid")
+        ):
             raise HTTPException(403, "Testing Lab runs require an authenticated workspace agent.")
         run_id = req.testRunId.strip()
         if not run_id or len(run_id) > 80:

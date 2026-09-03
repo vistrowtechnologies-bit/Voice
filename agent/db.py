@@ -51,7 +51,11 @@ CREATE TABLE IF NOT EXISTS calls (
     account_id INTEGER,
     extracted_data TEXT DEFAULT '',
     latency_metrics_json TEXT DEFAULT '',
-    diagnostic_events_json TEXT DEFAULT ''
+    diagnostic_events_json TEXT DEFAULT '',
+    test_run_id TEXT DEFAULT '',
+    test_scenario_id INTEGER,
+    test_scenario_key TEXT DEFAULT '',
+    test_scenario_name TEXT DEFAULT ''
 );
 
 -- Mirrors server/calls_db.py — created here too so the agent works even if it
@@ -109,6 +113,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS extracted_data TEXT DEFAULT ''")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS latency_metrics_json TEXT DEFAULT ''")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS diagnostic_events_json TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS test_run_id TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS test_scenario_id INTEGER")
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS test_scenario_key TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS test_scenario_name TEXT DEFAULT ''")
             # Mirrors server/calls_db.py — see its migration for what each holds.
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS disconnect_reason TEXT DEFAULT ''")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS tool_calls_json TEXT DEFAULT ''")
@@ -928,8 +936,9 @@ def save_call(record: dict) -> int | None:
                     lead_use_case, lead_team_size, site_visit_json,
                     transcript_json, call_type, direction, site_id, agent_id, account_id,
                     extracted_data, latency_metrics_json, diagnostic_events_json,
-                    disconnect_reason, tool_calls_json, page_path
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    disconnect_reason, tool_calls_json, page_path, test_run_id,
+                    test_scenario_id, test_scenario_key, test_scenario_name
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -967,6 +976,10 @@ def save_call(record: dict) -> int | None:
                     if record.get("tool_calls")
                     else "",
                     record.get("page_path") or "",
+                    record.get("test_run_id") or "",
+                    record.get("test_scenario_id"),
+                    record.get("test_scenario_key") or "",
+                    record.get("test_scenario_name") or "",
                 ),
             )
             return cur.lastrowid
