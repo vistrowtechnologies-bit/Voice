@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -11,7 +11,9 @@ import type { ContactDetail as ContactDetailType } from '../lib/types'
 const TABS = ['Activity', 'Calls', 'Campaigns', 'Notes'] as const
 type Tab = (typeof TABS)[number]
 
-type ActivityItem = { at: string; kind: 'call' | 'note'; label: string }
+// callId is a number here: ContactDetail's calls carry numeric ids, unlike
+// CallRecord.id elsewhere which is a string.
+type ActivityItem = { at: string; kind: 'call' | 'note'; label: string; callId?: number }
 
 const STATUS_STYLES: Record<string, string> = {
   new: 'bg-muted/20 text-text-muted border-muted/30',
@@ -26,6 +28,9 @@ function pct(n: number, total: number): number {
 
 export function ContactDetail() {
   const { id } = useParams<{ id: string }>()
+  // Stashed into each call link so the call modal stacks over this page
+  // (see App.tsx's backgroundLocation route) instead of navigating away.
+  const location = useLocation()
   const [contact, setContact] = useState<ContactDetailType | null | undefined>(undefined)
   const [tab, setTab] = useState<Tab>('Activity')
   const [noteBody, setNoteBody] = useState('')
@@ -84,6 +89,9 @@ export function ContactDetail() {
       at: c.startedAt,
       kind: 'call' as const,
       label: c.durationSeconds > 0 ? `${c.callType} call - ${formatDuration(c.durationSeconds)}` : `${c.callType} call - no answer`,
+      // Carried so the Activity row can open the same call modal the Calls
+      // tab does - a call is the one activity kind with something to read.
+      callId: c.id,
     })),
     ...contact.notes.map((n) => ({ at: n.createdAt, kind: 'note' as const, label: `Note: ${n.body}` })),
   ].sort((a, b) => b.at.localeCompare(a.at))
@@ -256,18 +264,37 @@ export function ContactDetail() {
               <EmptyState text="No activity yet." compact />
             ) : (
               <div className="divide-y divide-border">
-                {activity.map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-3">
-                    <Icon
-                      name={item.kind === 'call' ? 'call' : 'sticky_note_2'}
-                      className={`text-[18px] ${item.kind === 'call' ? 'text-cyan' : 'text-amber'}`}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm">{item.label}</p>
-                      <p className="text-[11px] text-text-muted">{formatDateTime(item.at)}</p>
+                {/* A call row opens the transcript; a note has nothing to
+                    open, so it stays inert rather than looking clickable. */}
+                {activity.map((item, i) => {
+                  const body = (
+                    <>
+                      <Icon
+                        name={item.kind === 'call' ? 'call' : 'sticky_note_2'}
+                        className={`text-[18px] ${item.kind === 'call' ? 'text-cyan' : 'text-amber'}`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm">{item.label}</p>
+                        <p className="text-[11px] text-text-muted">{formatDateTime(item.at)}</p>
+                      </div>
+                      {item.callId && <Icon name="chevron_right" className="text-[16px] text-text-muted" />}
+                    </>
+                  )
+                  return item.callId ? (
+                    <Link
+                      key={i}
+                      to={`/dashboard/calls/${item.callId}`}
+                      state={{ backgroundLocation: location }}
+                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-high"
+                    >
+                      {body}
+                    </Link>
+                  ) : (
+                    <div key={i} className="flex items-center gap-3 px-4 py-3">
+                      {body}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ))}
 
@@ -276,16 +303,28 @@ export function ContactDetail() {
               <EmptyState text="No calls with this contact yet." compact />
             ) : (
               <div className="divide-y divide-border">
+                {/* Opens the same call modal as All Calls History - transcript,
+                    recording and diagnostics - stacked over this page via
+                    backgroundLocation so closing it returns to the contact
+                    rather than dumping the operator on the calls list. */}
                 {contact.calls.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <Link
+                    key={c.id}
+                    to={`/dashboard/calls/${c.id}`}
+                    state={{ backgroundLocation: location }}
+                    className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-surface-high"
+                  >
                     <div>
                       <p className="text-sm font-semibold capitalize">{c.callType} call</p>
                       <p className="text-[11px] text-text-muted">{formatDateTime(c.startedAt)}</p>
                     </div>
-                    <span className="text-sm text-text-muted">
-                      {c.durationSeconds > 0 ? formatDuration(c.durationSeconds) : 'No answer'}
-                    </span>
-                  </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-text-muted">
+                        {c.durationSeconds > 0 ? formatDuration(c.durationSeconds) : 'No answer'}
+                      </span>
+                      <Icon name="chevron_right" className="text-[16px] text-text-muted" />
+                    </div>
+                  </Link>
                 ))}
               </div>
             ))}
