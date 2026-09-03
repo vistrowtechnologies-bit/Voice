@@ -11,16 +11,22 @@ export function AppLoadingScreen({ message = 'Loading your workspace…' }: { me
       aria-live="polite"
       aria-busy="true"
     >
-      <span className="app-loading-orb-shell" aria-hidden="true">
-        <video
-          src="/agent-orb.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="auto"
-          className="app-loading-orb-video"
-        />
+      <span className="flex flex-col items-center gap-5" aria-hidden="true">
+        <span className="app-loading-orb-shell">
+          <video
+            src="/agent-orb.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+            onLoadedMetadata={(event) => { event.currentTarget.playbackRate = 1.4 }}
+            className="app-loading-orb-video"
+          />
+        </span>
+        <span className="app-loading-progress">
+          <span />
+        </span>
       </span>
       <span className="sr-only">{message}</span>
     </div>
