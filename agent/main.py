@@ -852,7 +852,32 @@ _GENDERED_VERB_LANGUAGES = {"hi-IN", "mr-IN", "gu-IN", "pa-IN"}
 # in production (see EndpointingOptions below) — the caller's question never
 # reaches the LLM and they get "are you still there?". That is why max_delay
 # stays at 4.0.
-_EOT_HINDI_THRESHOLD = 0.25
+# Lowered again, 0.25 -> 0.20, on fresh measurement. Across 285 turns on 30
+# voice calls the split is still binary and still expensive: 78% finish at
+# ~400ms, 18-22% pay the full 4s, nothing in between. Splitting that sample by
+# date shows the previous move did work — 26.9% at the ceiling on 1-2 Sept vs
+# 18.2% on 3 Sept, after English was added to this map — so the lever is real
+# and this is the same lever pulled once more, not a new theory.
+#
+# What changed the priority is establishing that preemptive generation
+# actually fires on our setup: turn_detection is passed as a TurnDetector
+# OBJECT, so livekit's _turn_detection_mode is None, so _vad_base_turn_detection
+# is True, so the FINAL_TRANSCRIPT branch in audio_recognition.py reaches
+# on_preemptive_generation. The LLM and (preemptive_tts=True) the TTS have
+# therefore both already run by the time a ceiling turn commits. So those 4
+# seconds are not "slow LLM plus slow TTS" — they are pure dead air with the
+# reply sitting finished, waiting. On those turns endpointing is 100% of what
+# the caller hears, which makes this threshold the single highest-leverage
+# latency knob in the pipeline.
+#
+# 0.20 is LiveKit's own shipped value for Dutch — the floor of their tuned
+# range, not below it. Failure direction is unchanged and still the safe one:
+# too low means replying a shade early, which a caller talks over. max_delay
+# stays at 4.0 — the pre-registered condition for touching it ("measurement
+# shows finalization actually got faster") is NOT met, because transcriptionMs
+# is only recorded for turns that succeeded and is blind to the dropped
+# transcripts that lowering it caused twice.
+_EOT_HINDI_THRESHOLD = 0.20
 _EOT_UNLIKELY_THRESHOLDS = {
     lang: _EOT_HINDI_THRESHOLD
     for lang in ("hi", "mr", "bn", "ta", "te", "kn", "ml", "gu", "pa", "or", "en")
