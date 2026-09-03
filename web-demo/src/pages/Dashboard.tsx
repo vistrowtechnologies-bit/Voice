@@ -298,7 +298,13 @@ export function Dashboard() {
                         icon={ATTENTION_ICON[item.id.split(':')[0]] ?? 'info'}
                         label={item.title}
                         detail={item.body}
-                        tone={item.severity === 'critical' ? 'destructive' : 'amber'}
+                        tone={
+                          item.severity === 'critical'
+                            ? 'destructive'
+                            : item.severity === 'warning'
+                              ? 'amber'
+                              : 'success'
+                        }
                       />
                     ))}
                   </div>
@@ -854,9 +860,16 @@ const ATTENTION_ICON: Record<string, string> = {
   'campaign-complete': 'campaign',
 }
 
-function AttentionLink({ to, icon, label, detail, tone }: { to: string; icon: string; label: string; detail: string; tone: 'destructive' | 'amber' }) {
-  const toneClass = tone === 'destructive' ? 'text-destructive bg-destructive/10' : 'text-amber bg-amber/10'
-  return <Link to={to} className="flex items-start gap-3 rounded-xl border border-border p-3 transition-colors hover:border-primary"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneClass}`}><Icon name={icon} className="text-[19px]" /></span><span className="min-w-0"><span className="block text-sm font-semibold">{label}</span><span className="mt-0.5 block text-[11px] text-text-muted">{detail} →</span></span></Link>
+function AttentionLink({ to, icon, label, detail, tone }: { to: string; icon: string; label: string; detail: string; tone: 'destructive' | 'amber' | 'success' }) {
+  const toneClass = {
+    destructive: 'text-destructive bg-destructive/10',
+    amber: 'text-amber bg-amber/10',
+    success: 'text-success bg-success/10',
+  }[tone]
+  // bg-surface is intentional: without an owned background, the global
+  // outline-button selector mistakes this Link card for a CTA, paints the
+  // whole card purple, and forces the semantic icon to inherit white.
+  return <Link to={to} className="flex items-start gap-3 rounded-xl border border-border bg-surface p-3 transition-colors hover:border-primary"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneClass}`}><Icon name={icon} className="text-[19px]" /></span><span className="min-w-0"><span className="block text-sm font-semibold">{label}</span><span className="mt-0.5 block text-[11px] text-text-muted">{detail} →</span></span></Link>
 }
 
 function ComparisonTile({ label, value, change, icon }: { label: string; value: number; change: number | null; icon: string }) {
