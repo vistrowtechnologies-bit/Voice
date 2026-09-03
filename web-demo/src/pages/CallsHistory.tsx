@@ -35,12 +35,18 @@ const SENTIMENT_STYLES: Record<Sentiment, string> = {
 const GENERIC_CALLER_NAMES = new Set(['unknown caller', 'website visitor'])
 
 // Same caller identity used to group repeat calls into one row: phone first
-// (normalized - digits only, so "+91 706-688-0808" and "917066880808" match),
-// then email, then name. A call with none of those (an anonymous/generic
-// name) gets a unique per-call key instead of grouping with every other
+// (normalized - digits only, then trimmed to the last 10 digits, so
+// "+918080197945" and "8080197945" collapse to the same key even though one
+// carries the country code and the other doesn't - which real numbers do
+// depending on where they were captured from, e.g. a caller-ID number vs an
+// older/other source. A plain digits-only key without this trim looked
+// right but still split one real caller into two grouped rows.), then
+// email, then name. A call with none of those (an anonymous/generic name)
+// gets a unique per-call key instead of grouping with every other
 // unidentified caller, which would wrongly merge unrelated people.
 function identityKey(c: CallRecord): string {
-  const phone = c.phone.replace(/\D/g, '')
+  const digits = c.phone.replace(/\D/g, '')
+  const phone = digits.length > 10 ? digits.slice(-10) : digits
   if (phone) return `phone:${phone}`
   if (c.email) return `email:${c.email.toLowerCase()}`
   const name = c.name?.trim().toLowerCase()
