@@ -7355,12 +7355,17 @@ def place_outbound_call_direct(
     contact_email: str = "",
     contact_company: str = "",
     contact_custom_fields: str = "{}",
+    wait_for_answer: bool = True,
 ) -> dict:
     """Sync wrapper around livekit_sip.place_outbound_call — the new direct-
-    SIP-trunk outbound flow. NOT yet wired into place_test_call or the
-    campaign dialer; both still call place_test_call above. Blocks on
-    asyncio.run() until the call is answered or fails, same as every other
-    async-LiveKit-API caller in this module (see enablex_test_call_connected).
+    SIP-trunk outbound flow - now the path behind both the dashboard's
+    test-call button and the campaign dialer.
+
+    wait_for_answer=True blocks on asyncio.run() until the callee actually
+    picks up (or the call fails), which is what a one-off dashboard test
+    call wants. The campaign dialer passes False: it dials several contacts
+    per tick, so blocking would serialise calls meant to overlap and one
+    no-answer would stall every campaign for the full ringing timeout.
 
     Requires EnableX's outbound SBC address to have been passed to
     ensure_outbound_trunk at least once — until then this returns a clear
@@ -7380,6 +7385,7 @@ def place_outbound_call_direct(
             visitor_email=contact_email.strip(),
             company=contact_company.strip(),
             custom_fields=contact_custom_fields or "{}",
+            wait_for_answer=wait_for_answer,
         )
     )
 

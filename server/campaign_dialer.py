@@ -91,6 +91,21 @@ def _dial_one(campaign: dict) -> None:
         calls_db.set_campaign_status(cid, "paused", account_id)
         return
 
+    # The direct-SIP path stamps agent_id into the room metadata itself, so
+    # unlike the old bridge-back flow there is no dispatch rule to infer the
+    # agent from the dialled number. Fall back to whichever agent owns the
+    # from-number when the campaign doesn't name one, so a campaign without
+    # an explicit agent still reaches the same agent it used to.
+    agent_id = campaign.get("agent_id")
+    if not agent_id:
+        # camelCase: _phone_number_dict maps the columns, agent_id -> agentId.
+        number_row = calls_db.get_phone_number_by_number(from_number)
+        agent_id = (number_row or {}).get("agentId")
+    if not agent_id:
+        logger.warning("campaign %s has no agent (campaign or number); pausing", cid)
+        calls_db.set_campaign_status(cid, "paused", account_id)
+        return
+
     # Calling window is the same gate real dials use; skip the whole campaign
     # this tick if we're outside it (no point claiming contacts we can't dial).
     allowed, _reason = calls_db.within_calling_window(account_id)
@@ -116,16 +131,26 @@ def _dial_one(campaign: dict) -> None:
         try:
             if _on_orchestrator_pipeline(account_id):
                 result = _place_via_orchestrator(
-                    contact["phone"], from_number, account_id, campaign.get("agent_id"), contact
+                    contact["phone"], from_number, account_id, agent_id, contact
                 )
             else:
-                result = calls_db.place_test_call(
-                    from_number,
+                # wait_for_answer=False on purpose: this loop places up to
+                # `slots` calls per tick, so blocking each one until the
+                # callee picks up would serialise dials that are meant to
+                # overlap, and a single no-answer would stall every campaign
+                # for the full ringing timeout. "placed" has always meant
+                # "the dial went out", never "they answered" (see the note
+                # at the top of this module), so not waiting also keeps the
+                # recorded result honest.
+                result = calls_db.place_outbound_call_direct(
                     contact["phone"],
+                    from_number,
                     account_id,
-                    contact.get("name", ""),
-                    contact.get("company", ""),
-                    contact.get("custom_fields", "{}"),
+                    agent_id,
+                    contact_name=contact.get("name", ""),
+                    contact_company=contact.get("company", ""),
+                    contact_custom_fields=contact.get("custom_fields", "{}"),
+                    wait_for_answer=False,
                 )
         except Exception:
             logger.exception("dial failed for contact %s", contact["id"])

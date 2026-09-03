@@ -127,6 +127,7 @@ async def place_outbound_call(
     visitor_email: str = "",
     company: str = "",
     custom_fields: str = "{}",
+    wait_for_answer: bool = True,
 ) -> dict:
     """Place a real outbound call directly through LiveKit's own outbound SIP
     trunk, replacing the EnableX-REST + webhook + reconnect-through-our-OWN-
@@ -210,7 +211,13 @@ async def place_outbound_call(
                     room_name=room_name,
                     participant_identity=f"sip-{to_number.lstrip('+')}",
                     participant_name=visitor_name or to_number,
-                    wait_until_answered=True,
+                    # Callers that dial one number and want a real answered/
+                    # not-answered result (a dashboard test call) block here.
+                    # The campaign dialer must NOT: it places several calls
+                    # per tick in a loop, so blocking would serialise dials
+                    # that are meant to overlap, and a single no-answer would
+                    # stall every campaign for the full ringing timeout.
+                    wait_until_answered=wait_for_answer,
                 )
             )
         except TwirpError as exc:

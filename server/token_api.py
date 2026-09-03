@@ -3394,7 +3394,26 @@ def telephony_test_call(data: dict = Body(...), user: dict = Depends(current_use
             logger.exception("orchestrator test-call proxy failed")
             return {"ok": False, "error": f"Could not reach orchestrator: {e}"}
 
-    return calls_db.place_test_call(from_number, to_number, user["account_id"])
+    # Direct SIP INVITE to the provider's SBC, not the old EnableX REST
+    # /call + "connected" webhook + bridge-back-through-our-own-inbound-trunk
+    # dance (calls_db.place_test_call). EnableX asked us to stop using the
+    # REST path outright on 2026-09-03 — it needs their WebSocket streaming
+    # flow, which we don't run — and the direct path is what actually
+    # connects with two-way audio.
+    # NOTE: _phone_number_dict returns camelCase keys, not the raw column
+    # names — accountId/agentId, not account_id/agent_id.
+    row = calls_db.get_phone_number_by_number(from_number)
+    if not row or row.get("accountId") != user["account_id"]:
+        raise HTTPException(400, "That number isn't registered to this account")
+    agent_id = row.get("agentId")
+    if not agent_id:
+        raise HTTPException(400, "Assign an agent to this number before placing a test call")
+    return calls_db.place_outbound_call_direct(
+        to_number,
+        from_number,
+        user["account_id"],
+        agent_id,
+    )
 
 
 @app.post("/orchestrator/browser-token")
