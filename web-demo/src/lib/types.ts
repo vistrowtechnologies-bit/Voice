@@ -33,6 +33,16 @@ export interface LeadTranscriptLine {
   text: string
 }
 
+export interface CallDiagnosticEvent {
+  id: string
+  kind: string
+  stage: string
+  label: string
+  status: 'info' | 'ok' | 'warning' | 'error'
+  offsetMs: number
+  durationMs?: number
+}
+
 export interface CallRecord {
   id: string
   name: string
@@ -105,6 +115,11 @@ export interface CallRecord {
   creditsPerMinute?: number
   voiceTier?: 'economy' | 'standard' | 'premium'
   modelTier?: 'standard' | 'premium' | 'premium_plus'
+  // Present on the single-call detail response. `diagnosticsCaptured` is
+  // false for historical calls whose limited milestones are reconstructed
+  // only from the older measured latency columns.
+  diagnosticEvents?: CallDiagnosticEvent[]
+  diagnosticsCaptured?: boolean
 }
 
 export type Lead = CallRecord

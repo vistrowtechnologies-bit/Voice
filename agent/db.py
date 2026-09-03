@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS calls (
     agent_id INTEGER,
     account_id INTEGER,
     extracted_data TEXT DEFAULT '',
-    latency_metrics_json TEXT DEFAULT ''
+    latency_metrics_json TEXT DEFAULT '',
+    diagnostic_events_json TEXT DEFAULT ''
 );
 
 -- Mirrors server/calls_db.py — created here too so the agent works even if it
@@ -107,6 +108,7 @@ def init_db() -> None:
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} TEXT")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS extracted_data TEXT DEFAULT ''")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS latency_metrics_json TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS diagnostic_events_json TEXT DEFAULT ''")
             # Mirrors server/calls_db.py — see its migration for what each holds.
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS disconnect_reason TEXT DEFAULT ''")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS tool_calls_json TEXT DEFAULT ''")
@@ -925,9 +927,9 @@ def save_call(record: dict) -> int | None:
                     lead_email, lead_budget, lead_location, lead_timeline, lead_company,
                     lead_use_case, lead_team_size, site_visit_json,
                     transcript_json, call_type, direction, site_id, agent_id, account_id,
-                    extracted_data, latency_metrics_json, disconnect_reason, tool_calls_json,
-                    page_path
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    extracted_data, latency_metrics_json, diagnostic_events_json,
+                    disconnect_reason, tool_calls_json, page_path
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -959,6 +961,7 @@ def save_call(record: dict) -> int | None:
                     if record.get("extracted_data")
                     else "",
                     json.dumps(record.get("latency_metrics") or {}, ensure_ascii=False),
+                    json.dumps(record.get("diagnostic_events") or [], ensure_ascii=False),
                     record.get("disconnect_reason") or "",
                     json.dumps(record["tool_calls"], ensure_ascii=False)
                     if record.get("tool_calls")

@@ -59,6 +59,21 @@ function titleCase(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+function formatDiagnosticTime(milliseconds: number): string {
+  if (milliseconds < 1000) return `${milliseconds}ms`
+  const seconds = milliseconds / 1000
+  if (seconds < 60) return `+${seconds.toFixed(seconds < 10 ? 1 : 0)}s`
+  const minutes = Math.floor(seconds / 60)
+  return `+${minutes}m ${Math.round(seconds % 60)}s`
+}
+
+const DIAGNOSTIC_STATUS_STYLE = {
+  info: 'bg-cyan',
+  ok: 'bg-success',
+  warning: 'bg-amber',
+  error: 'bg-destructive',
+}
+
 // Client-side .txt export of the full conversation, both sides combined in
 // original chronological order, labeled by speaker for readability.
 function downloadTranscript(call: CallRecord): void {
@@ -99,7 +114,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null)
   const [recordingError, setRecordingError] = useState<string | null>(null)
   const [arthaleadsConnected, setArthaleadsConnected] = useState(false)
-  const [tab, setTab] = useState<'details' | 'history'>('details')
+  const [tab, setTab] = useState<'details' | 'diagnostics' | 'history'>('details')
   const [history, setHistory] = useState<CallRecord[] | null>(null)
   const [historySearch, setHistorySearch] = useState('')
 
@@ -250,6 +265,23 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           Details
         </button>
         <button
+          onClick={() => setTab('diagnostics')}
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${
+            tab === 'diagnostics' ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
+          }`}
+        >
+          Diagnostics
+          {!!call.diagnosticEvents?.length && (
+            <span
+              className={`rounded-full px-1.5 text-[10px] ${
+                tab === 'diagnostics' ? 'bg-bg/20' : 'bg-surface-high text-text-muted'
+              }`}
+            >
+              {call.diagnosticEvents.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setTab('history')}
           className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${
             tab === 'history' ? 'bg-primary text-bg' : 'text-text-muted hover:text-text'
@@ -337,6 +369,67 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
                   </button>
                 ))}
               </div>
+            )}
+          </Card>
+        </section>
+      ) : tab === 'diagnostics' ? (
+        <section className="flex flex-col gap-4 p-4 sm:p-6">
+          {!call.diagnosticsCaptured && (
+            <div className="flex items-start gap-2 rounded-xl border border-amber/30 bg-amber/10 px-4 py-3 text-sm text-text">
+              <Icon name="info" className="mt-0.5 shrink-0 text-[18px] text-amber" />
+              <div>
+                <p className="font-semibold">Limited diagnostics for this historical call</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-text-muted">
+                  Only previously measured connection milestones are shown. New calls capture ordered pipeline,
+                  conversation, action, provider-switch, and ending events.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <Card>
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-text">Call diagnostic timeline</h2>
+                <p className="mt-0.5 text-xs text-text-muted">
+                  Measured from call dispatch. Durations show time spent inside that stage.
+                </p>
+              </div>
+              <span className="rounded-full border border-border bg-surface-high px-2.5 py-1 text-[11px] font-semibold text-text-muted">
+                {call.diagnosticEvents?.length ?? 0} events
+              </span>
+            </div>
+
+            {call.diagnosticEvents?.length ? (
+              <ol className="relative ml-2 border-l border-border">
+                {call.diagnosticEvents.map((event) => (
+                  <li key={event.id} className="relative pb-5 pl-6 last:pb-0">
+                    <span
+                      className={`absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-surface ${
+                        DIAGNOSTIC_STATUS_STYLE[event.status]
+                      }`}
+                    />
+                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-text">{event.label}</p>
+                        <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-text-muted">
+                          {event.stage.replace(/_/g, ' ')}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2 font-mono text-[11px] text-text-muted">
+                        {event.durationMs != null && (
+                          <span className={event.durationMs >= 1500 ? 'font-semibold text-amber' : ''}>
+                            {formatDiagnosticTime(event.durationMs)} duration
+                          </span>
+                        )}
+                        <span>{formatDiagnosticTime(event.offsetMs)}</span>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <EmptyState icon="timeline" text="No diagnostic events were recorded for this call." compact />
             )}
           </Card>
         </section>

@@ -2712,6 +2712,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # (which also hosts every other concurrent call's session).
     config_task = asyncio.create_task(asyncio.to_thread(db.get_agent_config, call_context["agent_id"]))
     await ctx.connect()
+    _room_connected_ms = round((time.monotonic() - _t0) * 1000)
     logger.info("[latency] room connected at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # Don't say a word until the caller is actually in the room. Widget
     # rooms are pre-created at token-issuance time (to carry visitor
@@ -2741,6 +2742,7 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.warning("no caller joined room %s within 90s — abandoning job", ctx.room.name)
         await _hang_up(ctx.room.name)
         return
+    _caller_joined_ms = round((time.monotonic() - _t0) * 1000)
     logger.info("[latency] caller joined at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # /widget/warm pre-creates the room (to give the agent a head start
     # waking up) before the visitor has typed their name/phone/email, so
@@ -2821,6 +2823,7 @@ async def entrypoint(ctx: JobContext) -> None:
             stale_task.add_done_callback(lambda t: t.cancelled() or t.exception())
 
     config = await config_task
+    _config_ready_ms = round((time.monotonic() - _t0) * 1000)
     logger.info("[latency] config_task awaited at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     if config and config.get("status") == "paused":
         # Paused from the dashboard — don't take the call.
@@ -2897,6 +2900,7 @@ async def entrypoint(ctx: JobContext) -> None:
         cfg = config
         logger.info("demo language override -> %s (room=%s)", _requested_language, ctx.room.name)
     agent = RealEstateAgent(config, call_context["visitor_name"], call_context["visitor_phone"])
+    _agent_ready_ms = round((time.monotonic() - _t0) * 1000)
     logger.info("[latency] RealEstateAgent() constructed at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # See the [latency] markers above/below — lets on_enter() log its own
     # elapsed-since-dispatch time around the greeting's TTS call.
@@ -2934,6 +2938,25 @@ async def entrypoint(ctx: JobContext) -> None:
         # crashed before the close event should persist.
         "disconnect_reason": "",
         "tool_calls": [],
+        # Ordered call timeline. Values are relative to the worker receiving
+        # the dispatch, so startup latency and conversational latency share a
+        # single clock instead of being guessed from unrelated timestamps.
+        "diagnostic_events": [
+            {"id": "dispatch", "kind": "lifecycle", "stage": "dispatch", "label": "Call dispatched", "status": "ok", "offsetMs": 0},
+            {"id": "room-connected", "kind": "milestone", "stage": "connection", "label": "Media room connected", "status": "ok", "offsetMs": _room_connected_ms},
+            {"id": "caller-joined", "kind": "milestone", "stage": "connection", "label": "Caller joined", "status": "ok", "offsetMs": _caller_joined_ms},
+            {"id": "config-ready", "kind": "milestone", "stage": "agent", "label": "Agent configuration loaded", "status": "ok", "offsetMs": _config_ready_ms},
+            {
+                "id": "agent-ready",
+                "kind": "milestone",
+                "stage": "agent",
+                "label": "Voice agent ready",
+                "status": "ok",
+                "offsetMs": _agent_ready_ms,
+                "provider": getattr(agent, "_tts_provider", "") or "",
+                "model": getattr(agent, "_model", "") or "",
+            },
+        ],
         # First user turn on an outbound call hasn't been checked for a
         # voicemail greeting yet.
         "voicemail_checked": False,
@@ -2960,6 +2983,32 @@ async def entrypoint(ctx: JobContext) -> None:
             "providers": [],
         },
     }
+
+    def _record_diagnostic(kind: str, stage: str, label: str, status: str = "info", **detail) -> None:
+        """Append one bounded diagnostic event without risking the call.
+
+        Diagnostics are observability only. If an unexpected provider object
+        contains a value we cannot serialize, dropping that field is always
+        preferable to disturbing the conversation or its durable call row.
+        """
+        try:
+            events = userdata.setdefault("diagnostic_events", [])
+            if len(events) >= 500:
+                return
+            event = {
+                "id": f"event-{len(events)}",
+                "kind": kind,
+                "stage": stage,
+                "label": label,
+                "status": status,
+                "offsetMs": round((time.monotonic() - _t0) * 1000),
+            }
+            for key, value in detail.items():
+                if value is None or isinstance(value, (str, int, float, bool)):
+                    event[key] = value
+            events.append(event)
+        except Exception:
+            logger.debug("could not record call diagnostic event", exc_info=True)
 
     # interruption_sensitivity 0-1 → how many real words it takes to interrupt
     # the agent. High sensitivity yields the floor on a single word; low
@@ -3159,6 +3208,13 @@ async def entrypoint(ctx: JobContext) -> None:
         post_checkin_task["handle"] = asyncio.create_task(_watch())
 
     def _on_user_state_changed(ev) -> None:
+        _record_diagnostic(
+            "state",
+            "caller",
+            f"Caller {str(ev.new_state).replace('_', ' ')}",
+            "warning" if ev.new_state == "away" else "info",
+            state=str(ev.new_state),
+        )
         if ev.new_state == "speaking":
             # Caller is talking again — reset the reminder count and both
             # silence timers.
@@ -3206,6 +3262,13 @@ async def entrypoint(ctx: JobContext) -> None:
                 _arm_post_checkin_timeout()
 
     def _on_agent_state_changed(ev) -> None:
+        _record_diagnostic(
+            "state",
+            "agent",
+            f"Agent {str(ev.new_state).replace('_', ' ')}",
+            "info",
+            state=str(ev.new_state),
+        )
         # Read by _on_user_state_changed's "away" branch above, so the
         # check-in can never fire mid-reply.
         userdata["agent_speaking"] = ev.new_state == "speaking"
@@ -3245,6 +3308,14 @@ async def entrypoint(ctx: JobContext) -> None:
                     entry["ok"] = True
                     entry["note"] = "no output returned to model"
                 userdata.setdefault("tool_calls", []).append(entry)
+                _record_diagnostic(
+                    "tool",
+                    "action",
+                    "Agent action completed" if entry.get("ok", True) else "Agent action failed",
+                    "ok" if entry.get("ok", True) else "error",
+                    name=entry.get("name"),
+                    durationMs=entry.get("ms"),
+                )
         except Exception:
             logger.warning("could not record tool-call diagnostics", exc_info=True)
 
@@ -3257,6 +3328,13 @@ async def entrypoint(ctx: JobContext) -> None:
         # "CloseReason.USER_INITIATED".
         try:
             userdata["disconnect_reason"] = getattr(ev.reason, "value", None) or str(ev.reason)
+            _record_diagnostic(
+                "lifecycle",
+                "call",
+                "Call ended",
+                "error" if ev.reason == CloseReason.ERROR else "ok",
+                reason=userdata["disconnect_reason"],
+            )
             if ev.error is not None:
                 # Class name only — the message can carry provider payloads.
                 userdata["disconnect_error"] = type(ev.error).__name__
@@ -3333,6 +3411,15 @@ async def entrypoint(ctx: JobContext) -> None:
 
     def _on_conversation_item_added(ev) -> None:
         item = ev.item
+        role = getattr(item, "role", None)
+        if role in {"assistant", "user"}:
+            _record_diagnostic(
+                "turn",
+                "agent" if role == "assistant" else "caller",
+                "Agent response added" if role == "assistant" else "Caller turn captured",
+                "info",
+                role=role,
+            )
         if getattr(item, "role", None) != "assistant" or userdata.get("ending_call"):
             return
         text = (item.text_content or "").lower()
@@ -3349,27 +3436,53 @@ async def entrypoint(ctx: JobContext) -> None:
                 userdata["ending_call"] = False
                 asyncio.create_task(_hang_up(ctx.room.name))
 
+    last_provider_by_stage: dict[str, str] = {}
+
     def _on_metrics_collected(ev) -> None:
         metric = ev.metrics
         metric_type = getattr(metric, "type", "")
         timings = userdata["latency_metrics"]
-        if metric_type == "eou_metrics":
-            timings["eouMs"].append(round(max(0.0, metric.end_of_utterance_delay) * 1000))
-            timings["transcriptionMs"].append(round(max(0.0, metric.transcription_delay) * 1000))
-            timings["onTurnCompletedMs"].append(round(max(0.0, metric.on_user_turn_completed_delay) * 1000))
-        elif metric_type == "llm_metrics" and not metric.cancelled:
-            timings["llmTtftMs"].append(round(max(0.0, metric.ttft) * 1000))
-        elif metric_type == "tts_metrics" and not metric.cancelled:
-            timings["ttsTtfbMs"].append(round(max(0.0, metric.ttfb) * 1000))
-        else:
-            return
-
         metadata = getattr(metric, "metadata", None)
         provider = getattr(metadata, "model_provider", None) if metadata else None
         model = getattr(metadata, "model_name", None) if metadata else None
         label = "/".join(part for part in (provider, model) if part)
+        if metric_type == "eou_metrics":
+            samples = (
+                ("endpointing", "eouMs", "Caller turn detected", metric.end_of_utterance_delay),
+                ("stt", "transcriptionMs", "Speech transcription finalized", metric.transcription_delay),
+                ("turn", "onTurnCompletedMs", "Turn processing completed", metric.on_user_turn_completed_delay),
+            )
+            for stage, key, event_label, seconds in samples:
+                duration_ms = round(max(0.0, seconds) * 1000)
+                timings[key].append(duration_ms)
+                _record_diagnostic("metric", stage, event_label, "warning" if duration_ms >= 1500 else "ok", durationMs=duration_ms, provider=provider, model=model)
+        elif metric_type == "llm_metrics" and not metric.cancelled:
+            duration_ms = round(max(0.0, metric.ttft) * 1000)
+            timings["llmTtftMs"].append(duration_ms)
+            _record_diagnostic("metric", "llm", "AI response started", "warning" if duration_ms >= 1500 else "ok", durationMs=duration_ms, provider=provider, model=model)
+        elif metric_type == "tts_metrics" and not metric.cancelled:
+            duration_ms = round(max(0.0, metric.ttfb) * 1000)
+            timings["ttsTtfbMs"].append(duration_ms)
+            _record_diagnostic("metric", "tts", "First audio generated", "warning" if duration_ms >= 1500 else "ok", durationMs=duration_ms, provider=provider, model=model)
+        else:
+            return
+
         if label and label not in timings["providers"]:
             timings["providers"].append(label)
+        stage = "llm" if metric_type == "llm_metrics" else "tts" if metric_type == "tts_metrics" else "stt"
+        previous = last_provider_by_stage.get(stage)
+        if label and previous and label != previous:
+            _record_diagnostic(
+                "provider_switch",
+                stage,
+                f"{stage.upper()} provider changed",
+                "warning",
+                previousProvider=previous,
+                provider=label,
+                inferred=True,
+            )
+        if label:
+            last_provider_by_stage[stage] = label
 
     session.on("user_state_changed", _on_user_state_changed)
     session.on("agent_state_changed", _on_agent_state_changed)
@@ -3452,6 +3565,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     "account_id": cfg.get("account_id"),
                     "extracted_data": extracted,
                     "latency_metrics": userdata["latency_metrics"],
+                    "diagnostic_events": userdata.get("diagnostic_events") or [],
                     # Diagnostics collected during the call. .get() rather
                     # than [] — a call that died before userdata was fully
                     # populated must still save its transcript.

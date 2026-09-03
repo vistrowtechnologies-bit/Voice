@@ -432,6 +432,10 @@ def call_detail(call_id: int) -> dict | None:
             d["tool_calls"] = json.loads(d.pop("tool_calls_json") or "[]")
         except (TypeError, ValueError):
             d["tool_calls"] = []
+        try:
+            d["diagnostic_events"] = json.loads(d.pop("diagnostic_events_json") or "[]")
+        except (TypeError, ValueError):
+            d["diagnostic_events"] = []
         return d
     finally:
         conn.close()

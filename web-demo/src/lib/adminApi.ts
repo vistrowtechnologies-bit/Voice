@@ -182,6 +182,19 @@ export interface AdminCallDetail extends AdminCallRow {
   voice: string | null
   disconnect_reason: string | null
   tool_calls: { name: string; ok: boolean; ms?: number; error?: string; note?: string }[]
+  diagnostic_events: {
+    id: string
+    kind: string
+    stage: string
+    label: string
+    status: 'info' | 'ok' | 'warning' | 'error'
+    offsetMs: number
+    durationMs?: number
+    provider?: string
+    model?: string
+    previousProvider?: string
+    reason?: string
+  }[]
 }
 
 export interface AdminAnalytics {
