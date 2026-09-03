@@ -79,6 +79,7 @@ from tools import (
     request_callback,
     switch_reply_language,
     transfer_call,
+    lookup_project,
     web_search,
 )
 
@@ -1291,6 +1292,12 @@ def _build_tools(config: dict) -> list:
         tools.append(transfer_call)
     if TAVILY_API_KEY and _on("web_search"):
         tools.append(web_search)
+    # Only offered when this tenant actually has listings synced (see
+    # server/project_sync.py) - handing the model a lookup tool that can only
+    # ever return "nothing found" invites it to call the tool instead of
+    # answering, and costs a round trip mid-call to learn nothing.
+    if config.get("has_project_listings") and _on("lookup_project"):
+        tools.append(lookup_project)
     if _on("send_dtmf"):
         # Lets the agent press digits when it reaches an automated phone
         # tree instead of the person it dialled — an outbound call to a
@@ -1433,6 +1440,24 @@ class RealEstateAgent(Agent):
                 f"\n\n# Caller context\nThis call arrived from {visitor_phone} (caller ID), so you "
                 "already have the caller's phone number — never ask for it. If you need their name "
                 "for the brochure/callback/site-visit, ask for that only."
+            )
+        # Property listings synced from the tenant's own site
+        # (server/project_sync.py). Only the index goes in the prompt - one
+        # short line per project - because prompt text is paid for on every
+        # turn and its size is what drives cold time-to-first-token. Anything
+        # more specific than "what exists" comes from the lookup_project tool
+        # on demand, so the prompt cost stays flat as the catalogue grows.
+        listings_index = config.get("project_index") or ""
+        if listings_index:
+            instructions += (
+                "\n\n# This business's property listings\n"
+                "These are the ONLY projects available. Never invent one, and never quote a "
+                "figure that isn't here or from lookup_project.\n"
+                f"{listings_index}\n"
+                "Prices above are already written the way they should be spoken. For unit sizes, "
+                "exact prices per configuration, RERA numbers, amenities or an overview, call "
+                "lookup_project — don't guess, and don't tell the caller you're looking it up "
+                "unless it takes a moment."
             )
         if config.get("kb_id"):
             _kb_t0 = time.monotonic()

@@ -1585,6 +1585,33 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
 
 
 @function_tool
+async def lookup_project(context: RunContext, project: str) -> str:
+    """Look up full details of one of this business's own property projects —
+    unit types, sizes, prices, RERA number, amenities and an overview.
+
+    Use this whenever the caller asks about a specific project, or asks for
+    detail your instructions only summarise (your prompt lists what exists;
+    this returns the actual numbers). Prefer it over web_search for anything
+    about this business's own listings.
+
+    Args:
+        project: What the caller called it — project name, developer,
+            locality, or "plot"/"apartment". Loosely matched.
+    """
+    account_id = (context.userdata or {}).get("account_id")
+    if not account_id:
+        return "Project lookup isn't available on this call — answer from your instructions."
+    detail = await asyncio.to_thread(db.lookup_project, account_id, project)
+    if not detail:
+        return (
+            f"No project matching '{project}' is listed. Say honestly that it isn't something "
+            "currently available, and offer to note what they're looking for."
+        )
+    logger.info("lookup_project '%s' -> %s chars", project, len(detail))
+    return detail
+
+
+@function_tool
 async def web_search(context: RunContext, query: str) -> str:
     """Search the live web for current or factual information you don't
     already know — news, prices, "what is/who is" facts, anything
