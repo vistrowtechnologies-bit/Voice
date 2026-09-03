@@ -66,95 +66,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Auth/session restoration loader. The old half-width pulse barely moved and
-   looked frozen on a hard refresh. This uses transform-only animations so it
-   stays smooth on low-power devices and does not fake a completion percent. */
-.app-loading-screen {
-  position: relative;
-  isolation: isolate;
-}
-
-.app-loading-screen::before,
-.app-loading-screen::after {
-  position: absolute;
-  z-index: -1;
-  width: 26rem;
-  height: 26rem;
-  border-radius: 999px;
-  content: '';
-  pointer-events: none;
-  filter: blur(80px);
-  opacity: 0.13;
-}
-
-.app-loading-screen::before {
-  top: -12rem;
-  left: -9rem;
-  background: var(--color-primary);
-}
-
-.app-loading-screen::after {
-  right: -10rem;
-  bottom: -14rem;
-  background: var(--color-cyan);
-}
-
-.app-loading-card {
-  backdrop-filter: blur(18px);
-}
-
-.app-loading-signal {
-  position: relative;
-  display: grid;
-  width: 6.75rem;
-  height: 6.75rem;
-  place-items: center;
-}
-
-.app-loading-ring,
+/* Auth/session restoration loader: the real product orb, without extra
+   progress chrome that can look like a second brand mark. */
 .app-loading-orb-shell {
-  position: absolute;
-  border-radius: 999px;
-}
-
-.app-loading-ring {
-  inset: 0;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, transparent);
-}
-
-.app-loading-ring::after {
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  border-top: 2px solid var(--color-primary);
-  border-right: 2px solid transparent;
-  content: '';
-}
-
-.app-loading-ring-outer {
-  animation: app-loader-spin 1.9s linear infinite;
-}
-
-.app-loading-ring-inner {
-  inset: 0.65rem;
-  border-color: color-mix(in srgb, var(--color-cyan) 24%, transparent);
-  animation: app-loader-spin-reverse 1.35s linear infinite;
-}
-
-.app-loading-ring-inner::after {
-  border-top-color: var(--color-cyan);
-}
-
-.app-loading-orb-shell {
-  width: 5.25rem;
-  height: 5.25rem;
+  display: block;
+  width: 7rem;
+  height: 7rem;
   overflow: hidden;
+  border-radius: 999px;
   background: #08060e;
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-primary) 20%, transparent),
-    0 0 34px color-mix(in srgb, var(--color-primary) 34%, transparent),
-    0 12px 34px color-mix(in srgb, var(--color-primary) 24%, transparent);
-  animation: app-loader-breathe 1.8s ease-in-out infinite;
+    0 0 40px color-mix(in srgb, var(--color-primary) 38%, transparent),
+    0 16px 42px color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 
 .app-loading-orb-video {
@@ -162,73 +85,6 @@ body {
   height: 100%;
   object-fit: cover;
   transform: scale(1.5);
-}
-
-.app-loading-wave {
-  display: flex;
-  height: 1.5rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-}
-
-.app-loading-wave span {
-  width: 0.2rem;
-  height: 0.45rem;
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--color-cyan), var(--color-primary));
-  transform-origin: center;
-  animation: app-loader-wave 1s ease-in-out infinite;
-}
-
-.app-loading-wave span:nth-child(2),
-.app-loading-wave span:nth-child(6) { animation-delay: 90ms; }
-.app-loading-wave span:nth-child(3),
-.app-loading-wave span:nth-child(5) { animation-delay: 180ms; }
-.app-loading-wave span:nth-child(4) { animation-delay: 270ms; }
-
-.app-loading-progress span {
-  width: 42%;
-  background: linear-gradient(90deg, transparent, var(--color-primary), var(--color-cyan), transparent);
-  animation: app-loader-progress 1.45s ease-in-out infinite;
-}
-
-@keyframes app-loader-spin {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes app-loader-spin-reverse {
-  to { transform: rotate(-360deg); }
-}
-
-@keyframes app-loader-breathe {
-  0%, 100% { transform: scale(0.96); }
-  50% { transform: scale(1.03); }
-}
-
-@keyframes app-loader-wave {
-  0%, 100% { transform: scaleY(0.65); opacity: 0.55; }
-  50% { transform: scaleY(2.65); opacity: 1; }
-}
-
-@keyframes app-loader-progress {
-  0% { transform: translateX(-115%); }
-  100% { transform: translateX(345%); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .app-loading-ring-outer,
-  .app-loading-ring-inner,
-  .app-loading-orb-shell,
-  .app-loading-wave span,
-  .app-loading-progress span {
-    animation: none;
-  }
-
-  .app-loading-progress span {
-    width: 100%;
-    background: linear-gradient(90deg, var(--color-primary), var(--color-cyan));
-  }
 }
 
 /* One place to make every solid-primary button (dashboard AND the public
