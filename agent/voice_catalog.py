@@ -126,35 +126,27 @@ CATALOG: list[dict] = [
     {"value": "google:pa-IN-Standard-A", "name": "Gurleen (Punjabi)", "gender": "female", "tier": "lite", "force_lang": "pa"},
     {"value": "google:pa-IN-Standard-B", "name": "Armaan (Punjabi)", "gender": "male", "tier": "lite", "force_lang": "pa"},
     # --- Google Chirp 3 HD ---------------------------------------------------
-    # The only Google family the streaming synthesis endpoint accepts, which
-    # makes these the fastest Google voices we can offer: measured 188-346ms
-    # to first audio against 360-670ms for the Standard voices above (which
-    # have to go through StreamAdapter/synthesize) and 1010-1111ms for the
-    # Gemini personas. Same 30 personas exist in all 11 Indian locales; two
-    # are exposed per language, one of each gender, matching how the Standard
-    # tier is laid out. Tier is "standard" pending a real cost check — see the
-    # note in _VOICE_TIER_MULTIPLIERS about not assuming cost scales with
-    # voice choice.
-    {"value": "google:hi-IN-Chirp3-HD-Aoede", "name": "Kiara (Hindi) HD", "gender": "female", "tier": "standard", "force_lang": "hi"},
-    {"value": "google:hi-IN-Chirp3-HD-Achird", "name": "Advik (Hindi) HD", "gender": "male", "tier": "standard", "force_lang": "hi"},
-    {"value": "google:en-IN-Chirp3-HD-Aoede", "name": "Zoya (English) HD", "gender": "female", "tier": "standard", "force_lang": "en"},
-    {"value": "google:en-IN-Chirp3-HD-Achird", "name": "Neil (English) HD", "gender": "male", "tier": "standard", "force_lang": "en"},
-    {"value": "google:mr-IN-Chirp3-HD-Aoede", "name": "Sanika (Marathi) HD", "gender": "female", "tier": "standard", "force_lang": "mr"},
-    {"value": "google:mr-IN-Chirp3-HD-Achird", "name": "Atharv (Marathi) HD", "gender": "male", "tier": "standard", "force_lang": "mr"},
-    {"value": "google:ta-IN-Chirp3-HD-Aoede", "name": "Kavya (Tamil) HD", "gender": "female", "tier": "standard", "force_lang": "ta"},
-    {"value": "google:ta-IN-Chirp3-HD-Achird", "name": "Surya (Tamil) HD", "gender": "male", "tier": "standard", "force_lang": "ta"},
-    {"value": "google:te-IN-Chirp3-HD-Aoede", "name": "Sahasra (Telugu) HD", "gender": "female", "tier": "standard", "force_lang": "te"},
-    {"value": "google:te-IN-Chirp3-HD-Achird", "name": "Teja (Telugu) HD", "gender": "male", "tier": "standard", "force_lang": "te"},
-    {"value": "google:kn-IN-Chirp3-HD-Aoede", "name": "Chaitra (Kannada) HD", "gender": "female", "tier": "standard", "force_lang": "kn"},
-    {"value": "google:kn-IN-Chirp3-HD-Achird", "name": "Bhuvan (Kannada) HD", "gender": "male", "tier": "standard", "force_lang": "kn"},
-    {"value": "google:ml-IN-Chirp3-HD-Aoede", "name": "Anjali (Malayalam) HD", "gender": "female", "tier": "standard", "force_lang": "ml"},
-    {"value": "google:ml-IN-Chirp3-HD-Achird", "name": "Adhil (Malayalam) HD", "gender": "male", "tier": "standard", "force_lang": "ml"},
-    {"value": "google:gu-IN-Chirp3-HD-Aoede", "name": "Krisha (Gujarati) HD", "gender": "female", "tier": "standard", "force_lang": "gu"},
-    {"value": "google:gu-IN-Chirp3-HD-Achird", "name": "Jainam (Gujarati) HD", "gender": "male", "tier": "standard", "force_lang": "gu"},
-    {"value": "google:bn-IN-Chirp3-HD-Aoede", "name": "Rupa (Bengali) HD", "gender": "female", "tier": "standard", "force_lang": "bn"},
-    {"value": "google:bn-IN-Chirp3-HD-Achird", "name": "Sohom (Bengali) HD", "gender": "male", "tier": "standard", "force_lang": "bn"},
-    {"value": "google:pa-IN-Chirp3-HD-Aoede", "name": "Jasleen (Punjabi) HD", "gender": "female", "tier": "standard", "force_lang": "pa"},
-    {"value": "google:pa-IN-Chirp3-HD-Achird", "name": "Ekam (Punjabi) HD", "gender": "male", "tier": "standard", "force_lang": "pa"},
+    # The only Google family the streaming endpoint accepts, which makes these
+    # the fastest Google voices available: ~360ms to first audio against
+    # 483ms for the Standard voices below (which must go through
+    # StreamAdapter/synthesize) and ~1036ms for the Gemini personas.
+    #
+    # No Chirp 3 voice ID carries more than one language code — checked
+    # against Google's own list_voices, 0 of them do. But all 30 personas
+    # exist in all 10 Indian locales, so a persona survives a language switch
+    # by swapping the locale prefix and keeping the name:
+    # hi-IN-Chirp3-HD-Aoede -> mr-IN-Chirp3-HD-Aoede. That is what the
+    # "google:chirp3:<Persona>" value means, and _build_tts resolves it
+    # against the call's current language. The older per-locale form
+    # ("google:hi-IN-Chirp3-HD-Aoede") still works if anything holds one, it
+    # is simply not offered in the menu.
+    {"value": "google:chirp3:Aoede", "name": "Kiara HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
+    {"value": "google:chirp3:Achernar", "name": "Myra HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
+    {"value": "google:chirp3:Callirrhoe", "name": "Sana HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
+    {"value": "google:chirp3:Achird", "name": "Advik HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
+    {"value": "google:chirp3:Algenib", "name": "Rehan HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
+    {"value": "google:chirp3:Alnilam", "name": "Vivaan HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
+
     # --- Lite (Sarvam bulbul:v2) — REMOVED 2026-09-04 ------------------------
     # Sarvam retired the model: every request now returns
     # "400: Model 'bulbul:v2' has been deprecated. Please use 'bulbul:v3'".
@@ -360,6 +352,27 @@ _ALL_LANGUAGE_LABELS = {**LANGUAGE_LABELS, **GOOGLE_TTS_LANGUAGES}
 _GOOGLE_PREFIXES = ("google:", "google31:")
 
 
+# Chirp 3 HD personas exist in exactly these Indian locales (verified against
+# Google's list_voices: all 30 personas are present in all ten). This is the
+# real switchable range for a "google:chirp3:<Persona>" voice.
+CHIRP3_PERSONA_PREFIX = "google:chirp3:"
+CHIRP3_LANGUAGES = ["hi-IN", "en-IN", "mr-IN", "ta-IN", "te-IN", "kn-IN", "ml-IN", "gu-IN", "bn-IN", "pa-IN"]
+
+
+def chirp3_persona(value: str) -> str | None:
+    """Persona name for a "google:chirp3:<Persona>" value, else None."""
+    if not value.startswith(CHIRP3_PERSONA_PREFIX):
+        return None
+    return value[len(CHIRP3_PERSONA_PREFIX):] or None
+
+
+def chirp3_voice_name(persona: str, language: str) -> str:
+    """Google voice id for this persona in this language, falling back to
+    Hindi for a language Chirp 3 does not cover."""
+    lang = language if language in CHIRP3_LANGUAGES else "hi-IN"
+    return f"{lang}-Chirp3-HD-{persona}"
+
+
 def languages_for(entry: dict) -> tuple[list[str], bool]:
     """(language codes this voice speaks, can_switch_mid_call).
 
@@ -369,6 +382,11 @@ def languages_for(entry: dict) -> tuple[list[str], bool]:
     the engine - Gemini and Sarvam do not overlap cleanly.
     """
     value = entry.get("value", "")
+    if value.startswith(CHIRP3_PERSONA_PREFIX):
+        # One persona, ten Indian locales — not Gemini's 87. Falling through
+        # to the branch below would claim the Gemini range for a voice that
+        # does not have it.
+        return list(CHIRP3_LANGUAGES), True
     if value.startswith(_GOOGLE_PREFIXES):
         part = value.split(":", 1)[1]
         code = "-".join(part.split("-")[:2])
@@ -434,7 +452,9 @@ def public_entry(entry: dict, allowed_tiers: set[str]) -> dict:
         # badge should not undersell the voice by counting only what we could
         # enumerate without guessing.
         "languageCount": (
-            GOOGLE_TTS_TOTAL_LOCALES
+            len(_langs)
+            if entry.get("value", "").startswith(CHIRP3_PERSONA_PREFIX)
+            else GOOGLE_TTS_TOTAL_LOCALES
             if _can_switch and entry.get("value", "").startswith(_GOOGLE_PREFIXES)
             else len(_langs)
         ),

@@ -1442,6 +1442,14 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             )
             provider = "google-multilingual-31" if google_model == _GOOGLE_31_MODEL else "google-multilingual"
             return _google_fallback_tts(google_tts, google_model_fallback, google_model, reply_language, tone_name), provider
+        # "google:chirp3:<Persona>" is a persona, not a voice id — resolve it
+        # against the language this call opens in. The persona survives a
+        # mid-call switch by swapping only the locale prefix (see
+        # switch_reply_language), which is what makes one Chirp 3 voice cover
+        # all ten Indian languages.
+        _chirp_persona = voice_catalog.chirp3_persona(speaker)
+        if _chirp_persona:
+            voice_name = voice_catalog.chirp3_voice_name(_chirp_persona, reply_language)
         voice_language = "-".join(voice_name.split("-")[:2])
         # Real streaming, same as the Gemini-persona branch above — despite
         # its name, PatchedGeminiTTS's fix (aclose() race + the Cancelled/499
@@ -1507,7 +1515,13 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         )
         # max_retry_per_tts=5: see _google_fallback_tts docstring above —
         # real Google-side 504s need real retries, not a single attempt.
-        return TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=5), "google-native"
+        _adapter = TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=5)
+        # FallbackAdapter has no update_options, so a mid-call language switch
+        # cannot reach the Google TTS through it. Stash the primary: this is
+        # the only handle switch_reply_language has for swapping a Chirp 3
+        # persona's locale without tearing down the session's TTS.
+        _adapter._vistrow_primary = google_tts
+        return _adapter, "google-native"
     # A Google or ElevenLabs voice selected with no credentials/key
     # configured falls back to the default Sarvam speaker rather than
     # passing the raw "google:..."/"elevenlabs:..." string through as an
@@ -2996,6 +3010,36 @@ class RealEstateAgent(Agent):
                 # for the rest of the call.
                 if candidate in ELEVENLABS_SUPPORTED_LANGUAGES:
                     self.tts.update_options(language=candidate.split("-")[0])
+            elif self._tts_provider == "google-native" and voice_catalog.chirp3_persona(self._voice):
+                # A Chirp 3 persona follows the caller by changing locale and
+                # keeping its name — hi-IN-Chirp3-HD-Aoede becomes
+                # mr-IN-Chirp3-HD-Aoede, the same person speaking Marathi.
+                # No Chirp 3 voice id carries two language codes (0 of them
+                # do, per Google's list_voices), so this swap IS the mechanism;
+                # there is no single id to switch to.
+                #
+                # Only the ten locales Chirp 3 actually covers. A caller who
+                # moves to something outside that set keeps the current voice
+                # rather than being handed a silently wrong one — the reply
+                # language still changes, only the voice cannot follow.
+                _persona = voice_catalog.chirp3_persona(self._voice)
+                if candidate in voice_catalog.CHIRP3_LANGUAGES:
+                    _primary = getattr(self.tts, "_vistrow_primary", None)
+                    if _primary is None:
+                        logger.warning("chirp3 language switch: no primary TTS handle")
+                    else:
+                        try:
+                            _primary.update_options(
+                                language=candidate,
+                                voice_name=voice_catalog.chirp3_voice_name(_persona, candidate),
+                            )
+                        except Exception:
+                            logger.warning("chirp3 language switch failed", exc_info=True)
+                else:
+                    logger.info(
+                        "chirp3 persona %s does not cover %s — keeping the current voice",
+                        _persona, candidate,
+                    )
             elif self._tts_provider in ("google-multilingual", "google-multilingual-31"):
                 # google.TTS.update_options rebuilds its VoiceSelectionParams,
                 # so resend persona + model with the new language. Otherwise
@@ -3483,9 +3527,9 @@ async def entrypoint(ctx: JobContext) -> None:
     # shutdown callback below. Declining here (no session ever built) is what
     # actually enforces the cap; the campaign dialer's own pre-check just
     # avoids placing outbound calls that would land here anyway.
-    if not db.try_start_call(ctx.room.name, cfg.get("account_id")):
+    if not db.try_start_call(ctx.room.name, cfg.get("account_id"), cfg):
         logger.info(
-            "concurrent-call limit reached for account_id=%s — declining room %s",
+            "call admission denied (plan, configuration, capacity or database) for account_id=%s — declining room %s",
             cfg.get("account_id"), ctx.room.name,
         )
         await _hang_up(ctx.room.name)

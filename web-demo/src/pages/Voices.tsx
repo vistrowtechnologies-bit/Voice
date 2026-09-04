@@ -308,8 +308,8 @@ export function Voices() {
   // Chirp 3 HD gets its own group below — without splitting it out, 20 voices
   // land inside the generic Standard group and disappear behind its
   // "show more" collapse.
-  const chirp3Hd = () => stableByTier('standard').filter((v) => v.value.includes('Chirp3'))
-  const standardSolo = () => stableByTier('standard').filter((v) => !v.value.includes('Chirp3'))
+  const chirp3Hd = () => stableByTier('standard').filter((v) => v.value.toLowerCase().includes('chirp3'))
+  const standardSolo = () => stableByTier('standard').filter((v) => !v.value.toLowerCase().includes('chirp3'))
   const previewVoices = () => (data?.voices ?? []).filter((v) => v.preview && matchesSearch(v))
   const multilingualPremium = () => stableByTier('premium').filter((v) => v.multilingual)
   const premiumSolo = () => stableByTier('premium').filter((v) => !v.multilingual)

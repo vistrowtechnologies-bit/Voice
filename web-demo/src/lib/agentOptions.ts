@@ -110,7 +110,7 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
     note: voices.find((v) => v.tier === tier)?.tierNote ?? '',
     // Chirp 3 HD is split into its own group below, so keep it out of the
     // generic Standard group rather than listing every voice twice.
-    voices: voices.filter((v) => v.tier === tier && !v.preview && !v.value.includes('Chirp3')),
+    voices: voices.filter((v) => v.tier === tier && !v.preview && !v.value.toLowerCase().includes('chirp3')),
   })),
   {
     key: 'next-preview',
@@ -128,7 +128,7 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
     key: 'chirp3-hd',
     label: 'Vistrow HD',
     note: '1x credits · fastest Google voices · one language each',
-    voices: voices.filter((v) => v.value.includes('Chirp3') && !v.preview),
+    voices: voices.filter((v) => v.value.toLowerCase().includes('chirp3') && !v.preview),
   },
   {
     key: 'native-lite',
