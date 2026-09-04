@@ -3,7 +3,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
-import { PLANS } from '../../lib/plans'
+import { PLANS, SHARED_PLAN_FEATURES, planHighlights } from '../../lib/plans'
 
 const FAQ = [
   {
@@ -16,7 +16,7 @@ const FAQ = [
   },
   {
     q: 'Can I bring my own phone number?',
-    a: 'Yes. Point your existing number at Vistrow for inbound, or get one from us. The web call widget needs no number at all.',
+    a: 'You can use a compatible provider and number after we confirm the connection setup. Carrier usage and number rental are separate from AI credits. The web call widget needs no phone number.',
   },
   {
     q: 'Is there a free way to try it?',
@@ -68,13 +68,21 @@ export function Pricing() {
               <p className="mt-3 text-3xl font-bold">{plan.price}<span className="text-sm font-normal text-text-muted"> / month</span></p>
               <p className="mt-2 text-sm text-text-muted">{plan.credits} · {plan.description}</p>
               <ul className="mt-6 flex flex-1 flex-col gap-2.5">
-                {plan.features.map((feat) => <li key={feat} className="flex items-start gap-2 text-sm text-text-muted"><Icon name="check_circle" className="mt-0.5 text-[16px] text-cyan" />{feat}</li>)}
+                {planHighlights(plan).map((feat) => <li key={feat} className="flex items-start gap-2 text-sm text-text-muted"><Icon name="check_circle" className="mt-0.5 text-[16px] text-cyan" />{feat}</li>)}
               </ul>
               <p className="mt-5 text-xs text-text-muted">Not included: {plan.lockedFeatures?.join(', ') || 'Usage beyond your allowances; separately billed telephony'}.</p>
               <NavLink to="/contact" className="mt-6 rounded-full border border-primary px-5 py-3 text-center text-sm font-bold text-primary">Discuss {plan.name}</NavLink>
             </div>
           ))}
         </div>
+        <details className="mt-6 rounded-2xl border border-border bg-surface p-6">
+          <summary className="cursor-pointer font-semibold">Included in every plan</summary>
+          <ul className="mt-4 grid gap-3 text-sm text-text-muted sm:grid-cols-2">
+            {SHARED_PLAN_FEATURES.map((feature) => <li key={feature}>{feature}</li>)}
+          </ul>
+          <p className="mt-4 text-sm text-text-muted">Basic inbound calling requires a configured, supported number. Advanced inbound routing and outbound campaigns require Growth or Scale. Telephony is billed separately.</p>
+        </details>
+        <p className="mt-5 text-center text-sm text-text-muted">Activation is currently assisted by our team. Online checkout is not yet available.</p>
         <div className="mt-8 flex flex-wrap justify-center gap-3"><NavLink to="/signup" className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-white">Join public beta</NavLink><NavLink to="/contact" className="rounded-full border border-border px-6 py-3 text-sm font-bold">Discuss call volume</NavLink></div>
       </section>
 

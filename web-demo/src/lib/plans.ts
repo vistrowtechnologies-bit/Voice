@@ -75,7 +75,7 @@ export const PLANS: Plan[] = [
     name: 'Growth',
     key: 'growth',
     price: '₹5,999',
-    description: 'For teams running inbound and outbound campaigns across India.',
+    description: 'For teams automating inbound and outbound campaigns.',
     priceInr: 5999,
     creditsNum: 1000,
     credits: '1,000 credits/mo',
@@ -131,3 +131,10 @@ export const PLANS: Plan[] = [
     ],
   },
 ]
+
+// Keep comparison cards focused on differences without hiding included capabilities.
+export const SHARED_PLAN_FEATURES = PLANS[0].features.filter((feature) =>
+  PLANS.every((plan) => plan.features.includes(feature)),
+)
+export const planHighlights = (plan: Plan) =>
+  plan.features.filter((feature) => !SHARED_PLAN_FEATURES.includes(feature))

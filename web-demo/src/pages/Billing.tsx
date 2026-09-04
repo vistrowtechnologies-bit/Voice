@@ -7,7 +7,7 @@ import { SectionCard } from '../components/ui/SectionCard'
 import { fetchBilling, fetchSubscription, startCheckout, startTopup, verifyTopupPayment } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { CONTACT_EMAIL } from '../lib/marketingContent'
-import { ANNUAL_MONTHS_CHARGED, PLANS, PRICING_FINALIZED } from '../lib/plans'
+import { ANNUAL_MONTHS_CHARGED, PLANS, PRICING_FINALIZED, SHARED_PLAN_FEATURES, planHighlights } from '../lib/plans'
 import type { BillingSummary, Invoice } from '../lib/types'
 
 // Razorpay's Checkout.js attaches itself to window - loaded on demand (only
@@ -56,7 +56,8 @@ export function Billing() {
   const [billing, setBilling] = useState<BillingSummary | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [razorpayConfigured, setRazorpayConfigured] = useState(false)
-  const [cycle, setCycle] = useState<'monthly' | 'annual'>('monthly')
+  // Annual offers remain unavailable until monthly grants on annual subscriptions are verified.
+  const [cycle] = useState<'monthly' | 'annual'>('monthly')
   const [busyPlan, setBusyPlan] = useState<string | null>(null)
   const [topupOpen, setTopupOpen] = useState(false)
   const [topupCredits, setTopupCredits] = useState(100)
@@ -75,7 +76,7 @@ export function Billing() {
 
   useEffect(refetch, [])
 
-  const usedPct = billing ? Math.min(100, Math.round((billing.creditsUsed / billing.creditsTotal) * 100)) : 0
+  const usedPct = billing && billing.creditsTotal > 0 ? Math.max(0, Math.min(100, Math.round((billing.creditsUsed / billing.creditsTotal) * 100))) : 0
   const currentPlanKey = billing?.plan || (user?.plan || 'starter').toLowerCase()
   const currentPlanName = PLANS.find((p) => p.key === currentPlanKey)?.name || 'Starter'
   // Must match server/token_api.py's billing_topup exactly: plan price over
@@ -160,17 +161,17 @@ export function Billing() {
                   <Icon name="toll" className="text-[20px]" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Credits this cycle</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Remaining workspace credits</p>
                   <p className="text-2xl font-bold">
                     {billing?.creditsRemaining ?? '-'}
-                    <span className="ml-1 text-sm font-normal text-text-muted">/ {billing?.creditsTotal ?? '-'} available</span>
+                    <span className="ml-1 text-sm font-normal text-text-muted">of {billing?.creditsTotal ?? '-'} allocated</span>
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setTopupOpen(true)}
                 disabled={!razorpayConfigured || !PRICING_FINALIZED}
-                title={!PRICING_FINALIZED ? 'Top-ups open once introductory pricing is finalized' : undefined}
+                title={!razorpayConfigured ? 'Online payments are unavailable. Contact us for billing assistance.' : undefined}
                 className="rounded-lg border border-cyan/40 px-3 py-1.5 text-xs font-bold text-cyan hover:bg-cyan/10 disabled:opacity-40"
               >
                 + Buy credits
@@ -179,9 +180,14 @@ export function Billing() {
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-high">
               <div
                 className={`h-full rounded-full ${usedPct > 85 ? 'bg-destructive' : 'bg-cyan'}`}
-                style={{ width: `${Math.max(2, usedPct)}%` }}
+                style={{ width: `${usedPct}%` }}
               />
             </div>
+            {billing && billing.creditsTotal !== currentPlanCredits && (
+              <p className="mt-3 rounded-lg border border-border p-3 text-xs text-text-muted">
+                This workspace has a custom allocation of {billing.creditsTotal.toLocaleString()} credits, separate from the standard {currentPlanName} allowance of {currentPlanCredits.toLocaleString()} credits/month. Testing and manually allocated workspaces can differ from paid plans. Your existing balance is unchanged.
+              </p>
+            )}
             <p className="mt-2 text-xs text-text-muted">
               {billing ? `${billing.minutesUsed} call minutes used this cycle. Final credits include call type, voice tier, and model tier.` : 'Loading usage…'}
             </p>
@@ -189,14 +195,14 @@ export function Billing() {
               <p className="mt-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
                 {billing.overageCredits} credits over plan this cycle
                 {PRICING_FINALIZED
-                  ? ` · ~₹${billing.overageAmountInr} will be added to your next invoice (${billing.overageRateInr}/credit overage rate)`
+                  ? ` · estimated ₹${billing.overageAmountInr} at ₹${billing.overageRateInr}/credit. This estimate is not a payment confirmation or invoice.`
                   : ' · overage pricing is being finalized'}
               </p>
             )}
             {billing && billing.phoneNumberCount > 0 && (
               <p className="mt-1 text-xs text-text-muted">
                 {billing.phoneNumberCount} active phone number{billing.phoneNumberCount === 1 ? '' : 's'}
-                {PRICING_FINALIZED ? ` · ₹${billing.phoneNumberFeesInr}/mo` : ''}
+                {' · Telephony is separate from AI credits. Provider charges and any number rental depend on your setup; contact us to confirm your allocation.'}
               </p>
             )}
           </Card>
@@ -316,23 +322,7 @@ export function Billing() {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold">Available plans</h2>
             <div className="flex items-center gap-3">
-              {PRICING_FINALIZED && (
-                <div className="flex items-center rounded-full border border-border p-0.5 text-xs font-bold">
-                  <button
-                    onClick={() => setCycle('monthly')}
-                    className={`rounded-full px-3 py-1 ${cycle === 'monthly' ? 'bg-primary text-bg' : 'text-text-muted'}`}
-                  >
-                    Monthly
-                  </button>
-                  <button
-                    onClick={() => setCycle('annual')}
-                    className={`rounded-full px-3 py-1 ${cycle === 'annual' ? 'bg-primary text-bg' : 'text-text-muted'}`}
-                  >
-                    Annual · save {Math.round((1 - ANNUAL_MONTHS_CHARGED / 12) * 100)}%
-                  </button>
-                </div>
-              )}
-              <span className="rounded-full border border-border px-3 py-1 text-[11px] text-text-muted">Region · India</span>
+              <span className="text-xs text-text-muted">Monthly pricing · INR</span>
             </div>
           </div>
           {!PRICING_FINALIZED ? (
@@ -342,8 +332,8 @@ export function Billing() {
           ) : (
             !razorpayConfigured && (
               <p className="mb-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-2 text-xs text-amber">
-                Online checkout isn't configured on this server yet — plans below are informational until Razorpay
-                keys are added.
+                Online payments and self-service plan changes are currently unavailable. Your existing access and credits are unchanged.{' '}
+                <a className="underline" href={`mailto:${CONTACT_EMAIL}?subject=Billing assistance`}>Contact us for activation or billing assistance.</a>
               </p>
             )
           )}
@@ -407,7 +397,7 @@ export function Billing() {
                       {plan.credits}
                     </div>
                     <ul className="mt-3 flex flex-col gap-1.5 text-xs text-text-muted">
-                      {plan.features.map((f) => (
+                      {planHighlights(plan).map((f) => (
                         <li key={f} className="flex items-center gap-1.5">
                           <Icon name="check" className="text-[14px] text-cyan" />
                           {f}
@@ -457,6 +447,14 @@ export function Billing() {
               )
             })}
           </div>
+
+          <details className="mt-4 rounded-xl border border-border bg-surface p-5">
+            <summary className="cursor-pointer font-semibold">Included in every plan</summary>
+            <ul className="mt-4 grid gap-2 text-sm text-text-muted sm:grid-cols-2">
+              {SHARED_PLAN_FEATURES.map((feature) => <li key={feature}>{feature}</li>)}
+            </ul>
+            <p className="mt-4 text-xs text-text-muted">Basic inbound phone calls use a configured, supported number. Advanced inbound routing and outbound campaigns require Growth or Scale. Telephony charges are separate.</p>
+          </details>
 
           <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-border bg-surface p-5 sm:flex-row sm:items-center">
             <div className="flex items-start gap-3">
@@ -535,9 +533,9 @@ export function Billing() {
           </div>
         )}
 
-        <SectionCard title="Invoices">
+        <SectionCard title="Payment history" subtitle="Includes payment attempts and billing records. Only records marked Paid confirm a completed payment; pending attempts are not paid invoices.">
           {invoices.length === 0 ? (
-            <EmptyState icon="receipt_long" text="No invoices yet." />
+            <EmptyState icon="receipt_long" text="No payment activity yet." />
           ) : (
             <div className="divide-y divide-border">
               {invoices.map((inv) => (
@@ -564,7 +562,7 @@ export function Billing() {
                             : 'bg-amber/15 text-amber'
                       }`}
                     >
-                      {inv.status === 'pending_next_cycle' ? 'next invoice' : inv.status}
+                      {inv.status === 'created' ? 'Payment not completed' : inv.status === 'pending_next_cycle' ? 'Pending billing' : inv.status}
                     </span>
                   </div>
                 </div>
