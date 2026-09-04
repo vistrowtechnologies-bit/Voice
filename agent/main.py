@@ -1428,6 +1428,29 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             voice_name=voice_name,
             credentials_info=_GOOGLE_CREDENTIALS,
             speaking_rate=tone.get("pace", 1.0),
+            # model_name="chirp_3" here does NOT mean "use Chirp 3". It is the
+            # only value the plugin accepts that leaves
+            # VoiceSelectionParams.model_name UNSET, which is what a Google
+            # Cloud Standard voice needs — the voice name alone selects it.
+            #
+            # Without this the plugin's own default takes over: not given a
+            # model, it picks "gemini-2.5-flash-tts" and stamps that onto
+            # voice_params.model_name alongside name="hi-IN-Standard-A". That
+            # pairs the Gemini model with a Cloud Standard voice, which Gemini
+            # TTS does not accept (it takes persona voices — Kore, Charon), so
+            # every request fails, TtsFallbackAdapter burns its five retries,
+            # and the caller silently gets the Sarvam safety net instead of the
+            # voice the operator chose. Confirmed on call 836: agent 13 was set
+            # to google:hi-IN-Standard-A and the whole call recorded
+            # Sarvam/bulbul:v3 as its TTS provider, while google:kore — a
+            # Gemini persona, which IS a valid pairing — served 53 of 53 calls
+            # from Google.
+            #
+            # Only line 161 and 171 of the plugin's __init__ read this value:
+            # 161 is the skip we want, and 171 only supplies a default voice
+            # name when none was given, which never applies here. Nothing in
+            # the streaming path branches on the model.
+            model_name="chirp_3",
         )
         # Locale-specific Google Standard voices are not Gemini personas, so
         # 3.1 cannot preserve their identity. Keep their existing gender-
