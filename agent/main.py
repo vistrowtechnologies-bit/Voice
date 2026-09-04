@@ -1042,6 +1042,12 @@ _GOOGLE_VOICE_ENABLED = _GOOGLE_CREDENTIALS is not None and _env_enabled(
 )
 
 
+# Substring that marks a Google Chirp 3 HD voice name (e.g.
+# "hi-IN-Chirp3-HD-Aoede"). Matched case-insensitively, the same way
+# the Google plugin's own model auto-detection does it.
+_CHIRP3_VOICE_MARKER = "chirp3"
+
+
 def _speech_context_prompt(config: dict) -> str | None:
     """Domain vocabulary handed to Sarvam as a biasing hint at connect time.
 
@@ -1130,15 +1136,36 @@ def _build_stt(speech_context: str | None = None):
     return SttFallbackAdapter([sarvam_stt, google_stt])
 
 
-# bulbul:v3 is ~94% of Sarvam spend by character count (v3's per-character
-# rate is higher than v2's). These bulbul:v2 speakers are offered in the
-# dashboard voice picker as the cheaper "Lite" tier, to let an operator
-# compare quality against v3 before switching. v2 and v3 have entirely
-# separate, non-overlapping speaker rosters, so picking the right TTS model
-# per speaker (below) is required, not optional. Full v2 roster per Sarvam/
-# LiveKit's own plugin docs — do not add a name here without confirming it
-# against that roster first, since an unlisted name 404s against v2.
-_SARVAM_V2_SPEAKERS = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
+# bulbul:v2 was retired by Sarvam — every request returns "400: Model
+# 'bulbul:v2' has been deprecated. Please use 'bulbul:v3'". Its six speakers
+# are gone from the catalog (see voice_catalog.py), but a stale agent or
+# account-voice-menu row can still name one, and sarvam.TTS RAISES at
+# construction for a speaker the model does not know ("Speaker 'anushka' is
+# not compatible with model 'bulbul:v3'"), which would kill the call before
+# a word is spoken. So the speaker is validated against the plugin's own live
+# roster and dropped to a gender-matched default if it is not on it — the
+# rosters do not overlap, so an old v2 name can never be re-pointed directly.
+try:
+    from livekit.plugins.sarvam.tts import MODEL_SPEAKER_COMPATIBILITY as _SARVAM_ROSTER
+except Exception:  # plugin internals are not API — never break startup over it
+    _SARVAM_ROSTER = {}
+
+_SARVAM_V3_DEFAULTS = {"male": "shubh", "female": "ritu"}
+
+
+def _sarvam_v3_speaker(speaker: str, gender: str | None = None) -> str:
+    roster = _SARVAM_ROSTER.get("bulbul:v3") or {}
+    allowed = set(roster.get("all") or [])
+    if not allowed:
+        allowed = set(roster.get("male") or []) | set(roster.get("female") or [])
+    if not allowed or speaker in allowed:
+        return speaker
+    replacement = _SARVAM_V3_DEFAULTS["male" if gender == "male" else "female"]
+    logger.warning(
+        "speaker %r is not on the bulbul:v3 roster (retired v2 voice?) — using %r",
+        speaker, replacement,
+    )
+    return replacement
 
 _GOOGLE_VOICE_PREFIX = "google:"
 _GOOGLE_31_VOICE_PREFIX = "google31:"
@@ -1443,15 +1470,29 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         # DO support, chunked per sentence. Measured against Google: raw
         # synthesize 940ms to first audio, StreamAdapter 524ms, versus the
         # streaming endpoint's outright failure.
-        google_tts = StreamAdapter(
-            tts=google.TTS(
+        if _CHIRP3_VOICE_MARKER in voice_name.lower():
+            # Chirp 3 HD is the one Google family the streaming endpoint DOES
+            # accept — it is literally what the error above names. So these
+            # stream natively and skip the StreamAdapter round-trip entirely:
+            # measured 278ms to first audio against 360-670ms for the Standard
+            # voices below. The plugin picks model_name="chirp_3" on its own
+            # from the voice name, so nothing needs passing here.
+            google_tts = PatchedGeminiTTS(
                 language=voice_language,
                 voice_name=voice_name,
                 credentials_info=_GOOGLE_CREDENTIALS,
                 speaking_rate=tone.get("pace", 1.0),
-            ),
-            sentence_tokenizer=tokenize.blingfire.SentenceTokenizer(retain_format=True),
-        )
+            )
+        else:
+            google_tts = StreamAdapter(
+                tts=google.TTS(
+                    language=voice_language,
+                    voice_name=voice_name,
+                    credentials_info=_GOOGLE_CREDENTIALS,
+                    speaking_rate=tone.get("pace", 1.0),
+                ),
+                sentence_tokenizer=tokenize.blingfire.SentenceTokenizer(retain_format=True),
+            )
         # Locale-specific Google Standard voices are not Gemini personas, so
         # 3.1 cannot preserve their identity. Keep their existing gender-
         # matched Sarvam safety net; the same-persona 2.5 <-> 3.1 routing
@@ -1478,12 +1519,11 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     )
     sarvam_tts = sarvam.TTS(
         target_language_code=reply_language,
-        # bulbul:v2 speakers (added to compare quality/cost against v3,
-        # which is ~94% of Sarvam spend per usage — see
-        # _SARVAM_V2_SPEAKERS) only work with the v2 model; every other
-        # speaker uses the current default, v3.
-        model="bulbul:v2" if sarvam_speaker in _SARVAM_V2_SPEAKERS else "bulbul:v3",
-        speaker=sarvam_speaker,
+        # v2 is retired vendor-side; v3 is the only model left.
+        model="bulbul:v3",
+        speaker=_sarvam_v3_speaker(
+            sarvam_speaker, (voice_catalog.get_voice(speaker) or {}).get("gender")
+        ),
         **tone,
     )
     if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:

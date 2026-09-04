@@ -97,22 +97,21 @@ export const voiceLabel = (voice: string) =>
 // Tier display order in the picker's optgroups - premium tiers first.
 export const VOICE_TIER_ORDER = ['premium', 'standard', 'lite'] as const
 
-// Lite voices share the same 0.5x billing tier, but the picker keeps Sarvam
-// v2 and Google Cloud voices in separate groups so operators can deliberately
-// choose the provider/voice family they want to test.
+// Group notes must state the REAL multiplier. These were hardcoded "0.5x"
+// while calls_db.py bills economy at 0.75x and premium at 2x, so the picker
+// understated Lite by a third and, because google:kore/charon are premium
+// voices that also carry multilingual, understated Mira and Arin by 4x.
+// voice_catalog.py's own tier meta was right all along; these strings simply
+// drifted from it.
 export const voicePickerGroups = (voices: VoiceEntry[]) => [
   ...VOICE_TIER_ORDER.filter((tier) => tier !== 'lite').map((tier) => ({
     key: tier,
     label: voices.find((v) => v.tier === tier)?.tierLabel ?? tier,
     note: voices.find((v) => v.tier === tier)?.tierNote ?? '',
-    voices: voices.filter((v) => v.tier === tier && !v.preview),
+    // Chirp 3 HD is split into its own group below, so keep it out of the
+    // generic Standard group rather than listing every voice twice.
+    voices: voices.filter((v) => v.tier === tier && !v.preview && !v.value.includes('Chirp3')),
   })),
-  {
-    key: 'sarvam-lite',
-    label: 'Vistrow Lite v2',
-    note: '0.5x credits · multilingual',
-    voices: voices.filter((v) => v.tier === 'lite' && !v.value.startsWith('google:') && !v.value.startsWith('google31:')),
-  },
   {
     key: 'next-preview',
     label: 'Vistrow Next Preview',
@@ -120,15 +119,21 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
     voices: voices.filter((v) => v.preview),
   },
   {
-    key: 'multilingual-lite',
+    key: 'multilingual',
     label: 'Vistrow Multilingual',
-    note: '0.5x credits · same voice switches languages live',
+    note: '2x credits · same voice switches languages live',
     voices: voices.filter((v) => v.multilingual && !v.preview),
+  },
+  {
+    key: 'chirp3-hd',
+    label: 'Vistrow HD',
+    note: '1x credits · fastest Google voices · one language each',
+    voices: voices.filter((v) => v.value.includes('Chirp3') && !v.preview),
   },
   {
     key: 'native-lite',
     label: 'Vistrow Native',
-    note: '0.5x credits · native Indian languages',
+    note: '0.75x credits · native Indian languages',
     voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
   },
 ]
