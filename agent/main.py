@@ -653,9 +653,25 @@ _FEMALE_SELF_ID = ("i'm female", "i am female", "main female", "i'm a woman", "i
 # only thing carrying that turn (today's status quo), not a regression. No
 # \b on the Devanagari terms — see emotion.py's comment for why \b silently
 # fails on combining vowel signs in these scripts.
+# What this business sells. A question shaped like this is answered from the
+# catalog or not at all — the web knows about every developer in Pune, and
+# anything it returns would be someone else's stock described as ours.
+_INVENTORY_QUESTION_PATTERN = re.compile(
+    r"\b(project|projects|property|properties|flat|flats|apartment|apartments|"
+    r"villa|villas|plot|plots|bhk|inventory|available|listing|listings)\b|"
+    r"प्रोजेक्ट|प्रॉपर्टी|फ्लैट|अपार्टमेंट|प्लॉट|विला|उपलब्ध|स्कीम|"
+    r"प्रकल्प|मालमत्ता|સ્કીમ|પ્રોજેક્ટ",
+    re.IGNORECASE,
+)
+
 _FACT_LOOKUP_PATTERN = re.compile(
     r"\b(hospital|school|college|nearby|near by|how far|distance|closest|nearest|"
-    r"which (?:project|company|bank|branch|hospital|school)|current price|latest|"
+    # "which project" deliberately NOT here. It is the commonest inventory
+    # question there is, and nudging the model to web-search it is what made
+    # call 842 offer Stella Blue, Mangaldeep 15M and Pristine Prosperia as
+    # "हमारे पास" — four projects belonging to other developers, presented as
+    # this tenant's own stock, RERA-registered and all.
+    r"which (?:company|bank|branch|hospital|school)|current price|latest|"
     r"address of|located)\b|"
     r"अस्पताल|स्कूल|कॉलेज|नज़दीक|नजदीक|पास में|कितनी दूर|नज़दीकी|नजदीकी|कौन सा|कौनसा|"
     r"कहाँ है|कहां है|पता|कीमत",
@@ -2902,7 +2918,13 @@ class RealEstateAgent(Agent):
                 "one. Answering without calling web_search first is fabricating information, which "
                 "actively misleads a real prospect and is explicitly against your instructions."
             )
-            if self._has_web_search and _FACT_LOOKUP_PATTERN.search(text)
+            if (
+                self._has_web_search
+                and _FACT_LOOKUP_PATTERN.search(text)
+                # An inventory question is answered from the catalog, never
+                # from the web — see _INVENTORY_QUESTION_PATTERN.
+                and not (self._has_live_catalog and _INVENTORY_QUESTION_PATTERN.search(text))
+            )
             else ""
         )
         # The recovery the agent did not have on call 825: given nonsense, it

@@ -1777,6 +1777,16 @@ async def lookup_catalog(context: RunContext, query: str) -> str:
     return detail
 
 
+# Mirrors main.py's _INVENTORY_QUESTION_PATTERN, applied to the model's own
+# search query rather than the caller's words.
+_INVENTORY_QUERY_PATTERN = re.compile(
+    r"\b(project|projects|property|properties|flat|flats|apartment|apartments|"
+    r"villa|villas|plot|plots|bhk|inventory|listing|listings|builder|developer)\b|"
+    r"प्रोजेक्ट|प्रॉपर्टी|फ्लैट|अपार्टमेंट|प्लॉट|विला|स्कीम|प्रकल्प",
+    re.IGNORECASE,
+)
+
+
 @function_tool
 async def web_search(context: RunContext, query: str) -> str:
     """Search the live web for current or factual information you don't
@@ -1787,6 +1797,23 @@ async def web_search(context: RunContext, query: str) -> str:
     Args:
         query: A short, specific search query capturing what to look up.
     """
+    # An inventory question is never a web question. Call 842: asked which
+    # projects were available in Pimpri-Chinchwad, the model searched the web
+    # and offered Stella Blue, Mangaldeep 15M, Pristine Prosperia and Kavar as
+    # "हमारे पास" — four other developers' projects presented as this tenant's
+    # own stock, described as RERA-registered. That is worse than inventing
+    # one: it is confidently selling somebody else's inventory.
+    #
+    # Blocked in the tool as well as in the prompt nudge, because the nudge is
+    # advice and this is not allowed to depend on the model taking it.
+    _agent = getattr(context.session, "current_agent", None)
+    if getattr(_agent, "_has_live_catalog", False) and _INVENTORY_QUERY_PATTERN.search(query or ""):
+        return (
+            "Not searching the web for that — it is a question about what THIS business has, "
+            "and the web only knows other companies' listings. Use lookup_catalog instead, and "
+            "if the catalog has nothing matching, say so plainly rather than offering something "
+            "you found elsewhere. Never present a project from outside the catalog as ours."
+        )
     if not TAVILY_API_KEY:
         return "Web search isn't set up right now — answer from what you already know, don't mention this."
     try:
