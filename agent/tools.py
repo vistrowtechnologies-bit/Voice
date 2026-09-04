@@ -16,6 +16,7 @@ from livekit.agents.llm import function_tool
 import db
 from language import (
     ELEVENLABS_SUPPORTED_LANGUAGES,
+    best_match,
     fragment_languages,
     sounds_like,
     GOOGLE_LANGUAGE_NAMES,
@@ -1359,7 +1360,13 @@ async def log_lead(
     if incoming["location"]:
         _agent = getattr(context.session, "current_agent", None)
         _known = list(getattr(_agent, "_catalog_localities", None) or [])
-        if _known and not any(sounds_like(incoming["location"], k) for k in _known):
+        _canonical = best_match(incoming["location"], _known)
+        if _canonical:
+            # Store the locality's real name, not the spelling the recognizer
+            # produced. Otherwise the CRM keeps "बहानीर" for what is Baner and
+            # the same place arrives under a different name every call.
+            incoming["location"] = _canonical
+        elif _known:
             _rejected_location = incoming["location"]
             incoming["location"] = ""
             rejected += (
@@ -1406,6 +1413,11 @@ async def log_lead(
     # rather than assuming the write landed. This is what it should be
     # reasoning from when it picks the next question.
     known = ", ".join(f"{k}={lead_data[k]}" for k in _LEAD_FIELDS if lead_data.get(k))
+    if not changed:
+        # Rejection only, nothing written. Saying "Saved." here would be the
+        # tool itself claiming an action it did not take — the exact thing the
+        # platform rules forbid the model from doing.
+        return f"Nothing was recorded.{rejected}"
     return f"Saved. Known so far — {known}.{rejected}"
 
 

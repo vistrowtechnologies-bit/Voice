@@ -210,6 +210,35 @@ def _words(text: str | None) -> list[str]:
     return [w for w in re.split(r"[\s,.।?!\-]+", text or "") if w]
 
 
+def match_score(a: str | None, b: str | None) -> float:
+    """Best word-pair similarity between two names, 0.0 if nothing compares."""
+    if not a or not b:
+        return 0.0
+    best = 0.0
+    for wa in _words(a):
+        fa = _match_form(wa)
+        if len(fa) < _MIN_NAME_MATCH_CHARS or fa in _NAME_MATCH_STOPWORDS:
+            continue
+        for wb in _words(b):
+            fb = _match_form(wb)
+            if len(fb) < _MIN_NAME_MATCH_CHARS:
+                continue
+            best = max(best, 1.0 if fa == fb else difflib.SequenceMatcher(None, fa, fb).ratio())
+    return best
+
+
+def best_match(text: str | None, candidates: list[str]) -> str | None:
+    """The candidate this text most plausibly names, or None.
+
+    Scored rather than first-past-the-post: "Pimpri Chinchwad" clears the
+    threshold against BOTH "Hinjewadi Rd" and "Pimpri", and taking whichever
+    came first in the list canonicalized it to the wrong locality entirely.
+    """
+    scored = [(match_score(text, c), c) for c in candidates]
+    scored = [(sc, c) for sc, c in scored if sc >= _NAME_MATCH_RATIO]
+    return max(scored)[1] if scored else None
+
+
 def sounds_like(a: str | None, b: str | None) -> bool:
     """Whether two names plausibly refer to the same thing across scripts.
 
