@@ -5982,6 +5982,15 @@ _ECONOMY_VOICE_PREFIXES = ("google:",)
 # Checked ahead of the prefix rules so they bill premium while
 # google:hi-IN-Standard-A and friends stay economy.
 _PREMIUM_VOICES = {"google:kore", "google:charon"}
+# Chirp 3 HD personas ("google:chirp3:<Persona>") share the "google:" prefix
+# with the cheap single-locale voices too, and are likewise a different
+# product: one persona across ten Indian locales, switching mid-call, and the
+# only Google family the streaming endpoint serves. The catalog and the
+# dashboard both price them at the 1x standard tier, so this has to agree —
+# without it the prefix rule below silently billed them economy (0.75x) while
+# the picker promised 1x, which is the same display-vs-billing split that had
+# Mira sitting under a 0.5x label while charging 2x.
+_STANDARD_VOICE_PREFIXES = ("google:chirp3:",)
 # The 3.1 preview is billed at twice Gemini 2.5 Flash TTS, so its explicit
 # test prefix intentionally falls through to the standard 1x credit tier.
 
@@ -6045,6 +6054,9 @@ def voice_tier(voice: str | None) -> str:
         return "standard"
     if voice in _PREMIUM_VOICES or voice.startswith(_PREMIUM_VOICE_PREFIXES):
         return "premium"
+    # Checked before the economy prefix rule, same as _PREMIUM_VOICES above.
+    if voice.startswith(_STANDARD_VOICE_PREFIXES):
+        return "standard"
     if voice.startswith(_ECONOMY_VOICE_PREFIXES) or voice in _ECONOMY_VOICES:
         return "economy"
     return "standard"
