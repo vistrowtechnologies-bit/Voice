@@ -365,6 +365,25 @@ _REPEAT_COMPLAINT_PATTERN = re.compile(
 )
 
 
+# Content-free openers: the caller picking up and inviting you to speak, not
+# telling you anything. Deliberately an exact whole-string match — "जी बोलिए"
+# is an acknowledgement, "जी, Baner mein flat chahiye" is a requirement, and
+# only the first may be dropped.
+_OPENING_ACK_PATTERN = re.compile(
+    r"^(?:\s*(?:जी|हाँ|हां|हा|हैलो|हेलो|नमस्ते|नमस्कार|बोलिए|बोलिये|बताइए|बताइये|"
+    r"hello|hello\?|hi|hey|yes|yeah|yep|ok|okay|ji|haan|namaste|bolo|boliye|bataiye)"
+    r"[\s,.।!?\-]*)+$",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_opening_ack(text: str) -> bool:
+    text = (text or "").strip()
+    # Length cap as a second guard: anything long enough to carry a
+    # requirement is not an acknowledgement no matter what it starts with.
+    return bool(text) and len(text) <= 40 and bool(_OPENING_ACK_PATTERN.match(text))
+
+
 def _foreign_indic_scripts(text: str, expected: str) -> set[str]:
     """Indic scripts present in the text that are not the expected one."""
     found: set[str] = set()
@@ -2249,6 +2268,30 @@ class RealEstateAgent(Agent):
         # Recomputed EVERY turn (not just when true) so a single bad
         # transcript cannot leave later, good facts marked unconfirmed.
         # Read by log_lead in tools.py when it decides a fact's status.
+        # Call 834 opened with the caller saying "जी बोलिए।" while Mira's
+        # scripted line was still playing. session.say() returns once the line
+        # is QUEUED, not once it has been heard, so that turn reached the LLM
+        # and produced a SECOND opening — "जी, कृपया बताएं कि आप किस" — which
+        # was then cut off mid-sentence. The caller heard the agent start
+        # twice and talk over itself before the call had really begun.
+        #
+        # Only the opening is guarded, and only for a content-free
+        # acknowledgement: a caller who says something real over the greeting
+        # ("Baner mein flat chahiye") still gets answered, and if the greeting
+        # has already finished the agent is not speaking and this never fires.
+        if not _userdata.get("opening_ack_checked"):
+            _userdata["opening_ack_checked"] = True
+            _still_greeting = (
+                getattr(self.session, "agent_state", None) == "speaking"
+                or bool(_userdata.get("agent_speaking"))
+            )
+            if _still_greeting and _looks_like_opening_ack(text):
+                logger.info(
+                    "caller acknowledged over the opening line — letting the greeting "
+                    "finish instead of generating a second one: %r", text,
+                )
+                raise StopResponse()
+
         _script_anomaly = _transcript_script_anomaly(text, self._reply_language)
         _transcript_suspect = _script_anomaly == "garbled"
         _userdata["turn_transcript_suspect"] = _transcript_suspect
