@@ -365,21 +365,62 @@ _REPEAT_COMPLAINT_PATTERN = re.compile(
 )
 
 
-def _transcript_looks_misrecognized(text: str, reply_language: str) -> bool:
-    """Whether this turn was probably assigned to the wrong language by STT.
+def _foreign_indic_scripts(text: str, expected: str) -> set[str]:
+    """Indic scripts present in the text that are not the expected one."""
+    found: set[str] = set()
+    for ch in text or "":
+        code = ord(ch)
+        for script, (lo, hi) in _SCRIPT_RANGES.items():
+            if lo <= code <= hi:
+                if script != expected:
+                    found.add(script)
+                break
+    return found
 
-    Deliberately narrow: only an Indic script that is not the current
-    language's own script counts. Latin is excluded outright — Hinglish
-    code-switching is constant and entirely legitimate.
+
+def _transcript_script_anomaly(text: str, reply_language: str) -> str | None:
+    """Classify a turn by how its script relates to the language being spoken.
+
+    Two anomalies, needing OPPOSITE handling, which an earlier version of this
+    conflated into one boolean and got wrong on call 834:
+
+    "garbled" — the WHOLE turn came back in another Indic script and is short.
+    Call 825's "ಹ್ಞೂ. ನೀವು ಎಷ್ಟರಲ್ಲಿ?" from a Hindi speaker. Nothing in it can
+    be trusted, so the agent should say it did not catch that and ask again.
+
+    "fragment" — a stray foreign-script token sits inside an otherwise correct
+    turn. Call 834's "ಹ್ಮ್. फ्लैट देख रहा हूँ मैं। मेरा बजट दो करोड़ है।", where
+    "ಹ್ಮ್" is a mis-scripted "hmm" and the rest is a perfectly good sentence
+    stating a budget. Treating that as garbled would throw away the budget;
+    the only thing it must NOT do is count as evidence of a language switch.
+    Two such fragments accumulated into a switch_reply_language on call 834
+    and the agent answered three turns in Kannada while the caller asked in
+    Hindi to switch back.
+
+    Majority-vote on script cannot separate these — both of 834's turns are
+    dominantly Devanagari, which is why the original check never fired.
+    Latin is deliberately not a script here: Hinglish is constant and
+    legitimate.
     """
     text = (text or "").strip()
-    if not text or len(text) > _MAX_SUSPECT_TRANSCRIPT_CHARS:
-        return False
+    if not text:
+        return None
     expected = _LANGUAGE_SCRIPT.get((reply_language or "").split("-")[0].lower())
     if expected is None:
-        return False
-    found = _dominant_indic_script(text)
-    return found is not None and found != expected
+        return None
+    if not _foreign_indic_scripts(text, expected):
+        return None
+    if _dominant_indic_script(text) == expected:
+        # Expected script still carries the turn — a stray token, not a switch.
+        return "fragment"
+    # Whole turn is in another script. Short means drift; a caller genuinely
+    # switching language writes a full sentence, so leave those alone.
+    return "garbled" if len(text) <= _MAX_SUSPECT_TRANSCRIPT_CHARS else None
+
+
+def _transcript_looks_misrecognized(text: str, reply_language: str) -> bool:
+    """Whether the turn is untrustworthy enough to ask the caller to repeat."""
+    return _transcript_script_anomaly(text, reply_language) == "garbled"
 
 
 # Only name/phone/email/budget/location/timeline/company/use_case/team_size
@@ -1809,6 +1850,9 @@ class RealEstateAgent(Agent):
         # caller's phone (widget pre-call form, or an inbound caller id), pull
         # the rolling summary of past calls and let the agent open with real
         # continuity instead of treating them as a stranger.
+        # Mirrors the flag _build_tools uses to bind lookup_catalog, so the
+        # per-turn catalog nudge only fires on agents that actually have it.
+        self._has_live_catalog = bool(config.get("has_live_catalog"))
         self._memory_enabled = bool(config.get("memory_enabled"))
         self._caller_phone = (visitor_phone or "").strip()
         if self._memory_enabled and self._caller_phone and config.get("id"):
@@ -2008,6 +2052,8 @@ class RealEstateAgent(Agent):
         self._reply_language = reply_language
         self._pending_language: str | None = None
         self._pending_language_streak = 0
+        # "garbled" / "fragment" / None for the turn being processed.
+        self._turn_script_anomaly: str | None = None
         # Which update_options kwarg shape on_user_turn_completed should use
         # for mid-call prosody/language changes — see _build_tts's docstring.
         self._tts_provider = tts_provider
@@ -2203,12 +2249,22 @@ class RealEstateAgent(Agent):
         # Recomputed EVERY turn (not just when true) so a single bad
         # transcript cannot leave later, good facts marked unconfirmed.
         # Read by log_lead in tools.py when it decides a fact's status.
-        _transcript_suspect = _transcript_looks_misrecognized(text, self._reply_language)
+        _script_anomaly = _transcript_script_anomaly(text, self._reply_language)
+        _transcript_suspect = _script_anomaly == "garbled"
         _userdata["turn_transcript_suspect"] = _transcript_suspect
+        # Read by the language-switch logic below: a mis-scripted token is
+        # not the caller changing language.
+        self._turn_script_anomaly = _script_anomaly
         if _transcript_suspect:
             logger.info(
                 "transcript looks misrecognized (reply_language=%s) — turn: %r",
                 self._reply_language, text,
+            )
+        elif _script_anomaly == "fragment":
+            logger.info(
+                "stray foreign-script token in an otherwise valid turn "
+                "(reply_language=%s) — using the turn, ignoring it as language "
+                "evidence: %r", self._reply_language, text,
             )
 
         # Voicemail detection — only checked once, on the FIRST thing the
@@ -2654,6 +2710,34 @@ class RealEstateAgent(Agent):
             if _transcript_suspect
             else ""
         )
+        # Call 834: with location, budget and configuration all known, the
+        # agent offered "महिंद्रा सिटाडेल और Rohan Leher". Mahindra Citadel is
+        # real; Rohan Leher is not in the tenant's nine listings, and
+        # lookup_catalog was never called on that call at all — it recommended
+        # from memory and invented a name to pad the list. The static "never
+        # invent an item" line in the catalog prompt did not hold, the same way
+        # the static no-fabrication rule did not hold before _search_instruction
+        # was added for web_search. So it gets the same treatment: a nudge
+        # fired only on the turns where recommending is actually in play.
+        _catalog_tool_used = any(
+            (t or {}).get("name") == "lookup_catalog" for t in (_userdata.get("tool_calls") or [])
+        )
+        _ready_to_recommend = bool(_lead_data.get("location")) and bool(
+            _lead_data.get("budget") or _lead_data.get("configuration")
+        )
+        _catalog_instruction = (
+            (
+                "You now know enough about this caller to recommend something specific, and you "
+                "have NOT called lookup_catalog on this call yet. Call it BEFORE you name any "
+                "project, price, or availability. The only projects that exist are the ones "
+                "lookup_catalog returns and the ones listed in your catalog index above — naming "
+                "anything else invents inventory this business does not sell, which is worse than "
+                "saying you have nothing in that area. If the catalog has nothing in their "
+                "locality, say so plainly and offer the nearest thing it does have."
+            )
+            if (self._has_live_catalog and _ready_to_recommend and not _catalog_tool_used)
+            else ""
+        )
         _facts_reminder_text = _facts_reminder(_lead_data, _userdata.get("fact_status"))
         _funnel_stage = _advance_funnel_stage(
             _userdata,
@@ -2680,6 +2764,7 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _search_instruction if _search_instruction else "")
             + ("\n\n" + _garbled_instruction if _garbled_instruction else "")
             + ("\n\n" + _repeat_complaint_instruction if _repeat_complaint_instruction else "")
+            + ("\n\n" + _catalog_instruction if _catalog_instruction else "")
             + ("\n\n" + _facts_reminder_text if _facts_reminder_text else "")
             + "\n\n"
             + _objective_text,
@@ -2759,6 +2844,20 @@ class RealEstateAgent(Agent):
             # would drag them to English after a few turns. A caller who
             # actually wants English can say so: switch_reply_language now
             # accepts a bare "English" (see tools.py's short-utterance guard).
+            candidate = None
+        if candidate is not None and getattr(self, "_turn_script_anomaly", None) is not None:
+            # Confirmed on call 834: two turns whose only non-Devanagari
+            # content was a mis-scripted "hmm" ("ಹ್ಮ್") accumulated into a
+            # switch to Kannada, and the agent then answered three turns in
+            # Kannada while the caller asked in Hindi to switch back. A turn
+            # the script check has already called anomalous cannot also be
+            # trusted as proof the caller changed language. An explicit
+            # spoken request ("please speak in Marathi") is unaffected — that
+            # path runs through switch_reply_language, not this detector.
+            logger.info(
+                "ignoring language candidate %s from a %s turn: %r",
+                candidate, self._turn_script_anomaly, text,
+            )
             candidate = None
         if candidate is None or candidate == self._reply_language:
             # Ambiguous turn, or already the current language — nothing to
