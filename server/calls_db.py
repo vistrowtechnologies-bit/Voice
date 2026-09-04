@@ -3094,6 +3094,15 @@ def _agent_dict(row: dict) -> dict:
         "description": row["description"],
         "model": row["model"],
         "voice": row["voice"],
+        # The display name for that voice string. The dashboard was rendering
+        # the raw value, so an agent card read "google:chirp3:Callirrhoe" —
+        # naming the vendor and an internal persona id to the tenant, on a
+        # platform whose whole convention is that the vendor is never named
+        # (the Model row beside it correctly says "Vistrow Swift", not
+        # "gpt-4.1-mini"). Resolved here rather than in the frontend because
+        # the catalog lives on this side; falls back to the raw string only
+        # for a voice no longer in the catalog, which the UI then softens.
+        "voiceName": (voice_catalog.get_voice(row["voice"]) or {}).get("name") or row["voice"],
         "language": row["language"],
         "status": row["status"],
         "systemPrompt": row["system_prompt"],

@@ -282,6 +282,9 @@ export interface AgentConfig {
   description: string
   model: string
   voice: string
+  // Display name for `voice`, resolved server-side from the catalog. Never
+  // the raw vendor string — see calls_db._agent_dict.
+  voiceName?: string
   language: string
   status: 'live' | 'paused'
   systemPrompt: string

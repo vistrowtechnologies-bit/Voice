@@ -239,7 +239,7 @@ export function Agents() {
 
               <dl className="mb-4 flex flex-col gap-1.5 rounded-lg border border-border bg-surface-high/40 p-3 text-xs">
                 <InfoRow icon="memory" label="Model" value={modelLabel(agent.model)} />
-                <InfoRow icon="record_voice_over" label="Voice" value={voiceLabel(agent.voice)} />
+                <InfoRow icon="record_voice_over" label="Voice" value={agent.voiceName || voiceLabel(agent.voice)} />
                 <InfoRow icon="language" label="Language" value={agent.language} />
                 <InfoRow icon="menu_book" label="Knowledge" value={kbs.find((k) => k.id === agent.kbId)?.name ?? 'none'} />
                 <InfoRow icon="update" label="Updated" value={formatDateTime(agent.updatedAt)} />
