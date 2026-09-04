@@ -955,6 +955,45 @@ _EOT_UNLIKELY_THRESHOLDS = {
 }
 
 
+class _InstrumentedTurnDetector(eot.TurnDetector):
+    """eot.TurnDetector that records the end-of-turn probability it produced.
+
+    This number decides every 4-second wait on every call and nothing
+    surfaced it. The threshold above has now been changed and reverted twice
+    on argument rather than evidence, because there was no way to see whether
+    a candidate value sits anywhere near where the probabilities actually
+    fall — a threshold moved from 0.25 to 0.20 does nothing at all if no turn
+    ever scores in between, and there was no way to know that.
+
+    The framework computes the probability inside audio_recognition's private
+    path and exposes it on no event, so it is captured at the one point every
+    prediction passes through: _resolve_prediction on the stream. We
+    construct the detector, so this is a subclass rather than a patch of the
+    framework. A failure here must never cost a turn — the callback is
+    wrapped, and the original is called either way.
+    """
+
+    def __init__(self, *args, on_probability=None, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._on_probability = on_probability
+
+    def stream(self, **kwargs):
+        stream = super().stream(**kwargs)
+        if self._on_probability is None:
+            return stream
+        _original = stream._resolve_prediction
+
+        def _resolve(request_id, probability, **rest):
+            try:
+                self._on_probability(probability, rest)
+            except Exception:
+                logger.warning("eot probability capture failed", exc_info=True)
+            return _original(request_id, probability, **rest)
+
+        stream._resolve_prediction = _resolve
+        return stream
+
+
 def _build_llm(model: str, *, max_output_tokens: int = 220):
     """Picks the LLM plugin by model-name prefix, so an operator can switch
     an agent between OpenAI and Gemini from the dashboard's model dropdown
@@ -3576,6 +3615,30 @@ async def entrypoint(ctx: JobContext) -> None:
         config = {**(config or {}), "language": _requested_language}
         cfg = config
         logger.info("demo language override -> %s (room=%s)", _requested_language, ctx.room.name)
+    def _record_eot_probability(probability: float, extra: dict) -> None:
+        """Called for every end-of-turn prediction, before the framework acts
+        on it. Logged as well as stored: the log line is what makes a single
+        bad call diagnosable without a database query, and it names the
+        threshold the value is about to be compared against so the escalation
+        is visible rather than inferred."""
+        try:
+            _threshold = _EOT_UNLIKELY_THRESHOLDS.get(
+                (agent._reply_language or "").split("-")[0].lower(), _EOT_HINDI_THRESHOLD
+            )
+        except Exception:
+            _threshold = _EOT_HINDI_THRESHOLD
+        _escalates = probability < _threshold
+        userdata["latency_metrics"]["eotProbability"].append(round(probability, 4))
+        logger.info(
+            "[eot] p=%.4f threshold=%.2f -> %s%s",
+            probability,
+            _threshold,
+            "WAIT max_delay (4s)" if _escalates else "commit at min_delay",
+            (" inference=%.0fms" % (extra["inference_duration"] * 1000))
+            if isinstance(extra.get("inference_duration"), (int, float))
+            else "",
+        )
+
     agent = RealEstateAgent(config, call_context["visitor_name"], call_context["visitor_phone"])
     _agent_ready_ms = round((time.monotonic() - _t0) * 1000)
     logger.info("[latency] RealEstateAgent() constructed at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
@@ -3643,6 +3706,13 @@ async def entrypoint(ctx: JobContext) -> None:
         # below and persisted with the call for tenant/admin p50/p95 tuning.
         "latency_metrics": {
             "eouMs": [],
+            # The end-of-turn probability behind each eouMs. A turn scoring
+            # below the language's unlikely_threshold is what escalates the
+            # endpointing delay from min_delay to max_delay, i.e. this is the
+            # number that decides whether a caller waits 400ms or 4s. Stored
+            # per call so the distribution can be read off real traffic
+            # instead of guessed at — see _InstrumentedTurnDetector.
+            "eotProbability": [],
             "transcriptionMs": [],
             # Previously not captured at all, despite the framework providing
             # it on the same eou_metrics event as the two above — the one
@@ -3808,7 +3878,10 @@ async def entrypoint(ctx: JobContext) -> None:
         ),
         # See _EOT_UNLIKELY_THRESHOLDS: stops 9 of our 11 languages from
         # being judged with LiveKit's English end-of-turn threshold.
-        turn_detection=eot.TurnDetector(unlikely_threshold=_EOT_UNLIKELY_THRESHOLDS),
+        turn_detection=_InstrumentedTurnDetector(
+            unlikely_threshold=_EOT_UNLIKELY_THRESHOLDS,
+            on_probability=_record_eot_probability,
+        ),
         user_away_timeout=away_timeout,
         # Google's Gemini TTS backend (gemini-2.5-flash-tts) genuinely times
         # out under the framework's 10s default often enough to matter —
