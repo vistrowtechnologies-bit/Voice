@@ -55,6 +55,7 @@ from language import (
     ELEVENLABS_SUPPORTED_LANGUAGES,
     LANGUAGE_NAMES,
     detect_reply_language,
+    sounds_like,
     to_google_code,
 )
 from prompts.generic_assistant import build_generic_assistant_prompt
@@ -384,30 +385,65 @@ def _looks_like_opening_ack(text: str) -> bool:
     return bool(text) and len(text) <= 40 and bool(_OPENING_ACK_PATTERN.match(text))
 
 
+def catalog_localities(catalog_index: str) -> list[str]:
+    """Every locality this business actually has inventory in."""
+    out: list[str] = []
+    for line in (catalog_index or "").splitlines():
+        parts = [p.strip() for p in line.lstrip("- ").split("|")]
+        if len(parts) >= 3:
+            for piece in re.split(r"[,\u2013\u2014-]", parts[2]):
+                piece = piece.strip()
+                if piece and piece.lower() not in ("pune", "maharashtra") and piece not in out:
+                    out.append(piece)
+    return out
+
+
 def _catalog_rows_mentioned(text: str, catalog_index: str) -> list[str]:
-    """Exact catalog lines for any item the caller just named by name.
+    """Exact catalog lines for any item the caller just named.
 
-    The index is already in the system prompt and the model still answered
-    from memory: asked where Kalpataru Aria and Kalpataru Blossoms are, it
-    said Baner and "मोहतबा" when its own prompt said Karjat and Sinhagad
-    Road, and it never called lookup_catalog despite being told to. Telling
-    it harder does not work — the same lesson as web_search. So when the
-    caller names something in the catalog, the row is put in front of the
-    model on that turn rather than left to be retrieved.
+    Matched phonetically across scripts, not on Latin tokens. Entity names
+    never arrive in Latin on a Hindi call: call 842 asked about "आर्या" and
+    "महिंद्रा सीट आर्डल", a Latin match found neither, and the agent invented
+    an answer — placing Kalpataru Aria in Pune when it is in Karjat, and
+    saying there was nothing in Karjat when Aria is exactly there.
 
-    Matched on the title's Latin tokens: callers say project names in
-    English even mid-Hindi ("Kalpataru Arya कहाँ पर है?"), which is exactly
-    the turn that produced the wrong answer. A shared token like "Kalpataru"
-    legitimately returns both of its projects.
+    sounds_like() compares romanized word forms, which is
+    what makes "आर्या" and "Aria" compare equal, and a name too mangled to
+    resolve stays unmatched on purpose — the agent should ask rather than
+    guess at it.
     """
     if not text or not catalog_index:
         return []
     lowered = text.lower()
+    words = [w for w in re.split(r"[\s,.।?!]+", text) if w]
     rows = []
     for line in catalog_index.splitlines():
-        title = line.lstrip("- ").split("|")[0]
+        title = line.lstrip("- ").split("|")[0].strip()
+        if not title:
+            continue
+        # Latin still wins outright when the caller does say it in English.
         tokens = [t for t in re.findall(r"[A-Za-z]{4,}", title)]
         if tokens and any(t.lower() in lowered for t in tokens):
+            rows.append(line.strip())
+            continue
+        # Otherwise compare the spoken words against the title's own words,
+        # phonetically. Whole-title comparison drowns a one-word mention.
+        title_words = [w for w in re.split(r"[\s\-]+", title) if len(w) > 3]
+        if any(sounds_like(w, tw) for tw in title_words for w in words if len(w) > 2):
+            rows.append(line.strip())
+            continue
+        # Also match on the row's LOCALITY. "Which projects do you have in
+        # Karjat?" is the commonest question there is, and on call 842 the
+        # agent answered "कर्जत में कोई लाइव प्रोजेक्ट उपलब्ध नहीं है" when
+        # Kalpataru Aria is in Karjat — then described that same project as
+        # being in Pune two turns later.
+        parts = [p.strip() for p in line.lstrip("- ").split("|")]
+        locality = parts[2] if len(parts) >= 3 else ""
+        loc_words = [
+            w for w in re.split(r"[\s,\u2013\u2014-]+", locality)
+            if len(w) > 3 and w.lower() not in ("pune", "maharashtra", "road")
+        ]
+        if any(sounds_like(w, lw) for lw in loc_words for w in words if len(w) > 2):
             rows.append(line.strip())
     return rows
 
@@ -2018,6 +2054,10 @@ class RealEstateAgent(Agent):
         self._has_live_catalog = bool(config.get("has_live_catalog"))
         # Kept for the per-turn grounding in on_user_turn_completed.
         self._catalog_index = config.get("catalog_index") or ""
+        # Precomputed so tools.py can read it off the agent — it cannot import
+        # main (circular), and this is the set log_lead validates a spoken
+        # locality against before storing it.
+        self._catalog_localities = catalog_localities(self._catalog_index)
         self._memory_enabled = bool(config.get("memory_enabled"))
         self._caller_phone = (visitor_phone or "").strip()
         if self._memory_enabled and self._caller_phone and config.get("id"):

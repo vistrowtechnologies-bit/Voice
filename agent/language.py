@@ -1,4 +1,6 @@
+import difflib
 import re
+import unicodedata
 
 # Display name for each language code the dashboard's agent editor offers —
 # used to tell the LLM which language to open a call in (see main.py); the
@@ -114,6 +116,126 @@ _NON_LETTER_PATTERN = re.compile(r"[\s\W_]")
 # starting a 3-turn switch countdown to the wrong language.
 _MIN_SCRIPT_RATIO = 0.4
 _MIN_SCRIPT_CHARS = 3
+
+
+# Romanization built from Unicode character names, which every Indic block
+# follows ("DEVANAGARI LETTER KA", "MALAYALAM VOWEL SIGN AA"). No dependency,
+# and it covers every script Sarvam can return rather than Devanagari alone —
+# which matters, because the same word comes back in a different script on
+# almost every noisy turn.
+#
+# Exists because entity names never arrive in Latin on a Hindi call. Call 842
+# asked about "आर्या" and "महिंद्रा सीट आर्डल"; a Latin-token match against
+# the catalog finds neither, so the agent answered from imagination and put
+# Kalpataru Aria in Pune when it is in Karjat.
+_ROMAN_CACHE: dict[str, str] = {}
+
+
+def _roman_char(ch: str) -> str:
+    if ch in _ROMAN_CACHE:
+        return _ROMAN_CACHE[ch]
+    try:
+        name = unicodedata.name(ch)
+    except ValueError:
+        out = ch.lower() if ch.isalnum() else " "
+    else:
+        # "DEVANAGARI LETTER KA" -> KA ; "MALAYALAM VOWEL SIGN AA" -> AA
+        if " LETTER " in name:
+            out = name.rsplit(" LETTER ", 1)[1].lower()
+        elif " VOWEL SIGN " in name:
+            out = name.rsplit(" VOWEL SIGN ", 1)[1].lower()
+        elif " SIGN VIRAMA" in name or name.endswith(" SIGN NUKTA"):
+            out = ""  # virama kills the inherent vowel; nukta is a modifier
+        elif " DIGIT " in name:
+            out = ""
+        else:
+            out = " "
+        # Names like "KSSA" / "VOCALIC R" carry extra words; keep letters only
+        out = "".join(c for c in out if c.isalpha())
+    _ROMAN_CACHE[ch] = out
+    return out
+
+
+def romanize(text: str | None) -> str:
+    """Rough Latin rendering of Indic text — for MATCHING, not for display."""
+    if not text:
+        return ""
+    return "".join(_roman_char(ch) for ch in text)
+
+
+# Ordinary Hindi/Marathi conversation words that are long enough to survive
+# the length guard below and close enough to a short project name to match it
+# by sound. "बारे" ("about") scores 0.67 against "Aria" — the same ratio as
+# "आर्या", the actual mention — so no threshold can separate them and they are
+# excluded by identity instead.
+_STOPWORD_SOURCES = [
+    # Hindi / Marathi conversation filler, written in the script callers
+    # actually use. Normalized through _match_form() below rather than guessed
+    # in Latin: "मुझे" romanizes to "maujhae", not "mujhe", so a hand-written
+    # Latin list silently failed to exclude it and it matched "Gahunje".
+    "मुझे", "मेरा", "मेरी", "मेरे", "मला", "माझा", "माझी", "आपके", "आपका",
+    "आपकी", "आप", "हमारे", "हमारा", "तुमच्या", "बारे", "में",
+    "के", "का", "की", "को", "पर", "पास", "वाले", "लिए", "क्या", "कौन",
+    "कहाँ", "कुठे", "नाम", "बताइए", "बताओ", "बताव", "सांगा", "चाहिए",
+    "पाहिजे", "प्रोजेक्ट", "प्रॉपर्टी", "लोकेशन", "एरिया", "इलाके", "बजट",
+    "अपार्टमेंट", "फ्लैट", "प्लॉट", "विला", "साइट", "विजिट", "अच्छा",
+    "ठीक", "हाँ", "नहीं", "और", "भी", "तो", "था", "कुछ", "कोई", "सकते",
+    "सकती", "करना", "करने", "पहले", "अभी", "यहाँ", "वहाँ", "देख", "रहा",
+    "रहे", "रही", "करोड़", "लाख", "जल्दी", "थैंक",
+    # and the English/Hinglish equivalents that reach us in Latin
+    "project", "property", "location", "area", "budget", "apartment", "flat",
+    "plot", "villa", "site", "visit", "name", "please", "thanks", "thank",
+    "okay", "hello", "which", "where", "what", "about", "tell", "want",
+    "need", "have", "here", "there", "crore", "lakh", "price", "detail",
+    "details", "available", "possession",
+]
+_NAME_MATCH_STOPWORDS = set()
+
+
+def _match_form(text: str | None) -> str:
+    """Romanized, with runs of a repeated letter collapsed — the shape that
+    survives both transliteration and mis-transcription."""
+    roman = romanize(text).lower()
+    roman = re.sub(r"([a-z])\1+", r"\1", roman)
+    return re.sub(r"[^a-z]", "", roman)
+
+
+_NAME_MATCH_STOPWORDS.update(f for f in (_match_form(w) for w in _STOPWORD_SOURCES) if f)
+
+_MIN_NAME_MATCH_CHARS = 4
+_NAME_MATCH_RATIO = 0.55
+
+
+def _words(text: str | None) -> list[str]:
+    return [w for w in re.split(r"[\s,.।?!\-]+", text or "") if w]
+
+
+def sounds_like(a: str | None, b: str | None) -> bool:
+    """Whether two names plausibly refer to the same thing across scripts.
+
+    Compared word by word, because a caller says one word of a name inside a
+    sentence ("आर्या के बारे में") and a locality can be two words
+    ("पिंप्री चिंचवड़" against "Pimpri" and "Chinchwad") — whole-string
+    comparison misses both.
+
+    Tuned on the real mentions from calls 839 and 842: at 0.55 with a
+    four-character floor it resolves आर्या->Aria, महिंद्रा->Mahindra,
+    बानेर/బానేరు->Baner, पिंप्री->Pimpri, करजत->Karjat, and still refuses
+    बांगर and ബാങ്ങി, which are too far gone to act on.
+    """
+    if not a or not b:
+        return False
+    for wa in _words(a):
+        fa = _match_form(wa)
+        if len(fa) < _MIN_NAME_MATCH_CHARS or fa in _NAME_MATCH_STOPWORDS:
+            continue
+        for wb in _words(b):
+            fb = _match_form(wb)
+            if len(fb) < _MIN_NAME_MATCH_CHARS:
+                continue
+            if fa == fb or difflib.SequenceMatcher(None, fa, fb).ratio() >= _NAME_MATCH_RATIO:
+                return True
+    return False
 
 
 def fragment_languages(text: str | None, reply_language: str | None) -> set[str]:

@@ -17,6 +17,7 @@ import db
 from language import (
     ELEVENLABS_SUPPORTED_LANGUAGES,
     fragment_languages,
+    sounds_like,
     GOOGLE_LANGUAGE_NAMES,
     LANGUAGE_NAMES,
     detect_reply_language,
@@ -1342,6 +1343,31 @@ async def log_lead(
             rejected = (
                 f" The number you passed ('{phone}') isn't a complete phone number, so it was "
                 "NOT saved — everything else was. Ask them to repeat it digit by digit."
+            )
+
+    # A location has to be somewhere this business actually operates. Call 842
+    # stored "बाहेरीर, बांगर, पिंप्री चिंचवड़, आर्या" as the caller's preferred
+    # localities: two mis-transcriptions of Baner, a real one, and a PROJECT
+    # name. The agent had also been repeating each garbled form back as though
+    # it were a real place and qualifying against it — three turns spent on a
+    # word it never resolved.
+    #
+    # Resolved phonetically across scripts, so "बहानीर" and "బానేరు" both reach
+    # Baner. A value too mangled to resolve is refused rather than stored, and
+    # the model is told to confirm it instead of assuming — which is the whole
+    # point: do not act on a fact that was never actually understood.
+    if incoming["location"]:
+        _agent = getattr(context.session, "current_agent", None)
+        _known = list(getattr(_agent, "_catalog_localities", None) or [])
+        if _known and not any(sounds_like(incoming["location"], k) for k in _known):
+            _rejected_location = incoming["location"]
+            incoming["location"] = ""
+            rejected += (
+                f" '{_rejected_location}' does not match any locality we operate in, so it was "
+                "NOT saved — it is most likely a mis-transcription. Do NOT repeat it back as if "
+                "it were a real place. Ask the caller to say the area again, and only continue "
+                "once you have one you recognise. We currently have inventory in: "
+                + ", ".join(_known) + "."
             )
 
     changed = [k for k in _LEAD_FIELDS if _merge_lead_field(lead_data, k, incoming[k])]
