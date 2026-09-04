@@ -2,6 +2,8 @@ import asyncio
 import json
 import logging
 import os
+
+import voice_catalog
 import random
 import re
 import time
@@ -14,6 +16,7 @@ from livekit.agents.llm import function_tool
 import db
 from language import (
     ELEVENLABS_SUPPORTED_LANGUAGES,
+    fragment_languages,
     GOOGLE_LANGUAGE_NAMES,
     LANGUAGE_NAMES,
     detect_reply_language,
@@ -1622,6 +1625,22 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
             "word). Stay in the current language, and if you're not sure what they want, ask "
             "them to repeat or clarify which language they'd like."
         )
+    # The guard above asks whether the turn is confidently SOME language. It
+    # is not enough: on call 839 the turn was confidently Hindi and the model
+    # still switched to Gujarati, because one mis-transcribed Gujarati word
+    # ("હા") sat inside the Hindi sentence. main.py flags exactly that case —
+    # a script present ONLY as a minority fragment — and it is never evidence
+    # the caller asked for that language. A real request phrased in that
+    # language, or in the current one, is unaffected.
+    _fragment_languages = fragment_languages(_last, getattr(agent, "_reply_language", None))
+    if code in _fragment_languages:
+        return (
+            f"Not switching to {language} — the only {language} in the caller's last message "
+            "was a stray fragment inside a sentence that was otherwise in the current "
+            "language, which is what a mis-transcription looks like, not a request. Stay in "
+            "the current language. If you genuinely think they asked, let them say it again."
+        )
+
     voice_unsupported = False
     if hasattr(agent, "_reply_language"):
         agent._reply_language = code
@@ -1652,7 +1671,31 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
                     model_name="gemini-3.1-flash-tts-preview" if is_google_31 else "gemini-2.5-flash-tts",
                 )
             elif provider == "google-native":
-                voice_unsupported = True
+                # A Chirp 3 persona follows the caller by swapping only the
+                # locale prefix and keeping its name, so the same voice speaks
+                # the new language: hi-IN-Chirp3-HD-Callirrhoe becomes
+                # mr-IN-Chirp3-HD-Callirrhoe.
+                #
+                # This branch previously just set voice_unsupported and gave
+                # up. main.py has the same swap, but on the AUTOMATIC
+                # detection path — and the model calls this tool instead, so
+                # the swap never ran. Call 839 switched language seven times
+                # through here: the text became Marathi, then Malayalam, then
+                # Gujarati, while the voice stayed on the Hindi locale reading
+                # it, which is why it sounded wrong.
+                _persona = voice_catalog.chirp3_persona(getattr(agent, "_voice", "") or "")
+                _primary = getattr(agent.tts, "_vistrow_primary", None)
+                if _persona and code in voice_catalog.CHIRP3_LANGUAGES and _primary is not None:
+                    _primary.update_options(
+                        language=code,
+                        voice_name=voice_catalog.chirp3_voice_name(_persona, code),
+                    )
+                else:
+                    # A locale Standard voice, or a language outside the ten
+                    # Chirp 3 covers: the reply language still changes, the
+                    # voice cannot follow, and the caller is told rather than
+                    # handed a voice reading the wrong language.
+                    voice_unsupported = True
             elif provider not in (None, "elevenlabs-v3"):
                 agent.tts.update_options(target_language_code=code)
             # elevenlabs-v3 (StreamAdapter) has no update_options — same

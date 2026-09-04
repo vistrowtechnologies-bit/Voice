@@ -116,6 +116,50 @@ _MIN_SCRIPT_RATIO = 0.4
 _MIN_SCRIPT_CHARS = 3
 
 
+def fragment_languages(text: str | None, reply_language: str | None) -> set[str]:
+    """Languages present in this turn ONLY as a stray minority-script fragment.
+
+    Such a fragment is what a mis-transcription looks like, never a request.
+    Call 839 turn 9 was "હા. अर्ली पजेशन में। ਸਹੀ ਹੈ।" — one Gujarati word and
+    one Punjabi fragment inside a Hindi sentence — and the model called
+    switch_reply_language("Gujarati") on it, taking the whole call into a
+    language the caller then had to ask it to leave.
+
+    Deliberately narrow, so genuine multilingual switching is untouched:
+
+    - the turn must still be DOMINATED by the current language's own script,
+      so a caller who really has switched (their whole turn in the new
+      script) is not caught;
+    - Latin is not a script here, so Hinglish never triggers it and a switch
+      to English is never blocked;
+    - digits are stripped first, for the same reason detect_reply_language
+      strips them — native-script digits from a spoken price are not
+      evidence of anything.
+
+    Stateless on purpose. An earlier version of this computed the answer once
+    per turn and stashed it for the tool to read, which is unsound: with
+    preemptive generation the LLM can run — and call tools — before the
+    per-turn hook has updated that state, so the tool could have been reading
+    the PREVIOUS turn's flags.
+    """
+    if not text or not reply_language:
+        return set()
+    stripped = _DIGIT_PATTERN.sub("", text)
+    counts = {code: len(pattern.findall(stripped)) for code, pattern in _SCRIPT_PATTERNS}
+    present = {code: n for code, n in counts.items() if n}
+    if not present:
+        return set()
+    dominant = max(present, key=present.get)
+    # Devanagari is shared by Hindi and Marathi; compare on the script, not
+    # the language, or a Marathi call would treat all its own text as foreign.
+    def _script_of(code: str) -> str:
+        return "hi-IN" if code in ("hi-IN", "mr-IN") else code
+
+    if _script_of(reply_language) != dominant:
+        return set()
+    return {code for code in present if code != dominant}
+
+
 def detect_reply_language(text: str | None) -> str | None:
     """Guess which Sarvam TTS language code the reply should use, based on
     the dominant script of the caller's last transcribed utterance.

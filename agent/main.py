@@ -384,6 +384,34 @@ def _looks_like_opening_ack(text: str) -> bool:
     return bool(text) and len(text) <= 40 and bool(_OPENING_ACK_PATTERN.match(text))
 
 
+def _catalog_rows_mentioned(text: str, catalog_index: str) -> list[str]:
+    """Exact catalog lines for any item the caller just named by name.
+
+    The index is already in the system prompt and the model still answered
+    from memory: asked where Kalpataru Aria and Kalpataru Blossoms are, it
+    said Baner and "मोहतबा" when its own prompt said Karjat and Sinhagad
+    Road, and it never called lookup_catalog despite being told to. Telling
+    it harder does not work — the same lesson as web_search. So when the
+    caller names something in the catalog, the row is put in front of the
+    model on that turn rather than left to be retrieved.
+
+    Matched on the title's Latin tokens: callers say project names in
+    English even mid-Hindi ("Kalpataru Arya कहाँ पर है?"), which is exactly
+    the turn that produced the wrong answer. A shared token like "Kalpataru"
+    legitimately returns both of its projects.
+    """
+    if not text or not catalog_index:
+        return []
+    lowered = text.lower()
+    rows = []
+    for line in catalog_index.splitlines():
+        title = line.lstrip("- ").split("|")[0]
+        tokens = [t for t in re.findall(r"[A-Za-z]{4,}", title)]
+        if tokens and any(t.lower() in lowered for t in tokens):
+            rows.append(line.strip())
+    return rows
+
+
 def _foreign_indic_scripts(text: str, expected: str) -> set[str]:
     """Indic scripts present in the text that are not the expected one."""
     found: set[str] = set()
@@ -1988,6 +2016,8 @@ class RealEstateAgent(Agent):
         # Mirrors the flag _build_tools uses to bind lookup_catalog, so the
         # per-turn catalog nudge only fires on agents that actually have it.
         self._has_live_catalog = bool(config.get("has_live_catalog"))
+        # Kept for the per-turn grounding in on_user_turn_completed.
+        self._catalog_index = config.get("catalog_index") or ""
         self._memory_enabled = bool(config.get("memory_enabled"))
         self._caller_phone = (visitor_phone or "").strip()
         if self._memory_enabled and self._caller_phone and config.get("id"):
@@ -2884,6 +2914,22 @@ class RealEstateAgent(Agent):
         _ready_to_recommend = bool(_lead_data.get("location")) and bool(
             _lead_data.get("budget") or _lead_data.get("configuration")
         )
+        # Deterministic grounding: the row itself, not an instruction to go
+        # and find it. Fires whenever the caller names a catalog item, whether
+        # or not the model would have looked it up.
+        _named_rows = _catalog_rows_mentioned(text, self._catalog_index)
+        _catalog_facts_instruction = (
+            (
+                "# Exact catalog entries for what the caller just named — use these VERBATIM\n"
+                + "\n".join(_named_rows)
+                + "\nThese lines are the truth about location, configuration and price. Do not "
+                "state any of those differently, and do not describe one of these projects as "
+                "being somewhere it is not. If they asked about something not in this list, say "
+                "plainly that it is not one of ours rather than guessing where it is."
+            )
+            if _named_rows
+            else ""
+        )
         _catalog_instruction = (
             (
                 "You now know enough about this caller to recommend something specific, and you "
@@ -2923,6 +2969,7 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _search_instruction if _search_instruction else "")
             + ("\n\n" + _garbled_instruction if _garbled_instruction else "")
             + ("\n\n" + _repeat_complaint_instruction if _repeat_complaint_instruction else "")
+            + ("\n\n" + _catalog_facts_instruction if _catalog_facts_instruction else "")
             + ("\n\n" + _catalog_instruction if _catalog_instruction else "")
             + ("\n\n" + _facts_reminder_text if _facts_reminder_text else "")
             + "\n\n"
