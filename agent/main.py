@@ -1769,6 +1769,14 @@ class RealEstateAgent(Agent):
         visitor_phone: str | None = None,
         direction: str | None = None,
     ) -> None:
+        # Set FIRST, before any of the prompt assembly below can read it.
+        # It was originally assigned further down, next to _welcome_message,
+        # while the direction block that reads it sits ~80 lines earlier — so
+        # every single call raised AttributeError inside __init__, the agent
+        # never constructed, and the caller heard silence until the watchdog
+        # cut the line. A constructor that reads its own attributes out of
+        # order fails on every call, not on an edge case.
+        self._direction = (direction or "").strip().lower()
         # Dashboard-managed settings (agents table, edited via the web UI)
         # override the code defaults, so prompt/voice/model/KB changes apply
         # on the next call without a redeploy. Missing table or empty fields
@@ -2331,7 +2339,6 @@ class RealEstateAgent(Agent):
         self._current_emotion: str | None = None
         # Conversation-start behavior (see on_enter).
         self._first_speaker = (config.get("first_speaker") or "agent").lower()
-        self._direction = (direction or "").strip().lower()
         # One agent serves both directions. The persona is identical; the only
         # thing that genuinely differs is the first line, because an outbound
         # opener has to ask permission before it pitches — a compliance point,
