@@ -3922,12 +3922,32 @@ async def entrypoint(ctx: JobContext) -> None:
             # fix for the underlying STT-finalization race, not just a
             # latency trade that brings the drop back.
             endpointing=EndpointingOptions(min_delay=0.4, max_delay=4.0),
-        ),
-        # See _EOT_UNLIKELY_THRESHOLDS: stops 9 of our 11 languages from
-        # being judged with LiveKit's English end-of-turn threshold.
-        turn_detection=_InstrumentedTurnDetector(
-            unlikely_threshold=_EOT_UNLIKELY_THRESHOLDS,
-            on_probability=_record_eot_probability,
+            # MUST live inside turn_handling. Passed as AgentSession's own
+            # turn_detection= kwarg it is silently discarded: that argument is
+            # deprecated, and agent_session.py only migrates the deprecated
+            # arguments when turn_handling is ABSENT —
+            #
+            #   turn_handling = (_migrate_turn_handling(..., turn_detection=...)
+            #                    if not is_given(turn_handling) else turn_handling)
+            #
+            # We pass turn_handling, so our detector was dropped on the floor
+            # and the session auto-selected its own with LiveKit's default
+            # thresholds. Nothing errored; the only trace was a deprecation
+            # warning about the argument's NAME, not about it being ignored.
+            #
+            # This is why the threshold work went nowhere. _EOT_UNLIKELY_THRESHOLDS
+            # was never reaching a detector, so moving it 0.3050 -> 0.25 -> 0.20
+            # changed nothing, which is exactly what measuring it showed — the
+            # per-agent numbers were right and the explanation was wrong. It is
+            # also why eotProbability came back empty on call 841: the
+            # instrumented detector was discarded too.
+            #
+            # See _EOT_UNLIKELY_THRESHOLDS: stops 9 of our 11 languages from
+            # being judged with LiveKit's English end-of-turn threshold.
+            turn_detection=_InstrumentedTurnDetector(
+                unlikely_threshold=_EOT_UNLIKELY_THRESHOLDS,
+                on_probability=_record_eot_probability,
+            ),
         ),
         user_away_timeout=away_timeout,
         # Google's Gemini TTS backend (gemini-2.5-flash-tts) genuinely times
