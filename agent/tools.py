@@ -1039,6 +1039,14 @@ async def check_calendar_availability(
         _remember = {}
         _agent._offered_slots = _remember
 
+    # Every time this tool confirms a specific slot is FREE, record it. This
+    # is the evidence book_appointment requires before it will write to a
+    # real calendar -- see the gate there for why prose was not enough.
+    _verified = getattr(_agent, "_verified_slots", None)
+    if _verified is None:
+        _verified = set()
+        _agent._verified_slots = _verified
+
     if requested_time:
         # Deterministic exact-match check instead of leaving the model to
         # scan a long comma list itself — a 2026-08-03 real call had the
@@ -1047,6 +1055,7 @@ async def check_calendar_availability(
         # failure mode for the one case that matters most: the exact time
         # the caller just asked for.
         if requested_time in slots:
+            _verified.add((date, requested_time))
             return (
                 f"YES — {requested_time} on {date_phrase} IS available. Offer it back to the caller ({_say(requested_time)}) "
                 f"and book it if they confirm; do not claim it's unavailable."
@@ -1069,6 +1078,8 @@ async def check_calendar_availability(
     # Record what was actually offered so a second question about the same
     # day cannot come back with a different list (see the guard above).
     _remember[date] = list(choices)
+    for _c in choices:
+        _verified.add((date, _c))
     return (
         # These are the BUSINESS's open times. The tool has no idea which
         # staff member works which days, and the prompt rule saying so was
@@ -1194,6 +1205,47 @@ async def book_appointment(
             "BOOKING REJECTED — the reason/purpose is missing. Ask what the visit is for and do not say "
             "the appointment is booked or confirmed."
         )
+    # HARD GATE: the slot must have been confirmed free by
+    # check_calendar_availability during THIS call.
+    #
+    # Evidence, every real booking this system has ever written:
+    #   796  availability checked -> legitimate
+    #   806  availability checked -> legitimate
+    #   817  availability checked -> legitimate
+    #   832  availability checked -> legitimate
+    #   841  NOT checked          -> spurious, deleted by hand
+    #   845  NOT checked          -> spurious, deleted by hand
+    # A clean split. Both bad bookings went log_lead -> book_appointment with
+    # nothing in between, off an unintelligible turn ("मैंने जान। मैंने बाहने
+    # और कहा।"), and put a real site visit in a real customer's calendar.
+    #
+    # The prompt already said to check availability first. It said so twice,
+    # and was ignored twice, which is the whole argument for putting this in
+    # code: an instruction the model may skip cannot protect a write.
+    _bk_agent = getattr(context.session, "current_agent", None)
+    _bk_verified = getattr(_bk_agent, "_verified_slots", None) or set()
+    if (date, time) not in _bk_verified:
+        logger.warning(
+            "booking BLOCKED - %s %s was never confirmed free this call (verified=%s)",
+            date, time, sorted(_bk_verified),
+        )
+        if not _bk_verified:
+            return (
+                "BOOKING REJECTED — you have not checked the calendar at all on this call, so you "
+                "do not know this slot is free and the caller has not been offered it. Do NOT say "
+                "anything is booked, confirmed or reserved. If the caller actually asked for an "
+                "appointment, call check_calendar_availability first, offer them a real slot, and "
+                "book only the slot they pick. If they did not ask for one, carry on with the "
+                "conversation and do not mention appointments."
+            )
+        return (
+            f"BOOKING REJECTED — {date} {time} is not one of the slots you confirmed free on this "
+            f"call. Confirmed slots: "
+            f"{', '.join(f'{d} {t}' for d, t in sorted(_bk_verified))}. Do NOT say anything is "
+            f"booked. Either book one of those exact slots, or call check_calendar_availability "
+            f"for {time} on {date} and book it only if it comes back available."
+        )
+
     name, phone, purpose = clean_name, clean_phone, clean_purpose
     logger.info("booking appointment: %s (%s) %s %s for %s", name, phone, date, time, purpose)
     lead_data = (context.userdata or {}).get("lead_data")
