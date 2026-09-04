@@ -408,7 +408,7 @@ export function Voices() {
             <TierGroup
               entries={chirp3Hd()}
               label="Vistrow HD"
-              note="1x credits · fastest Google voices · one language each"
+              note="1x credits · fastest Google voices · ten Indian languages, switches mid-call"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}

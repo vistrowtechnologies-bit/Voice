@@ -127,7 +127,7 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
   {
     key: 'chirp3-hd',
     label: 'Vistrow HD',
-    note: '1x credits · fastest Google voices · one language each',
+    note: '1x credits · fastest Google voices · ten Indian languages, switches mid-call',
     voices: voices.filter((v) => v.value.toLowerCase().includes('chirp3') && !v.preview),
   },
   {

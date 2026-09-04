@@ -37,7 +37,6 @@ _ELEVEN_PREFIX = "elevenlabs:"
 _GOOGLE_31_PREFIX = "google31:"
 _GOOGLE_PREFIX = "google:"
 _GOOGLE_MULTILINGUAL_VOICES = {"charon", "kore"}
-_SARVAM_V2_SPEAKERS = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 
 # lang code (voice_catalog.SAMPLE_TEXTS keys) → Sarvam target_language_code.
 _SARVAM_LANG = {"hi": "hi-IN", "en": "en-IN"}
@@ -154,11 +153,24 @@ def synthesize(voice_string: str, lang: str) -> tuple[bytes, str]:
         return _synth_elevenlabs(voice_string[len(_ELEVEN_V3_PREFIX):], "eleven_v3", text)
     if voice_string.startswith(_ELEVEN_PREFIX):
         return _synth_elevenlabs(voice_string[len(_ELEVEN_PREFIX):], "eleven_flash_v2_5", text)
+    # "google:chirp3:<Persona>" is a persona, not a voice id. Resolved here to
+    # the concrete locale voice for the language being auditioned — the same
+    # swap _build_tts does on a call. Without this the code below derives a
+    # language_code of "chirp3:Aoede" from the value and Google rejects every
+    # request, so the audition button failed on all six HD voices.
+    _persona = voice_catalog.chirp3_persona(voice_string)
+    if _persona:
+        return _synth_google(
+            voice_catalog.chirp3_voice_name(_persona, _SARVAM_LANG.get(lang, "hi-IN")),
+            lang,
+            text,
+        )
     if voice_string.startswith(_GOOGLE_31_PREFIX):
         return _synth_google(
             voice_string[len(_GOOGLE_31_PREFIX):], lang, text, "gemini-3.1-flash-tts-preview"
         )
     if voice_string.startswith(_GOOGLE_PREFIX):
         return _synth_google(voice_string[len(_GOOGLE_PREFIX):], lang, text)
-    model = "bulbul:v2" if voice_string in _SARVAM_V2_SPEAKERS else "bulbul:v3"
-    return _synth_sarvam(voice_string, model, lang, text)
+    # bulbul:v2 is retired vendor-side and its speakers are gone from the
+    # catalog, so get_voice() above already rejects them.
+    return _synth_sarvam(voice_string, "bulbul:v3", lang, text)
