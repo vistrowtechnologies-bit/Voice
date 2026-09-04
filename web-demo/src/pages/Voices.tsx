@@ -374,29 +374,14 @@ export function Voices() {
               </div>
             )}
 
+            {/* Ordered by what a voice COSTS, most expensive first, so the
+                credit multiplier only ever goes down as you scroll. It used to
+                run 2x, 1x, preview, 2x, 1x, 0.75x — Multilingual sat between
+                two cheaper groups and the pricing read as random. Experimental
+                voices go last regardless of price: they are not something to
+                pick by cost. */}
             <TierGroup
               entries={premiumSolo()}
-              lang={lang}
-              busyVoice={busyVoice}
-              onAdd={onAdd}
-              onRemove={onRemove}
-            />
-            <TierGroup
-              entries={standardSolo()}
-              lang={lang}
-              busyVoice={busyVoice}
-              onAdd={onAdd}
-              onRemove={onRemove}
-            />
-            {query && (data?.voices ?? []).filter(matchesSearch).length === 0 && (
-              <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center text-sm text-text-muted">
-                No voices match “{search}”.
-              </div>
-            )}
-            <TierGroup
-              entries={previewVoices()}
-              label="Vistrow Next Preview"
-              note="1x credits · testing only · experimental multilingual voices"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
@@ -408,6 +393,13 @@ export function Voices() {
               // Derived from the entries themselves — a hardcoded count here
               // drifted out of sync with the badge the moment the catalog grew.
               note={`2x credits · one voice, ${multilingualPremium()[0]?.languageCount ?? 0} languages, switches live`}
+              lang={lang}
+              busyVoice={busyVoice}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
+            <TierGroup
+              entries={standardSolo()}
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
@@ -431,6 +423,20 @@ export function Voices() {
               onAdd={onAdd}
               onRemove={onRemove}
             />
+            <TierGroup
+              entries={previewVoices()}
+              label="Vistrow Next Preview"
+              note="experimental · testing only · billed at 1x credits"
+              lang={lang}
+              busyVoice={busyVoice}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
+            {query && (data?.voices ?? []).filter(matchesSearch).length === 0 && (
+              <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center text-sm text-text-muted">
+                No voices match “{search}”.
+              </div>
+            )}
           </>
         )}
       </div>
