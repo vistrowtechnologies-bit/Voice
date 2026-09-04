@@ -296,6 +296,10 @@ export interface AgentConfig {
   // Conversation start
   firstSpeaker: 'agent' | 'user'
   welcomeMessage: string
+  // Opening used only when WE placed the call. One agent serves both
+  // directions; the outbound opener asks permission before it pitches.
+  // Blank falls back to welcomeMessage.
+  welcomeMessageOutbound?: string
   // Speech / turn-taking
   interruptionSensitivity: number
   silenceReminderMs: number

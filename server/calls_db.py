@@ -1079,6 +1079,13 @@ def init_tables() -> None:
             for column, coltype in (
                 ("first_speaker", "TEXT DEFAULT 'agent'"),
                 ("welcome_message", "TEXT DEFAULT ''"),
+                # A second opening, used only when WE placed the call. One
+                # agent serves both directions — the difference between them
+                # is the first line, not the persona — and an outbound opener
+                # has to ask permission before it pitches ("दो मिनट बात कर
+                # सकते हैं?"), which is a compliance point, not a style one.
+                # Empty falls back to welcome_message.
+                ("welcome_message_outbound", "TEXT DEFAULT ''"),
                 ("interruption_sensitivity", "REAL DEFAULT 0.5"),
                 ("silence_reminder_ms", "INTEGER DEFAULT 0"),
                 ("silence_reminder_max", "INTEGER DEFAULT 1"),
@@ -3049,6 +3056,7 @@ _AGENT_CAMEL_TO_SNAKE = {
     "isPlatformDemo": "is_platform_demo",
     "firstSpeaker": "first_speaker",
     "welcomeMessage": "welcome_message",
+    "welcomeMessageOutbound": "welcome_message_outbound",
     "interruptionSensitivity": "interruption_sensitivity",
     "silenceReminderMs": "silence_reminder_ms",
     "silenceReminderMax": "silence_reminder_max",
@@ -3116,6 +3124,7 @@ def _agent_dict(row: dict) -> dict:
         "isPlatformDemo": bool(row["is_platform_demo"]),
         "firstSpeaker": row["first_speaker"] or "agent",
         "welcomeMessage": row["welcome_message"] or "",
+        "welcomeMessageOutbound": _row_get(row, "welcome_message_outbound") or "",
         "interruptionSensitivity": row["interruption_sensitivity"] if row["interruption_sensitivity"] is not None else 0.5,
         "silenceReminderMs": row["silence_reminder_ms"] or 0,
         "silenceReminderMax": row["silence_reminder_max"] or 1,

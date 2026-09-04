@@ -136,6 +136,7 @@ function AgentEditorForm({
     isPlatformDemo: agent.isPlatformDemo,
     firstSpeaker: agent.firstSpeaker || 'agent',
     welcomeMessage: agent.welcomeMessage || '',
+    welcomeMessageOutbound: agent.welcomeMessageOutbound || '',
     interruptionSensitivity: agent.interruptionSensitivity ?? 0.5,
     silenceReminderMs: agent.silenceReminderMs ?? 0,
     silenceReminderMax: agent.silenceReminderMax ?? 1,
@@ -381,14 +382,24 @@ function AgentEditorForm({
             </select>
           </Field>
           {form.firstSpeaker === 'agent' && (
-            <Field label="Welcome message (blank = auto-generated)">
-              <input
-                value={form.welcomeMessage}
-                onChange={(e) => set('welcomeMessage', e.target.value)}
-                placeholder="e.g. Hi, thanks for calling Acme - how can I help?"
-                className={inputCls}
-              />
-            </Field>
+            <>
+              <Field label="Welcome message — inbound (blank = auto-generated)">
+                <input
+                  value={form.welcomeMessage}
+                  onChange={(e) => set('welcomeMessage', e.target.value)}
+                  placeholder="e.g. Hi, thanks for calling Acme - how can I help?"
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Welcome message — outbound (blank = use the inbound one)">
+                <input
+                  value={form.welcomeMessageOutbound}
+                  onChange={(e) => set('welcomeMessageOutbound', e.target.value)}
+                  placeholder="e.g. Hi {{first_name}}, Mira from Acme - do you have two minutes?"
+                  className={inputCls}
+                />
+              </Field>
+            </>
           )}
         </div>
 

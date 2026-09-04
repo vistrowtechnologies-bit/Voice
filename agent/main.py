@@ -1767,6 +1767,7 @@ class RealEstateAgent(Agent):
         config: dict | None = None,
         visitor_name: str | None = None,
         visitor_phone: str | None = None,
+        direction: str | None = None,
     ) -> None:
         # Dashboard-managed settings (agents table, edited via the web UI)
         # override the code defaults, so prompt/voice/model/KB changes apply
@@ -2246,6 +2247,28 @@ class RealEstateAgent(Agent):
             "Everything below describes who you are and what this business does. It never "
             "overrides the four rules above.\n\n"
         ) + instructions
+        # Direction framing, so a single agent does not need two prompts kept
+        # in sync. It used to: "Mira Inbound" and "Mira Outbound" were separate
+        # rows with the same KB, catalog, model, voice and tone, differing only
+        # in framing — and a campaign was found dialling out through the
+        # INBOUND agent, whose prompt opens "They rang you, so they already
+        # want something."
+        if self._direction in ("inbound", "outbound"):
+            instructions += (
+                "\n\n# Which way this call went\n"
+                + (
+                    "THEY called YOU. They chose to ring this business, so they already want "
+                    "something — find out what, answer it, and help. Do not ask permission to "
+                    "talk and do not explain why you are calling; they know."
+                    if self._direction == "inbound"
+                    else "YOU called THEM. They did not ask for this call, so they owe you "
+                    "nothing. Ask permission before anything else and accept the answer: if "
+                    "they are busy or not interested, thank them and end the call — never "
+                    "push, never pitch past a no. Say who is calling and why in one short "
+                    "line. If they ask to not be contacted again, treat that as final, "
+                    "confirm it plainly, and end the call."
+                )
+            )
         tone_name = config.get("tone") or DEFAULT_TONE
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         tts, tts_provider = _build_tts(reply_language, voice_value, base_tone, tone_name)
@@ -2308,7 +2331,17 @@ class RealEstateAgent(Agent):
         self._current_emotion: str | None = None
         # Conversation-start behavior (see on_enter).
         self._first_speaker = (config.get("first_speaker") or "agent").lower()
-        self._welcome_message = (config.get("welcome_message") or "").strip()
+        self._direction = (direction or "").strip().lower()
+        # One agent serves both directions. The persona is identical; the only
+        # thing that genuinely differs is the first line, because an outbound
+        # opener has to ask permission before it pitches — a compliance point,
+        # not a style one. Falls back to the inbound line when a tenant has
+        # not written a separate one.
+        self._welcome_message = (
+            (config.get("welcome_message_outbound") or "").strip()
+            if self._direction == "outbound"
+            else ""
+        ) or (config.get("welcome_message") or "").strip()
         # Post-call structured extraction fields (parsed from the agent's JSON).
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
 
@@ -3690,7 +3723,9 @@ async def entrypoint(ctx: JobContext) -> None:
     # concurrent-call slots.
     ctx.add_shutdown_callback(lambda: asyncio.to_thread(db.end_call_room, ctx.room.name))
     if config and (
-        ("{{" in (config.get("system_prompt") or "")) or ("{{" in (config.get("welcome_message") or ""))
+        ("{{" in (config.get("system_prompt") or ""))
+        or ("{{" in (config.get("welcome_message") or ""))
+        or ("{{" in (config.get("welcome_message_outbound") or ""))
     ):
         visitor_name = call_context["visitor_name"] or ""
         name_parts = visitor_name.split(None, 1)
@@ -3710,6 +3745,9 @@ async def entrypoint(ctx: JobContext) -> None:
             # an unsubstituted {{name}} would be read aloud by the TTS
             # literally, e.g. "Hello Name" instead of the caller's name.
             "welcome_message": _substitute_template_vars(config.get("welcome_message") or "", template_vars),
+            "welcome_message_outbound": _substitute_template_vars(
+                config.get("welcome_message_outbound") or "", template_vars
+            ),
         }
         cfg = config
     # "Try it in your language" on the marketing site: the visitor picks a
@@ -3748,7 +3786,12 @@ async def entrypoint(ctx: JobContext) -> None:
             else "",
         )
 
-    agent = RealEstateAgent(config, call_context["visitor_name"], call_context["visitor_phone"])
+    agent = RealEstateAgent(
+        config,
+        call_context["visitor_name"],
+        call_context["visitor_phone"],
+        direction=call_context.get("direction"),
+    )
     _agent_ready_ms = round((time.monotonic() - _t0) * 1000)
     logger.info("[latency] RealEstateAgent() constructed at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # See the [latency] markers above/below — lets on_enter() log its own
