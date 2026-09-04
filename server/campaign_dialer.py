@@ -28,6 +28,7 @@ import urllib.error
 import urllib.request
 
 import calls_db
+import plan_policy
 
 logger = logging.getLogger("vistrow-dialer")
 
@@ -82,6 +83,12 @@ def _place_via_orchestrator(to_number: str, from_number: str, account_id: int, a
 def _dial_one(campaign: dict) -> None:
     account_id = campaign["account_id"]
     cid = campaign["id"]
+    try:
+        calls_db.require_feature(account_id, "campaigns")
+    except plan_policy.EntitlementError:
+        calls_db.set_campaign_status(cid, "paused", account_id)
+        logger.info("campaign %s paused: workspace plan no longer includes campaigns", cid)
+        return
     from_number = (campaign.get("from_number") or "").strip()
 
     # A campaign with no from-number can never dial — surface it and pause so

@@ -307,6 +307,8 @@ def _deliver_zoho_crm(account_id: int, config: dict, lead: dict) -> tuple[bool, 
 
 
 def _deliver_one(key: str, config: dict, lead: dict, account_id: int | None = None) -> tuple[bool, str]:
+    if account_id is None or not calls_db.account_entitlements(account_id)["features"]["crm"]:
+        return False, "CRM delivery requires the Growth or Scale plan"
     if key == "zoho_crm":
         return _deliver_zoho_crm(account_id, config, lead)
     body = _body_for(key, config, lead)

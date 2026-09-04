@@ -31,6 +31,7 @@ import psycopg
 
 import dbconn
 import voice_catalog
+import plan_policy
 from industry_demos import INDUSTRY_DEMOS
 from widget_avatars import is_valid_avatar_key
 
@@ -3157,6 +3158,22 @@ def get_account_plan(account_id: int) -> str:
         conn.close()
 
 
+def account_entitlements(account_id: int) -> dict:
+    conn = _connect()
+    try:
+        return plan_policy.account_policy(conn, account_id)
+    finally:
+        conn.close()
+
+
+def require_feature(account_id: int, feature: str) -> dict:
+    conn = _connect()
+    try:
+        return plan_policy.require(conn, account_id, feature)
+    finally:
+        conn.close()
+
+
 def count_active_calls(account_id: int) -> int:
     """How many calls this account has live right now, per the active_calls
     table (see its schema comment). Used by the campaign dialer to skip
@@ -3218,9 +3235,11 @@ class AgentLimitError(Exception):
 def create_agent(data: dict, account_id: int) -> dict:
     conn = _connect()
     try:
+        # Held through INSERT/commit: concurrent creates cannot overshoot.
+        conn.execute("SELECT id FROM accounts WHERE id = ? FOR UPDATE", (account_id,))
         plan, is_owner = _account_plan_and_owner(conn, account_id)
         if not is_owner:
-            limit = AGENT_LIMITS.get(plan, AGENT_LIMITS["starter"])
+            limit = AGENT_LIMITS.get(plan, 0)
             current = conn.execute("SELECT COUNT(*) c FROM agents WHERE account_id = ?", (account_id,)).fetchone()["c"]
             if current >= limit:
                 raise AgentLimitError(
@@ -3264,6 +3283,8 @@ def update_agent(agent_id: int, data: dict, account_id: int) -> dict | None:
             column = _AGENT_CAMEL_TO_SNAKE.get(key, key)
             if column not in _AGENT_FIELDS:
                 continue
+            if value and column in {"kb_id", "live_catalog_enabled"}:
+                plan_policy.require(conn, account_id, "knowledge" if column == "kb_id" else "live_catalog")
             if column == "kb_id" and value is not None:
                 # Refuse to point this agent at a knowledge base the caller's
                 # account doesn't own — otherwise a crafted kbId would let one
@@ -3477,6 +3498,8 @@ def resolve_api_key(full_key: str) -> int | None:
             "SELECT id, account_id FROM api_keys WHERE key_hash = ?", (_hash_api_key(full_key),)
         ).fetchone()
         if row is None:
+            return None
+        if not plan_policy.account_policy(conn, row["account_id"])["features"]["api"]:
             return None
         with conn:
             conn.execute(f"UPDATE api_keys SET last_used_at = {_NOW} WHERE id = ?", (row["id"],))
@@ -4190,6 +4213,15 @@ def create_knowledge_base(name: str, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
+            # Serialize quota checks across concurrent requests for this tenant.
+            conn.execute("SELECT id FROM accounts WHERE id = ? FOR UPDATE", (account_id,)).fetchone()
+            policy = plan_policy.require(conn, account_id, "knowledge")
+            limit = policy["knowledgeBaseLimit"]
+            count = conn.execute("SELECT COUNT(*) c FROM knowledge_bases WHERE account_id = ?", (account_id,)).fetchone()["c"]
+            if limit is not None and count >= limit:
+                raise plan_policy.EntitlementError(
+                    f"Your plan includes {limit} knowledge base(s). Existing data is retained; remove an unused base or upgrade to create another."
+                )
             conn.execute("INSERT INTO knowledge_bases (account_id, name) VALUES (?, ?)", (account_id, name))
     finally:
         conn.close()
@@ -4557,6 +4589,7 @@ def create_campaign(data: dict, account_id: int) -> int:
     deduped by normalized form so the same person isn't dialed twice. Returns
     the new campaign id. Starts in 'draft' — the dialer ignores it until the
     operator explicitly launches it (set_campaign_status running)."""
+    require_feature(account_id, "campaigns")
     conn = _connect()
     try:
         with conn:
@@ -4803,6 +4836,8 @@ def set_campaign_status(campaign_id: int, status: str, account_id: int) -> None:
     """Lifecycle transitions: draft -> running -> paused/completed/cancelled.
     Stamps started_at the first time it runs and completed_at when it finishes
     or is cancelled, so the dashboard can show duration."""
+    if status in {"running", "scheduled"}:
+        require_feature(account_id, "campaigns")
     conn = _connect()
     try:
         with conn:
@@ -5064,6 +5099,8 @@ def update_integration(key: str, status: str, config: dict, account_id: int, nam
     "webhook" integration) with the actual receiver's name, like "ArthaLeads
     CRM", without touching _SEED_INTEGRATIONS (which every other tenant's
     freshly-seeded row still starts from unchanged)."""
+    if status == "connected" and key in {"webhook", "slack", "whatsapp", "sheets", "arthaleads", "zoho_crm"}:
+        require_feature(account_id, "crm")
     conn = _connect()
     try:
         with conn:
@@ -5860,17 +5897,13 @@ PRICING_FINALIZED = True
 # module (Python backend / TS frontend), so keep them in sync by hand. This
 # is the source of truth for what an account is actually charged; plans.ts
 # is display copy only.
-PLAN_PRICING = {
-    "starter": {"price_inr": 2999, "credits": 300},
-    "growth": {"price_inr": 5999, "credits": 1000},
-    "scale": {"price_inr": 12999, "credits": 2500},
-}
+PLAN_PRICING = {key: {k: value[k] for k in ("price_inr", "credits")} for key, value in plan_policy.PLANS.items()}
 # Confirmed real gap: the pricing page has always advertised these agent
 # counts as a plan differentiator, but create_agent() enforced nothing -
 # a Starter account could create an unlimited number of agents same as
 # Scale. Mirrors web-demo/src/lib/plans.ts's PLANS[].features counts -
 # keep both in sync by hand.
-AGENT_LIMITS = {"starter": 1, "growth": 5, "scale": 20}
+AGENT_LIMITS = {key: value["agents"] for key, value in plan_policy.PLANS.items()}
 # Same real gap as AGENT_LIMITS: the pricing page advertises "~N concurrent
 # calls" per plan (web-demo/src/lib/plans.ts PLANS[].features — keep both in
 # sync by hand) but nothing enforced it — an account could run unlimited
@@ -5879,7 +5912,7 @@ AGENT_LIMITS = {"starter": 1, "growth": 5, "scale": 20}
 # spend). Counts BOTH directions — inbound and outbound calls share the same
 # cap, since the cost driver is the conversation itself, not which side
 # dialled.
-CONCURRENT_CALL_LIMITS = {"starter": 5, "growth": 15, "scale": 30}
+CONCURRENT_CALL_LIMITS = {key: value["concurrency"] for key, value in plan_policy.PLANS.items()}
 # Standard India GST rate on SaaS/digital services. Added on TOP of every
 # figure above (and the overage/phone-number/top-up rates derived from
 # them) - PLAN_PRICING etc. stay tax-exclusive so the credit/overage math

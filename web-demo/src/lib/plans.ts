@@ -33,6 +33,17 @@ export const ANNUAL_MONTHS_CHARGED = 10
 // Mirrors server/calls_db.py's PRICING_FINALIZED - keep both in sync.
 export const PRICING_FINALIZED = true
 
+// Existing dashboard capabilities, not promises of unlimited usage or support.
+const DASHBOARD_FEATURES = [
+  'Scenario-based live testing & saved regression cases',
+  'Call transcripts, recording playback & diagnostic timelines',
+  'Conversation summaries & structured call analysis',
+  'Contact imports, custom fields & activity history',
+  'Widget visitor fields & page-specific agent routing',
+  'Speech interruption, silence & call-duration controls',
+  'Profile, device sign-out & privacy request controls',
+]
+
 export const PLANS: Plan[] = [
   {
     name: 'Starter',
@@ -45,7 +56,8 @@ export const PLANS: Plan[] = [
     tag: null,
     features: [
       '1 AI agent',
-      '~5 concurrent calls',
+      '1 knowledge base with approved answers',
+      'Up to 5 concurrent calls',
       'Web calling widget',
       'Call history & analytics',
       'Call recording',
@@ -55,8 +67,9 @@ export const PLANS: Plan[] = [
       'Caller memory (recognizes returning callers)',
       'Background sound customization',
       'Calendar & appointment booking',
+      ...DASHBOARD_FEATURES,
     ],
-    lockedFeatures: ['Premium voice tier'],
+    lockedFeatures: ['Inbound + outbound campaigns', 'CRM webhook integration', 'Agent-assigned live catalog', 'Full API access', 'Premium voice tier'],
   },
   {
     name: 'Growth',
@@ -69,7 +82,9 @@ export const PLANS: Plan[] = [
     tag: 'Recommended',
     features: [
       '5 AI agents',
-      '~15 concurrent calls',
+      '5 knowledge bases with approved answers',
+      'Agent-assigned live catalog (1 workspace feed)',
+      'Up to 15 concurrent calls',
       'Web calling widget',
       'Call history & analytics',
       'Inbound + outbound campaigns',
@@ -81,9 +96,9 @@ export const PLANS: Plan[] = [
       'Caller memory (recognizes returning callers)',
       'Background sound customization',
       'Calendar & appointment booking',
-      'Priority support',
+      ...DASHBOARD_FEATURES,
     ],
-    lockedFeatures: ['Premium voice tier'],
+    lockedFeatures: ['Full API access', 'Premium voice tier'],
   },
   {
     name: 'Scale',
@@ -96,7 +111,7 @@ export const PLANS: Plan[] = [
     tag: 'Most Popular',
     features: [
       '20 AI agents',
-      '~30 concurrent calls',
+      'Up to 30 concurrent calls',
       'Web calling widget',
       'Call history & analytics',
       'Inbound + outbound campaigns',
@@ -108,10 +123,10 @@ export const PLANS: Plan[] = [
       'Caller memory (recognizes returning callers)',
       'Background sound customization',
       'Calendar & appointment booking',
-      'Priority support',
+      ...DASHBOARD_FEATURES,
       'Full API access',
-      'Knowledge base (RAG)',
-      'Dedicated success manager',
+      '15 knowledge bases with approved answers',
+      'Agent-assigned live catalog (1 workspace feed)',
       'Premium voice tier',
     ],
   },

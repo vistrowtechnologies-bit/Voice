@@ -23,6 +23,8 @@ import psycopg
 from zoneinfo import ZoneInfo
 
 import dbconn
+import plan_policy
+import voice_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_active_calls_account ON active_calls(account_id);
 # calls") and server/calls_db.py's CONCURRENT_CALL_LIMITS — keep all three in
 # sync by hand. Duplicated rather than imported: agent/ and server/ are
 # separate deployables with separate venvs (see module docstring above).
-CONCURRENT_CALL_LIMITS = {"starter": 5, "growth": 15, "scale": 30}
+CONCURRENT_CALL_LIMITS = {key: value["concurrency"] for key, value in plan_policy.PLANS.items()}
 
 
 def init_db() -> None:
@@ -761,6 +763,8 @@ def get_delivery_integrations(
         return []
     conn = dbconn.connect()
     try:
+        if not plan_policy.account_policy(conn, account_id)["features"]["crm"]:
+            return []
         rows = conn.execute(
             "SELECT key, config_json FROM integrations "
             "WHERE account_id = ? AND status = 'connected' "
@@ -777,33 +781,35 @@ def get_delivery_integrations(
         conn.close()
 
 
-def try_start_call(room_name: str, account_id: int | None) -> bool:
+def try_start_call(room_name: str, account_id: int | None, config: dict | None = None) -> bool:
     """Claims a concurrent-call slot for this account, if one is free.
     Returns False (call the entrypoint must decline) once the account is at
     its plan's CONCURRENT_CALL_LIMITS cap. account_id is None for demo/
-    platform calls with no owning tenant — always allowed, since there's no
-    account to bill or protect. Not race-hardened against two calls landing
-    in the same instant on separate worker processes (same rigor level as
-    AGENT_LIMITS in server/calls_db.py) — acceptable for a human-paced cap,
-    not a hard resource limit.
-
-    Never blocks a call on its own failure: a DB hiccup here must not be able
-    to drop a real caller, so any error is treated as "slot granted"."""
+    platform calls with no owning tenant. Account row locking serializes
+    admission across workers; database failures decline new admissions."""
     if account_id is None:
         return True
-    conn = dbconn.connect()
+    conn = None
     try:
+        conn = dbconn.connect()
         row = conn.execute(
-            "SELECT plan, is_platform_owner FROM accounts WHERE id = ?", (account_id,)
+            "SELECT plan, is_platform_owner FROM accounts WHERE id = ? FOR UPDATE", (account_id,)
         ).fetchone()
+        if not row:
+            return False
+        if config is not None:
+            plan_policy.validate_agent(conn, account_id, config, voice_catalog)
+        existing = conn.execute("SELECT account_id FROM active_calls WHERE room_name = ?", (room_name,)).fetchone()
+        if existing:
+            return existing["account_id"] == account_id
         # Same exemption as AGENT_LIMITS in server/calls_db.py — Vistrow's own
         # account runs the marketing site's live demo, whose traffic must
         # never be capped by an arbitrary plan tier.
         if row and row["is_platform_owner"]:
             limit = None
         else:
-            plan = (row["plan"] if row else None) or "starter"
-            limit = CONCURRENT_CALL_LIMITS.get(plan, CONCURRENT_CALL_LIMITS["starter"])
+            plan = row["plan"] or ""
+            limit = CONCURRENT_CALL_LIMITS.get(plan, 0)
         if limit is not None:
             current = conn.execute(
                 "SELECT COUNT(*) c FROM active_calls WHERE account_id = ?", (account_id,)
@@ -817,11 +823,12 @@ def try_start_call(room_name: str, account_id: int | None) -> bool:
                 (room_name, account_id),
             )
         return True
-    except psycopg.Error:
-        logger.warning("try_start_call: DB error for account_id=%s — granting slot", account_id, exc_info=True)
-        return True
+    except (psycopg.Error, plan_policy.EntitlementError):
+        logger.warning("try_start_call: admission denied for account_id=%s", account_id, exc_info=True)
+        return False
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
 
 
 def end_call_room(room_name: str) -> None:

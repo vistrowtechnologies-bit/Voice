@@ -12,6 +12,7 @@ import {
   deleteKnowledgeSource,
   extractQaFromSource,
   fetchKnowledgeBases,
+  fetchEntitlements,
   fetchKnowledgeSource,
   fetchProjectListings,
   importKnowledgeSourceUrls,
@@ -84,7 +85,14 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 }
 
 export function KnowledgeBasePage() {
+  const [entitlements, setEntitlements] = useState<Awaited<ReturnType<typeof fetchEntitlements>> | null>(null)
+  const [entitlementError, setEntitlementError] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [kbs, setKbs] = useState<KnowledgeBase[]>([])
+  const canCreate = !!entitlements?.features.knowledge && (entitlements.knowledgeBaseLimit === null || kbs.length < entitlements.knowledgeBaseLimit)
+  const canSyncCatalog = !!entitlements?.features.live_catalog
+  useEffect(() => { fetchEntitlements().then(setEntitlements).catch(() => setEntitlementError(true)) }, [])
   // Optional live catalog synced from the tenant's own site. Kept out of the KB
   // on purpose: KB text goes into every system prompt under an 8k cap, so a
   // growing catalogue would silently truncate mid-call.
@@ -187,10 +195,18 @@ export function KnowledgeBasePage() {
   }
 
   const handleCreate = async () => {
-    if (!newName.trim()) return
-    await createKnowledgeBase(newName.trim())
-    setNewName('')
-    reload()
+    if (!newName.trim() || !canCreate || creating || loading) return
+    setCreating(true)
+    setCreateError(null)
+    try {
+      await createKnowledgeBase(newName.trim())
+      setNewName('')
+      await reload()
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : 'Could not create the knowledge base.')
+    } finally {
+      setCreating(false)
+    }
   }
 
   const closeAddSource = () => {
@@ -408,7 +424,7 @@ export function KnowledgeBasePage() {
               />
               <button
                 onClick={handleSaveFeed}
-                disabled={feedBusy}
+                disabled={feedBusy || !canSyncCatalog}
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
               >
                 {feedBusy ? 'Syncing…' : 'Save & sync'}
@@ -416,7 +432,7 @@ export function KnowledgeBasePage() {
               {!!listings.length && (
                 <button
                   onClick={handleSyncNow}
-                  disabled={feedBusy}
+                  disabled={feedBusy || !canSyncCatalog}
                   className="rounded-lg border border-border px-4 py-2 text-sm font-bold transition-colors hover:border-primary disabled:opacity-40"
                 >
                   Sync now
@@ -469,18 +485,24 @@ export function KnowledgeBasePage() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            placeholder="New knowledge base name (e.g. Treetopia - Pune)"
+            placeholder="New knowledge base name (e.g. Products and FAQs)"
             className="min-w-[240px] flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
           />
           <button
             onClick={handleCreate}
-            disabled={!newName.trim()}
+            disabled={!newName.trim() || !canCreate || creating || loading}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
           >
             <Icon name="add" className="text-[18px]" />
-            Create Knowledge Base
+            {creating ? 'Creating…' : 'Create Knowledge Base'}
           </button>
         </div>
+
+        <p className="text-xs text-text-muted" role="status">
+          {entitlementError ? 'Unable to check plan limits. Reload before creating a base or syncing a catalog.' : !entitlements ? 'Checking plan limits…' : `${kbs.length} knowledge bases used${entitlements.knowledgeBaseLimit === null ? '' : ` of ${entitlements.knowledgeBaseLimit}`}. Existing knowledge is retained when your plan changes.`}
+          {entitlements && !canSyncCatalog && <> Live catalog sync requires Growth or Scale. <a href="/dashboard/billing" className="text-primary underline">Compare plans</a>.</>}
+        </p>
+        {createError && <p role="alert" className="text-xs text-destructive">{createError}</p>}
 
         {loading && (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2" aria-label="Loading knowledge bases">

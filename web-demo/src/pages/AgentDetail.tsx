@@ -8,6 +8,7 @@ import { useAuth } from '../lib/auth'
 import {
   deleteAgent,
   fetchAgents,
+  fetchEntitlements,
   fetchIntegrations,
   fetchKnowledgeBases,
   fetchMyVoices,
@@ -118,6 +119,8 @@ function AgentEditorForm({
   onCancel: () => void
   onDeleted: () => void
 }) {
+  const [catalogAccess, setCatalogAccess] = useState<boolean | null>(null)
+  useEffect(() => { fetchEntitlements().then((e) => setCatalogAccess(!!e.features.live_catalog)).catch(() => setCatalogAccess(false)) }, [])
   const [form, setForm] = useState<AgentForm>({
     name: agent.name,
     description: agent.description,
@@ -498,12 +501,15 @@ function AgentEditorForm({
           subtitle="Optional products, services, inventory, menus, plans, or listings"
         >
           <div className="flex flex-col gap-3">
+            <fieldset disabled={!catalogAccess && !form.liveCatalogEnabled}>
             <Toggle
               checked={form.liveCatalogEnabled}
               onChange={(v) => set('liveCatalogEnabled', v)}
               label="Give this agent access to the live catalog"
               hint="Only this agent receives the workspace catalog. Other agents remain unaffected."
             />
+            </fieldset>
+            {!catalogAccess && <p className="text-xs text-text-muted">{catalogAccess === null ? 'Checking catalog access…' : <>Live catalog requires Growth or Scale. You can disable a retained assignment without deleting its data. <Link to="/dashboard/billing" className="text-primary underline">Compare plans</Link>.</>}</p>}
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-3">
               <p className="text-xs text-text-muted">
                 {catalogCount > 0

@@ -55,6 +55,20 @@ def is_configured() -> bool:
     return bool(os.environ.get("RAZORPAY_KEY_ID") and os.environ.get("RAZORPAY_KEY_SECRET"))
 
 
+def checkout_ready() -> bool:
+    """Credentials alone do not approve customer billing or sandbox sales.
+
+    Keep collection off until entitlement/ledger acceptance and live-key
+    rollout are approved. Explicit sandbox checkout is for staging only.
+    """
+    if not is_configured() or os.environ.get("BILLING_CHECKOUT_ENABLED") != "true":
+        return False
+    key = os.environ.get("RAZORPAY_KEY_ID", "")
+    return key.startswith("rzp_live_") or (
+        key.startswith("rzp_test_") and os.environ.get("BILLING_ALLOW_TEST_CHECKOUT") == "true"
+    )
+
+
 def plan_id_for(plan: str, billing_cycle: str) -> str:
     env_var = PLAN_ENV_VARS.get((plan, billing_cycle))
     plan_id = env_var and os.environ.get(env_var)

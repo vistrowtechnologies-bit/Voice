@@ -3,6 +3,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
+import { PLANS } from '../../lib/plans'
 
 const FAQ = [
   {
@@ -49,28 +50,28 @@ export function Pricing() {
       <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8 lg:py-20">
         <SectionEyebrow>Pricing</SectionEyebrow>
         <h1 className="mt-4 font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl">
-          Public beta access is open.
+          Choose the plan for your business.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
-          Test the complete voice platform, share feedback, and help shape the introductory plans before launch.
+          Start with one knowledgeable agent. Add campaign automation, integrations, and API access as you grow.
         </p>
         <p className="mx-auto mt-3 max-w-xl text-sm text-text-muted">
-          No public price is being advertised until the introductory rates are finalized.
+          Monthly prices below exclude applicable taxes and telephony. Credits are shared across calls; voice and model choices affect credits per minute. Contact us to confirm activation and supported telephony configuration.
         </p>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
         <div className="grid gap-5 lg:grid-cols-3">
-          {[
-            ['Voice + chat', ['Inbound and outbound calling', 'Embeddable website widget', 'Natural language switching']],
-            ['Operate confidently', ['Call history and transcripts', 'Visitor feedback and analytics', 'Agent and provider readiness']],
-            ['Scale when ready', ['Shared credit usage', 'CRM and webhook integrations', 'Volume planning with our team']],
-          ].map(([title, features]) => (
-            <div key={title as string} className="flex flex-col rounded-2xl border border-border bg-surface p-7">
-              <h3 className="font-display text-lg font-semibold">{title as string}</h3>
+          {PLANS.map((plan) => (
+            <div key={plan.key} className="flex flex-col rounded-2xl border border-border bg-surface p-7">
+              <h3 className="font-display text-lg font-semibold">{plan.name}</h3>
+              <p className="mt-3 text-3xl font-bold">{plan.price}<span className="text-sm font-normal text-text-muted"> / month</span></p>
+              <p className="mt-2 text-sm text-text-muted">{plan.credits} · {plan.description}</p>
               <ul className="mt-6 flex flex-1 flex-col gap-2.5">
-                {(features as string[]).map((feat) => <li key={feat} className="flex items-start gap-2 text-sm text-text-muted"><Icon name="check_circle" className="mt-0.5 text-[16px] text-cyan" />{feat}</li>)}
+                {plan.features.map((feat) => <li key={feat} className="flex items-start gap-2 text-sm text-text-muted"><Icon name="check_circle" className="mt-0.5 text-[16px] text-cyan" />{feat}</li>)}
               </ul>
+              <p className="mt-5 text-xs text-text-muted">Not included: {plan.lockedFeatures?.join(', ') || 'Usage beyond your allowances; separately billed telephony'}.</p>
+              <NavLink to="/contact" className="mt-6 rounded-full border border-primary px-5 py-3 text-center text-sm font-bold text-primary">Discuss {plan.name}</NavLink>
             </div>
           ))}
         </div>
@@ -84,7 +85,7 @@ export function Pricing() {
         <div className="rounded-3xl border border-border bg-surface p-10 text-center">
           <h2 className="font-display text-2xl font-bold">Need something custom?</h2>
           <p className="mx-auto mt-2 max-w-md text-text-muted">
-            High call volumes, on-prem, or a dedicated success manager - let’s talk.
+            Discuss higher call volumes, supported telephony connections, and an agreed support scope.
           </p>
           <NavLink
             to="/contact"

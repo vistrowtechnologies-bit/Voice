@@ -80,6 +80,8 @@ def sync_account(account_id: int, feed_url: str | None = None) -> dict:
     took down must stop being something the agent offers, and leaving stale
     rows behind would have the agent pitching withdrawn inventory.
     """
+    if not calls_db.account_entitlements(account_id)["features"]["live_catalog"]:
+        return {"ok": False, "error": "Live catalog sync requires the Scale plan. Existing data is retained."}
     feed_url = (feed_url or calls_db.get_setting(FEED_URL_SETTING, account_id) or "").strip()
     if not feed_url:
         return {"ok": False, "error": "No live catalog feed URL configured for this account."}

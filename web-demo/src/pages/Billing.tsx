@@ -55,7 +55,7 @@ export function Billing() {
   const { user } = useAuth()
   const [billing, setBilling] = useState<BillingSummary | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [razorpayConfigured, setRazorpayConfigured] = useState(true)
+  const [razorpayConfigured, setRazorpayConfigured] = useState(false)
   const [cycle, setCycle] = useState<'monthly' | 'annual'>('monthly')
   const [busyPlan, setBusyPlan] = useState<string | null>(null)
   const [topupOpen, setTopupOpen] = useState(false)
@@ -70,7 +70,7 @@ export function Billing() {
         setInvoices(r.invoices)
         setRazorpayConfigured(r.razorpayConfigured)
       })
-      .catch(() => {})
+      .catch(() => setRazorpayConfigured(false))
   }
 
   useEffect(refetch, [])
@@ -425,7 +425,7 @@ export function Billing() {
                             <li key={f} className="flex items-center justify-between gap-2 text-text-muted/60">
                               <span>{f}</span>
                               <span className="rounded-full border border-border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-text-muted/60">
-                                Scale only
+                                {['Full API access', 'Premium voice tier'].includes(f) ? 'Scale' : 'Growth+'}
                               </span>
                             </li>
                           ))}

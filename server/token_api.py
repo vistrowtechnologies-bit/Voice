@@ -18,6 +18,7 @@ import auth
 import jwt
 import call_intelligence
 import calls_db
+import plan_policy
 import campaign_dialer
 import db_backup
 import email_sender
@@ -162,7 +163,39 @@ def current_user(request: Request) -> dict:
     """FastAPI dependency: the logged-in user's {uid, aid}. The middleware has
     already rejected unauthenticated requests, so state is always populated on
     guarded routes."""
-    return {"user_id": request.state.user_id, "account_id": request.state.account_id}
+    user = {"user_id": request.state.user_id, "account_id": request.state.account_id}
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and not getattr(request.state, "impersonator_id", None):
+        resource = request.url.path.split("/")[1]
+        if resource in {"agents", "knowledge-bases", "knowledge-sources", "kb-qa", "project-listings", "campaigns", "contacts", "appointments", "inbound-routes"}:
+            member = calls_db.get_user_by_id(user["user_id"])
+            if not member or calls_db.ROLE_RANK.get(member["role"], 0) < calls_db.ROLE_RANK["member"]:
+                raise HTTPException(403, "Member access or higher is required to make changes.")
+    if request.method not in {"GET", "HEAD", "OPTIONS", "DELETE"}:
+        path = request.url.path
+        gates = {"/campaigns": "campaigns", "/inbound-routes": "inbound_routing",
+                 "/knowledge-bases": "knowledge",
+                 "/knowledge-sources": "knowledge", "/kb-qa": "knowledge",
+                 "/project-listings": "live_catalog"}
+        integration = path.split("/")
+        if len(integration) > 2 and integration[1] == "integrations" and integration[2] in {"webhook", "slack", "whatsapp", "sheets", "arthaleads", "zoho_crm"}:
+            gates["/integrations/" + integration[2]] = "crm"
+        for prefix, feature in gates.items():
+            if path == prefix or path.startswith(prefix + "/"):
+                try:
+                    calls_db.require_feature(user["account_id"], feature)
+                except plan_policy.EntitlementError as exc:
+                    raise HTTPException(403, str(exc)) from exc
+    return user
+
+
+@app.get("/entitlements")
+def get_entitlements(user: dict = Depends(current_user)) -> dict:
+    return calls_db.account_entitlements(user["account_id"])
+
+
+@app.exception_handler(plan_policy.EntitlementError)
+async def entitlement_error_response(request: Request, exc: plan_policy.EntitlementError):
+    return JSONResponse({"detail": str(exc)}, status_code=403)
 
 
 def require_role(min_role: str):
@@ -2682,7 +2715,7 @@ def _guard_voice_tier(data: dict | None, account_id: int) -> None:
         return
     entry = voice_catalog.get_voice(requested_voice)
     if entry is None:
-        return
+        raise HTTPException(400, "Select an available catalog voice.")
     is_owner = calls_db.is_platform_owner(account_id)
     if entry.get("preview") and not is_owner:
         raise HTTPException(400, "That preview voice is available only to the Vistrow admin account.")
@@ -2706,6 +2739,13 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
 def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     _guard_voice_tier(data, user["account_id"])
     _guard_admin_only_model(data, user["account_id"])
+    for fields, feature in ((('kbId', 'kb_id'), 'knowledge'),
+                            (('liveCatalogEnabled', 'live_catalog_enabled'), 'live_catalog')):
+        if any(data.get(field) for field in fields):
+            try:
+                calls_db.require_feature(user["account_id"], feature)
+            except plan_policy.EntitlementError as exc:
+                raise HTTPException(403, str(exc)) from exc
     # Both of these decide what the PUBLIC marketing site talks to, so only
     # the platform operator's own account may set them: isPlatformDemo
     # redirects the main "talk to Artha" demo, and publicDemoSlug publishes
@@ -3712,7 +3752,7 @@ def billing_subscription(user: dict = Depends(current_user)) -> dict:
     return {
         "subscription": calls_db.get_subscription(user["account_id"]),
         "invoices": calls_db.list_invoices(user["account_id"]),
-        "razorpayConfigured": razorpay_client.is_configured(),
+        "razorpayConfigured": razorpay_client.checkout_ready(),
     }
 
 
@@ -3722,15 +3762,15 @@ class CheckoutRequest(BaseModel):
 
 
 @app.post("/billing/checkout")
-def billing_checkout(req: CheckoutRequest, user: dict = Depends(current_user)) -> dict:
+def billing_checkout(req: CheckoutRequest, user: dict = Depends(require_role("admin"))) -> dict:
     """Starts (or switches) a subscription for this account. Returns what the
     frontend needs to open Razorpay Checkout against — actual activation
     happens via the subscription.activated/charged webhook below, not here;
     this route only creates the pending subscription and hands back its id."""
     if not calls_db.PRICING_FINALIZED:
         raise HTTPException(503, "Introductory pricing is still being finalized — checkout isn't open yet.")
-    if not razorpay_client.is_configured():
-        raise HTTPException(503, "Billing isn't set up on this server yet — contact support.")
+    if not razorpay_client.checkout_ready():
+        raise HTTPException(503, "Checkout is not enabled for customer payments. Contact billing support.")
     plan = req.plan.strip().lower()
     if plan not in calls_db.PLAN_PRICING:
         raise HTTPException(400, f"Unknown plan: {req.plan}")
@@ -3744,6 +3784,8 @@ def billing_checkout(req: CheckoutRequest, user: dict = Depends(current_user)) -
         raise HTTPException(503, str(e)) from e
 
     existing = calls_db.get_subscription(user["account_id"])
+    if existing and existing.get("status") in {"active", "authenticated", "pending", "halted"}:
+        raise HTTPException(409, "An existing subscription needs to be managed first. Contact billing support to change plans without duplicate charges.")
     customer_id = existing["razorpay_customer_id"] if existing else None
     if not customer_id:
         profile = calls_db.get_user_by_id(user["user_id"])
@@ -3780,13 +3822,13 @@ class TopupRequest(BaseModel):
 
 
 @app.post("/billing/topup")
-def billing_topup(req: TopupRequest, user: dict = Depends(current_user)) -> dict:
+def billing_topup(req: TopupRequest, user: dict = Depends(require_role("admin"))) -> dict:
     """One-off credit purchase, priced at the account's own plan rate (not
     the overage penalty rate — this is buying ahead, not running over)."""
     if not calls_db.PRICING_FINALIZED:
         raise HTTPException(503, "Introductory pricing is still being finalized — top-ups aren't open yet.")
-    if not razorpay_client.is_configured():
-        raise HTTPException(503, "Billing isn't set up on this server yet — contact support.")
+    if not razorpay_client.checkout_ready():
+        raise HTTPException(503, "Checkout is not enabled for customer payments. Contact billing support.")
     if req.credits <= 0:
         raise HTTPException(400, "credits must be positive")
     summary = calls_db.billing_summary(user["account_id"])

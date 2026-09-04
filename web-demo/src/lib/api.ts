@@ -79,6 +79,17 @@ async function send<T = unknown>(method: string, path: string, body?: unknown): 
 
 // ---------------------------------------------------------- calls & leads
 
+export interface AccountEntitlements {
+  plan: string
+  platformOwner: boolean
+  knowledgeBaseLimit: number | null
+  features: Record<string, boolean>
+}
+
+export function fetchEntitlements() {
+  return get<AccountEntitlements>('/entitlements')
+}
+
 export function fetchCalls(params?: { search?: string; status?: string; days?: number }) {
   const q = new URLSearchParams()
   if (params?.search) q.set('search', params.search)
