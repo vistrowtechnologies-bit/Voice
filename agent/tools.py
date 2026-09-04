@@ -824,7 +824,20 @@ async def _calendar_check(context: RunContext, date: str, duration_minutes: int)
     if _is_demo(context):
         return _demo_slots_for(date)
     account_id = (context.userdata or {}).get("account_id")
-    return db.check_appointment_availability(account_id, date, duration_minutes)
+    # to_thread, not a bare call. This runs as a task alongside the spoken
+    # "एक मिनट, चेक करके बताती हूँ" filler, and the whole point of that filler
+    # is to cover the lookup. But psycopg is synchronous: a bare call here has
+    # no await before it, so once the task starts it holds the event loop for
+    # the full query and nothing else can run — including the TTS stream for
+    # the filler that is supposed to be playing over it.
+    #
+    # Call 851, measured: the filler's first audio byte took 12,769ms. Every
+    # other line in that call was 137-318ms. The caller asked to book a visit
+    # and heard thirteen seconds of silence, then "one moment, let me check".
+    # The line written to hide the wait was blocked by the wait.
+    return await asyncio.to_thread(
+        db.check_appointment_availability, account_id, date, duration_minutes
+    )
 
 
 async def _calendar_book(
@@ -841,7 +854,12 @@ async def _calendar_book(
         return {"ok": True}
     account_id = (context.userdata or {}).get("account_id")
     agent_id = (context.userdata or {}).get("agent_id")
-    return db.book_native_appointment(account_id, agent_id, date, time, duration_minutes, name, phone, purpose)
+    # Same reason as _calendar_check: this runs under with_filler, so a
+    # blocking write stalls the very line meant to cover it.
+    return await asyncio.to_thread(
+        db.book_native_appointment,
+        account_id, agent_id, date, time, duration_minutes, name, phone, purpose,
+    )
 
 
 @function_tool
@@ -1131,7 +1149,8 @@ async def request_callback(
         logger.info("demo agent: simulating callback request for %s (%s)", name, phone)
         result = {"ok": True}
     else:
-        result = db.record_callback_request(
+        result = await asyncio.to_thread(
+            db.record_callback_request,
             (context.userdata or {}).get("account_id"),
             (context.userdata or {}).get("agent_id"),
             name, phone, preferred_date, preferred_time, reason,
