@@ -305,8 +305,12 @@ export function Voices() {
     .some((value) => value.toLowerCase().includes(query))
   const byTier = (tier: VoiceTier) => (data?.voices ?? []).filter((v) => v.tier === tier && matchesSearch(v))
   const stableByTier = (tier: VoiceTier) => byTier(tier).filter((v) => !v.preview)
+  // Chirp 3 HD gets its own group below — without splitting it out, 20 voices
+  // land inside the generic Standard group and disappear behind its
+  // "show more" collapse.
+  const chirp3Hd = () => stableByTier('standard').filter((v) => v.value.includes('Chirp3'))
+  const standardSolo = () => stableByTier('standard').filter((v) => !v.value.includes('Chirp3'))
   const previewVoices = () => (data?.voices ?? []).filter((v) => v.preview && matchesSearch(v))
-  const sarvamLite = () => byTier('lite').filter((v) => !v.value.startsWith('google:') && !v.value.startsWith('google31:'))
   const multilingualPremium = () => stableByTier('premium').filter((v) => v.multilingual)
   const premiumSolo = () => stableByTier('premium').filter((v) => !v.multilingual)
   const nativeLite = () => byTier('lite').filter((v) => v.value.startsWith('google:') && !v.multilingual)
@@ -378,7 +382,7 @@ export function Voices() {
               onRemove={onRemove}
             />
             <TierGroup
-              entries={stableByTier('standard')}
+              entries={standardSolo()}
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
@@ -389,15 +393,6 @@ export function Voices() {
                 No voices match “{search}”.
               </div>
             )}
-            <TierGroup
-              entries={sarvamLite()}
-              label="Vistrow Lite v2"
-              note="0.75x credits · multilingual"
-              lang={lang}
-              busyVoice={busyVoice}
-              onAdd={onAdd}
-              onRemove={onRemove}
-            />
             <TierGroup
               entries={previewVoices()}
               label="Vistrow Next Preview"
@@ -413,6 +408,15 @@ export function Voices() {
               // Derived from the entries themselves — a hardcoded count here
               // drifted out of sync with the badge the moment the catalog grew.
               note={`2x credits · one voice, ${multilingualPremium()[0]?.languageCount ?? 0} languages, switches live`}
+              lang={lang}
+              busyVoice={busyVoice}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
+            <TierGroup
+              entries={chirp3Hd()}
+              label="Vistrow HD"
+              note="1x credits · fastest Google voices · one language each"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
