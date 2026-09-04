@@ -1154,8 +1154,8 @@ def catalog_index(account_id: int, limit: int = 60) -> str:
     conn = dbconn.connect()
     try:
         rows = conn.execute(
-            "SELECT title, location, category, status, config, price_from, price_label FROM project_listings "
-            "WHERE account_id = ? ORDER BY status, title LIMIT ?",
+            "SELECT title, developer, location, category, status, config, price_from, price_label "
+            "FROM project_listings WHERE account_id = ? ORDER BY status, title LIMIT ?",
             (account_id, limit),
         ).fetchall()
     except psycopg.Error:
@@ -1170,8 +1170,26 @@ def catalog_index(account_id: int, limit: int = 60) -> str:
         )
         status_value = r["status"] or ""
         status = "" if status_value in ("", "active") else f" [{status_value}]"
+        # The developer/brand belongs in the index, not just behind
+        # lookup_catalog. Call 847 asked "कौन से कौन से डेवलपर्स के प्रोजेक्ट हैं
+        # आपके पास?" and then, twice, for Shapoorji Pallonji's projects. The
+        # index had no developer column at all, so the model had nothing to
+        # answer from and produced "Residential Towers" and "Micro Market Hub"
+        # — two names lifted out of the `config` text of real rows. The real
+        # answer, Shapoorji Pallonji Khopoli and Treetopia, was sitting in the
+        # same table one column over.
+        #
+        # "Which builder do you have" is a question every property caller
+        # asks, and it is the cheapest possible thing to answer correctly:
+        # roughly twenty characters per row.
+        _dev = (r["developer"] or "").strip()
+        _title = r["title"] + status
+        # Skip it when the title already carries the brand ("Godrej River
+        # Royale", "Shapoorji Pallonji Khopoli") — repeating it there buys
+        # nothing and costs prompt the whole call is already short on.
+        _dev_bit = "" if not _dev or _dev.split()[0].lower() in _title.lower() else f"by {_dev}"
         bits = [
-            b for b in (r["title"] + status, _normalize_for_speech(r["config"]), r["location"], price) if b
+            b for b in (_title, _dev_bit, _normalize_for_speech(r["config"]), r["location"], price) if b
         ]
         lines.append("- " + " | ".join(bits))
     return "\n".join(lines)

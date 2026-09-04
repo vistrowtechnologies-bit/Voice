@@ -620,9 +620,120 @@ def _advance_funnel_stage(
     return userdata["funnel_stage"]
 
 
-def _current_objective(stage_index: int) -> str:
-    name, guidance = _FUNNEL_STAGES[stage_index]
-    return f"# Current objective: {name}\n{guidance}"
+# --- What the caller wants RIGHT NOW, as opposed to where the funnel got to --
+#
+# Call 847 is the whole argument for separating these two. The caller asked,
+# in order: which developers do you have, which Shapoorji Pallonji projects,
+# do you have Treetopia, tell me about Mahindra Citadel. Four explicit
+# information requests. The agent answered with site-visit slots three times,
+# until the caller said "साइट विजिट बार-बार मत पूछिए" — stop asking about site
+# visits.
+#
+# It was not ignoring him. _advance_funnel_stage is monotonic by design, the
+# call had touched an appointment turn, and so every prompt after that ended
+# with "A demo/appointment is being discussed — check real availability". That
+# line is the LAST thing in the system message, the strongest position there
+# is, and it was still there while the caller was asking about developers.
+#
+# So the funnel stage stays what it is (it is a useful record of how far the
+# call got) and a separate, per-turn intent decides what the objective
+# actually is. The caller's current request outranks it.
+
+# An explicit ask for a visit. Only this turns scheduling back on once the
+# caller has told us to stop offering it.
+_SITE_VISIT_REQUEST_PATTERN = re.compile(
+    r"\b(site\s*visit|visit|viewing|see the (flat|site|property|project)|"
+    r"come (and )?see|show me around)\b|"
+    r"साइट\s*विज़?िट|विजिट|देखने आ|दिखा\s*दीजिए|दिखाइए|"
+    r"साईट\s*व्हिजिट|पाहायला",
+    re.IGNORECASE,
+)
+
+# "Don't ask me about a site visit again." A standing constraint for the rest
+# of the call, not a single-turn mood.
+_SITE_VISIT_REFUSAL_PATTERN = re.compile(
+    r"(don'?t|do not|stop|no need to)\s+(keep\s+)?(ask|asking|offer|offering|"
+    r"push|pushing)[^.?!]{0,24}(visit|appointment|slot)|"
+    r"(visit|appointment|slot)[^.?!]{0,24}(mat|nahi|nahin)\s*(pooch|puch)|"
+    # Deliberately narrow: it must be about ASKING, and about a visit.
+    # "अभी नहीं चाहिए" and "फिलहाल नहीं" were in here and are just someone
+    # saying not right now — to anything. They would have silenced site
+    # visits for a whole call over a declined biscuit.
+    r"(साइट\s*विज़?िट|विजिट|अपॉइंटमेंट)[^।?!]{0,20}मत\s*पूछ|"
+    r"बार[-\s]*बार\s*मत\s*पूछ",
+    re.IGNORECASE,
+)
+
+# The caller wants to know about the business's stock: what projects, whose
+# projects, how much, what's in them. _INVENTORY_QUESTION_PATTERN covers the
+# "what do you have" shape; these two cover price and amenities, which are
+# the other two things a property caller asks that must be answered from the
+# catalog rather than deflected into scheduling.
+_PROJECT_DETAIL_PATTERN = re.compile(
+    r"\b(price|cost|rate|budget|amenit|facilit|carpet|area|size|possession|"
+    r"floor|developer|builder|brand|configuration|sq\s?ft)\b|"
+    r"कीमत|दाम|रेट|भाव|सुविधा|एमेनिट|डेवलपर|बिल्डर|कारपेट|पजेशन|"
+    r"किंमत|सुविधा|बांधकाम",
+    re.IGNORECASE,
+)
+
+def _detect_customer_intent(text: str, named_rows: list[str]) -> str:
+    """What this turn is asking for, independent of the funnel stage.
+
+    Deterministic and regex-only on purpose: an intent classifier that costs
+    an LLM call would sit on the critical path of every single turn, and the
+    signals that matter here (a named catalog row, an inventory question, an
+    explicit "stop asking") are all things a pattern can see.
+    """
+    t = text or ""
+    if not t.strip():
+        return ""
+    # Checked before the request pattern: "साइट विजिट बार-बार मत पूछिए"
+    # contains the words for a site visit and must not read as asking for one.
+    if _SITE_VISIT_REFUSAL_PATTERN.search(t):
+        return "site_visit_refused"
+    if _SITE_VISIT_REQUEST_PATTERN.search(t):
+        return "site_visit"
+    # A named catalog row is the strongest possible signal that this turn is
+    # about a project, whatever else the sentence looks like.
+    if named_rows or _INVENTORY_QUESTION_PATTERN.search(t) or _PROJECT_DETAIL_PATTERN.search(t):
+        return "project_information"
+    return ""
+
+
+def _current_objective(
+    stage_index: int,
+    intent: str = "",
+    site_visit_suppressed: bool = False,
+) -> str:
+    """The objective for THIS turn.
+
+    When the caller has asked something, answering them IS the objective and
+    the funnel line is not emitted at all. This block is last in the system
+    message, so whatever it says is the final instruction the model reads —
+    which is exactly why it must not say "offer a site visit" to someone who
+    just asked which projects we carry.
+    """
+    if intent == "project_information":
+        objective = (
+            "# Current objective: ANSWER WHAT THEY JUST ASKED\n"
+            "The caller has asked you for information — about a project, a developer, a price, "
+            "or what you have available. Answering that question IS the objective of this turn. "
+            "Answer it directly and completely first, from the catalog entries above, and stop "
+            "there. Do NOT offer a site visit, do NOT offer to check availability, and do NOT "
+            "ask the next qualifying question in the same breath. The sales process continues "
+            "after they are satisfied, not instead of answering them."
+        )
+    else:
+        name, guidance = _FUNNEL_STAGES[stage_index]
+        objective = f"# Current objective: {name}\n{guidance}"
+    if site_visit_suppressed:
+        objective += (
+            "\n\nThe caller has told you to stop bringing up site visits. Do not mention a "
+            "site visit, a viewing, an appointment or available slots again unless THEY raise "
+            "it. This holds for the rest of the call. Keep helping them with everything else."
+        )
+    return objective
 
 
 # The cadence cap ("max one filler every 3-5 turns") only holds if something
@@ -3020,6 +3131,24 @@ class RealEstateAgent(Agent):
         # and find it. Fires whenever the caller names a catalog item, whether
         # or not the model would have looked it up.
         _named_rows = _catalog_rows_mentioned(text, self._catalog_index)
+        # What they want right NOW. Decided per turn, and it outranks the
+        # funnel stage when the two disagree — see _detect_customer_intent.
+        _intent = _detect_customer_intent(text, _named_rows)
+        if _intent == "site_visit_refused":
+            # A standing constraint, not a one-turn mood: call 847 was asked
+            # to stop offering visits and offered two more.
+            _userdata["site_visit_prompt_suppressed"] = True
+        elif _intent == "site_visit":
+            # They brought it up themselves, so the constraint is lifted.
+            _userdata["site_visit_prompt_suppressed"] = False
+        _site_visit_suppressed = bool(_userdata.get("site_visit_prompt_suppressed"))
+        if _intent:
+            _userdata["customer_intent"] = _intent
+            logger.info(
+                "customer intent=%s funnel_stage=%s site_visit_suppressed=%s",
+                _intent, _userdata.get("funnel_stage"), _site_visit_suppressed,
+            )
+
         _catalog_facts_instruction = (
             (
                 "# Exact catalog entries for what the caller just named — use these VERBATIM\n"
@@ -3055,7 +3184,7 @@ class RealEstateAgent(Agent):
             self._appointment_booked,
             bool(_userdata.get("lead_captured")),
         )
-        _objective_text = _current_objective(_funnel_stage)
+        _objective_text = _current_objective(_funnel_stage, _intent, _site_visit_suppressed)
         turn_ctx.add_message(
             role="system",
             content=_language_instruction
@@ -3071,11 +3200,18 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _search_instruction if _search_instruction else "")
             + ("\n\n" + _garbled_instruction if _garbled_instruction else "")
             + ("\n\n" + _repeat_complaint_instruction if _repeat_complaint_instruction else "")
-            + ("\n\n" + _catalog_facts_instruction if _catalog_facts_instruction else "")
             + ("\n\n" + _catalog_instruction if _catalog_instruction else "")
             + ("\n\n" + _facts_reminder_text if _facts_reminder_text else "")
             + "\n\n"
-            + _objective_text,
+            + _objective_text
+            # LAST, deliberately. These are the verified facts for the exact
+            # thing the caller just named, and on call 847 they were injected
+            # correctly and still lost: they sat third from the end, behind
+            # the facts reminder and the funnel push, and the model answered
+            # from its own memory instead — "Treetopia is not listed with us"
+            # while the Treetopia row was in its context, and a price four
+            # times the real one. Ground truth gets the final word.
+            + ("\n\n" + _catalog_facts_instruction if _catalog_facts_instruction else ""),
         )
 
         if emotion != self._current_emotion:
