@@ -60,6 +60,9 @@ export interface CallRecord {
   sentiment: Sentiment
   channel: string
   callType: 'phone' | 'widget' | 'browser'
+  // A call the operator placed themselves from the dashboard's Test Call
+  // buttons. Listed like any other call, but labelled, and never billed.
+  isDashboardTest?: boolean
   direction: 'inbound' | 'outbound' | null
   website: string
   agent: string

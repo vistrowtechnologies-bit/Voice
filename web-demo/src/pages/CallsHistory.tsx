@@ -237,7 +237,23 @@ export function CallsHistory() {
         </span>
       ),
     },
-    { key: 'channel', header: 'Channel', render: (call) => <span className="text-sm text-text-muted">{call.channel}</span> },
+    {
+      key: 'channel',
+      header: 'Channel',
+      render: (call) => (
+        <div className="flex flex-col gap-1">
+          <span className="text-sm text-text-muted">{call.channel}</span>
+          {call.isDashboardTest && (
+            <span
+              className="w-fit rounded border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-muted"
+              title="You placed this call yourself from the dashboard's Test Call button. It is not billed."
+            >
+              Dashboard test
+            </span>
+          )}
+        </div>
+      ),
+    },
     {
       key: 'direction',
       header: 'Direction',
