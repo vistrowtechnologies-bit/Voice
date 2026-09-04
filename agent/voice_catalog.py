@@ -1,5 +1,16 @@
 """Single source of truth for the platform's available voices.
 
+DUPLICATED FILE — agent/voice_catalog.py and server/voice_catalog.py must
+stay byte-identical. They are two copies rather than one import because the
+agent's Docker image does not ship the server package (and vice versa), so
+neither can import the other. Nothing enforces this: on 2026-09-04 only the
+agent copy was edited, and the result was that new voices worked on live
+calls while the dashboard's Voices page still listed six voices that had
+been deleted and none of the twenty that had been added. Change one, copy it
+to the other, in the same commit:
+
+    cp agent/voice_catalog.py server/voice_catalog.py
+
 Historically the voice roster lived hardcoded in the frontend
 (web-demo/src/pages/Agents.tsx, four separate arrays). It now lives here so
 one place defines every voice, its display name, tier, and gender — the

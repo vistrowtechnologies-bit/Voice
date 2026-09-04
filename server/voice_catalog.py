@@ -1,5 +1,16 @@
 """Single source of truth for the platform's available voices.
 
+DUPLICATED FILE — agent/voice_catalog.py and server/voice_catalog.py must
+stay byte-identical. They are two copies rather than one import because the
+agent's Docker image does not ship the server package (and vice versa), so
+neither can import the other. Nothing enforces this: on 2026-09-04 only the
+agent copy was edited, and the result was that new voices worked on live
+calls while the dashboard's Voices page still listed six voices that had
+been deleted and none of the twenty that had been added. Change one, copy it
+to the other, in the same commit:
+
+    cp agent/voice_catalog.py server/voice_catalog.py
+
 Historically the voice roster lived hardcoded in the frontend
 (web-demo/src/pages/Agents.tsx, four separate arrays). It now lives here so
 one place defines every voice, its display name, tier, and gender — the
@@ -114,13 +125,46 @@ CATALOG: list[dict] = [
     {"value": "google:bn-IN-Standard-B", "name": "Arindam (Bengali)", "gender": "male", "tier": "lite", "force_lang": "bn"},
     {"value": "google:pa-IN-Standard-A", "name": "Gurleen (Punjabi)", "gender": "female", "tier": "lite", "force_lang": "pa"},
     {"value": "google:pa-IN-Standard-B", "name": "Armaan (Punjabi)", "gender": "male", "tier": "lite", "force_lang": "pa"},
-    # --- Lite (Sarvam bulbul:v2) --------------------------------------------
-    {"value": "abhilash", "name": "Abhilash", "gender": "male", "tier": "lite"},
-    {"value": "hitesh", "name": "Hitesh", "gender": "male", "tier": "lite"},
-    {"value": "karun", "name": "Karun", "gender": "male", "tier": "lite"},
-    {"value": "anushka", "name": "Anushka", "gender": "female", "tier": "lite"},
-    {"value": "arya", "name": "Arya", "gender": "female", "tier": "lite"},
-    {"value": "manisha", "name": "Manisha", "gender": "female", "tier": "lite"},
+    # --- Google Chirp 3 HD ---------------------------------------------------
+    # The only Google family the streaming synthesis endpoint accepts, which
+    # makes these the fastest Google voices we can offer: measured 188-346ms
+    # to first audio against 360-670ms for the Standard voices above (which
+    # have to go through StreamAdapter/synthesize) and 1010-1111ms for the
+    # Gemini personas. Same 30 personas exist in all 11 Indian locales; two
+    # are exposed per language, one of each gender, matching how the Standard
+    # tier is laid out. Tier is "standard" pending a real cost check — see the
+    # note in _VOICE_TIER_MULTIPLIERS about not assuming cost scales with
+    # voice choice.
+    {"value": "google:hi-IN-Chirp3-HD-Aoede", "name": "Kiara (Hindi) HD", "gender": "female", "tier": "standard", "force_lang": "hi"},
+    {"value": "google:hi-IN-Chirp3-HD-Achird", "name": "Advik (Hindi) HD", "gender": "male", "tier": "standard", "force_lang": "hi"},
+    {"value": "google:en-IN-Chirp3-HD-Aoede", "name": "Zoya (English) HD", "gender": "female", "tier": "standard", "force_lang": "en"},
+    {"value": "google:en-IN-Chirp3-HD-Achird", "name": "Neil (English) HD", "gender": "male", "tier": "standard", "force_lang": "en"},
+    {"value": "google:mr-IN-Chirp3-HD-Aoede", "name": "Sanika (Marathi) HD", "gender": "female", "tier": "standard", "force_lang": "mr"},
+    {"value": "google:mr-IN-Chirp3-HD-Achird", "name": "Atharv (Marathi) HD", "gender": "male", "tier": "standard", "force_lang": "mr"},
+    {"value": "google:ta-IN-Chirp3-HD-Aoede", "name": "Kavya (Tamil) HD", "gender": "female", "tier": "standard", "force_lang": "ta"},
+    {"value": "google:ta-IN-Chirp3-HD-Achird", "name": "Surya (Tamil) HD", "gender": "male", "tier": "standard", "force_lang": "ta"},
+    {"value": "google:te-IN-Chirp3-HD-Aoede", "name": "Sahasra (Telugu) HD", "gender": "female", "tier": "standard", "force_lang": "te"},
+    {"value": "google:te-IN-Chirp3-HD-Achird", "name": "Teja (Telugu) HD", "gender": "male", "tier": "standard", "force_lang": "te"},
+    {"value": "google:kn-IN-Chirp3-HD-Aoede", "name": "Chaitra (Kannada) HD", "gender": "female", "tier": "standard", "force_lang": "kn"},
+    {"value": "google:kn-IN-Chirp3-HD-Achird", "name": "Bhuvan (Kannada) HD", "gender": "male", "tier": "standard", "force_lang": "kn"},
+    {"value": "google:ml-IN-Chirp3-HD-Aoede", "name": "Anjali (Malayalam) HD", "gender": "female", "tier": "standard", "force_lang": "ml"},
+    {"value": "google:ml-IN-Chirp3-HD-Achird", "name": "Adhil (Malayalam) HD", "gender": "male", "tier": "standard", "force_lang": "ml"},
+    {"value": "google:gu-IN-Chirp3-HD-Aoede", "name": "Krisha (Gujarati) HD", "gender": "female", "tier": "standard", "force_lang": "gu"},
+    {"value": "google:gu-IN-Chirp3-HD-Achird", "name": "Jainam (Gujarati) HD", "gender": "male", "tier": "standard", "force_lang": "gu"},
+    {"value": "google:bn-IN-Chirp3-HD-Aoede", "name": "Rupa (Bengali) HD", "gender": "female", "tier": "standard", "force_lang": "bn"},
+    {"value": "google:bn-IN-Chirp3-HD-Achird", "name": "Sohom (Bengali) HD", "gender": "male", "tier": "standard", "force_lang": "bn"},
+    {"value": "google:pa-IN-Chirp3-HD-Aoede", "name": "Jasleen (Punjabi) HD", "gender": "female", "tier": "standard", "force_lang": "pa"},
+    {"value": "google:pa-IN-Chirp3-HD-Achird", "name": "Ekam (Punjabi) HD", "gender": "male", "tier": "standard", "force_lang": "pa"},
+    # --- Lite (Sarvam bulbul:v2) — REMOVED 2026-09-04 ------------------------
+    # Sarvam retired the model: every request now returns
+    # "400: Model 'bulbul:v2' has been deprecated. Please use 'bulbul:v3'".
+    # Abhilash, Hitesh, Karun, Anushka, Arya and Manisha were six menu entries
+    # that could not produce audio, and anushka/karun are not on the v3 roster
+    # either, so they cannot simply be re-pointed. No agent was using one (the
+    # only trace anywhere was a stale 'arya' row in one account's voice menu),
+    # so removing them strands nobody. _build_tts drops any speaker that is
+    # not on the live v3 roster to a gender-matched one rather than letting a
+    # stale row raise at construction time and kill the call.
 ]
 
 _BY_VALUE: dict[str, dict] = {v["value"]: v for v in CATALOG}
