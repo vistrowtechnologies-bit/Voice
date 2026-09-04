@@ -4666,9 +4666,29 @@ async def entrypoint(ctx: JobContext) -> None:
     # livekit-agents[sarvam] so no separate install or paid plan is
     # needed. Telephony audio (8kHz, already compressed by the carrier)
     # needs the dedicated telephony-tuned model, not the general one.
-    noise_filter = (
-        noise_cancellation.BVCTelephony() if call_context["call_type"] == "phone" else noise_cancellation.BVC()
-    )
+    # Switchable, because it is a suspect rather than a settled good. BVC is
+    # an aggressive speech-ISOLATION model, and on a carrier leg that is
+    # already 8kHz and lossily compressed it can chew the speech it exists to
+    # protect. The symptom that raised it: "Baner" coming back as ബാങ്ങി,
+    # బానేరు and बांगर across three different scripts on three different
+    # calls — the recognizer hearing something, but not the consonants.
+    #
+    # NOISE_CANCELLATION=off disables it entirely; =general forces the
+    # wideband BVC model on phone calls instead of the telephony-tuned one.
+    # Unset keeps today's behaviour. This exists to make the A/B possible at
+    # all — without it the only way to test the theory is a code change and a
+    # deploy per attempt.
+    _nc_mode = (os.environ.get("NOISE_CANCELLATION") or "").strip().lower()
+    if _nc_mode in ("off", "0", "false", "none"):
+        noise_filter = None
+        logger.info("noise cancellation DISABLED for this call (NOISE_CANCELLATION=%s)", _nc_mode)
+    elif _nc_mode == "general":
+        noise_filter = noise_cancellation.BVC()
+        logger.info("noise cancellation forced to the general BVC model")
+    else:
+        noise_filter = (
+            noise_cancellation.BVCTelephony() if call_context["call_type"] == "phone" else noise_cancellation.BVC()
+        )
     # Lets the widget's in-call "type instead" fallback (a noisy-environment
     # visitor who can't reliably be heard by STT) inject a turn as if it had
     # been spoken — generate_reply(user_input=...) runs it through the same
