@@ -852,32 +852,43 @@ _GENDERED_VERB_LANGUAGES = {"hi-IN", "mr-IN", "gu-IN", "pa-IN"}
 # in production (see EndpointingOptions below) — the caller's question never
 # reaches the LLM and they get "are you still there?". That is why max_delay
 # stays at 4.0.
-# Lowered again, 0.25 -> 0.20, on fresh measurement. Across 285 turns on 30
-# voice calls the split is still binary and still expensive: 78% finish at
-# ~400ms, 18-22% pay the full 4s, nothing in between. Splitting that sample by
-# date shows the previous move did work — 26.9% at the ceiling on 1-2 Sept vs
-# 18.2% on 3 Sept, after English was added to this map — so the lever is real
-# and this is the same lever pulled once more, not a new theory.
+# Held at 0.25. This was briefly lowered to 0.20 and reverted the same day
+# once the change was actually measured instead of argued for — recording the
+# negative result here so the next person does not spend the afternoon
+# rediscovering it.
 #
-# What changed the priority is establishing that preemptive generation
-# actually fires on our setup: turn_detection is passed as a TurnDetector
-# OBJECT, so livekit's _turn_detection_mode is None, so _vad_base_turn_detection
-# is True, so the FINAL_TRANSCRIPT branch in audio_recognition.py reaches
-# on_preemptive_generation. The LLM and (preemptive_tts=True) the TTS have
-# therefore both already run by the time a ceiling turn commits. So those 4
-# seconds are not "slow LLM plus slow TTS" — they are pure dead air with the
-# reply sitting finished, waiting. On those turns endpointing is 100% of what
-# the caller hears, which makes this threshold the single highest-leverage
-# latency knob in the pipeline.
+# eouMs is not a distribution. Across 1471 turns it is quantized to the
+# configured constants and nothing else: 400ms x904, 450ms x137, 0ms x144 in
+# the fast bucket; 4000ms x263 and 3000ms x20 (livekit's old default max_delay)
+# in the slow one. Spread inside the slow bucket is 3001-4004ms. So the
+# endpointer makes a BINARY choice between min_delay and max_delay, and this
+# threshold only decides which branch — it cannot shave a partial second off
+# anything.
 #
-# 0.20 is LiveKit's own shipped value for Dutch — the floor of their tuned
-# range, not below it. Failure direction is unchanged and still the safe one:
-# too low means replying a shade early, which a caller talks over. max_delay
-# stays at 4.0 — the pre-registered condition for touching it ("measurement
-# shows finalization actually got faster") is NOT met, because transcriptionMs
-# is only recorded for turns that succeeded and is blind to the dropped
-# transcripts that lowering it caused twice.
-_EOT_HINDI_THRESHOLD = 0.20
+# Which means the only question that matters is whether moving the threshold
+# reallocates turns between the two buckets, and on the evidence it does not.
+# Comparing the 0.3050 era against the 0.25 era, per agent, holding the agent
+# constant to control for the traffic mix:
+#
+#   agent 4    15.8% of 749 turns at the ceiling  ->  27.0% of 163   (p<0.001, WORSE)
+#   agent 13   27.3% of  33 turns                 ->  16.8% of 113   (p~0.18, n.s.)
+#   agent 18   18.0% of 233 turns                 ->  18.8% of  96   (flat)
+#
+# No consistent direction, and the one statistically significant movement is
+# in the wrong one. An earlier read of this data claimed 26.9% -> 18.2% as
+# proof the lever worked; that was wrong — both of those periods already ran
+# at 0.25 and the difference was English being added to the map, which is a
+# different change entirely.
+#
+# The real gap is instrumentation: nothing logs the end-of-turn probability,
+# so there is no way to see whether any threshold sits near the mass of the
+# distribution. Log that first; tuning this blind is guessing.
+#
+# max_delay stays at 4.0 for the reason it always has — lowering it
+# reintroduced the STT-finalization race that dropped whole transcripts twice,
+# and transcriptionMs cannot detect that because it only records turns that
+# succeeded.
+_EOT_HINDI_THRESHOLD = 0.25
 _EOT_UNLIKELY_THRESHOLDS = {
     lang: _EOT_HINDI_THRESHOLD
     for lang in ("hi", "mr", "bn", "ta", "te", "kn", "ml", "gu", "pa", "or", "en")
