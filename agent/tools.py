@@ -1548,6 +1548,28 @@ async def capture_platform_lead(
     return "Lead details recorded."
 
 
+# A turn that is asking for something. Deliberately broad on the Indian
+# languages this line serves, because the cost of a false positive is one
+# extra "anything else?" and the cost of a miss is hanging up on a customer.
+_QUESTION_PATTERN = re.compile(
+    r"[?？]|\b(what|which|where|when|how|why|who|can you|could you|tell me|"
+    r"do you have|is there|are there)\b|"
+    r"क्या|कौन|कहाँ|कहां|कब|कैसे|क्यों|कितना|कितनी|बता|बताइए|बताओ|सकते|सकती|"
+    r"काय|कुठे|कधी|कसे|सांग|શું|ક્યાં|કેમ",
+    re.IGNORECASE,
+)
+
+_GOODBYE_MARKERS = (
+    "bye", "goodbye", "thank you", "thanks", "थैंक", "धन्यवाद", "शुक्रिया",
+    "बाय", "अलविदा", "नमस्ते जी", "रखता हूँ", "रखती हूँ", "ठीक है बाय",
+)
+
+
+def _looks_like_goodbye(text: str) -> bool:
+    lowered = (text or "").lower()
+    return any(marker.lower() in lowered for marker in _GOODBYE_MARKERS)
+
+
 @function_tool
 async def end_call(context: RunContext) -> str:
     """Call this once the caller has clearly indicated the conversation is
@@ -1557,6 +1579,20 @@ async def end_call(context: RunContext) -> str:
     end-of-call signal. main.py watches for the agent's speech to finish
     after this tool returns, then actually ends the call for both sides.
     """
+    # Never hang up on an unanswered question. Call 844 ended while the caller
+    # was mid-enquiry: "क्या आप मुझे कल्पतरु में बता सकते हैं? आर्या के बारे
+    # में बता सकते हो?" and the agent replied "धन्यवाद, अभि जी… आपका दिन शुभ
+    # रहे!" and dropped the line. The caller had said nothing resembling a
+    # goodbye — _looks_like_farewell is False for both of those turns — so
+    # this was the model's own judgement, and the prompt telling it not to end
+    # early plainly did not hold.
+    _last = _last_user_utterance(context) or ""
+    if _last and _QUESTION_PATTERN.search(_last) and not _looks_like_goodbye(_last):
+        return (
+            "NOT ending the call — the caller's last message is a question they are still "
+            "waiting on an answer to. Answer it. Only call this once they have actually "
+            "signalled they are finished."
+        )
     if context.userdata is not None:
         context.userdata["ending_call"] = True
     return (
@@ -1806,14 +1842,28 @@ async def web_search(context: RunContext, query: str) -> str:
     #
     # Blocked in the tool as well as in the prompt nudge, because the nudge is
     # advice and this is not allowed to depend on the model taking it.
+    # Gated on the QUERY alone. The first version also required the agent to
+    # have a live catalog, and on call 844 that condition did not hold at
+    # runtime even though the agent does have one — the model searched
+    # "projects in Baner Pune" and offered Godrej Greens Hillside, Kolte Patil
+    # 45 West and Runwal Sylvan Oaks as "प्रॉप हंट की तरफ से हमारे पास". None
+    # exist in the catalog. Rather than guess at why the attribute was falsy,
+    # the dependency is gone: an inventory question is not a web question for
+    # ANY agent. One without a catalog has no inventory data either, so
+    # searching only lets it invent with more confidence.
     _agent = getattr(context.session, "current_agent", None)
-    if getattr(_agent, "_has_live_catalog", False) and _INVENTORY_QUERY_PATTERN.search(query or ""):
+    if _INVENTORY_QUERY_PATTERN.search(query or ""):
+        logger.info(
+            "web_search refused an inventory query %r (agent=%s has_catalog=%s)",
+            query, type(_agent).__name__, getattr(_agent, "_has_live_catalog", None),
+        )
         return (
             "Not searching the web for that — it is a question about what THIS business has, "
             "and the web only knows other companies' listings. Use lookup_catalog instead, and "
             "if the catalog has nothing matching, say so plainly rather than offering something "
             "you found elsewhere. Never present a project from outside the catalog as ours."
         )
+
     if not TAVILY_API_KEY:
         return "Web search isn't set up right now — answer from what you already know, don't mention this."
     try:
