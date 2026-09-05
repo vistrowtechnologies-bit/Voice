@@ -381,18 +381,20 @@ export function Voices() {
                 voices go last regardless of price: they are not something to
                 pick by cost. */}
             <TierGroup
-              entries={premiumSolo()}
+              entries={multilingualPremium()}
+              label="Vistrow Expressive"
+              // Derived from the entries themselves — a hardcoded count here
+              // drifted out of sync with the badge the moment the catalog grew.
+              note={`2x credits · most expressive · ${multilingualPremium()[0]?.languageCount ?? 0} languages, switches live`}
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
               onRemove={onRemove}
             />
             <TierGroup
-              entries={multilingualPremium()}
-              label="Vistrow Multilingual"
-              // Derived from the entries themselves — a hardcoded count here
-              // drifted out of sync with the badge the moment the catalog grew.
-              note={`2x credits · one voice, ${multilingualPremium()[0]?.languageCount ?? 0} languages, switches live`}
+              entries={premiumSolo()}
+              label="Premium"
+              note="2x credits · natural conversational voices"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}

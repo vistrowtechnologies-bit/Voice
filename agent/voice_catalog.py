@@ -39,7 +39,10 @@ from __future__ import annotations
 
 # Display order + credit signalling per tier. tier -> (label, credits_note).
 TIER_META: dict[str, dict] = {
-    "premium": {"label": "Premium", "note": "2x credits · most expressive, widest language range", "rank": 0},
+    # "Premium" spans more than one provider family. Product-specific UI
+    # labels Google Gemini personas as the most expressive; do not attach
+    # that claim to every Premium voice (including ElevenLabs) here.
+    "premium": {"label": "Premium", "note": "2x credits · advanced natural voices", "rank": 0},
     "standard": {"label": "Standard", "note": "1x credits", "rank": 1},
     "lite": {"label": "Lite", "note": "0.75x credits · economy", "rank": 2},
 }
