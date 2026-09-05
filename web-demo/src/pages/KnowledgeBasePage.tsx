@@ -523,6 +523,10 @@ export function KnowledgeBasePage() {
             const used = kbCharsUsed(kb)
             const pct = Math.min(100, Math.round((used / PROMPT_BUDGET_CHARS) * 100))
             const over = used > PROMPT_BUDGET_CHARS
+            // Warn on the way up, not only after text has already been
+            // dropped. A base sitting at 7.7k/8k is one paste away from
+            // losing content silently, and today said nothing at all.
+            const nearlyFull = !over && used >= PROMPT_BUDGET_CHARS * 0.9
             return (
               <Card key={kb.id} className="flex flex-col gap-4">
                 {/* Header: name · counts · strict toggle */}
@@ -560,9 +564,21 @@ export function KnowledgeBasePage() {
                       }}
                     />
                   </div>
-                  <p className={`mt-1.5 text-[11px] ${over ? 'font-semibold text-destructive' : 'text-text-muted'}`}>
+                  <p className={`mt-1.5 text-[11px] ${over ? 'font-semibold text-destructive' : nearlyFull ? 'font-medium text-amber-600 dark:text-amber-500' : 'text-text-muted'}`}>
                     {(used / 1000).toFixed(1)}k / {PROMPT_BUDGET_CHARS / 1000}k characters used
-                    {over && ' - over budget: Q&A pairs always reach the agent first; source text past the cap is trimmed'}
+                    {/* Deliberately about what the agent KNOWS, not about
+                        speed. Measured on the live prompt: halving it moved
+                        time-to-first-word by ~150ms, inside the run-to-run
+                        spread. Telling an operator a full knowledge base
+                        slows their calls would be untrue, and it would hide
+                        the consequence that actually bites — text past the
+                        cap never reaches the agent, so it answers as though
+                        that paragraph was never written. */}
+                    {over
+                      ? ' — over the limit. Q&A pairs always reach the agent; source text past 8k does not, so the agent will not know it. Trim the source or move it to another knowledge base.'
+                      : nearlyFull
+                        ? ' — nearly full. Anything past 8k will not reach the agent.'
+                        : ' — only the first 8k reaches the agent on a call.'}
                   </p>
                 </div>
 
