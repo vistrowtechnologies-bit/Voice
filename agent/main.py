@@ -2503,6 +2503,57 @@ class RealEstateAgent(Agent):
         self._llm_warm_task = task
         task.add_done_callback(lambda _: setattr(self, "_llm_warm_task", None))
 
+
+    # How long to wait for our own audio track before greeting anyway.
+    _OWN_TRACK_TIMEOUT_S = 2.0
+
+    async def _await_own_audio_track(self, dispatch_t0: float | None) -> None:
+        """Do not start the opener before we have somewhere to put it.
+
+        Measured on calls 865 and 866, both outbound, consistently:
+
+            callee answered      +8.96s / +8.98s
+            on_enter starting    +9.65s / +9.63s   <- greeting starts here
+            roomio_audio published       ~+1.0s later
+
+        The agent begins speaking about a second before its own audio track
+        exists, and audio produced before the track is published has nowhere
+        to go. The callee on 866 heard only "दो मिनट बात कर सकते हैं?" — the
+        tail of a six-second opener.
+
+        This accounts for about one second of that, NOT all of it, which is
+        why the marker below exists: it records when the first greeting
+        audio is actually emitted, so the remainder can be measured on the
+        next call instead of guessed at.
+
+        Bounded and outbound-only. A widget call publishes before the
+        session hands over and would only pay the check.
+        """
+        if self._direction != "outbound":
+            return
+        room = getattr(self.session, "room", None) or getattr(self, "_room", None)
+        local = getattr(room, "local_participant", None)
+        if local is None:
+            logger.info("greeting: no local participant to check for a published track")
+            return
+        deadline = time.monotonic() + self._OWN_TRACK_TIMEOUT_S
+        while time.monotonic() < deadline:
+            if any(
+                pub.kind == rtc.TrackKind.KIND_AUDIO
+                for pub in (getattr(local, "track_publications", None) or {}).values()
+            ):
+                if dispatch_t0 is not None:
+                    logger.info(
+                        "[latency] own audio track published at +%.2fs", time.monotonic() - dispatch_t0
+                    )
+                return
+            await asyncio.sleep(0.02)
+        logger.warning(
+            "greeting anyway: our own audio track was not published within %.1fs — "
+            "the opening line may not reach the caller",
+            self._OWN_TRACK_TIMEOUT_S,
+        )
+
     async def on_enter(self) -> None:
         # first_speaker == 'user' means wait silently for the caller to open —
         # no greeting is ever queued, so away-tracking is valid immediately.
@@ -2521,6 +2572,7 @@ class RealEstateAgent(Agent):
         dispatch_t0 = getattr(self, "_dispatch_t0", None)
         if dispatch_t0 is not None:
             logger.info("[latency] on_enter starting at +%.2fs", time.monotonic() - dispatch_t0)
+        await self._await_own_audio_track(dispatch_t0)
         try:
             if self._welcome_message:
                 # Operator wrote an exact opening line — speak it verbatim
@@ -3369,6 +3421,11 @@ def _caller_number_from_sip(attrs: dict, participant) -> str | None:
 # not leave the callee in silence.
 _SIP_ATTR_GRACE_S = 3.0
 
+# How long to wait after answer for the first real audio frame from the
+# callee. Long enough for a carrier to bring RTP up, short enough that a
+# silent handset is not left listening to nothing.
+_MEDIA_SETTLE_TIMEOUT_S = 2.5
+
 
 async def _wait_for_sip_answer(ctx: JobContext, participant, t0: float, timeout: float = 90.0) -> bool:
     """Block until an outbound SIP callee actually picks up.
@@ -3410,6 +3467,16 @@ async def _wait_for_sip_answer(ctx: JobContext, participant, t0: float, timeout:
         never publishes audio (muted handset, odd carrier) must still get
         greeted rather than sit in silence forever.
         """
+        # The audio we are waiting on is the callee's, i.e. the direction
+        # AGENT <- CALLER. It is a weak proxy and it is known to be weak:
+        # on an outbound leg the callee's track is published while the phone
+        # is still ringing, so on call 866 "callee answered at +8.98s" and
+        # "caller audio live at +8.98s" are the same instant and this waited
+        # for nothing.
+        #
+        # Kept only because it costs nothing and does occasionally hold. The
+        # direction that actually loses the opener is AGENT -> CALLER, and
+        # that is handled in on_enter, where the agent's own track is.
         audio_deadline = time.monotonic() + 3.0
         while time.monotonic() < audio_deadline:
             if any(
