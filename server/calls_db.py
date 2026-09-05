@@ -1199,6 +1199,20 @@ def init_tables() -> None:
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_accepted_at TEXT")
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_version TEXT DEFAULT ''")
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_user_id INTEGER")
+            # agents.model defaulted to 'gpt-4.1', which is the WORST
+            # available default on both axes it is chosen for. It sits on a
+            # 30,000 TPM limit — roughly three turns a minute at this
+            # product's prompt size, and cached tokens count toward that
+            # limit too (measured: a fully-cached 7,213-token request still
+            # consumed 4,541 TPM) — and it bills premium_plus, 4x credits,
+            # against gpt-4.1-mini's 2x. Every workspace created without an
+            # explicit model choice inherited it, which is exactly how four
+            # tenant workspaces ended up on it; none had placed a call yet,
+            # so the first one each of them made would have hit the wall.
+            #
+            # The dashboard has always listed mini as "recommended". Only
+            # this default disagreed.
+            conn.execute("ALTER TABLE agents ALTER COLUMN model SET DEFAULT 'gpt-4.1-mini'")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TEXT")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'password'")
             # Existing accounts predate verified-email onboarding and must

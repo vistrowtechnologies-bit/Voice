@@ -19,7 +19,7 @@ AGENT_ID = 18
 cfg = db.get_agent_config(AGENT_ID)
 agent = main.RealEstateAgent(cfg, None, None)
 SYSTEM = agent.instructions
-MODEL = cfg.get("model") or "gpt-4.1"
+MODEL = cfg.get("model") or "gpt-4.1-mini"
 
 TOOLS = [
     {

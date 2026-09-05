@@ -2425,7 +2425,15 @@ class RealEstateAgent(Agent):
             # same sentence in English, so 160 still leaves room for two
             # short multilingual sentences plus a tool call.
             llm=_build_llm(
-                config.get("model") or "gpt-4.1",
+                # gpt-4.1-mini, not gpt-4.1. An agent with no model set used
+                # to fall back to gpt-4.1, which is on a 30,000 TPM limit —
+                # about three turns a minute at this prompt size, since
+                # cached tokens count against the limit too (measured: a
+                # fully-cached 7,213-token request still consumed 4,541 TPM).
+                # It also bills at premium_plus, 4x credits against mini's
+                # 2x. The dashboard has always labelled mini "recommended";
+                # only the fallback disagreed.
+                config.get("model") or "gpt-4.1-mini",
                 max_output_tokens=120 if self._is_platform_demo else 220,
             ),
             tts=tts,
@@ -2455,7 +2463,7 @@ class RealEstateAgent(Agent):
         # _voice is for per-voice-tier billing. Must mirror the value handed
         # to _build_llm below - the fallback included - or billing would
         # attribute the call to the wrong model.
-        self._model = config.get("model") or "gpt-4.1"
+        self._model = config.get("model") or "gpt-4.1-mini"
         # Prosody-adaptation baseline (see on_user_turn_completed) — deltas
         # from a detected caller emotion apply on top of these, never replace
         # them, so the agent's configured base personality always shows through.
