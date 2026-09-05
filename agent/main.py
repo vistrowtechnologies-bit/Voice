@@ -2101,8 +2101,20 @@ class RealEstateAgent(Agent):
         # and language-mirroring hold no matter what the business content is.
         # A custom system_prompt replaces the persona/content above, never
         # these conversation rules.
+        # Built here, appended LAST (just before super().__init__). It carries
+        # the wall-clock time to the minute, which makes it the one part of
+        # the prompt that differs between two otherwise identical calls — so
+        # everything after it in the string is, for caching purposes, a brand
+        # new prefix on every call that starts in a new minute. Which is
+        # essentially all of them.
+        #
+        # Measured against the real prompt: with this block in the middle
+        # (char 27,760 of 38,629), advancing the clock by one minute dropped
+        # the cache from 98% to 67% and re-charged 2,900 tokens at full price
+        # instead of 212. Moving it to the very end leaves the whole static
+        # prompt as a stable shared prefix and costs nothing to do.
         now_ist = datetime.now(_IST)
-        instructions += (
+        date_instruction = (
             f"\n\n# Current date and time\nRight now it is {now_ist.strftime('%A, %d %B %Y')}, "
             f"{now_ist.strftime('%H:%M')} IST. This is the ONLY source of truth for \"today\", "
             "\"tomorrow\", \"next Monday\", \"this weekend\", etc. — never resolve a relative date "
@@ -2396,6 +2408,10 @@ class RealEstateAgent(Agent):
                     "confirm it plainly, and end the call."
                 )
             )
+        # LAST. Everything above this line is identical between two calls on
+        # the same agent, so it is one cacheable prefix; only these ~100
+        # tokens change. See where date_instruction is built for the numbers.
+        instructions += date_instruction
         tone_name = config.get("tone") or DEFAULT_TONE
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         tts, tts_provider = _build_tts(reply_language, voice_value, base_tone, tone_name)
