@@ -59,7 +59,7 @@ from language import (
     to_google_code,
 )
 from prompts.generic_assistant import build_generic_assistant_prompt
-from prompts.human_speech import build_human_speech_manner
+from prompts.human_speech import build_human_speech_manner, build_turn_delivery
 from prompts.industry_demo_style import (
     build_industry_demo_style,
     industry_demo_empathy_nudge,
@@ -253,10 +253,7 @@ _ELEVENLABS_SIMILARITY_BOOST = 0.75
 
 # Dashboard-facing "Emotion intensity" dial (see Agents.tsx). Emotion-
 # reactive delivery is now Google-TTS-only (see on_user_turn_completed) —
-# this multiplier is read into self._emotion_intensity below but currently
-# has no effect on any provider's delivery; kept so the dashboard setting
-# still round-trips cleanly if a future Google-side intensity control is
-# added, rather than orphaning the DB column/UI control silently.
+# this multiplier controls the strength of Gemini's per-turn style prompt.
 _EMOTION_INTENSITY_MULTIPLIERS = {"off": 0.0, "subtle": 0.5, "strong": 1.0}
 
 
@@ -745,12 +742,23 @@ def _current_objective(
 _FILLER_MARKERS = (
     "हम्म", "हाँ,", "अच्छा", "मतलब", "देखिए", "अरे वाह", "अरे",
     "right,", "got it", "honestly", "actually", "well,", "so,",
+    "hmm", "um", "uh", "acha", "achha", "haan", "matlab",
+    "अच्छा", "असं", "બરાબર", "சரி", "అలాగే", "ಸರಿ", "ശരി", "আচ্ছা", "ਅੱਛਾ", "ଆଚ୍ଛା",
 )
 
 
 def _reply_used_filler(text: str) -> bool:
     lowered = (text or "").strip().lower()
-    return any(lowered.startswith(marker.lower()) for marker in _FILLER_MARKERS)
+    for marker in _FILLER_MARKERS:
+        if not lowered.startswith(marker.lower()):
+            continue
+        # Avoid treating "umbrella" or "human" as an English hesitation.
+        if marker.isascii() and marker[-1].isalpha():
+            suffix = lowered[len(marker):]
+            if suffix and suffix[0].isalnum():
+                continue
+        return True
+    return False
 
 
 # Explicit self-identification only — deliberately not inferring gender from
@@ -2854,73 +2862,8 @@ class RealEstateAgent(Agent):
         # humor and warmth. Same fix as the language/gender reinforcement
         # above — restate it fresh, last, every turn, so it isn't drowned
         # out by the structural rules.
-        if self._is_platform_demo:
-            _repeat_filler_warning = (
-                "\nYour last reply already used an expressive opener. Start this reply directly "
-                "unless a reaction is genuinely needed."
-                if any(opener in _last_assistant_text.lower() for opener in ("अरे वाह", "wow", "honestly", "actually"))
-                else ""
-            )
-            # A same-turn duplicate check alone let fillers land on every OTHER
-            # turn instead of every 3-5, since each individual reply looked
-            # fine on its own. This tracks actual spacing instead of asking
-            # the model to remember it.
-            _filler_cadence_warning = (
-                f"\nDo NOT start this reply with any filler, reaction, or aside (हम्म, अच्छा, "
-                f"actually, right, etc.) — begin directly with the content. One was already used "
-                f"{self._turns_since_filler} turn(s) ago; the next is allowed only after turn "
-                f"{4 - self._turns_since_filler} from now."
-                if self._turns_since_filler < 4
-                # Cadence alone only ever suppresses — it never nudges once spacing
-                # clears, and a real call (762, real-estate demo) went the full 38
-                # turns with zero fillers as a direct result: nothing was ever
-                # pushing TOWARD one, only capping overuse that never happened.
-                # This fires only when spacing allows it, and only asks for one on
-                # a turn that's actually earned it (an objection, a comparison, an
-                # explanation) — a plain fact-recall turn should still stay clean.
-                else "\nIt's been a few turns since you used any natural hesitation or filler. "
-                "If this reply is handling an objection, a comparison, or an explanation, a brief "
-                "one now (हम्म, मतलब, actually) would sound more natural — skip it if this is a "
-                "plain fact-recall answer."
-            )
-            _personality_instruction = (
-                "HARD TURN LIMIT: reply with ONE short sentence by default and never more than TWO "
-                "short sentences or about thirty-five spoken words. This limit overrides discovery, "
-                "active-listening, sales, and personality guidance elsewhere. Give only the single "
-                "most relevant point; the caller can ask for more. Do not repeat or summarize what "
-                "the caller just said. Do not append a GENERIC follow-up such as 'anything else?' or "
-                "'would you like to know more?' — but do not just stop talking either. Confirmed live: "
-                "banning generic filler made replies dead-end instead, leaving the caller to restart "
-                "momentum every single turn, which felt like the conversation was over. Unless this "
-                "turn is genuinely closing the call (see the goodbye rule below), end with ONE short, "
-                "SPECIFIC next question or beat that grows directly out of what you just said or what "
-                "the caller just said — e.g. after explaining pricing, ask which plan fits their team "
-                "size; after a feature answer, ask about the specific call type they'd use it for. "
-                "That's advancing the conversation, not a generic closer, and it's required on most "
-                "turns. If they asked to change language, switch it and give "
-                "only a brief confirmation in that language. If they say they have no more questions, "
-                "are done for now, thank you/bye, or otherwise close the conversation, give one short "
-                "goodbye and call end_call—never reopen discovery. If they sound skeptical (for example "
-                "'seriously?'), answer the concern directly in one sentence without repeating the pitch.\n"
-                "This reply must sound like a witty, warm human friend on a call, not a form being "
-                "filled out. Most replies should begin directly. Use at most one filler, reaction, "
-                "self-correction, or playful aside, and only when the caller's words genuinely invite "
-                "it; never add one merely to sound human. A short acknowledgement followed by one "
-                "answer or one relevant question is allowed and often more natural than an artificial "
-                "one-sentence restriction. Never force humour, and never use it on complaints, urgent "
-                "requests, sensitive information, confirmations, or direct pricing questions.\n"
-                "An excited/delighted opener like \"अरे वाह\" or \"wow\" is ONLY for when the caller "
-                "said something genuinely positive or surprising — NEVER for a neutral fact, and "
-                "especially never for a pain point or something manual/burdensome about how they work "
-                "today. Confirmed wrong live: caller said \"manual callback karuchi\" (describing "
-                "their current painful workflow) and got \"अरे वाह, मैन्युअल फॉलोअप!\" back — that reads "
-                "as gleeful about their problem, not listening to it. The correct reaction there is "
-                "empathetic acknowledgment (\"अरे, ये तो सच में टाइम खा जाता है\"), not delight."
-                + _repeat_filler_warning
-                + _filler_cadence_warning
-            )
-        else:
-            _personality_instruction = ""
+        # Shared delivery reinforcement for demo, generic and custom tenant personas.
+        _personality_instruction = build_turn_delivery(self._turns_since_filler)
         emotion = detect_caller_emotion(text)
         _industry_turn_instruction = industry_demo_turn_nudge(self._public_demo_slug)
         _industry_empathy_instruction = industry_demo_empathy_nudge(
@@ -3244,6 +3187,13 @@ class RealEstateAgent(Agent):
                 # configured — FallbackAdapter has no update_options, so
                 # guard the same way every other Google/Sarvam branch here does.
                 emotion_line = GEMINI_EMOTION_PROMPT_DELTAS.get(emotion, "") if emotion else ""
+                if self._emotion_intensity == 0:
+                    emotion_line = ""
+                elif self._emotion_intensity < 1 and emotion_line:
+                    emotion_line = (
+                        f"Make only a subtle adjustment for the caller's {emotion} wording. "
+                        "Keep the configured pace and pitch close to baseline; avoid exaggerated emotion."
+                    )
                 new_prompt = f"{self._gemini_base_prompt} {emotion_line}".strip()
                 try:
                     self.tts.update_options(prompt=new_prompt)
@@ -5035,20 +4985,72 @@ def _prewarm(proc: JobProcess) -> None:
 # to hit Google's own rate limit (429 RESOURCE_EXHAUSTED) on most of them.
 # The openers themselves now load from disk (see _load_cached_greetings,
 # no API call, no rate limit possible), but this stagger is kept for the
-# one remaining live call below (warming the gRPC/credential connection) —
-# even a single request per process can still collide if all 4 fire at once.
-_TTS_PREWARM_STAGGER_MAX_S = 20.0
+# live calls below (warming the gRPC/credential connection) — even a single
+# request per process can still collide if all 4 fire at once.
+#
+# Was 20s, which is the whole point of this note. The sleep happens BEFORE
+# the warm-up, so it is also a window in which a brand-new process is
+# COMPLETELY COLD — and a call landing in it pays the full connection setup
+# the warm-up exists to avoid. Processes are replaced as the pool churns, not
+# only at deploy, so that window keeps reopening all day. It is the best
+# explanation for the sporadic multi-second first-utterance stalls that
+# correlate with nothing else: call 849 waited 5,464ms for its opening line
+# while a neighbouring call on the same build and the same voice waited 176ms.
+#
+# 4 seconds still de-synchronizes four processes, and the retry below now
+# covers the collision the long delay was really protecting against —
+# spreading requests out is a weak defence against a rate limit; retrying is
+# a real one.
+_TTS_PREWARM_STAGGER_MAX_S = 4.0
+
+
+# Warmed in the order they matter. Chirp 3 HD is FIRST because it is what
+# both live tenant agents now speak with; the Gemini persona voices are still
+# configured on several agents, so both get warmed.
+#
+# This used to warm the Gemini path alone, and was written when that was the
+# only Google voice there was. Chirp 3 HD arrived later and is a different
+# model — the plugin routes it to model_name="chirp_3" off the voice name —
+# so warming Gemini 3.1 stopped being the same thing as warming the path the
+# greeting takes. Every Chirp 3 agent has been paying its own cold-start
+# since, on whichever call happened to land on a fresh process.
+_TTS_PREWARM_TARGETS = (
+    ("chirp3", {"language": "hi-IN", "voice_name": "hi-IN-Chirp3-HD-Callirrhoe"}),
+    ("gemini", {"language": "hi-IN", "voice_name": "Kore", "model_name": _GOOGLE_31_MODEL}),
+)
+
+# One retry, because the thing the stagger was guarding against (429
+# RESOURCE_EXHAUSTED when several processes warm at once) is transient by
+# definition and a second attempt a moment later succeeds.
+_TTS_PREWARM_ATTEMPTS = 2
+_TTS_PREWARM_RETRY_S = 3.0
 
 
 async def _warm_google_tts_client() -> None:
     """Pays the Google Cloud TTS client/credential/gRPC connection setup
-    cost (measured ~10.5s on a fresh process) via one throwaway synthesis,
-    so a real call's first live Google TTS request — a greeting-cache miss,
-    or any mid-call turn — doesn't pay that setup cost itself."""
-    tts = PatchedGeminiTTS(
-        language="hi-IN", voice_name="Kore", model_name=_GOOGLE_31_MODEL, credentials_info=_GOOGLE_CREDENTIALS
-    )
-    await _synthesize_frames(tts, "ठीक है")
+    cost (measured ~10.5s on a fresh process) via one throwaway synthesis
+    per voice family, so a real call's first live Google TTS request — a
+    greeting-cache miss, or any mid-call turn — doesn't pay that setup cost
+    itself.
+
+    Each family is independent: one failing must not stop the other being
+    warmed, or a Chirp 3 rate-limit would leave every Gemini agent cold too.
+    """
+    for family, kwargs in _TTS_PREWARM_TARGETS:
+        for attempt in range(1, _TTS_PREWARM_ATTEMPTS + 1):
+            try:
+                tts = PatchedGeminiTTS(credentials_info=_GOOGLE_CREDENTIALS, **kwargs)
+                await _synthesize_frames(tts, "ठीक है")
+                logger.info("prewarm: %s TTS path warmed", family)
+                break
+            except Exception:
+                if attempt == _TTS_PREWARM_ATTEMPTS:
+                    logger.exception(
+                        "prewarm: %s TTS warm-up failed after %d attempts — a call landing on "
+                        "this process pays the connection setup itself", family, attempt,
+                    )
+                else:
+                    await asyncio.sleep(_TTS_PREWARM_RETRY_S)
 
 
 def _run_google_tts_prewarm(pid: int) -> None:
