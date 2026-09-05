@@ -144,13 +144,41 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
 // value in parentheses too, since an operator picking between tiers needs
 // to know which is actually the newer/faster one, not just a marketing
 // name. Order = premium → economy.
+//
+// Three removed on 2026-09-05, each measured against this product's own
+// workload (the real ~8,900-token prompt with all 11 tools bound) rather
+// than on reputation:
+//
+//   gpt-4.1  "Prime - Best reasoning & quality"   30,000 TPM = 3.4 turns
+//   gpt-4o   "Pro - Fast & natural"               30,000 TPM = 3.4 turns
+//
+//     Both sit on a 30k tokens/minute limit against the minis' 200k, and
+//     cached tokens count toward it (a fully-cached 7,213-token request
+//     still consumed 4,541 TPM). At this prompt size that is under four
+//     turns a minute for the whole organisation, so a single busy call
+//     rate-limits itself and the plugin's retries turn that into
+//     multi-second stalls. They also bill premium_plus, 4x credits. There
+//     is no sense in which they were the "best" option; the labels said so
+//     anyway.
+//
+//   gemini-3.6-flash  "Flash - Fast"              1,921ms, scored 6/12
+//
+//     The slowest of the six by ~800ms, and it failed the three checks that
+//     matter most: it denied a project the catalog carries, quoted a price
+//     the catalog contradicts, and answered a Hindi caller in English 0/2.
+//     "Fast" was wrong in both senses.
+//
+// No agent was on any of the three. They stay in calls_db's tier maps so
+// the four historical calls that used them still bill correctly.
+//
+// The tags below are what the survivors actually measured, not tier
+// marketing. Note in particular that "Lite" was labelled "Lowest cost"
+// while billing 2x, and "Standard" bills 1x - the old copy had it exactly
+// backwards.
 export const MODEL_OPTIONS = [
-  { value: 'gpt-4.1', label: 'Vistrow Prime', tag: 'Best reasoning & quality' },
-  { value: 'gpt-4o', label: 'Vistrow Pro', tag: 'Fast & natural' },
-  { value: 'gpt-4.1-mini', label: 'Vistrow Swift', tag: 'Fastest & most consistent · recommended' },
-  { value: 'gpt-4o-mini', label: 'Vistrow Standard', tag: 'Balanced' },
-  { value: 'gemini-3.6-flash', label: 'Vistrow Flash', tag: 'Fast' },
-  { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite', tag: 'Lowest cost' },
+  { value: 'gpt-4.1-mini', label: 'Vistrow Swift', tag: 'Recommended · most accurate in testing' },
+  { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite', tag: 'Same accuracy as Swift, a touch faster' },
+  { value: 'gpt-4o-mini', label: 'Vistrow Standard', tag: 'Half the credits · slightly less accurate' },
 ] as const
 // Groq runs open-weight models on its own LPU hardware — the fastest
 // time-to-first-token available (~120-180ms published, vs ~900ms for
