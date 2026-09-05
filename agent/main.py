@@ -2531,7 +2531,13 @@ class RealEstateAgent(Agent):
         """
         if self._direction != "outbound":
             return
-        room = getattr(self.session, "room", None) or getattr(self, "_room", None)
+        # userdata["room"], not session.room: AgentSession has no `room`
+        # attribute at all (it exposes room_io), so the first version of this
+        # silently took the "nothing to check" branch on every single call
+        # and did nothing — visible in the logs as "greeting: no local
+        # participant to check for a published track" on calls 867 and 868.
+        # main.py already reaches the room this way in on_user_turn_completed.
+        room = (self.session.userdata or {}).get("room")
         local = getattr(room, "local_participant", None)
         if local is None:
             logger.info("greeting: no local participant to check for a published track")
@@ -4995,6 +5001,52 @@ async def entrypoint(ctx: JobContext) -> None:
         room_input_options=RoomInputOptions(noise_cancellation=noise_filter),
     )
     logger.info("[latency] session.start() returned at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
+
+    # Does the caller's audio ever actually reach us?
+    #
+    # Calls 865, 867 and 868 each ran ~50s and recorded ZERO user turns: the
+    # agent greeted, asked "सुन पा रहे हैं?", and gave up. No STT, no VAD, no
+    # transcript — nothing. That is not an endpointing problem or a threshold
+    # problem, and no amount of tuning either one explains it.
+    #
+    # Nothing currently distinguishes "the caller said nothing" from "their
+    # audio never arrived", and those need completely different fixes. This
+    # counts frames off the SIP participant's own track and reports at the
+    # end of the call, which separates them once and for all.
+    async def _watch_inbound_audio() -> None:
+        try:
+            track = None
+            deadline = time.monotonic() + 10.0
+            while time.monotonic() < deadline and track is None:
+                for pub in (first_participant.track_publications or {}).values():
+                    if pub.kind == rtc.TrackKind.KIND_AUDIO and pub.track is not None:
+                        track = pub.track
+                        break
+                if track is None:
+                    await asyncio.sleep(0.2)
+            if track is None:
+                logger.warning("[audio-in] caller published no audio track within 10s")
+                return
+            stream = rtc.AudioStream(track)
+            frames = 0
+            first_at = None
+            try:
+                async for _ev in stream:
+                    frames += 1
+                    if first_at is None:
+                        first_at = time.monotonic() - _t0
+                        logger.info("[audio-in] first caller audio frame at +%.2fs", first_at)
+            finally:
+                await stream.aclose()
+                logger.info(
+                    "[audio-in] call ended: %d frames from the caller, first at %s",
+                    frames, ("+%.2fs" % first_at) if first_at is not None else "NEVER",
+                )
+        except Exception:
+            logger.warning("[audio-in] watcher failed", exc_info=True)
+
+    if call_context.get("call_type") == "phone":
+        asyncio.create_task(_watch_inbound_audio())
     # Started only after the session (and therefore both the caller's and
     # the agent's audio tracks) is actually up — see recording.py for why
     # this taps tracks directly instead of LiveKit's own record=True/Egress.
