@@ -3155,7 +3155,37 @@ class RealEstateAgent(Agent):
                 "plainly that it is not one of ours rather than guessing where it is."
             )
             if _named_rows
-            else ""
+            # No specific project matched, but they asked what we HAVE.
+            #
+            # Removed once as prompt bulk, and call 869 is the receipt for
+            # that: asked which developers we carry, the agent answered
+            # Godrej, Mahindra, Shapoorji and Tejraj — all real — mixed with
+            # Rohan Builders, Kohinoor, DLF, VTP Realty and Tribeca, none of
+            # which this business sells. Identical to the invented list on
+            # call 847. The index is the only thing that has ever stopped it.
+            #
+            # Narrower than the version that was removed: that one fired on
+            # any project_information intent, including price and amenity
+            # questions where a named row already carries the answer. This
+            # fires only on "what do you have" — about 2,300 characters, on
+            # the handful of turns where naming inventory is the whole reply.
+            else (
+                (
+                    "# The COMPLETE list of what this business has. There is nothing else.\n"
+                    + self._catalog_index
+                    + "\n\nEvery project name and every developer name you say must appear "
+                    "above. If they asked for something not here, say plainly it is not one of "
+                    "ours — after checking this list properly, because saying no to something "
+                    "you do sell costs the business the sale. Do not pad a short list with "
+                    "names you recall from elsewhere: a short honest list is the right answer."
+                )
+                if (
+                    self._has_live_catalog
+                    and self._catalog_index
+                    and _INVENTORY_QUESTION_PATTERN.search(text or "")
+                )
+                else ""
+            )
         )
         _catalog_instruction = (
             (

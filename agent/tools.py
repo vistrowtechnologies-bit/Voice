@@ -1659,7 +1659,27 @@ async def end_call(context: RunContext) -> str:
     # goodbye — _looks_like_farewell is False for both of those turns — so
     # this was the model's own judgement, and the prompt telling it not to end
     # early plainly did not hold.
+    # Look past a trailing fragment.
+    #
+    # Call 869 ended on "महिंद्रा सीटाडेल की किंमत क्या है?" — a direct
+    # question about a price — because the caller then made one more sound,
+    # "ಹ್ಮ್.", and THAT became the last user turn. It carries no question
+    # mark and no question word, so the guard below saw nothing to protect
+    # and the agent said goodbye mid-enquiry.
+    #
+    # A two-character fragment in a script the caller is not speaking is not
+    # a new turn that supersedes their question; it is noise on the line. So
+    # the guard walks back over anything too short to be a real utterance and
+    # judges the last thing the caller actually SAID.
     _last = _last_user_utterance(context) or ""
+    if len(_last.strip()) < _SUBSTANTIVE_TURN_CHARS:
+        _earlier = next(
+            (t for t in _recent_user_utterances(context, limit=3)
+             if len(t.strip()) >= _SUBSTANTIVE_TURN_CHARS),
+            "",
+        )
+        if _earlier:
+            _last = _earlier
     if _last and _QUESTION_PATTERN.search(_last) and not _looks_like_goodbye(_last):
         return (
             "NOT ending the call — the caller's last message is a question they are still "
@@ -1672,6 +1692,26 @@ async def end_call(context: RunContext) -> str:
         "The caller is done. Give one short, warm goodbye line right now (thank them, wish them well) "
         "and then stop — do not ask any further questions or add anything after the goodbye."
     )
+
+
+# Shorter than this and a "turn" is a cough, an acknowledgement, or an STT
+# artefact — not something that replaces a question the caller is waiting on.
+_SUBSTANTIVE_TURN_CHARS = 6
+
+
+def _recent_user_utterances(context: RunContext, limit: int = 3) -> list[str]:
+    """The caller's last few turns, newest first."""
+    out: list[str] = []
+    try:
+        items = context.session.history.items
+    except Exception:
+        return out
+    for item in reversed(items):
+        if getattr(item, "role", None) == "user" and getattr(item, "text_content", None):
+            out.append(item.text_content)
+            if len(out) >= limit:
+                break
+    return out
 
 
 def _last_user_utterance(context: RunContext) -> str | None:
