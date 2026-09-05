@@ -152,3 +152,17 @@ class Conn:
 
 def connect() -> Conn:
     return Conn(_get_pool().getconn())
+
+
+def listen_connection() -> psycopg.Connection:
+    """Return a dedicated autocommit connection for PostgreSQL LISTEN.
+
+    A listener is intentionally not borrowed from the request pool: it stays
+    open for the lifetime of a LiveKit worker process, while ordinary config
+    reads and call writes must still have both pooled connections available.
+    """
+    return psycopg.connect(
+        _database_url(),
+        autocommit=True,
+        row_factory=dict_row,
+    )

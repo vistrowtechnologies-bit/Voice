@@ -191,12 +191,57 @@ def save_caller_memory(account_id: int | None, agent_id: int, caller_phone: str,
 # a 30s TTL meant the cache was cold on nearly every call anyway — confirmed
 # live on 2026-08-20 (get_kb_content, the equivalent cache below, still took
 # 1.47s on a real widget call despite this fix already being deployed).
-# Dashboard config edits are a rare, operator-driven event, not something
-# that needs near-real-time propagation — 10 minutes gives the cache a real
-# chance to actually warm up across realistic call spacing, while still
-# keeping edits from going stale for a process's entire lifetime.
+# The long TTL keeps realistic call spacing warm. Dashboard writes publish a
+# PostgreSQL notification (server/calls_db.py), and the listener below evicts
+# only the changed agent immediately, so the next call still sees every save.
 _agent_config_cache: dict[int | None, tuple[float, dict | None]] = {}
 _AGENT_CONFIG_CACHE_TTL_S = 600.0
+_AGENT_CONFIG_NOTIFY_CHANNEL = "vistrow_agent_config_changed"
+_cache_workers_started = False
+_cache_workers_lock = threading.Lock()
+
+
+def _invalidate_agent_config_cache(payload: str) -> None:
+    """Evict a dashboard-edited agent from this worker process.
+
+    The ``None`` entry is the platform-demo/default-agent alias, so it must
+    always be evicted too: changing which agent is public, or editing the
+    currently public agent, otherwise leaves unauthenticated demo calls on
+    the previous configuration.
+    """
+    try:
+        agent_id = int(payload)
+    except (TypeError, ValueError):
+        # A malformed/broadcast notification should fail safe. Clearing a
+        # small in-memory cache is preferable to serving stale call config.
+        _agent_config_cache.clear()
+        logger.warning("cleared agent config cache after invalidation payload %r", payload)
+        return
+    _agent_config_cache.pop(agent_id, None)
+    _agent_config_cache.pop(None, None)
+    logger.info("invalidated cached config for agent_id=%s", agent_id)
+
+
+def _listen_for_agent_config_changes() -> None:
+    """Keep this process's warm cache coherent with dashboard saves."""
+    retry_delay = 1.0
+    while True:
+        try:
+            with dbconn.listen_connection() as conn:
+                conn.execute(f"LISTEN {_AGENT_CONFIG_NOTIFY_CHANNEL}")
+                logger.info("listening for agent configuration invalidations")
+                retry_delay = 1.0
+                for notification in conn.notifies():
+                    _invalidate_agent_config_cache(notification.payload)
+        except Exception:
+            # A dropped listener never takes calls down. The periodic cache
+            # warmer remains a fallback, while this loop reconnects quietly.
+            logger.warning(
+                "agent configuration invalidation listener disconnected; retrying",
+                exc_info=True,
+            )
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 30.0)
 
 
 def get_agent_config(agent_id: int | None = None) -> dict | None:
@@ -340,7 +385,8 @@ _CACHE_PREWARM_INTERVAL_S = 240.0
 
 def start_cache_prewarm() -> None:
     """Kick off the cache warm in a background thread and return immediately,
-    then keep re-warming on an interval for as long as the process lives.
+    then keep re-warming and listening for dashboard invalidations for as long
+    as the process lives.
 
     MUST NOT BLOCK. LiveKit gives each job subprocess a bounded initialization
     window and kills the process when prewarm overruns it. Calling the
@@ -358,12 +404,23 @@ def start_cache_prewarm() -> None:
     racing write is safe.
     """
 
+    global _cache_workers_started
+    with _cache_workers_lock:
+        if _cache_workers_started:
+            return
+        _cache_workers_started = True
+
     def _loop() -> None:
         while True:
             prewarm_caches()
             time.sleep(_CACHE_PREWARM_INTERVAL_S)
 
     threading.Thread(target=_loop, name="cache-prewarm", daemon=True).start()
+    threading.Thread(
+        target=_listen_for_agent_config_changes,
+        name="agent-config-listener",
+        daemon=True,
+    ).start()
 
 
 def prewarm_caches() -> None:

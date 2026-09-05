@@ -3327,6 +3327,14 @@ def update_agent(agent_id: int, data: dict, account_id: int) -> dict | None:
                 f"UPDATE agents SET {', '.join(sets)}, updated_at = {_NOW} WHERE id = ? AND account_id = ?",
                 (*params, agent_id, account_id),
             )
+            # LiveKit workers deliberately keep agent configuration warm to
+            # avoid a multi-second cross-region Postgres read on every call.
+            # Notify every worker process after this transaction commits so
+            # the next call reloads only this changed agent immediately.
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', ?)",
+                (str(agent_id),),
+            )
         row = conn.execute("SELECT * FROM agents WHERE id = ? AND account_id = ?", (agent_id, account_id)).fetchone()
         return _agent_dict(row) if row else None
     finally:
@@ -3338,6 +3346,10 @@ def delete_agent(agent_id: int, account_id: int) -> None:
     try:
         with conn:
             conn.execute("DELETE FROM agents WHERE id = ? AND account_id = ?", (agent_id, account_id))
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', ?)",
+                (str(agent_id),),
+            )
     finally:
         conn.close()
 

@@ -12,6 +12,26 @@ from test_plan_policy import ROOT, function_from_file
 
 
 class OfflinePlanAcceptance(unittest.TestCase):
+    def test_agent_writes_notify_live_workers_to_drop_stale_config(self):
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = {"id": 25}
+        with patch.object(calls_db, "_connect", return_value=conn), patch.object(
+            calls_db, "_agent_dict", return_value={"id": 25}
+        ):
+            self.assertEqual(
+                calls_db.update_agent(25, {"voice": "elevenlabs:test"}, 2),
+                {"id": 25},
+            )
+            calls_db.delete_agent(25, 2)
+
+        notify_calls = [
+            call
+            for call in conn.execute.call_args_list
+            if "pg_notify('vistrow_agent_config_changed'" in call.args[0]
+        ]
+        self.assertEqual(len(notify_calls), 2)
+        self.assertTrue(all(call.args[1] == ("25",) for call in notify_calls))
+
     def test_agent_caps_for_each_plan(self):
         for plan, cap in (("starter", 1), ("growth", 5), ("scale", 20)):
             for count in (cap, cap + 1):
