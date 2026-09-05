@@ -2657,6 +2657,21 @@ class RealEstateAgent(Agent):
         text = new_message.text_content
         self._booking_confirmed_this_turn = False
         _userdata = self.session.userdata
+        # Close out the turn's end-of-turn predictions (see
+        # _record_eot_probability). The last prediction of a turn is the one
+        # the framework acted on; if it escalated, nobody spoke again and the
+        # caller waited the full max_delay for nothing.
+        _preds = _userdata.get("_eot_turn_preds")
+        if _preds:
+            if _preds[-1]:
+                _lm = _userdata.setdefault("latency_metrics", {})
+                _lm["eotWaitWasted"] = _lm.get("eotWaitWasted", 0) + 1
+                logger.info(
+                    "[eot] turn ended on an escalated prediction — caller waited "
+                    "max_delay and never spoke again: %r",
+                    (text or "")[:60],
+                )
+            _userdata["_eot_turn_preds"] = []
         _lead_data = _userdata.get("lead_data") or {}
         # Recomputed EVERY turn (not just when true) so a single bad
         # transcript cannot leave later, good facts marked unconfirmed.
@@ -3978,6 +3993,28 @@ async def entrypoint(ctx: JobContext) -> None:
             _threshold = _EOT_HINDI_THRESHOLD
         _escalates = probability < _threshold
         userdata["latency_metrics"]["eotProbability"].append(round(probability, 4))
+        # Was the wait WORTH it?
+        #
+        # The probability alone cannot answer that. A turn scoring 0.13 means
+        # the detector believes the caller has not finished, and waiting 4s
+        # for them is then correct. The open question — the one the threshold
+        # comment says must not be guessed at — is how often that belief is
+        # WRONG, because when it is wrong the caller gets four seconds of
+        # silence for nothing. That is what call 866 sounded like: "जी बोलिए",
+        # four seconds, "Hello", four seconds, "Hello".
+        #
+        # If the caller does keep speaking, the detector runs again and this
+        # callback fires again inside the same turn. So an escalation that is
+        # the LAST prediction of its turn is one where nobody spoke again:
+        # the wait bought nothing. Counting the two cases separately is the
+        # measurement that decides the threshold, and it costs one integer.
+        _preds = userdata.setdefault("_eot_turn_preds", [])
+        if _preds and _preds[-1]:
+            # A previous prediction in this same turn escalated and the
+            # caller then produced more speech: that wait was justified.
+            userdata["latency_metrics"].setdefault("eotWaitJustified", 0)
+            userdata["latency_metrics"]["eotWaitJustified"] += 1
+        _preds.append(_escalates)
         logger.info(
             "[eot] p=%.4f threshold=%.2f -> %s%s",
             probability,
