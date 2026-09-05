@@ -15,6 +15,8 @@ from livekit.agents.llm import function_tool
 
 import db
 from language import (
+    catalog_locality,
+    catalog_rows_mentioned,
     ELEVENLABS_SUPPORTED_LANGUAGES,
     best_match,
     fragment_languages,
@@ -1894,6 +1896,71 @@ _INVENTORY_QUERY_PATTERN = re.compile(
 )
 
 
+# A "what is around here" question. Distance ordering is only meaningful for
+# these; everything else keeps the query the model wrote.
+_PROXIMITY_PATTERN = re.compile(
+    r"\b(near|nearby|nearest|closest|close to|around|how far|distance|walking distance|"
+    r"km from|minutes from)\b|"
+    r"पास|नज़दीक|नजदीक|नज़दीकी|कितनी\s*दूर|दूरी|जवळ|आसपास",
+    re.IGNORECASE,
+)
+
+
+def _project_locality_in(query: str, catalog_index: str) -> str:
+    """Locality of the ONE catalog project this query names, or "".
+
+    Deliberately stricter than catalog_rows_mentioned. That function is
+    generous on purpose — it feeds candidate rows into the prompt, where an
+    extra row costs nothing. Here the answer rewrites a live search query, so
+    a loose match actively makes the result worse:
+
+      - "hospitals near Mahindra Citadel" matched Mahindra Citadel AND
+        Mahindra Lifespaces Mahalunge, and taking the first row appended
+        "Baner, Pune" — the wrong project's locality, which is a worse query
+        than the one we started with.
+      - "what is the stamp duty in Maharashtra" matched a row on locality
+        alone and appended "Wakad, Pune" to a question about state-level
+        stamp duty.
+
+    So: title matches only, never locality, and the best-scoring title wins
+    outright rather than whichever happened to be listed first.
+    """
+    if not query or not catalog_index:
+        return ""
+    lowered = query.lower()
+    words = [w for w in re.split(r"[\s,.।?!]+", query) if len(w) > 2]
+    best_line, best_score = "", 0
+    for line in catalog_index.splitlines():
+        title = line.lstrip("- ").split("|")[0].strip()
+        if not title:
+            continue
+        title_words = [w for w in re.split(r"[\s\-]+", title) if len(w) > 3]
+        # Score = how much of the title the query actually contains, so a
+        # two-word hit beats a one-word hit on a longer name.
+        score = sum(1 for t in title_words if t.lower() in lowered)
+        if not score:
+            # Phonetic fallback needs TWO title words, not one. sounds_like
+            # compares romanized forms and is tuned for cross-script name
+            # matching, which makes it far too generous on ordinary English:
+            # on "what is the stamp duty in Maharashtra" it matched "duty" to
+            # "County", "stamp" to "Astra" and "Maharashtra" to "Astra", and
+            # would have appended "Wakad, Pune" to a question about
+            # state-level stamp duty. Two words agreeing is not a
+            # coincidence; one is.
+            #
+            # This mostly costs nothing: the query reaching this tool is
+            # written by the model, and models write search queries in Latin,
+            # which the exact match above already handles. A single-word
+            # project name written in Devanagari simply is not grounded, and
+            # the search runs exactly as it does today.
+            score = sum(1 for tw in title_words if any(sounds_like(w, tw) for w in words))
+            if score < 2:
+                score = 0
+        if score > best_score:
+            best_line, best_score = line, score
+    return catalog_locality(best_line) if best_score else ""
+
+
 @function_tool
 async def web_search(context: RunContext, query: str) -> str:
     """Search the live web for current or factual information you don't
@@ -1934,6 +2001,48 @@ async def web_search(context: RunContext, query: str) -> str:
             "if the catalog has nothing matching, say so plainly rather than offering something "
             "you found elsewhere. Never present a project from outside the catalog as ours."
         )
+
+    # A project name on its own is not a place the web can find. Asked for
+    # hospitals near Mahindra Citadel, Tavily answered "Aditya Birla Memorial
+    # Hospital is 2 km away" — it is 5.4 km, and the two actually nearest
+    # (Yashwantrao Chavan Memorial and D Y Patil, both about 2 km) were not
+    # mentioned at all. The name matches Mahindra developments in several
+    # cities, so the search grounds on whichever page ranks.
+    #
+    # The catalog already knows exactly where the project is. Adding that one
+    # phrase to the query is the whole fix; measured against the live API on
+    # the same day:
+    #
+    #   "hospitals near Mahindra Citadel"
+    #     -> Aditya Birla Memorial Hospital is 2 km away, Lokmanya 4 km...
+    #   "hospitals near Mahindra Citadel Pimpri-Chinchwad, Pune"
+    #     -> the closest hospitals are Yashwantrao Chavan Memorial and Citi
+    #        Care, both within 2 km. Aditya Birla is 5.4 km away.
+    #
+    # Only ever ADDS the locality, never rewrites what the model asked for,
+    # and does nothing when the query names no catalog project or already
+    # says where it is.
+    _loc = _project_locality_in(query or "", getattr(_agent, "_catalog_index", "") or "")
+    if _loc and _loc.split(",")[0].strip().lower() not in (query or "").lower():
+        query = f"{query} {_loc}"
+        logger.info("web_search grounded to the catalog locality -> %r", query)
+
+    # "near" gets a popularity-ranked answer; "sorted by distance" gets a
+    # distance-ranked one. Same API, same locality, measured back to back and
+    # stable across repeats:
+    #
+    #   "hospitals near Mahindra Citadel Pimpri-Chinchwad, Pune"
+    #     -> Aditya Birla Memorial Hospital is 2 km away...      (it is 5.4)
+    #   ...the same query + " sorted by distance in km"
+    #     -> the closest is Samarth Hospital, 0.43 km; Lotus Multi Speciality
+    #        1.14 km; New Life Child Care 1.43 km
+    #
+    # A caller asking what is nearby means nearest, not best known, so the
+    # question is asked that way. Only on proximity questions — the suffix on
+    # "what is the stamp duty in Maharashtra" would be nonsense.
+    if _PROXIMITY_PATTERN.search(query or "") and "sorted by distance" not in (query or "").lower():
+        query = f"{query} sorted by distance in km"
+        logger.info("web_search asked for distance ordering -> %r", query)
 
     if not TAVILY_API_KEY:
         return "Web search isn't set up right now — answer from what you already know, don't mention this."
