@@ -3383,6 +3383,13 @@ def _caller_number_from_sip(attrs: dict, participant) -> str | None:
     return None
 
 
+# How long to let a freshly-created outbound SIP participant publish its
+# sip.callStatus before giving up and greeting anyway. Generous enough to
+# cover attribute sync, short enough that a carrier which never sets it does
+# not leave the callee in silence.
+_SIP_ATTR_GRACE_S = 3.0
+
+
 async def _wait_for_sip_answer(ctx: JobContext, participant, t0: float, timeout: float = 90.0) -> bool:
     """Block until an outbound SIP callee actually picks up.
 
@@ -3409,10 +3416,75 @@ async def _wait_for_sip_answer(ctx: JobContext, participant, t0: float, timeout:
     def status_of() -> str | None:
         return dict(getattr(participant, "attributes", None) or {}).get("sip.callStatus")
 
-    if status_of() in (None, "active"):
+    async def settle_media() -> None:
+        """"active" means the SIP dialog is up (200 OK), NOT that audio is
+        flowing yet - RTP takes a moment more. Greeting on "active" alone
+        meant the opener went out before the path carried it: confirmed on
+        campaign call 820, where the transcript shows the greeting spoken but
+        the callee heard nothing, answered the silence with "Hello", and the
+        agent then talked itself into a goodbye 76s later having never
+        actually connected.
+
+        Wait for their audio track to be subscribed - that is the first
+        moment we know the media path exists. Bounded, because a caller who
+        never publishes audio (muted handset, odd carrier) must still get
+        greeted rather than sit in silence forever.
+        """
+        audio_deadline = time.monotonic() + 3.0
+        while time.monotonic() < audio_deadline:
+            if any(
+                pub.subscribed and pub.kind == rtc.TrackKind.KIND_AUDIO
+                for pub in participant.track_publications.values()
+            ):
+                logger.info("[latency] caller audio live at +%.2fs", time.monotonic() - t0)
+                return
+            await asyncio.sleep(0.05)
+        logger.info("greeting anyway: no caller audio track within 3s of answer")
+
+    status = status_of()
+
+    # None does NOT mean "not a SIP call" here. This function only runs when
+    # room metadata says direction=outbound, i.e. on a leg we dialled
+    # ourselves, so there is always a SIP status coming — None means the
+    # participant's attributes have not synced to us yet.
+    #
+    # Treating that as "answered" is how the opener gets spoken into a
+    # ringing handset, which is exactly what a campaign test heard: the line
+    # starting before the callee picked up, so they caught the back half of
+    # it. Campaigns are the only path that can hit this. A dashboard test
+    # call sets wait_until_answered=True, so create_sip_participant blocks in
+    # the dialer and the participant only exists once answered, already
+    # "active"; the campaign dialer must not block (it would serialise dials
+    # that are meant to overlap), so its participant appears while still
+    # dialing and this loop is the ONLY thing holding the greeting.
+    #
+    # It is also likely to have got worse recently rather than better: the
+    # attribute sync races against everything between wait_for_participant()
+    # and here, and prewarming the config/KB caches cut that from seconds to
+    # about one, removing the accidental delay that was hiding the race.
+    if status is None:
+        attr_deadline = time.monotonic() + _SIP_ATTR_GRACE_S
+        while status is None and time.monotonic() < attr_deadline:
+            await asyncio.sleep(0.05)
+            status = status_of()
+        if status is None:
+            logger.warning(
+                "outbound leg published no sip.callStatus within %.1fs — greeting without "
+                "confirmation that anyone answered (room=%s)", _SIP_ATTR_GRACE_S, ctx.room.name,
+            )
+            await settle_media()
+            return True
+        logger.info("[latency] sip.callStatus arrived as %r after waiting for it", status)
+
+    if status == "active":
+        # Already answered when we got here — the dashboard-test shape. This
+        # used to return immediately and so skipped the media settle
+        # entirely, meaning the one path that greets soonest was also the
+        # one that never waited for RTP.
+        await settle_media()
         return True
 
-    logger.info("[latency] outbound leg still %s — holding greeting until answered", status_of())
+    logger.info("[latency] outbound leg still %s — holding greeting until answered", status)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         status = status_of()
@@ -3431,17 +3503,7 @@ async def _wait_for_sip_answer(ctx: JobContext, participant, t0: float, timeout:
             # Bounded, because a caller who never publishes audio (muted
             # handset, odd carrier) must still get greeted rather than sit in
             # silence forever.
-            audio_deadline = time.monotonic() + 3.0
-            while time.monotonic() < audio_deadline:
-                if any(
-                    pub.subscribed and pub.kind == rtc.TrackKind.KIND_AUDIO
-                    for pub in participant.track_publications.values()
-                ):
-                    logger.info("[latency] caller audio live at +%.2fs", time.monotonic() - t0)
-                    break
-                await asyncio.sleep(0.05)
-            else:
-                logger.info("greeting anyway: no caller audio track within 3s of answer")
+            await settle_media()
             return True
         # Declined/hung up before answering, or the SIP leg dropped out of
         # the room entirely — either way there is nobody to greet.
