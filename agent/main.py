@@ -750,9 +750,19 @@ _FEMALE_SELF_ID = ("i'm female", "i am female", "main female", "i'm a woman", "i
 # anything it returns would be someone else's stock described as ours.
 _INVENTORY_QUESTION_PATTERN = re.compile(
     r"\b(project|projects|property|properties|flat|flats|apartment|apartments|"
-    r"villa|villas|plot|plots|bhk|inventory|available|listing|listings)\b|"
+    r"villa|villas|plot|plots|bhk|inventory|available|listing|listings|"
+    # "which developers do you have" is one of the two commonest inventory
+    # questions there is, and neither this pattern nor tools' copy matched
+    # the word in any Indian script. Call 870 asked it and matched only
+    # because the recognizer happened to drop the English word "project"
+    # into the turn; call 873 asked the same thing as "कौन से डेवलपर से लिख
+    # रहे हैं?", matched nothing, got no catalog index, and the agent
+    # answered with Rohan Builders — who are not ours. My own regression
+    # test for 870 passed for that accidental reason.
+    r"developer|developers|builder|builders)\b|"
     r"प्रोजेक्ट|प्रॉपर्टी|फ्लैट|अपार्टमेंट|प्लॉट|विला|उपलब्ध|स्कीम|"
-    r"प्रकल्प|मालमत्ता|સ્કીમ|પ્રોજેક્ટ",
+    r"डेवलपर|डेवेलपर|बिल्डर|विकासक|"
+    r"प्रकल्प|मालमत्ता|સ્કીમ|પ્રોજેક્ટ|ડેવલપર|બિલ્ડર",
     re.IGNORECASE,
 )
 

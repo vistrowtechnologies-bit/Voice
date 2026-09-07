@@ -2011,8 +2011,13 @@ async def lookup_catalog(context: RunContext, query: str) -> str:
 # search query rather than the caller's words.
 _INVENTORY_QUERY_PATTERN = re.compile(
     r"\b(project|projects|property|properties|flat|flats|apartment|apartments|"
-    r"villa|villas|plot|plots|bhk|inventory|listing|listings|builder|developer)\b|"
-    r"प्रोजेक्ट|प्रॉपर्टी|फ्लैट|अपार्टमेंट|प्लॉट|विला|स्कीम|प्रकल्प",
+    r"villa|villas|plot|plots|bhk|inventory|listing|listings|builder|builders|"
+    r"developer|developers)\b|"
+    # Same gap as main.py's copy: "builder"/"developer" were here in English
+    # only, so a caller asking in Hindi could still send the question to the
+    # web, where every developer in Pune is somebody else's stock.
+    r"प्रोजेक्ट|प्रॉपर्टी|फ्लैट|अपार्टमेंट|प्लॉट|विला|स्कीम|प्रकल्प|"
+    r"डेवलपर|डेवेलपर|बिल्डर|विकासक|ડેવલપર|બિલ્ડર",
     re.IGNORECASE,
 )
 
