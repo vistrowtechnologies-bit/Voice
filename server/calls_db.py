@@ -6035,8 +6035,8 @@ PHONE_NUMBER_MONTHLY_FEE_INR = 299
 
 def credit_rates(account_id: int, conn=None) -> dict:
     """Per-minute credit-burn multiplier for each call type, e.g.
-    {"browser": 1.0, "widget": 1.0, "phone": 1.5} — phone calls burn more
-    since they carry an EnableX telephony cost the others don't."""
+    {"browser": 1.0, "widget": 1.0, "phone": 1.0}. Telephony is billed
+    separately or supplied by the tenant, so it does not change AI credits."""
     if conn is not None:
         rates = {}
         for call_type, setting_key in _CREDIT_RATE_SETTINGS.items():
@@ -6528,8 +6528,21 @@ def notifications(account_id: int) -> list[dict]:
             pct = remaining / total * 100
             bucket = None
             if remaining <= 0:
-                bucket = ("exhausted", "critical", "Credits exhausted",
-                          "Calls will fail until you top up or your plan renews.")
+                if billing.get("subscriptionStatus") == "active":
+                    rate = float(billing.get("overageRateInr") or 0)
+                    bucket = (
+                        "overage",
+                        "warning",
+                        "Included credits used",
+                        f"Calls remain active on billable overage at ₹{rate:g} per credit.",
+                    )
+                else:
+                    bucket = (
+                        "exhausted",
+                        "critical",
+                        "Credits exhausted",
+                        "Calls are paused until you top up or activate a paid plan.",
+                    )
             elif pct <= 10:
                 bucket = ("10", "critical", "Under 10% of credits left",
                           f"{int(remaining)} of {int(total)} credits remaining this cycle.")
@@ -6702,6 +6715,27 @@ def add_topup_credits(account_id: int, credits: int) -> None:
         conn.close()
 
 
+def reset_plan_credits(account_id: int, plan: str) -> None:
+    """Start a paid billing period with exactly that plan's allowance.
+
+    Top-ups are added during the period by ``add_topup_credits`` and are
+    therefore part of that period's allowance.  A renewal begins a fresh
+    allowance; carrying the previous period's top-ups forward would grant
+    them repeatedly.
+    """
+    plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO settings (account_id, key, value) VALUES (?, 'credits_total', ?) "
+                "ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value",
+                (account_id, str(int(plan_pricing["credits"]))),
+            )
+    finally:
+        conn.close()
+
+
 def overage_for_account_period(account_id: int, plan: str, period_start: str, period_end: str) -> dict:
     """Credits used strictly within [period_start, period_end) against that
     plan's included allotment — used by the subscription.charged webhook
@@ -6710,19 +6744,19 @@ def overage_for_account_period(account_id: int, plan: str, period_start: str, pe
     conn = _connect()
     try:
         rates = credit_rates(account_id, conn=conn)
-        used, _by_type, _by_tier = _credits_used_in_period(
-            conn, account_id, rates, period_start
-        )
-        # _credits_used_in_period only bounds the start; re-filter the upper
-        # edge here since this is the one caller that needs a closed period
-        # rather than "since period_start through now".
+        # This is the one caller that needs a closed period rather than
+        # "since period_start through now". Keep the same non-billable test
+        # call exclusions as billing_summary.
         query = (
             "SELECT COALESCE(call_type, 'browser') call_type, voice, model, "
             "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls "
-            "WHERE account_id = ? AND started_at >= ? AND started_at < ? GROUP BY call_type, voice, model"
+            "WHERE account_id = ? AND room_name NOT LIKE ? AND room_name NOT LIKE ? "
+            "AND started_at >= ? AND started_at < ? GROUP BY call_type, voice, model"
         )
         used = 0.0
-        for row in conn.execute(query, (account_id, period_start, period_end)).fetchall():
+        for row in conn.execute(
+            query, (account_id, "test-phone-%", "test-agent-%", period_start, period_end)
+        ).fetchall():
             call_type = row["call_type"] if row["call_type"] in rates else "browser"
             tier = voice_tier(row["voice"])
             mtier = model_tier(_row_get(row, "model"))
@@ -6731,7 +6765,12 @@ def overage_for_account_period(account_id: int, plan: str, period_start: str, pe
             )
         used = round(used, 1)
         plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
-        overage_credits = max(0.0, round(used - plan_pricing["credits"], 1))
+        allowance_row = conn.execute(
+            "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total'",
+            (account_id,),
+        ).fetchone()
+        allowance = int(allowance_row["value"]) if allowance_row else plan_pricing["credits"]
+        overage_credits = max(0.0, round(used - allowance, 1))
         per_credit_rate = plan_pricing["price_inr"] / plan_pricing["credits"]
         overage_rate_inr = round(per_credit_rate * OVERAGE_RATE_MULTIPLIER, 2)
         return {
@@ -6849,16 +6888,12 @@ def mark_invoice_paid(razorpay_order_id: str | None = None, razorpay_payment_id:
     conn = _connect()
     try:
         with conn:
-            if razorpay_payment_id:
-                conn.execute(
-                    f"UPDATE invoices SET status = 'paid', razorpay_payment_id = ?, paid_at = {_NOW} "
-                    "WHERE razorpay_order_id = ? AND status != 'paid'",
-                    (razorpay_payment_id, razorpay_order_id),
-                )
+            if not razorpay_order_id:
+                return None
             row = conn.execute(
-                "SELECT * FROM invoices WHERE razorpay_order_id = ? OR razorpay_payment_id = ? "
-                "ORDER BY id DESC LIMIT 1",
-                (razorpay_order_id, razorpay_payment_id),
+                f"UPDATE invoices SET status = 'paid', razorpay_payment_id = ?, paid_at = {_NOW} "
+                "WHERE razorpay_order_id = ? AND status != 'paid' RETURNING *",
+                (razorpay_payment_id, razorpay_order_id),
             ).fetchone()
             return dict(row) if row else None
     finally:
@@ -7017,15 +7052,49 @@ def get_phone_number_by_number(number: str) -> dict | None:
         conn.close()
 
 
+class PhoneNumberTakenError(Exception):
+    """The number is registered to a different account."""
+
+
 def add_phone_number(number: str, account_id: int, label: str = "", agent_id: int | None = None) -> int:
+    """Register a number to THIS account, or update it if this account owns it.
+
+    The ON CONFLICT clause used to update label and agent_id without checking
+    who owned the row, and `number` is UNIQUE platform-wide. So adding a
+    number that belonged to another account silently rewrote THEIR row:
+
+      - account_id stayed with the original owner, so the caller's own
+        numbers list came back empty and the add looked like it had failed
+      - agent_id was overwritten with whatever the caller passed, which from
+        the Add form is None — pointing the other tenant's live inbound
+        number at no agent at all
+
+    That is how +917713128715 ended up unrouted: it was added from a second
+    account, the add appeared to do nothing, and Prophunt's inbound routing
+    was cleared as a side effect.
+
+    Now the conflict path only applies to rows this account already owns, and
+    a number held elsewhere raises instead of quietly succeeding.
+    """
     number = _normalize_sip_number(number)
     conn = _connect()
     try:
+        owner = conn.execute(
+            "SELECT id, account_id FROM phone_numbers WHERE number = ?", (number,)
+        ).fetchone()
+        if owner is not None and owner["account_id"] != account_id:
+            raise PhoneNumberTakenError(
+                f"{number} is already registered to another account. Remove it there first."
+            )
         with conn:
             conn.execute(
                 "INSERT INTO phone_numbers (number, account_id, label, provider, agent_id) "
                 "VALUES (?, ?, ?, 'enablex', ?) "
-                "ON CONFLICT(number) DO UPDATE SET label = excluded.label, agent_id = excluded.agent_id",
+                "ON CONFLICT(number) DO UPDATE SET label = excluded.label, agent_id = excluded.agent_id "
+                # Belt and braces: even if the ownership check above were
+                # bypassed by a race, this refuses to touch another account's
+                # row rather than rewriting it.
+                "WHERE phone_numbers.account_id = excluded.account_id",
                 (number, account_id, label, agent_id),
             )
         return conn.execute("SELECT id FROM phone_numbers WHERE number = ?", (number,)).fetchone()["id"]

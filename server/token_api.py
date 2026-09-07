@@ -3450,7 +3450,15 @@ async def add_phone_number(data: dict = Body(...), user: dict = Depends(current_
     number = (data.get("number") or "").strip()
     if not number:
         raise HTTPException(400, "A phone/virtual number is required")
-    number_id = calls_db.add_phone_number(number, user["account_id"], data.get("label", ""), data.get("agentId"))
+    try:
+        number_id = calls_db.add_phone_number(
+            number, user["account_id"], data.get("label", ""), data.get("agentId")
+        )
+    except calls_db.PhoneNumberTakenError as exc:
+        # 409, and say WHY. This previously "succeeded" while writing to
+        # another account's row, so the operator saw an empty numbers list
+        # and no reason for it.
+        raise HTTPException(409, str(exc)) from exc
     lk_sync_error = await _sync_dispatch_rule(number_id, user["account_id"])
     return {"ok": True, "lkSyncError": lk_sync_error}
 
@@ -3946,6 +3954,8 @@ async def billing_razorpay_webhook(request: Request) -> dict:
                 current_period_start=_epoch_to_iso(sub.get("current_start")),
                 current_period_end=_epoch_to_iso(sub.get("current_end")),
             )
+            if not existing or existing.get("status") != "active":
+                calls_db.reset_plan_credits(account_id, plan)
             admin_db.change_plan(account_id, plan)
         else:
             # Confirmed real gap: this used to fall through silently — a real
@@ -4010,6 +4020,7 @@ async def billing_razorpay_webhook(request: Request) -> dict:
                 sub.get("customer_id"), sub["id"], status="active",
                 current_period_start=new_period_start, current_period_end=new_period_end,
             )
+            calls_db.reset_plan_credits(account_id, plan)
             admin_db.change_plan(account_id, plan)
         else:
             logger.warning("razorpay subscription.charged: no account for subscription %s", sub.get("id"))

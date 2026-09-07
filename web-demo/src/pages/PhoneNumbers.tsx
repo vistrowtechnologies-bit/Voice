@@ -15,7 +15,7 @@ import {
   fetchTelephonyStatus,
   placeTestCall,
 } from '../lib/api'
-import { isE164 } from '../lib/phone'
+import { COMMON_DIAL_CODES, composeE164, isE164 } from '../lib/phone'
 import type { AgentConfig, PhoneNumber, TelephonyStatus } from '../lib/types'
 
 // Every provider carries an explicit, truthful status rather than a boolean
@@ -210,6 +210,31 @@ function EnableXPanel() {
             <Icon name="link" className="text-[18px]" />
             {connecting ? 'Connecting…' : 'Connect EnableX'}
           </button>
+          {/* Disconnecting deletes the stored credentials and deliberately
+              KEEPS the numbers — the confirm dialog says so, because dropping
+              them would also destroy each number's LiveKit trunk and dispatch
+              rule. But the numbers list used to render only in the connected
+              branch, so "saved numbers stay" was invisible: an operator could
+              not see what they still owned, could not remove it, and hit an
+              unexplained failure when adding the same number on another
+              account, since `number` is UNIQUE platform-wide. */}
+          {numbers.length > 0 && (
+            <div className="mt-6 border-t border-border pt-4">
+              <h4 className="text-sm font-semibold">
+                Still registered to this account ({numbers.length})
+              </h4>
+              <p className="mb-3 text-xs text-text-muted">
+                These are kept so reconnecting restores routing immediately. They cannot take
+                calls while EnableX is disconnected, and no other account can register them
+                until they are removed here.
+              </p>
+              <div className="divide-y divide-border">
+                {numbers.map((n) => (
+                  <NumberRow key={n.id} number={n} agents={agents} onChange={reloadNumbers} />
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
       ) : (
         <>
@@ -294,22 +319,23 @@ function NumberRow({
   onChange: () => void
 }) {
   const [testTo, setTestTo] = useState('')
+  const [testDialCode, setTestDialCode] = useState('+91')
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [showTest, setShowTest] = useState(false)
 
   const runTest = async () => {
-    const to = testTo.trim()
+    const to = composeE164(testDialCode, testTo)
     if (!to) return
     if (!isE164(to)) {
-      setResult('✕ Enter the number in full international format, starting with + and the country code (e.g. +919812345678).')
+      setResult('✕ Enter a valid phone number for the selected country code.')
       return
     }
     setTesting(true)
     setResult(null)
     try {
       const res = await placeTestCall(number.number, to)
-      setResult(res.ok ? '✓ EnableX accepted the call - the destination should ring shortly.' : `✕ ${res.error}`)
+      setResult(res.ok ? '✓ Call started successfully.' : `✕ ${res.error}`)
     } catch {
       setResult('✕ Request failed - is the backend running?')
     } finally {
@@ -357,10 +383,23 @@ function NumberRow({
 
       {showTest && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-high/40 p-3">
+          <select
+            value={testDialCode}
+            onChange={(e) => setTestDialCode(e.target.value)}
+            aria-label="Country dial code"
+            className="rounded-lg border border-border bg-surface px-2 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+          >
+            {COMMON_DIAL_CODES.map((country) => (
+              <option key={country.code} value={country.dial}>{country.code} {country.dial}</option>
+            ))}
+          </select>
           <input
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel-national"
             value={testTo}
             onChange={(e) => setTestTo(e.target.value)}
-            placeholder="Call this number, e.g. +9199…"
+            placeholder="Call this number, e.g. 98765 43210"
             className="min-w-[180px] flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
           />
           <button
