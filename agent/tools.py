@@ -1643,6 +1643,27 @@ def _looks_like_goodbye(text: str) -> bool:
     return any(marker.lower() in lowered for marker in _GOODBYE_MARKERS)
 
 
+def _agent_awaiting_reply(context: RunContext) -> bool:
+    """True when the agent's own most recent line asked something and no
+    substantive caller turn has followed it.
+
+    Call 851 ended one line after "कृपया एक बार फिर पूछें" — please ask
+    again — with nothing from the caller in between.
+    """
+    try:
+        items = context.session.history.items
+    except Exception:
+        return False
+    for item in reversed(items):
+        role = getattr(item, "role", None)
+        text = getattr(item, "text_content", None) or ""
+        if role == "user" and len(text.strip()) >= _SUBSTANTIVE_TURN_CHARS:
+            return False          # they answered after whatever we asked
+        if role == "assistant" and text.strip():
+            return bool(_QUESTION_PATTERN.search(text))
+    return False
+
+
 @function_tool
 async def end_call(context: RunContext) -> str:
     """Call this once the caller has clearly indicated the conversation is
@@ -1686,6 +1707,66 @@ async def end_call(context: RunContext) -> str:
             "waiting on an answer to. Answer it. Only call this once they have actually "
             "signalled they are finished."
         )
+
+    # Replaying every hangup this system has actually performed showed the
+    # question guard above catches only two of seven. The two it misses are
+    # the same failure wearing different clothes: the agent could not
+    # understand the caller, and ended the call rather than persisting.
+    #
+    #   Call 866  caller said "Hello", then "Hello" — they could not hear
+    #             anything — and the agent thanked them and hung up.
+    #   Call 851  caller's turn came through as "Pune ପଟ୍ଟା ସେ ଡିସଟେମ୍।
+    #             Speak". The agent said "माफ़ कीजिए, मैं आपका सवाल ठीक से
+    #             समझ नहीं पाई, कृपया एक बार फिर पूछें" — please ask again —
+    #             and then hung up without waiting for them to.
+    #
+    # Neither caller said anything resembling a goodbye. Both were still
+    # trying to talk.
+    _recent = _recent_user_utterances(context, limit=3)
+    _said_goodbye = any(_looks_like_goodbye(t) for t in _recent)
+    if not _said_goodbye:
+        # A stray script in the caller's last turn means the recognizer put
+        # it in the wrong language — the words are not what they said. Call
+        # 851 ended on "Pune ପଟ୍ଟା ସେ ଡିସଟେମ୍। Speak" (Odia inside a Hindi
+        # call), where the one word that did come through was "Speak".
+        _reply_lang = getattr(getattr(context.session, "current_agent", None), "_reply_language", None)
+        _detected = detect_reply_language(_recent[0]) if _recent else None
+        _wrong_script = bool(
+            _recent
+            and (
+                fragment_languages(_recent[0], _reply_lang)
+                # fragment_languages only sees a foreign script present as a
+                # MINORITY. Call 851's turn was majority Odia — "Pune ପଟ୍ଟା ସେ
+                # ଡିସଟେମ୍। Speak" on a Hindi call — so it returned nothing
+                # while detect_reply_language named it od-IN outright.
+                or (_detected and _reply_lang and _detected != _reply_lang)
+            )
+        )
+        if _wrong_script:
+            return (
+                "NOT ending the call — the caller's last message came through in the wrong "
+                "script, so those are not the words they said. You have no idea whether they "
+                "are finished. Say once that you did not catch it and ask them to repeat."
+            )
+        # Their most recent turn was too short to be a real utterance, so
+        # there is no evidence they are finished. Call 866 hung up on a
+        # caller whose last two turns were "Hello" and "Hello" — they could
+        # not hear anything.
+        if _recent and len(_recent[0].strip()) < _SUBSTANTIVE_TURN_CHARS:
+            return (
+                "NOT ending the call — nothing the caller has said recently came through as "
+                "more than a fragment, which usually means they cannot hear you or the line is "
+                "poor, not that they are done. Say once, clearly, that you cannot hear them "
+                "properly and ask them to repeat. Do not thank them and do not say goodbye."
+            )
+        # You asked them something and they have not answered yet. Ending
+        # here is incoherent: it hangs up on your own question.
+        if _agent_awaiting_reply(context):
+            return (
+                "NOT ending the call — your own last line asked the caller something and they "
+                "have not answered it yet. Wait for them, or ask once more in a shorter way. "
+                "Hanging up on your own question is worse than saying nothing."
+            )
     if context.userdata is not None:
         context.userdata["ending_call"] = True
     return (
