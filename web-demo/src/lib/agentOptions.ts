@@ -205,24 +205,33 @@ export const MODEL_OPTIONS = [
 // If a paid Groq tier is ever bought, re-list them — but benchmark against
 // this platform's own Hindi/Marathi checks first, the way gpt-4.1-nano was
 // disqualified at 2/12 for being fast and wrong.
-export const ADMIN_ONLY_MODELS = [
-  {
-    value: 'gemini-live',
-    label: 'Gemini Live 2.5 (Preview)',
-    tag: 'Speech-to-speech · admin testing · Indic quality unverified',
-  },
-  {
-    // Newer, and worse for this platform. The plugin warns that any "3.1"
-    // Live model has limited mid-session update support: instructions, chat
-    // context and tool updates are not applied until the next session. Every
-    // per-turn guard here is a system message added in
-    // on_user_turn_completed — the objective that stops the funnel
-    // overriding a caller's question, the garbled handling, the site-visit
-    // suppression. On 3.1 they are accepted and silently ignored.
-    value: 'gemini-live:gemini-3.1-flash-live-preview',
-    label: 'Gemini Live 3.1 (Preview)',
-    tag: 'Newer, but per-turn guards do NOT apply · raw testing only',
-  },
+// Gemini Live is PARKED, not removed. Three admin test calls on 2026-09-07:
+// audio worked once and was silent twice, the working one opened with "Sorry,
+// I didn't catch that" before the caller had spoken, and it felt slower than
+// the pipeline it was meant to beat.
+//
+// The blocker is not any of those individually — it is that the realtime path
+// emits NO latency metrics at all. providers comes back empty and
+// eouMs/llmTtftMs/ttsTtfbMs are absent, because every one of them is measured
+// at a pipeline stage speech-to-speech does not have. So the architecture
+// adopted specifically to reduce latency reports no latency, and the only
+// instrument left is the operator's ear.
+//
+// The reasoning that led here still stands and is worth keeping: a six-token
+// prompt costs 1,093ms and the full 38.6k prompt with 11 tools costs 935ms,
+// so the LLM second is the OpenAI round trip and nothing inside OpenAI —
+// prompt size, model choice, tier — can touch it. Removing the hop is the only
+// structural answer.
+//
+// Re-list these only after the realtime path reports per-turn latency. Then
+// test the 700ms turn-detection fix (never yet exercised — every fragmenting
+// sample predates it), then compare against the pipeline's measured 1.64s. In
+// that order: the last attempt did it backwards.
+export const ADMIN_ONLY_MODELS = [] as const
+
+const PARKED_MODELS = [
+  { value: 'gemini-live', label: 'Gemini Live 2.5 (Preview)' },
+  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Gemini Live 3.1 (Preview)' },
 ] as const
 
 // Kept out of the dropdown but still resolvable, so calls 853 and 854 render
@@ -252,6 +261,7 @@ export const modelLabel = (value: string) =>
   MODEL_OPTIONS.find((m) => m.value === value)?.label ??
   ADMIN_ONLY_MODELS.find((m) => m.value === value)?.label ??
   RETIRED_ADMIN_MODELS.find((m) => m.value === value)?.label ??
+  PARKED_MODELS.find((m) => m.value === value)?.label ??
   RETIRED_MODELS.find((m) => m.value === value)?.label ??
   value
 // Presets for Sarvam bulbul:v3's own pace/temperature/pitch - controls how
