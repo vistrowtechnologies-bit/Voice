@@ -4970,6 +4970,14 @@ async def entrypoint(ctx: JobContext) -> None:
         provider = getattr(metadata, "model_provider", None) if metadata else None
         model = getattr(metadata, "model_name", None) if metadata else None
         label = "/".join(part for part in (provider, model) if part)
+        # A RealtimeModel emits no metadata, so provider and model are both
+        # None and the joined label comes out empty — which is how a realtime
+        # call would go on recording providers=[] even with its timings
+        # captured. The metric carries its own label
+        # ("google.realtime.RealtimeModel"); fall back to it so the call
+        # record still says what served the turn.
+        if not label:
+            label = (getattr(metric, "label", "") or "").strip()
         if metric_type == "eou_metrics":
             samples = (
                 ("endpointing", "eouMs", "Caller turn detected", metric.end_of_utterance_delay),
@@ -5016,12 +5024,48 @@ async def entrypoint(ctx: JobContext) -> None:
                 provider=provider,
                 model=model,
             )
+        elif metric_type == "realtime_model_metrics" and not metric.cancelled:
+            # Speech-to-speech reports ONE number where the pipeline reports
+            # three, because it is one hop: audio in, audio out. ttft here is
+            # the caller's turn ending to the first audio of the reply — the
+            # same span the pipeline only produces by adding eouMs + llmTtftMs
+            # + ttsTtfbMs together.
+            #
+            # This branch is why Gemini Live was parked. It was never written,
+            # so every realtime call recorded providers=[] and no timings at
+            # all, and the architecture adopted specifically to cut latency
+            # reported none. Three test calls were judged on "feels slower"
+            # because there was nothing else to judge them on.
+            #
+            # Stored under realtimeTtftMs, deliberately NOT merged into
+            # llmTtftMs: the pipeline's llmTtftMs excludes endpointing and
+            # synthesis, so averaging the two together would compare a part
+            # against a whole and flatter whichever was measured last.
+            duration_ms = round(max(0.0, metric.ttft) * 1000)
+            timings.setdefault("realtimeTtftMs", []).append(duration_ms)
+            request_duration_ms = round(max(0.0, metric.duration) * 1000)
+            first_audio_offset_ms = max(0, collected_offset_ms - request_duration_ms + duration_ms)
+            _record_diagnostic(
+                "metric", "llm", "Reply audio started (speech-to-speech)",
+                "warning" if duration_ms >= 1500 else "ok",
+                durationMs=duration_ms,
+                offsetMs=first_audio_offset_ms,
+                observedAtOffsetMs=collected_offset_ms,
+                provider=provider,
+                model=model,
+            )
+            logger.info(
+                "[latency] realtime turn: first reply audio %dms after the caller stopped", duration_ms
+            )
         else:
             return
 
         if label and label not in timings["providers"]:
             timings["providers"].append(label)
-        stage = "llm" if metric_type == "llm_metrics" else "tts" if metric_type == "tts_metrics" else "stt"
+        stage = (
+            "llm" if metric_type in ("llm_metrics", "realtime_model_metrics")
+            else "tts" if metric_type == "tts_metrics" else "stt"
+        )
         previous = last_provider_by_stage.get(stage)
         if label and previous and label != previous:
             _record_diagnostic(
