@@ -1130,6 +1130,37 @@ _GENDERED_VERB_LANGUAGES = {"hi-IN", "mr-IN", "gu-IN", "pa-IN"}
 # reintroduced the STT-finalization race that dropped whole transcripts twice,
 # and transcriptionMs cannot detect that because it only records turns that
 # succeeded.
+# DECISION RULE, written down BEFORE the data arrives, because this setting
+# has now been changed and reverted twice on argument rather than evidence and
+# the third time should not be a matter of who argues better.
+#
+# eotWaitWasted / eotWaitJustified (see _record_eot_probability) count what the
+# probability alone never could: an escalation that was the LAST prediction of
+# its turn means the caller never spoke again and the 4s bought nothing;
+# an escalation followed by another prediction in the same turn means they DID
+# continue and the wait was right.
+#
+# Read them with:
+#   SELECT id, latency_metrics_json FROM calls WHERE id >= 866
+#   -- sum eotWaitWasted and eotWaitJustified across rows
+#
+# Decide only at n >= 40 escalations (about two days of normal traffic):
+#
+#   wasted / (wasted + justified) > 0.60  -> lower this to 0.15
+#                                            (most waits are dead air)
+#   between 0.40 and 0.60                 -> leave it alone, no clear signal
+#   below 0.40                            -> leave it, and do NOT lower it
+#                                            later on latency reasoning alone
+#
+# First 16 turns after the counters shipped: 1 wasted, 3 justified. That is
+# n=4 and decides nothing, but it points the OPPOSITE way to the intuition
+# that these waits are waste — three quarters of them were the caller
+# genuinely still talking. Lowering the threshold on that evidence would cut
+# people off three times for every silence it saved.
+#
+# max_delay stays at 4.0 regardless: lowering it reintroduced the
+# STT-finalization race that dropped whole transcripts twice, and this
+# threshold decides how OFTEN the ceiling is hit, not how long it lasts.
 _EOT_HINDI_THRESHOLD = 0.25
 _EOT_UNLIKELY_THRESHOLDS = {
     lang: _EOT_HINDI_THRESHOLD
