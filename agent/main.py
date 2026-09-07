@@ -3145,8 +3145,19 @@ class RealEstateAgent(Agent):
                 _intent, _userdata.get("funnel_stage"), _site_visit_suppressed,
             )
 
-        _catalog_facts_instruction = (
-            (
+        # Two different jobs, so both can apply to one turn rather than
+        # one silently replacing the other.
+        #
+        #   named rows  — the verbatim truth about a project they NAMED
+        #   full index  — the complete list, for "what do you have"
+        #
+        # These used to be an either/or, and "क्या आपके पास ट्रिटोपिया
+        # प्रोजेक्ट है?" is both at once: it names a project AND is an
+        # inventory question. Whichever branch won, the other's grounding
+        # was lost.
+        _catalog_parts: list[str] = []
+        if _named_rows:
+            _catalog_parts.append(
                 "# Exact catalog entries for what the caller just named — use these VERBATIM\n"
                 + "\n".join(_named_rows)
                 + "\nThese lines are the truth about location, configuration and price. Do not "
@@ -3154,39 +3165,25 @@ class RealEstateAgent(Agent):
                 "being somewhere it is not. If they asked about something not in this list, say "
                 "plainly that it is not one of ours rather than guessing where it is."
             )
-            if _named_rows
-            # No specific project matched, but they asked what we HAVE.
-            #
-            # Removed once as prompt bulk, and call 869 is the receipt for
-            # that: asked which developers we carry, the agent answered
-            # Godrej, Mahindra, Shapoorji and Tejraj — all real — mixed with
-            # Rohan Builders, Kohinoor, DLF, VTP Realty and Tribeca, none of
-            # which this business sells. Identical to the invented list on
-            # call 847. The index is the only thing that has ever stopped it.
-            #
-            # Narrower than the version that was removed: that one fired on
-            # any project_information intent, including price and amenity
-            # questions where a named row already carries the answer. This
-            # fires only on "what do you have" — about 2,300 characters, on
-            # the handful of turns where naming inventory is the whole reply.
-            else (
-                (
-                    "# The COMPLETE list of what this business has. There is nothing else.\n"
-                    + self._catalog_index
-                    + "\n\nEvery project name and every developer name you say must appear "
-                    "above. If they asked for something not here, say plainly it is not one of "
-                    "ours — after checking this list properly, because saying no to something "
-                    "you do sell costs the business the sale. Do not pad a short list with "
-                    "names you recall from elsewhere: a short honest list is the right answer."
-                )
-                if (
-                    self._has_live_catalog
-                    and self._catalog_index
-                    and _INVENTORY_QUESTION_PATTERN.search(text or "")
-                )
-                else ""
+        if (
+            self._has_live_catalog
+            and self._catalog_index
+            and _INVENTORY_QUESTION_PATTERN.search(text or "")
+        ):
+            # Call 870: asked which developers we carry, the agent answered
+            # Godrej, Mahindra and Shapoorji — real — plus Rohan Builders,
+            # who are not ours. The index is the only thing that has ever
+            # stopped that.
+            _catalog_parts.append(
+                "# The COMPLETE list of what this business has. There is nothing else.\n"
+                + self._catalog_index
+                + "\n\nEvery project name and every developer name you say must appear above. "
+                "If they asked for something not here, say plainly it is not one of ours — after "
+                "checking this list properly, because saying no to something you do sell costs "
+                "the business the sale. Do not pad a short list with names you recall from "
+                "elsewhere: a short honest list is the right answer."
             )
-        )
+        _catalog_facts_instruction = "\n\n".join(_catalog_parts)
         _catalog_instruction = (
             (
                 "You now know enough about this caller to recommend something specific, and you "
@@ -4186,6 +4183,41 @@ async def entrypoint(ctx: JobContext) -> None:
         except Exception:
             logger.debug("could not record call diagnostic event", exc_info=True)
 
+    # AgentSession's close reason describes the AI session, not necessarily
+    # the SIP leg. Persist the participant's transport-level reason as well,
+    # otherwise LiveKit can report MEDIA_FAILURE while the CRM calls the row
+    # "Completed" merely because a greeting reached the transcript.
+    _FAILED_SIP_DISCONNECT_REASONS = {
+        "agent_error",
+        "connection_timeout",
+        "join_failure",
+        "media_failure",
+        "sip_trunk_failure",
+        "user_rejected",
+        "user_unavailable",
+    }
+
+    def _on_participant_disconnected(participant) -> None:
+        if participant.identity != first_participant.identity:
+            return
+        try:
+            reason_value = getattr(participant, "disconnect_reason", None)
+            reason = rtc.DisconnectReason.Name(reason_value).lower() if reason_value is not None else "unknown_reason"
+        except Exception:
+            reason = "unknown_reason"
+        status = "error" if reason in _FAILED_SIP_DISCONNECT_REASONS else "ok"
+        _record_diagnostic(
+            "lifecycle",
+            "transport",
+            "Caller media disconnected",
+            status,
+            reason=reason,
+        )
+        if status == "error":
+            userdata["failure_reason"] = f"sip_{reason}"
+
+    ctx.room.on("participant_disconnected", _on_participant_disconnected)
+
     # interruption_sensitivity 0-1 → how many real words it takes to interrupt
     # the agent. High sensitivity yields the floor on a single word; low
     # sensitivity ignores stray noise and needs a few words. Default 0.5 ≈ the
@@ -4206,7 +4238,12 @@ async def entrypoint(ctx: JobContext) -> None:
         if silence_reminder_ms > 0
         else (18.0 if cfg.get("is_platform_demo") else 6.5)
     )
-    silence_reminder_max = int(cfg.get("silence_reminder_max") or 1)
+    configured_silence_reminder_max = cfg.get("silence_reminder_max")
+    silence_reminder_max = (
+        1
+        if configured_silence_reminder_max is None
+        else max(0, int(configured_silence_reminder_max))
+    )
     end_call_on_silence_ms = int(cfg.get("end_call_on_silence_ms") or 0)
     max_call_duration_s = int(cfg.get("max_call_duration_s") or 0)
     # Dialed by _on_session_close below when AgentSession itself reports the
@@ -4350,11 +4387,24 @@ async def entrypoint(ctx: JobContext) -> None:
     # end_call_on_silence_ms, hang up. Reset every time the user speaks.
     silence_task: dict = {"handle": None}
 
-    def _reset_silence_hangup() -> None:
-        if end_call_on_silence_ms <= 0:
-            return
+    def _cancel_silence_hangup() -> None:
         if silence_task["handle"]:
             silence_task["handle"].cancel()
+            silence_task["handle"] = None
+
+    def _reset_silence_hangup() -> None:
+        _cancel_silence_hangup()
+        if end_call_on_silence_ms <= 0:
+            return
+        if not userdata.get("greeting_played", False):
+            return
+        if userdata.get("post_checkin_pending") or post_checkin_task.get("handle"):
+            return
+        # Silence is caller response time, not wall-clock time. Never spend
+        # that allowance while either side is speaking or while the agent is
+        # still producing its answer.
+        if userdata.get("user_state") == "speaking" or userdata.get("agent_state") in {"thinking", "speaking"}:
+            return
 
         async def _watch() -> None:
             try:
@@ -4378,6 +4428,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # "checked in and STILL silent": armed right after the check-in line is
     # sent, cancelled the moment the caller speaks.
     post_checkin_task: dict = {"handle": None}
+    deferred_checkin_task: dict = {"handle": None}
     _POST_CHECKIN_TIMEOUT_S = 12.0
 
     def _cancel_post_checkin_timeout() -> None:
@@ -4406,7 +4457,54 @@ async def entrypoint(ctx: JobContext) -> None:
 
         post_checkin_task["handle"] = asyncio.create_task(_watch())
 
+    def _cancel_deferred_checkin() -> None:
+        if deferred_checkin_task["handle"]:
+            deferred_checkin_task["handle"].cancel()
+            deferred_checkin_task["handle"] = None
+
+    def _send_silence_checkin() -> None:
+        sent = userdata.get("silence_reminders", 0)
+        if sent >= silence_reminder_max:
+            return
+        _cancel_silence_hangup()
+        userdata["silence_reminders"] = sent + 1
+        userdata["post_checkin_pending"] = True
+        session.generate_reply(
+            instructions=(
+                "The caller has gone quiet for a few seconds. Check in warmly and briefly — "
+                "nothing else. Do NOT default to a stock \"are you still there?\" line — vary "
+                "it like a real person would: a soft filler first (\"हां\", \"तो\", \"अच्छा\"), "
+                "sometimes just their name with a questioning tone, sometimes referencing what "
+                "you just said (\"सुन पा रहे हैं?\", \"कुछ पूछना था?\"), sometimes a trailing "
+                "\"...?\" instead of a full question. Never repeat the same phrasing you used "
+                "earlier in this call."
+            )
+        )
+
+    def _defer_silence_checkin_until_after_agent() -> None:
+        _cancel_deferred_checkin()
+
+        async def _watch() -> None:
+            try:
+                # Give the caller a fresh thinking window after the agent's
+                # audio ends. The away event may have fired halfway through
+                # a long response and will not fire a second time.
+                await asyncio.sleep(away_timeout)
+                if (
+                    userdata.get("user_state") != "speaking"
+                    and userdata.get("agent_state") not in {"thinking", "speaking"}
+                    and not userdata.get("ending_call")
+                ):
+                    _send_silence_checkin()
+            except asyncio.CancelledError:
+                pass
+            finally:
+                deferred_checkin_task["handle"] = None
+
+        deferred_checkin_task["handle"] = asyncio.create_task(_watch())
+
     def _on_user_state_changed(ev) -> None:
+        userdata["user_state"] = str(ev.new_state)
         _record_diagnostic(
             "state",
             "caller",
@@ -4418,14 +4516,19 @@ async def entrypoint(ctx: JobContext) -> None:
             # Caller is talking again — reset the reminder count and both
             # silence timers.
             userdata["silence_reminders"] = 0
-            _reset_silence_hangup()
+            _cancel_silence_hangup()
             _cancel_post_checkin_timeout()
+            _cancel_deferred_checkin()
+            userdata["post_checkin_pending"] = False
+            userdata["away_during_agent_turn"] = False
+        elif ev.new_state != "away":
+            _reset_silence_hangup()
         elif ev.new_state == "away":
             if not userdata.get("greeting_played", False):
                 # Away fired before the opening line finished playing (slow
                 # cold start / TTS) — not real caller silence, ignore it.
                 return
-            if userdata.get("agent_speaking", False):
+            if userdata.get("agent_state") in {"thinking", "speaking"}:
                 # Away fired while the AGENT's own reply is still generating
                 # or playing — user_away_timeout only watches caller VOICE
                 # activity, so a long agent turn (a multi-sentence answer,
@@ -4439,28 +4542,12 @@ async def entrypoint(ctx: JobContext) -> None:
                 # entirely here; _on_agent_state_changed will let a real
                 # away condition (caller silent after the agent finishes)
                 # be caught by the next "away" event instead.
+                userdata["away_during_agent_turn"] = True
                 return
-            sent = userdata.get("silence_reminders", 0)
-            if sent < silence_reminder_max:
-                userdata["silence_reminders"] = sent + 1
-                session.generate_reply(
-                    instructions=(
-                        "The caller has gone quiet for a few seconds. Check in warmly and briefly — "
-                        "nothing else. Do NOT default to a stock \"are you still there?\" line — vary "
-                        "it like a real person would: a soft filler first (\"हां\", \"तो\", \"अच्छा\"), "
-                        "sometimes just their name with a questioning tone, sometimes referencing what "
-                        "you just said (\"सुन पा रहे हैं?\", \"कुछ पूछना था?\"), sometimes a trailing "
-                        "\"...?\" instead of a full question. Never repeat the same phrasing you used "
-                        "earlier in this call."
-                    )
-                )
-                # If the caller is still silent _POST_CHECKIN_TIMEOUT_S after
-                # this check-in finishes, hang up with a spoken reason —
-                # see _arm_post_checkin_timeout for why a second "away"
-                # event can't be relied on to catch this instead.
-                _arm_post_checkin_timeout()
+            _send_silence_checkin()
 
     def _on_agent_state_changed(ev) -> None:
+        userdata["agent_state"] = str(ev.new_state)
         _record_diagnostic(
             "state",
             "agent",
@@ -4471,6 +4558,16 @@ async def entrypoint(ctx: JobContext) -> None:
         # Read by _on_user_state_changed's "away" branch above, so the
         # check-in can never fire mid-reply.
         userdata["agent_speaking"] = ev.new_state == "speaking"
+        if ev.new_state in {"thinking", "speaking"}:
+            _cancel_silence_hangup()
+        else:
+            _reset_silence_hangup()
+            if userdata.pop("away_during_agent_turn", False):
+                _defer_silence_checkin_until_after_agent()
+            # Start the post-check-in countdown only once its audio has
+            # finished (or generation returned without speaking).
+            if userdata.pop("post_checkin_pending", False):
+                _arm_post_checkin_timeout()
         # end_call (tools.py) sets userdata["ending_call"] and returns
         # instructions for a goodbye line; this waits for that goodbye to
         # actually finish playing (agent state drops out of "speaking")
@@ -4812,6 +4909,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     "extracted_data": {**_extra_lead_facts(lead_data), **extracted},
                     "latency_metrics": userdata["latency_metrics"],
                     "diagnostic_events": userdata.get("diagnostic_events") or [],
+                    "failure_reason": userdata.get("failure_reason") or "",
                     # Diagnostics collected during the call. .get() rather
                     # than [] — a call that died before userdata was fully
                     # populated must still save its transcript.
@@ -4924,9 +5022,8 @@ async def entrypoint(ctx: JobContext) -> None:
                 pass
 
         asyncio.create_task(_max_duration_guard())
-    # Arm the end-call-on-silence watchdog for the opening stretch (no-ops if
-    # end_call_on_silence_ms is 0); it re-arms whenever the caller speaks.
-    _reset_silence_hangup()
+    # The silence watchdog is armed by state transitions after the greeting,
+    # so setup, thinking and greeting playback never consume caller time.
 
     # Strips steady background noise (traffic, crowd chatter, AC hum) from
     # the caller's mic before it ever reaches STT — Krisp's model via
@@ -4975,7 +5072,11 @@ async def entrypoint(ctx: JobContext) -> None:
     # _on_user_state_changed resets on ev.new_state == "speaking".
     def _mark_present() -> None:
         userdata["silence_reminders"] = 0
-        _reset_silence_hangup()
+        _cancel_silence_hangup()
+        _cancel_post_checkin_timeout()
+        _cancel_deferred_checkin()
+        userdata["post_checkin_pending"] = False
+        userdata["away_during_agent_turn"] = False
 
     def _on_data_received(data_packet) -> None:
         if data_packet.topic == "typing-presence":

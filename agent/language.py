@@ -365,6 +365,32 @@ def catalog_locality(line: str) -> str:
     return fields[1] if len(fields) >= 2 else ""
 
 
+
+def _dominant_script(text: str) -> str | None:
+    """The script code most of this text is written in, or None."""
+    counts = {code: len(pattern.findall(text or "")) for code, pattern in _SCRIPT_PATTERNS}
+    best = max(counts.items(), key=lambda kv: kv[1], default=(None, 0))
+    return best[0] if best[1] else None
+
+
+def _fragment_scripts(text: str) -> set[str]:
+    """Scripts present in `text` but only as a small minority of it.
+
+    A turn is normally one script plus maybe some Latin. Anything else
+    appearing in a handful of characters is the recognizer slipping, not the
+    caller switching language mid-sentence.
+    """
+    counts = {code: len(pattern.findall(text or "")) for code, pattern in _SCRIPT_PATTERNS}
+    total = sum(counts.values())
+    if total < _MIN_SCRIPT_CHARS:
+        return set()
+    return {
+        code
+        for code, n in counts.items()
+        if 0 < n and n / total < _MIN_SCRIPT_RATIO
+    }
+
+
 def catalog_rows_mentioned(text: str, catalog_index: str) -> list[str]:
     """Exact catalog lines for any item the caller just named.
 
@@ -385,6 +411,21 @@ def catalog_rows_mentioned(text: str, catalog_index: str) -> list[str]:
         return []
     lowered = text.lower()
     words = [w for w in re.split(r"[\s,.।?!]+", text) if w]
+    # Drop words written in a script that is only a fragment of this turn.
+    #
+    # Call 870 asked "कौन से डेवलपर्स हैं? project ଯୁକ୍ତ କ୍ଷେତ୍ର।" — Hindi
+    # with two words of Odia the recognizer produced out of nothing. That
+    # Odia word, କ୍ଷେତ୍ର, romanizes close enough to match BOTH "Kalpataru"
+    # and "Astra", so three unrelated projects were served up as the ones
+    # the caller had named. Phonetic matching exists to survive a caller's
+    # accent, not to find meaning in a mis-transcription.
+    _main = _dominant_script(text)
+    if _main:
+        # Keep only words in the turn's own script, plus anything Latin or
+        # scriptless. No ratio threshold: on call 870 the Odia was exactly
+        # 40% of the characters and sat precisely on the boundary a ratio
+        # test would have used, which is not a number worth tuning.
+        words = [w for w in words if _dominant_script(w) in (None, _main, "en")]
     rows = []
     for line in catalog_index.splitlines():
         title = line.lstrip("- ").split("|")[0].strip()
