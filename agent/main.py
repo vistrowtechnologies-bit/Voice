@@ -86,7 +86,24 @@ from tools import (
 )
 
 load_dotenv()
-db.init_db()
+# The agent deliberately does NOT migrate the schema. server/calls_db.py's
+# init_tables() owns that and creates every column this file reads —
+# checked column by column, all 19 the old call added.
+#
+# It used to run db.init_db() right here, at module import, which is inside
+# every subprocess LiveKit spawns. Measured: `import main` takes 11.5s, and
+# that call is most of it. With num_idle_processes=4 the pool starts several
+# at once, so several processes each opened a connection and issued the same
+# ALTER TABLE statements against `calls` and `agents` simultaneously —
+# taking AccessExclusiveLock on tables a live call is reading.
+#
+# LiveKit says what that costs, on every single deploy:
+#   "timed out waiting for idle processes to initialize"
+#   killing process / error initializing process
+#
+# A call arriving then has no warm process behind it. The same collision is
+# reproducible by hand: running init_tables() from a laptop while the server
+# was booting deadlocked on exactly these tables.
 
 logger = logging.getLogger("real-estate-voice-agent")
 logger.setLevel(logging.INFO)
