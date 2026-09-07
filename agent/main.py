@@ -2790,21 +2790,33 @@ class RealEstateAgent(Agent):
         # directly. The opener is passed as an instruction to say that exact
         # line rather than as text to synthesize.
         if self._is_realtime:
-            _opener = self._welcome_message or ""
+            # One instruction shape, not two.
+            #
+            # These were two branches and only one of them ever produced
+            # audio. Agent 4, whose welcome message is empty, took the
+            # generic branch and spoke (call 877). Agent 24, whose welcome
+            # message is "नमस्ते {{first_name}}, मैं मीरा बोल रही हूँ…", took
+            # the "say exactly this" branch and the call was silent with no
+            # record written at all.
+            #
+            # Two candidate reasons, and I could not separate them because
+            # `lk agent logs` would not return for this worker: the opener
+            # still carries an unsubstituted {{first_name}} template, and
+            # "repeat this Devanagari string verbatim" is a harder
+            # instruction for a speech-to-speech model than "greet them".
+            #
+            # So the greeting is now always the instruction that is KNOWN to
+            # work, with the operator's line supplied as the thing to open
+            # with rather than as a string to reproduce exactly. If a
+            # template token survives this far it reads as context the model
+            # can work around instead of text it must utter.
+            _opener = (self._welcome_message or "").strip()
+            _greet = (
+                "Greet the caller now, in one short warm line, then stop and let them reply."
+            )
             if _opener:
-                self.session.generate_reply(
-                    instructions=(
-                        "Greet the caller by saying exactly this, word for word, and nothing "
-                        f"else: {_opener}"
-                    )
-                )
-            else:
-                self.session.generate_reply(
-                    instructions=(
-                        "Greet the caller in one short, warm line and ask how you can help. "
-                        "Do not say anything else yet."
-                    )
-                )
+                _greet += f" Open with this line, or as close to it as reads naturally: {_opener}"
+            self.session.generate_reply(instructions=_greet)
             self.session.userdata["greeting_played"] = True
             if dispatch_t0 is not None:
                 logger.info(
