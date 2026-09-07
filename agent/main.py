@@ -1207,6 +1207,98 @@ class _InstrumentedTurnDetector(eot.TurnDetector):
         return stream
 
 
+# Gemini Live: speech-to-speech, admin-gated.
+#
+# The whole reason this exists. Measured on this account, a turn costs
+# end-of-turn 402ms + LLM 1082ms + TTS 160ms = 1.64s, and the LLM second is
+# not ours to optimise — a SIX-TOKEN prompt with no tools takes 1,093ms
+# against the full 38.6k prompt's 935ms. The payload is free; the round trip
+# to OpenAI is the whole cost. No amount of prompt work, model swapping
+# inside OpenAI, or tier upgrading touches it.
+#
+# Speech-to-speech removes three of the four hops rather than optimising
+# them: audio goes in and audio comes out, so there is no separate STT wait,
+# no LLM round trip and no TTS synthesis. That is how the sub-second numbers
+# competitors quote are actually reached.
+#
+# It also fits what this platform already is. The voices are the same
+# identities — Callirrhoe and Kore are Gemini Live voices as well as Chirp 3
+# ones — so an agent keeps the voice its callers know.
+#
+# What it costs: transcripts arrive from the model rather than from Sarvam,
+# whose Indic accuracy this platform measured and depends on (5/5 on Indian
+# place names against Google's 0/5). Until that is measured for Gemini Live
+# on Hindi and Marathi, this stays admin-only.
+_GEMINI_LIVE_PREFIX = "gemini-live"
+# NOT the 3.1 model, despite it being newer. The plugin warns that any model
+# with "3.1" in the name "has limited mid-session update support: instructions,
+# chat context, and tool updates will not be applied until the next session" —
+# and mid-session instruction updates are how every per-turn guard in this file
+# works. The objective that stops the funnel overriding a question, the garbled
+# handling, the site-visit suppression, the facts reminder: all of them are a
+# system message added in on_user_turn_completed. On 3.1 they would be accepted
+# and silently ignored, which is worse than not having them, because the tests
+# would still pass.
+_GEMINI_LIVE_DEFAULT_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
+# Live models reachable with a plain GEMINI_API_KEY. The plugin also lists
+# gemini-live-2.5-flash-native-audio, which is VertexAI-only.
+_GEMINI_LIVE_API_MODELS = {
+    "gemini-3.1-flash-live-preview",
+    "gemini-2.5-flash-native-audio-preview-12-2025",
+}
+# Gemini Live's own voice list; the ones this platform already uses appear in
+# it verbatim, so a Chirp 3 persona maps straight across.
+_GEMINI_LIVE_VOICES = {
+    "achernar","achird","algenib","algieba","alnilam","aoede","autonoe","callirrhoe",
+    "charon","despina","enceladus","erinome","fenrir","gacrux","iapetus","kore",
+    "laomedeia","leda","orus","pulcherrima","puck","rasalgethi","sadachbia",
+    "sadaltager","schedar","sulafat","umbriel","vindemiatrix","zephyr","zubenelgenubi",
+}
+
+
+def _gemini_live_voice(voice_value: str) -> str:
+    """Map this agent's configured voice onto a Gemini Live voice.
+
+    "google:chirp3:Callirrhoe" -> "Callirrhoe", "google:kore" -> "Kore".
+    Anything unrecognised falls back to Kore rather than failing the call.
+    """
+    tail = (voice_value or "").split(":")[-1].strip()
+    persona = voice_catalog.chirp3_persona(voice_value or "") or tail
+    return persona.capitalize() if (persona or "").lower() in _GEMINI_LIVE_VOICES else "Kore"
+
+
+def _build_realtime_llm(model: str, instructions: str, voice_value: str, language: str):
+    """Gemini Live RealtimeModel — replaces llm+stt+tts, not just the llm."""
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError(f"{model} is selected, but GEMINI_API_KEY is not configured.")
+    name = model[len(_GEMINI_LIVE_PREFIX):].lstrip(":-") or _GEMINI_LIVE_DEFAULT_MODEL
+    # The plugin's model list mixes Gemini-API models with VertexAI-only ones,
+    # and choosing a Vertex model with an API key raises rather than degrading:
+    # "Model 'gemini-live-2.5-flash-native-audio' is a VertexAI model, but
+    # vertexai=False". Vertex would need project/location/service-account
+    # credentials this platform does not configure, so the two API models are
+    # the supported set and anything else is refused here with a reason
+    # instead of at session start on a live call.
+    if name not in _GEMINI_LIVE_API_MODELS:
+        raise RuntimeError(
+            f"{name} is not a Gemini-API Live model. Supported: "
+            + ", ".join(sorted(_GEMINI_LIVE_API_MODELS))
+        )
+    return google.beta.realtime.RealtimeModel(
+        model=name,
+        api_key=api_key,
+        instructions=instructions,
+        voice=_gemini_live_voice(voice_value),
+        language=language,
+        # Without these there is no transcript at all: no dashboard call
+        # record, no lead extraction, and none of the per-turn guards this
+        # file relies on, all of which read the caller's words.
+        input_audio_transcription={},
+        output_audio_transcription={},
+    )
+
+
 def _build_llm(model: str, *, max_output_tokens: int = 220):
     """Picks the LLM plugin by model-name prefix, so an operator can switch
     an agent between OpenAI and Gemini from the dashboard's model dropdown
@@ -2430,15 +2522,34 @@ class RealEstateAgent(Agent):
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         tts, tts_provider = _build_tts(reply_language, voice_value, base_tone, tone_name)
         agent_tools = _build_tools(config)
+        _model_name = config.get("model") or "gpt-4.1-mini"
+        self._is_realtime = _model_name.startswith(_GEMINI_LIVE_PREFIX)
+        if self._is_realtime:
+            # A RealtimeModel IS the whole pipeline, so stt and tts are
+            # passed as None — handing them over would have the framework
+            # build a Sarvam stream and a Chirp 3 stream that never receive
+            # any audio.
+            #
+            # Deliberately NOT an early return. Sixteen attributes are
+            # assigned below this call — _welcome_message, _reply_language,
+            # _first_speaker among them — and returning here would skip every
+            # one, which is precisely the bug that took every call down
+            # earlier (see _direction at the top of this method). One
+            # super().__init__, one path through the rest.
+            _rt = _build_realtime_llm(_model_name, instructions, voice_value, reply_language)
+            logger.info(
+                "speech-to-speech mode: %s, voice=%s, language=%s (no separate STT/TTS)",
+                _model_name, _gemini_live_voice(voice_value), reply_language,
+            )
         super().__init__(
             instructions=instructions,
-            stt=_build_stt(_speech_context_prompt(config)),
+            stt=None if self._is_realtime else _build_stt(_speech_context_prompt(config)),
             # The public demo is judged turn-by-turn. A hard generation cap
             # prevents a missed prompt instruction from becoming a spoken
             # sales monologue; Indian scripts consume more tokens than the
             # same sentence in English, so 160 still leaves room for two
             # short multilingual sentences plus a tool call.
-            llm=_build_llm(
+            llm=_rt if self._is_realtime else _build_llm(
                 # gpt-4.1-mini, not gpt-4.1. An agent with no model set used
                 # to fall back to gpt-4.1, which is on a 30,000 TPM limit —
                 # about three turns a minute at this prompt size, since
@@ -2447,10 +2558,10 @@ class RealEstateAgent(Agent):
                 # It also bills at premium_plus, 4x credits against mini's
                 # 2x. The dashboard has always labelled mini "recommended";
                 # only the fallback disagreed.
-                config.get("model") or "gpt-4.1-mini",
+                _model_name,
                 max_output_tokens=120 if self._is_platform_demo else 220,
             ),
-            tts=tts,
+            tts=None if self._is_realtime else tts,
             tools=agent_tools,
         )
         # Gates the web_search per-turn reinforcement below — only meaningful

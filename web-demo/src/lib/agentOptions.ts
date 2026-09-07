@@ -205,7 +205,13 @@ export const MODEL_OPTIONS = [
 // If a paid Groq tier is ever bought, re-list them — but benchmark against
 // this platform's own Hindi/Marathi checks first, the way gpt-4.1-nano was
 // disqualified at 2/12 for being fast and wrong.
-export const ADMIN_ONLY_MODELS = [] as const
+export const ADMIN_ONLY_MODELS = [
+  {
+    value: 'gemini-live',
+    label: 'Gemini Live (Preview)',
+    tag: 'Speech-to-speech · admin testing · Indic quality unverified',
+  },
+] as const
 
 // Kept out of the dropdown but still resolvable, so calls 853 and 854 render
 // under a name instead of leaking the raw vendor string at a tenant.

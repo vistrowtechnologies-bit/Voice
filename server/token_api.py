@@ -74,6 +74,17 @@ llm_warmer.start_llm_warmer()
 # current without any of it being stuffed into the system prompt.
 project_sync.start_project_sync()
 
+
+def _orchestrator_headers(*, json_body: bool = False) -> dict[str, str]:
+    """Headers for authenticated server-to-server orchestrator requests."""
+    secret = os.environ.get("ORCHESTRATOR_SERVICE_SECRET", "").strip()
+    if not secret:
+        raise RuntimeError("ORCHESTRATOR_SERVICE_SECRET is not configured")
+    headers = {"X-Vistrow-Orchestrator-Secret": secret}
+    if json_body:
+        headers["Content-Type"] = "application/json"
+    return headers
+
 # Cookie is Secure in production (HTTPS) and not in local http dev — set
 # AUTH_COOKIE_SECURE=1 on the deployment. In prod the browser hits the app's
 # own origin and Vercel rewrites /api to the backend, so the session cookie
@@ -479,7 +490,11 @@ async def orchestrator_platform_demo_token(request: Request) -> dict:
     if not orchestrator_url:
         return {"ok": False, "error": "Orchestrator not configured."}
     try:
-        req = urllib.request.Request(f"{orchestrator_url.rstrip('/')}/browser/token/platform-demo", method="GET")
+        req = urllib.request.Request(
+            f"{orchestrator_url.rstrip('/')}/browser/token/platform-demo",
+            headers=_orchestrator_headers(),
+            method="GET",
+        )
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read().decode())
     except Exception as e:
@@ -2486,10 +2501,23 @@ def admin_impersonate_exit(request: Request, response: Response) -> dict:
 
 @app.get("/calls")
 def list_calls(
-    limit: int = 200, search: str = "", status: str = "", days: int = 0, user: dict = Depends(current_user)
+    limit: int = 200,
+    offset: int = 0,
+    search: str = "",
+    status: str = "",
+    days: int = 0,
+    user: dict = Depends(current_user),
 ) -> list[dict]:
     """Real call history from the calls table — one row per completed call."""
-    return calls_db.list_calls(user["account_id"], limit=limit, search=search, status=status, days=days)
+    safe_limit = max(1, min(limit, 500))
+    return calls_db.list_calls(
+        user["account_id"],
+        limit=safe_limit,
+        offset=max(0, offset),
+        search=search,
+        status=status,
+        days=days,
+    )
 
 
 @app.get("/calls/export.csv", response_class=PlainTextResponse)
@@ -2691,7 +2719,11 @@ def list_agents(user: dict = Depends(current_user)) -> list[dict]:
 # only and unevaluated for Hindi/Marathi quality on real calls — speed was
 # measured, quality was not. Keep it owner-only until that is checked, the
 # same way preview voices are gated below.
-_ADMIN_ONLY_MODEL_PREFIXES = ("groq/",)
+# gemini-live is speech-to-speech and bypasses Sarvam STT entirely, so the
+# Indic recognition this platform measured and depends on (5/5 on Indian place
+# names, against Google STT's 0/5) does not apply to it. Admin-only until that
+# is measured for Gemini Live itself.
+_ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live")
 
 
 def _guard_admin_only_model(data: dict | None, account_id: int) -> None:
@@ -3464,7 +3496,7 @@ def telephony_test_call(data: dict = Body(...), user: dict = Depends(current_use
             request = urllib.request.Request(
                 f"{orchestrator_url.rstrip('/')}/telephony/enablex/outbound-test-call",
                 data=json.dumps({"to": to_number, "fromNumber": from_number, "accountId": user["account_id"]}).encode(),
-                headers={"Content-Type": "application/json"},
+                headers=_orchestrator_headers(json_body=True),
                 method="POST",
             )
             with urllib.request.urlopen(request, timeout=15) as resp:
@@ -3516,7 +3548,7 @@ def orchestrator_browser_token(data: dict = Body(...), user: dict = Depends(curr
 
     try:
         url = f"{orchestrator_url.rstrip('/')}/browser/token?account_id={user['account_id']}&agent_id={agent_id}"
-        request = urllib.request.Request(url, method="GET")
+        request = urllib.request.Request(url, headers=_orchestrator_headers(), method="GET")
         with urllib.request.urlopen(request, timeout=15) as resp:
             return json.loads(resp.read().decode())
     except Exception as e:
