@@ -30,8 +30,14 @@ const SENTIMENT_STYLE: Record<string, string> = {
 // that is PARTICIPANT_DISCONNECTED.
 const DISCONNECT_REASONS: Record<string, { label: string; help: string; bad?: boolean }> = {
   participant_disconnected: {
-    label: 'Caller hung up',
-    help: 'The caller ended the call or closed the tab. Normal ending.',
+    label: 'Call ended from the caller\'s side',
+    // Deliberately not "Caller hung up". On a widget call this really is the
+    // visitor closing the tab, but on a PHONE call it is only LiveKit saying
+    // the SIP leg left the room - which is equally what a carrier drop, a
+    // network failure or a timeout looks like. An operator told "caller hung
+    // up" stops investigating; a caller who did not hang up and is told they
+    // did has been contradicted by their own dashboard.
+    help: 'The call ended from the phone or browser side. Usually the caller hanging up or closing the tab - on a phone call it can also be the carrier dropping the leg.',
   },
   user_initiated: {
     label: 'Agent ended the call',

@@ -20,6 +20,7 @@ import {
   EMOTION_INTENSITIES,
   LANGUAGES,
   modelOptionsFor,
+  NOISE_CANCELLATION_OPTIONS,
   TONES,
   voiceLabel,
   voicePickerGroups,
@@ -125,6 +126,7 @@ function AgentEditorForm({
     name: agent.name,
     description: agent.description,
     model: agent.model,
+    noiseCancellation: agent.noiseCancellation ?? '',
     voice: agent.voice,
     language: agent.language,
     status: agent.status,
@@ -343,6 +345,7 @@ function AgentEditorForm({
           </Field>
           <Field label="Emotion intensity">
             <select
+              disabled={!form.voice.startsWith('google:') && !form.voice.startsWith('google31:') || form.voice.startsWith('google:chirp3:')}
               value={form.emotionIntensity}
               onChange={(e) => set('emotionIntensity', e.target.value as AgentForm['emotionIntensity'])}
               className={inputCls}
@@ -353,6 +356,21 @@ function AgentEditorForm({
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-text-muted">Adaptive delivery is available on expressive multilingual voices. Other voices keep their configured delivery. This responds to conversation wording, not a measurement of vocal emotion.</p>
+          </Field>
+          <Field label="Caller noise suppression">
+            <select
+              value={form.noiseCancellation ?? ''}
+              onChange={(e) => set('noiseCancellation', e.target.value as AgentForm['noiseCancellation'])}
+              className={inputCls}
+            >
+              {NOISE_CANCELLATION_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label} - {o.description}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-text-muted">Filters background noise out of the caller's audio before transcription. If callers say they spoke but the transcript is empty, set this to Off.</p>
           </Field>
           <Field label="Background ambience">
             <select

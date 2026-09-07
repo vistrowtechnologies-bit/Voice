@@ -1086,6 +1086,16 @@ def init_tables() -> None:
                 # सकते हैं?"), which is a compliance point, not a style one.
                 # Empty falls back to welcome_message.
                 ("welcome_message_outbound", "TEXT DEFAULT ''"),
+                # "" = platform default (telephony-tuned BVC on phone calls),
+                # "off" = none, "general" = the wideband model on phone too.
+                # Per agent because it is not one answer: BVCTelephony
+                # measurably destroyed a caller's speech on an 8kHz carrier
+                # leg — 0 caller turns transcribed across four calls, 9 on the
+                # same agent with it off — while a widget call carries
+                # wideband audio where the same filter may well be earning its
+                # keep. It was an environment variable set by hand, which is
+                # not a setting an operator can reach.
+                ("noise_cancellation", "TEXT DEFAULT ''"),
                 ("interruption_sensitivity", "REAL DEFAULT 0.5"),
                 ("silence_reminder_ms", "INTEGER DEFAULT 0"),
                 ("silence_reminder_max", "INTEGER DEFAULT 1"),
@@ -1445,7 +1455,10 @@ def create_account_with_owner(
             cur = conn.execute(
                 "INSERT INTO users (account_id, email, name, password_hash, role, phone, password_set, email_verified_at) "
                 "VALUES (?, ?, ?, ?, 'owner', ?, ?, CASE WHEN ? THEN " + _NOW + " ELSE NULL END) RETURNING id",
-                (account_id, email.lower(), user_name, password_hash, phone, int(password_set), int(email_verified)),
+                # PostgreSQL requires the CASE condition to be a real boolean;
+                # passing int(email_verified) produces a smallint and makes
+                # first-time OAuth/signup fail with DatatypeMismatch.
+                (account_id, email.lower(), user_name, password_hash, phone, int(password_set), bool(email_verified)),
             )
             user_id = cur.lastrowid
             if email.lower() == _PLATFORM_OWNER_EMAIL:
@@ -2189,8 +2202,23 @@ def _sentiment(transcript: list[dict]) -> str:
 
 
 def _status(row: dict, transcript: list[dict]) -> str:
-    # A call that ended almost immediately with nothing captured and no real
-    # exchange is a drop/failure; everything else completed.
+    # Transport/provider failures win over transcript heuristics. A greeting
+    # can be added to the transcript before RTP fails, so transcript length
+    # alone must never turn a failed SIP call into "Completed".
+    if (_row_get(row, "failure_reason") or "").strip():
+        return "failed"
+    if (_row_get(row, "disconnect_reason") or "").strip().lower() in {
+        "agent_error",
+        "connection_timeout",
+        "error",
+        "job_shutdown",
+        "join_failure",
+        "media_failure",
+        "sip_trunk_failure",
+        "user_rejected",
+        "user_unavailable",
+    }:
+        return "failed"
     if (row["duration_seconds"] or 0) < 10 and not row["lead_name"] and len(transcript) < 2:
         return "failed"
     return "completed"
@@ -2492,7 +2520,14 @@ def _call_dict(
     return out
 
 
-def list_calls(account_id: int, limit: int = 200, search: str = "", status: str = "", days: int = 0) -> list[dict]:
+def list_calls(
+    account_id: int,
+    limit: int = 200,
+    search: str = "",
+    status: str = "",
+    days: int = 0,
+    offset: int = 0,
+) -> list[dict]:
     sites_by_id = {s["id"]: s for s in list_sites(account_id)}
     agent_names = _agent_names_by_id(account_id)
     conn = _connect()
@@ -2516,8 +2551,12 @@ def list_calls(account_id: int, limit: int = 200, search: str = "", status: str 
         if days:
             query += " AND started_at::date >= (CURRENT_DATE - (? || ' days')::interval)::date"
             params.append(str(days - 1))
-        query += " ORDER BY started_at DESC LIMIT ?"
-        params.append(limit)
+        query += " ORDER BY started_at DESC"
+        # Derived status and normalized phone/name search are applied below.
+        # Fetching a limited window first made valid older matches invisible.
+        if not search and not status:
+            query += " LIMIT ? OFFSET ?"
+            params.extend((limit, max(0, offset)))
         rows = conn.execute(query, params).fetchall()
         calls = [
             _call_dict(
@@ -2551,6 +2590,8 @@ def list_calls(account_id: int, limit: int = 200, search: str = "", status: str 
             ]
         if status:
             calls = [c for c in calls if c["callStatus"] == status or c["status"] == status]
+        if search or status:
+            return calls[max(0, offset):max(0, offset) + limit]
         return calls
     finally:
         conn.close()
@@ -3071,6 +3112,7 @@ _AGENT_CAMEL_TO_SNAKE = {
     "firstSpeaker": "first_speaker",
     "welcomeMessage": "welcome_message",
     "welcomeMessageOutbound": "welcome_message_outbound",
+    "noiseCancellation": "noise_cancellation",
     "interruptionSensitivity": "interruption_sensitivity",
     "silenceReminderMs": "silence_reminder_ms",
     "silenceReminderMax": "silence_reminder_max",
@@ -3139,6 +3181,7 @@ def _agent_dict(row: dict) -> dict:
         "firstSpeaker": row["first_speaker"] or "agent",
         "welcomeMessage": row["welcome_message"] or "",
         "welcomeMessageOutbound": _row_get(row, "welcome_message_outbound") or "",
+        "noiseCancellation": _row_get(row, "noise_cancellation") or "",
         "interruptionSensitivity": row["interruption_sensitivity"] if row["interruption_sensitivity"] is not None else 0.5,
         "silenceReminderMs": row["silence_reminder_ms"] or 0,
         "silenceReminderMax": row["silence_reminder_max"] or 1,

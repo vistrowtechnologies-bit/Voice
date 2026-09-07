@@ -187,17 +187,30 @@ export const MODEL_OPTIONS = [
 // the same restriction, so hiding these here is UX, not the security
 // boundary. Same treatment as preview voices.
 export const ADMIN_ONLY_MODELS = [
-  { value: 'groq/openai/gpt-oss-20b', label: 'Groq GPT-OSS 20B', tag: 'Admin only · testing · needs paid Groq tier' },
-  { value: 'groq/openai/gpt-oss-120b', label: 'Groq GPT-OSS 120B', tag: 'Admin only · testing · needs paid Groq tier' },
-  { value: 'groq/qwen/qwen3.6-27b', label: 'Groq Qwen3.6 27B', tag: 'Admin only · testing · needs paid Groq tier' },
+  { value: 'groq/openai/gpt-oss-20b', label: 'Groq GPT-OSS 20B', tag: 'Admin testing · free-tier limits apply' },
+  { value: 'groq/openai/gpt-oss-120b', label: 'Groq GPT-OSS 120B', tag: 'Admin testing · free-tier limits apply' },
+  { value: 'groq/qwen/qwen3.6-27b', label: 'Groq Qwen3.6 27B', tag: 'Admin testing · free-tier limits apply' },
+  { value: 'groq/qwen/qwen3.8-27b', label: 'Groq Qwen3.8 27B', tag: 'Admin testing · free-tier limits apply' },
 ] as const
 
 export const modelOptionsFor = (isPlatformOwner: boolean) =>
   isPlatformOwner ? [...MODEL_OPTIONS, ...ADMIN_ONLY_MODELS] : MODEL_OPTIONS
 
+// Retired tiers, kept ONLY so a call recorded on one still renders under the
+// name the operator picked. Deliberately not in MODEL_OPTIONS, so they cannot
+// be selected again. Without this, modelLabel falls through to the raw value
+// and the call history starts printing "gpt-4.1" at a tenant — the exact
+// vendor-name leak calls_db guards against everywhere else.
+const RETIRED_MODELS = [
+  { value: 'gpt-4.1', label: 'Vistrow Prime' },
+  { value: 'gpt-4o', label: 'Vistrow Pro' },
+  { value: 'gemini-3.6-flash', label: 'Vistrow Flash' },
+] as const
+
 export const modelLabel = (value: string) =>
   MODEL_OPTIONS.find((m) => m.value === value)?.label ??
   ADMIN_ONLY_MODELS.find((m) => m.value === value)?.label ??
+  RETIRED_MODELS.find((m) => m.value === value)?.label ??
   value
 // Presets for Sarvam bulbul:v3's own pace/temperature/pitch - controls how
 // the voice is actually delivered (speed + prosodic variation), separate
@@ -246,4 +259,17 @@ export const LANGUAGES = [
   ['bn-IN', 'Bengali'],
   ['pa-IN', 'Punjabi'],
   ['od-IN', 'Odia'],
+] as const
+
+// Background noise suppression on the CALLER's audio, before it reaches
+// speech recognition. Not one right answer, which is why it is per agent:
+// measured on this platform, the telephony-tuned filter destroyed a caller's
+// speech on an 8kHz phone leg — four consecutive calls transcribed zero
+// caller turns, and the same agent with it off transcribed nine — while a
+// browser call carries wideband audio where suppression is more likely to
+// help than hurt.
+export const NOISE_CANCELLATION_OPTIONS = [
+  { value: '', label: 'Default', description: 'Tuned for the channel — telephony filtering on calls, wideband in the browser' },
+  { value: 'off', label: 'Off', description: 'No filtering. Try this first if callers are heard as silence on phone calls' },
+  { value: 'general', label: 'Wideband', description: 'The browser-grade filter on phone calls too' },
 ] as const

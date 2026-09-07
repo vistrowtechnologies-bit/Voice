@@ -300,6 +300,8 @@ export interface AgentConfig {
   // directions; the outbound opener asks permission before it pitches.
   // Blank falls back to welcomeMessage.
   welcomeMessageOutbound?: string
+  /** '' = channel default, 'off' = none, 'general' = wideband filter on phone calls too. */
+  noiseCancellation?: string
   // Speech / turn-taking
   interruptionSensitivity: number
   silenceReminderMs: number

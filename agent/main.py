@@ -3172,61 +3172,26 @@ class RealEstateAgent(Agent):
                 _intent, _userdata.get("funnel_stage"), _site_visit_suppressed,
             )
 
-        # Two different jobs, so both can apply to one turn rather than
-        # one silently replacing the other.
+        # Catalog grounding removed. The tenant turned the live catalog off
+        # and this is what it was costing: every bug in it lived in the logic
+        # deciding WHEN and WHAT to inject, never in the data.
         #
-        #   named rows  — the verbatim truth about a project they NAMED
-        #   full index  — the complete list, for "what do you have"
+        #   a stray Odia word phonetically matched "Kalpataru" and "Astra"
+        #   matched rows and the full index were an either/or, so one
+        #     silently suppressed the other
+        #   the trigger pattern did not recognise "डेवलपर", so a Hindi
+        #     developer question got no grounding at all
+        #   adding a developer column shifted the locality out of the fixed
+        #     index this parsing assumed
         #
-        # These used to be an either/or, and "क्या आपके पास ट्रिटोपिया
-        # प्रोजेक्ट है?" is both at once: it names a project AND is an
-        # inventory question. Whichever branch won, the other's grounding
-        # was lost.
-        _catalog_parts: list[str] = []
-        if _named_rows:
-            _catalog_parts.append(
-                "# Exact catalog entries for what the caller just named — use these VERBATIM\n"
-                + "\n".join(_named_rows)
-                + "\nThese lines are the truth about location, configuration and price. Do not "
-                "state any of those differently, and do not describe one of these projects as "
-                "being somewhere it is not. If they asked about something not in this list, say "
-                "plainly that it is not one of ours rather than guessing where it is."
-            )
-        if (
-            self._has_live_catalog
-            and self._catalog_index
-            and _INVENTORY_QUESTION_PATTERN.search(text or "")
-        ):
-            # Call 870: asked which developers we carry, the agent answered
-            # Godrej, Mahindra and Shapoorji — real — plus Rohan Builders,
-            # who are not ours. The index is the only thing that has ever
-            # stopped that.
-            _catalog_parts.append(
-                "# The live catalog — every listing synced from this business's own feed\n"
-                + self._catalog_index
-                + "\n\nThe knowledge base above is an EQUALLY valid source: this business also "
-                "works with developers and projects that are described there but have no listing "
-                "here, and naming those is correct. What you must not do is name a project or "
-                "developer that appears in NEITHER — do not add names you merely recall from the "
-                "wider market. Where a project does have a listing above, that listing is the "
-                "truth about its location, configuration and price. And check both sources "
-                "before saying you do not have something: saying no to something this business "
-                "actually sells costs it the sale."
-            )
-        _catalog_facts_instruction = "\n\n".join(_catalog_parts)
-        _catalog_instruction = (
-            (
-                "You now know enough about this caller to recommend something specific, and you "
-                "have NOT called lookup_catalog on this call yet. Call it BEFORE you name any "
-                "project, price, or availability. The only projects that exist are the ones "
-                "lookup_catalog returns and the ones listed in your catalog index above — naming "
-                "anything else invents inventory this business does not sell, which is worse than "
-                "saying you have nothing in that area. If the catalog has nothing in their "
-                "locality, say so plainly and offer the nearest thing it does have."
-            )
-            if (self._has_live_catalog and _ready_to_recommend and not _catalog_tool_used)
-            else ""
-        )
+        # Four bugs, four mechanisms, all in the gating. The knowledge base
+        # is now the single grounding source: prose and operator-approved Q&A,
+        # with strict mode, which is what it was already doing correctly —
+        # the developer list callers were given came from there and was right.
+        #
+        # lookup_catalog and the sync are left in place and the listings are
+        # not deleted, so re-enabling an agent's catalog restores the tool.
+        # What is gone is this per-turn injection.
         _facts_reminder_text = _facts_reminder(_lead_data, _userdata.get("fact_status"))
         _funnel_stage = _advance_funnel_stage(
             _userdata,
@@ -3253,7 +3218,6 @@ class RealEstateAgent(Agent):
             + ("\n\n" + _search_instruction if _search_instruction else "")
             + ("\n\n" + _garbled_instruction if _garbled_instruction else "")
             + ("\n\n" + _repeat_complaint_instruction if _repeat_complaint_instruction else "")
-            + ("\n\n" + _catalog_instruction if _catalog_instruction else "")
             + ("\n\n" + _facts_reminder_text if _facts_reminder_text else "")
             + "\n\n"
             + _objective_text
@@ -3264,7 +3228,7 @@ class RealEstateAgent(Agent):
             # from its own memory instead — "Treetopia is not listed with us"
             # while the Treetopia row was in its context, and a price four
             # times the real one. Ground truth gets the final word.
-            + ("\n\n" + _catalog_facts_instruction if _catalog_facts_instruction else ""),
+            ,
         )
 
         if emotion != self._current_emotion:
@@ -5073,7 +5037,11 @@ async def entrypoint(ctx: JobContext) -> None:
     # Unset keeps today's behaviour. This exists to make the A/B possible at
     # all — without it the only way to test the theory is a code change and a
     # deploy per attempt.
-    _nc_mode = (os.environ.get("NOISE_CANCELLATION") or "").strip().lower()
+    # The agent's own dashboard setting wins; the environment variable stays
+    # as an operator override for A/B testing a whole worker at once.
+    _nc_mode = ((cfg or {}).get("noise_cancellation") or "").strip().lower()
+    if not _nc_mode:
+        _nc_mode = (os.environ.get("NOISE_CANCELLATION") or "").strip().lower()
     if _nc_mode in ("off", "0", "false", "none"):
         noise_filter = None
         logger.info("noise cancellation DISABLED for this call (NOISE_CANCELLATION=%s)", _nc_mode)
