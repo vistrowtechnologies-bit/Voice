@@ -2748,6 +2748,39 @@ class RealEstateAgent(Agent):
         if dispatch_t0 is not None:
             logger.info("[latency] on_enter starting at +%.2fs", time.monotonic() - dispatch_t0)
         await self._await_own_audio_track(dispatch_t0)
+        # A speech-to-speech model has no TTS to speak text through, and the
+        # framework says so outright: Gemini Live reports supports_say=False,
+        # so session.say() raises "trying to generate speech from text without
+        # a TTS model or a RealtimeSession that supports say()". That
+        # exception inside on_enter is why the first Gemini Live test call
+        # connected and then sat in total silence — the greeting never
+        # happened and nothing downstream ran.
+        #
+        # generate_reply is the realtime equivalent: the model speaks it
+        # directly. The opener is passed as an instruction to say that exact
+        # line rather than as text to synthesize.
+        if self._is_realtime:
+            _opener = self._welcome_message or ""
+            if _opener:
+                self.session.generate_reply(
+                    instructions=(
+                        "Greet the caller by saying exactly this, word for word, and nothing "
+                        f"else: {_opener}"
+                    )
+                )
+            else:
+                self.session.generate_reply(
+                    instructions=(
+                        "Greet the caller in one short, warm line and ask how you can help. "
+                        "Do not say anything else yet."
+                    )
+                )
+            self.session.userdata["greeting_played"] = True
+            if dispatch_t0 is not None:
+                logger.info(
+                    "[latency] realtime greeting requested at +%.2fs", time.monotonic() - dispatch_t0
+                )
+            return
         try:
             if self._welcome_message:
                 # Operator wrote an exact opening line — speak it verbatim

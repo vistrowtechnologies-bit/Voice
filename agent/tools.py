@@ -945,7 +945,12 @@ async def check_calendar_availability(
     # already what made call 723 sound like a machine.
     _say_filler = not getattr(_agent, "_said_calendar_filler", False)
     try:
-        if _say_filler:
+        # A speech-to-speech model has no TTS to speak this through —
+        # Gemini Live reports supports_say=False and session.say() raises. The
+        # filler is a nicety; the calendar lookup is not. Skipping it there
+        # costs a spoken "one moment" and keeps the tool working, where
+        # letting it raise would take the whole turn down.
+        if _say_filler and not getattr(_agent, "_is_realtime", False):
             _agent._said_calendar_filler = True
             filler = context.session.say(_calendar_check_filler(context), allow_interruptions=False)
             await filler.wait_for_playout()
