@@ -208,8 +208,20 @@ export const MODEL_OPTIONS = [
 export const ADMIN_ONLY_MODELS = [
   {
     value: 'gemini-live',
-    label: 'Gemini Live (Preview)',
+    label: 'Gemini Live 2.5 (Preview)',
     tag: 'Speech-to-speech · admin testing · Indic quality unverified',
+  },
+  {
+    // Newer, and worse for this platform. The plugin warns that any "3.1"
+    // Live model has limited mid-session update support: instructions, chat
+    // context and tool updates are not applied until the next session. Every
+    // per-turn guard here is a system message added in
+    // on_user_turn_completed — the objective that stops the funnel
+    // overriding a caller's question, the garbled handling, the site-visit
+    // suppression. On 3.1 they are accepted and silently ignored.
+    value: 'gemini-live:gemini-3.1-flash-live-preview',
+    label: 'Gemini Live 3.1 (Preview)',
+    tag: 'Newer, but per-turn guards do NOT apply · raw testing only',
   },
 ] as const
 
