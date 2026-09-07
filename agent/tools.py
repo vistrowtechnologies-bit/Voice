@@ -1371,15 +1371,27 @@ async def log_lead(
     property_type: str = "",
     configuration: str = "",
     purpose: str = "",
+    need: str = "",
 ) -> str:
     """Record what you have learned about this caller so far.
 
-    Call this the MOMENT the caller gives you any detail — a budget, a
-    locality, a timeline, a configuration. You do NOT need their name, you do
-    NOT need a phone number, and you do NOT need the full picture. Pass only
-    the fields you actually just learned; everything you omit is left exactly
-    as it was. Calling it eight times across a call with one field each is
+    Call this the MOMENT the caller gives you any detail — what they want, a
+    budget, a locality, a timeline. You do NOT need their name, you do NOT
+    need a phone number, and you do NOT need the full picture. Pass only the
+    fields you actually just learned; everything you omit is left exactly as
+    it was. Calling it eight times across a call with one field each is
     correct and expected.
+
+    `need` is the field that works for every business. The others below
+    (budget, location, property_type, configuration) are property-specific
+    and simply will not fit most callers: a dental patient saying "tooth
+    pain, can I come tomorrow", a caterer's "twenty people next Friday", a
+    software buyer's "twelve technicians in the field". Tested on those exact
+    openers, this tool was called ZERO times, because there was no field to
+    put the answer in — the caller's actual requirement went unrecorded while
+    the agent held out for a budget nobody was going to give it. Put the need
+    in `need`, in the caller's own words, and use the property fields only
+    when they genuinely apply.
 
     Args:
         name: Caller's name, once they give it.
@@ -1393,6 +1405,11 @@ async def log_lead(
         property_type: apartment, plot, villa, commercial, etc.
         configuration: e.g. "2 BHK", "3 BHK", "2000 sqft plot".
         purpose: "investment" or "self-use" — ONLY if they actually said it.
+        need: What this caller actually wants, in their own words, for ANY
+            business — "root canal, in pain, wants tomorrow", "dinner for 20
+            next Friday", "field-service software for 12 technicians", "car
+            service with pickup". Always fill this in when they tell you what
+            they are after; it is the one field that is never inapplicable.
     """
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is None:
@@ -1402,6 +1419,12 @@ async def log_lead(
         "name": name, "phone": phone, "budget": budget, "location": location,
         "timeline": timeline, "property_type": property_type,
         "configuration": configuration, "purpose": purpose,
+        # Stored as use_case: the calls table already has a lead_use_case
+        # column and _advance_funnel_stage already reads it, so the
+        # industry-neutral field costs no schema change and moves the funnel
+        # off DISCOVERY for a non-property business exactly as
+        # property_type does for a property one.
+        "use_case": need,
     }
 
     # Per-FIELD validation, not per-call. The previous version validated
