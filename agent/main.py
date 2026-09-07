@@ -37,6 +37,7 @@ from livekit.agents.stt import FallbackAdapter as SttFallbackAdapter
 from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
 from livekit.agents.types import NOT_GIVEN, APIConnectOptions
 from livekit.agents.voice.agent_session import SessionConnectOptions
+from google.genai import types as genai_types
 from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarvam
 
 import db
@@ -1296,6 +1297,35 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
         # file relies on, all of which read the caller's words.
         input_audio_transcription={},
         output_audio_transcription={},
+        # Gemini Live runs its OWN turn detection server-side, so none of
+        # this file's endpointing settings reach it — and its defaults split
+        # Hindi mid-sentence. Observed on a real test call: "naam kya hai
+        # aapka" arrived as THREE separate turns ("naam" / "kya" / "hai
+        # aapka"), and "रियल स्टेट में" as two. Each fragment was answered as
+        # if it were a whole question, which is why the replies read as
+        # confused rather than the model being weak.
+        #
+        # The two sensitivities pull in opposite directions and both
+        # complaints are here:
+        #   END_SENSITIVITY_LOW + a longer silence window stops it ending a
+        #   turn on the pauses Hindi has mid-sentence — that is the
+        #   fragmentation.
+        #   START_SENSITIVITY_HIGH keeps it noticing the caller has begun
+        #   speaking straight away — that is barge-in, which was also
+        #   reported as not working.
+        #
+        # 700ms is a starting value, not a tuned one: it is roughly the pause
+        # this platform's own turn detector already tolerates (min_delay 0.4s
+        # plus Sarvam's ~0.3s VAD window) and should be measured on a call
+        # rather than argued about.
+        realtime_input_config=genai_types.RealtimeInputConfig(
+            automatic_activity_detection=genai_types.AutomaticActivityDetection(
+                start_of_speech_sensitivity=genai_types.StartSensitivity.START_SENSITIVITY_HIGH,
+                end_of_speech_sensitivity=genai_types.EndSensitivity.END_SENSITIVITY_LOW,
+                prefix_padding_ms=200,
+                silence_duration_ms=700,
+            )
+        ),
     )
 
 
