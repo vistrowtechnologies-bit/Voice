@@ -1,5 +1,6 @@
 import asyncio
 import json
+import contextlib
 import logging
 import os
 
@@ -40,6 +41,18 @@ logger = logging.getLogger("real-estate-tools")
 # "one second" is said in English mid-sentence across every Indian language
 # this product speaks, so it doesn't need translating to sound natural.
 _TOOL_FILLER_TEXT = "One second..."
+
+
+def _tool_filler(context: RunContext):
+    """with_filler, unless main.py's latency backchannel already covered this
+    turn. Both fire on a slow turn — the backchannel at 0.9s, this at 0.6s
+    after the tool starts — and without this guard a slow tool call produces
+    "जी..." immediately followed by "One second...", which is two apologies
+    for one wait and reads worse than either alone."""
+    userdata = getattr(context.session, "userdata", None) or {}
+    if userdata.get("backchannel_turn"):
+        return contextlib.nullcontext()
+    return context.with_filler(_TOOL_FILLER_TEXT, delay=0.6)
 
 # Availability checks need an immediate spoken bridge, even though the native
 # calendar lookup itself is usually fast. Without one, the caller asks for a
@@ -1288,7 +1301,7 @@ async def book_appointment(
     _bk_lang = getattr(context.session.current_agent, "_reply_language", "en-IN")
     _bk_spoken = _spoken_date(date, _bk_lang)
     _bk_date = date if _bk_spoken == date else f'{date} (say: "{_bk_spoken}")'
-    async with context.with_filler(_TOOL_FILLER_TEXT, delay=0.6):
+    async with _tool_filler(context):
         result = await _calendar_book(context, date, time, duration_minutes, name, phone, purpose)
         event = {
             "type": "appointment_booked",
@@ -1505,7 +1518,7 @@ async def log_lead(
 
     logger.info("lead updated: %s", {k: lead_data.get(k) for k in changed})
     event = {"type": "lead_update", **{k: lead_data.get(k, "") for k in _LEAD_FIELDS}}
-    async with context.with_filler(_TOOL_FILLER_TEXT, delay=0.6):
+    async with _tool_filler(context):
         await _publish_event(context, event)
         await _post_webhook(event)
         await _fan_out_integrations(context, event)
@@ -1642,7 +1655,7 @@ async def capture_platform_lead(
         "use_case": use_case,
         "team_size": team_size,
     }
-    async with context.with_filler(_TOOL_FILLER_TEXT, delay=0.6):
+    async with _tool_filler(context):
         await _publish_event(context, event)
         await _post_webhook(event)
         await _fan_out_integrations(context, event)

@@ -707,6 +707,58 @@ def _current_objective(
     return objective
 
 
+# Latency backchannel — the one lever left on perceived turn latency.
+#
+# The measured turn is eou 402 + llm 1082 + tts 160 = 1644ms, and three
+# separate measurements agree the ~1.1s LLM leg is the provider's floor: a
+# 6-token prompt cost 1093ms, an 80k-char prompt with 7 tools cost 1275ms from
+# a laptop, and real calls from LiveKit Cloud sit at 1082ms. Prompt size, tool
+# count and region do not move it. Speech-to-speech was tried as the way
+# around it and measured WORSE (call 878: 1647ms and 2556ms per turn), so it
+# was shelved.
+#
+# That leaves closing the gap the caller actually hears rather than the gap
+# that exists. A human on a phone does not go silent for 1.6s while thinking —
+# they say "जी" and then answer. This does the same: if the agent is still in
+# "thinking" after _BACKCHANNEL_DELAY_S, drop in a one-word ack while the real
+# reply finishes generating.
+#
+# The delay is deliberately ABOVE the 1082ms median minus TTS's own 160ms
+# TTFB, so a median turn does NOT get one — the ack is for turns that are
+# genuinely slow, not every turn. Set it lower and this becomes a verbal tic.
+_BACKCHANNEL_DELAY_S = 0.9
+
+# Never spoken into the chat context (add_to_chat_ctx=False at the call site):
+# these are audio-only, so the LLM never sees them and cannot start copying
+# them into its own replies, which would defeat _reply_used_filler's cadence
+# cap. Kept to one word — anything longer plays past the point the real reply
+# is ready and delays the thing the caller is waiting for.
+_BACKCHANNEL_LINES = {
+    "hi": ["जी...", "हाँ...", "अच्छा...", "ठीक है...", "हम्म..."],
+    "mr": ["हो...", "बरं...", "ठीक आहे...", "हम्म..."],
+    "gu": ["હા...", "સારું...", "હમ્મ..."],
+    "ta": ["ஆமா...", "சரி...", "ம்ம்..."],
+    "te": ["అవును...", "సరే...", "హ్మ్..."],
+    "kn": ["ಹೌದು...", "ಸರಿ...", "ಹ್ಮ್..."],
+    "ml": ["അതെ...", "ശരി...", "ഹ്മ്..."],
+    "bn": ["হ্যাঁ...", "আচ্ছা...", "হুম..."],
+    "pa": ["ਹਾਂ...", "ਠੀਕ ਹੈ...", "ਹਮ..."],
+    "or": ["ହଁ...", "ଆଚ୍ଛା...", "ହମ୍..."],
+    "en": ["Right...", "Sure...", "Okay...", "Mm-hmm..."],
+}
+
+
+def _backchannel_line(reply_language: str, previous: str = "") -> str:
+    """A short ack in the language currently being spoken, never the same one
+    twice running — a repeated identical "जी" is the failure mode that makes
+    this read as a machine rather than as someone listening."""
+    lines = _BACKCHANNEL_LINES.get(
+        (reply_language or "").split("-")[0].lower(), _BACKCHANNEL_LINES["en"]
+    )
+    choices = [line for line in lines if line != previous] or lines
+    return random.choice(choices)
+
+
 # The cadence cap ("max one filler every 3-5 turns") only holds if something
 # counts fillers used, since "use fillers sparingly" is prose the model does
 # not reliably self-track over a multi-turn call — the same lesson as the
@@ -4714,6 +4766,61 @@ async def entrypoint(ctx: JobContext) -> None:
 
         deferred_checkin_task["handle"] = asyncio.create_task(_watch())
 
+    backchannel_task: dict = {"handle": None}
+
+    def _cancel_backchannel() -> None:
+        handle = backchannel_task.get("handle")
+        backchannel_task["handle"] = None
+        if handle and not handle.done():
+            handle.cancel()
+
+    def _arm_backchannel() -> None:
+        """Speak a one-word ack if the reply is still generating after
+        _BACKCHANNEL_DELAY_S. See the constant for why this exists and why the
+        delay is set above the median turn."""
+        if getattr(agent, "_is_realtime", False):
+            # Speech-to-speech has no separate LLM leg to cover, and
+            # session.say() raises outright on a model with supports_say=False
+            # (the mute that cost three test calls before it was understood).
+            return
+        _cancel_backchannel()
+
+        async def _watch() -> None:
+            try:
+                await asyncio.sleep(_BACKCHANNEL_DELAY_S)
+                if (
+                    userdata.get("agent_state") != "thinking"
+                    # Reply audio already started, or the caller barged in —
+                    # in both cases an ack now would talk over real speech.
+                    or userdata.get("user_state") == "speaking"
+                    or userdata.get("ending_call")
+                    # The opener is itself a say(); acking over it would land
+                    # before the caller has said anything at all.
+                    or not userdata.get("greeting_played", False)
+                ):
+                    return
+                line = _backchannel_line(
+                    getattr(agent, "_reply_language", "") or "",
+                    userdata.get("last_backchannel", ""),
+                )
+                userdata["last_backchannel"] = line
+                # Read by tools._tool_filler so a turn never gets this ack AND
+                # "One second..." back to back.
+                userdata["backchannel_turn"] = True
+                _record_diagnostic(
+                    "metric", "agent", "Latency backchannel spoken", "info",
+                    offsetMs=round((time.monotonic() - _t0) * 1000),
+                )
+                session.say(line, add_to_chat_ctx=False, allow_interruptions=True)
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("backchannel failed (room=%s)", ctx.room.name)
+            finally:
+                backchannel_task["handle"] = None
+
+        backchannel_task["handle"] = asyncio.create_task(_watch())
+
     def _on_user_state_changed(ev) -> None:
         userdata["user_state"] = str(ev.new_state)
         _record_diagnostic(
@@ -4732,6 +4839,7 @@ async def entrypoint(ctx: JobContext) -> None:
             _cancel_deferred_checkin()
             userdata["post_checkin_pending"] = False
             userdata["away_during_agent_turn"] = False
+            userdata["backchannel_turn"] = False
         elif ev.new_state != "away":
             _reset_silence_hangup()
         elif ev.new_state == "away":
@@ -4769,6 +4877,12 @@ async def entrypoint(ctx: JobContext) -> None:
         # Read by _on_user_state_changed's "away" branch above, so the
         # check-in can never fire mid-reply.
         userdata["agent_speaking"] = ev.new_state == "speaking"
+        if ev.new_state == "thinking":
+            _arm_backchannel()
+        else:
+            # Covers "speaking" (reply audio started, nothing to cover) and
+            # every idle state (turn abandoned).
+            _cancel_backchannel()
         if ev.new_state in {"thinking", "speaking"}:
             _cancel_silence_hangup()
         else:
