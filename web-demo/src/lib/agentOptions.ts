@@ -227,34 +227,43 @@ export const MODEL_OPTIONS = [
 // test the 700ms turn-detection fix (never yet exercised — every fragmenting
 // sample predates it), then compare against the pipeline's measured 1.64s. In
 // that order: the last attempt did it backwards.
-// Re-listed once the realtime path could actually be measured. The parking
-// note above set that as the condition: RealtimeModelMetrics.ttft is now
-// captured as realtimeTtftMs, so a speech-to-speech call finally reports a
-// per-turn number instead of providers=[] and nothing else.
+// SHELVED 2026-09-07 after call 878 measured it. Not a judgement call any
+// more — the numbers are in, and they say speech-to-speech does not buy us
+// what it was wanted for. Tenants stay on the STT/LLM/TTS pipeline.
 //
-// Compare realtimeTtftMs against the PIPELINE'S SUM (~1.64s = eou 402 +
-// llm 1082 + tts 160), not against its 1,082ms LLM leg. On a realtime turn
-// that one number covers the caller finishing speaking through to the first
-// audio of the reply — the same span the pipeline needs three numbers for.
+//   realtimeTtftMs = [0, 312, 1647, 2556]
 //
-// Still admin-only, and still unverified on the thing that decides it: this
-// bypasses Sarvam, which is the only reason Indian place names are heard at
-// all here (5/5 against Google STT's 0/5 on बानेर, ट्रिटोपिया, हिंजवडी).
-export const ADMIN_ONLY_MODELS = [
-  {
-    value: 'gemini-live',
-    label: 'Gemini Live 2.5 (Preview)',
-    tag: 'Speech-to-speech · admin testing · Indic quality unverified',
-  },
-  {
-    // Mid-session instruction updates do not apply on any "3.1" Live model,
-    // and every per-turn guard in main.py is exactly that — the objective
-    // that stops the funnel overriding a question, the garbled handling, the
-    // site-visit suppression. They are accepted and silently ignored here.
-    value: 'gemini-live:gemini-3.1-flash-live-preview',
-    label: 'Gemini Live 3.1 (Preview)',
-    tag: 'Newer, but per-turn guards do NOT apply · raw testing only',
-  },
+// The 0 is the greeting (generate_reply, no caller turn before it) and 312
+// is an unprompted follow-up the model emitted at 7.4s before the caller had
+// said anything. The two real caller-triggered turns cost 1647ms and 2556ms.
+//
+// The pipeline's full turn is eou 402 + llm 1082 + tts 160 = 1644ms. So
+// Gemini Live is level on one turn and ~1.5x worse on the other. That is the
+// GENEROUS reading: RealtimeModelMetrics.ttft starts when Gemini's own VAD
+// decides the caller stopped, so it excludes the endpointing wait the 402ms
+// covers. Like-for-like against llm+tts (1242ms) it is 1.3x-2x slower.
+//
+// Worse than the latency: on that call the agent started speaking at 35.7s
+// while the caller was still talking until 41.9s — 6.2s of talking over them.
+// Gemini's AutomaticActivityDetection called end-of-turn mid-sentence, and
+// there were two "Caller away" stretches where it heard nothing at all.
+//
+// One thing DID work and is worth keeping if this is ever revived: the 700ms
+// turn-detection fix. "जी बताइए नाम क्या है आपका" arrived as one turn rather
+// than fragmenting into three.
+//
+// Never tested, and still the question that would decide it: this bypasses
+// Sarvam, which is the only reason Indian place names are heard here at all
+// (5/5 vs Google STT's 0/5 on बानेर, ट्रिटोपिया, हिंजवडी). There is now no
+// latency win to trade that against, so the test was not worth running.
+//
+// Reviving needs a reason beyond latency. PARKED_MODELS below only exists so
+// agent 26 ("Artha · Gemini Live test", account 2) still renders a label.
+export const ADMIN_ONLY_MODELS = [] as const
+
+const PARKED_MODELS = [
+  { value: 'gemini-live', label: 'Gemini Live 2.5 (Preview)' },
+  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Gemini Live 3.1 (Preview)' },
 ] as const
 
 // Kept out of the dropdown but still resolvable, so calls 853 and 854 render
@@ -283,6 +292,7 @@ const RETIRED_MODELS = [
 export const modelLabel = (value: string) =>
   MODEL_OPTIONS.find((m) => m.value === value)?.label ??
   ADMIN_ONLY_MODELS.find((m) => m.value === value)?.label ??
+  PARKED_MODELS.find((m) => m.value === value)?.label ??
   RETIRED_ADMIN_MODELS.find((m) => m.value === value)?.label ??
   RETIRED_MODELS.find((m) => m.value === value)?.label ??
   value
