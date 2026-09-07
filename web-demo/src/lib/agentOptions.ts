@@ -134,7 +134,17 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
   {
     key: 'native-lite',
     label: 'Vistrow Native',
-    note: '0.75x credits · native Indian languages',
+    // Measured on call 885 (agent 26 set to google:hi-IN-Standard-A / Aditi):
+    // audible distortion, 402ms TTS TTFB, and NOT ONE caller turn transcribed
+    // across the whole call — the agent checked in twice and hung up on a
+    // caller who was talking to it. Google rejects this whole family on the
+    // streaming endpoint ("only Chirp 3: HD voices are supported for
+    // streaming synthesis"), so main.py runs them through a StreamAdapter
+    // sentence-chunking workaround, and that is what the caller hears.
+    // Warned rather than hidden: they are cheaper and some tenants may be on
+    // one already, so an operator picking one deserves to know before a live
+    // call rather than after.
+    note: '0.75x credits · known audio quality issues — test before using on live calls',
     voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
   },
 ]

@@ -4481,13 +4481,24 @@ async def entrypoint(ctx: JobContext) -> None:
 
     ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
-    # interruption_sensitivity 0-1 → how many real words it takes to interrupt
-    # the agent. High sensitivity yields the floor on a single word; low
-    # sensitivity ignores stray noise and needs a few words. Default 0.5 ≈ the
-    # previous fixed min_words=2.
+    # interruption_sensitivity 0-1 → how LONG the caller must speak to take the
+    # floor. It used to scale min_words instead, and that combination silently
+    # blocked real interruptions: min_words and min_duration are ANDed, so at
+    # the default sensitivity (min_words=2) a caller who spoke for well over
+    # the 0.8s duration gate still could not interrupt if STT had only parsed
+    # one word by then. Measured on call 884 — the caller spoke for 1,200ms
+    # over the agent and the agent talked straight through it.
+    #
+    # min_words is now pinned to 1 and the duration gate does the filtering on
+    # its own, which is what the comment below always described as the right
+    # design: length is language-neutral, word count is not. Sensitivity moves
+    # min_duration across 1.1s (least sensitive) → 0.5s (most), and 0.5 still
+    # lands on 0.8s, so the default behaviour is unchanged apart from the
+    # word gate that was blocking it.
     sensitivity = cfg.get("interruption_sensitivity")
     sensitivity = 0.5 if sensitivity is None else max(0.0, min(1.0, float(sensitivity)))
-    min_words = max(1, round(4 - sensitivity * 3))
+    min_words = 1
+    min_interruption_duration = round(1.1 - sensitivity * 0.6, 2)
     # Silence check-in cadence: how long the caller can be quiet before the
     # session marks user_state "away" and the agent checks in (see below).
     silence_reminder_ms = int(cfg.get("silence_reminder_ms") or 0)
@@ -4545,6 +4556,8 @@ async def entrypoint(ctx: JobContext) -> None:
                 # dropped-in acknowledgement is short, a genuine interruption
                 # runs longer. 0.8s clears typical two-word backchannels while
                 # still yielding the floor to someone actually cutting in.
+                # Now scaled by interruption_sensitivity (see above); 0.5
+                # keeps the measured 0.8s.
                 #
                 # The right fix is interruption_detection="adaptive", whose
                 # backchannel_boundary suppresses exactly this - but it
@@ -4552,7 +4565,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 # plugin hardcodes that False ("chunk timestamps don't seem to
                 # work despite the docs saying they do"), so adaptive cannot
                 # run on this STT at all. Revisit if that changes.
-                "min_duration": 0.8,
+                "min_duration": min_interruption_duration,
             },
             # Preemptive LLM generation (starting on the interim, not-yet-
             # finalized transcript) is already ON by default in this
