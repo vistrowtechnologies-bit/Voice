@@ -3202,13 +3202,16 @@ class RealEstateAgent(Agent):
             # who are not ours. The index is the only thing that has ever
             # stopped that.
             _catalog_parts.append(
-                "# The COMPLETE list of what this business has. There is nothing else.\n"
+                "# The live catalog — every listing synced from this business's own feed\n"
                 + self._catalog_index
-                + "\n\nEvery project name and every developer name you say must appear above. "
-                "If they asked for something not here, say plainly it is not one of ours — after "
-                "checking this list properly, because saying no to something you do sell costs "
-                "the business the sale. Do not pad a short list with names you recall from "
-                "elsewhere: a short honest list is the right answer."
+                + "\n\nThe knowledge base above is an EQUALLY valid source: this business also "
+                "works with developers and projects that are described there but have no listing "
+                "here, and naming those is correct. What you must not do is name a project or "
+                "developer that appears in NEITHER — do not add names you merely recall from the "
+                "wider market. Where a project does have a listing above, that listing is the "
+                "truth about its location, configuration and price. And check both sources "
+                "before saying you do not have something: saying no to something this business "
+                "actually sells costs it the sale."
             )
         _catalog_facts_instruction = "\n\n".join(_catalog_parts)
         _catalog_instruction = (
