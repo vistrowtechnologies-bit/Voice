@@ -5326,11 +5326,27 @@ def _prewarm(proc: JobProcess) -> None:
 # correlate with nothing else: call 849 waited 5,464ms for its opening line
 # while a neighbouring call on the same build and the same voice waited 176ms.
 #
-# 4 seconds still de-synchronizes four processes, and the retry below now
-# covers the collision the long delay was really protecting against —
-# spreading requests out is a weak defence against a rate limit; retrying is
-# a real one.
-_TTS_PREWARM_STAGGER_MAX_S = 4.0
+# Cutting this to 4s was a mistake, and the reasoning above is why it was
+# tempting: a shorter stagger genuinely does shrink the cold window. What it
+# ignored is that the same commit ALSO doubled the work (two TTS families
+# instead of one) and added retries. The result was four processes each
+# running two synthesis requests within four seconds of starting — straight
+# through LiveKit's init handshake, which is the one thing the original 20s
+# was keeping them clear of.
+#
+# The logs show what that costs: processes killed in batches seconds after
+# worker start, each then logging "error initializing process". A call
+# landing on one of those dies with it — and because save_call runs in a
+# shutdown callback, the call is cut AND no record is written, which is
+# exactly what a caller reported as "I talked and the call got cut" with
+# nothing in the database afterwards.
+#
+# So the warm-up now waits out the init window entirely before it starts,
+# and the spread goes back to what it was. The cold window this reopens is
+# real but bounded and only affects the first call on a fresh process; a
+# killed worker affects the call in progress.
+_TTS_PREWARM_INITIAL_DELAY_S = 10.0
+_TTS_PREWARM_STAGGER_MAX_S = 20.0
 
 
 # Warmed in the order they matter. Chirp 3 HD is FIRST because it is what
@@ -5383,8 +5399,11 @@ async def _warm_google_tts_client() -> None:
 
 
 def _run_google_tts_prewarm(pid: int) -> None:
+    # Nothing here may touch CPU or the network until the process has
+    # finished initializing — see _TTS_PREWARM_INITIAL_DELAY_S. Reading the
+    # cached greetings off disk moved below the delay for the same reason.
+    time.sleep(_TTS_PREWARM_INITIAL_DELAY_S + random.uniform(0, _TTS_PREWARM_STAGGER_MAX_S))
     _load_cached_greetings()
-    time.sleep(random.uniform(0, _TTS_PREWARM_STAGGER_MAX_S))
     try:
         asyncio.run(_warm_google_tts_client())
         logger.info("prewarm: Google TTS client warmed (pid=%s)", pid)
