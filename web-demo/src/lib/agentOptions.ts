@@ -180,17 +180,40 @@ export const MODEL_OPTIONS = [
   { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite', tag: 'Same accuracy as Swift, a touch faster' },
   { value: 'gpt-4o-mini', label: 'Vistrow Standard', tag: 'Half the credits · slightly less accurate' },
 ] as const
-// Groq runs open-weight models on its own LPU hardware — the fastest
-// time-to-first-token available (~120-180ms published, vs ~900ms for
-// gpt-4.1-mini at our prompt size). Admin-only for now: the speed is
-// measured, the Hindi/Marathi quality is not. server/token_api.py enforces
-// the same restriction, so hiding these here is UX, not the security
-// boundary. Same treatment as preview voices.
-export const ADMIN_ONLY_MODELS = [
-  { value: 'groq/openai/gpt-oss-20b', label: 'Groq GPT-OSS 20B', tag: 'Admin testing · free-tier limits apply' },
-  { value: 'groq/openai/gpt-oss-120b', label: 'Groq GPT-OSS 120B', tag: 'Admin testing · free-tier limits apply' },
-  { value: 'groq/qwen/qwen3.6-27b', label: 'Groq Qwen3.6 27B', tag: 'Admin testing · free-tier limits apply' },
-  { value: 'groq/qwen/qwen3.8-27b', label: 'Groq Qwen3.8 27B', tag: 'Admin testing · free-tier limits apply' },
+// Groq was listed here on its published time-to-first-token — 120-180ms
+// against gpt-4.1-mini's ~1,000ms — and removed on 2026-09-07 when the two
+// production calls that had actually run it were finally looked at:
+//
+//   call 853  groq/openai/gpt-oss-20b   llmTtft 5,099ms
+//   call 854  groq/openai/gpt-oss-20b   llmTtft 0ms (metric artefact)
+//   gpt-4.1-mini, same period           llmTtft 1,082ms median over 260 turns
+//
+// Five seconds to first token, and both calls produced one or two agent
+// turns in a minute — the operator's report was "I test it and it's not
+// working", which is what a five-second wait sounds like on a phone.
+//
+// The published figure is real, on a paid tier with reserved capacity. On
+// the free tier this account uses, it queues. The dropdown said "free-tier
+// limits apply" and that was not enough: it sat directly under the speed
+// claim, so the only reason anyone would pick it was speed it does not
+// deliver here.
+//
+// Two of these model ids may not exist at all (qwen3.6-27b, qwen3.8-27b were
+// never observed in any call). Not investigated, because nothing should
+// select them either way.
+//
+// If a paid Groq tier is ever bought, re-list them — but benchmark against
+// this platform's own Hindi/Marathi checks first, the way gpt-4.1-nano was
+// disqualified at 2/12 for being fast and wrong.
+export const ADMIN_ONLY_MODELS = [] as const
+
+// Kept out of the dropdown but still resolvable, so calls 853 and 854 render
+// under a name instead of leaking the raw vendor string at a tenant.
+const RETIRED_ADMIN_MODELS = [
+  { value: 'groq/openai/gpt-oss-20b', label: 'Groq GPT-OSS 20B' },
+  { value: 'groq/openai/gpt-oss-120b', label: 'Groq GPT-OSS 120B' },
+  { value: 'groq/qwen/qwen3.6-27b', label: 'Groq Qwen3.6 27B' },
+  { value: 'groq/qwen/qwen3.8-27b', label: 'Groq Qwen3.8 27B' },
 ] as const
 
 export const modelOptionsFor = (isPlatformOwner: boolean) =>
@@ -210,6 +233,7 @@ const RETIRED_MODELS = [
 export const modelLabel = (value: string) =>
   MODEL_OPTIONS.find((m) => m.value === value)?.label ??
   ADMIN_ONLY_MODELS.find((m) => m.value === value)?.label ??
+  RETIRED_ADMIN_MODELS.find((m) => m.value === value)?.label ??
   RETIRED_MODELS.find((m) => m.value === value)?.label ??
   value
 // Presets for Sarvam bulbul:v3's own pace/temperature/pitch - controls how
