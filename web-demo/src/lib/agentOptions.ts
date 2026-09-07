@@ -227,11 +227,34 @@ export const MODEL_OPTIONS = [
 // test the 700ms turn-detection fix (never yet exercised — every fragmenting
 // sample predates it), then compare against the pipeline's measured 1.64s. In
 // that order: the last attempt did it backwards.
-export const ADMIN_ONLY_MODELS = [] as const
-
-const PARKED_MODELS = [
-  { value: 'gemini-live', label: 'Gemini Live 2.5 (Preview)' },
-  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Gemini Live 3.1 (Preview)' },
+// Re-listed once the realtime path could actually be measured. The parking
+// note above set that as the condition: RealtimeModelMetrics.ttft is now
+// captured as realtimeTtftMs, so a speech-to-speech call finally reports a
+// per-turn number instead of providers=[] and nothing else.
+//
+// Compare realtimeTtftMs against the PIPELINE'S SUM (~1.64s = eou 402 +
+// llm 1082 + tts 160), not against its 1,082ms LLM leg. On a realtime turn
+// that one number covers the caller finishing speaking through to the first
+// audio of the reply — the same span the pipeline needs three numbers for.
+//
+// Still admin-only, and still unverified on the thing that decides it: this
+// bypasses Sarvam, which is the only reason Indian place names are heard at
+// all here (5/5 against Google STT's 0/5 on बानेर, ट्रिटोपिया, हिंजवडी).
+export const ADMIN_ONLY_MODELS = [
+  {
+    value: 'gemini-live',
+    label: 'Gemini Live 2.5 (Preview)',
+    tag: 'Speech-to-speech · admin testing · Indic quality unverified',
+  },
+  {
+    // Mid-session instruction updates do not apply on any "3.1" Live model,
+    // and every per-turn guard in main.py is exactly that — the objective
+    // that stops the funnel overriding a question, the garbled handling, the
+    // site-visit suppression. They are accepted and silently ignored here.
+    value: 'gemini-live:gemini-3.1-flash-live-preview',
+    label: 'Gemini Live 3.1 (Preview)',
+    tag: 'Newer, but per-turn guards do NOT apply · raw testing only',
+  },
 ] as const
 
 // Kept out of the dropdown but still resolvable, so calls 853 and 854 render
@@ -261,7 +284,6 @@ export const modelLabel = (value: string) =>
   MODEL_OPTIONS.find((m) => m.value === value)?.label ??
   ADMIN_ONLY_MODELS.find((m) => m.value === value)?.label ??
   RETIRED_ADMIN_MODELS.find((m) => m.value === value)?.label ??
-  PARKED_MODELS.find((m) => m.value === value)?.label ??
   RETIRED_MODELS.find((m) => m.value === value)?.label ??
   value
 // Presets for Sarvam bulbul:v3's own pace/temperature/pitch - controls how
