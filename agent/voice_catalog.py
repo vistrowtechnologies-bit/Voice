@@ -177,7 +177,18 @@ _BASE_TIERS = {"lite", "standard"}
 
 # Voices auto-added to a brand-new (or never-configured) account's menu so the
 # agent picker is never empty. Both are free-tier Standard voices.
-DEFAULT_ACCOUNT_VOICES = ["shubh", "priya"]
+# Kiara HD (Chirp 3) leads because it is the fastest voice measured on
+# real calls - 141ms TTS TTFB against 160-176ms for ElevenLabs, 288ms for
+# Sarvam bulbul:v3 and 880-905ms for the Gemini TTS models. Same
+# "standard" credit tier as the Sarvam voices below, so leading with it
+# costs a tenant nothing. Chirp 3 is also the only Google family Google's
+# streaming endpoint accepts, so it streams natively instead of going
+# through the StreamAdapter workaround the other Google voices need.
+#
+# The Sarvam voices stay in the menu: an account that has been using one
+# must not find it missing, and they are the fallback whenever
+# GOOGLE_APPLICATION_CREDENTIALS_JSON is absent.
+DEFAULT_ACCOUNT_VOICES = ["google:chirp3:Aoede", "shubh", "priya"]
 
 # Fixed audition script, per language. Because it's fixed, each voice is
 # synthesized at most once per language ever (then cached in Postgres) — see

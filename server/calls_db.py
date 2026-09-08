@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS agents (
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
     model TEXT DEFAULT 'gpt-4.1-mini',
-    voice TEXT DEFAULT 'pooja',
+    voice TEXT DEFAULT 'google:chirp3:Aoede',
     language TEXT DEFAULT 'hi-IN',
     status TEXT DEFAULT 'live',
     system_prompt TEXT DEFAULT '',
@@ -1227,6 +1227,12 @@ def init_tables() -> None:
             # The dashboard has always listed mini as "recommended". Only
             # this default disagreed.
             conn.execute("ALTER TABLE agents ALTER COLUMN model SET DEFAULT 'gpt-4.1-mini'")
+            # Same reasoning as the model default above: the column default is
+            # what provision_account_defaults' bare INSERT relies on, so a new
+            # tenant's starter agent gets the fastest measured voice. Existing
+            # agents keep whatever they already chose - a DEFAULT only applies
+            # to rows inserted without the column.
+            conn.execute("ALTER TABLE agents ALTER COLUMN voice SET DEFAULT 'google:chirp3:Aoede'")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TEXT")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'password'")
             # Existing accounts predate verified-email onboarding and must
@@ -3335,7 +3341,7 @@ def create_agent(data: dict, account_id: int) -> dict:
                     # lines up; the two paths just disagreed. Existing agents
                     # keep whatever they were configured with.
                     data.get("model", "gpt-4.1-mini"),
-                    data.get("voice", "shubh"),
+                    data.get("voice", "google:chirp3:Aoede"),
                     data.get("language", "hi-IN"),
                     data.get("systemPrompt", ""),
                 ),
