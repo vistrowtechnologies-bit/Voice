@@ -723,10 +723,15 @@ def _current_objective(
 # "thinking" after _BACKCHANNEL_DELAY_S, drop in a one-word ack while the real
 # reply finishes generating.
 #
-# The delay is deliberately ABOVE the 1082ms median minus TTS's own 160ms
-# TTFB, so a median turn does NOT get one — the ack is for turns that are
-# genuinely slow, not every turn. Set it lower and this becomes a verbal tic.
-_BACKCHANNEL_DELAY_S = 0.9
+# The delay must clear the WHOLE median turn, not just the LLM leg. Set at
+# 0.9s it fired 9 times in one 3-minute call (898) and read as a verbal tic:
+# reply audio lands ~1.19s after the turn commits (llm 1036 + tts 154), and
+# the ack's own TTS adds ~150ms, so it was landing at ~1.05s — 140ms before
+# the real answer. That is not covering a silence, it is interrupting one.
+#
+# At 1.6s only a genuinely slow turn gets one (llm above ~1.45s), which is
+# roughly the top quarter of turns rather than all of them.
+_BACKCHANNEL_DELAY_S = 1.6
 
 # Never spoken into the chat context (add_to_chat_ctx=False at the call site):
 # these are audio-only, so the LLM never sees them and cannot start copying
@@ -4905,6 +4910,14 @@ async def entrypoint(ctx: JobContext) -> None:
                     or not userdata.get("greeting_played", False)
                 ):
                     return
+                # Never on consecutive turns. Even at a correct threshold a
+                # run of slow turns would otherwise put an ack in front of
+                # every single reply, which is the tic all over again — a
+                # person who says "mm" before every sentence sounds nervous,
+                # not attentive.
+                if userdata.get("backchannel_last_turn", False):
+                    userdata["backchannel_last_turn"] = False
+                    return
                 line = _backchannel_line(
                     getattr(agent, "_reply_language", "") or "",
                     userdata.get("last_backchannel", ""),
@@ -4913,6 +4926,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 # Read by tools._tool_filler so a turn never gets this ack AND
                 # "One second..." back to back.
                 userdata["backchannel_turn"] = True
+                userdata["backchannel_last_turn"] = True
                 _record_diagnostic(
                     "metric", "agent", "Latency backchannel spoken", "info",
                     offsetMs=round((time.monotonic() - _t0) * 1000),

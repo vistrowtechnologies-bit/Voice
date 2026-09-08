@@ -36,9 +36,12 @@ class BackchannelLine(unittest.TestCase):
             for line in lines:
                 self.assertLessEqual(len(line.rstrip(". ")), 12, f"{lang}: {line!r}")
 
-    def test_delay_is_above_the_median_turn(self):
-        # Set below this and a median turn gets an ack, i.e. every turn does.
-        self.assertGreaterEqual(main._BACKCHANNEL_DELAY_S, 0.9)
+    def test_delay_clears_a_whole_median_turn(self):
+        # Measured on call 898: reply audio lands ~1.19s after the turn
+        # commits (llm 1036 + tts 154). An ack must not fire inside that, or
+        # it lands just before the real answer instead of covering a wait —
+        # which is exactly what 0.9s did, 9 times in one 3-minute call.
+        self.assertGreater(main._BACKCHANNEL_DELAY_S, 1.19 + 0.15)
 
     def test_every_dashboard_language_has_lines(self):
         # A language offered in the picker but missing here silently falls
