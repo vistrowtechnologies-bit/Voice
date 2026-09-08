@@ -387,9 +387,23 @@ _REPEAT_COMPLAINT_PATTERN = re.compile(
 # telling you anything. Deliberately an exact whole-string match — "जी बोलिए"
 # is an acknowledgement, "जी, Baner mein flat chahiye" is a requirement, and
 # only the first may be dropped.
+# Anchored on the whole string on purpose: anything carrying a requirement is
+# not an acknowledgement. But the word list has to include the noises people
+# actually make picking up a phone, or a greeting falls through to the LLM to
+# improvise an opening instead of playing the configured one.
+#
+# Call 921 cost 4.06 seconds of silence to exactly that: "ओ हेलो।" has "हेलो"
+# but the leading "ओ" was unlisted, the full-string match failed, and instead
+# of the canned opener firing instantly the model was asked to invent one -
+# STT plus 1,036ms of LLM plus synthesis. The caller said "हेलो" again while
+# waiting. The interjections and particles below are all from real call
+# transcripts.
 _OPENING_ACK_PATTERN = re.compile(
-    r"^(?:\s*(?:जी|हाँ|हां|हा|हैलो|हेलो|नमस्ते|नमस्कार|बोलिए|बोलिये|बताइए|बताइये|"
-    r"hello|hello\?|hi|hey|yes|yeah|yep|ok|okay|ji|haan|namaste|bolo|boliye|bataiye)"
+    r"^(?:\s*(?:जी|हाँ|हां|हा|हैलो|हेलो|हलो|नमस्ते|नमस्कार|बोलिए|बोलिये|बताइए|बताइये|"
+    r"ओ|अरे|अच्छा|अच्छा जी|ना|न|तो|हम्म|हम|सुनिए|बोलो|"        # interjections + particles
+    r"हो|बोला|सांगा|"                                            # Marathi
+    r"hello|hello\?|hi|hey|yes|yeah|yep|yup|ok|okay|oh|hmm|uh|er|"
+    r"ji|haan|han|namaste|bolo|boliye|bataiye|suniye)"
     r"[\s,.।!?\-]*)+$",
     re.IGNORECASE,
 )

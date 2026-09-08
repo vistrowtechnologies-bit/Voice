@@ -76,5 +76,34 @@ class OpeningAckAcceptsThem(unittest.TestCase):
             "Haan, mujhe apne restaurant ke liye nayi website banwani hai"))
 
 
+class InterjectionsAreStillAcknowledgements(unittest.TestCase):
+    """Every one of these is how a real caller answered a real outbound call.
+
+    A miss here is not cosmetic: it sends the turn to the LLM to invent an
+    opening instead of playing the configured one instantly. Call 921 waited
+    4.06 seconds for exactly that, because "ओ हेलो।" carried an unlisted
+    leading "ओ", and the caller said "हेलो" again into the gap.
+    """
+
+    def test_greetings_with_interjections(self):
+        for text in ("ओ हेलो।", "अरे हाँ", "अच्छा जी", "हाँ जी।", "हम्म",
+                     "oh hello", "hmm hello", "yup", "हो बोला"):
+            with self.subTest(text=text):
+                self.assertTrue(main._looks_like_opening_ack(text))
+
+    def test_the_plain_ones_still_work(self):
+        for text in ("हेलो।", "जी।", "हाँ", "hello", "yes", "okay", "namaste"):
+            with self.subTest(text=text):
+                self.assertTrue(main._looks_like_opening_ack(text))
+
+    def test_content_is_never_an_acknowledgement(self):
+        # These must reach the LLM: answering them with the canned opener
+        # talks straight over what the caller actually said.
+        for text in ("हेलो, मुझे वेबसाइट चाहिए", "रियल इस्टेट का बिज़नेस है",
+                     "Haan mujhe website banwani hai", "hello can you hear me properly"):
+            with self.subTest(text=text):
+                self.assertFalse(main._looks_like_opening_ack(text))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
