@@ -274,9 +274,27 @@ a[class*="border-cyan"]:not([class*=" bg-"]):not([class^="bg-"]) * {
   transition: background-color 150ms ease, box-shadow 150ms ease;
 }
 
-[data-dashboard-root] tbody tr:hover {
+[data-dashboard-root] tbody tr:not([data-hover-rows='false']):hover {
   background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
   box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+
+/* Sticky table cells must be opaque so horizontally scrolling content cannot
+   show through them. Mix the same hover/selection tint onto the real surface
+   color to keep pinned and ordinary cells visually continuous. */
+[data-dashboard-root] tbody tr:not([data-selected='true']):not([data-hover-rows='false']):hover > td[data-sticky-column] {
+  background-color: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
+}
+
+[data-dashboard-root] tbody tr[data-selected='true'],
+[data-dashboard-root] tbody tr[data-selected='true']:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-primary) 70%, transparent);
+}
+
+[data-dashboard-root] tbody tr[data-selected='true'] > td[data-sticky-column],
+[data-dashboard-root] tbody tr[data-selected='true']:hover > td[data-sticky-column] {
+  background-color: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
 }
 
 @media (prefers-reduced-motion: reduce) {

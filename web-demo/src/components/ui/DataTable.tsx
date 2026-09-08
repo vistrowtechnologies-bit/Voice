@@ -4,7 +4,10 @@ import { Card } from './Card'
 
 export interface DataTableColumn<T> {
   key: string
-  header: string
+  header: ReactNode
+  /** Plain-language label used for accessibility, sorting and resize hints
+   * when `header` is a control rather than text. */
+  headerLabel?: string
   render: (row: T) => ReactNode
   /** Extra classes on both the <th> and each row's <td> for this column. */
   className?: string
@@ -25,6 +28,8 @@ export interface DataTableColumn<T> {
   sticky?: 'left' | 'right'
   /** Show a drag handle on the desktop header. */
   resizable?: boolean
+  /** Enables a real client-side sort control in the column header. */
+  sortValue?: (row: T) => string | number | null | undefined
 }
 
 interface DataTableProps<T> {
@@ -51,6 +56,8 @@ interface DataTableProps<T> {
   columnDividers?: boolean
   /** Persists operator-adjusted desktop widths in localStorage. */
   columnWidthStorageKey?: string
+  /** Gives selected rows a consistent background, including pinned cells. */
+  isRowSelected?: (row: T) => boolean
 }
 
 /** One shimmering placeholder bar. Widths vary per column so a loading table
@@ -77,6 +84,7 @@ export function DataTable<T>({
   rowAriaLabel,
   columnDividers = false,
   columnWidthStorageKey,
+  isRowSelected,
 }: DataTableProps<T>) {
   const primaryCol = columns.find((c) => c.primary) ?? columns[0]
   const cardCols = columns.filter((c) => c !== primaryCol && !c.hideOnCard)
@@ -88,6 +96,7 @@ export function DataTable<T>({
       return {}
     }
   })
+  const [sort, setSort] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null)
 
   useEffect(() => {
     if (!columnWidthStorageKey || typeof window === 'undefined') return
@@ -99,6 +108,22 @@ export function DataTable<T>({
     [columns, savedWidths],
   ) as Record<string, number | undefined>
   const totalWidth = columns.reduce((sum, column) => sum + (widths[column.key] ?? column.minWidth ?? 140), 0)
+  const visibleRows = useMemo(() => {
+    if (!sort) return rows
+    const column = columns.find((candidate) => candidate.key === sort.key)
+    if (!column?.sortValue) return rows
+    return [...rows].sort((a, b) => {
+      const left = column.sortValue?.(a)
+      const right = column.sortValue?.(b)
+      if (left == null && right == null) return 0
+      if (left == null) return 1
+      if (right == null) return -1
+      const comparison = typeof left === 'number' && typeof right === 'number'
+        ? left - right
+        : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' })
+      return sort.direction === 'asc' ? comparison : -comparison
+    })
+  }, [columns, rows, sort])
 
   const stickyOffsets = useMemo(() => {
     const left: Record<string, number> = {}
@@ -155,6 +180,13 @@ export function DataTable<T>({
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', end, { once: true })
   }
+  const headerLabel = (column: DataTableColumn<T>) => column.headerLabel ?? (typeof column.header === 'string' ? column.header : 'column')
+  const toggleSort = (column: DataTableColumn<T>) => {
+    if (!column.sortValue) return
+    setSort((current) => current?.key === column.key
+      ? { key: column.key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+      : { key: column.key, direction: 'asc' })
+  }
   const isInteractive = (target: EventTarget | null) =>
     target instanceof HTMLElement && Boolean(target.closest('a, button, input, select, textarea, [role="button"]'))
   const activateRow = (event: MouseEvent<HTMLElement>, row: T) => {
@@ -206,7 +238,19 @@ export function DataTable<T>({
                 {cardCols.map((col, c) => (
                   <div key={col.key} className="flex items-center justify-between gap-3">
                     <span className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-text-muted">
-                      {col.header}
+                      {col.sortValue ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(col)}
+                          className="flex w-full min-w-0 items-center gap-1 text-left hover:text-text"
+                          aria-label={`Sort by ${headerLabel(col)}`}
+                        >
+                          <span className="truncate">{col.header}</span>
+                          <span className={`shrink-0 text-[13px] normal-case tracking-normal ${sort?.key === col.key ? 'text-primary' : 'text-text-muted/70'}`} aria-hidden="true">
+                            {sort?.key === col.key ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        </button>
+                      ) : col.header}
                     </span>
                     <span className="min-w-0 flex-1 pl-6">
                       <SkeletonBar index={r + c + 1} />
@@ -246,9 +290,9 @@ export function DataTable<T>({
                         <span
                           role="separator"
                           aria-orientation="vertical"
-                          aria-label={`Resize ${col.header || 'column'}`}
+                          aria-label={`Resize ${headerLabel(col)}`}
                           onPointerDown={(event) => startResize(event, col)}
-                          title={`Drag to resize ${col.header.toLowerCase()}`}
+                          title={`Drag to resize ${headerLabel(col).toLowerCase()}`}
                           className="absolute inset-y-0 -right-1.5 z-40 w-3 cursor-col-resize touch-none bg-transparent after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border after:content-[''] hover:after:w-0.5 hover:after:bg-primary"
                         />
                       )}
@@ -257,33 +301,40 @@ export function DataTable<T>({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {rows.map((row) => (
-                  <tr
-                    key={rowKey(row)}
-                    onClick={(event) => activateRow(event, row)}
-                    onKeyDown={(event) => activateRowFromKeyboard(event, row)}
-                    tabIndex={onRowClick ? 0 : undefined}
-                    aria-label={rowAriaLabel?.(row)}
-                    className={`${hoverRows ? 'group hover:bg-surface-high' : 'group'} ${onRowClick ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary' : ''}`}
-                  >
-                    {columns.map((col) => (
-                      <td
-                        key={col.key}
-                        style={columnStyle(col)}
-                        className={`py-3 px-3 first:pl-5 ${columnDividers ? 'border-r border-border/70 last:border-r-0' : ''} ${col.resizable ? 'overflow-hidden' : ''} ${col.sticky ? `sticky z-10 bg-surface group-hover:bg-surface-high ${stickyShadow(col)}` : ''} ${col.className ?? ''} ${col.cellClassName ?? ''}`}
-                      >
-                        {col.render(row)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {visibleRows.map((row) => {
+                  const selected = isRowSelected?.(row) ?? false
+                  return (
+                    <tr
+                      key={rowKey(row)}
+                      onClick={(event) => activateRow(event, row)}
+                      onKeyDown={(event) => activateRowFromKeyboard(event, row)}
+                      tabIndex={onRowClick ? 0 : undefined}
+                      aria-label={rowAriaLabel?.(row)}
+                      aria-selected={isRowSelected ? selected : undefined}
+                      data-selected={selected ? 'true' : undefined}
+                      data-hover-rows={hoverRows ? 'true' : 'false'}
+                      className={`group ${onRowClick ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary' : ''}`}
+                    >
+                      {columns.map((col) => (
+                        <td
+                          key={col.key}
+                          style={columnStyle(col)}
+                          data-sticky-column={col.sticky || undefined}
+                          className={`py-3 px-3 first:pl-5 ${columnDividers ? 'border-r border-border/40 last:border-r-0' : ''} ${col.resizable ? 'overflow-hidden' : ''} ${col.sticky ? `sticky z-10 bg-surface ${stickyShadow(col)}` : ''} ${col.className ?? ''} ${col.cellClassName ?? ''}`}
+                        >
+                          {col.render(row)}
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Mobile: stacked cards, one per row */}
           <div className="flex flex-col divide-y divide-border lg:hidden">
-            {rows.map((row) => (
+            {visibleRows.map((row) => (
               <div
                 key={rowKey(row)}
                 onClick={(event) => activateRow(event, row)}
@@ -291,7 +342,8 @@ export function DataTable<T>({
                 tabIndex={onRowClick ? 0 : undefined}
                 role={onRowClick ? 'link' : undefined}
                 aria-label={rowAriaLabel?.(row)}
-                className={`flex flex-col gap-2 px-4 py-3 ${onRowClick ? 'cursor-pointer hover:bg-surface-high/30 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary' : ''}`}
+                aria-selected={isRowSelected ? isRowSelected(row) : undefined}
+                className={`flex flex-col gap-2 px-4 py-3 ${isRowSelected?.(row) ? 'bg-primary/10' : ''} ${onRowClick ? 'cursor-pointer hover:bg-surface-high/30 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary' : ''}`}
               >
                 <div className="font-semibold">{primaryCol.render(row)}</div>
                 {cardCols.map((col) => (

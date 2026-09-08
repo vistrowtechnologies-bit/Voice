@@ -79,6 +79,24 @@ export function Contacts() {
   const [fromNumber, setFromNumber] = useState('')
   const [placingCall, setPlacingCall] = useState(false)
   const [callError, setCallError] = useState('')
+  const [showMoreActions, setShowMoreActions] = useState(false)
+  const moreActionsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showMoreActions) return
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (!moreActionsRef.current?.contains(event.target as Node)) setShowMoreActions(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowMoreActions(false)
+    }
+    window.addEventListener('pointerdown', closeOnOutsidePress)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('pointerdown', closeOnOutsidePress)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [showMoreActions])
 
   // XLSX/XLS reuse the same CSV column-mapping pipeline: convert the first
   // sheet to CSV text client-side so the backend never has to parse
@@ -183,6 +201,8 @@ export function Contacts() {
   const handleDeleteAll = async () => {
     if (!confirm('Delete ALL contacts? Pending campaign calls for these contacts will be blocked. Call records remain available in All Calls History.')) return
     await deleteAllContacts()
+    setSelected(new Set())
+    setShowMoreActions(false)
     reload()
   }
 
@@ -302,7 +322,18 @@ export function Contacts() {
   const columns: DataTableColumn<Contact>[] = [
     {
       key: 'select',
-      header: '',
+      header: (
+        <input
+          type="checkbox"
+          checked={allFilteredSelected}
+          onChange={toggleAllFiltered}
+          onClick={(event) => event.stopPropagation()}
+          aria-label="Select all visible contacts"
+          title="Select all visible contacts"
+          className="h-4 w-4 accent-primary"
+        />
+      ),
+      headerLabel: 'selection',
       hideOnCard: true,
       width: 52,
       minWidth: 52,
@@ -327,6 +358,7 @@ export function Contacts() {
       maxWidth: 460,
       sticky: 'left',
       resizable: true,
+      sortValue: (c) => c.name,
       render: (c) => (
         <div className="flex min-w-0 items-center gap-2 overflow-hidden">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
@@ -372,6 +404,7 @@ export function Contacts() {
       minWidth: 82,
       maxWidth: 180,
       resizable: true,
+      sortValue: (c) => c.status,
       render: (c) => (
         <span className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLES[c.status] ?? STATUS_STYLES.new}`}>
           {c.status.replace('_', ' ')}
@@ -386,17 +419,18 @@ export function Contacts() {
       maxWidth: 720,
       resizable: true,
       render: (c) => (
-        <div className="flex min-w-0 flex-nowrap gap-1 overflow-hidden">
+        <div className="flex min-w-0 flex-nowrap gap-1 overflow-hidden" title={c.tags.join(', ')}>
           {c.tags.length === 0 && <span className="text-sm text-text-muted">-</span>}
-          {c.tags.map((t) => (
+          {c.tags.slice(0, 2).map((t) => (
             <span key={t} className="shrink-0 rounded bg-surface-high px-1.5 py-0.5 text-[11px] text-text-muted">
               {t}
             </span>
           ))}
+          {c.tags.length > 2 && <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">+{c.tags.length - 2} more</span>}
         </div>
       ),
     },
-    { key: 'source', header: 'Source', width: 125, minWidth: 78, maxWidth: 240, resizable: true, render: (c) => <span className="block truncate text-sm capitalize text-text-muted">{c.source}</span> },
+    { key: 'source', header: 'Source', width: 125, minWidth: 78, maxWidth: 240, resizable: true, sortValue: (c) => c.source, render: (c) => <span className="block truncate text-sm capitalize text-text-muted">{c.source}</span> },
     {
       key: 'lastCalled',
       header: 'Last Called',
@@ -404,6 +438,7 @@ export function Contacts() {
       minWidth: 82,
       maxWidth: 200,
       resizable: true,
+      sortValue: (c) => c.lastCalledAt ? Date.parse(c.lastCalledAt) : null,
       render: (c) => <span className="text-sm text-text-muted">{c.lastCalledAt ? formatRelativeTime(c.lastCalledAt) : 'never'}</span>,
     },
     {
@@ -429,7 +464,7 @@ export function Contacts() {
           <button
             onClick={() => window.confirm(`Delete ${c.name}?`) && deleteContact(c.id).then(reload)}
             aria-label={`Delete ${c.name}`}
-            className="flex h-8 w-8 items-center justify-center rounded bg-surface-high text-destructive hover:bg-destructive hover:text-bg"
+            className="flex h-8 w-8 items-center justify-center rounded bg-surface-high text-destructive transition-opacity hover:bg-destructive hover:text-bg lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
           >
             <Icon name="delete" className="text-[18px]" />
           </button>
@@ -443,11 +478,28 @@ export function Contacts() {
       <PageHeader title="Contacts" subtitle="Global contact list - auto-synced from every qualified call" />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
-        <Card padding="sm" className="flex flex-wrap items-center gap-3">
-          <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-text-muted">
-            <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} className="h-4 w-4 accent-primary" />
-            Select all
-          </label>
+        <Card padding="sm" className="flex min-h-[66px] flex-wrap items-center gap-3">
+          {selected.size > 0 ? (
+            <>
+              <span className="text-sm font-bold">{selected.size} selected</span>
+              <button
+                onClick={() => setSelected(new Set())}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-text"
+              >
+                Clear
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="flex items-center gap-1 rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+              >
+                <Icon name="delete" className="text-[15px]" />
+                {bulkDeleting ? 'Deleting…' : 'Delete selected'}
+              </button>
+              <span className="ml-auto text-xs text-text-muted">Select rows below to update this group</span>
+            </>
+          ) : (
+            <>
           <div className="relative min-w-[220px] flex-1">
             <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted" />
             <input
@@ -480,43 +532,38 @@ export function Contacts() {
             Export CSV
           </a>
           <button
-            onClick={handleDeleteAll}
-            className="flex items-center gap-2 rounded-lg border border-destructive/40 px-4 py-2 text-sm font-bold text-destructive hover:bg-destructive/10"
-          >
-            <Icon name="delete" className="text-[18px]" />
-            Delete All
-          </button>
-          <button
             onClick={() => setShowAdd((v) => !v)}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90"
           >
             <Icon name="add" className="text-[18px]" />
             Add Contact
           </button>
+          <div ref={moreActionsRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowMoreActions((visible) => !visible)}
+              aria-label="More contact actions"
+              aria-expanded={showMoreActions}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface-high text-text-muted hover:border-primary hover:text-primary"
+            >
+              <Icon name="more_horiz" className="text-[20px]" />
+            </button>
+            {showMoreActions && (
+              <div className="absolute right-0 top-full z-40 mt-2 w-48 rounded-lg border border-border bg-surface p-1.5 shadow-xl">
+                <button
+                  type="button"
+                  onClick={handleDeleteAll}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-destructive hover:bg-destructive/10"
+                >
+                  <Icon name="delete" className="text-[17px]" />
+                  Delete all contacts
+                </button>
+              </div>
+            )}
+          </div>
+            </>
+          )}
         </Card>
-
-        {selected.size > 0 && (
-          <Card padding="sm" className="flex flex-wrap items-center gap-3 !border-primary/40">
-            <label className="flex items-center gap-2 text-sm font-semibold">
-              <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} className="h-4 w-4 accent-primary" />
-              {selected.size} selected
-            </label>
-            <button
-              onClick={() => setSelected(new Set())}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-text"
-            >
-              Clear
-            </button>
-            <button
-              onClick={handleBulkDelete}
-              disabled={bulkDeleting}
-              className="flex items-center gap-1 rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50"
-            >
-              <Icon name="delete" className="text-[15px]" />
-              {bulkDeleting ? 'Deleting…' : 'Delete selected'}
-            </button>
-          </Card>
-        )}
 
         {showAdd && (
           <Card variant="flat" padding="sm" className="grid grid-cols-1 gap-3 !border-primary/40 sm:grid-cols-2 lg:grid-cols-5">
@@ -632,6 +679,7 @@ export function Contacts() {
             rowAriaLabel={(c) => `Open ${c.name}`}
             columnDividers
             columnWidthStorageKey="contacts-table-column-widths-v2"
+            isRowSelected={(c) => selected.has(c.id)}
             emptyMessage="No contacts yet. They appear here automatically when the agent qualifies a caller, or add/import them manually."
             footer={`Showing ${filtered.length} of ${contacts.length} contacts · ${contacts.filter(needsContactReview).length} need review`}
           />
