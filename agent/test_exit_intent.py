@@ -46,6 +46,33 @@ class ExitIntentDetection(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(main._detect_customer_intent(text, []), "wrap_up")
 
+    def test_deferring_a_topic_while_asking_a_question_is_not_an_exit(self):
+        # Call 911, verbatim: the caller pushed design aside and asked for the
+        # price in the same breath. The agent said goodbye mid-question.
+        # Someone who wants an answer wants the call to continue.
+        text = "वो सब बाद में देखते हैं। पहले मुझे आप इसका प्राइस बताइए।"
+        self.assertNotEqual(main._detect_customer_intent(text, []), "wrap_up")
+
+    def test_other_defer_plus_ask_combinations(self):
+        for text in (
+            "Design baad mein dekhenge, pehle price bata do",
+            "Baaki baad mein, abhi ye batao kitna kharcha aayega",
+            "That we'll see later, but tell me how much it costs",
+            "Bas itna hi features, par rate kya rahega?",
+        ):
+            with self.subTest(text=text):
+                self.assertNotEqual(main._detect_customer_intent(text, []), "wrap_up")
+
+    def test_a_real_exit_still_fires_when_it_asks_nothing_back(self):
+        # The guard must not swallow genuine exits - these ask for nothing.
+        for text in (
+            "बाद में देखेंगे।",
+            "कोई बेसिक इन्फो व्हाट्सएप पे भेज देना।",
+            "Aaj ke liye bas itna hi.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(main._detect_customer_intent(text, []), "wrap_up")
+
     def test_does_not_fire_on_an_engaged_caller(self):
         # These all mention WhatsApp or "dekhna" but are REQUIREMENTS, not
         # exits. Ending the call on any of these loses a live lead.

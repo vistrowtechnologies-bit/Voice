@@ -663,6 +663,25 @@ _PROJECT_DETAIL_PATTERN = re.compile(
 # Precision matters more than recall: a false positive hangs up on an engaged
 # lead. Anchored on phrases that end a topic, not on any mention of WhatsApp -
 # "WhatsApp button chahiye website mein" is a REQUIREMENT, not an exit.
+# A turn that ASKS for something is never an exit, whatever else it contains.
+# Call 911: "वो सब बाद में देखते हैं। पहले मुझे आप इसका प्राइस बताइए।" - they
+# deferred ONE topic (design) and in the same breath asked for the price. The
+# exit pattern matched "बाद में देखते" and the agent said goodbye to a caller
+# who was asking a buying question, then carried on talking after its own
+# farewell. Deferring a sub-topic is not ending a call.
+#
+# Someone who wants information wants the conversation to continue; answer
+# them. A genuine exit ("WhatsApp pe bhej dena", "bas itna hi") asks for
+# nothing back.
+_STILL_ASKING_PATTERN = re.compile(
+    r"(bata|बता|बताइए|बताओ|batao|bataiye|batayenge)|"
+    r"(kitna|कितना|kitne|कितने|kitni|कितनी)|"
+    r"\b(price|pricing|cost|charge|rate|quote)\b|"
+    r"(कीमत|दाम|प्राइस|खर्च|रेट)|"
+    r"\b(how much|what is|what's|can you tell|tell me)\b",
+    re.IGNORECASE,
+)
+
 _EXIT_INTENT_PATTERN = re.compile(
     # "send me the details / info on WhatsApp"
     r"(whats\s?app|व्हाट्सएप|व्हाट्सऐप|वॉट्सएप)\s*(pe|par|पे|पर)?\s*"
@@ -698,7 +717,7 @@ def _detect_customer_intent(text: str, named_rows: list[str]) -> str:
         return ""
     # Checked before everything else: whatever else this sentence contains,
     # if they have asked to wrap up then that is the intent of the turn.
-    if _EXIT_INTENT_PATTERN.search(t):
+    if _EXIT_INTENT_PATTERN.search(t) and not _STILL_ASKING_PATTERN.search(t):
         return "wrap_up"
     # Checked before the request pattern: "साइट विजिट बार-बार मत पूछिए"
     # contains the words for a site visit and must not read as asking for one.
