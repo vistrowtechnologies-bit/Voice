@@ -4,6 +4,30 @@ import calls_db
 
 
 class TenantCallDiagnosticsTests(unittest.TestCase):
+    def test_transport_failure_cannot_be_reported_as_completed(self) -> None:
+        row = {
+            "duration_seconds": 30,
+            "lead_name": "Caller",
+            "failure_reason": "sip_media_failure",
+            "disconnect_reason": "participant_disconnected",
+        }
+        transcript = [
+            {"role": "assistant", "text": "Hello"},
+            {"role": "assistant", "text": "Can you hear me?"},
+        ]
+
+        self.assertEqual(calls_db._status(row, transcript), "failed")
+
+    def test_normal_participant_hangup_remains_completed(self) -> None:
+        row = {
+            "duration_seconds": 30,
+            "lead_name": "Caller",
+            "failure_reason": "",
+            "disconnect_reason": "participant_disconnected",
+        }
+
+        self.assertEqual(calls_db._status(row, [{"role": "user", "text": "Hello"}]), "completed")
+
     def test_raw_events_are_sorted_and_internal_fields_are_removed(self) -> None:
         row = {
             "diagnostic_events_json": """[

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react'
 import { ActiveCallUI } from './ActiveCallUI'
@@ -6,16 +6,26 @@ import { OrchestratorTestCallUI } from './OrchestratorTestCallUI'
 import { Icon } from './Icon'
 import { fetchOrchestratorBrowserToken, placeTestCall } from '../lib/api'
 import { fetchLiveKitToken, randomId } from '../lib/livekit'
-import { isE164 } from '../lib/phone'
+import { COMMON_DIAL_CODES, composeE164, isE164 } from '../lib/phone'
 import type { AgentConfig } from '../lib/types'
 
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const titleId = useId()
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-6">
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="text-text-muted hover:text-text">
+          <h2 id={titleId} className="text-sm font-semibold">{title}</h2>
+          <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-text-muted transition-colors hover:bg-surface-high hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
             <Icon name="close" className="text-[20px]" />
           </button>
         </div>
@@ -38,21 +48,22 @@ export function DialTestModal({
   onClose: () => void
 }) {
   const [to, setTo] = useState('')
+  const [dialCode, setDialCode] = useState('+91')
   const [placing, setPlacing] = useState(false)
   const [result, setResult] = useState<string | null>(null)
 
   const runTest = async () => {
-    const target = to.trim()
+    const target = composeE164(dialCode, to)
     if (!target || !fromNumber) return
     if (!isE164(target)) {
-      setResult('✕ Enter the number in full international format, starting with + and the country code (e.g. +919812345678).')
+      setResult('✕ Enter a valid phone number for the selected country code.')
       return
     }
     setPlacing(true)
     setResult(null)
     try {
       const res = await placeTestCall(fromNumber, target)
-      setResult(res.ok ? '✓ EnableX accepted the call - the destination should ring shortly.' : `✕ ${res.error}`)
+      setResult(res.ok ? '✓ Call started successfully.' : `✕ ${res.error}`)
     } catch {
       setResult('✕ Request failed - is the backend running?')
     } finally {
@@ -74,12 +85,29 @@ export function DialTestModal({
           <p className="text-xs text-text-muted">
             Places a real call from <span className="font-mono text-text">{fromNumber}</span> to the number below.
           </p>
-          <input
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            placeholder="+919812345678"
-            className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
-          />
+          <label htmlFor="agent-test-phone" className="text-xs font-medium text-text-muted">Destination number</label>
+          <div className="flex gap-2">
+            <select
+              value={dialCode}
+              onChange={(e) => setDialCode(e.target.value)}
+              aria-label="Country dial code"
+              className="rounded-lg border border-border bg-surface-high px-2 text-sm text-text outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+            >
+              {COMMON_DIAL_CODES.map((country) => (
+                <option key={country.code} value={country.dial}>{country.code} {country.dial}</option>
+              ))}
+            </select>
+            <input
+              id="agent-test-phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel-national"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              placeholder="98765 43210"
+              className="min-w-0 flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+            />
+          </div>
           <button
             onClick={runTest}
             disabled={placing || !to.trim()}
@@ -118,6 +146,7 @@ export function BrowserTestModal({
   // The ordinary quick-test button keeps its existing orchestrator-first flow.
   const [forceLiveKit, setForceLiveKit] = useState(() => Boolean(testContext))
   const [status, setStatus] = useState('Checking the fastest available call route')
+  const [retryNonce, setRetryNonce] = useState(0)
   const diagnosticId = useState(() => `VV-${Date.now().toString(36).toUpperCase().slice(-6)}`)[0]
 
   const handleOrchestratorConnectionError = useCallback(() => {
@@ -156,7 +185,8 @@ export function BrowserTestModal({
       setPhase('connecting')
       try {
         setStatus('Requesting microphone access')
-        await navigator.mediaDevices.getUserMedia({ audio: true })
+        const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        permissionStream.getTracks().forEach((track) => track.stop())
         setStatus('Preparing agent and secure call room')
         const identity = randomId('operator')
         const room = randomId(`${testContext ? 'test-lab' : 'test-agent'}-${agent.id}`)
@@ -190,7 +220,7 @@ export function BrowserTestModal({
     return () => {
       cancelled = true
     }
-  }, [agent.id, forceLiveKit, testContext])
+  }, [agent.id, forceLiveKit, retryNonce, testContext])
 
   if (useOrchestrator && phase === 'active') {
     return (
@@ -212,7 +242,20 @@ export function BrowserTestModal({
             <p className="mt-1 text-xs leading-relaxed text-text-muted">{error ?? 'Could not connect.'}</p>
             <p className="mt-2 font-mono text-[10px] text-text-muted">Reference: {diagnosticId}</p>
           </div>
-          <button onClick={() => { setError(null); setPhase('checking'); setForceLiveKit((v) => testContext ? true : !v) }} className="rounded-lg bg-primary py-2 text-sm font-bold text-bg">Retry test</button>
+          <button
+            onClick={() => {
+              setError(null)
+              setToken(null)
+              setServerUrl(null)
+              setUseOrchestrator(false)
+              setForceLiveKit(Boolean(testContext))
+              setPhase('checking')
+              setRetryNonce((value) => value + 1)
+            }}
+            className="rounded-lg bg-primary py-2 text-sm font-bold text-bg transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            Retry test
+          </button>
         </div>
       </ModalShell>
     )

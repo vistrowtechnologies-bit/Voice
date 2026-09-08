@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -8,8 +8,8 @@ import { StatTile } from '../components/ui/StatTile'
 import {
   callsExportUrl,
   fetchActiveCalls,
+  fetchAllCalls,
   fetchCallRecordingUrl,
-  fetchCalls,
   formatDateTime,
   formatDuration,
 } from '../lib/api'
@@ -99,16 +99,31 @@ export function CallsHistory() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [headerRefreshSignal, setHeaderRefreshSignal] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const recordingRequestRef = useRef<string | null>(null)
   const [recordingCallId, setRecordingCallId] = useState<string | null>(null)
   const [recordingState, setRecordingState] = useState<'idle' | 'loading' | 'playing' | 'paused' | 'error'>('idle')
 
-  useEffect(() => {
-    fetchCalls().then(setCalls).catch(() => setCalls([])).finally(() => setLoading(false))
-    fetchActiveCalls().then(setActiveCalls).catch(() => setActiveCalls([]))
+  const loadCallData = useCallback(async () => {
+    const [historyResult, activeResult] = await Promise.allSettled([fetchAllCalls(), fetchActiveCalls()])
+    if (historyResult.status === 'fulfilled') setCalls(historyResult.value)
+    if (activeResult.status === 'fulfilled') setActiveCalls(activeResult.value)
+
+    if (historyResult.status === 'rejected') {
+      setLoadError('Call history could not be loaded. Your existing view was kept; retry when the connection is restored.')
+    } else if (activeResult.status === 'rejected') {
+      setLoadError('Call history loaded, but live-call status is temporarily unavailable.')
+    } else {
+      setLoadError(null)
+    }
+    return historyResult.status === 'fulfilled'
   }, [])
+
+  useEffect(() => {
+    void loadCallData().finally(() => setLoading(false))
+  }, [loadCallData])
 
   useEffect(
     () => () => {
@@ -122,11 +137,7 @@ export function CallsHistory() {
     if (refreshing) return
     setRefreshing(true)
     try {
-      await Promise.all([
-        fetchCalls().then(setCalls).catch(() => setCalls([])),
-        fetchActiveCalls().then(setActiveCalls).catch(() => setActiveCalls([])),
-      ])
-      setHeaderRefreshSignal((signal) => signal + 1)
+      if (await loadCallData()) setHeaderRefreshSignal((signal) => signal + 1)
     } finally {
       setRefreshing(false)
     }
@@ -375,6 +386,20 @@ export function CallsHistory() {
       </PageHeader>
 
       <section className="flex flex-col gap-6 p-4 sm:p-6">
+        {loadError && (
+          <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
+            <Icon name="error" className="text-[19px] text-destructive" />
+            <span className="min-w-0 flex-1 text-text">{loadError}</span>
+            <button
+              type="button"
+              onClick={() => void refreshCalls()}
+              disabled={refreshing}
+              className="rounded-lg border border-destructive/30 px-3 py-1.5 text-xs font-bold text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            >
+              {refreshing ? 'Retrying…' : 'Retry'}
+            </button>
+          </div>
+        )}
         <audio
           ref={audioRef}
           className="hidden"

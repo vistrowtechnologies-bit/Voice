@@ -7,16 +7,19 @@ import { Card } from '../components/ui/Card'
 import { DataTable } from '../components/ui/DataTable'
 import type { DataTableColumn } from '../components/ui/DataTable'
 import {
+  callContactNow,
   contactsExportUrl,
   createContact,
   deleteAllContacts,
   deleteContact,
   fetchContacts,
+  fetchPhoneNumbers,
   formatRelativeTime,
   importContactsMapped,
   previewContactsImport,
+  updateContact,
 } from '../lib/api'
-import type { Contact, CsvPreview } from '../lib/types'
+import type { Contact, CsvPreview, PhoneNumber } from '../lib/types'
 
 const MAPPING_TARGETS = [
   { value: '', label: 'Skip this column' },
@@ -62,6 +65,14 @@ export function Contacts() {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [editingContact, setEditingContact] = useState<Contact | null>(null)
+  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', phone: '', email: '', company: '', status: 'new', tags: '' })
+  const [savingContact, setSavingContact] = useState(false)
+  const [callingContact, setCallingContact] = useState<Contact | null>(null)
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([])
+  const [fromNumber, setFromNumber] = useState('')
+  const [placingCall, setPlacingCall] = useState(false)
+  const [callError, setCallError] = useState('')
 
   // XLSX/XLS reuse the same CSV column-mapping pipeline: convert the first
   // sheet to CSV text client-side so the backend never has to parse
@@ -192,6 +203,73 @@ export function Contacts() {
     }
   }
 
+  const openEdit = (contact: Contact) => {
+    const parts = contact.name.trim().split(/\s+/)
+    setEditForm({
+      firstName: parts[0] || '',
+      lastName: parts.slice(1).join(' '),
+      phone: contact.phone,
+      email: contact.email,
+      company: contact.company,
+      status: contact.status,
+      tags: contact.tags.join(', '),
+    })
+    setEditingContact(contact)
+  }
+
+  const saveContact = async () => {
+    if (!editingContact || !editForm.firstName.trim()) return
+    setSavingContact(true)
+    try {
+      await updateContact(editingContact.id, {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        phone: editForm.phone.trim(),
+        email: editForm.email.trim(),
+        company: editForm.company.trim(),
+        status: editForm.status,
+        tags: editForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+      })
+      setEditingContact(null)
+      await reload()
+    } finally {
+      setSavingContact(false)
+    }
+  }
+
+  const openCall = async (contact: Contact) => {
+    setCallError('')
+    setCallingContact(contact)
+    try {
+      const available = (await fetchPhoneNumbers()).filter((number) => number.status === 'active' && number.agentId)
+      setPhoneNumbers(available)
+      setFromNumber(available[0]?.number || '')
+    } catch {
+      setPhoneNumbers([])
+      setFromNumber('')
+      setCallError('Could not load an assigned phone number.')
+    }
+  }
+
+  const placeCall = async () => {
+    if (!callingContact || !fromNumber) return
+    setPlacingCall(true)
+    setCallError('')
+    try {
+      const result = await callContactNow(callingContact.id, fromNumber)
+      if (!result.ok) {
+        setCallError(result.error || 'The call could not be placed.')
+        return
+      }
+      setCallingContact(null)
+      await reload()
+    } catch (error) {
+      setCallError(error instanceof Error ? error.message : 'The call could not be placed.')
+    } finally {
+      setPlacingCall(false)
+    }
+  }
+
   const columns: DataTableColumn<Contact>[] = [
     {
       key: 'select',
@@ -213,16 +291,27 @@ export function Contacts() {
       header: 'Contact Name',
       primary: true,
       render: (c) => (
-        <Link to={`/dashboard/contacts/${c.id}`} className="flex items-center gap-2 hover:underline">
+        <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
             {c.name.slice(0, 2).toUpperCase()}
           </div>
-          <div>
-            <span className="text-sm font-semibold">{c.name}</span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1">
+              <Link to={`/dashboard/contacts/${c.id}`} className="truncate text-sm font-semibold hover:underline">{c.name}</Link>
+              <button
+                type="button"
+                onClick={() => openEdit(c)}
+                aria-label={`Edit ${c.name}`}
+                title="Edit contact"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-primary/10 hover:text-primary"
+              >
+                <Icon name="edit" className="text-[15px]" />
+              </button>
+            </div>
             {needsContactReview(c) && <span className="ml-2 rounded bg-amber/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber">Needs review</span>}
             {c.company && <p className="text-[11px] text-text-muted">{c.company}</p>}
           </div>
-        </Link>
+        </div>
       ),
     },
     {
@@ -269,7 +358,17 @@ export function Contacts() {
       header: 'Actions',
       className: 'text-center',
       render: (c) => (
-        <div className="flex justify-center opacity-60 transition-opacity group-hover:opacity-100">
+        <div className="flex justify-center gap-1">
+          <button
+            type="button"
+            onClick={() => openCall(c)}
+            disabled={!c.phone}
+            aria-label={`Call ${c.name}`}
+            title={c.phone ? 'Call now' : 'No phone number'}
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-primary/30 text-primary transition-colors hover:bg-primary hover:text-bg disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            <Icon name="call" className="text-[17px]" />
+          </button>
           <button
             onClick={() => window.confirm(`Delete ${c.name}?`) && deleteContact(c.id).then(reload)}
             aria-label={`Delete ${c.name}`}
@@ -468,6 +567,60 @@ export function Contacts() {
             emptyMessage="No contacts yet. They appear here automatically when the agent qualifies a caller, or add/import them manually."
             footer={`Showing ${filtered.length} of ${contacts.length} contacts · ${contacts.filter(needsContactReview).length} need review`}
           />
+        )}
+
+        {editingContact && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Edit contact">
+            <Card padding="sm" className="w-full max-w-2xl bg-surface shadow-2xl">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div><h2 className="text-lg font-bold">Edit contact</h2><p className="text-xs text-text-muted">Update the name and calling context before testing.</p></div>
+                <button type="button" onClick={() => setEditingContact(null)} aria-label="Close edit contact" className="rounded-md p-2 text-text-muted hover:bg-surface-high hover:text-text"><Icon name="close" /></button>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {([
+                  ['firstName', 'First name'], ['lastName', 'Last name'], ['phone', 'Phone'],
+                  ['email', 'Email'], ['company', 'Organization'], ['tags', 'Tags (comma separated)'],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
+                    {label}
+                    <input value={editForm[key]} onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary" />
+                  </label>
+                ))}
+                <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
+                  Status
+                  <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary">
+                    <option value="new">New</option><option value="qualified">Qualified</option><option value="site_visit">Site visit</option><option value="customer">Customer</option>
+                  </select>
+                </label>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" onClick={() => setEditingContact(null)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">Cancel</button>
+                <button type="button" onClick={saveContact} disabled={savingContact || !editForm.firstName.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50">{savingContact ? 'Saving…' : 'Save changes'}</button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {callingContact && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Confirm real call">
+            <Card padding="sm" className="w-full max-w-md bg-surface shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div><h2 className="text-lg font-bold">Call {callingContact.name} now?</h2><p className="mt-1 text-xs text-text-muted">This will place one real call to {callingContact.phone}. It does not resume the campaign.</p></div>
+                <button type="button" onClick={() => setCallingContact(null)} aria-label="Close call confirmation" className="rounded-md p-2 text-text-muted hover:bg-surface-high hover:text-text"><Icon name="close" /></button>
+              </div>
+              <label className="mt-4 flex flex-col gap-1 text-xs font-semibold text-text-muted">Call from
+                <select value={fromNumber} onChange={(e) => setFromNumber(e.target.value)} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary">
+                  {phoneNumbers.map((number) => <option key={number.id} value={number.number}>{number.label ? `${number.label} · ` : ''}{number.number}</option>)}
+                </select>
+              </label>
+              {phoneNumbers.length === 0 && <p className="mt-3 rounded-lg bg-amber/10 p-3 text-xs text-amber">No active phone number is assigned to an agent.</p>}
+              {callError && <p className="mt-3 rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{callError}</p>}
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" onClick={() => setCallingContact(null)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">Cancel</button>
+                <button type="button" onClick={placeCall} disabled={placingCall || !fromNumber} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50"><Icon name="call" className="text-[17px]" />{placingCall ? 'Placing call…' : 'Confirm real call'}</button>
+              </div>
+            </Card>
+          </div>
         )}
       </section>
     </DashboardLayout>

@@ -1,4 +1,5 @@
 import unittest
+import os
 import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -31,6 +32,20 @@ class EnableXEventRoutingTests(unittest.IsolatedAsyncioTestCase):
         outbound = {"direction": "outbound", "from": "+91111", "to": "+91222"}
         self.assertEqual(server._event_number_candidates(inbound), ["+91222", "+91111"])
         self.assertEqual(server._event_number_candidates(outbound), ["+91111", "+91222"])
+
+    def test_privileged_routes_fail_closed_without_service_secret(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(Exception, "not configured"):
+                server._require_service_secret("anything")
+
+    def test_privileged_routes_reject_wrong_service_secret(self) -> None:
+        with patch.dict(os.environ, {"ORCHESTRATOR_SERVICE_SECRET": "correct"}, clear=True):
+            with self.assertRaisesRegex(Exception, "Invalid orchestrator"):
+                server._require_service_secret("wrong")
+
+    def test_privileged_routes_accept_service_secret(self) -> None:
+        with patch.dict(os.environ, {"ORCHESTRATOR_SERVICE_SECRET": "correct"}, clear=True):
+            self.assertIsNone(server._require_service_secret("correct"))
 
     async def test_connected_event_recovers_missing_incomingcall_context(self) -> None:
         event = {

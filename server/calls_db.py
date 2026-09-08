@@ -3728,6 +3728,8 @@ def _safe_json_loads(raw: str | None) -> dict:
 
 
 def create_contact(data: dict, account_id: int) -> None:
+    raw_phone = data.get("phone") or None
+    phone = _normalize_sip_number(raw_phone) if raw_phone else None
     conn = _connect()
     try:
         with conn:
@@ -3744,7 +3746,7 @@ def create_contact(data: dict, account_id: int) -> None:
                 (
                     account_id,
                     data.get("name", "Unknown"),
-                    data.get("phone") or None,
+                    phone,
                     data.get("email", ""),
                     data.get("company", ""),
                     json.dumps(data.get("customFields") or {}),
@@ -3753,6 +3755,85 @@ def create_contact(data: dict, account_id: int) -> None:
                     data.get("source", "manual"),
                 ),
             )
+    finally:
+        conn.close()
+
+
+def update_contact(contact_id: int, data: dict, account_id: int) -> dict | None:
+    """Update one tenant contact and keep any untouched paused/draft queue
+    snapshots in sync.
+
+    Campaign rows intentionally snapshot contact data at creation time. That
+    is correct once a dial has happened, but it made a pre-launch name or
+    phone correction in Contacts invisible to tomorrow's pending calls. Only
+    pending rows in non-running campaigns are updated here; historical and
+    in-flight rows are never rewritten.
+    """
+    conn = _connect()
+    try:
+        current = conn.execute(
+            "SELECT * FROM contacts WHERE id = ? AND account_id = ?", (contact_id, account_id)
+        ).fetchone()
+        if current is None:
+            return None
+
+        first_supplied = "firstName" in data
+        last_supplied = "lastName" in data
+        if first_supplied or last_supplied:
+            current_parts = (current["name"] or "").strip().split(None, 1)
+            first = str(data.get("firstName") if first_supplied else (current_parts[0] if current_parts else "")).strip()
+            last = str(data.get("lastName") if last_supplied else (current_parts[1] if len(current_parts) > 1 else "")).strip()
+            name = " ".join(part for part in (first, last) if part).strip() or "Unknown"
+        else:
+            name = str(data.get("name", current["name"]) or "").strip() or "Unknown"
+
+        raw_phone = str(data.get("phone", current["phone"] or "") or "").strip()
+        phone = _normalize_sip_number(raw_phone) if raw_phone else ""
+        if raw_phone and not re.fullmatch(r"\+[1-9]\d{7,14}", phone):
+            raise ValueError("Enter a valid phone number with country code")
+
+        duplicate = conn.execute(
+            "SELECT id FROM contacts WHERE account_id = ? AND phone = ? AND id <> ? LIMIT 1",
+            (account_id, phone or None, contact_id),
+        ).fetchone()
+        if phone and duplicate:
+            raise ValueError("Another contact already uses this phone number")
+
+        email = str(data.get("email", current["email"] or "") or "").strip()
+        company = str(data.get("company", current["company"] or "") or "").strip()
+        status = str(data.get("status", current["status"] or "new") or "new").strip()
+        custom_fields = (
+            data.get("customFields") if isinstance(data.get("customFields"), dict)
+            else _safe_json_loads(current["custom_fields"])
+        )
+        raw_tags = data.get("tags")
+        if isinstance(raw_tags, list):
+            tags_list = [str(tag).strip() for tag in raw_tags if str(tag).strip()]
+            # Preserve order while preventing duplicate routing labels.
+            tags = ",".join(dict.fromkeys(tags_list))
+        elif isinstance(raw_tags, str):
+            tags = ",".join(dict.fromkeys(t.strip() for t in raw_tags.split(",") if t.strip()))
+        else:
+            tags = current["tags"] or ""
+
+        old_norm = _normalize_phone(current["phone"] or "")
+        new_norm = _normalize_phone(phone)
+        custom_json = json.dumps(custom_fields or {})
+        with conn:
+            conn.execute(
+                f"UPDATE contacts SET name = ?, phone = ?, email = ?, company = ?, custom_fields = ?, "
+                f"status = ?, tags = ?, updated_at = {_NOW} WHERE id = ? AND account_id = ?",
+                (name, phone or None, email, company, custom_json, status, tags, contact_id, account_id),
+            )
+            if old_norm:
+                conn.execute(
+                    "UPDATE campaign_contacts SET name = ?, phone = ?, phone_norm = ?, company = ?, custom_fields = ? "
+                    "WHERE account_id = ? AND phone_norm = ? AND status = 'pending' "
+                    "AND campaign_id IN (SELECT id FROM campaigns WHERE account_id = ? "
+                    "AND status IN ('draft', 'paused', 'scheduled'))",
+                    (name, phone, new_norm, company, custom_json, account_id, old_norm, account_id),
+                )
+        return contact_detail(contact_id, account_id)
     finally:
         conn.close()
 

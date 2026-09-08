@@ -32,6 +32,16 @@ import plan_policy
 
 logger = logging.getLogger("vistrow-dialer")
 
+
+def _orchestrator_headers() -> dict[str, str]:
+    secret = os.environ.get("ORCHESTRATOR_SERVICE_SECRET", "").strip()
+    if not secret:
+        raise RuntimeError("ORCHESTRATOR_SERVICE_SECRET is not configured")
+    return {
+        "Content-Type": "application/json",
+        "X-Vistrow-Orchestrator-Secret": secret,
+    }
+
 # Accounts on the Railway-native orchestrator pipeline (see
 # calls_db.is_on_orchestrator_pipeline, the same per-account flag
 # server/token_api.py's /telephony/test-call and the inbound-event proxy
@@ -70,7 +80,7 @@ def _place_via_orchestrator(to_number: str, from_number: str, account_id: int, a
     request = urllib.request.Request(
         f"{orchestrator_url}/telephony/enablex/outbound-test-call",
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers=_orchestrator_headers(),
         method="POST",
     )
     try:

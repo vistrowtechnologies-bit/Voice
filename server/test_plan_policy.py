@@ -81,7 +81,8 @@ class PolicyTests(unittest.TestCase):
         connect = MagicMock(side_effect=psycopg.OperationalError("offline"))
         ns = {"dbconn": SimpleNamespace(connect=connect), "psycopg": psycopg,
               "plan_policy": plan_policy, "logger": logging.getLogger("test"),
-              "voice_catalog": None, "CONCURRENT_CALL_LIMITS": {"starter": 5}}
+              "voice_catalog": None, "CONCURRENT_CALL_LIMITS": {"starter": 5},
+              "_trial_credits_exhausted": lambda conn, account_id: False}
         fn = function_from_file(ROOT / "agent/db.py", "try_start_call", ns)
         self.assertFalse(fn("room", 1))
 
@@ -92,7 +93,8 @@ class PolicyTests(unittest.TestCase):
             {"plan": "starter", "is_platform_owner": 0}, None, {"c": 5}]
         ns = {"dbconn": SimpleNamespace(connect=lambda: conn), "psycopg": psycopg,
               "plan_policy": plan_policy, "logger": logging.getLogger("test"),
-              "voice_catalog": None, "CONCURRENT_CALL_LIMITS": {"starter": 5}}
+              "voice_catalog": None, "CONCURRENT_CALL_LIMITS": {"starter": 5},
+              "_trial_credits_exhausted": lambda conn, account_id: False}
         fn = function_from_file(ROOT / "agent/db.py", "try_start_call", ns)
         self.assertFalse(fn("room", 1))
         self.assertIn("FOR UPDATE", conn.execute.call_args_list[0].args[0])
@@ -145,7 +147,8 @@ class PolicyTests(unittest.TestCase):
             {"plan": "invalid", "is_platform_owner": 0}, None, {"c": 0}]
         ns = {"dbconn": SimpleNamespace(connect=lambda: conn), "psycopg": psycopg,
               "plan_policy": plan_policy, "logger": logging.getLogger("test"),
-              "voice_catalog": None, "CONCURRENT_CALL_LIMITS": {"starter": 5}}
+              "voice_catalog": None, "CONCURRENT_CALL_LIMITS": {"starter": 5},
+              "_trial_credits_exhausted": lambda conn, account_id: False}
         fn = function_from_file(ROOT / "agent/db.py", "try_start_call", ns)
         self.assertFalse(fn("room", 1))
 

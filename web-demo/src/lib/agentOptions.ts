@@ -269,7 +269,10 @@ export const MODEL_OPTIONS = [
 //
 // Reviving needs a reason beyond latency. PARKED_MODELS below only exists so
 // agent 26 ("Artha · Gemini Live test", account 2) still renders a label.
-export const ADMIN_ONLY_MODELS = [] as const
+// Keep an explicit item type even while the selectable admin-only list is
+// empty. `[] as const` becomes readonly never[], which makes modelLabel's
+// compatibility lookup fail the TypeScript production build.
+export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: string }[] = []
 
 const PARKED_MODELS = [
   { value: 'gemini-live', label: 'Gemini Live 2.5 (Preview)' },

@@ -2812,6 +2812,17 @@ class RealEstateAgent(Agent):
         )
 
     async def on_enter(self) -> None:
+        # Outbound carriers can expose early media (ringback/announcements)
+        # after reporting SIP 200/"active" but before the handset user is
+        # actually ready. Speaking on SIP active alone therefore loses the
+        # beginning of the opener. LiveKit's own outbound-agent guidance uses
+        # the safer conversational shape: let the recipient say "hello"
+        # first, then speak. Keep the configured outbound opening pending and
+        # release it from on_user_turn_completed after real speech arrives.
+        if self._direction == "outbound" and self._first_speaker != "user":
+            self.session.userdata["outbound_opening_pending"] = True
+            logger.info("outbound opening held until the recipient speaks")
+            return
         # first_speaker == 'user' means wait silently for the caller to open —
         # no greeting is ever queued, so away-tracking is valid immediately.
         if self._first_speaker == "user":
@@ -3059,6 +3070,29 @@ class RealEstateAgent(Agent):
                 _userdata["ending_call"] = True
                 await self.session.say(closing)
                 raise StopResponse()
+
+        # A live outbound recipient has now spoken. For a simple pickup such
+        # as "hello"/"जी बोलिए", play the tenant's configured
+        # permission-based opening verbatim and wait for their answer. If the
+        # recipient already said something substantive, do not ignore it or
+        # restart the call: let the LLM answer naturally, with a short
+        # introduction folded into that response.
+        if _userdata.pop("outbound_opening_pending", False):
+            _userdata["greeting_played"] = True
+            if self._welcome_message and _looks_like_opening_ack(text):
+                logger.info("recipient speech confirmed; playing held outbound opening")
+                await self.session.say(self._welcome_message)
+                raise StopResponse()
+            turn_ctx.add_message(
+                role="system",
+                content=(
+                    "This is the recipient's first live turn on an outbound call. They have "
+                    "already said something substantive, so do not ignore it and do not restart "
+                    "the conversation. Briefly introduce yourself and the reason for the call, "
+                    "then respond directly to what they said. Ask permission to continue only "
+                    "if it still reads naturally."
+                ),
+            )
 
         _last_assistant_text = ""
         for item in reversed(turn_ctx.items):
@@ -3727,9 +3761,9 @@ def _caller_number_from_sip(attrs: dict, participant) -> str | None:
 
 
 # How long to let a freshly-created outbound SIP participant publish its
-# sip.callStatus before giving up and greeting anyway. Generous enough to
-# cover attribute sync, short enough that a carrier which never sets it does
-# not leave the callee in silence.
+# sip.callStatus before logging that attribute propagation is unusually slow.
+# This is observability only: missing status must never be treated as an
+# answer, because doing so plays the opener into the ringing phase.
 _SIP_ATTR_GRACE_S = 3.0
 
 # How long to wait after answer for the first real audio frame from the
@@ -3827,12 +3861,11 @@ async def _wait_for_sip_answer(ctx: JobContext, participant, t0: float, timeout:
             status = status_of()
         if status is None:
             logger.warning(
-                "outbound leg published no sip.callStatus within %.1fs — greeting without "
-                "confirmation that anyone answered (room=%s)", _SIP_ATTR_GRACE_S, ctx.room.name,
+                "outbound leg published no sip.callStatus within %.1fs — continuing to hold "
+                "the greeting until answer is confirmed (room=%s)", _SIP_ATTR_GRACE_S, ctx.room.name,
             )
-            await settle_media()
-            return True
-        logger.info("[latency] sip.callStatus arrived as %r after waiting for it", status)
+        else:
+            logger.info("[latency] sip.callStatus arrived as %r after waiting for it", status)
 
     if status == "active":
         # Already answered when we got here — the dashboard-test shape. This
@@ -5511,6 +5544,11 @@ async def entrypoint(ctx: JobContext) -> None:
     ):
         await _hang_up(ctx.room.name)
         return
+    if call_context.get("direction") == "outbound":
+        _record_diagnostic(
+            "milestone", "connection", "Callee answered", "ok",
+            sipCallStatus="active",
+        )
     logger.info("[latency] session.start() beginning at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     await session.start(
         agent=agent,

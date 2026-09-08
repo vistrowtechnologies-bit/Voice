@@ -5,8 +5,17 @@ import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { StatTile } from '../components/ui/StatTile'
-import { addContactNote, deleteContactNote, fetchContactDetail, formatDateTime, formatDuration } from '../lib/api'
-import type { ContactDetail as ContactDetailType } from '../lib/types'
+import {
+  addContactNote,
+  callContactNow,
+  deleteContactNote,
+  fetchContactDetail,
+  fetchPhoneNumbers,
+  formatDateTime,
+  formatDuration,
+  updateContact,
+} from '../lib/api'
+import type { ContactDetail as ContactDetailType, PhoneNumber } from '../lib/types'
 
 const TABS = ['Activity', 'Calls', 'Campaigns', 'Notes'] as const
 type Tab = (typeof TABS)[number]
@@ -35,6 +44,22 @@ export function ContactDetail() {
   const [tab, setTab] = useState<Tab>('Activity')
   const [noteBody, setNoteBody] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
+  const [showCall, setShowCall] = useState(false)
+  const [savingContact, setSavingContact] = useState(false)
+  const [calling, setCalling] = useState(false)
+  const [callError, setCallError] = useState('')
+  const [numbers, setNumbers] = useState<PhoneNumber[]>([])
+  const [fromNumber, setFromNumber] = useState('')
+  const [editForm, setEditForm] = useState({
+    firstName: '',
+    lastName: '',
+    phone: '',
+    email: '',
+    company: '',
+    status: 'new',
+    tags: '',
+  })
 
   const reload = () => {
     if (!id) return
@@ -80,6 +105,64 @@ export function ContactDetail() {
       reload()
     } finally {
       setSavingNote(false)
+    }
+  }
+
+  const openEdit = () => {
+    const parts = contact.name.trim().split(/\s+/)
+    setEditForm({
+      firstName: parts[0] || '',
+      lastName: parts.slice(1).join(' '),
+      phone: contact.phone,
+      email: contact.email,
+      company: contact.company,
+      status: contact.status,
+      tags: contact.tags.join(', '),
+    })
+    setShowEdit(true)
+  }
+
+  const saveContact = async () => {
+    setSavingContact(true)
+    try {
+      const updated = await updateContact(contact.id, {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        phone: editForm.phone.trim(),
+        email: editForm.email.trim(),
+        company: editForm.company.trim(),
+        status: editForm.status,
+        tags: editForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+      })
+      setContact(updated)
+      setShowEdit(false)
+    } finally {
+      setSavingContact(false)
+    }
+  }
+
+  const openCall = async () => {
+    setCallError('')
+    const available = (await fetchPhoneNumbers()).filter((number) => number.status === 'active' && number.agentId)
+    setNumbers(available)
+    setFromNumber(available[0]?.number || '')
+    setShowCall(true)
+  }
+
+  const placeCall = async () => {
+    setCalling(true)
+    setCallError('')
+    try {
+      const result = await callContactNow(contact.id, fromNumber)
+      if (!result.ok) {
+        setCallError(result.error || 'The call could not be placed.')
+        return
+      }
+      setShowCall(false)
+    } catch (error) {
+      setCallError(error instanceof Error ? error.message : 'The call could not be placed.')
+    } finally {
+      setCalling(false)
     }
   }
 
@@ -138,7 +221,95 @@ export function ContactDetail() {
               )}
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={openEdit}
+              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold transition-colors hover:border-primary hover:text-primary"
+            >
+              <Icon name="edit" className="text-[17px]" />
+              Edit contact
+            </button>
+            <button
+              onClick={openCall}
+              disabled={!contact.phone}
+              className="flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Icon name="call" className="text-[17px]" />
+              Call now
+            </button>
+          </div>
         </Card>
+
+        {showEdit && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Edit contact">
+            <Card padding="sm" className="w-full max-w-2xl bg-surface shadow-2xl">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold">Edit contact</h2>
+                  <p className="text-xs text-text-muted">Changes also update untouched calls in paused campaigns.</p>
+                </div>
+                <button onClick={() => setShowEdit(false)} aria-label="Close edit contact" className="rounded p-2 text-text-muted hover:bg-surface-high hover:text-text">
+                  <Icon name="close" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <EditField label="First name" value={editForm.firstName} onChange={(value) => setEditForm({ ...editForm, firstName: value })} />
+                <EditField label="Last name" value={editForm.lastName} onChange={(value) => setEditForm({ ...editForm, lastName: value })} />
+                <EditField label="Phone" value={editForm.phone} onChange={(value) => setEditForm({ ...editForm, phone: value })} placeholder="+919812345678" />
+                <EditField label="Email" type="email" value={editForm.email} onChange={(value) => setEditForm({ ...editForm, email: value })} />
+                <EditField label="Organization" value={editForm.company} onChange={(value) => setEditForm({ ...editForm, company: value })} />
+                <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
+                  Status
+                  <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary">
+                    <option value="new">New</option>
+                    <option value="qualified">Qualified</option>
+                    <option value="site_visit">Site visit</option>
+                    <option value="customer">Customer</option>
+                  </select>
+                </label>
+                <div className="sm:col-span-2">
+                  <EditField label="Tags" value={editForm.tags} onChange={(value) => setEditForm({ ...editForm, tags: value })} placeholder="meta-lead, vistrow-outbound-ready" />
+                  <p className="mt-1 text-[11px] text-text-muted">Comma-separated. Routing tags are used when a campaign queue is created.</p>
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <button onClick={() => setShowEdit(false)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">Cancel</button>
+                <button onClick={saveContact} disabled={savingContact || !editForm.firstName.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50">
+                  {savingContact ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {showCall && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Call contact now">
+            <Card padding="sm" className="w-full max-w-md bg-surface shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold">Call {contact.name} now?</h2>
+                  <p className="mt-1 text-xs text-text-muted">This places a real call to {contact.phone}. Credits and calling-window rules apply.</p>
+                </div>
+                <button onClick={() => setShowCall(false)} aria-label="Close call confirmation" className="rounded p-2 text-text-muted hover:bg-surface-high hover:text-text"><Icon name="close" /></button>
+              </div>
+              <label className="mt-4 flex flex-col gap-1 text-xs font-semibold text-text-muted">
+                Call from
+                <select value={fromNumber} onChange={(e) => setFromNumber(e.target.value)} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary">
+                  {numbers.map((number) => <option key={number.id} value={number.number}>{number.label ? `${number.label} · ` : ''}{number.number}</option>)}
+                </select>
+              </label>
+              {numbers.length === 0 && <p className="mt-3 rounded-lg bg-amber/10 p-3 text-xs text-amber">Assign an active phone number to an agent first.</p>}
+              {callError && <p className="mt-3 rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{callError}</p>}
+              <div className="mt-5 flex justify-end gap-2">
+                <button onClick={() => setShowCall(false)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">Cancel</button>
+                <button onClick={placeCall} disabled={calling || !fromNumber} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50">
+                  <Icon name="call" className="text-[17px]" />
+                  {calling ? 'Placing call…' : 'Confirm call'}
+                </button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Stat strip */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">
@@ -407,6 +578,15 @@ function SnapshotBox({ label, value }: { label: string; value: string }) {
         {value}
       </p>
     </div>
+  )
+}
+
+function EditField({ label, value, onChange, placeholder, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string }) {
+  return (
+    <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
+      {label}
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm font-normal text-text outline-none focus:border-primary" />
+    </label>
   )
 }
 

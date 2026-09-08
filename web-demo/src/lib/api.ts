@@ -90,13 +90,26 @@ export function fetchEntitlements() {
   return get<AccountEntitlements>('/entitlements')
 }
 
-export function fetchCalls(params?: { search?: string; status?: string; days?: number }) {
+export function fetchCalls(params?: { search?: string; status?: string; days?: number; limit?: number; offset?: number }) {
   const q = new URLSearchParams()
   if (params?.search) q.set('search', params.search)
   if (params?.status) q.set('status', params.status)
   if (params?.days) q.set('days', String(params.days))
+  if (params?.limit) q.set('limit', String(params.limit))
+  if (params?.offset) q.set('offset', String(params.offset))
   const qs = q.toString()
   return get<CallRecord[]>(`/calls${qs ? `?${qs}` : ''}`)
+}
+
+/** Load the complete lightweight history in bounded pages. */
+export async function fetchAllCalls(): Promise<CallRecord[]> {
+  const pageSize = 500
+  const rows: CallRecord[] = []
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await fetchCalls({ limit: pageSize, offset })
+    rows.push(...page)
+    if (page.length < pageSize) return rows
+  }
 }
 
 export const fetchLeads = () => get<CallRecord[]>('/leads')
@@ -195,6 +208,10 @@ export const deleteApiKey = (id: number) => send('DELETE', `/api-keys/${id}`)
 
 export const fetchContacts = () => get<Contact[]>('/contacts')
 export const createContact = (data: Partial<Contact>) => send('POST', '/contacts', data)
+export const updateContact = (id: number, data: Partial<Contact> & { firstName?: string; lastName?: string }) =>
+  send<ContactDetail>('PATCH', `/contacts/${id}`, data)
+export const callContactNow = (id: number, fromNumber: string) =>
+  send<{ ok: boolean; error?: string; response?: unknown }>('POST', `/contacts/${id}/call`, { fromNumber })
 export const deleteContact = (id: number) => send('DELETE', `/contacts/${id}`)
 export const deleteAllContacts = () => send('DELETE', '/contacts')
 export const contactsExportUrl = '/api/contacts/export.csv'

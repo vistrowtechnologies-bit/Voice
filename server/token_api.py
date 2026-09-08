@@ -2845,6 +2845,83 @@ def create_contact(data: dict = Body(...), user: dict = Depends(current_user)) -
     return {"ok": True}
 
 
+@app.patch("/contacts/{contact_id}")
+def update_contact(contact_id: int, data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
+    try:
+        detail = calls_db.update_contact(contact_id, data, user["account_id"])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if detail is None:
+        raise HTTPException(404, "Contact not found")
+    return detail
+
+
+@app.post("/contacts/{contact_id}/call")
+def call_contact_now(contact_id: int, data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
+    """Place one deliberate, compliance-gated call with this contact's live
+    name/company/custom context. This is separate from campaign state, so it
+    cannot double-claim or mutate a paused campaign queue row.
+    """
+    contact = calls_db.contact_detail(contact_id, user["account_id"])
+    if contact is None:
+        raise HTTPException(404, "Contact not found")
+    to_number = (contact.get("phone") or "").strip()
+    if not to_number:
+        raise HTTPException(400, "Add a valid phone number before calling this contact")
+    from_number = (data.get("fromNumber") or "").strip()
+    number = calls_db.get_phone_number_by_number(from_number)
+    if not number or number.get("accountId") != user["account_id"] or number.get("status") != "active":
+        raise HTTPException(400, "Choose an active phone number from this workspace")
+    agent_id = number.get("agentId")
+    if not agent_id:
+        raise HTTPException(400, "Assign an agent to this number before placing the call")
+
+    custom = dict(contact.get("customFields") or {})
+    custom["tags"] = ",".join(contact.get("tags") or [])
+    custom_json = json.dumps(custom)
+    orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
+    if orchestrator_url and calls_db.is_on_orchestrator_pipeline(user["account_id"]):
+        try:
+            request = urllib.request.Request(
+                f"{orchestrator_url.rstrip('/')}/telephony/enablex/outbound-test-call",
+                data=json.dumps({
+                    "to": to_number,
+                    "fromNumber": from_number,
+                    "accountId": user["account_id"],
+                    "agentId": agent_id,
+                    "contactName": contact.get("name", ""),
+                    "contactEmail": contact.get("email", ""),
+                    "contactCompany": contact.get("company", ""),
+                    "contactCustomFields": custom_json,
+                }).encode(),
+                headers=_orchestrator_headers(json_body=True),
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=15) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as exc:
+            logger.exception("orchestrator contact call failed")
+            return {"ok": False, "error": f"Could not reach the calling service: {exc}"}
+
+    return calls_db.place_outbound_call_direct(
+        to_number,
+        from_number,
+        user["account_id"],
+        agent_id,
+        contact_name=contact.get("name", ""),
+        contact_email=contact.get("email", ""),
+        contact_company=contact.get("company", ""),
+        contact_custom_fields=custom_json,
+        # This is a deliberate one-off operator test, so follow LiveKit's
+        # safest outbound contract: do not return or dispatch the agent until
+        # the destination has actually answered. Campaign dials use their
+        # own concurrent path and are independently answer-gated in the
+        # worker before session.start().
+        wait_for_answer=True,
+        is_test=False,
+    )
+
+
 @app.delete("/contacts/{contact_id}")
 def delete_contact(contact_id: int, user: dict = Depends(current_user)) -> dict:
     calls_db.delete_contact(contact_id, user["account_id"])

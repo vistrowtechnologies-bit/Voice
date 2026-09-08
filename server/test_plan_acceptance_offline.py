@@ -106,7 +106,7 @@ class OfflinePlanAcceptance(unittest.TestCase):
                 with self.subTest(plan=plan, count=count):
                     conn = MagicMock()
                     conn.execute.return_value.fetchone.side_effect = [{"plan": plan, "is_platform_owner": 0}, None, {"c": count}]
-                    fn = function_from_file(ROOT / "agent/db.py", "try_start_call", {"dbconn": SimpleNamespace(connect=lambda: conn), "psycopg": psycopg, "plan_policy": plan_policy, "logger": logging.getLogger("test"), "voice_catalog": None, "CONCURRENT_CALL_LIMITS": limits})
+                    fn = function_from_file(ROOT / "agent/db.py", "try_start_call", {"dbconn": SimpleNamespace(connect=lambda: conn), "psycopg": psycopg, "plan_policy": plan_policy, "logger": logging.getLogger("test"), "voice_catalog": None, "CONCURRENT_CALL_LIMITS": limits, "_trial_credits_exhausted": lambda conn, account_id: False})
                     self.assertEqual(fn("synthetic-room", 901), count < cap)
                     self.assertEqual(any("INSERT" in c.args[0] for c in conn.execute.call_args_list), count < cap)
 
@@ -139,7 +139,7 @@ class OfflinePlanAcceptance(unittest.TestCase):
             with self.subTest(room_owner=owner):
                 conn = MagicMock()
                 conn.execute.return_value.fetchone.side_effect = [{"plan": "starter", "is_platform_owner": 0}, {"account_id": owner}]
-                fn = function_from_file(ROOT / "agent/db.py", "try_start_call", {"dbconn": SimpleNamespace(connect=lambda: conn), "psycopg": psycopg, "plan_policy": plan_policy, "logger": logging.getLogger("test"), "voice_catalog": None, "CONCURRENT_CALL_LIMITS": {"starter": 5}})
+                fn = function_from_file(ROOT / "agent/db.py", "try_start_call", {"dbconn": SimpleNamespace(connect=lambda: conn), "psycopg": psycopg, "plan_policy": plan_policy, "logger": logging.getLogger("test"), "voice_catalog": None, "CONCURRENT_CALL_LIMITS": {"starter": 5}, "_trial_credits_exhausted": lambda conn, account_id: False})
                 self.assertEqual(fn("same-room", 901), owner == 901)
                 self.assertFalse(any("INSERT" in c.args[0] for c in conn.execute.call_args_list))
 

@@ -86,7 +86,7 @@ function DesktopNav() {
   }, [open])
 
   return (
-    <nav className="hidden items-center gap-1 lg:flex">
+    <nav className="hidden shrink-0 items-center gap-1 whitespace-nowrap xl:flex">
       {NAV.map((group) => {
         const isOpen = open === group.label
         const wide = (group.items?.length ?? 0) > NAV_TWO_COLUMN_THRESHOLD
@@ -170,7 +170,7 @@ function MobileNav({ onClose }: { onClose: () => void }) {
   const [openGroup, setOpenGroup] = useState<string | null>(null)
 
   return (
-    <div className="fixed inset-0 z-50 lg:hidden">
+    <div className="fixed inset-0 z-50 xl:hidden">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="absolute right-0 top-0 flex h-full w-80 max-w-[85%] flex-col overflow-y-auto border-l border-border bg-surface p-6">
         <div className="mb-6 flex items-center justify-between">
@@ -285,15 +285,15 @@ function Header() {
     <>
       <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3.5 md:px-8">
-          <NavLink to="/" className="flex items-center gap-2">
+          <NavLink to="/" className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             <OrbMark />
             <span className="font-display text-lg font-semibold tracking-tight">{BRAND.name}</span>
-            <span className="hidden font-mono text-xs text-text-muted sm:inline">by Vistrow</span>
+            <span className="hidden font-mono text-xs text-text-muted 2xl:inline">by Vistrow</span>
           </NavLink>
 
           <DesktopNav />
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             <MarketingThemeSwitcher />
             <NavLink
               to="/login"
@@ -310,7 +310,7 @@ function Header() {
               Book a demo
             </NavLink>
             <button
-              className="text-text-muted hover:text-text lg:hidden"
+              className="text-text-muted hover:text-text xl:hidden"
               onClick={() => setMobileOpen(true)}
               aria-label="Open menu"
             >

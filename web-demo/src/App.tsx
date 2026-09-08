@@ -211,6 +211,7 @@ function App() {
           path="/dashboard/leads/:id"
           element={guard(<CallDetailModalRoute cameFromList={Boolean(backgroundLocation)} />)}
         />
+        <Route path="*" element={null} />
       </Routes>
     </AuthProvider>
   )

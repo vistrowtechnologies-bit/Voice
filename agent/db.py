@@ -90,6 +90,63 @@ CREATE INDEX IF NOT EXISTS idx_active_calls_account ON active_calls(account_id);
 # separate deployables with separate venvs (see module docstring above).
 CONCURRENT_CALL_LIMITS = {key: value["concurrency"] for key, value in plan_policy.PLANS.items()}
 
+_VOICE_TIER_MULTIPLIERS = {"economy": 0.75, "standard": 1.0, "premium": 2.0}
+_MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0}
+_PREMIUM_MODELS = {"gpt-4.1-mini", "gemini-3.5-flash-lite", "gemini-3.6-flash"}
+_PREMIUM_PLUS_MODELS = {"gpt-4.1", "gpt-4o"}
+
+
+def _trial_credits_exhausted(conn, account_id: int) -> bool:
+    """Fail closed for exhausted unpaid/trial workspaces.
+
+    Active paid subscriptions may exceed their allowance because overage is
+    invoiced. Accounts without an active collection method must stop at their
+    configured allowance instead of creating uncollectable vendor spend.
+    """
+    sub = conn.execute(
+        "SELECT status, current_period_start FROM subscriptions WHERE account_id = ?",
+        (account_id,),
+    ).fetchone()
+    if sub and sub["status"] == "active":
+        return False
+    total_row = conn.execute(
+        "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total'",
+        (account_id,),
+    ).fetchone()
+    credits_total = float(total_row["value"]) if total_row else 0.0
+    if credits_total <= 0:
+        return True
+    period_start = sub["current_period_start"] if sub and sub["current_period_start"] else None
+    if not period_start:
+        period_start = conn.execute("SELECT date_trunc('month', now())::text AS s").fetchone()["s"]
+    rates = {}
+    for call_type in ("browser", "widget", "phone"):
+        rate_row = conn.execute(
+            "SELECT value FROM settings WHERE account_id = ? AND key = ?",
+            (account_id, f"credit_rate_{call_type}"),
+        ).fetchone()
+        rates[call_type] = float(rate_row["value"]) if rate_row else 1.0
+    rows = conn.execute(
+        "SELECT COALESCE(call_type, 'browser') call_type, voice, model, "
+        "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls "
+        "WHERE account_id = ? AND started_at >= ? "
+        "AND room_name NOT LIKE ? AND room_name NOT LIKE ? "
+        "GROUP BY call_type, voice, model",
+        (account_id, period_start, "test-phone-%", "test-agent-%"),
+    ).fetchall()
+    used = 0.0
+    for usage in rows:
+        call_type = usage["call_type"] if usage["call_type"] in rates else "browser"
+        entry = voice_catalog.get_voice(usage["voice"] or "") or {}
+        voice_mult = _VOICE_TIER_MULTIPLIERS.get(entry.get("tier"), 1.0)
+        model = usage["model"] or ""
+        model_tier = "premium_plus" if model in _PREMIUM_PLUS_MODELS else "premium" if model in _PREMIUM_MODELS else "standard"
+        used += float(usage["m"] or 0) * max(
+            0.75,
+            rates[call_type] * voice_mult * _MODEL_TIER_MULTIPLIERS[model_tier],
+        )
+    return used >= credits_total
+
 
 def init_db() -> None:
     conn = dbconn.connect()
@@ -122,6 +179,7 @@ def init_db() -> None:
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS test_scenario_name TEXT DEFAULT ''")
             # Mirrors server/calls_db.py — see its migration for what each holds.
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS disconnect_reason TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS failure_reason TEXT")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS tool_calls_json TEXT DEFAULT ''")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS page_path TEXT DEFAULT ''")
     finally:
@@ -850,9 +908,11 @@ def try_start_call(room_name: str, account_id: int | None, config: dict | None =
     try:
         conn = dbconn.connect()
         row = conn.execute(
-            "SELECT plan, is_platform_owner FROM accounts WHERE id = ? FOR UPDATE", (account_id,)
+            "SELECT plan, is_platform_owner, status FROM accounts WHERE id = ? FOR UPDATE", (account_id,)
         ).fetchone()
         if not row:
+            return False
+        if (row.get("status") or "active") != "active":
             return False
         if config is not None:
             plan_policy.validate_agent(conn, account_id, config, voice_catalog)
@@ -865,6 +925,8 @@ def try_start_call(room_name: str, account_id: int | None, config: dict | None =
         if row and row["is_platform_owner"]:
             limit = None
         else:
+            if _trial_credits_exhausted(conn, account_id):
+                return False
             plan = row["plan"] or ""
             limit = CONCURRENT_CALL_LIMITS.get(plan, 0)
         if limit is not None:
@@ -1009,9 +1071,9 @@ def save_call(record: dict) -> int | None:
                     lead_use_case, lead_team_size, site_visit_json,
                     transcript_json, call_type, direction, site_id, agent_id, account_id,
                     extracted_data, latency_metrics_json, diagnostic_events_json,
-                    disconnect_reason, tool_calls_json, page_path, test_run_id,
+                    failure_reason, disconnect_reason, tool_calls_json, page_path, test_run_id,
                     test_scenario_id, test_scenario_key, test_scenario_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -1044,6 +1106,7 @@ def save_call(record: dict) -> int | None:
                     else "",
                     json.dumps(record.get("latency_metrics") or {}, ensure_ascii=False),
                     json.dumps(record.get("diagnostic_events") or [], ensure_ascii=False),
+                    record.get("failure_reason") or None,
                     record.get("disconnect_reason") or "",
                     json.dumps(record["tool_calls"], ensure_ascii=False)
                     if record.get("tool_calls")

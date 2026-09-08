@@ -56,7 +56,7 @@ export function Pricing() {
           Start with one knowledgeable agent. Add campaign automation, integrations, and API access as you grow.
         </p>
         <p className="mx-auto mt-3 max-w-xl text-sm text-text-muted">
-          Monthly prices below exclude applicable taxes and telephony. Credits are shared across calls; voice and model choices affect credits per minute. Contact us to confirm activation and supported telephony configuration.
+          All plans include voice conversations, your website widget, and call insights. Choose the agent capacity and automation your team needs.
         </p>
       </section>
 
@@ -66,11 +66,12 @@ export function Pricing() {
             <div key={plan.key} className="flex flex-col rounded-2xl border border-border bg-surface p-7">
               <h3 className="font-display text-lg font-semibold">{plan.name}</h3>
               <p className="mt-3 text-3xl font-bold">{plan.price}<span className="text-sm font-normal text-text-muted"> / month</span></p>
-              <p className="mt-2 text-sm text-text-muted">{plan.credits} · {plan.description}</p>
+              <p className="mt-3 font-semibold text-cyan">{plan.credits}</p>
+              <p className="mt-2 text-sm text-text-muted">{plan.description}</p>
               <ul className="mt-6 flex flex-1 flex-col gap-2.5">
                 {planHighlights(plan).map((feat) => <li key={feat} className="flex items-start gap-2 text-sm text-text-muted"><Icon name="check_circle" className="mt-0.5 text-[16px] text-cyan" />{feat}</li>)}
               </ul>
-              <p className="mt-5 text-xs text-text-muted">Not included: {plan.lockedFeatures?.join(', ') || 'Usage beyond your allowances; separately billed telephony'}.</p>
+              <p className="mt-5 text-xs text-text-muted">{plan.key === 'starter' ? 'Need campaigns, CRM integration, or a live catalog? Choose Growth.' : plan.key === 'growth' ? 'Need API access or premium voices? Choose Scale.' : 'Need more agents or capacity? Talk to us about a custom plan.'}</p>
               <NavLink to="/contact" className="mt-6 rounded-full border border-primary px-5 py-3 text-center text-sm font-bold text-primary">Discuss {plan.name}</NavLink>
             </div>
           ))}
@@ -82,8 +83,8 @@ export function Pricing() {
           </ul>
           <p className="mt-4 text-sm text-text-muted">Basic inbound calling requires a configured, supported number. Advanced inbound routing and outbound campaigns require Growth or Scale. Telephony is billed separately.</p>
         </details>
-        <p className="mt-5 text-center text-sm text-text-muted">Activation is currently assisted by our team. Online checkout is not yet available.</p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3"><NavLink to="/signup" className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-white">Join public beta</NavLink><NavLink to="/contact" className="rounded-full border border-border px-6 py-3 text-sm font-bold">Discuss call volume</NavLink></div>
+        <p className="mt-5 text-center text-sm text-text-muted">Prices are in INR per month, excluding applicable taxes and telephony. Voice and model choices affect credits per minute.</p>
+        <p className="mt-3 text-center text-sm text-text-muted">Not sure which plan fits? Our team can help estimate your usage and arrange setup.</p>
       </section>
 
       {/* FAQ */}

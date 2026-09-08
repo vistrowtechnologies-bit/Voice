@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon'
 import { useAuth } from '../lib/auth'
 import { trackQualifyLead } from '../lib/analytics'
 import { AuthInput, AuthShell, PasswordVisibilityToggle, SocialButtons, useShake } from './AuthShell'
+import { COMMON_DIAL_CODES } from '../lib/phone'
 
 // Cheap client-side password strength: length + character-class variety.
 // Purely for the meter/feedback - the server enforces the 8-char minimum.
@@ -33,19 +34,6 @@ const REFERRAL_SOURCES = [
   'Blog / Article',
   'Product Hunt',
   'Other',
-]
-
-// Common dial codes, India first since that's this product's core market.
-// Phone is plain data collection only - email is the verified identity here,
-// so there's no OTP flow attached to this field.
-const DIAL_CODES = [
-  { code: 'IN', dial: '+91' },
-  { code: 'US', dial: '+1' },
-  { code: 'GB', dial: '+44' },
-  { code: 'AE', dial: '+971' },
-  { code: 'SG', dial: '+65' },
-  { code: 'AU', dial: '+61' },
-  { code: 'CA', dial: '+1' },
 ]
 
 export function Signup() {
@@ -136,7 +124,7 @@ export function Signup() {
               aria-label="Country dial code"
               className="rounded-lg border border-border bg-surface-high px-2 text-sm text-text outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
             >
-              {DIAL_CODES.map((c) => (
+              {COMMON_DIAL_CODES.map((c) => (
                 <option key={c.code} value={c.dial}>
                   {c.code} {c.dial}
                 </option>

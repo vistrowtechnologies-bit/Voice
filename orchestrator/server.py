@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import audioop
 import base64
+import hmac
 import itertools
 import json
 import logging
@@ -32,7 +33,7 @@ import time
 import uuid
 
 import numpy as np
-from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 import audio
@@ -55,12 +56,38 @@ app = FastAPI(title="Vistrow Voice orchestrator (Phase 2/3 — EnableX + browser
 # widget), a different origin than this service. Wide open for the Phase 3
 # proving stage; tighten to the actual widget/marketing origins before the
 # real cutover.
+_ALLOWED_BROWSER_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "ORCHESTRATOR_ALLOWED_ORIGINS",
+        "https://app.vistrowvoice.com,https://www.vistrowvoice.com,https://vistrowvoice.com",
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_BROWSER_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+def _require_service_secret(
+    x_vistrow_orchestrator_secret: str | None = Header(default=None),
+) -> None:
+    """Authenticate privileged calls made by the main Voice API.
+
+    Fail closed when the deployment has not been configured. Browser clients
+    never receive this secret; they call the authenticated/rate-limited Voice
+    API proxy instead.
+    """
+    expected = os.environ.get("ORCHESTRATOR_SERVICE_SECRET", "").strip()
+    supplied = (x_vistrow_orchestrator_secret or "").strip()
+    if not expected:
+        raise HTTPException(503, "Orchestrator service authentication is not configured.")
+    if not supplied or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(401, "Invalid orchestrator service credentials.")
 
 # --- Phase 2 feature flag: ONE test number, hardcoded via env vars rather
 # than the production phone_numbers table, so this can't accidentally pick
@@ -363,7 +390,10 @@ async def _build_session(
 
 
 @app.post("/telephony/enablex/outbound-test-call")
-async def enablex_outbound_test_call(body: dict = Body(...)) -> dict:
+async def enablex_outbound_test_call(
+    body: dict = Body(...),
+    _: None = Depends(_require_service_secret),
+) -> dict:
     """Places an outbound call from fromNumber/TEST_PHONE_NUMBER to `to`.
     Streaming starts on the `connected` webhook event, same as inbound —
     see enablex.place_outbound_call's docstring.
@@ -937,7 +967,11 @@ async def stream_ws(websocket: WebSocket, token: str) -> None:
 
 
 @app.get("/browser/token")
-async def browser_token(account_id: int | None = None, agent_id: int | None = None) -> dict:
+async def browser_token(
+    account_id: int | None = None,
+    agent_id: int | None = None,
+    _: None = Depends(_require_service_secret),
+) -> dict:
     account_id = account_id or TEST_ACCOUNT_ID or None
     agent_id = agent_id or TEST_AGENT_ID or None
     if not account_id or not agent_id:
@@ -951,7 +985,9 @@ async def browser_token(account_id: int | None = None, agent_id: int | None = No
 
 
 @app.get("/browser/token/platform-demo")
-async def browser_token_platform_demo() -> dict:
+async def browser_token_platform_demo(
+    _: None = Depends(_require_service_secret),
+) -> dict:
     """Public (no auth) token for the marketing site's live demo — used as
     a fallback when LiveKit's demo worker doesn't pick up (see
     server/token_api.py's /orchestrator/platform-demo-token, which is the
