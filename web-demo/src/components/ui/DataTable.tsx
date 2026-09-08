@@ -202,7 +202,7 @@ export function DataTable<T>({
   if (loading) {
     const placeholders = Array.from({ length: skeletonRows }, (_, i) => i)
     return (
-      <Card variant="default" padding="none">
+      <Card variant="default" padding="none" className="overflow-hidden">
         <div className="animate-pulse" aria-hidden="true">
           {/* Desktop/tablet: same table, same columns, placeholder cells */}
           <div className="hidden overflow-x-auto lg:block">
@@ -269,7 +269,7 @@ export function DataTable<T>({
   }
 
   return (
-    <Card variant="default" padding="none">
+    <Card variant="default" padding="none" className="overflow-hidden">
       {rows.length === 0 ? (
         <div className="px-5 py-10 text-center text-sm text-text-muted">{emptyMessage}</div>
       ) : (

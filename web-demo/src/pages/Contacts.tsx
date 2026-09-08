@@ -18,6 +18,7 @@ import {
   formatRelativeTime,
   importContactsMapped,
   previewContactsImport,
+  updateContact,
 } from '../lib/api'
 import type { Contact, CsvPreview, PhoneNumber } from '../lib/types'
 import { composeE164, isE164 } from '../lib/phone'
@@ -72,6 +73,10 @@ export function Contacts() {
   const [importing, setImporting] = useState(false)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [showBulkUpdate, setShowBulkUpdate] = useState(false)
+  const [bulkUpdating, setBulkUpdating] = useState(false)
+  const [bulkUpdateError, setBulkUpdateError] = useState('')
+  const [bulkForm, setBulkForm] = useState({ status: '', tags: '' })
   const [loading, setLoading] = useState(true)
   const [callingContact, setCallingContact] = useState<Contact | null>(null)
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([])
@@ -257,6 +262,57 @@ export function Contacts() {
       reload()
     } finally {
       setBulkDeleting(false)
+    }
+  }
+
+  const selectedContacts = contacts.filter((contact) => selected.has(contact.id))
+
+  const downloadSelectedContacts = () => {
+    const escapeCell = (value: string) => `"${value.replace(/"/g, '""')}"`
+    const rows = [
+      ['Name', 'Phone', 'Email', 'Company', 'Status', 'Tags', 'Source'],
+      ...selectedContacts.map((contact) => [
+        contact.name,
+        contact.phone,
+        contact.email,
+        contact.company,
+        contact.status,
+        contact.tags.join(', '),
+        contact.source,
+      ]),
+    ]
+    const csv = rows.map((row) => row.map((cell) => escapeCell(String(cell ?? ''))).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `vistrow-selected-contacts-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const applyBulkUpdate = async () => {
+    const tagsToAdd = bulkForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean)
+    if (!bulkForm.status && tagsToAdd.length === 0) {
+      setBulkUpdateError('Choose a status or enter at least one tag.')
+      return
+    }
+    setBulkUpdating(true)
+    setBulkUpdateError('')
+    try {
+      for (let index = 0; index < selectedContacts.length; index += 10) {
+        await Promise.all(selectedContacts.slice(index, index + 10).map((contact) => updateContact(contact.id, {
+          ...(bulkForm.status ? { status: bulkForm.status } : {}),
+          ...(tagsToAdd.length > 0 ? { tags: [...new Set([...contact.tags, ...tagsToAdd])] } : {}),
+        })))
+      }
+      setShowBulkUpdate(false)
+      setBulkForm({ status: '', tags: '' })
+      setSelected(new Set())
+      await reload()
+    } catch (error) {
+      setBulkUpdateError(error instanceof Error ? error.message : 'Could not update the selected contacts.')
+    } finally {
+      setBulkUpdating(false)
     }
   }
 
@@ -452,6 +508,22 @@ export function Contacts() {
                 Clear
               </button>
               <button
+                type="button"
+                onClick={() => { setBulkUpdateError(''); setShowBulkUpdate(true) }}
+                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-text hover:border-primary hover:text-primary"
+              >
+                <Icon name="edit_note" className="text-[16px]" />
+                Bulk update
+              </button>
+              <button
+                type="button"
+                onClick={downloadSelectedContacts}
+                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-text hover:border-primary hover:text-primary"
+              >
+                <Icon name="download" className="text-[16px]" />
+                Export selected
+              </button>
+              <button
                 onClick={handleBulkDelete}
                 disabled={bulkDeleting}
                 className="flex items-center gap-1 rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50"
@@ -459,7 +531,7 @@ export function Contacts() {
                 <Icon name="delete" className="text-[15px]" />
                 {bulkDeleting ? 'Deleting…' : 'Delete selected'}
               </button>
-              <span className="ml-auto text-xs text-text-muted">Select rows below to update this group</span>
+              <span className="ml-auto hidden text-xs text-text-muted xl:inline">Status and tags can be updated without starting a campaign</span>
             </>
           ) : (
             <>
@@ -663,6 +735,49 @@ export function Contacts() {
               </button>
             </div>
           </Card>
+        )}
+
+        {showBulkUpdate && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Bulk update contacts">
+            <Card padding="sm" className="w-full max-w-lg bg-surface shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold">Update {selected.size} contacts</h2>
+                  <p className="mt-1 text-xs text-text-muted">Change their CRM status or add tags used for filtering and campaign segments. This will not start a campaign.</p>
+                </div>
+                <button type="button" onClick={() => setShowBulkUpdate(false)} aria-label="Close bulk update" className="rounded-md p-2 text-text-muted hover:bg-surface-high hover:text-text">
+                  <Icon name="close" />
+                </button>
+              </div>
+              <div className="mt-5 grid gap-4">
+                <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">
+                  Change status
+                  <select value={bulkForm.status} onChange={(event) => { setBulkForm({ ...bulkForm, status: event.target.value }); setBulkUpdateError('') }} className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm text-text outline-none focus:border-primary">
+                    <option value="">Keep current status</option>
+                    <option value="new">New</option>
+                    <option value="qualified">Qualified</option>
+                    <option value="site_visit">Site visit</option>
+                    <option value="customer">Customer</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">
+                  Add tags
+                  <input
+                    value={bulkForm.tags}
+                    onChange={(event) => { setBulkForm({ ...bulkForm, tags: event.target.value }); setBulkUpdateError('') }}
+                    placeholder="e.g. website-lead, follow-up-september"
+                    className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm text-text outline-none focus:border-primary"
+                  />
+                  <span className="font-normal">Existing tags are preserved. Separate new tags with commas.</span>
+                </label>
+              </div>
+              {bulkUpdateError && <p className="mt-4 rounded-lg bg-destructive/10 p-3 text-xs font-semibold text-destructive">{bulkUpdateError}</p>}
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" onClick={() => setShowBulkUpdate(false)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">Cancel</button>
+                <button type="button" onClick={applyBulkUpdate} disabled={bulkUpdating} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50">{bulkUpdating ? 'Updating…' : 'Apply update'}</button>
+              </div>
+            </Card>
+          </div>
         )}
 
         {loading ? (
