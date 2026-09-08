@@ -42,6 +42,8 @@ const STATUS_STYLES: Record<string, string> = {
 }
 
 const PLACEHOLDER_VALUES = new Set(['', '-', 'unknown', 'na', 'n/a', 'not applicable', 'not provided', 'not provided yet', 'pending'])
+const CONTACTS_TABLE_WIDTHS_KEY = 'contacts-table-column-widths-v2'
+
 function needsContactReview(contact: Contact) {
   const name = contact.name.trim().toLowerCase()
   const phone = contact.phone.trim().toLowerCase()
@@ -53,6 +55,8 @@ export function Contacts() {
   const navigate = useNavigate()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [search, setSearch] = useState('')
+  const [reviewOnly, setReviewOnly] = useState(false)
+  const [tableLayoutVersion, setTableLayoutVersion] = useState(0)
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ name: '', phone: '', email: '', tags: '' })
   const [addDialCode, setAddDialCode] = useState('+91')
@@ -110,12 +114,32 @@ export function Contacts() {
   }, [])
 
   const filtered = useMemo(() => {
-    if (!search) return contacts
-    const s = search.toLowerCase()
-    return contacts.filter(
-      (c) => c.name.toLowerCase().includes(s) || c.phone.includes(s) || c.email.toLowerCase().includes(s),
-    )
-  }, [contacts, search])
+    const s = search.trim().toLowerCase()
+    return contacts.filter((contact) => {
+      if (reviewOnly && !needsContactReview(contact)) return false
+      if (!s) return true
+      return contact.name.toLowerCase().includes(s) || contact.phone.includes(s) || contact.email.toLowerCase().includes(s)
+    })
+  }, [contacts, reviewOnly, search])
+
+  const reviewCount = useMemo(() => contacts.filter(needsContactReview).length, [contacts])
+
+  const downloadImportTemplate = () => {
+    const csv = 'First Name,Last Name,Phone,Email,Company,Tags\nAarav,Sharma,+919876543210,aarav@example.com,Example Pvt Ltd,"lead,follow-up"\n'
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'vistrow-contacts-import-template.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+    setShowMoreActions(false)
+  }
+
+  const resetColumnLayout = () => {
+    localStorage.removeItem(CONTACTS_TABLE_WIDTHS_KEY)
+    setTableLayoutVersion((version) => version + 1)
+    setShowMoreActions(false)
+  }
 
   const handleAdd = async () => {
     if (!form.name && !form.phone) return
@@ -417,7 +441,7 @@ export function Contacts() {
       <PageHeader title="Contacts" subtitle="Global contact list - auto-synced from every qualified call" />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
-        <Card padding="sm" className="flex min-h-[66px] flex-wrap items-center gap-3">
+        <Card padding="sm" className={`relative flex min-h-[66px] flex-wrap items-center gap-3 ${showMoreActions ? 'z-50' : 'z-20'}`}>
           {selected.size > 0 ? (
             <>
               <span className="text-sm font-bold">{selected.size} selected</span>
@@ -483,16 +507,50 @@ export function Contacts() {
               onClick={() => setShowMoreActions((visible) => !visible)}
               aria-label="More contact actions"
               aria-expanded={showMoreActions}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-surface-high text-text-muted hover:border-primary hover:text-primary"
+              className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-surface-high transition-colors hover:border-primary hover:text-primary ${showMoreActions || reviewOnly ? 'border-primary text-primary' : 'border-border text-text-muted'}`}
             >
               <Icon name="more_horiz" className="text-[20px]" />
             </button>
             {showMoreActions && (
-              <div className="absolute right-0 top-full z-40 mt-2 w-48 rounded-lg border border-border bg-surface p-1.5 shadow-xl">
+              <div className="absolute right-0 top-[calc(100%+10px)] z-[70] w-72 overflow-hidden rounded-xl border border-border bg-surface p-1.5 shadow-2xl">
+                <button
+                  type="button"
+                  onClick={() => { setReviewOnly((active) => !active); setShowMoreActions(false) }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-text hover:bg-surface-high"
+                >
+                  <Icon name={reviewOnly ? 'check' : 'filter_alt'} className="text-[18px] text-primary" />
+                  <span className="min-w-0 flex-1">{reviewOnly ? 'Show all contacts' : 'Needs review only'}</span>
+                  {!reviewOnly && <span className="rounded-full bg-amber/10 px-2 py-0.5 text-[11px] font-bold text-amber">{reviewCount}</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadImportTemplate}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-text hover:bg-surface-high"
+                >
+                  <Icon name="description" className="text-[18px] text-text-muted" />
+                  Download import template
+                </button>
+                <button
+                  type="button"
+                  onClick={resetColumnLayout}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-text hover:bg-surface-high"
+                >
+                  <Icon name="view_column" className="text-[18px] text-text-muted" />
+                  Reset column widths
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/dashboard/compliance')}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-text hover:bg-surface-high"
+                >
+                  <Icon name="block" className="text-[18px] text-text-muted" />
+                  Manage do-not-call list
+                </button>
+                <div className="my-1 border-t border-border" />
                 <button
                   type="button"
                   onClick={handleDeleteAll}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold text-destructive hover:bg-destructive/10"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-destructive hover:bg-destructive/10"
                 >
                   <Icon name="delete" className="text-[17px]" />
                   Delete all contacts
@@ -611,13 +669,14 @@ export function Contacts() {
           <div className="h-64 animate-pulse rounded-xl border border-border bg-surface" aria-label="Loading contacts" />
         ) : (
           <DataTable
+            key={tableLayoutVersion}
             columns={columns}
             rows={filtered}
             rowKey={(c) => c.id}
             onRowClick={(c) => navigate(`/dashboard/contacts/${c.id}`)}
             rowAriaLabel={(c) => `Open ${c.name}`}
             columnDividers
-            columnWidthStorageKey="contacts-table-column-widths-v2"
+            columnWidthStorageKey={CONTACTS_TABLE_WIDTHS_KEY}
             isRowSelected={(c) => selected.has(c.id)}
             emptyMessage="No contacts yet. They appear here automatically when the agent qualifies a caller, or add/import them manually."
             footer={`Showing ${filtered.length} of ${contacts.length} contacts · ${contacts.filter(needsContactReview).length} need review`}
