@@ -678,7 +678,11 @@ _STILL_ASKING_PATTERN = re.compile(
     r"(kitna|कितना|kitne|कितने|kitni|कितनी)|"
     r"\b(price|pricing|cost|charge|rate|quote)\b|"
     r"(कीमत|दाम|प्राइस|खर्च|रेट)|"
-    r"\b(how much|what is|what's|can you tell|tell me)\b",
+    r"\b(how much|what is|what's|can you tell|tell me)\b|"
+    # Marathi: "सांगा" (tell me), "किती" (how much), "अंदाज" (estimate),
+    # "दर" (rate). Call 914's "रेट्सचा थोडा अंदाजा मिळेल का?" is a question,
+    # and a question must never read as a goodbye.
+    r"(सांगा|सांगू|सांगाल|सांगता)|(किती)|(अंदाज|अंदाजा)|(दर|दरा)",
     re.IGNORECASE,
 )
 
@@ -699,7 +703,28 @@ _EXIT_INTENT_PATTERN = re.compile(
     r"(nahi|नहीं|nai)|"
     r"(call|कॉल)\s*(end|बंद|खत्म|समाप्त)|"
     r"\b(i\s+have\s+to\s+go|gotta\s+go|abhi\s+time\s+nahi)\b|"
-    r"(अभी|abhi)\s*(time|समय|वक्त)\s*(nahi|नहीं)",
+    r"(अभी|abhi)\s*(time|समय|वक्त)\s*(nahi|नहीं)|"
+    # --- Marathi -----------------------------------------------------------
+    # Same script as Hindi, different verbs, so none of the above fired on
+    # call 914 even though the caller asked to stop three times. Marathi is
+    # the highest-value addition because STT is pinned to hi-IN: Devanagari
+    # languages still transcribe correctly, so a Marathi caller reaches us
+    # intact while a Tamil or Gujarati one does not.
+    #
+    # "WhatsApp वर पाठवून द्या" - send it on WhatsApp ("वर", not "पे/पर")
+    r"(पाठवून|पाठवा|पाठवा\s*ना|पाठव)\s*(द्या|दे|देत)?|"
+    # "एवढंच / इतकंच" - that's all
+    r"(एवढंच|एवढेच|एव्हढंच|इतकंच|इतकेच|एवढच)|"
+    # "नंतर बघू / नंतर बोलू" - we'll see, we'll talk later
+    r"(नंतर|नन्तर)\s*(बघू|बघतो|बघते|पाहू|बोलू|बोलतो|बोलते)|"
+    # "मी बघेन / बघतो" - I'll look at it (deferral, not a question)
+    r"(मी)\s*(बघेन|बघतो|बघते|पाहीन|पाहतो)|"
+    # "पुढे नाही जायचं / पुढे नको" - don't want to go further
+    r"(पुढे|पुढं)\s*(नाही|नको)|"
+    # "आत्ता वेळ नाही" - no time right now
+    r"(आत्ता|आता)\s*(वेळ|टाइम)\s*(नाही|नाहीये)|"
+    # "फोन ठेवतो" - I'll hang up
+    r"(फोन|कॉल)\s*(ठेवतो|ठेवते|ठेवू|बंद)",
     re.IGNORECASE,
 )
 

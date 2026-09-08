@@ -90,6 +90,58 @@ class ExitIntentDetection(unittest.TestCase):
                 self.assertNotEqual(main._detect_customer_intent(text, []), "wrap_up")
 
 
+class MarathiExitIntent(unittest.TestCase):
+    """Marathi shares Devanagari with Hindi but not its verbs, so none of the
+    Hindi patterns fired on call 914 - the caller asked to stop three times
+    and was questioned after each one. Marathi matters most of the languages
+    we do not yet cover: STT is pinned to hi-IN, so Devanagari languages still
+    transcribe correctly and actually reach these patterns intact."""
+
+    def test_call_914_verbatim(self):
+        for text in (
+            "बेसिक इन्फॉर्मेशन पाहिजे मला व्हाट्सएप्प वर पाठवून द्या बघेन मी",
+            "आता थोड़ा। पुढे नाही जायचं",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(main._detect_customer_intent(text, []), "wrap_up")
+
+    def test_common_marathi_exits(self):
+        for text in (
+            "बस एवढंच",
+            "सध्या इतकंच पुरे",
+            "नंतर बघू",
+            "नंतर बोलू आपण",
+            "मी बघतो आणि कळवतो",
+            "आत्ता वेळ नाही",
+            "फोन ठेवतो",
+            "WhatsApp वर पाठवा",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(main._detect_customer_intent(text, []), "wrap_up")
+
+    def test_a_marathi_question_is_never_an_exit(self):
+        # Call 914's actual price question, plus variants. The Hindi version
+        # of this bug ended a call mid-question on call 911.
+        for text in (
+            "रेट्सचा थोडा अंदाजा मिळेल का? रफ रेंज सुधा",
+            "किती खर्च येईल सांगा",
+            "नंतर बघू, पण आधी दर सांगा",
+            "पुढे नको, फक्त किती पैसे ते सांगा",
+        ):
+            with self.subTest(text=text):
+                self.assertNotEqual(main._detect_customer_intent(text, []), "wrap_up")
+
+    def test_engaged_marathi_caller_is_not_an_exit(self):
+        for text in (
+            "मला नवीन वेबसाइट पाहिजे",
+            "माझा छोटासा स्वीट्सचा बिझनेस आहे",
+            "WhatsApp चं बटण पाहिजे वेबसाइटवर",
+            "हो सांगा",
+        ):
+            with self.subTest(text=text):
+                self.assertNotEqual(main._detect_customer_intent(text, []), "wrap_up")
+
+
 class WrapUpObjective(unittest.TestCase):
     def test_objective_forbids_further_questions(self):
         obj = main._current_objective(0, "wrap_up")
