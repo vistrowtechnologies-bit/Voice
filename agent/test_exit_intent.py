@@ -1,0 +1,91 @@
+"""Exit-intent detection (_EXIT_INTENT_PATTERN, _current_objective).
+
+On call 907 the caller asked to wrap up three separate times - "baad mein
+dekhenge", "koi basic info WhatsApp pe bhej dena", "abhi sirf WhatsApp pe
+info bhej do" - and after each one was asked another qualifying question,
+including a decision-maker question they had already answered. The prompt
+already forbade this; prose did not hold it across a long call, so the rule
+lives in code and lands in the per-turn objective, which is the last thing
+the model reads.
+
+The precision tests matter more than the recall tests: a false positive ends
+a call on an engaged lead.
+"""
+import os, sys, unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+os.environ.setdefault("LIVEKIT_URL", "ws://x")
+os.environ.setdefault("LIVEKIT_API_KEY", "x")
+os.environ.setdefault("LIVEKIT_API_SECRET", "x")
+import main
+
+
+class ExitIntentDetection(unittest.TestCase):
+    def test_call_907_verbatim(self):
+        # The three the agent talked straight through.
+        for text in (
+            "बाद में देखेंगे।",
+            "कोई बेसिक इन्फो व्हाट्सएप पे भेज देना।",
+            "अभी सिर्फ WhatsApp पे इन्फो भेज दो।",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(main._detect_customer_intent(text, []), "wrap_up")
+
+    def test_other_natural_exit_phrasings(self):
+        for text in (
+            "Aaj ke liye bas itna hi.",
+            "अभी इतना ही काफी है",
+            "Abhi zyada detail mein nahi jaana",
+            "WhatsApp pe details bhej do",
+            "main dekh loonga",
+            "Abhi call end karte hain",
+            "I have to go, send me the details",
+            "I'll check and get back to you",
+            "abhi time nahi hai",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(main._detect_customer_intent(text, []), "wrap_up")
+
+    def test_does_not_fire_on_an_engaged_caller(self):
+        # These all mention WhatsApp or "dekhna" but are REQUIREMENTS, not
+        # exits. Ending the call on any of these loses a live lead.
+        for text in (
+            "Website mein WhatsApp button chahiye",
+            "Log WhatsApp se contact kar sakein",
+            "WhatsApp integration ho sakta hai kya?",
+            "Mujhe ek nayi website banwani hai",
+            "Haan boliye",
+            "Do-teen hafte mein start karna hai",
+            "Main hi decide karunga",
+            "Aapki website dekhi thi maine",
+        ):
+            with self.subTest(text=text):
+                self.assertNotEqual(main._detect_customer_intent(text, []), "wrap_up")
+
+
+class WrapUpObjective(unittest.TestCase):
+    def test_objective_forbids_further_questions(self):
+        obj = main._current_objective(0, "wrap_up")
+        self.assertIn("CLOSE THE CALL NOW", obj)
+        self.assertIn("Ask NO further question", obj)
+
+    def test_wrap_up_outranks_the_funnel_at_every_stage(self):
+        for stage in range(len(main._FUNNEL_STAGES)):
+            with self.subTest(stage=stage):
+                self.assertIn("CLOSE THE CALL NOW",
+                              main._current_objective(stage, "wrap_up"))
+
+    def test_sticky_flag_holds_after_the_signal_turn(self):
+        # The turn after "bhej do" is usually a bare "haan" or "theek hai",
+        # which carries no exit signal of its own. Without the standing flag
+        # the agent resumes qualifying, which is exactly what call 907 did.
+        obj = main._current_objective(0, "", wrap_up_requested=True)
+        self.assertIn("CLOSE THE CALL NOW", obj)
+
+    def test_normal_calls_are_untouched(self):
+        obj = main._current_objective(0, "")
+        self.assertNotIn("CLOSE THE CALL NOW", obj)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

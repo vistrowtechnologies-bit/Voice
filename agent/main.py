@@ -648,6 +648,43 @@ _PROJECT_DETAIL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# The caller asking to wrap up, or to be sent information instead of
+# continuing on the phone. This is NOT a rejection - "WhatsApp pe bhej do" is
+# a lead choosing an asynchronous next step - but it IS a full stop on
+# qualification.
+#
+# It has to live in code rather than in the prompt because the prompt already
+# said all of this and the model still did not hold it: on call 907 the caller
+# said "baad mein dekhenge", then "koi basic info WhatsApp pe bhej dena", and
+# was asked a design question and then a decision-maker question it had
+# already answered. Same reason _reply_used_filler exists - a standing rule
+# across a long call is not something prose reliably enforces.
+#
+# Precision matters more than recall: a false positive hangs up on an engaged
+# lead. Anchored on phrases that end a topic, not on any mention of WhatsApp -
+# "WhatsApp button chahiye website mein" is a REQUIREMENT, not an exit.
+_EXIT_INTENT_PATTERN = re.compile(
+    # "send me the details / info on WhatsApp"
+    r"(whats\s?app|व्हाट्सएप|व्हाट्सऐप|वॉट्सएप)\s*(pe|par|पे|पर)?\s*"
+    r"(bhej|भेज|send|share)|"
+    r"(bhej|भेज)\s*(do|de|dena|दो|दे|देना|dijiye|दीजिए)|"
+    r"\b(send|share)\s+(me\s+)?(the\s+)?(details|info|information)\b|"
+    # "that's it for now / we'll see later / I'll check"
+    r"\b(bas|बस)\s*(itna|इतना)\s*(hi|ही)|"
+    r"(इतना|itna)\s*(hi|ही)\s*(kaafi|काफ़ी|काफी|enough)|"
+    r"(baad|बाद)\s*(mein|में|me)\s*(dekh|देख|baat|बात)|"
+    r"(main|मैं)\s*(dekh|देख)\s*(loonga|लूंगा|lungi|लूंगी|leta|लेता)|"
+    r"\b(i'?ll\s+(check|review|look)|get\s+back\s+to\s+you)\b|"
+    # "no more detail right now / let's end the call / I have to go"
+    r"(zyada|ज़्यादा|ज्यादा)\s*(detail|डिटेल|discuss|डिस्कस)\s*(mein|में|me)?\s*"
+    r"(nahi|नहीं|nai)|"
+    r"(call|कॉल)\s*(end|बंद|खत्म|समाप्त)|"
+    r"\b(i\s+have\s+to\s+go|gotta\s+go|abhi\s+time\s+nahi)\b|"
+    r"(अभी|abhi)\s*(time|समय|वक्त)\s*(nahi|नहीं)",
+    re.IGNORECASE,
+)
+
+
 def _detect_customer_intent(text: str, named_rows: list[str]) -> str:
     """What this turn is asking for, independent of the funnel stage.
 
@@ -659,6 +696,10 @@ def _detect_customer_intent(text: str, named_rows: list[str]) -> str:
     t = text or ""
     if not t.strip():
         return ""
+    # Checked before everything else: whatever else this sentence contains,
+    # if they have asked to wrap up then that is the intent of the turn.
+    if _EXIT_INTENT_PATTERN.search(t):
+        return "wrap_up"
     # Checked before the request pattern: "साइट विजिट बार-बार मत पूछिए"
     # contains the words for a site visit and must not read as asking for one.
     if _SITE_VISIT_REFUSAL_PATTERN.search(t):
@@ -676,6 +717,7 @@ def _current_objective(
     stage_index: int,
     intent: str = "",
     site_visit_suppressed: bool = False,
+    wrap_up_requested: bool = False,
 ) -> str:
     """The objective for THIS turn.
 
@@ -685,6 +727,21 @@ def _current_objective(
     which is exactly why it must not say "offer a site visit" to someone who
     just asked which projects we carry.
     """
+    if intent == "wrap_up" or wrap_up_requested:
+        return (
+            "# Current objective: CLOSE THE CALL NOW\n"
+            "The caller has asked to wrap up, or to be sent information instead of continuing "
+            "on the phone. That is their decision and it outranks every qualifying question you "
+            "still have. This is NOT a rejection and NOT an objection to overcome — they have "
+            "chosen a next step.\n"
+            "Do exactly this and nothing else: acknowledge warmly, confirm you will send the "
+            "details on WhatsApp on this number, thank them, and end the call.\n"
+            "Ask NO further question. Not about design, colours, pages, features, branding, "
+            "Instagram, budget, timeline, or who decides — not even one you think is quick, and "
+            "not even one they have not answered yet. Do not re-open qualification, do not "
+            "pitch, and do not mention the offer if you have not already. Every extra question "
+            "after this point makes a warm lead cold."
+        )
     if intent == "project_information":
         objective = (
             "# Current objective: ANSWER WHAT THEY JUST ASKED\n"
@@ -3592,11 +3649,18 @@ class RealEstateAgent(Agent):
             # They brought it up themselves, so the constraint is lifted.
             _userdata["site_visit_prompt_suppressed"] = False
         _site_visit_suppressed = bool(_userdata.get("site_visit_prompt_suppressed"))
+        if _intent == "wrap_up":
+            # Standing, like site-visit suppression: once someone has asked to
+            # wrap up, a later "haan" or "theek hai" must not be read as
+            # permission to resume qualifying. On call 907 the caller asked
+            # three separate times and was questioned after each one.
+            _userdata["wrap_up_requested"] = True
+        _wrap_up = bool(_userdata.get("wrap_up_requested"))
         if _intent:
             _userdata["customer_intent"] = _intent
             logger.info(
-                "customer intent=%s funnel_stage=%s site_visit_suppressed=%s",
-                _intent, _userdata.get("funnel_stage"), _site_visit_suppressed,
+                "customer intent=%s funnel_stage=%s site_visit_suppressed=%s wrap_up=%s",
+                _intent, _userdata.get("funnel_stage"), _site_visit_suppressed, _wrap_up,
             )
 
         # Catalog grounding removed. The tenant turned the live catalog off
@@ -3629,7 +3693,9 @@ class RealEstateAgent(Agent):
             self._appointment_booked,
             bool(_userdata.get("lead_captured")),
         )
-        _objective_text = _current_objective(_funnel_stage, _intent, _site_visit_suppressed)
+        _objective_text = _current_objective(
+            _funnel_stage, _intent, _site_visit_suppressed, _wrap_up
+        )
         turn_ctx.add_message(
             role="system",
             content=_language_instruction
