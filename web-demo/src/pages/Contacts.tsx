@@ -322,18 +322,18 @@ export function Contacts() {
       key: 'name',
       header: 'Contact Name',
       primary: true,
-      width: 280,
-      minWidth: 210,
+      width: 250,
+      minWidth: 120,
       maxWidth: 460,
       sticky: 'left',
       resizable: true,
       render: (c) => (
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2 overflow-hidden">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
             {c.name.slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-1">
+            <div className="flex min-w-0 items-center gap-1">
               <span className="truncate text-sm font-semibold">{c.name}</span>
               <button
                 type="button"
@@ -354,14 +354,14 @@ export function Contacts() {
     {
       key: 'info',
       header: 'Contact Info',
-      width: 230,
-      minWidth: 175,
+      width: 210,
+      minWidth: 115,
       maxWidth: 380,
       resizable: true,
       render: (c) => (
-        <div className="text-sm text-text-muted">
-          <p>{c.phone || '-'}</p>
-          {c.email && <p className="text-[11px]">{c.email}</p>}
+        <div className="min-w-0 overflow-hidden text-sm text-text-muted">
+          <p className="truncate">{c.phone || '-'}</p>
+          {c.email && <p className="truncate text-[11px]">{c.email}</p>}
         </div>
       ),
     },
@@ -369,7 +369,7 @@ export function Contacts() {
       key: 'status',
       header: 'Status',
       width: 115,
-      minWidth: 100,
+      minWidth: 82,
       maxWidth: 180,
       resizable: true,
       render: (c) => (
@@ -381,27 +381,27 @@ export function Contacts() {
     {
       key: 'tags',
       header: 'Tags',
-      width: 480,
-      minWidth: 240,
+      width: 400,
+      minWidth: 120,
       maxWidth: 720,
       resizable: true,
       render: (c) => (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex min-w-0 flex-nowrap gap-1 overflow-hidden">
           {c.tags.length === 0 && <span className="text-sm text-text-muted">-</span>}
           {c.tags.map((t) => (
-            <span key={t} className="rounded bg-surface-high px-1.5 py-0.5 text-[11px] text-text-muted">
+            <span key={t} className="shrink-0 rounded bg-surface-high px-1.5 py-0.5 text-[11px] text-text-muted">
               {t}
             </span>
           ))}
         </div>
       ),
     },
-    { key: 'source', header: 'Source', width: 135, minWidth: 110, maxWidth: 240, resizable: true, render: (c) => <span className="text-sm capitalize text-text-muted">{c.source}</span> },
+    { key: 'source', header: 'Source', width: 125, minWidth: 78, maxWidth: 240, resizable: true, render: (c) => <span className="block truncate text-sm capitalize text-text-muted">{c.source}</span> },
     {
       key: 'lastCalled',
       header: 'Last Called',
       width: 120,
-      minWidth: 105,
+      minWidth: 82,
       maxWidth: 200,
       resizable: true,
       render: (c) => <span className="text-sm text-text-muted">{c.lastCalledAt ? formatRelativeTime(c.lastCalledAt) : 'never'}</span>,
@@ -631,7 +631,7 @@ export function Contacts() {
             onRowClick={(c) => navigate(`/dashboard/contacts/${c.id}`)}
             rowAriaLabel={(c) => `Open ${c.name}`}
             columnDividers
-            columnWidthStorageKey="contacts-table-column-widths-v1"
+            columnWidthStorageKey="contacts-table-column-widths-v2"
             emptyMessage="No contacts yet. They appear here automatically when the agent qualifies a caller, or add/import them manually."
             footer={`Showing ${filtered.length} of ${contacts.length} contacts · ${contacts.filter(needsContactReview).length} need review`}
           />

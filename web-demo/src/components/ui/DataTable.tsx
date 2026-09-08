@@ -248,7 +248,8 @@ export function DataTable<T>({
                           aria-orientation="vertical"
                           aria-label={`Resize ${col.header || 'column'}`}
                           onPointerDown={(event) => startResize(event, col)}
-                          className="absolute inset-y-0 right-[-3px] z-40 w-1.5 cursor-col-resize touch-none bg-transparent transition-colors hover:bg-primary/70"
+                          title={`Drag to resize ${col.header.toLowerCase()}`}
+                          className="absolute inset-y-0 -right-1.5 z-40 w-3 cursor-col-resize touch-none bg-transparent after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border after:content-[''] hover:after:w-0.5 hover:after:bg-primary"
                         />
                       )}
                     </th>
@@ -263,13 +264,13 @@ export function DataTable<T>({
                     onKeyDown={(event) => activateRowFromKeyboard(event, row)}
                     tabIndex={onRowClick ? 0 : undefined}
                     aria-label={rowAriaLabel?.(row)}
-                    className={`${hoverRows ? 'group hover:bg-surface-high/20' : 'group'} ${onRowClick ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary' : ''}`}
+                    className={`${hoverRows ? 'group hover:bg-surface-high' : 'group'} ${onRowClick ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary' : ''}`}
                   >
                     {columns.map((col) => (
                       <td
                         key={col.key}
                         style={columnStyle(col)}
-                        className={`py-3 px-3 first:pl-5 ${columnDividers ? 'border-r border-border/70 last:border-r-0' : ''} ${col.sticky ? `sticky z-10 bg-surface group-hover:bg-surface-high ${stickyShadow(col)}` : ''} ${col.className ?? ''} ${col.cellClassName ?? ''}`}
+                        className={`py-3 px-3 first:pl-5 ${columnDividers ? 'border-r border-border/70 last:border-r-0' : ''} ${col.resizable ? 'overflow-hidden' : ''} ${col.sticky ? `sticky z-10 bg-surface group-hover:bg-surface-high ${stickyShadow(col)}` : ''} ${col.className ?? ''} ${col.cellClassName ?? ''}`}
                       >
                         {col.render(row)}
                       </td>
