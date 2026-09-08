@@ -3149,18 +3149,23 @@ class RealEstateAgent(Agent):
         # the safer conversational shape: let the recipient say "hello"
         # first, then speak. Keep the configured outbound opening pending and
         # release it from on_user_turn_completed after real speech arrives.
-        if self._direction == "outbound" and self._first_speaker != "user":
-            self.session.userdata["outbound_opening_pending"] = True
-            logger.info("outbound opening held until the recipient speaks")
-            # Held on a TRANSCRIPT, released by a watchdog on VOICE. Call 915:
-            # 112 seconds, zero transcript turns, and VAD had the caller
-            # speaking twice (349ms and 452ms - two short "hello"s that STT
-            # returned nothing for). The agent never said a word for the whole
-            # call, and could not recover: greeting_played stays False while
-            # the opening is held, which is exactly what suppresses the
-            # silence check-in that would otherwise have rescued it.
-            asyncio.create_task(self._release_held_opening_if_unheard())
-            return
+        # REVERTED 2026-09-08. The hold that lived here - keep the opening
+        # back until the recipient speaks - was introduced this morning and
+        # regressed outbound badly: the recipient answered, heard nothing,
+        # said hello two or three times and hung up. Call 915 was 112 seconds
+        # of complete silence. The behaviour it replaced had been stable since
+        # 3 September and the operator confirms it worked: you pick up, you
+        # hear the opening.
+        #
+        # Four commits went into patching around it (a watchdog, an STT frame
+        # threshold, a 0.3s fast path, a wider acknowledgement pattern) before
+        # it was clear the hold itself was the defect rather than its tuning.
+        #
+        # _wait_for_sip_answer in entrypoint() is still the gate: session.start
+        # does not happen until it clears, so this is not a return to greeting
+        # into a ringing handset. If a half-missed opener reappears, the fix is
+        # _release_held_opening_if_unheard's sibling - the interrupted-opener
+        # recovery, which restates why we called - not another hold.
         # first_speaker == 'user' means wait silently for the caller to open —
         # no greeting is ever queued, so away-tracking is valid immediately.
         if self._first_speaker == "user":
@@ -3228,7 +3233,20 @@ class RealEstateAgent(Agent):
             if self._welcome_message:
                 # Operator wrote an exact opening line — speak it verbatim
                 # rather than letting the model improvise a greeting.
-                await self.session.say(self._welcome_message)
+                _opening = self.session.say(self._welcome_message)
+                await _opening
+                # The opening is the only line that says why their phone rang,
+                # and it is the likeliest line in the call to be spoken over:
+                # people answer with "hello", hear a voice start, and say
+                # "hello" again on top of it. Call 913 lost it that way and the
+                # recipient asked "did you even call me?". This recovery used
+                # to live inside the outbound hold; the hold was reverted, so
+                # it moves onto the path that actually speaks.
+                if self._direction == "outbound" and getattr(_opening, "interrupted", False):
+                    self.session.userdata["outbound_context_pending"] = True
+                    logger.info(
+                        "opening was interrupted; will restate the reason for the call"
+                    )
                 # Same flag the fallback path sets below. Returning without
                 # it left greeting_played False for the whole call on every
                 # agent that has a custom welcome message, which

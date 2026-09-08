@@ -1,5 +1,12 @@
 """The outbound opening must never be held forever.
 
+CURRENTLY RESERVED, NOT WIRED IN. The hold this watchdog protected was
+reverted on 2026-09-08 - it regressed outbound badly and the behaviour it
+replaced had been stable since 3 September. on_enter now speaks the opening
+directly, so _release_held_opening_if_unheard is never started. These tests
+still pin its behaviour so that if a hold is ever reintroduced, its safety
+net comes back correct rather than being rewritten from memory.
+
 Call 915: 112 seconds, ZERO transcript turns, and VAD had the caller speaking
 twice - 349ms and 452ms, two short "hello"s that STT returned nothing for.
 The agent said nothing for the entire call and could not recover, because the
