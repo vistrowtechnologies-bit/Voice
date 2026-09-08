@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -51,6 +51,7 @@ function needsContactReview(contact: Contact) {
 }
 
 export function Contacts() {
+  const navigate = useNavigate()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
@@ -303,7 +304,10 @@ export function Contacts() {
       key: 'select',
       header: '',
       hideOnCard: true,
-      className: 'w-10',
+      width: 52,
+      minWidth: 52,
+      maxWidth: 52,
+      sticky: 'left',
       render: (c) => (
         <input
           type="checkbox"
@@ -318,6 +322,11 @@ export function Contacts() {
       key: 'name',
       header: 'Contact Name',
       primary: true,
+      width: 280,
+      minWidth: 210,
+      maxWidth: 460,
+      sticky: 'left',
+      resizable: true,
       render: (c) => (
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
@@ -325,7 +334,7 @@ export function Contacts() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1">
-              <Link to={`/dashboard/contacts/${c.id}`} className="truncate text-sm font-semibold hover:underline">{c.name}</Link>
+              <span className="truncate text-sm font-semibold">{c.name}</span>
               <button
                 type="button"
                 onClick={() => openEdit(c)}
@@ -345,6 +354,10 @@ export function Contacts() {
     {
       key: 'info',
       header: 'Contact Info',
+      width: 230,
+      minWidth: 175,
+      maxWidth: 380,
+      resizable: true,
       render: (c) => (
         <div className="text-sm text-text-muted">
           <p>{c.phone || '-'}</p>
@@ -355,6 +368,10 @@ export function Contacts() {
     {
       key: 'status',
       header: 'Status',
+      width: 115,
+      minWidth: 100,
+      maxWidth: 180,
+      resizable: true,
       render: (c) => (
         <span className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLES[c.status] ?? STATUS_STYLES.new}`}>
           {c.status.replace('_', ' ')}
@@ -364,6 +381,10 @@ export function Contacts() {
     {
       key: 'tags',
       header: 'Tags',
+      width: 480,
+      minWidth: 240,
+      maxWidth: 720,
+      resizable: true,
       render: (c) => (
         <div className="flex flex-wrap gap-1">
           {c.tags.length === 0 && <span className="text-sm text-text-muted">-</span>}
@@ -375,15 +396,23 @@ export function Contacts() {
         </div>
       ),
     },
-    { key: 'source', header: 'Source', render: (c) => <span className="text-sm capitalize text-text-muted">{c.source}</span> },
+    { key: 'source', header: 'Source', width: 135, minWidth: 110, maxWidth: 240, resizable: true, render: (c) => <span className="text-sm capitalize text-text-muted">{c.source}</span> },
     {
       key: 'lastCalled',
       header: 'Last Called',
+      width: 120,
+      minWidth: 105,
+      maxWidth: 200,
+      resizable: true,
       render: (c) => <span className="text-sm text-text-muted">{c.lastCalledAt ? formatRelativeTime(c.lastCalledAt) : 'never'}</span>,
     },
     {
       key: 'actions',
       header: 'Actions',
+      width: 100,
+      minWidth: 100,
+      maxWidth: 100,
+      sticky: 'right',
       className: 'text-center',
       render: (c) => (
         <div className="flex justify-center gap-1">
@@ -599,6 +628,10 @@ export function Contacts() {
             columns={columns}
             rows={filtered}
             rowKey={(c) => c.id}
+            onRowClick={(c) => navigate(`/dashboard/contacts/${c.id}`)}
+            rowAriaLabel={(c) => `Open ${c.name}`}
+            columnDividers
+            columnWidthStorageKey="contacts-table-column-widths-v1"
             emptyMessage="No contacts yet. They appear here automatically when the agent qualifies a caller, or add/import them manually."
             footer={`Showing ${filtered.length} of ${contacts.length} contacts · ${contacts.filter(needsContactReview).length} need review`}
           />

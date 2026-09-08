@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react'
 import { Card } from './Card'
 
 export interface DataTableColumn<T> {
@@ -14,6 +15,16 @@ export interface DataTableColumn<T> {
   primary?: boolean
   /** Omit this column from the mobile stacked-card view (e.g. a column that duplicates info already shown, or an actions column better placed inline on the card). */
   hideOnCard?: boolean
+  /** Desktop width in pixels. Supplying widths for every column gives the
+   * table a stable, Ads-Manager-style grid instead of content-driven jumps. */
+  width?: number
+  minWidth?: number
+  maxWidth?: number
+  /** Keep important identity/action columns visible while the middle grid
+   * scrolls horizontally. Sticky columns need an explicit width. */
+  sticky?: 'left' | 'right'
+  /** Show a drag handle on the desktop header. */
+  resizable?: boolean
 }
 
 interface DataTableProps<T> {
@@ -32,6 +43,14 @@ interface DataTableProps<T> {
   /** Disable row background changes when a table uses its own interactive
    * controls and the hover fill would visually compete with them. */
   hoverRows?: boolean
+  /** Makes the complete desktop row/mobile card open its detail view. Native
+   * controls inside the row remain independent and never trigger navigation. */
+  onRowClick?: (row: T) => void
+  rowAriaLabel?: (row: T) => string
+  /** Draw separators between desktop columns. */
+  columnDividers?: boolean
+  /** Persists operator-adjusted desktop widths in localStorage. */
+  columnWidthStorageKey?: string
 }
 
 /** One shimmering placeholder bar. Widths vary per column so a loading table
@@ -54,9 +73,99 @@ export function DataTable<T>({
   loading = false,
   skeletonRows = 6,
   hoverRows = true,
+  onRowClick,
+  rowAriaLabel,
+  columnDividers = false,
+  columnWidthStorageKey,
 }: DataTableProps<T>) {
   const primaryCol = columns.find((c) => c.primary) ?? columns[0]
   const cardCols = columns.filter((c) => c !== primaryCol && !c.hideOnCard)
+  const [savedWidths, setSavedWidths] = useState<Record<string, number>>(() => {
+    if (!columnWidthStorageKey || typeof window === 'undefined') return {}
+    try {
+      return JSON.parse(window.localStorage.getItem(columnWidthStorageKey) || '{}') as Record<string, number>
+    } catch {
+      return {}
+    }
+  })
+
+  useEffect(() => {
+    if (!columnWidthStorageKey || typeof window === 'undefined') return
+    window.localStorage.setItem(columnWidthStorageKey, JSON.stringify(savedWidths))
+  }, [columnWidthStorageKey, savedWidths])
+
+  const widths = useMemo(
+    () => Object.fromEntries(columns.map((column) => [column.key, savedWidths[column.key] ?? column.width])),
+    [columns, savedWidths],
+  ) as Record<string, number | undefined>
+  const totalWidth = columns.reduce((sum, column) => sum + (widths[column.key] ?? column.minWidth ?? 140), 0)
+
+  const stickyOffsets = useMemo(() => {
+    const left: Record<string, number> = {}
+    const right: Record<string, number> = {}
+    let leftOffset = 0
+    for (const column of columns) {
+      if (column.sticky !== 'left') continue
+      left[column.key] = leftOffset
+      leftOffset += widths[column.key] ?? column.minWidth ?? 0
+    }
+    let rightOffset = 0
+    for (const column of [...columns].reverse()) {
+      if (column.sticky !== 'right') continue
+      right[column.key] = rightOffset
+      rightOffset += widths[column.key] ?? column.minWidth ?? 0
+    }
+    return { left, right }
+  }, [columns, widths])
+
+  const lastLeftSticky = [...columns].reverse().find((column) => column.sticky === 'left')?.key
+  const firstRightSticky = columns.find((column) => column.sticky === 'right')?.key
+  const columnStyle = (column: DataTableColumn<T>): CSSProperties => ({
+    width: widths[column.key],
+    minWidth: column.minWidth ?? widths[column.key],
+    maxWidth: column.maxWidth,
+    left: column.sticky === 'left' ? stickyOffsets.left[column.key] : undefined,
+    right: column.sticky === 'right' ? stickyOffsets.right[column.key] : undefined,
+  })
+  const stickyShadow = (column: DataTableColumn<T>) =>
+    column.key === lastLeftSticky
+      ? 'shadow-[7px_0_9px_-9px_rgba(20,17,35,0.65)]'
+      : column.key === firstRightSticky
+        ? 'shadow-[-7px_0_9px_-9px_rgba(20,17,35,0.65)]'
+        : ''
+  const startResize = (event: PointerEvent<HTMLSpanElement>, column: DataTableColumn<T>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const startX = event.clientX
+    const startWidth = widths[column.key] ?? column.width ?? column.minWidth ?? 140
+    const min = column.minWidth ?? 72
+    const max = column.maxWidth ?? 640
+    const move = (moveEvent: globalThis.PointerEvent) => {
+      const next = Math.max(min, Math.min(max, startWidth + moveEvent.clientX - startX))
+      setSavedWidths((current) => ({ ...current, [column.key]: Math.round(next) }))
+    }
+    const end = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      document.body.style.removeProperty('user-select')
+      document.body.style.removeProperty('cursor')
+    }
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end, { once: true })
+  }
+  const isInteractive = (target: EventTarget | null) =>
+    target instanceof HTMLElement && Boolean(target.closest('a, button, input, select, textarea, [role="button"]'))
+  const activateRow = (event: MouseEvent<HTMLElement>, row: T) => {
+    if (!onRowClick || isInteractive(event.target)) return
+    onRowClick(row)
+  }
+  const activateRowFromKeyboard = (event: KeyboardEvent<HTMLElement>, row: T) => {
+    if (!onRowClick || (event.key !== 'Enter' && event.key !== ' ')) return
+    event.preventDefault()
+    onRowClick(row)
+  }
 
   if (loading) {
     const placeholders = Array.from({ length: skeletonRows }, (_, i) => i)
@@ -65,11 +174,11 @@ export function DataTable<T>({
         <div className="animate-pulse" aria-hidden="true">
           {/* Desktop/tablet: same table, same columns, placeholder cells */}
           <div className="hidden overflow-x-auto lg:block">
-            <table className="w-full text-left">
+            <table className="w-full table-fixed text-left" style={{ minWidth: totalWidth }}>
               <thead>
                 <tr className="bg-surface-high/30 text-[11px] font-bold uppercase tracking-widest text-text-muted">
                   {columns.map((col) => (
-                    <th key={col.key} className={`py-3 px-3 first:pl-5 ${col.className ?? ''}`}>
+                    <th key={col.key} style={columnStyle(col)} className={`relative py-3 px-3 first:pl-5 ${columnDividers ? 'border-r border-border/70 last:border-r-0' : ''} ${col.sticky ? `sticky z-30 bg-surface-high ${stickyShadow(col)}` : ''} ${col.className ?? ''}`}>
                       {col.header}
                     </th>
                   ))}
@@ -79,7 +188,7 @@ export function DataTable<T>({
                 {placeholders.map((r) => (
                   <tr key={r}>
                     {columns.map((col, c) => (
-                      <td key={col.key} className={`py-3 px-3 first:pl-5 ${col.className ?? ''}`}>
+                      <td key={col.key} style={columnStyle(col)} className={`py-3 px-3 first:pl-5 ${columnDividers ? 'border-r border-border/70 last:border-r-0' : ''} ${col.sticky ? `sticky z-10 bg-surface ${stickyShadow(col)}` : ''} ${col.className ?? ''}`}>
                         <SkeletonBar index={r + c} />
                       </td>
                     ))}
@@ -123,23 +232,44 @@ export function DataTable<T>({
         <>
           {/* Desktop/tablet: real table */}
           <div className="hidden overflow-x-auto lg:block">
-            <table className="w-full text-left">
+            <table className="w-full table-fixed text-left" style={{ minWidth: totalWidth }}>
               <thead>
                 <tr className="bg-surface-high/30 text-[11px] font-bold uppercase tracking-widest text-text-muted">
                   {columns.map((col) => (
-                    <th key={col.key} className={`py-3 px-3 first:pl-5 ${col.className ?? ''}`}>
+                    <th
+                      key={col.key}
+                      style={columnStyle(col)}
+                      className={`relative py-3 px-3 first:pl-5 ${columnDividers ? 'border-r border-border/70 last:border-r-0' : ''} ${col.sticky ? `sticky z-30 bg-surface-high ${stickyShadow(col)}` : ''} ${col.className ?? ''}`}
+                    >
                       {col.header}
+                      {col.resizable && (
+                        <span
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label={`Resize ${col.header || 'column'}`}
+                          onPointerDown={(event) => startResize(event, col)}
+                          className="absolute inset-y-0 right-[-3px] z-40 w-1.5 cursor-col-resize touch-none bg-transparent transition-colors hover:bg-primary/70"
+                        />
+                      )}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.map((row) => (
-                  <tr key={rowKey(row)} className={hoverRows ? 'group hover:bg-surface-high/20' : 'group'}>
+                  <tr
+                    key={rowKey(row)}
+                    onClick={(event) => activateRow(event, row)}
+                    onKeyDown={(event) => activateRowFromKeyboard(event, row)}
+                    tabIndex={onRowClick ? 0 : undefined}
+                    aria-label={rowAriaLabel?.(row)}
+                    className={`${hoverRows ? 'group hover:bg-surface-high/20' : 'group'} ${onRowClick ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary' : ''}`}
+                  >
                     {columns.map((col) => (
                       <td
                         key={col.key}
-                        className={`py-3 px-3 first:pl-5 ${col.className ?? ''} ${col.cellClassName ?? ''}`}
+                        style={columnStyle(col)}
+                        className={`py-3 px-3 first:pl-5 ${columnDividers ? 'border-r border-border/70 last:border-r-0' : ''} ${col.sticky ? `sticky z-10 bg-surface group-hover:bg-surface-high ${stickyShadow(col)}` : ''} ${col.className ?? ''} ${col.cellClassName ?? ''}`}
                       >
                         {col.render(row)}
                       </td>
@@ -153,7 +283,15 @@ export function DataTable<T>({
           {/* Mobile: stacked cards, one per row */}
           <div className="flex flex-col divide-y divide-border lg:hidden">
             {rows.map((row) => (
-              <div key={rowKey(row)} className="flex flex-col gap-2 px-4 py-3">
+              <div
+                key={rowKey(row)}
+                onClick={(event) => activateRow(event, row)}
+                onKeyDown={(event) => activateRowFromKeyboard(event, row)}
+                tabIndex={onRowClick ? 0 : undefined}
+                role={onRowClick ? 'link' : undefined}
+                aria-label={rowAriaLabel?.(row)}
+                className={`flex flex-col gap-2 px-4 py-3 ${onRowClick ? 'cursor-pointer hover:bg-surface-high/30 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary' : ''}`}
+              >
                 <div className="font-semibold">{primaryCol.render(row)}</div>
                 {cardCols.map((col) => (
                   <div key={col.key} className="flex items-center justify-between gap-3 text-sm">
