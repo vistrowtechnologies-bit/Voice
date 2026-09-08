@@ -223,6 +223,15 @@ export function ContactDetail() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-bold">{contact.name}</h2>
+              <button
+                type="button"
+                onClick={openEdit}
+                aria-label={`Edit ${contact.name}`}
+                title="Edit contact"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-primary/10 hover:text-primary"
+              >
+                <Icon name="edit" className="text-[17px]" />
+              </button>
               <span className={`rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLES[contact.status] ?? STATUS_STYLES.new}`}>
                 {contact.status.replace('_', ' ')}
               </span>
@@ -243,13 +252,6 @@ export function ContactDetail() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={openEdit}
-              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold transition-colors hover:border-primary hover:text-primary"
-            >
-              <Icon name="edit" className="text-[17px]" />
-              Edit contact
-            </button>
             <button
               onClick={openCall}
               disabled={!contact.phone}

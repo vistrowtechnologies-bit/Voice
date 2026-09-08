@@ -288,13 +288,13 @@ a[class*="border-cyan"]:not([class*=" bg-"]):not([class^="bg-"]) * {
 
 [data-dashboard-root] tbody tr[data-selected='true'],
 [data-dashboard-root] tbody tr[data-selected='true']:hover {
-  background-color: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  background-color: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
   box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-primary) 70%, transparent);
 }
 
 [data-dashboard-root] tbody tr[data-selected='true'] > td[data-sticky-column],
 [data-dashboard-root] tbody tr[data-selected='true']:hover > td[data-sticky-column] {
-  background-color: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  background-color: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
 }
 
 @media (prefers-reduced-motion: reduce) {

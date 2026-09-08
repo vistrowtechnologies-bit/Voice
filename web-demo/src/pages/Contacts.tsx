@@ -18,10 +18,9 @@ import {
   formatRelativeTime,
   importContactsMapped,
   previewContactsImport,
-  updateContact,
 } from '../lib/api'
 import type { Contact, CsvPreview, PhoneNumber } from '../lib/types'
-import { composeE164, isE164, splitE164 } from '../lib/phone'
+import { composeE164, isE164 } from '../lib/phone'
 
 const MAPPING_TARGETS = [
   { value: '', label: 'Skip this column' },
@@ -57,7 +56,6 @@ export function Contacts() {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ name: '', phone: '', email: '', tags: '' })
   const [addDialCode, setAddDialCode] = useState('+91')
-  const [editDialCode, setEditDialCode] = useState('+91')
   const [formError, setFormError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -71,9 +69,6 @@ export function Contacts() {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [editingContact, setEditingContact] = useState<Contact | null>(null)
-  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', phone: '', email: '', company: '', status: 'new', tags: '' })
-  const [savingContact, setSavingContact] = useState(false)
   const [callingContact, setCallingContact] = useState<Contact | null>(null)
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([])
   const [fromNumber, setFromNumber] = useState('')
@@ -241,51 +236,6 @@ export function Contacts() {
     }
   }
 
-  const openEdit = (contact: Contact) => {
-    const parts = contact.name.trim().split(/\s+/)
-    const phone = splitE164(contact.phone)
-    setEditForm({
-      firstName: parts[0] || '',
-      lastName: parts.slice(1).join(' '),
-      phone: phone.localNumber,
-      email: contact.email,
-      company: contact.company,
-      status: contact.status,
-      tags: contact.tags.join(', '),
-    })
-    setEditDialCode(phone.dialCode)
-    setFormError('')
-    setEditingContact(contact)
-  }
-
-  const saveContact = async () => {
-    if (!editingContact || !editForm.firstName.trim()) return
-    const phone = editForm.phone.trim() ? composeE164(editDialCode, editForm.phone) : ''
-    if (phone && !isE164(phone)) {
-      setFormError('Enter a valid phone number.')
-      return
-    }
-    setSavingContact(true)
-    setFormError('')
-    try {
-      await updateContact(editingContact.id, {
-        firstName: editForm.firstName.trim(),
-        lastName: editForm.lastName.trim(),
-        phone,
-        email: editForm.email.trim(),
-        company: editForm.company.trim(),
-        status: editForm.status,
-        tags: editForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
-      })
-      setEditingContact(null)
-      await reload()
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Could not save these changes.')
-    } finally {
-      setSavingContact(false)
-    }
-  }
-
   const openCall = async (contact: Contact) => {
     setCallError('')
     setCallingContact(contact)
@@ -365,18 +315,7 @@ export function Contacts() {
             {c.name.slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-1">
-              <span className="truncate text-sm font-semibold">{c.name}</span>
-              <button
-                type="button"
-                onClick={() => openEdit(c)}
-                aria-label={`Edit ${c.name}`}
-                title="Edit contact"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-primary/10 hover:text-primary"
-              >
-                <Icon name="edit" className="text-[15px]" />
-              </button>
-            </div>
+            <span className="block truncate text-sm font-bold text-text">{c.name}</span>
             {needsContactReview(c) && <span className="ml-2 rounded bg-amber/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber">Needs review</span>}
             {c.company && <p className="text-[11px] text-text-muted">{c.company}</p>}
           </div>
@@ -391,9 +330,9 @@ export function Contacts() {
       maxWidth: 380,
       resizable: true,
       render: (c) => (
-        <div className="min-w-0 overflow-hidden text-sm text-text-muted">
-          <p className="truncate">{c.phone || '-'}</p>
-          {c.email && <p className="truncate text-[11px]">{c.email}</p>}
+        <div className="min-w-0 overflow-hidden text-sm">
+          <p className="truncate font-semibold text-text">{c.phone || '-'}</p>
+          {c.email && <p className="truncate text-[11px] font-medium text-text-muted">{c.email}</p>}
         </div>
       ),
     },
@@ -683,45 +622,6 @@ export function Contacts() {
             emptyMessage="No contacts yet. They appear here automatically when the agent qualifies a caller, or add/import them manually."
             footer={`Showing ${filtered.length} of ${contacts.length} contacts · ${contacts.filter(needsContactReview).length} need review`}
           />
-        )}
-
-        {editingContact && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Edit contact">
-            <Card padding="sm" className="w-full max-w-2xl bg-surface shadow-2xl">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div><h2 className="text-lg font-bold">Edit contact</h2><p className="text-xs text-text-muted">Update the name and calling context before testing.</p></div>
-                <button type="button" onClick={() => setEditingContact(null)} aria-label="Close edit contact" className="rounded-md p-2 text-text-muted hover:bg-surface-high hover:text-text"><Icon name="close" /></button>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {([
-                  ['firstName', 'First name'], ['lastName', 'Last name'],
-                  ['email', 'Email'], ['company', 'Organization'], ['tags', 'Tags (comma separated)'],
-                ] as const).map(([key, label]) => (
-                  <label key={key} className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
-                    {label}
-                    <input value={editForm[key]} onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary" />
-                  </label>
-                ))}
-                <PhoneNumberField
-                  dialCode={editDialCode}
-                  number={editForm.phone}
-                  onDialCodeChange={setEditDialCode}
-                  onNumberChange={(phone) => { setEditForm({ ...editForm, phone }); setFormError('') }}
-                  error={formError}
-                />
-                <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
-                  Status
-                  <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary">
-                    <option value="new">New</option><option value="qualified">Qualified</option><option value="site_visit">Site visit</option><option value="customer">Customer</option>
-                  </select>
-                </label>
-              </div>
-              <div className="mt-5 flex justify-end gap-2">
-                <button type="button" onClick={() => setEditingContact(null)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">Cancel</button>
-                <button type="button" onClick={saveContact} disabled={savingContact || !editForm.firstName.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50">{savingContact ? 'Saving…' : 'Save changes'}</button>
-              </div>
-            </Card>
-          </div>
         )}
 
         {callingContact && (

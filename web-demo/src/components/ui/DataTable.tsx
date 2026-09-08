@@ -208,7 +208,7 @@ export function DataTable<T>({
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full table-fixed text-left" style={{ minWidth: totalWidth }}>
               <thead>
-                <tr className="bg-surface-high/30 text-[11px] font-bold uppercase tracking-widest text-text-muted">
+                <tr className="border-b-2 border-border bg-surface-high text-[11px] font-bold uppercase tracking-widest text-text-muted">
                   {columns.map((col) => (
                     <th key={col.key} style={columnStyle(col)} className={`relative py-3 px-3 first:pl-5 ${columnDividers ? 'border-r border-border/70 last:border-r-0' : ''} ${col.sticky ? `sticky z-30 bg-surface-high ${stickyShadow(col)}` : ''} ${col.className ?? ''}`}>
                       {col.header}
@@ -278,7 +278,7 @@ export function DataTable<T>({
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full table-fixed text-left" style={{ minWidth: totalWidth }}>
               <thead>
-                <tr className="bg-surface-high/30 text-[11px] font-bold uppercase tracking-widest text-text-muted">
+                <tr className="border-b-2 border-border bg-surface-high text-[11px] font-bold uppercase tracking-widest text-text-muted">
                   {columns.map((col) => (
                     <th
                       key={col.key}
