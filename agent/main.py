@@ -3018,6 +3018,71 @@ class RealEstateAgent(Agent):
             self._OWN_TRACK_TIMEOUT_S,
         )
 
+    # VAD said a human spoke; if no transcript follows within this, speak
+    # anyway. Short enough that the caller is still holding the phone.
+    _HELD_OPENING_AFTER_SPEECH_S = 2.5
+    # Nothing heard at all. Generous, because speaking early is the bug this
+    # whole hold exists to prevent - but never "never".
+    _HELD_OPENING_HARD_CAP_S = 20.0
+
+    async def _release_held_opening_if_unheard(self) -> None:
+        """Say the opening even when the recipient's speech never transcribes.
+
+        The hold waits for on_user_turn_completed, which needs STT to produce
+        text. When it does not - a short bare "hello", a noisy line, a
+        language the pinned model does not catch - nothing else in the call
+        can recover, so the agent stays silent until the caller gives up.
+        Voice activity is the better signal here: it means a human is on the
+        line regardless of whether we understood the words.
+        """
+        userdata = self.session.userdata
+        started = time.monotonic()
+        heard_speech = False
+        stopped_speaking_at: float | None = None
+        reason = f"no caller speech within {self._HELD_OPENING_HARD_CAP_S:.0f}s"
+        while time.monotonic() - started < self._HELD_OPENING_HARD_CAP_S:
+            if not userdata.get("outbound_opening_pending"):
+                return  # released normally, by a real transcript
+            state = userdata.get("user_state")
+            if state == "speaking":
+                heard_speech = True
+                stopped_speaking_at = None
+            elif heard_speech and stopped_speaking_at is None:
+                # heard_speech guard, not just "state == listening": the call
+                # starts in listening, so without it the post-speech timer
+                # fires when nobody has spoken at all and the opening goes out
+                # ~2.5s in - straight back into ringback, the bug the hold
+                # exists to prevent. Caught by the hard-cap test.
+                stopped_speaking_at = time.monotonic()
+            if (
+                stopped_speaking_at is not None
+                and time.monotonic() - stopped_speaking_at >= self._HELD_OPENING_AFTER_SPEECH_S
+            ):
+                reason = "caller spoke but nothing transcribed"
+                break
+            await asyncio.sleep(0.2)
+        # pop, not read: whoever clears the flag first wins, so a transcript
+        # arriving in this same instant cannot produce two openings.
+        if not userdata.pop("outbound_opening_pending", False):
+            return
+        userdata["greeting_played"] = True
+        # logger only: _record_diagnostic is a closure inside entrypoint(),
+        # not module scope, so calling it from an agent method raises
+        # NameError - and it would raise here, outside the try below, killing
+        # this task and leaving the agent mute all over again.
+        logger.warning("releasing the held outbound opening — %s", reason)
+        try:
+            if self._welcome_message:
+                await self.session.say(self._welcome_message)
+            else:
+                self.session.generate_reply(
+                    instructions=(
+                        "Greet them briefly and say why you are calling, in one short line."
+                    )
+                )
+        except Exception:
+            logger.exception("could not release the held outbound opening")
+
     async def on_enter(self) -> None:
         # Outbound carriers can expose early media (ringback/announcements)
         # after reporting SIP 200/"active" but before the handset user is
@@ -3029,6 +3094,14 @@ class RealEstateAgent(Agent):
         if self._direction == "outbound" and self._first_speaker != "user":
             self.session.userdata["outbound_opening_pending"] = True
             logger.info("outbound opening held until the recipient speaks")
+            # Held on a TRANSCRIPT, released by a watchdog on VOICE. Call 915:
+            # 112 seconds, zero transcript turns, and VAD had the caller
+            # speaking twice (349ms and 452ms - two short "hello"s that STT
+            # returned nothing for). The agent never said a word for the whole
+            # call, and could not recover: greeting_played stays False while
+            # the opening is held, which is exactly what suppresses the
+            # silence check-in that would otherwise have rescued it.
+            asyncio.create_task(self._release_held_opening_if_unheard())
             return
         # first_speaker == 'user' means wait silently for the caller to open —
         # no greeting is ever queued, so away-tracking is valid immediately.
