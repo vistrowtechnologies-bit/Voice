@@ -3048,9 +3048,24 @@ class RealEstateAgent(Agent):
             self._OWN_TRACK_TIMEOUT_S,
         )
 
-    # VAD said a human spoke; if no transcript follows within this, speak
-    # anyway. Short enough that the caller is still holding the phone.
+    # After a SHORT first utterance - a bare "hello" - speak almost at once.
+    # Waiting for a transcript here is what produced the silence that killed
+    # calls 915 and 917: the recipient says hello, hears nothing, says it
+    # again, and hangs up. Nobody says hello three times unless they think
+    # the line is dead.
+    #
+    # Safe to trigger on voice alone because VAD does not fire on ringback.
+    # Measured across calls 915-919: the SIP leg reported "answered" at
+    # 3.5-4.2s and the real human did not speak until 9.3-16.6s, and in every
+    # one of those 5.8-13.0 second ringback windows VAD stayed completely
+    # quiet. Five calls, zero false positives.
+    _HELD_OPENING_AFTER_SHORT_SPEECH_S = 0.3
+    # After a LONGER first utterance they said something substantive, and the
+    # right reply answers it rather than reciting the opener over the top.
+    # Give the transcript time to land.
     _HELD_OPENING_AFTER_SPEECH_S = 2.5
+    # Under this, a first utterance is a greeting, not content.
+    _SHORT_FIRST_UTTERANCE_S = 1.2
     # Nothing heard at all. Generous, because speaking early is the bug this
     # whole hold exists to prevent - but never "never".
     _HELD_OPENING_HARD_CAP_S = 20.0
@@ -3067,30 +3082,29 @@ class RealEstateAgent(Agent):
         """
         userdata = self.session.userdata
         started = time.monotonic()
-        heard_speech = False
-        stopped_speaking_at: float | None = None
         reason = f"no caller speech within {self._HELD_OPENING_HARD_CAP_S:.0f}s"
         while time.monotonic() - started < self._HELD_OPENING_HARD_CAP_S:
             if not userdata.get("outbound_opening_pending"):
                 return  # released normally, by a real transcript
-            state = userdata.get("user_state")
-            if state == "speaking":
-                heard_speech = True
-                stopped_speaking_at = None
-            elif heard_speech and stopped_speaking_at is None:
-                # heard_speech guard, not just "state == listening": the call
-                # starts in listening, so without it the post-speech timer
-                # fires when nobody has spoken at all and the opening goes out
-                # ~2.5s in - straight back into ringback, the bug the hold
-                # exists to prevent. Caught by the hard-cap test.
-                stopped_speaking_at = time.monotonic()
-            if (
-                stopped_speaking_at is not None
-                and time.monotonic() - stopped_speaking_at >= self._HELD_OPENING_AFTER_SPEECH_S
-            ):
-                reason = "caller spoke but nothing transcribed"
-                break
-            await asyncio.sleep(0.2)
+            began = userdata.get("speech_started_at")
+            ended = userdata.get("speech_ended_at")
+            # Both stamps present and in order means they have finished an
+            # utterance. Still speaking (ended is stale or missing) means wait
+            # - never cut across someone mid-sentence.
+            if began and ended and ended >= began:
+                spoke_for = ended - began
+                grace = (
+                    self._HELD_OPENING_AFTER_SHORT_SPEECH_S
+                    if spoke_for <= self._SHORT_FIRST_UTTERANCE_S
+                    else self._HELD_OPENING_AFTER_SPEECH_S
+                )
+                if time.monotonic() - ended >= grace:
+                    reason = (
+                        f"caller spoke for {spoke_for:.1f}s and nothing transcribed "
+                        f"(waited {grace:.1f}s)"
+                    )
+                    break
+            await asyncio.sleep(0.05)
         # pop, not read: whoever clears the flag first wins, so a transcript
         # arriving in this same instant cannot produce two openings.
         if not userdata.pop("outbound_opening_pending", False):
@@ -5256,6 +5270,13 @@ async def entrypoint(ctx: JobContext) -> None:
 
     def _on_user_state_changed(ev) -> None:
         userdata["user_state"] = str(ev.new_state)
+        # Stamped here, not sampled by the watchdog's poll loop: a 349ms
+        # "hello" (call 915's, exactly) is shorter than a poll interval and
+        # can fall between two samples entirely. An event cannot be missed.
+        if str(ev.new_state) == "speaking":
+            userdata["speech_started_at"] = time.monotonic()
+        elif userdata.get("speech_started_at") and str(ev.new_state) != "speaking":
+            userdata["speech_ended_at"] = time.monotonic()
         _record_diagnostic(
             "state",
             "caller",
