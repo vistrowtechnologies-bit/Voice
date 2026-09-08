@@ -1180,8 +1180,14 @@ def set_call_extracted_data(call_id: int | None, extracted: dict) -> None:
         conn.close()
 
 
-def record_campaign_voicemail(contact_id: int, campaign_id: int) -> None:
-    """Correct a campaign contact from 'placed' to 'voicemail'.
+def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = "voicemail") -> None:
+    """Correct a campaign contact from 'placed' to what actually picked up.
+
+    outcome is 'voicemail' for an answering machine, or 'no_answer' for a
+    carrier announcement ("the number you have dialled is currently busy").
+    Both are non-conversations that the dialer optimistically recorded as
+    'placed', and both must schedule a retry rather than burn the contact —
+    'no_answer' is already a retrying status in calls_db.record_campaign_dial_result.
 
     The dialer records 'placed' the instant the dial goes out, because it
     deliberately does not wait for an answer (waiting would serialise dials
@@ -1211,9 +1217,9 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int) -> None:
             attempts = row["attempts"] or 1
             if attempts >= max_attempts:
                 conn.execute(
-                    "UPDATE campaign_contacts SET status = 'voicemail', outcome = 'voicemail', "
+                    "UPDATE campaign_contacts SET status = ?, outcome = ?, "
                     "next_attempt_at = NULL WHERE id = ?",
-                    (contact_id,),
+                    (outcome, outcome, contact_id),
                 )
             else:
                 next_at = (
@@ -1221,11 +1227,11 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int) -> None:
                     + datetime.timedelta(minutes=retry_minutes)
                 ).strftime("%Y-%m-%d %H:%M:%S")
                 conn.execute(
-                    "UPDATE campaign_contacts SET status = 'voicemail', outcome = 'voicemail', "
+                    "UPDATE campaign_contacts SET status = ?, outcome = ?, "
                     "next_attempt_at = ? WHERE id = ?",
-                    (next_at, contact_id),
+                    (outcome, outcome, next_at, contact_id),
                 )
-        logger.info("recorded voicemail for campaign contact %s", contact_id)
+        logger.info("recorded %s for campaign contact %s", outcome, contact_id)
     except Exception:
         logger.exception("could not record campaign voicemail for contact %s", contact_id)
     finally:

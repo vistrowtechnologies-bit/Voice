@@ -931,6 +931,36 @@ _VOICEMAIL_GREETING_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# A carrier announcement, not a person and not a voicemail box: "the number
+# you have dialled is currently busy / switched off / out of coverage area".
+# Indian carriers play these in English plus one or two local languages, and
+# LiveKit reports the leg as answered while they play, so the agent happily
+# holds a conversation with the recording. Confirmed on campaign call 890,
+# billed 3.1 credits for 46s of talking to a Gujarati "number is busy"
+# message, which it then tried to qualify as a lead.
+#
+# Anchored on the "<dialled> <number>" framing rather than loose words like
+# "busy" or "switched off", which a live human says constantly ("sorry, I'm
+# busy", "my phone was switched off"). The anchor phrase is one no human
+# opens a call with, and this only ever inspects the FIRST thing the other
+# party says on a call we placed.
+_CARRIER_UNAVAILABLE_PATTERN = re.compile(
+    # English: "the number you have dialed/dialled is ..."
+    r"number\s+you\s+(have\s+)?(dial|call)(ed|led)?|"
+    r"out\s+of\s+coverage\s+area|temporarily\s+out\s+of\s+service|"
+    r"all\s+lines\s+are\s+busy|not\s+reachable\s+at\s+the\s+moment|"
+    # Hindi: "आप द्वारा डायल किया गया नंबर"
+    r"(आप|आपके)\s*(के\s*)?द्वारा\s+डायल|डायल\s+किया\s+गया\s+नंबर|"
+    r"पहुँच\s+से\s+बाहर|पहुंच\s+से\s+बाहर|"
+    # Gujarati: "તમે જે નંબર ડાયલ કર્યો છે"
+    r"નંબર\s+ડાયલ|ડાયલ\s+કરેલ\s+નંબર|"
+    # Marathi: "आपण डायल केलेला क्रमांक"
+    r"डायल\s+केलेला\s+क्रमांक|"
+    # Tamil / Telugu / Kannada equivalents of "the number you dialled"
+    r"டயல்\s+செய்த\s+எண்|డయల్\s+చేసిన\s+నంబర్|ಡಯಲ್\s+ಮಾಡಿದ\s+ಸಂಖ್ಯೆ",
+    re.IGNORECASE,
+)
+
 # Marks the funnel's DISCOVERY->PAIN->IMPACT->SOLUTION_FIT->INTEREST jump in
 # _current_objective below — a caller asking about cost/plans is the
 # clearest signal they've moved from "understanding the product" to
@@ -3039,6 +3069,36 @@ class RealEstateAgent(Agent):
         # machine for the rest of the call.
         if not _userdata.get("voicemail_checked") and _userdata.get("direction") == "outbound":
             _userdata["voicemail_checked"] = True
+            # Checked BEFORE voicemail: a carrier announcement is not a
+            # mailbox and there is nobody on the line to hear a closing line,
+            # so unlike the voicemail branch below this says nothing at all —
+            # it just hangs up. Speaking here would only bill the tenant for
+            # more seconds of talking to a recording.
+            if text and _CARRIER_UNAVAILABLE_PATTERN.search(text):
+                _room = _userdata.get("room")
+                logger.info(
+                    "carrier unavailable announcement detected on outbound call "
+                    "(room=%s): %r", getattr(_room, "name", None), text[:120],
+                )
+                _contact_id = _userdata.get("campaign_contact_id")
+                _campaign_id = _userdata.get("campaign_id")
+                if _contact_id and _campaign_id:
+                    try:
+                        # 'no_answer', not 'voicemail': nobody picked up, the
+                        # network answered. Both retry, but the campaign
+                        # report should say what actually happened.
+                        await asyncio.to_thread(
+                            db.record_campaign_voicemail,
+                            int(_contact_id), int(_campaign_id), "no_answer",
+                        )
+                    except Exception:
+                        logger.exception(
+                            "could not record no_answer for contact %s", _contact_id
+                        )
+                _userdata["ending_call"] = True
+                _userdata["failure_reason"] = "carrier_unavailable"
+                await _hang_up(getattr(_room, "name", "") or "")
+                raise StopResponse()
             if text and _VOICEMAIL_GREETING_PATTERN.search(text):
                 _room = _userdata.get("room")
                 logger.info("voicemail detected on outbound call (room=%s)", getattr(_room, "name", None))
