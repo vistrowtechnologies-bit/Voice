@@ -53,5 +53,37 @@ class SarvamSttLanguage(unittest.TestCase):
         self.assertEqual(main._sarvam_stt_language("  hi-IN  "), "hi-IN")
 
 
+class ShortGreetingIsHeard(unittest.TestCase):
+    """A phone call opens with a short bare "hello" and nothing else.
+
+    Call 915: VAD detected the recipient speaking twice (349ms and 452ms,
+    about 11 and 14 frames at 32ms) and STT produced no transcript for
+    either, so the agent stayed silent for 112 seconds while they said hello
+    three times. Sarvam's default first-turn minimum suppresses false starts,
+    which is right for dictation and wrong for a greeting.
+    """
+
+    def _opts(self):
+        return main._build_stt(None, "hi-IN")._opts
+
+    def test_first_turn_threshold_is_low_enough_for_a_short_hello(self):
+        # 4 frames = ~128ms, comfortably under the 349ms that was dropped.
+        frames = self._opts().first_turn_min_speech_frames
+        self.assertIsNotNone(frames)
+        self.assertLessEqual(frames * 32, 200)
+
+    def test_steady_state_threshold_is_left_alone(self):
+        # Only the FIRST turn is loosened. Lowering it mid-call would let
+        # breath and line noise trigger turns for the whole conversation.
+        self.assertIsNone(self._opts().min_speech_frames)
+
+    def test_mode_stays_transcribe(self):
+        # codemix returns Latin "Hello" and mixed script, which would break
+        # the Devanagari exit-intent patterns. Verified against the API:
+        # language=hi-IN mode=transcribe already returns "हेलो।" for a bare
+        # English "Hello", so it is not deaf to English.
+        self.assertEqual(self._opts().mode, "transcribe")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

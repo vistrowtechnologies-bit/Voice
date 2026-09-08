@@ -1740,6 +1740,26 @@ def _build_stt(speech_context: str | None = None, reply_language: str | None = N
         # the STT side and leaves max_delay=4.0 alone until measurement shows
         # finalization actually got faster.
         high_vad_sensitivity=True,
+        # A phone call opens with a short bare "hello" and nothing else, and
+        # that is the one utterance we cannot afford to miss: on an outbound
+        # call it is the signal that releases the held opening. Call 915 had
+        # VAD detect the recipient speaking twice - 349ms and 452ms, about 11
+        # and 14 frames at 32ms - and produced no transcript for either, so
+        # the agent stayed silent for 112 seconds while they said hello three
+        # times.
+        #
+        # Sarvam's default first-turn minimum is tuned to suppress false
+        # starts, which is the right default for a long dictation and the
+        # wrong one for a greeting. Lowered only for the FIRST turn: a
+        # spurious trigger there costs a wasted greeting into a line we are
+        # already waiting on, while a missed one costs the whole call. Steady
+        # -state min_speech_frames is left at Sarvam's default so mid-call
+        # breath and line noise are still filtered.
+        #
+        # NOT the cause originally blamed: hi-IN pinning transcribes English
+        # fine. Verified against the API - a bare "Hello" comes back as
+        # "हेलो।" under language=hi-IN mode=transcribe.
+        first_turn_min_speech_frames=4,
     )
     if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
         return sarvam_stt
