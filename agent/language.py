@@ -454,3 +454,44 @@ def catalog_rows_mentioned(text: str, catalog_index: str) -> list[str]:
         if any(sounds_like(w, lw) for lw in loc_words for w in words if len(w) > 2):
             rows.append(line.strip())
     return rows
+
+
+# The caller inviting you to carry on: "boliye na", "haan bataiye", "go
+# ahead", "हो सांगा". Two places need exactly this and they used to disagree.
+#
+# On an outbound call it is the FIRST thing a recipient says after hello, and
+# both readings of it were wrong. main.py's opening-ack check listed "बोलिए"
+# but not the particle "ना", so "बोलिए ना।" failed a full-string match and the
+# configured opening was never played verbatim - the model improvised one
+# instead (flagged live as "Agent replayed its opening line mid-call").
+# Meanwhile end_call had no guard for it at all: on campaign calls 917 and
+# 918 the recipient said "बोलिए ना।" and "हाँ बोलिए।", and the agent thanked
+# them and hung up 39 and 52 seconds in, on people who had just asked it to
+# speak.
+INVITATION_TO_CONTINUE_PATTERN = re.compile(
+    # imperative "speak / tell me", the core of it
+    r"\b(bol(o|iye|iy?e)|batao|bataiye|bataye|kahiye|kaho)\b|"
+    r"(बोलो|बोलिए|बोलिये|बताओ|बताइए|बताइये|बताएं|कहिए|कहिये)|"
+    r"(सांगा|सांगू|बोला)|"                       # Marathi
+    # "yes we can talk / carry on / I'm listening"
+    r"\b(go ahead|carry on|please continue|i'?m listening|tell me)\b|"
+    r"(बात\s*कर\s*(सकते|सकता|सकती)|सुन\s*रहा|सुन\s*रही)|"
+    r"(बोलू\s*शकता|बोला\s*ना)",
+    re.IGNORECASE,
+)
+
+
+def invites_you_to_continue(text: str) -> bool:
+    """True when the caller has just asked you to speak or carry on.
+
+    Never a reason to hang up, and on an outbound call it is permission to
+    deliver the opening. Capped in length because anything long enough to
+    carry a requirement is a requirement, not an invitation - "bataiye kitne
+    ka padega" is a question to answer, not a cue to recite the opener.
+    30 characters, not 60: a real invitation is short ("बोलिए ना।" is 9,
+    "हाँ, बात कर सकते हैं।" is 21). At 60 a whole question sentence slipped
+    through on the word "bataiye". end_call has its own question guard for
+    those, so nothing is lost by keeping this narrow.
+    """
+    t = (text or "").strip()
+    return bool(t) and len(t) <= 30 and bool(INVITATION_TO_CONTINUE_PATTERN.search(t))

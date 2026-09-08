@@ -25,6 +25,7 @@ from language import (
     GOOGLE_LANGUAGE_NAMES,
     LANGUAGE_NAMES,
     detect_reply_language,
+    invites_you_to_continue,
     is_google_multilingual,
     to_google_code,
 )
@@ -1799,6 +1800,18 @@ async def end_call(context: RunContext) -> str:
                 "more than a fragment, which usually means they cannot hear you or the line is "
                 "poor, not that they are done. Say once, clearly, that you cannot hear them "
                 "properly and ask them to repeat. Do not thank them and do not say goodbye."
+            )
+        # They just asked you to speak. Campaign calls 917 and 918 ended 39
+        # and 52 seconds in, on recipients whose last words were "बोलिए ना।"
+        # and "हाँ बोलिए।" - go ahead, speak. Every other guard passed them:
+        # nine characters is not a fragment, and neither is a question, so
+        # nothing here objected to hanging up on a person actively inviting
+        # the agent to continue.
+        if _last and invites_you_to_continue(_last):
+            return (
+                "NOT ending the call — the caller has just asked you to go ahead and speak. "
+                "That is an invitation to continue, the opposite of being finished. Say what "
+                "you called about, or ask your next question."
             )
         # You asked them something and they have not answered yet. Ending
         # here is incoherent: it hangs up on your own question.

@@ -57,6 +57,7 @@ from language import (
     ELEVENLABS_SUPPORTED_LANGUAGES,
     LANGUAGE_NAMES,
     detect_reply_language,
+    invites_you_to_continue,
     sounds_like,
     to_google_code,
 )
@@ -396,9 +397,18 @@ _OPENING_ACK_PATTERN = re.compile(
 
 def _looks_like_opening_ack(text: str) -> bool:
     text = (text or "").strip()
+    if not text:
+        return False
+    # "बोलिए ना।" and "हाँ, बात कर सकते हैं।" are the two commonest ways an
+    # outbound recipient hands you the floor, and neither matched the
+    # word-list above: it has "बोलिए" but not the particle "ना", and the
+    # full-string anchor rejects anything with an unlisted word in it. So the
+    # configured opening was skipped and the model improvised one instead.
+    if invites_you_to_continue(text):
+        return True
     # Length cap as a second guard: anything long enough to carry a
     # requirement is not an acknowledgement no matter what it starts with.
-    return bool(text) and len(text) <= 40 and bool(_OPENING_ACK_PATTERN.match(text))
+    return len(text) <= 40 and bool(_OPENING_ACK_PATTERN.match(text))
 
 
 def catalog_localities(catalog_index: str) -> list[str]:
