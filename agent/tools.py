@@ -43,6 +43,54 @@ logger = logging.getLogger("real-estate-tools")
 # this product speaks, so it doesn't need translating to sound natural.
 _TOOL_FILLER_TEXT = "One second..."
 
+# log_lead's fan-out runs in the background instead of being awaited.
+#
+# Measured over calls 905-926: a turn with no tool call reaches speech in
+# 1,642ms; a turn containing log_lead takes 3,708ms. The tool's own body is
+# 6ms (median, n=15) — the entire ~2s difference is this fan-out plus the
+# second full-prompt LLM call it delays. Nothing in the spoken reply depends
+# on a webhook having landed, and lead_data is already updated in memory
+# before this runs, so the summary handed back to the model stays true.
+#
+# Held in a module-level set because asyncio keeps only a WEAK reference to a
+# running task: an unreferenced one can be garbage-collected mid-flight, which
+# would silently drop leads rather than merely delaying them.
+_BACKGROUND_FANOUT: set[asyncio.Task] = set()
+
+
+def _fan_out_in_background(context: RunContext, event: dict) -> None:
+    async def _run() -> None:
+        try:
+            await _publish_event(context, event)
+            await _post_webhook(event)
+            await _fan_out_integrations(context, event)
+        except Exception:
+            # Never let a webhook failure surface as a tool error: the lead is
+            # already recorded in lead_data and persisted with the call.
+            logger.exception("background lead fan-out failed")
+
+    task = asyncio.create_task(_run())
+    _BACKGROUND_FANOUT.add(task)
+    task.add_done_callback(_BACKGROUND_FANOUT.discard)
+
+
+async def drain_background_fanout(timeout: float = 5.0) -> None:
+    """Let in-flight lead fan-out finish before the call is torn down.
+
+    Without this, moving the fan-out off the speech path would trade latency
+    for lost webhooks on any lead logged in the last moments of a call —
+    _publish_event writes to the room, which stops existing at shutdown.
+    """
+    pending = [t for t in _BACKGROUND_FANOUT if not t.done()]
+    if not pending:
+        return
+    _, still_running = await asyncio.wait(pending, timeout=timeout)
+    if still_running:
+        logger.warning(
+            "%d lead fan-out task(s) still running after %.1fs — abandoning",
+            len(still_running), timeout,
+        )
+
 
 def _tool_filler(context: RunContext):
     """with_filler, unless main.py's latency backchannel already covered this
@@ -1519,10 +1567,10 @@ async def log_lead(
 
     logger.info("lead updated: %s", {k: lead_data.get(k) for k in changed})
     event = {"type": "lead_update", **{k: lead_data.get(k, "") for k in _LEAD_FIELDS}}
-    async with _tool_filler(context):
-        await _publish_event(context, event)
-        await _post_webhook(event)
-        await _fan_out_integrations(context, event)
+    # Deliberately not awaited, and deliberately no _tool_filler: there is now
+    # nothing to fill, because the caller hears the real reply instead of
+    # "One second..." followed by ~2s of webhook. See _fan_out_in_background.
+    _fan_out_in_background(context, event)
 
     # Hand the merged state back so the model can SEE what is now known
     # rather than assuming the write landed. This is what it should be

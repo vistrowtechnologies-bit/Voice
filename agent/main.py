@@ -78,6 +78,7 @@ from tools import (
     build_custom_function_tools,
     capture_platform_lead,
     check_calendar_availability,
+    drain_background_fanout,
     end_call,
     log_lead,
     request_callback,
@@ -5891,6 +5892,10 @@ async def entrypoint(ctx: JobContext) -> None:
             db.save_caller_memory(cfg.get("account_id"), resolved_agent_id, agent._caller_phone, memory_summary)
 
     ctx.add_shutdown_callback(log_call)
+    # log_lead's webhook/integration fan-out no longer blocks the spoken reply,
+    # so a lead logged in the final seconds of a call could otherwise be cut off
+    # by teardown. Drain it here instead of paying ~2s on every turn.
+    ctx.add_shutdown_callback(drain_background_fanout)
 
     # Hard call-length ceiling: tear the room down after max_call_duration_s.
     if max_call_duration_s > 0:
