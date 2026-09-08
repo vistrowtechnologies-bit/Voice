@@ -217,10 +217,31 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
   }
 
   if (call === null) {
+    // Reached by deep-linking or refreshing a /dashboard/calls/:id URL for a
+    // call this workspace cannot see - most often a link copied while
+    // impersonating another tenant, since calls are scoped per account. The
+    // old version printed four words onto a blurred backdrop with no way
+    // out, which reads as a broken page rather than a permissions boundary.
     return (
       <ModalShell onClose={onClose}>
-        <div className="p-6">
-          <p className="text-sm text-text-muted">Call not found.</p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface-high text-text-muted">
+            <Icon name="search_off" className="text-[24px]" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-text">This call isn&apos;t in this workspace</p>
+            <p className="mt-1 max-w-sm text-xs text-text-muted">
+              It may belong to a different account, or it may have been deleted. Calls are only
+              visible to the workspace they were made in.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-1 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg transition-opacity hover:opacity-90"
+          >
+            Back to all calls
+          </button>
         </div>
       </ModalShell>
     )
@@ -264,7 +285,12 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
             <Icon name="close" className="text-[18px]" />
           </button>
         </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* Small screens keep one scrolling column (the layout is stacked, so
+          the transcript has nothing to scroll beside). From lg up the two
+          columns are side by side and each scrolls independently, so a long
+          transcript no longer drags Call details and Notes up out of view -
+          it stays inside its own card. */}
+      <div className="min-h-0 flex-1 overflow-y-auto lg:overflow-hidden">
 
       <div
         role="tablist"
@@ -483,8 +509,8 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           pill, and credits/sentiment/duration are per-call facts that belong
           with the rest of them in Call details - a two-tile band spanning the
           full dialog gave them more weight than the transcript underneath. */}
-      <section className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:grid-cols-3">
-        <Card className="flex flex-col gap-3 lg:col-span-2">
+      <section className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:h-full lg:min-h-0 lg:grid-cols-3">
+        <Card className="flex flex-col gap-3 lg:col-span-2 lg:min-h-0">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-text-muted">Call transcript</h2>
             {!!call.transcript?.length && (
@@ -497,7 +523,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
               </button>
             )}
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
             {(call.transcript ?? []).map((line, i) => (
               <div
                 key={i}
@@ -517,7 +543,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           </div>
         </Card>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
           <Card>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-text-muted">Conversation intelligence</h2>
