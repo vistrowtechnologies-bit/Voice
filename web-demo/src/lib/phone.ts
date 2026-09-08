@@ -20,5 +20,28 @@ export const COMMON_DIAL_CODES = [
 export function composeE164(dialCode: string, localNumber: string): string {
   const input = localNumber.trim()
   if (input.startsWith('+')) return `+${input.slice(1).replace(/\D/g, '')}`
-  return `${dialCode}${input.replace(/\D/g, '')}`
+  let digits = input.replace(/\D/g, '')
+  const countryDigits = dialCode.replace(/\D/g, '')
+
+  // Pasting 919812345678 while +91 is selected must not become
+  // +91919812345678. Accept that common operator workflow as-is.
+  if (digits.startsWith(countryDigits) && digits.length >= 8 && digits.length <= 15) {
+    return `+${digits}`
+  }
+  // Indian numbers are frequently copied with the domestic trunk prefix.
+  if (dialCode === '+91' && digits.length === 11 && digits.startsWith('0')) {
+    digits = digits.slice(1)
+  }
+  return `${dialCode}${digits}`
+}
+
+/** Split a stored number for the country-code selector. Unknown explicit
+ * international codes stay intact in the number box so saving is lossless. */
+export function splitE164(value: string, fallbackDial = '+91'): { dialCode: string; localNumber: string } {
+  const input = value.trim()
+  const match = [...COMMON_DIAL_CODES]
+    .sort((a, b) => b.dial.length - a.dial.length)
+    .find((item) => input.startsWith(item.dial))
+  if (!match) return { dialCode: fallbackDial, localNumber: input }
+  return { dialCode: match.dial, localNumber: input.slice(match.dial.length) }
 }

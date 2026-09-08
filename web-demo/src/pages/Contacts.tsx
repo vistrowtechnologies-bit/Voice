@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { PhoneNumberField } from '../components/PhoneNumberField'
 import { Card } from '../components/ui/Card'
 import { DataTable } from '../components/ui/DataTable'
 import type { DataTableColumn } from '../components/ui/DataTable'
@@ -20,6 +21,7 @@ import {
   updateContact,
 } from '../lib/api'
 import type { Contact, CsvPreview, PhoneNumber } from '../lib/types'
+import { composeE164, isE164, splitE164 } from '../lib/phone'
 
 const MAPPING_TARGETS = [
   { value: '', label: 'Skip this column' },
@@ -40,7 +42,7 @@ const STATUS_STYLES: Record<string, string> = {
   customer: 'bg-amber/20 text-amber border-amber/30',
 }
 
-const PLACEHOLDER_VALUES = new Set(['', '-', 'na', 'n/a', 'not applicable', 'not provided', 'not provided yet', 'pending'])
+const PLACEHOLDER_VALUES = new Set(['', '-', 'unknown', 'na', 'n/a', 'not applicable', 'not provided', 'not provided yet', 'pending'])
 function needsContactReview(contact: Contact) {
   const name = contact.name.trim().toLowerCase()
   const phone = contact.phone.trim().toLowerCase()
@@ -53,6 +55,9 @@ export function Contacts() {
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ name: '', phone: '', email: '', tags: '' })
+  const [addDialCode, setAddDialCode] = useState('+91')
+  const [editDialCode, setEditDialCode] = useState('+91')
+  const [formError, setFormError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   // Column-mapping import flow: pick a file -> preview headers/sample rows
@@ -100,10 +105,21 @@ export function Contacts() {
 
   const handleAdd = async () => {
     if (!form.name && !form.phone) return
-    await createContact({ ...form, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean) })
-    setForm({ name: '', phone: '', email: '', tags: '' })
-    setShowAdd(false)
-    reload()
+    const phone = form.phone.trim() ? composeE164(addDialCode, form.phone) : ''
+    if (phone && !isE164(phone)) {
+      setFormError('Enter a valid phone number.')
+      return
+    }
+    setFormError('')
+    try {
+      await createContact({ ...form, phone, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean) })
+      setForm({ name: '', phone: '', email: '', tags: '' })
+      setAddDialCode('+91')
+      setShowAdd(false)
+      reload()
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not save this contact.')
+    }
   }
 
   const handlePickFile = async (file: File) => {
@@ -154,7 +170,8 @@ export function Contacts() {
         }
       }
       const result = await importContactsMapped(importCsv, finalMapping)
-      alert(`Imported ${result.imported} contacts`)
+      const skipped = result.skippedMissingPhone + result.skippedInvalidPhone
+      alert(`Imported ${result.imported} contacts${skipped ? ` · skipped ${skipped} (${result.skippedMissingPhone} missing phone, ${result.skippedInvalidPhone} invalid phone)` : ''}`)
       cancelImport()
       reload()
     } finally {
@@ -163,7 +180,7 @@ export function Contacts() {
   }
 
   const handleDeleteAll = async () => {
-    if (!confirm('Delete ALL contacts? Contacts captured from calls will re-sync on next load.')) return
+    if (!confirm('Delete ALL contacts? Pending campaign calls for these contacts will be blocked. Call records remain available in All Calls History.')) return
     await deleteAllContacts()
     reload()
   }
@@ -205,26 +222,35 @@ export function Contacts() {
 
   const openEdit = (contact: Contact) => {
     const parts = contact.name.trim().split(/\s+/)
+    const phone = splitE164(contact.phone)
     setEditForm({
       firstName: parts[0] || '',
       lastName: parts.slice(1).join(' '),
-      phone: contact.phone,
+      phone: phone.localNumber,
       email: contact.email,
       company: contact.company,
       status: contact.status,
       tags: contact.tags.join(', '),
     })
+    setEditDialCode(phone.dialCode)
+    setFormError('')
     setEditingContact(contact)
   }
 
   const saveContact = async () => {
     if (!editingContact || !editForm.firstName.trim()) return
+    const phone = editForm.phone.trim() ? composeE164(editDialCode, editForm.phone) : ''
+    if (phone && !isE164(phone)) {
+      setFormError('Enter a valid phone number.')
+      return
+    }
     setSavingContact(true)
+    setFormError('')
     try {
       await updateContact(editingContact.id, {
         firstName: editForm.firstName.trim(),
         lastName: editForm.lastName.trim(),
-        phone: editForm.phone.trim(),
+        phone,
         email: editForm.email.trim(),
         company: editForm.company.trim(),
         status: editForm.status,
@@ -232,6 +258,8 @@ export function Contacts() {
       })
       setEditingContact(null)
       await reload()
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not save these changes.')
     } finally {
       setSavingContact(false)
     }
@@ -466,7 +494,6 @@ export function Contacts() {
             {(
               [
                 ['name', 'Name'],
-                ['phone', 'Phone'],
                 ['email', 'Email'],
                 ['tags', 'Tags (comma separated)'],
               ] as const
@@ -479,6 +506,14 @@ export function Contacts() {
                 className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
               />
             ))}
+            <PhoneNumberField
+              label=""
+              dialCode={addDialCode}
+              number={form.phone}
+              onDialCodeChange={setAddDialCode}
+              onNumberChange={(phone) => { setForm({ ...form, phone }); setFormError('') }}
+              error={formError}
+            />
             <button onClick={handleAdd} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90">
               Save contact
             </button>
@@ -578,7 +613,7 @@ export function Contacts() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {([
-                  ['firstName', 'First name'], ['lastName', 'Last name'], ['phone', 'Phone'],
+                  ['firstName', 'First name'], ['lastName', 'Last name'],
                   ['email', 'Email'], ['company', 'Organization'], ['tags', 'Tags (comma separated)'],
                 ] as const).map(([key, label]) => (
                   <label key={key} className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
@@ -586,6 +621,13 @@ export function Contacts() {
                     <input value={editForm[key]} onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary" />
                   </label>
                 ))}
+                <PhoneNumberField
+                  dialCode={editDialCode}
+                  number={editForm.phone}
+                  onDialCodeChange={setEditDialCode}
+                  onNumberChange={(phone) => { setEditForm({ ...editForm, phone }); setFormError('') }}
+                  error={formError}
+                />
                 <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
                   Status
                   <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary">

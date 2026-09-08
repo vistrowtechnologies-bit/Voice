@@ -225,7 +225,7 @@ export const deleteContactNote = (contactId: number, noteId: number) =>
 // field, then import with that mapping.
 export const previewContactsImport = (csv: string) => send<CsvPreview>('POST', '/contacts/import/preview', { csv })
 export const importContactsMapped = (csv: string, mapping: Record<string, string>) =>
-  send<{ imported: number }>('POST', '/contacts/import/mapped', { csv, mapping })
+  send<{ imported: number; skippedMissingPhone: number; skippedInvalidPhone: number }>('POST', '/contacts/import/mapped', { csv, mapping })
 
 // -------------------------------------------------------- knowledge base
 

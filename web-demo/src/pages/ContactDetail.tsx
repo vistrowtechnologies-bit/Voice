@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { PhoneNumberField } from '../components/PhoneNumberField'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { StatTile } from '../components/ui/StatTile'
@@ -16,6 +17,7 @@ import {
   updateContact,
 } from '../lib/api'
 import type { ContactDetail as ContactDetailType, PhoneNumber } from '../lib/types'
+import { composeE164, isE164, splitE164 } from '../lib/phone'
 
 const TABS = ['Activity', 'Calls', 'Campaigns', 'Notes'] as const
 type Tab = (typeof TABS)[number]
@@ -51,6 +53,8 @@ export function ContactDetail() {
   const [callError, setCallError] = useState('')
   const [numbers, setNumbers] = useState<PhoneNumber[]>([])
   const [fromNumber, setFromNumber] = useState('')
+  const [editDialCode, setEditDialCode] = useState('+91')
+  const [formError, setFormError] = useState('')
   const [editForm, setEditForm] = useState({
     firstName: '',
     lastName: '',
@@ -110,25 +114,34 @@ export function ContactDetail() {
 
   const openEdit = () => {
     const parts = contact.name.trim().split(/\s+/)
+    const phone = splitE164(contact.phone)
     setEditForm({
       firstName: parts[0] || '',
       lastName: parts.slice(1).join(' '),
-      phone: contact.phone,
+      phone: phone.localNumber,
       email: contact.email,
       company: contact.company,
       status: contact.status,
       tags: contact.tags.join(', '),
     })
+    setEditDialCode(phone.dialCode)
+    setFormError('')
     setShowEdit(true)
   }
 
   const saveContact = async () => {
+    const phone = editForm.phone.trim() ? composeE164(editDialCode, editForm.phone) : ''
+    if (phone && !isE164(phone)) {
+      setFormError('Enter a valid phone number.')
+      return
+    }
     setSavingContact(true)
+    setFormError('')
     try {
       const updated = await updateContact(contact.id, {
         firstName: editForm.firstName.trim(),
         lastName: editForm.lastName.trim(),
-        phone: editForm.phone.trim(),
+        phone,
         email: editForm.email.trim(),
         company: editForm.company.trim(),
         status: editForm.status,
@@ -136,6 +149,8 @@ export function ContactDetail() {
       })
       setContact(updated)
       setShowEdit(false)
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not save these changes.')
     } finally {
       setSavingContact(false)
     }
@@ -143,10 +158,16 @@ export function ContactDetail() {
 
   const openCall = async () => {
     setCallError('')
-    const available = (await fetchPhoneNumbers()).filter((number) => number.status === 'active' && number.agentId)
-    setNumbers(available)
-    setFromNumber(available[0]?.number || '')
     setShowCall(true)
+    try {
+      const available = (await fetchPhoneNumbers()).filter((number) => number.status === 'active' && number.agentId)
+      setNumbers(available)
+      setFromNumber(available[0]?.number || '')
+    } catch {
+      setNumbers([])
+      setFromNumber('')
+      setCallError('Could not load an assigned phone number.')
+    }
   }
 
   const placeCall = async () => {
@@ -255,7 +276,13 @@ export function ContactDetail() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <EditField label="First name" value={editForm.firstName} onChange={(value) => setEditForm({ ...editForm, firstName: value })} />
                 <EditField label="Last name" value={editForm.lastName} onChange={(value) => setEditForm({ ...editForm, lastName: value })} />
-                <EditField label="Phone" value={editForm.phone} onChange={(value) => setEditForm({ ...editForm, phone: value })} placeholder="+919812345678" />
+                <PhoneNumberField
+                  dialCode={editDialCode}
+                  number={editForm.phone}
+                  onDialCodeChange={setEditDialCode}
+                  onNumberChange={(phone) => { setEditForm({ ...editForm, phone }); setFormError('') }}
+                  error={formError}
+                />
                 <EditField label="Email" type="email" value={editForm.email} onChange={(value) => setEditForm({ ...editForm, email: value })} />
                 <EditField label="Organization" value={editForm.company} onChange={(value) => setEditForm({ ...editForm, company: value })} />
                 <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted">

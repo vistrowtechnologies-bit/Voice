@@ -404,6 +404,10 @@ CREATE TABLE IF NOT EXISTS contacts (
     tags TEXT DEFAULT '',
     source TEXT DEFAULT 'manual',
     last_called_at TEXT,
+    -- Soft deletion prevents call-derived contacts from silently reappearing
+    -- on the next GET /contacts sync. Re-adding the same canonical number
+    -- explicitly clears this tombstone.
+    deleted_at TEXT,
     created_at TEXT DEFAULT {_NOW},
     updated_at TEXT DEFAULT {_NOW},
     UNIQUE(account_id, phone)
@@ -1290,6 +1294,7 @@ def init_tables() -> None:
             conn.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS company TEXT DEFAULT ''")
             conn.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS custom_fields TEXT DEFAULT '{}'")
             conn.execute(f"ALTER TABLE contacts ADD COLUMN IF NOT EXISTS updated_at TEXT DEFAULT {_NOW}")
+            conn.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS deleted_at TEXT")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS company TEXT DEFAULT ''")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS custom_fields TEXT DEFAULT '{}'")
             # Curated avatar color + custom greeting bubble, added after the
@@ -3644,6 +3649,29 @@ def consume_password_reset(token: str) -> int | None:
 # -------------------------------------------------------------- contacts
 
 
+_CONTACT_PLACEHOLDERS = {"", "-", "unknown", "na", "n/a", "not applicable", "not provided", "pending"}
+
+
+def canonical_contact_phone(value: str | None) -> str:
+    """Return the only phone representation Contacts is allowed to store.
+
+    Legacy Indian 10-digit and 0-prefixed values are accepted for operator
+    convenience and expanded to +91. Explicit international E.164 values are
+    preserved. Invalid/ambiguous values return an empty string so callers can
+    reject them before a carrier request is created.
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    # A leading + is an explicit country code. Do not reinterpret an invalid
+    # +0… value as a ten-digit Indian local number.
+    if raw.startswith("+"):
+        canonical = "+" + "".join(char for char in raw[1:] if char.isdigit())
+    else:
+        canonical = _normalize_sip_number(raw)
+    return canonical if re.fullmatch(r"\+[1-9]\d{7,14}", canonical) else ""
+
+
 def _sync_contacts_from_calls(conn: dbconn.Conn, account_id: int) -> None:
     """Upsert a contact for every call that captured a phone number."""
     rows = conn.execute(
@@ -3670,20 +3698,31 @@ def _sync_contacts_from_calls(conn: dbconn.Conn, account_id: int) -> None:
     ).fetchall()
     with conn:
         for row in rows:
+            phone = canonical_contact_phone(row["lead_phone"])
+            if not phone:
+                logger.warning("skipping call-derived contact with invalid phone %r", row["lead_phone"])
+                continue
             conn.execute(
                 f"""
                 INSERT INTO contacts (account_id, name, phone, status, source, last_called_at)
                 VALUES (?, ?, ?, ?, 'call', ?)
                 ON CONFLICT(account_id, phone) DO UPDATE SET
-                    name = excluded.name,
-                    status = excluded.status,
+                    -- A transcript-derived placeholder must never erase a
+                    -- name/status the operator corrected by hand.
+                    name = CASE
+                        WHEN contacts.source = 'call' AND lower(trim(contacts.name)) IN ('', '-', 'unknown', 'na', 'n/a', 'not applicable', 'not provided', 'pending')
+                        THEN excluded.name ELSE contacts.name END,
+                    status = CASE
+                        WHEN excluded.status = 'site_visit' AND contacts.status IN ('new', 'qualified') THEN 'site_visit'
+                        ELSE contacts.status
+                    END,
                     last_called_at = excluded.last_called_at,
                     updated_at = {_NOW}
                 """,
                 (
                     account_id,
                     row["lead_name"] or "Unknown",
-                    row["lead_phone"],
+                    phone,
                     "site_visit" if row["visited"] else "qualified",
                     row["last_call"],
                 ),
@@ -3710,7 +3749,7 @@ def list_contacts(account_id: int) -> list[dict]:
                 "updatedAt": r["updated_at"],
             }
             for r in conn.execute(
-                "SELECT * FROM contacts WHERE account_id = ? ORDER BY created_at DESC", (account_id,)
+                "SELECT * FROM contacts WHERE account_id = ? AND deleted_at IS NULL ORDER BY created_at DESC", (account_id,)
             ).fetchall()
         ]
     finally:
@@ -3729,7 +3768,9 @@ def _safe_json_loads(raw: str | None) -> dict:
 
 def create_contact(data: dict, account_id: int) -> None:
     raw_phone = data.get("phone") or None
-    phone = _normalize_sip_number(raw_phone) if raw_phone else None
+    phone = canonical_contact_phone(raw_phone) if raw_phone else None
+    if raw_phone and not phone:
+        raise ValueError("Enter a valid phone number with country code")
     conn = _connect()
     try:
         with conn:
@@ -3741,6 +3782,7 @@ def create_contact(data: dict, account_id: int) -> None:
                     name = excluded.name, email = excluded.email, company = excluded.company,
                     custom_fields = excluded.custom_fields,
                     status = excluded.status, tags = excluded.tags,
+                    deleted_at = NULL,
                     updated_at = {_NOW}
                 """,
                 (
@@ -3772,7 +3814,7 @@ def update_contact(contact_id: int, data: dict, account_id: int) -> dict | None:
     conn = _connect()
     try:
         current = conn.execute(
-            "SELECT * FROM contacts WHERE id = ? AND account_id = ?", (contact_id, account_id)
+            "SELECT * FROM contacts WHERE id = ? AND account_id = ? AND deleted_at IS NULL", (contact_id, account_id)
         ).fetchone()
         if current is None:
             return None
@@ -3788,8 +3830,8 @@ def update_contact(contact_id: int, data: dict, account_id: int) -> dict | None:
             name = str(data.get("name", current["name"]) or "").strip() or "Unknown"
 
         raw_phone = str(data.get("phone", current["phone"] or "") or "").strip()
-        phone = _normalize_sip_number(raw_phone) if raw_phone else ""
-        if raw_phone and not re.fullmatch(r"\+[1-9]\d{7,14}", phone):
+        phone = canonical_contact_phone(raw_phone) if raw_phone else ""
+        if raw_phone and not phone:
             raise ValueError("Enter a valid phone number with country code")
 
         duplicate = conn.execute(
@@ -3842,7 +3884,25 @@ def delete_contact(contact_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("DELETE FROM contacts WHERE id = ? AND account_id = ?", (contact_id, account_id))
+            row = conn.execute(
+                "SELECT phone FROM contacts WHERE id = ? AND account_id = ? AND deleted_at IS NULL",
+                (contact_id, account_id),
+            ).fetchone()
+            if row is None:
+                return
+            phone_norm = _normalize_phone(row["phone"] or "")
+            conn.execute(
+                f"UPDATE contacts SET deleted_at = {_NOW}, updated_at = {_NOW} WHERE id = ? AND account_id = ?",
+                (contact_id, account_id),
+            )
+            # Removing a contact must also guarantee that an untouched queued
+            # snapshot cannot call them later.
+            if phone_norm:
+                conn.execute(
+                    "UPDATE campaign_contacts SET status = 'blocked', outcome = 'contact_deleted', next_attempt_at = NULL "
+                    "WHERE account_id = ? AND phone_norm = ? AND status = 'pending'",
+                    (account_id, phone_norm),
+                )
     finally:
         conn.close()
 
@@ -3851,7 +3911,15 @@ def delete_all_contacts(account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("DELETE FROM contacts WHERE account_id = ?", (account_id,))
+            conn.execute(
+                f"UPDATE contacts SET deleted_at = {_NOW}, updated_at = {_NOW} WHERE account_id = ? AND deleted_at IS NULL",
+                (account_id,),
+            )
+            conn.execute(
+                "UPDATE campaign_contacts SET status = 'blocked', outcome = 'contact_deleted', next_attempt_at = NULL "
+                "WHERE account_id = ? AND status = 'pending'",
+                (account_id,),
+            )
     finally:
         conn.close()
 
@@ -3884,16 +3952,22 @@ def preview_csv_columns(text: str) -> dict:
 _BUILTIN_MAPPING_TARGETS = {"first_name", "last_name", "name", "phone", "email", "company", "tags"}
 
 
-def import_contacts_mapped(text: str, mapping: dict, account_id: int) -> int:
+def import_contacts_mapped(text: str, mapping: dict, account_id: int) -> dict:
     """Import a CSV using an explicit header -> target mapping. `mapping` is
     {csv_header: target}, where target is one of _BUILTIN_MAPPING_TARGETS,
     "" (skip this column), or any other string — that string becomes the
     contact's custom_fields key, so a column mapped to "appointment_date"
     is later available to a campaign call as {{custom.appointment_date}}
     (see agent/main.py's template substitution)."""
+    if "phone" not in mapping.values():
+        raise ValueError("Map one column to Phone before importing")
     reader = csv.DictReader(io.StringIO(text))
     count = 0
-    for row in reader:
+    skipped_missing_phone = 0
+    skipped_invalid_phone = 0
+    for row_number, row in enumerate(reader, start=2):
+        if row_number > 5001:
+            raise ValueError("Import is limited to 5,000 contacts at a time")
         first_name = last_name = name = phone = email = company = tags = ""
         custom: dict = {}
         for header, value in row.items():
@@ -3918,21 +3992,30 @@ def import_contacts_mapped(text: str, mapping: dict, account_id: int) -> int:
             else:
                 custom[target] = value
         if not phone:
+            skipped_missing_phone += 1
             continue
-        create_contact(
-            {
-                "name": name or " ".join(p for p in (first_name, last_name) if p) or "Unknown",
-                "phone": phone,
-                "email": email,
-                "company": company,
-                "tags": tags,
-                "customFields": custom,
-                "source": "import",
-            },
-            account_id,
-        )
+        try:
+            create_contact(
+                {
+                    "name": name or " ".join(p for p in (first_name, last_name) if p) or "Unknown",
+                    "phone": phone,
+                    "email": email,
+                    "company": company,
+                    "tags": tags,
+                    "customFields": custom,
+                    "source": "import",
+                },
+                account_id,
+            )
+        except ValueError:
+            skipped_invalid_phone += 1
+            continue
         count += 1
-    return count
+    return {
+        "imported": count,
+        "skippedMissingPhone": skipped_missing_phone,
+        "skippedInvalidPhone": skipped_invalid_phone,
+    }
 
 
 def contact_detail(contact_id: int, account_id: int) -> dict | None:
@@ -3947,20 +4030,30 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
     conn = _connect()
     try:
         contact = conn.execute(
-            "SELECT * FROM contacts WHERE id = ? AND account_id = ?", (contact_id, account_id)
+            "SELECT * FROM contacts WHERE id = ? AND account_id = ? AND deleted_at IS NULL", (contact_id, account_id)
         ).fetchone()
         if contact is None:
             return None
         phone = contact["phone"] or ""
 
+        phone_key = _normalize_phone(phone)
         calls = (
             conn.execute(
-                "SELECT id, started_at, duration_seconds, call_type FROM calls "
-                "WHERE account_id = ? AND lead_phone = ? AND COALESCE(test_run_id, '') = '' "
+                "SELECT id, started_at, duration_seconds, call_type, transcript_json, "
+                "COALESCE(failure_reason, '') failure_reason, COALESCE(disconnect_reason, '') disconnect_reason "
+                "FROM calls WHERE account_id = ? AND COALESCE(test_run_id, '') = '' "
+                "AND CASE "
+                "  WHEN length(regexp_replace(lead_phone, '[^0-9]', '', 'g')) = 12 "
+                "       AND regexp_replace(lead_phone, '[^0-9]', '', 'g') LIKE '91%%' "
+                "  THEN substring(regexp_replace(lead_phone, '[^0-9]', '', 'g') from 3) "
+                "  WHEN length(regexp_replace(lead_phone, '[^0-9]', '', 'g')) = 11 "
+                "       AND regexp_replace(lead_phone, '[^0-9]', '', 'g') LIKE '0%%' "
+                "  THEN substring(regexp_replace(lead_phone, '[^0-9]', '', 'g') from 2) "
+                "  ELSE regexp_replace(lead_phone, '[^0-9]', '', 'g') END = ? "
                 "ORDER BY started_at DESC",
-                (account_id, phone),
+                (account_id, phone_key),
             ).fetchall()
-            if phone
+            if phone_key
             else []
         )
         # call_id -> campaign_contacts.status, for the calls that were placed
@@ -3978,11 +4071,20 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
         total_calls = len(calls)
         completed = no_answer = failed = voicemail = 0
         total_seconds = 0.0
+        completed_seconds = 0.0
         for c in calls:
             duration = c["duration_seconds"] or 0
             total_seconds += duration
             outcome = campaign_outcome_by_call_id.get(c["id"])
-            if outcome == "failed":
+            try:
+                turns = json.loads(c["transcript_json"] or "[]")
+            except (ValueError, TypeError):
+                turns = []
+            has_caller = any(t.get("role") == "user" and str(t.get("text") or t.get("content") or "").strip() for t in turns if isinstance(t, dict))
+            has_agent = any(t.get("role") == "assistant" and str(t.get("text") or t.get("content") or "").strip() for t in turns if isinstance(t, dict))
+            has_conversation = has_caller and has_agent
+            transport_failed = bool(c["failure_reason"]) or c["disconnect_reason"] == "error"
+            if outcome == "failed" or transport_failed:
                 failed += 1
             elif outcome == "voicemail":
                 # Reached a machine, not the person. Counting these as
@@ -3990,8 +4092,9 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
                 voicemail += 1
             elif outcome == "no_answer":
                 no_answer += 1
-            elif duration > 0:
+            elif has_conversation:
                 completed += 1
+                completed_seconds += duration
             else:
                 no_answer += 1
 
@@ -4032,7 +4135,7 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
                 "noAnswer": no_answer,
                 "failed": failed,
                 "voicemail": voicemail,
-                "avgDurationSeconds": round(total_seconds / completed) if completed else 0,
+                "avgDurationSeconds": round(completed_seconds / completed) if completed else 0,
                 "totalDurationSeconds": round(total_seconds),
             },
             "calls": [

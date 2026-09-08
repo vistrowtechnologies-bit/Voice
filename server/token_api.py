@@ -2841,7 +2841,10 @@ def list_contacts(user: dict = Depends(current_user)) -> list[dict]:
 
 @app.post("/contacts")
 def create_contact(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
-    calls_db.create_contact(data, user["account_id"])
+    try:
+        calls_db.create_contact(data, user["account_id"])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     return {"ok": True}
 
 
@@ -2865,9 +2868,9 @@ def call_contact_now(contact_id: int, data: dict = Body(...), user: dict = Depen
     contact = calls_db.contact_detail(contact_id, user["account_id"])
     if contact is None:
         raise HTTPException(404, "Contact not found")
-    to_number = (contact.get("phone") or "").strip()
+    to_number = calls_db.canonical_contact_phone(contact.get("phone"))
     if not to_number:
-        raise HTTPException(400, "Add a valid phone number before calling this contact")
+        raise HTTPException(400, "Add a valid phone number with country code before calling this contact")
     from_number = (data.get("fromNumber") or "").strip()
     number = calls_db.get_phone_number_by_number(from_number)
     if not number or number.get("accountId") != user["account_id"] or number.get("status") != "active":
@@ -2953,8 +2956,10 @@ def preview_contacts_import(data: dict = Body(...), user: dict = Depends(current
 
 @app.post("/contacts/import/mapped")
 def import_contacts_mapped(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
-    count = calls_db.import_contacts_mapped(data.get("csv", ""), data.get("mapping") or {}, user["account_id"])
-    return {"imported": count}
+    try:
+        return calls_db.import_contacts_mapped(data.get("csv", ""), data.get("mapping") or {}, user["account_id"])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/contacts/{contact_id}")
