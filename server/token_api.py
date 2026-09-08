@@ -2723,7 +2723,12 @@ def list_agents(user: dict = Depends(current_user)) -> list[dict]:
 # Indic recognition this platform measured and depends on (5/5 on Indian place
 # names, against Google STT's 0/5) does not apply to it. Admin-only until that
 # is measured for Gemini Live itself.
-_ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live")
+# sarvam/ matches gpt-4.1-mini on the grounding benchmark (9/12 each) and is
+# markedly faster on a live call (call 926: llmTtft 450ms vs 1,058ms), but on
+# that same call it read ambiguous answers as agreement and logged them as
+# confirmed requirements. Owner-only until that is fixed and reproduced over
+# more than one conversation.
+_ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live", "sarvam/")
 
 
 def _guard_admin_only_model(data: dict | None, account_id: int) -> None:

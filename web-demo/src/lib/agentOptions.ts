@@ -272,7 +272,9 @@ export const MODEL_OPTIONS = [
 // Keep an explicit item type even while the selectable admin-only list is
 // empty. `[] as const` becomes readonly never[], which makes modelLabel's
 // compatibility lookup fail the TypeScript production build.
-export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: string }[] = []
+export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: string }[] = [
+  { value: 'sarvam/sarvam-105b-conversations', label: 'Sarvam 105B Conversations', tag: 'Fast' },
+]
 
 const PARKED_MODELS = [
   { value: 'gemini-live', label: 'Gemini Live 2.5 (Preview)' },

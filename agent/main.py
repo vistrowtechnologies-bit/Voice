@@ -1594,6 +1594,33 @@ def _build_llm(model: str, *, max_output_tokens: int = 220):
             base_url="https://api.groq.com/openai/v1",
             max_completion_tokens=max_output_tokens,
         )
+    if model.startswith("sarvam/"):
+        # Call 926, 15 turns on a real phone line: llmTtft median 450ms
+        # against gpt-4.1-mini's 1,058ms over eight comparable calls, which
+        # cuts the instrumented turn pipeline (eou+stt+llm+tts) from 1,860ms
+        # to 1,176ms. Endpointing, STT and TTS are unchanged - the whole gain
+        # is the LLM. Scores the same 9/12 as gpt-4.1-mini on the grounding
+        # benchmark, from the STT/TTS vendor we already depend on.
+        #
+        # Not yet tenant-ready, which is why it stays admin-gated: on call 926
+        # it turned ambiguous replies into confirmed requirements ("नहीं, ठीक
+        # है।" came back as "तो नया website बनवाना है"), which gpt-4.1-mini did
+        # not do on comparable turns.
+        #
+        # Deliberately NOT the livekit sarvam plugin: its LLM class is just
+        # OpenAILLM with a base_url, and its model allowlist is stale enough to
+        # reject sarvam-105b-conversations outright while still defaulting to
+        # sarvam-30b, which the API has deprecated. Going through the OpenAI
+        # plugin skips a vendored list that would break us on their next model.
+        api_key = os.environ.get("SARVAM_API_KEY")
+        if not api_key:
+            raise RuntimeError(f"{model} is selected, but SARVAM_API_KEY is not configured.")
+        return openai.LLM(
+            model=model.split("/", 1)[1],
+            api_key=api_key,
+            base_url="https://api.sarvam.ai/v1",
+            max_completion_tokens=max_output_tokens,
+        )
     # Bound spoken replies and give OpenAI a stable cache-routing key.  The
     # exact prompt prefix still has to match before it can be reused, so this
     # does not mix one tenant's instructions or KB with another tenant's.
