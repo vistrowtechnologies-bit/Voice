@@ -97,11 +97,10 @@ def run_backup_now() -> dict:
 
         calls_db.set_setting(_LAST_RUN_SETTING, today, calls_db.PLATFORM_ACCOUNT_ID)
         logger.info("db backup uploaded: %s (%.1f MB), pruned %s old backup(s)", key, size_mb, deleted)
-        _notify(
-            "Vistrow Voice: daily backup succeeded",
-            f"<p>Backed up to <code>{key}</code> — {size_mb:.1f} MB.</p>"
-            f"<p>Pruned {deleted} backup(s) older than {_RETENTION_DAYS} days.</p>",
-        )
+        # No success email — this runs daily and a mailbox does not need a
+        # daily "it worked" receipt (Resend's free-plan send quota is not
+        # worth spending on it). Logged above instead. Failure below still
+        # emails: a backup that silently stops running is the actual risk.
         return {"ok": True, "key": key, "size_mb": size_mb, "pruned": deleted}
     except Exception as exc:
         logger.exception("db backup failed")
