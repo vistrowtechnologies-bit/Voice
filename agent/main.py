@@ -3281,7 +3281,20 @@ class RealEstateAgent(Agent):
             _userdata["greeting_played"] = True
             if self._welcome_message and _looks_like_opening_ack(text):
                 logger.info("recipient speech confirmed; playing held outbound opening")
-                await self.session.say(self._welcome_message)
+                _opening = self.session.say(self._welcome_message)
+                await _opening
+                if getattr(_opening, "interrupted", False):
+                    # The opening line is the ONLY thing that says why their
+                    # phone rang, and it is the most likely line in the whole
+                    # call to be spoken over: people answer with "hello",
+                    # hear a voice, and say "hello" again on top of it. On
+                    # call 913 exactly that happened, the caller never heard
+                    # the reason, and the next turn asked "kuch madad chahiye
+                    # thi?" — turning our outbound call into an inbound one
+                    # in the caller's mind. They had to ask "aapne call kiya
+                    # kya mujhe?".
+                    _userdata["outbound_context_pending"] = True
+                    logger.info("outbound opening was interrupted; will re-establish the reason for the call")
                 raise StopResponse()
             turn_ctx.add_message(
                 role="system",
@@ -3291,6 +3304,20 @@ class RealEstateAgent(Agent):
                     "the conversation. Briefly introduce yourself and the reason for the call, "
                     "then respond directly to what they said. Ask permission to continue only "
                     "if it still reads naturally."
+                ),
+            )
+        elif _userdata.pop("outbound_context_pending", False):
+            # One turn only: say why we called, then carry on normally.
+            turn_ctx.add_message(
+                role="system",
+                content=(
+                    "Your opening line was cut off before the caller heard why you are "
+                    "calling, so they may not know who you are or why their phone rang. "
+                    "Re-establish it in ONE short sentence — that you are calling from "
+                    "Vistrow Technologies about the website enquiry they submitted — and "
+                    "then respond to what they just said. Do NOT ask 'how can I help you', "
+                    "'kuch madad chahiye thi', or anything else that implies THEY called "
+                    "YOU. You called them."
                 ),
             )
 
