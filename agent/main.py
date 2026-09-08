@@ -1558,7 +1558,46 @@ def _speech_context_prompt(config: dict) -> str | None:
     return f"Indian real-estate and business call. Names likely to occur: {prompt}."
 
 
-def _build_stt(speech_context: str | None = None):
+# Sarvam's own spelling of each language we offer. Mostly identical to our
+# reply_language codes; Odia is the exception (Sarvam says "od-IN", the rest
+# of the world and our own catalog say "or-IN").
+_SARVAM_STT_LANGUAGES = {
+    "hi-IN", "en-IN", "bn-IN", "gu-IN", "kn-IN", "ml-IN", "mr-IN",
+    "pa-IN", "ta-IN", "te-IN", "as-IN", "ur-IN", "sa-IN", "ne-IN",
+    "ks-IN", "sd-IN", "od-IN",
+}
+_SARVAM_STT_ALIASES = {"or-IN": "od-IN"}
+
+
+def _sarvam_stt_language(reply_language: str | None) -> str:
+    """Pin recognition to the language this agent is configured to speak.
+
+    "unknown" is Sarvam's auto-detect across 20+ Indian languages, and it was
+    what we passed for every agent. On a Hindi call that is actively harmful:
+    a single mispronounced or clipped Hindi word gets detected as a DIFFERENT
+    Indian language and comes back in that script. Measured across three live
+    calls (899, 904, 905) - "ನಮಸ್ತೆ" for namaste, "હા બોલો" for haan bolo,
+    "பஸ்" for bas, "ഫോക്കസ്" for focus, "ਠੀਕ ਹੈ" for theek hai. Every one of
+    those is the caller speaking Hindi. The agent then cannot read its own
+    transcript, apologises, and the conversation degrades from there.
+
+    Pinning costs us genuine mid-call switching to a DIFFERENT Indian
+    language, because the Sarvam plugin fixes language at construction and
+    exposes no update_options. That is an acceptable trade: Hinglish still
+    works (Hindi mode handles English code-switching, which is the register
+    these calls are actually in), a caller switching from Hindi to Tamil
+    mid-sentence is rare, and garbled cross-script transcripts were constant.
+    switch_reply_language still changes what the agent SPEAKS.
+
+    Falls back to auto-detect when the agent has no usable language set, so
+    nothing regresses for an agent that was relying on detection.
+    """
+    code = (reply_language or "").strip()
+    code = _SARVAM_STT_ALIASES.get(code, code)
+    return code if code in _SARVAM_STT_LANGUAGES else "unknown"
+
+
+def _build_stt(speech_context: str | None = None, reply_language: str | None = None):
     """Sarvam saaras:v3 is the primary — Indian-language quality/latency it
     was actually chosen for. If GOOGLE_APPLICATION_CREDENTIALS_JSON is set,
     wraps it in a FallbackAdapter so a Sarvam outage or exhausted credit
@@ -1572,7 +1611,7 @@ def _build_stt(speech_context: str | None = None):
         # we support more than just Hindi/English. "codemix" mode is
         # Hindi-English-specific; plain "transcribe" is Sarvam's
         # general-purpose multi-language mode.
-        language="unknown",
+        language=_sarvam_stt_language(reply_language),
         model="saaras:v3",
         mode="transcribe",
         prompt=speech_context,
@@ -2674,7 +2713,13 @@ class RealEstateAgent(Agent):
             )
         super().__init__(
             instructions=instructions,
-            stt=None if self._is_realtime else _build_stt(_speech_context_prompt(config)),
+            # reply_language, the LOCAL at the top of __init__ — not
+            # self._reply_language, which is not assigned until after
+            # super().__init__() further down. Same trap as the _direction
+            # outage: an attribute read here is read before it exists.
+            stt=None if self._is_realtime else _build_stt(
+                _speech_context_prompt(config), reply_language
+            ),
             # The public demo is judged turn-by-turn. A hard generation cap
             # prevents a missed prompt instruction from becoming a spoken
             # sales monologue; Indian scripts consume more tokens than the
