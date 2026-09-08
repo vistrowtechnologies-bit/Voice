@@ -49,6 +49,13 @@ class BackchannelLine(unittest.TestCase):
         self.assertIn("hi", main._BACKCHANNEL_LINES)
         self.assertIn("en", main._BACKCHANNEL_LINES)
 
+    def test_disabled_by_default_after_the_tts_change(self):
+        # Turned off deliberately, not by accident. The whole turn is now
+        # ~1.59s on ElevenLabs, so the ~1.19s gap the ack was built to cover
+        # is too short for it to help - it lands on the answer. Two live
+        # calls (898, 899) reported it breaking the conversation flow.
+        self.assertFalse(main._BACKCHANNEL_ENABLED)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

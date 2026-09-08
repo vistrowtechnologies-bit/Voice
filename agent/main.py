@@ -723,6 +723,20 @@ def _current_objective(
 # "thinking" after _BACKCHANNEL_DELAY_S, drop in a one-word ack while the real
 # reply finishes generating.
 #
+# OFF by default. It was built when a turn cost ~2.3s and the wait was worth
+# covering; on google31:kore's ~900ms TTS that was a real silence. After the
+# move to ElevenLabs the whole turn is ~1.59s (eou 401 + llm 1034 + tts 158),
+# so the gap it exists to fill is ~1.19s - short enough that an ack lands on
+# top of the answer instead of ahead of it. Two calls confirmed it breaks the
+# flow rather than smoothing it: 9 fillers in call 898, and still 4 in call
+# 899 after the threshold was raised, reported both times as interrupting the
+# conversation.
+#
+# Kept, not deleted: if a tenant picks a slow TTS voice again the turn goes
+# back over 2s and this becomes worth having. Flip it on and re-measure
+# rather than re-deriving it.
+_BACKCHANNEL_ENABLED = False
+
 # The delay must clear the WHOLE median turn, not just the LLM leg. Set at
 # 0.9s it fired 9 times in one 3-minute call (898) and read as a verbal tic:
 # reply audio lands ~1.19s after the turn commits (llm 1036 + tts 154), and
@@ -4889,6 +4903,8 @@ async def entrypoint(ctx: JobContext) -> None:
         """Speak a one-word ack if the reply is still generating after
         _BACKCHANNEL_DELAY_S. See the constant for why this exists and why the
         delay is set above the median turn."""
+        if not _BACKCHANNEL_ENABLED:
+            return
         if getattr(agent, "_is_realtime", False):
             # Speech-to-speech has no separate LLM leg to cover, and
             # session.say() raises outright on a model with supports_say=False
