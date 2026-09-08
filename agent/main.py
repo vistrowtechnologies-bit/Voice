@@ -60,7 +60,7 @@ from language import (
     sounds_like,
     to_google_code,
 )
-from prompts.generic_assistant import build_generic_assistant_prompt
+from prompts.generic_assistant import build_generic_assistant_prompt, build_outbound_layer
 from prompts.human_speech import build_human_speech_manner, build_turn_delivery
 from prompts.industry_demo_style import (
     build_industry_demo_style,
@@ -2349,6 +2349,18 @@ class RealEstateAgent(Agent):
             # must answer as their demo business), then the tenant's company
             # name from signup, then the old placeholder.
             instructions = build_generic_assistant_prompt(agent_name, business_name, speaks_global)
+        # Outbound changes what the call IS, not just its tone, and the two
+        # built-in personas are both written for someone who rang US. Without
+        # this a tenant whose system_prompt is empty runs an outbound campaign
+        # with an inbound persona and opens with the equivalent of "how can I
+        # help you" - on a call the recipient did not make.
+        #
+        # Only the built-ins get it. A tenant who wrote their own prompt owns
+        # the whole persona, and silently appending call-handling rules they
+        # did not write is how their instructions start losing arguments they
+        # should win.
+        if self._direction == "outbound" and not config.get("system_prompt"):
+            instructions += "\n\n" + build_outbound_layer(business_name)
         if needs_human_speech_layer:
             # Appended AFTER the tenant's own prompt so their content and
             # rules read first and win any conflict — this layer is delivery
