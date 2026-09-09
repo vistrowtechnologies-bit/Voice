@@ -70,21 +70,6 @@ function titleCase(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-function formatDiagnosticTime(milliseconds: number): string {
-  if (milliseconds < 1000) return `${milliseconds}ms`
-  const seconds = milliseconds / 1000
-  if (seconds < 60) return `+${seconds.toFixed(seconds < 10 ? 1 : 0)}s`
-  const minutes = Math.floor(seconds / 60)
-  return `+${minutes}m ${Math.round(seconds % 60)}s`
-}
-
-const DIAGNOSTIC_STATUS_STYLE = {
-  info: 'bg-cyan',
-  ok: 'bg-success',
-  warning: 'bg-amber',
-  error: 'bg-destructive',
-}
-
 // Client-side .txt export of the full conversation, both sides combined in
 // original chronological order, labeled by speaker for readability.
 function downloadTranscript(call: CallRecord): void {
@@ -125,7 +110,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null)
   const [recordingError, setRecordingError] = useState<string | null>(null)
   const [arthaleadsConnected, setArthaleadsConnected] = useState(false)
-  const [tab, setTab] = useState<'details' | 'diagnostics' | 'history'>('details')
+  const [tab, setTab] = useState<'details' | 'history'>('details')
   const [history, setHistory] = useState<CallRecord[] | null>(null)
   const [historySearch, setHistorySearch] = useState('')
 
@@ -314,29 +299,6 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'diagnostics'}
-          onClick={() => setTab('diagnostics')}
-          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${
-            tab === 'diagnostics'
-              ? 'border-primary/50 bg-primary text-bg shadow-sm'
-              : 'border-border bg-surface text-text-muted hover:border-primary/40 hover:bg-surface-high hover:text-text'
-          }`}
-        >
-          <Icon name="monitoring" className="text-[15px]" />
-          Diagnostics
-          {!!call.diagnosticEvents?.length && (
-            <span
-              className={`rounded-full px-1.5 text-[10px] ${
-                tab === 'diagnostics' ? 'bg-bg/20 text-bg' : 'bg-primary/10 text-primary'
-              }`}
-            >
-              {call.diagnosticEvents.length}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          role="tab"
           aria-selected={tab === 'history'}
           onClick={() => setTab('history')}
           className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold ${
@@ -428,78 +390,6 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
                   </button>
                 ))}
               </div>
-            )}
-          </Card>
-        </section>
-      ) : tab === 'diagnostics' ? (
-        <section key="diagnostics" className="flex flex-col gap-4 p-4 sm:p-6 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
-          {!call.diagnosticsCaptured && (
-            <div className="flex items-start gap-2 rounded-xl border border-amber/30 bg-amber/10 px-4 py-3 text-sm text-text">
-              <Icon name="info" className="mt-0.5 shrink-0 text-[18px] text-amber" />
-              <div>
-                <p className="font-semibold">Limited diagnostics for this historical call</p>
-                <p className="mt-0.5 text-xs leading-relaxed text-text-muted">
-                  Only previously measured connection milestones are shown. New calls capture ordered pipeline,
-                  conversation, action, provider-switch, and ending events.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-text">Call diagnostic timeline</h2>
-                <p className="mt-0.5 text-xs text-text-muted">
-                  Measured from call dispatch. Milestones show when they occurred; durations show measured stage latency.
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-high px-2.5 py-1 font-semibold text-text">
-                    <Icon
-                      name={call.callType === 'widget' ? 'widgets' : call.callType === 'phone' ? 'phone' : 'language'}
-                      className="text-[14px] text-primary"
-                    />
-                    {call.channel} call
-                  </span>
-                  {call.website && <span>Website: {call.website}</span>}
-                  {call.pagePath && <span className="font-mono">Page: {call.pagePath}</span>}
-                </div>
-              </div>
-              <span className="rounded-full border border-border bg-surface-high px-2.5 py-1 text-[11px] font-semibold text-text-muted">
-                {call.diagnosticEvents?.length ?? 0} events
-              </span>
-            </div>
-
-            {call.diagnosticEvents?.length ? (
-              <ol className="relative ml-2 min-h-0 flex-1 overscroll-contain overflow-y-auto border-l border-border pb-4 pr-2">
-                {call.diagnosticEvents.map((event) => (
-                  <li key={event.id} className="relative pb-5 pl-6 last:pb-0">
-                    <span
-                      className={`absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-surface ${
-                        DIAGNOSTIC_STATUS_STYLE[event.status]
-                      }`}
-                    />
-                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-text">{event.label}</p>
-                        <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-text-muted">
-                          {event.stage.replace(/_/g, ' ')}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2 font-mono text-[11px] text-text-muted">
-                        {event.durationMs != null && (
-                          <span className={event.durationMs >= 1500 ? 'font-semibold text-amber' : ''}>
-                            {formatDiagnosticTime(event.durationMs)} duration
-                          </span>
-                        )}
-                        <span>{formatDiagnosticTime(event.offsetMs)}</span>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <EmptyState icon="timeline" text="No diagnostic events were recorded for this call." compact />
             )}
           </Card>
         </section>
