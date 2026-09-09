@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import html
 import json
 import logging
 import os
@@ -47,7 +48,7 @@ from livekit.api import (
     RoomAgentDispatch,
     UpdateRoomMetadataRequest,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field as PydanticField
 
 WIDGET_JS_PATH = Path(__file__).resolve().parent / "static" / "widget.js"
 WORDPRESS_PLUGIN_ZIP_PATH = Path(__file__).resolve().parent / "static" / "vistrow-voice-widget.zip"
@@ -3198,6 +3199,20 @@ class HelpChatRequest(BaseModel):
     currentPage: str | None = None
 
 
+class HelpTicketAttachment(BaseModel):
+    filename: str
+    contentType: str = "application/octet-stream"
+    content: str
+
+
+class HelpTicketRequest(BaseModel):
+    subject: str
+    detail: str
+    category: str = "general"
+    currentPage: str = ""
+    attachments: list[HelpTicketAttachment] = PydanticField(default_factory=list)
+
+
 @app.get("/help/faqs")
 def list_help_faqs(user: dict = Depends(current_user)) -> list[dict]:
     return FAQS
@@ -3215,6 +3230,79 @@ def help_chat_message(req: HelpChatRequest, user: dict = Depends(current_user)) 
     except RuntimeError as exc:
         raise HTTPException(502, str(exc)) from exc
     return {"reply": reply}
+
+
+@app.post("/help/tickets")
+def create_help_ticket(req: HelpTicketRequest, user: dict = Depends(current_user)) -> dict:
+    subject = req.subject.strip()[:160]
+    detail = req.detail.strip()[:5_000]
+    category = req.category.strip().lower()
+    if category not in {"general", "technical", "billing", "feature", "account"}:
+        category = "general"
+    if not subject or not detail:
+        raise HTTPException(400, "Add a subject and describe the issue")
+    if len(req.attachments) > 3:
+        raise HTTPException(400, "Attach at most 3 files")
+
+    email_attachments: list[dict] = []
+    attachment_metadata: list[dict] = []
+    for item in req.attachments:
+        filename = re.sub(r"[^A-Za-z0-9._ -]", "_", item.filename.strip())[:120] or "attachment"
+        try:
+            raw = base64.b64decode(item.content, validate=True)
+        except Exception as exc:
+            raise HTTPException(400, f"Could not read attachment: {filename}") from exc
+        if len(raw) > 600 * 1024:
+            raise HTTPException(400, f"{filename} is larger than 600 KB")
+        content_type = (item.contentType or "application/octet-stream")[:100]
+        email_attachments.append(
+            {"filename": filename, "contentType": content_type, "content": item.content}
+        )
+        attachment_metadata.append(
+            {"filename": filename, "contentType": content_type, "size": len(raw)}
+        )
+
+    current_page = req.currentPage.strip()[:500]
+    ticket_id = calls_db.create_support_ticket(
+        user["account_id"],
+        user.get("id"),
+        user.get("email", ""),
+        category,
+        subject,
+        detail,
+        current_page,
+        attachment_metadata,
+    )
+    body = "".join(
+        f"<p style='margin:5px 0'><strong>{html.escape(label)}:</strong> {html.escape(value)}</p>"
+        for label, value in [
+            ("Ticket", f"VV-{ticket_id}"),
+            ("Workspace", str(user.get("account_name") or user["account_id"])),
+            ("User", f"{user.get('name', '')} ({user.get('email', '')})"),
+            ("Category", category),
+            ("Page", current_page or "-"),
+            ("Subject", subject),
+        ]
+    )
+    body += (
+        "<div style='margin-top:16px;padding:14px;border-radius:10px;background:#f6f3ff;"
+        f"white-space:pre-wrap'>{html.escape(detail)}</div>"
+    )
+    rendered = email_sender.render_email(
+        preheader=f"Support ticket VV-{ticket_id}: {subject}",
+        heading=f"Support ticket VV-{ticket_id}",
+        body_html=body,
+    )
+    sent = email_sender.send_email(
+        os.environ.get("SUPPORT_NOTIFY_EMAIL") or "support@vistrowvoice.com",
+        f"[VV-{ticket_id}] {subject}",
+        rendered,
+        email_sender.FROM_SUPPORT,
+        email_attachments,
+    )
+    if sent:
+        calls_db.mark_support_ticket_emailed(ticket_id, user["account_id"])
+    return {"ok": True, "ticketId": f"VV-{ticket_id}", "emailSent": sent}
 
 
 # ----------------------------------------------------------- campaigns

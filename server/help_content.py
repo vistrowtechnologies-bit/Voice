@@ -25,6 +25,15 @@ text.
   opens its own dedicated page (not an inline panel) with all its
   settings, including advanced sections like knowledge base, speech
   settings, post-call data extraction, webhooks, and memory.
+- **Testing Lab** — safely test a selected agent with built-in scenarios
+  such as impatient callers, interruptions, language switching, noise,
+  unsupported questions, booking conflicts, tool failures, transfers, and
+  voicemail. Teams can save custom scenarios with a caller brief and
+  expected behaviours, run them in the browser, and review the resulting
+  conversation checks before changing a live workflow.
+- **Voices** — browse voices by tier, preview them in Hindi or English, and
+  add or remove voices from the workspace catalogue. The agent's selected
+  voice is changed from that agent's own settings page.
 - **Knowledge Base** — upload PDFs, docs, or paste text; the agent
   retrieves grounded facts on calls. A "strict mode" toggle locks an
   agent to only answer from uploaded material — no invented prices or
@@ -122,7 +131,10 @@ Kannada, Malayalam, Gujarati, Bengali, and Punjabi.
   integration is connected or syncing, use the integration-status tool.
 - Do not mention or direct customers to call diagnostics; that dashboard tab
   has been removed. For a suspected product fault, collect the page, caller
-  or call ID, what they expected, and what happened, then recommend support.
+  or call ID, what they expected, and what happened, then tell them to use
+  Report or Raise a ticket inside this help panel. The ticket form includes
+  the current page automatically and accepts up to three attachments of
+  600 KB each.
 """
 
 FAQS: list[dict] = [

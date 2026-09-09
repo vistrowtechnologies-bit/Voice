@@ -2,9 +2,16 @@ import unittest
 from unittest.mock import patch
 
 import help_tools
+import help_chat
 
 
 class HelpToolsTests(unittest.TestCase):
+    def test_settings_subpage_context_is_specific(self):
+        self.assertEqual(
+            help_chat._page_label("/dashboard/settings?tab=privacy"),
+            "Settings > Data & privacy",
+        )
+
     @patch("help_tools.calls_db.list_calls")
     def test_find_recent_calls_returns_source_and_crm_state(self, list_calls):
         list_calls.return_value = [

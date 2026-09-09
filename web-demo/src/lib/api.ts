@@ -451,6 +451,13 @@ export const fetchWidgetBackendUrl = () => get<{ backendUrl: string | null }>('/
 export const fetchHelpFaqs = () => get<HelpFaq[]>('/help/faqs')
 export const sendHelpChatMessage = (message: string, history: HelpChatMessage[], currentPage?: string) =>
   send<{ reply: string }>('POST', '/help/chat', { message, history, currentPage })
+export const submitHelpTicket = (ticket: {
+  subject: string
+  detail: string
+  category: string
+  currentPage: string
+  attachments: { filename: string; contentType: string; content: string }[]
+}) => send<{ ok: boolean; ticketId: string; emailSent: boolean }>('POST', '/help/tickets', ticket)
 
 // --------------------------------------------------------------- helpers
 

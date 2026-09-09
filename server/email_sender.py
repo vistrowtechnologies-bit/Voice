@@ -13,6 +13,7 @@ caller treats a False as "couldn't deliver" but never crashes — email is an
 enhancement, not a hard dependency.
 """
 
+import base64
 import json
 import logging
 import os
@@ -36,6 +37,7 @@ FROM_ACCOUNT_SECURITY = "Vistrow Voice <security@vistrowvoice.com>"  # password 
 FROM_EMAIL_VERIFICATION = "Vistrow Voice <verify@vistrowvoice.com>"  # signup OTP
 FROM_INVITES = "Vistrow Voice <invites@vistrowvoice.com>"  # team member invites
 FROM_WEBSITE = "Vistrow Voice Website <contact@vistrowvoice.com>"  # contact-form notifications
+FROM_SUPPORT = "Vistrow Voice Support <support@vistrowvoice.com>"
 
 
 def is_configured() -> bool:
@@ -139,7 +141,13 @@ def render_email(*, preheader: str, heading: str, body_html: str, cta_label: str
 </html>"""
 
 
-def send_email(to: str, subject: str, html: str, from_address: str = _DEFAULT_FROM) -> bool:
+def send_email(
+    to: str,
+    subject: str,
+    html: str,
+    from_address: str = _DEFAULT_FROM,
+    attachments: list[dict] | None = None,
+) -> bool:
     """Best-effort send. Returns True only on a confirmed handoff to a provider.
 
     `from_address` picks the category-specific identity (see FROM_* constants
@@ -147,9 +155,9 @@ def send_email(to: str, subject: str, html: str, from_address: str = _DEFAULT_FR
     invites@. Still overridden globally by EMAIL_FROM if that's set."""
     resend_key = os.environ.get("RESEND_API_KEY")
     if resend_key:
-        return _send_resend(resend_key, to, subject, html, from_address)
+        return _send_resend(resend_key, to, subject, html, from_address, attachments)
     if os.environ.get("SMTP_HOST"):
-        return _send_smtp(to, subject, html, from_address)
+        return _send_smtp(to, subject, html, from_address, attachments)
     logger.warning(
         "email not configured — would have sent to %s: %r. Set RESEND_API_KEY or SMTP_* to enable.",
         to,
@@ -158,10 +166,21 @@ def send_email(to: str, subject: str, html: str, from_address: str = _DEFAULT_FR
     return False
 
 
-def _send_resend(api_key: str, to: str, subject: str, html: str, from_address: str = _DEFAULT_FROM) -> bool:
-    payload = json.dumps(
-        {"from": _from_address(from_address), "to": [to], "subject": subject, "html": html}
-    ).encode()
+def _send_resend(
+    api_key: str,
+    to: str,
+    subject: str,
+    html: str,
+    from_address: str = _DEFAULT_FROM,
+    attachments: list[dict] | None = None,
+) -> bool:
+    body = {"from": _from_address(from_address), "to": [to], "subject": subject, "html": html}
+    if attachments:
+        body["attachments"] = [
+            {"filename": item["filename"], "content": item["content"]}
+            for item in attachments
+        ]
+    payload = json.dumps(body).encode()
     req = urllib.request.Request(
         "https://api.resend.com/emails",
         data=payload,
@@ -189,7 +208,13 @@ def _send_resend(api_key: str, to: str, subject: str, html: str, from_address: s
         return False
 
 
-def _send_smtp(to: str, subject: str, html: str, from_address: str = _DEFAULT_FROM) -> bool:
+def _send_smtp(
+    to: str,
+    subject: str,
+    html: str,
+    from_address: str = _DEFAULT_FROM,
+    attachments: list[dict] | None = None,
+) -> bool:
     host = os.environ["SMTP_HOST"]
     port = int(os.environ.get("SMTP_PORT") or 587)
     user = os.environ.get("SMTP_USER")
@@ -200,6 +225,19 @@ def _send_smtp(to: str, subject: str, html: str, from_address: str = _DEFAULT_FR
     msg["Subject"] = subject
     msg.set_content("This message requires an HTML-capable email client.")
     msg.add_alternative(html, subtype="html")
+    for item in attachments or []:
+        try:
+            payload = base64.b64decode(item["content"], validate=True)
+        except Exception:
+            continue
+        content_type = str(item.get("contentType") or "application/octet-stream")
+        maintype, _, subtype = content_type.partition("/")
+        msg.add_attachment(
+            payload,
+            maintype=maintype or "application",
+            subtype=subtype or "octet-stream",
+            filename=item["filename"],
+        )
     try:
         with smtplib.SMTP(host, port, timeout=10) as server:
             server.starttls()

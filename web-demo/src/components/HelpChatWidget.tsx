@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import arthaAvatar from '../assets/artha-avatar.png'
-import { fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
+import { fetchHelpFaqs, sendHelpChatMessage, submitHelpTicket } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { HelpChatMessage, HelpFaq } from '../lib/types'
 import { Icon } from './Icon'
@@ -10,7 +10,29 @@ import { Icon } from './Icon'
 // or a read-only server/help_tools.py function when live account data is
 // required. Keyed by route prefix, checked longest-first so
 // /dashboard/calls doesn't fall through to the generic /dashboard entry.
-const PAGE_SUGGESTIONS: Record<string, { label: string; questions: string[] }> = {
+type PageHelp = { label: string; questions: string[] }
+
+const PAGE_SUGGESTIONS: Record<string, PageHelp> = {
+  '/dashboard/settings?tab=privacy': {
+    label: 'Data & privacy',
+    questions: ['How do I download my data?', 'How do I cancel an account deletion request?', 'What happens when I delete my account?'],
+  },
+  '/dashboard/settings?tab=security': {
+    label: 'Sign-in & security',
+    questions: ['How do I change my password?', 'How do I sign out another device?', 'Can I use email sign-in with Google sign-in?'],
+  },
+  '/dashboard/settings?tab=preferences': {
+    label: 'Preferences',
+    questions: ['Which notification preferences can I change?', 'How do I change my personal timezone?'],
+  },
+  '/dashboard/settings?tab=team': {
+    label: 'Team & roles',
+    questions: ['How do I add teammates to my workspace?', 'What can each workspace role do?'],
+  },
+  '/dashboard/settings?tab=availability': {
+    label: 'Scheduling',
+    questions: ['Where do I manage appointment availability?', 'How do slot length and booking notice work?'],
+  },
   '/dashboard/calls': {
     label: 'All Calls History',
     questions: ['How many calls came in today?', 'How do I check whether a lead reached my CRM?', 'How can I see which landing page produced a call?'],
@@ -35,6 +57,14 @@ const PAGE_SUGGESTIONS: Record<string, { label: string; questions: string[] }> =
     label: 'Agents',
     questions: ["How do I edit an agent's settings?", 'How do I connect a knowledge base?'],
   },
+  '/dashboard/testing': {
+    label: 'Testing Lab',
+    questions: ['How do I test an agent before going live?', 'What should I include in a test scenario?'],
+  },
+  '/dashboard/voices': {
+    label: 'Voices',
+    questions: ['How do I preview a voice?', 'Which languages do agents support?'],
+  },
   '/dashboard/knowledge': {
     label: 'Knowledge Base',
     questions: ['Can I ground an agent in my own documents?', 'What does Strict Mode do?'],
@@ -42,6 +72,18 @@ const PAGE_SUGGESTIONS: Record<string, { label: string; questions: string[] }> =
   '/dashboard/compliance': {
     label: 'Compliance',
     questions: ['How do I stay compliant with Do-Not-Call rules?'],
+  },
+  '/dashboard/inbound': {
+    label: 'Inbound',
+    questions: ['How do I choose which agent answers?', 'How do business hours affect inbound calls?'],
+  },
+  '/dashboard/outbound': {
+    label: 'Outbound',
+    questions: ['How do I run an outbound calling campaign?', 'How are DNC and calling windows applied?'],
+  },
+  '/dashboard/numbers': {
+    label: 'Phone Numbers',
+    questions: ['How do I connect a phone number?', 'How do I assign a number to an agent?'],
   },
   '/dashboard/settings': {
     label: 'Settings',
@@ -57,11 +99,39 @@ const PAGE_SUGGESTIONS: Record<string, { label: string; questions: string[] }> =
   },
 }
 
-function pageSuggestions(pathname: string) {
+function pageSuggestions(locationKey: string) {
   const prefix = Object.keys(PAGE_SUGGESTIONS)
     .sort((a, b) => b.length - a.length)
-    .find((p) => pathname.startsWith(p))
+    .find((p) => locationKey.startsWith(p))
   return prefix ? PAGE_SUGGESTIONS[prefix] : null
+}
+
+const fileContent = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error)
+    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '')
+    reader.readAsDataURL(file)
+  })
+
+const HELP_NAVIGATION = [
+  { label: 'All Calls History', to: '/dashboard/calls' },
+  { label: 'Contacts', to: '/dashboard/contacts' },
+  { label: 'Appointments', to: '/dashboard/appointments' },
+  { label: 'Integrations', to: '/dashboard/integrations' },
+  { label: 'Website Widget', to: '/dashboard/website-widget' },
+  { label: 'Knowledge Base', to: '/dashboard/knowledge' },
+  { label: 'Testing Lab', to: '/dashboard/testing' },
+  { label: 'Phone Numbers', to: '/dashboard/numbers' },
+  { label: 'Compliance', to: '/dashboard/compliance' },
+  { label: 'Billing', to: '/dashboard/billing' },
+  { label: 'Agents', to: '/dashboard/agents' },
+  { label: 'Settings', to: '/dashboard/settings' },
+]
+
+function replyNavigation(content: string, currentPath: string) {
+  const lower = content.toLowerCase()
+  return HELP_NAVIGATION.find((item) => lower.includes(item.label.toLowerCase()) && !currentPath.startsWith(item.to))
 }
 
 /** Persistent text-only help chatbot, bottom-right on every dashboard page -
@@ -77,11 +147,45 @@ export function HelpChatWidget() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [ratings, setRatings] = useState<Record<number, 'up' | 'down'>>({})
+  const [ticketOpen, setTicketOpen] = useState(false)
+  const [ticketSubject, setTicketSubject] = useState('')
+  const [ticketDetail, setTicketDetail] = useState('')
+  const [ticketCategory, setTicketCategory] = useState('technical')
+  const [ticketFiles, setTicketFiles] = useState<File[]>([])
+  const [ticketSending, setTicketSending] = useState(false)
+  const [ticketResult, setTicketResult] = useState('')
+  const [ticketError, setTicketError] = useState('')
+  const [hydratedStorageKey, setHydratedStorageKey] = useState('')
   const threadRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
   const location = useLocation()
-  const page = pageSuggestions(location.pathname)
+  const navigate = useNavigate()
+  const locationKey = `${location.pathname}${location.search}`
+  const page = pageSuggestions(locationKey)
   const firstName = (user?.name || '').split(' ')[0] || 'there'
+  const storageKey = `vistrow-help-chat:${user?.accountId ?? 'guest'}:${user?.id ?? 'guest'}`
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey)
+      setMessages(stored ? JSON.parse(stored).slice(-12) : [])
+    } catch {
+      // A blocked or malformed localStorage entry should never break support.
+    } finally {
+      setHydratedStorageKey(storageKey)
+    }
+  }, [storageKey])
+
+  useEffect(() => {
+    if (hydratedStorageKey !== storageKey) return
+    try {
+      if (messages.length) localStorage.setItem(storageKey, JSON.stringify(messages.slice(-12)))
+      else localStorage.removeItem(storageKey)
+    } catch {
+      // Private browsing/storage limits: continue with in-memory chat.
+    }
+  }, [hydratedStorageKey, messages, storageKey])
 
   useEffect(() => {
     if (open && faqs.length === 0) {
@@ -139,6 +243,43 @@ export function HelpChatWidget() {
     }
   }
 
+  const openTicket = (subject = '') => {
+    setTicketSubject(subject || messages.filter((message) => message.role === 'user').at(-1)?.content || '')
+    setTicketDetail('')
+    setTicketResult('')
+    setTicketError('')
+    setTicketOpen(true)
+  }
+
+  const sendTicket = async () => {
+    if (!ticketSubject.trim() || !ticketDetail.trim() || ticketSending) return
+    setTicketSending(true)
+    setTicketResult('')
+    setTicketError('')
+    try {
+      const attachments = await Promise.all(
+        ticketFiles.map(async (file) => ({
+          filename: file.name,
+          contentType: file.type || 'application/octet-stream',
+          content: await fileContent(file),
+        })),
+      )
+      const result = await submitHelpTicket({
+        subject: ticketSubject.trim(),
+        detail: ticketDetail.trim(),
+        category: ticketCategory,
+        currentPage: locationKey,
+        attachments,
+      })
+      setTicketResult(`Ticket ${result.ticketId} created. Our support team will follow up by email.`)
+      setTicketFiles([])
+    } catch (ticketError) {
+      setTicketError(ticketError instanceof Error ? ticketError.message : 'Could not create the ticket. Please try again.')
+    } finally {
+      setTicketSending(false)
+    }
+  }
+
   return (
     // z-60, above the call modal's z-50 overlay: at the same z-index the two
     // tied and DOM order decided, so the modal (rendered after the routes in
@@ -147,7 +288,7 @@ export function HelpChatWidget() {
     // needs it.
     <div className="fixed bottom-3 right-3 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
       {open && (
-        <div className="help-chat-panel-in flex h-[min(520px,calc(100dvh-6rem))] w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl sm:w-[380px]">
+        <div className="help-chat-panel-in flex h-[min(640px,calc(100dvh-6rem))] w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl sm:w-[420px]">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <div className="relative h-8 w-8 shrink-0">
@@ -159,11 +300,23 @@ export function HelpChatWidget() {
                 <span className="pulse-dot absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-surface bg-green-500" />
               </div>
               <div>
-                <div className="text-sm font-semibold">Artha</div>
-                <div className="text-[11px] text-text-muted">Help Assistant</div>
+                <div className="text-sm font-semibold">Artha - Help Assistant</div>
+                <div className="flex items-center gap-1 text-[11px] font-medium text-primary">
+                  <Icon name="bolt" className="text-[13px]" /> Copilot - {page?.label || 'Vistrow Voice'}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-1">
+              {location.pathname !== '/dashboard' && (
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text"
+                  aria-label="Open dashboard"
+                  title="Open dashboard"
+                >
+                  <Icon name="home" className="text-[18px]" />
+                </button>
+              )}
               {messages.length > 0 && (
                 <button
                   onClick={() => {
@@ -190,10 +343,13 @@ export function HelpChatWidget() {
           <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-3">
             {messages.length === 0 ? (
               <div className="flex flex-col gap-3">
-                <p className="text-xs leading-relaxed text-text-muted">
-                  Hi {firstName}!{page ? ` I can see you're on ${page.label}.` : ''} Ask me anything about your
-                  account, or tap a question below.
-                </p>
+                <div className="flex items-start gap-2">
+                  <img src={arthaAvatar} alt="Artha" className="mt-0.5 h-7 w-7 shrink-0 rounded-full object-cover" />
+                  <p className="rounded-xl border border-border bg-surface-high px-3 py-2 text-xs leading-relaxed text-text">
+                    Hi {firstName}!{page ? ` I can see you're on ${page.label}.` : ''} I have page guidance and live
+                    account data ready - tap a question below or ask me anything.
+                  </p>
+                </div>
 
                 {page && page.questions.length > 0 && (
                   <div className="flex flex-col gap-2">
@@ -235,10 +391,46 @@ export function HelpChatWidget() {
               <div className="flex flex-col gap-3">
                 {messages.map((m, i) =>
                   m.role === 'assistant' ? (
-                    <div key={i} className="mr-auto flex max-w-[85%] items-start gap-2">
+                    <div key={i} className="mr-auto flex max-w-[90%] items-start gap-2">
                       <img src={arthaAvatar} alt="Artha" className="mt-0.5 h-6 w-6 shrink-0 rounded-full object-cover" />
-                      <div className="rounded-xl border border-border bg-surface-high px-3 py-2 text-xs leading-relaxed text-text">
-                        {m.content}
+                      <div>
+                        <div className="rounded-xl border border-border bg-surface-high px-3 py-2 text-xs leading-relaxed text-text">
+                          {m.content}
+                        </div>
+                        {replyNavigation(m.content, location.pathname) && (() => {
+                          const destination = replyNavigation(m.content, location.pathname)!
+                          return (
+                            <button type="button" onClick={() => navigate(destination.to)} className="mt-1.5 flex items-center gap-1 rounded-md border border-primary/30 px-2 py-1 text-[10px] font-semibold text-primary hover:bg-primary/5">
+                              Open {destination.label} <Icon name="arrow_forward" className="text-[12px]" />
+                            </button>
+                          )
+                        })()}
+                        <div className="mt-1 flex items-center gap-1 text-text-muted">
+                          <button
+                            type="button"
+                            onClick={() => setRatings((current) => ({ ...current, [i]: 'up' }))}
+                            className={`flex h-6 w-6 items-center justify-center rounded-full hover:bg-surface-high ${ratings[i] === 'up' ? 'text-success' : ''}`}
+                            aria-label="Helpful answer"
+                            title="Helpful"
+                          >
+                            <Icon name="thumb_up" className="text-[14px]" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRatings((current) => ({ ...current, [i]: 'down' }))
+                              openTicket(messages[i - 1]?.role === 'user' ? messages[i - 1].content : '')
+                            }}
+                            className={`flex h-6 w-6 items-center justify-center rounded-full hover:bg-surface-high ${ratings[i] === 'down' ? 'text-destructive' : ''}`}
+                            aria-label="Unhelpful answer"
+                            title="Not helpful - raise a ticket"
+                          >
+                            <Icon name="thumb_down" className="text-[14px]" />
+                          </button>
+                          <button type="button" onClick={() => openTicket()} className="ml-1 text-[10px] hover:text-primary">
+                            Report
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -255,10 +447,72 @@ export function HelpChatWidget() {
                     </div>
                   </div>
                 )}
+                {!sending && page && (
+                  <div className="mt-1 flex flex-col gap-1.5 border-t border-border pt-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Suggested on {page.label}</p>
+                    {page.questions.slice(0, 2).map((question) => (
+                      <button key={question} type="button" onClick={() => send(question)} className="flex items-center justify-between rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-left text-[11px] text-text hover:border-primary">
+                        {question}<Icon name="arrow_forward" className="shrink-0 text-[13px] text-primary" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-            {error && <p className="mt-3 text-[11px] text-red-500">{error}</p>}
+            {error && (
+              <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
+                <p>{error}</p>
+                <button type="button" onClick={() => openTicket()} className="mt-2 rounded-md border border-destructive/40 px-2 py-1 font-semibold">
+                  Raise a ticket
+                </button>
+              </div>
+            )}
           </div>
+
+          {ticketOpen && (
+            <section className="max-h-[330px] shrink-0 overflow-y-auto border-t border-border bg-surface-high/35 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-sm font-semibold"><Icon name="confirmation_number" className="text-[17px] text-primary" /> Raise a support ticket</h3>
+                <button type="button" onClick={() => setTicketOpen(false)} aria-label="Close ticket form" className="text-text-muted hover:text-text"><Icon name="expand_more" className="text-[18px]" /></button>
+              </div>
+              {ticketResult ? (
+                <div className="rounded-lg border border-success/30 bg-success/10 p-3 text-xs text-success">{ticketResult}</div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <input value={ticketSubject} onChange={(event) => setTicketSubject(event.target.value)} maxLength={160} placeholder="What do you need help with?" className="rounded-lg border border-border bg-surface px-3 py-2 text-xs outline-none focus:border-primary" />
+                  <textarea value={ticketDetail} onChange={(event) => setTicketDetail(event.target.value)} maxLength={5000} placeholder="Describe what happened, what you expected, and any call ID…" className="h-20 resize-none rounded-lg border border-border bg-surface px-3 py-2 text-xs outline-none focus:border-primary" />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select value={ticketCategory} onChange={(event) => setTicketCategory(event.target.value)} className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs outline-none">
+                      <option value="technical">Technical issue</option>
+                      <option value="billing">Billing</option>
+                      <option value="account">Account</option>
+                      <option value="feature">Feature request</option>
+                      <option value="general">General question</option>
+                    </select>
+                    <label className="cursor-pointer rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-muted hover:border-primary">
+                      <Icon name="attach_file" className="mr-1 align-middle text-[14px]" /> Attach
+                      <input
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={(event) => {
+                          const selected = Array.from(event.target.files || []).slice(0, 3)
+                          const valid = selected.filter((file) => file.size <= 600 * 1024)
+                          setTicketFiles(valid)
+                          if (valid.length !== selected.length) setTicketError('Each attachment must be 600 KB or smaller.')
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {ticketFiles.length > 0 && <p className="truncate text-[10px] text-text-muted">{ticketFiles.map((file) => file.name).join(', ')}</p>}
+                  {ticketError && <p className="text-[10px] text-destructive">{ticketError}</p>}
+                  <button type="button" onClick={sendTicket} disabled={ticketSending || !ticketSubject.trim() || !ticketDetail.trim()} className="flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-bg disabled:opacity-50">
+                    <Icon name="send" className="text-[14px]" /> {ticketSending ? 'Submitting…' : 'Submit ticket'}
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
 
           <form
             onSubmit={(e) => {
