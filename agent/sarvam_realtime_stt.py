@@ -373,7 +373,28 @@ class RealtimeStream(stt.SpeechStream):
             # but a VALID preflight beats a bigger invalid one: an invalidated
             # run is cancelled and the LLM re-runs from scratch, which is
             # strictly worse than not preempting at all.
-            if text and self._utterance_open:
+            # Only AFTER vad.speech_end, and that is not a detail — it is the
+            # whole design. agent_activity.on_preemptive_generation (1.7.1)
+            # cancels any in-flight run and THEN returns early once
+            # _preemptive_generation_count >= max_retries (default 3):
+            #
+            #     self._cancel_preemptive_generation()
+            #     ...
+            #     if self._preemptive_generation_count >= max_retries: return
+            #
+            # So emitting a preflight per partial is actively harmful. Call
+            # 934 sent ~32 in a turn: the 4th cancelled the 3rd and created
+            # nothing, and every later one left _preemptive_generation None.
+            # Nothing survived to be used, which is why that call measured no
+            # gain at all.
+            #
+            # Sarvam's recogniser lags the audio, so partials arriving after
+            # speech_end carry the completed sentence and match the final's
+            # words. Emitting only those yields one or two preflights per
+            # turn — inside max_retries, and the last one is the one that
+            # matches. One speculative LLM run per turn is exactly what
+            # preemptive generation is designed for.
+            if text and self._utterance_open and not self._speaking:
                 self._event_ch.send_nowait(
                     stt.SpeechEvent(
                         type=stt.SpeechEventType.PREFLIGHT_TRANSCRIPT,
