@@ -265,9 +265,10 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="shrink-0 rounded-lg border border-border p-1.5 text-text-muted hover:text-text"
+            title="Close call details"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-text-muted shadow-sm transition-colors hover:border-primary/40 hover:bg-surface-high hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:h-10 sm:w-10"
           >
-            <Icon name="close" className="text-[18px]" />
+            <Icon name="close" className="text-[18px] leading-none sm:text-[20px]" />
           </button>
         </div>
       {/* Small screens keep one scrolling column (the layout is stacked, so
