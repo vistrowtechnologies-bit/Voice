@@ -1751,24 +1751,43 @@ def _sarvam_stt_language(reply_language: str | None) -> str:
     return code if code in _SARVAM_STT_LANGUAGES else "unknown"
 
 
-def _build_stt(speech_context: str | None = None, reply_language: str | None = None):
+def _build_stt(speech_context: str | None = None, reply_language: str | None = None,
+               is_phone: bool = True):
     """Sarvam saaras:v3 is the primary — Indian-language quality/latency it
     was actually chosen for. If GOOGLE_APPLICATION_CREDENTIALS_JSON is set,
     wraps it in a FallbackAdapter so a Sarvam outage or exhausted credit
     balance (observed in production as "Insufficient credits", which
     AgentSession treats as unrecoverable and closes the whole call) retries
     against Google Cloud STT instead of killing the session."""
+    # Sarvam's own LiveKit production guide, followed as published:
+    # docs.sarvam.ai/api/integration/livekit-production-best-practices
+    #
+    # STTStreaming (saaras:v3-realtime) is their official class and replaces
+    # the hand-rolled protocol client this file used to import. That adapter
+    # existed only because livekit-plugins-sarvam 1.6.4 had no way to reach
+    # the realtime socket; 1.8.0 does, so maintaining our own is pure risk.
+    #
+    # stream_type="fast" is called out as "the single biggest latency knob"
+    # and "the single most impactful bad setting for voice" - the default
+    # ("balanced") chunks at 1000ms instead of 500ms.
+    #
+    # mode="codemix" is their recommendation for Indian deployments. It was
+    # previously avoided here on the theory that Latin-script output would
+    # break the Devanagari exit-intent patterns. Measured against the API on
+    # three real exit phrases, transcribe and codemix produce IDENTICAL
+    # intents, and codemix keeps "WhatsApp"/"busy" as English rather than
+    # transliterating them to व्हाट्सएप/बिज़ी, which reads better to the LLM.
+    #
+    # vad_min_silence_ms is per channel: 500ms on telephony, 300ms in the
+    # browser, where the wideband path needs less confirmation.
     if sarvam_realtime_stt.enabled():
-        # PROTOTYPE, off unless SARVAM_REALTIME_STT=1. The plugin below talks
-        # to Sarvam's LEGACY socket, which their docs describe as giving "only
-        # a final per utterance" - so it emits no PREFLIGHT_TRANSCRIPT, and
-        # AgentSession's preemptive generation (on by default) has therefore
-        # never fired on a single call. This path uses the realtime socket to
-        # feed it partials so the LLM runs under the endpointing wait instead
-        # of after it. Falls back to Google identically to the branch below.
-        realtime = sarvam_realtime_stt.RealtimeSTT(
+        realtime = sarvam.STTStreaming(
             language=_sarvam_stt_language(reply_language),
+            stream_type="fast",
+            mode="codemix",
+            endpointing="vad",
             prompt=speech_context,
+            vad_min_silence_ms=500 if is_phone else 300,
         )
         if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
             return realtime
@@ -2927,7 +2946,8 @@ class RealEstateAgent(Agent):
             # super().__init__() further down. Same trap as the _direction
             # outage: an attribute read here is read before it exists.
             stt=None if self._is_realtime else _build_stt(
-                _speech_context_prompt(config), reply_language
+                _speech_context_prompt(config), reply_language,
+                is_phone=(call_context or {}).get("call_type") == "phone",
             ),
             # The public demo is judged turn-by-turn. A hard generation cap
             # prevents a missed prompt instruction from becoming a spoken
@@ -5141,6 +5161,12 @@ async def entrypoint(ctx: JobContext) -> None:
     emergency_fallback_number = (cfg.get("emergency_fallback_number") or "").strip()
 
     session = AgentSession(
+        # Sarvam's STT runs its own server-side VAD, so LiveKit's would be a
+        # second detector and a second network hop over the same audio. Their
+        # guide is explicit: vad=None. Passing None (not omitting it) matters
+        # — agent_session.py treats an omitted vad as "not given" and quietly
+        # loads inference.VAD(model="silero") in its place.
+        vad=None,
         userdata=userdata,
         # filter_markdown first: strips **bold**/bullets/etc before the
         # gender guard ever sees the text, since the LLM occasionally
@@ -5179,6 +5205,13 @@ async def entrypoint(ctx: JobContext) -> None:
                 # work despite the docs saying they do"), so adaptive cannot
                 # run on this STT at all. Revisit if that changes.
                 "min_duration": min_interruption_duration,
+                # Explicit per Sarvam's guide — they note VAD-driven
+                # interruption never fires unless the mode is set.
+                "mode": "vad",
+                # 1.3s, down from the 2.0s default: how long the agent waits
+                # after a suspected interruption before deciding it was noise
+                # and resuming.
+                "false_interruption_timeout": 1.3,
             },
             # Preemptive LLM generation (starting on the interim, not-yet-
             # finalized transcript) is already ON by default in this
@@ -5227,7 +5260,12 @@ async def entrypoint(ctx: JobContext) -> None:
             # to fix that failure mode; don't lower it again without a real
             # fix for the underlying STT-finalization race, not just a
             # latency trade that brings the drop back.
-            endpointing=EndpointingOptions(min_delay=0.4, max_delay=4.0),
+            # 0.25 per Sarvam's guide, down from 0.4. Their diagnosis of the
+            # stacked wait is exactly ours: "500 ms of Sarvam silence plus a
+            # 0.5 s min_delay is a full second of dead air." We were paying
+            # 500 + 400 = 900ms before any processing began, which is why
+            # eouMs sat pinned at ~401ms on every single call.
+            endpointing=EndpointingOptions(min_delay=0.25, max_delay=4.0),
             # MUST live inside turn_handling. Passed as AgentSession's own
             # turn_detection= kwarg it is silently discarded: that argument is
             # deprecated, and agent_session.py only migrates the deprecated
@@ -5250,10 +5288,22 @@ async def entrypoint(ctx: JobContext) -> None:
             #
             # See _EOT_UNLIKELY_THRESHOLDS: stops 9 of our 11 languages from
             # being judged with LiveKit's English end-of-turn threshold.
-            turn_detection=_InstrumentedTurnDetector(
-                unlikely_threshold=_EOT_UNLIKELY_THRESHOLDS,
-                on_probability=_record_eot_probability,
-            ),
+            # "stt" per Sarvam's guide: trust their server-side vad.speech_end
+            # rather than running a semantic end-of-turn model on top of it.
+            #
+            # This gives up _InstrumentedTurnDetector, and with it the
+            # eotProbability instrumentation and _EOT_UNLIKELY_THRESHOLDS.
+            # That threshold work was measured to be doing little anyway —
+            # call 939 scored the single Hindi word "तो" at 0.9068 completeness,
+            # so the model's judgements on Hindi fragments were wrong rather
+            # than badly thresholded.
+            #
+            # The real risk is the opposite one: silence timing cuts off a
+            # caller who pauses mid-sentence, which semantic detection was
+            # protecting against. Sarvam's own tuning sequence says to step
+            # min_delay down until cutoffs appear, so this needs watching on
+            # real Hindi calls, not just a latency reading.
+            turn_detection="stt",
         ),
         user_away_timeout=away_timeout,
         # Google's Gemini TTS backend (gemini-2.5-flash-tts) genuinely times
