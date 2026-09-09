@@ -49,20 +49,11 @@ so the final's added "।" does not invalidate it.
 
 ## Still to raise with Sarvam
 
-1. **Which account holds our Startup Program benefits?** Our onboarding form
-   (submitted 2026-09-08) put **vistrowai@gmail.com** in the Primary Email field
-   — the one labelled *"Startup credits & rate limits will be added to this
-   account"* and *"cannot be changed"*. But the ₹25,000 and, evidently, the
-   realtime entitlement are on **vistrowtechnologies@gmail.com**. These need to
-   be the same account, and the form says it cannot be changed by us.
-
-2. **`saaras:v4-realtime` is unreachable.** Every connection attempt terminates
+1. **`saaras:v4-realtime` is unreachable.** Every connection attempt terminates
    immediately with no `error` event first:
    `ClientConnectionResetError: Cannot write to closing transport`.
-   Worth re-testing on the entitled key before asking — it may be the same
-   gating.
 
-## 3. Prompt caching does not appear to apply to our account
+2. **Prompt caching does not appear to apply to our account.**
 
 Your pricing page lists a cached-input rate for `sarvam-105b-conversations`
 (₹10.98 / 1M against ₹29.28 / 1M uncached), but we see no evidence of caching.
@@ -93,14 +84,10 @@ call 2: prompt=9757  cached=9600     <- 98% cached from the second call on
 3. Will `usage.prompt_tokens_details.cached_tokens` be populated when it is
    active? We currently have no way to verify a cache hit.
 
-**Why it matters commercially.** This is a voice agent: the same large system
-prompt is re-sent on every conversational turn, so caching dominates the bill.
-Uncached, a turn costs us roughly ₹0.299 against ₹0.101 for the comparable
-OpenAI model — about 3x — even though your headline rates are lower. With
-caching at the published rate it would be roughly ₹0.116, and clearly the
-better choice on both latency and cost. We have made your model the default
-for new tenants on the strength of its latency (450-500ms time-to-first-token
-against 1,058ms), and we would like to keep it there.
+**Why it matters.** This is a voice agent, so the same large system prompt is
+re-sent on every conversational turn — caching dominates the token bill for
+this workload in a way it would not for one-shot requests. Enabling it would
+make a material difference to whether this scales for us.
 
 ## Lesson for us
 
