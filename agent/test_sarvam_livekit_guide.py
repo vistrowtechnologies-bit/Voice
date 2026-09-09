@@ -86,3 +86,44 @@ class TheAdapterIsGone(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class Prewarm(unittest.TestCase):
+    """Their guide: prewarm in setup so the TLS handshake is off the critical
+    path — they measure ~300ms off the first utterance.
+
+    Worth being precise about what it buys, because 1.8.0 differs by class:
+    sarvam.TTS.prewarm() calls self._pool.prewarm() and does real work, while
+    sarvam.STTStreaming.prewarm() is currently `pass`. Both are called anyway
+    — the STT one costs nothing and starts helping the day they implement it.
+    """
+
+    def test_every_sarvam_provider_is_prewarmed(self):
+        # Three sites: the realtime STT, the primary Sarvam voice, and the
+        # Sarvam safety net behind Google. Missing the primary would mean the
+        # ~300ms never reaches a tenant on shubh/priya.
+        self.assertEqual(SRC.count("_prewarm_provider("), 4,
+                         "expected the helper plus three call sites")
+
+    def test_prewarm_can_never_break_a_call(self):
+        # A provider that cannot pre-connect must still get its normal chance
+        # to connect when the call starts.
+        import inspect
+        src = inspect.getsource(main._prewarm_provider)
+        self.assertIn("except Exception", src)
+        self.assertIn("return inst", src)
+
+    def test_it_tolerates_a_provider_without_prewarm(self):
+        # Google and ElevenLabs have no prewarm(); the helper is called on
+        # Sarvam objects only, but must not assume the method exists.
+        class NoPrewarm:
+            pass
+        obj = NoPrewarm()
+        self.assertIs(main._prewarm_provider(obj, "test"), obj)
+
+    def test_a_raising_prewarm_is_swallowed(self):
+        class Boom:
+            def prewarm(self):
+                raise RuntimeError("no network")
+        obj = Boom()
+        self.assertIs(main._prewarm_provider(obj, "test"), obj)

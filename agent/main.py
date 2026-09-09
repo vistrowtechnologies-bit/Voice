@@ -1751,6 +1751,31 @@ def _sarvam_stt_language(reply_language: str | None) -> str:
     return code if code in _SARVAM_STT_LANGUAGES else "unknown"
 
 
+def _prewarm_provider(inst, what: str):
+    """Open the provider's connections during setup, not on the first word.
+
+    Sarvam's LiveKit guide asks for this: it takes the TLS handshake off the
+    critical path and they measure ~300ms off the first utterance.
+
+    Honest about what it buys, because 1.8.0 differs by class:
+      sarvam.TTS.prewarm()          -> self._pool.prewarm(), real work
+      sarvam.STTStreaming.prewarm() -> `pass`, a no-op today
+    Called on both anyway: it costs nothing, and the STT one starts helping
+    the day they implement it rather than needing to be remembered.
+
+    Never allowed to break a call — a provider that cannot pre-connect must
+    still get the chance to connect normally when the call starts.
+    """
+    fn = getattr(inst, "prewarm", None)
+    if not callable(fn):
+        return inst
+    try:
+        fn()
+    except Exception:
+        logger.warning("prewarm failed for %s — continuing without it", what, exc_info=True)
+    return inst
+
+
 def _build_stt(speech_context: str | None = None, reply_language: str | None = None,
                is_phone: bool = True):
     """Sarvam saaras:v3 is the primary — Indian-language quality/latency it
@@ -1789,6 +1814,7 @@ def _build_stt(speech_context: str | None = None, reply_language: str | None = N
             prompt=speech_context,
             vad_min_silence_ms=500 if is_phone else 300,
         )
+        _prewarm_provider(realtime, "sarvam STTStreaming")
         if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
             return realtime
         return SttFallbackAdapter([
@@ -2243,6 +2269,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             speaker=safety_speaker,
             **tone,
         )
+        _prewarm_provider(sarvam_safety_net, "sarvam TTS (Google fallback)")
         # max_retry_per_tts=5: see _google_fallback_tts docstring above —
         # real Google-side 504s need real retries, not a single attempt.
         _adapter = TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=5)
@@ -2270,6 +2297,9 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         ),
         **tone,
     )
+    # The primary Sarvam voice — the one a tenant on shubh/priya actually
+    # hears, so the ~300ms this saves lands on their first spoken word.
+    _prewarm_provider(sarvam_tts, "sarvam TTS")
     if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
         return sarvam_tts, "sarvam"
     # Same streaming fix as the two branches above — see the comment on the
