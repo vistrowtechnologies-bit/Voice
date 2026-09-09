@@ -1806,13 +1806,30 @@ def _build_stt(speech_context: str | None = None, reply_language: str | None = N
     # vad_min_silence_ms is per channel: 500ms on telephony, 300ms in the
     # browser, where the wideband path needs less confirmation.
     if sarvam_realtime_stt.enabled():
+        # Sarvam's per-channel VAD table, in full. Their guide gives THREE
+        # numbers per channel and only silence was set before, which is a
+        # third of step 3 of their tuning sequence:
+        #
+        #   channel            silence  min_speech  sot_threshold
+        #   WebRTC / headset     300ms      80ms        0.5
+        #   Telephony (SIP)      500ms     200ms        0.7
+        #
+        # A phone line needs a higher start-of-turn threshold and a longer
+        # minimum utterance because the channel is narrowband and noisier —
+        # line noise clears 0.5 far more easily than it clears 0.7, and an
+        # 80ms minimum on telephony turns a click into a turn.
         realtime = sarvam.STTStreaming(
             language=_sarvam_stt_language(reply_language),
             stream_type="fast",
-            mode="codemix",
+            # THEIR values, per channel: the WebRTC example uses codemix, the
+            # telephony example uses transcribe. Not interchangeable — a
+            # narrowband line mixes scripts less reliably.
+            mode="transcribe" if is_phone else "codemix",
             endpointing="vad",
             prompt=speech_context,
             vad_min_silence_ms=500 if is_phone else 300,
+            vad_min_speech_ms=200 if is_phone else 80,
+            vad_sot_threshold=0.7 if is_phone else 0.5,
         )
         _prewarm_provider(realtime, "sarvam STTStreaming")
         if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
@@ -5166,7 +5183,12 @@ async def entrypoint(ctx: JobContext) -> None:
     # word gate that was blocking it.
     sensitivity = cfg.get("interruption_sensitivity")
     sensitivity = 0.5 if sensitivity is None else max(0.0, min(1.0, float(sensitivity)))
-    min_words = 1
+    # Their guide: "With vad=None, interruption.min_words becomes your noise
+    # filter since min_duration becomes inert. Start at 1 for clean audio,
+    # raise to 2 on telephony lines." min_duration is kept for the legacy
+    # non-Sarvam path, where it is still live.
+    _is_phone_call = (call_context or {}).get("call_type") == "phone"
+    min_words = 2 if _is_phone_call else 1
     min_interruption_duration = round(1.1 - sensitivity * 0.6, 2)
     # Silence check-in cadence: how long the caller can be quiet before the
     # session marks user_state "away" and the agent checks in (see below).
@@ -5197,6 +5219,12 @@ async def entrypoint(ctx: JobContext) -> None:
     emergency_fallback_number = (cfg.get("emergency_fallback_number") or "").strip()
 
     session = AgentSession(
+        # Their guide calls this out for telephony specifically. Acoustic echo
+        # cancellation warmup exists for an open mic and speaker in a room; a
+        # phone line has no acoustic path to cancel, so the 3s default is
+        # 3 seconds of the call spent warming up something that cannot help.
+        # Kept at the default for the browser widget, where it is real.
+        aec_warmup_duration=None if _is_phone_call else 3.0,
         # Sarvam's STT runs its own server-side VAD, so LiveKit's would be a
         # second detector and a second network hop over the same audio. Their
         # guide is explicit: vad=None. Passing None (not omitting it) matters
@@ -5247,7 +5275,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 # 1.3s, down from the 2.0s default: how long the agent waits
                 # after a suspected interruption before deciding it was noise
                 # and resuming.
-                "false_interruption_timeout": 1.3,
+                "false_interruption_timeout": 1.5 if _is_phone_call else 1.3,
             },
             # Preemptive LLM generation (starting on the interim, not-yet-
             # finalized transcript) is already ON by default in this
@@ -5301,7 +5329,16 @@ async def entrypoint(ctx: JobContext) -> None:
             # 0.5 s min_delay is a full second of dead air." We were paying
             # 500 + 400 = 900ms before any processing began, which is why
             # eouMs sat pinned at ~401ms on every single call.
-            endpointing=EndpointingOptions(min_delay=0.25, max_delay=4.0),
+            # Cloned from Sarvam's own examples, which differ by channel:
+            #   telephony  min_delay 0.3   max_delay 2.5
+            #   WebRTC     min_delay 0.22  max_delay 2.0
+            # max_delay was 4.0 here — nearly double their telephony value.
+            # It is the ceiling a caller waits when the detector is unsure,
+            # so it sets the worst case, not the median.
+            endpointing=EndpointingOptions(
+                min_delay=0.3 if _is_phone_call else 0.22,
+                max_delay=2.5 if _is_phone_call else 2.0,
+            ),
             # MUST live inside turn_handling. Passed as AgentSession's own
             # turn_detection= kwarg it is silently discarded: that argument is
             # deprecated, and agent_session.py only migrates the deprecated

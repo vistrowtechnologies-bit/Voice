@@ -54,9 +54,16 @@ class TheStackedWaitIsGone(unittest.TestCase):
     def test_turn_detection_trusts_sarvams_speech_end(self):
         self.assertIn('turn_detection="stt"', SRC)
 
-    def test_min_delay_is_lowered(self):
-        self.assertIn("min_delay=0.25", SRC)
+    def test_min_delay_matches_their_examples_per_channel(self):
+        # Their two reference configs differ, and we clone both rather than
+        # picking a blend:  telephony 0.3 / 0.22 WebRTC.
+        self.assertIn("min_delay=0.3 if _is_phone_call else 0.22", SRC)
         self.assertNotIn("min_delay=0.4", SRC)
+
+    def test_max_delay_matches_theirs(self):
+        # Was 4.0 — nearly double their telephony value. This is the ceiling a
+        # caller waits when the detector is unsure, so it sets the worst case.
+        self.assertIn("max_delay=2.5 if _is_phone_call else 2.0", SRC)
 
 
 class Interruption(unittest.TestCase):
@@ -65,8 +72,24 @@ class Interruption(unittest.TestCase):
         # mode is set explicitly.
         self.assertIn('"mode": "vad"', SRC)
 
-    def test_false_interruption_timeout_is_lowered(self):
-        self.assertIn('"false_interruption_timeout": 1.3', SRC)
+    def test_false_interruption_timeout_matches_theirs(self):
+        # telephony 1.5, WebRTC 1.3 — a noisy line needs longer before the
+        # agent decides an interruption was real.
+        self.assertIn('"false_interruption_timeout": 1.5 if _is_phone_call else 1.3', SRC)
+
+    def test_min_words_is_stricter_on_telephony(self):
+        # Their guide: with vad=None, min_words IS the noise filter because
+        # min_duration goes inert. 1 for clean audio, 2 on a phone line.
+        self.assertIn("min_words = 2 if _is_phone_call else 1", SRC)
+
+    def test_stt_mode_matches_their_per_channel_examples(self):
+        # Their telephony example uses transcribe, their WebRTC one codemix.
+        self.assertIn('mode="transcribe" if is_phone else "codemix"', SRC)
+
+    def test_aec_warmup_is_disabled_on_telephony(self):
+        # A phone line has no acoustic path to cancel; the 3s default is 3s
+        # of the call spent warming up something that cannot help.
+        self.assertIn("aec_warmup_duration=None if _is_phone_call else 3.0", SRC)
 
 
 class TheAdapterIsGone(unittest.TestCase):
