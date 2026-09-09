@@ -2409,6 +2409,11 @@ class RealEstateAgent(Agent):
         visitor_name: str | None = None,
         visitor_phone: str | None = None,
         direction: str | None = None,
+        # Phone or browser. Only used to pick Sarvam's per-channel VAD
+        # silence (500ms telephony / 300ms WebRTC, per their guide). Passed
+        # explicitly rather than read from call_context, which is a LOCAL of
+        # entrypoint() and not in scope here — reading it crashed every call.
+        call_type: str | None = None,
     ) -> None:
         # Set FIRST, before any of the prompt assembly below can read it.
         # It was originally assigned further down, next to _welcome_message,
@@ -2977,7 +2982,7 @@ class RealEstateAgent(Agent):
             # outage: an attribute read here is read before it exists.
             stt=None if self._is_realtime else _build_stt(
                 _speech_context_prompt(config), reply_language,
-                is_phone=(call_context or {}).get("call_type") == "phone",
+                is_phone=(call_type or "") == "phone",
             ),
             # The public demo is judged turn-by-turn. A hard generation cap
             # prevents a missed prompt instruction from becoming a spoken
@@ -4989,6 +4994,7 @@ async def entrypoint(ctx: JobContext) -> None:
         call_context["visitor_name"],
         call_context["visitor_phone"],
         direction=call_context.get("direction"),
+        call_type=call_context.get("call_type"),
     )
     _agent_ready_ms = round((time.monotonic() - _t0) * 1000)
     logger.info("[latency] RealEstateAgent() constructed at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
