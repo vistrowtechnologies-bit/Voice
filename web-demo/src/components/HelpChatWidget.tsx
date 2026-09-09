@@ -12,6 +12,13 @@ import { Icon } from './Icon'
 // /dashboard/calls doesn't fall through to the generic /dashboard entry.
 type PageHelp = { label: string; questions: string[] }
 
+const GLOBAL_SUGGESTIONS = [
+  'How many calls came in today?',
+  'Who are my hottest leads right now?',
+  'How many credits do I have left?',
+  'Which integrations are connected?',
+]
+
 const PAGE_SUGGESTIONS: Record<string, PageHelp> = {
   '/dashboard/settings?tab=privacy': {
     label: 'Data & privacy',
@@ -106,6 +113,10 @@ function pageSuggestions(locationKey: string) {
   return prefix ? PAGE_SUGGESTIONS[prefix] : null
 }
 
+function visibleQuestions(page: PageHelp | null) {
+  return [...new Set([...(page?.questions || []), ...GLOBAL_SUGGESTIONS])].slice(0, 4)
+}
+
 const fileContent = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
@@ -163,6 +174,7 @@ export function HelpChatWidget() {
   const navigate = useNavigate()
   const locationKey = `${location.pathname}${location.search}`
   const page = pageSuggestions(locationKey)
+  const questions = visibleQuestions(page)
   const firstName = (user?.name || '').split(' ')[0] || 'there'
   const storageKey = `vistrow-help-chat:${user?.accountId ?? 'guest'}:${user?.id ?? 'guest'}`
 
@@ -379,9 +391,9 @@ export function HelpChatWidget() {
                   </p>
                 </div>
 
-                {page && page.questions.length > 0 && (
+                {questions.length > 0 && (
                   <div className="flex flex-col gap-2">
-                    {page.questions.map((q) => (
+                    {questions.map((q) => (
                       <button
                         key={q}
                         onClick={() => send(q)}
@@ -492,7 +504,7 @@ export function HelpChatWidget() {
                 {!sending && page && (
                   <div className="mt-1 flex flex-col gap-1.5 border-t border-border pt-3">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Suggested on {page.label}</p>
-                    {page.questions.slice(0, 2).map((question) => (
+                    {questions.map((question) => (
                       <button key={question} type="button" onClick={() => send(question)} className="flex items-center justify-between rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-left text-[11px] text-text hover:border-primary">
                         {question}<Icon name="arrow_forward" className="shrink-0 text-[13px] text-primary" />
                       </button>
