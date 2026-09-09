@@ -3132,9 +3132,25 @@ class RealEstateAgent(Agent):
     _HELD_OPENING_AFTER_SPEECH_S = 2.5
     # Under this, a first utterance is a greeting, not content.
     _SHORT_FIRST_UTTERANCE_S = 1.2
-    # Nothing heard at all. Generous, because speaking early is the bug this
-    # whole hold exists to prevent - but never "never".
-    _HELD_OPENING_HARD_CAP_S = 20.0
+    # Nothing heard at all.
+    #
+    # Was 20s, and that was wrong in a way only a live call showed. On an
+    # OUTBOUND call the recipient answers and expects US to speak - many say
+    # "hello", but many simply wait. Waiting for their voice deadlocks against
+    # a recipient waiting for ours. Call 936: answered at 4.9s, "Caller away"
+    # logged at 17.5s, and they finally spoke at 24.2s - roughly 19 seconds of
+    # mutual silence. The cap then released the opening at 26.8s and they
+    # spoke 101ms into it, so the two collided: the opening was cut off at
+    # "...bol rahi hoon Vistrow", the interrupted-opener recovery fired, and
+    # the agent re-introduced itself three times. They hung up.
+    #
+    # 4s bounds that. A recipient who greets us is released by VAD in well
+    # under a second and never reaches this; a silent one waits 4s instead of
+    # 20. The cost is that a handset still genuinely ringing at 4s past SIP
+    # "active" gets greeted into ringback again - but that case still has the
+    # interrupted-opener recovery behind it, and 19 seconds of silence has no
+    # recovery at all.
+    _HELD_OPENING_HARD_CAP_S = 4.0
 
     async def _release_held_opening_if_unheard(self) -> None:
         """Say the opening even when the recipient's speech never transcribes.

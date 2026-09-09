@@ -272,3 +272,32 @@ class TheFirstPlayingIsNotAReplay(unittest.TestCase):
         src = inspect.getsource(main)
         line = next(l for l in src.splitlines() if "opening_being_played" in l and "pop" in l)
         self.assertIn("pop(", line)
+
+
+class SilentRecipientsAreNotPunished(unittest.TestCase):
+    """Call 936: the cap was 20s and the recipient simply waited.
+
+    Answered 4.9s, "Caller away" 17.5s, first speech 24.2s — about 19 seconds
+    of mutual silence, because on an OUTBOUND call the recipient expects the
+    caller to speak first. The opening then released straight into their
+    "hello" and was cut off at "...bol rahi hoon Vistrow"; the agent
+    re-introduced itself three times and they hung up.
+    """
+
+    def test_the_cap_is_short_enough_to_survive(self):
+        # Anything beyond a few seconds of dead air on an answered call reads
+        # as a dropped line, and the recipient hangs up before the agent has
+        # said who it is.
+        self.assertLessEqual(main.RealEstateAgent._HELD_OPENING_HARD_CAP_S, 6.0)
+
+    def test_the_cap_still_leaves_room_for_a_greeting(self):
+        # It must not be so tight that it fires before someone saying "hello"
+        # can be heard and release it normally.
+        self.assertGreaterEqual(main.RealEstateAgent._HELD_OPENING_HARD_CAP_S, 2.0)
+
+    def test_a_greeting_still_releases_far_sooner_than_the_cap(self):
+        # The common path must never depend on the cap.
+        self.assertLess(
+            main.RealEstateAgent._HELD_OPENING_AFTER_SHORT_SPEECH_S,
+            main.RealEstateAgent._HELD_OPENING_HARD_CAP_S / 2,
+        )
