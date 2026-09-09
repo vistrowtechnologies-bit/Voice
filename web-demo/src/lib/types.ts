@@ -621,6 +621,8 @@ export interface HelpFaq {
 export interface HelpChatMessage {
   role: 'user' | 'assistant'
   content: string
+  suggestTicket?: boolean
+  comingSoon?: boolean
 }
 
 export interface ApiKey {

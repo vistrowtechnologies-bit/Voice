@@ -194,6 +194,16 @@ export function HelpChatWidget() {
   }, [open, faqs.length])
 
   useEffect(() => {
+    const askFromPage = (event: Event) => {
+      const question = (event as CustomEvent<{ question?: string }>).detail?.question?.trim()
+      setOpen(true)
+      if (question) setInput(question)
+    }
+    window.addEventListener('helpbot:ask', askFromPage)
+    return () => window.removeEventListener('helpbot:ask', askFromPage)
+  }, [])
+
+  useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, sending])
 
@@ -234,13 +244,31 @@ export function HelpChatWidget() {
     setMessages(next)
     setSending(true)
     try {
-      const { reply } = await sendHelpChatMessage(trimmed, history, `${location.pathname}${location.search}`)
-      setMessages([...next, { role: 'assistant', content: reply }])
+      const result = await sendHelpChatMessage(trimmed, history, `${location.pathname}${location.search}`)
+      setMessages([
+        ...next,
+        {
+          role: 'assistant',
+          content: result.reply,
+          suggestTicket: result.suggestTicket,
+          comingSoon: result.comingSoon,
+        },
+      ])
     } catch {
       setError("Couldn't reach the help assistant - try again in a moment.")
     } finally {
       setSending(false)
     }
+  }
+
+  const answerFaq = (faq: HelpFaq) => {
+    if (sending) return
+    setError('')
+    setMessages((current) => [
+      ...current,
+      { role: 'user', content: faq.question },
+      { role: 'assistant', content: faq.answer, suggestTicket: false, comingSoon: false },
+    ])
   }
 
   const openTicket = (subject = '') => {
@@ -378,7 +406,7 @@ export function HelpChatWidget() {
                     {faqs.map((faq) => (
                       <button
                         key={faq.question}
-                        onClick={() => send(faq.question)}
+                        onClick={() => answerFaq(faq)}
                         className="rounded-lg border border-border bg-surface-high px-3 py-2 text-left text-xs text-text transition-colors hover:border-primary"
                       >
                         {faq.question}
@@ -397,6 +425,11 @@ export function HelpChatWidget() {
                         <div className="rounded-xl border border-border bg-surface-high px-3 py-2 text-xs leading-relaxed text-text">
                           {m.content}
                         </div>
+                        {m.comingSoon && (
+                          <span className="mt-1.5 inline-flex rounded-full border border-primary/25 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                            Coming soon
+                          </span>
+                        )}
                         {replyNavigation(m.content, location.pathname) && (() => {
                           const destination = replyNavigation(m.content, location.pathname)!
                           return (
@@ -431,6 +464,15 @@ export function HelpChatWidget() {
                             Report
                           </button>
                         </div>
+                        {m.suggestTicket && (
+                          <button
+                            type="button"
+                            onClick={() => openTicket(messages[i - 1]?.role === 'user' ? messages[i - 1].content : '')}
+                            className="mt-1.5 flex items-center gap-1 rounded-md border border-destructive/35 bg-destructive/5 px-2 py-1 text-[10px] font-semibold text-destructive hover:bg-destructive/10"
+                          >
+                            <Icon name="confirmation_number" className="text-[12px]" /> Raise a ticket
+                          </button>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -514,28 +556,30 @@ export function HelpChatWidget() {
             </section>
           )}
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              send(input)
-            }}
-            className="flex items-center gap-2 border-t border-border p-3"
-          >
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask anything about your account…"
-              className="flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-xs outline-none focus:border-primary"
-            />
-            <button
-              type="submit"
-              disabled={sending || !input.trim()}
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
-              aria-label="Send"
+          {!ticketOpen && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                send(input)
+              }}
+              className="flex items-center gap-2 border-t border-border p-3"
             >
-              <Icon name="arrow_upward" className="text-[16px]" />
-            </button>
-          </form>
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask anything about your account…"
+                className="flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-xs outline-none focus:border-primary"
+              />
+              <button
+                type="submit"
+                disabled={sending || !input.trim()}
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+                aria-label="Send"
+              >
+                <Icon name="arrow_upward" className="text-[16px]" />
+              </button>
+            </form>
+          )}
         </div>
       )}
 

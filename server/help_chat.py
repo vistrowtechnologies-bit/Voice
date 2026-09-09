@@ -12,9 +12,11 @@ instead of single-shot JSON extraction.
 import json
 import logging
 import os
+import re
 import urllib.error
 import urllib.request
 
+import calls_db
 from help_content import HELP_DOC
 from help_tools import TOOL_FUNCTIONS, TOOL_SCHEMAS
 
@@ -22,6 +24,7 @@ logger = logging.getLogger("help-chat")
 
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 CHAT_MODEL = "gpt-4.1-mini"
+CHAT_STRONG_MODEL = os.environ.get("HELP_CHAT_STRONG_MODEL", "gpt-4.1")
 # Cap history sent to the model — this is a support-chat panel, not a
 # long-running conversation; the last few turns are enough context.
 MAX_HISTORY_TURNS = 6
@@ -29,12 +32,20 @@ MAX_MESSAGE_CHARS = 2_000
 
 _SYSTEM_PROMPT_BASE = f"""You are the help assistant embedded in the Vistrow Voice dashboard — a \
 small text chat panel, not the voice product. You help logged-in users understand and use the \
-platform. Answer in plain text, no markdown headers, at most a short paragraph or a few bullet \
-points.
+platform. Keep answers concise and precise. Never invent a page, control, feature, or live value.
 
 You have tools that read this account's real data (calls, leads, contacts, credits) — call one \
 whenever the question needs an actual number or a live fact instead of general product info. \
 Never guess or estimate a number that a tool could answer.
+
+Return exactly one JSON object with no text outside it:
+{{"reply":"plain-text answer","suggestTicket":false,"comingSoon":false}}
+- suggestTicket is true only for a likely product bug, persistent technical failure, billing/account
+  issue, or something the documented troubleshooting cannot resolve. It must stay false for normal
+  how-to questions.
+- comingSoon is true only when the documentation explicitly says the requested feature is not yet
+  available. Never claim something is coming soon merely because you cannot find it.
+- reply is plain text without markdown headings and should name the exact page or button when known.
 
 {HELP_DOC}"""
 
@@ -75,6 +86,57 @@ def _page_label(current_page: str | None) -> str | None:
     return None
 
 
+def _open_record_context(current_page: str | None, account_id: int) -> str:
+    """Add safe, account-scoped context for the record visible behind the bot.
+
+    Call details have a stable route, so the backend can resolve the call itself;
+    the browser never supplies record data and cannot use this to cross tenants.
+    """
+    match = re.match(r"^/dashboard/calls/(\d+)(?:[/?#]|$)", current_page or "")
+    if not match:
+        return ""
+    call = calls_db.get_call(int(match.group(1)), account_id)
+    if not call:
+        return "The currently open call record was not found in this workspace."
+    fields = {
+        "Call ID": call.get("id"),
+        "Caller": call.get("name"),
+        "Phone": call.get("phone"),
+        "Call status": call.get("callStatus"),
+        "Lead stage": call.get("status"),
+        "Channel": call.get("channel"),
+        "Direction": call.get("direction"),
+        "Agent": call.get("agent"),
+        "Website": call.get("website"),
+        "Landing page": call.get("pagePath"),
+        "Created": call.get("callDate"),
+        "ArthaLeads delivery": call.get("arthaleadsStatus"),
+        "ArthaLeads last sync": call.get("arthaleadsSyncedAt"),
+        "ArthaLeads error": call.get("arthaleadsError"),
+    }
+    facts = "\n".join(f"- {label}: {value}" for label, value in fields.items() if value not in (None, ""))
+    return f"CURRENTLY OPEN CALL (the user is looking at this record now):\n{facts}"
+
+
+def _needs_strong_model(message: str) -> bool:
+    return bool(re.search(r"not work|can'?t|cannot|broken|error|bug|failed|why (?:is|isn'?t|doesn'?t)", message, re.I))
+
+
+def _structured_reply(choice_message: dict) -> dict:
+    content = (choice_message.get("content") or "").strip()
+    try:
+        parsed = json.loads(content)
+    except (TypeError, json.JSONDecodeError):
+        # Defensive compatibility if an upstream model ignores JSON mode.
+        return {"reply": content, "suggestTicket": False, "comingSoon": False}
+    reply = str(parsed.get("reply") or parsed.get("answer") or "").strip()
+    return {
+        "reply": reply,
+        "suggestTicket": bool(parsed.get("suggestTicket", False)),
+        "comingSoon": bool(parsed.get("comingSoon", False)),
+    }
+
+
 def _post_chat(api_key: str, body: dict) -> dict:
     request = urllib.request.Request(
         OPENAI_CHAT_URL,
@@ -96,7 +158,7 @@ def _post_chat(api_key: str, body: dict) -> dict:
 
 def answer_help_question(
     message: str, history: list[dict], account_id: int, current_page: str | None = None
-) -> str:
+) -> dict:
     """history is [{"role": "user"|"assistant", "content": "..."}, ...] in
     chronological order. Raises RuntimeError with a human-readable message
     on any failure so the API route can 502 it."""
@@ -119,6 +181,9 @@ def answer_help_question(
     system_prompt = _SYSTEM_PROMPT_BASE
     if page_label:
         system_prompt += f"\n\nThe user is currently viewing: {page_label}."
+    open_record = _open_record_context(current_page, account_id)
+    if open_record:
+        system_prompt += f"\n\n{open_record}"
 
     messages: list[dict] = [
         {"role": "system", "content": system_prompt},
@@ -126,9 +191,18 @@ def answer_help_question(
         {"role": "user", "content": text},
     ]
 
+    model = CHAT_STRONG_MODEL if _needs_strong_model(text) else CHAT_MODEL
+    response_shape = {"type": "json_object"}
     payload = _post_chat(
         api_key,
-        {"model": CHAT_MODEL, "temperature": 0.3, "messages": messages, "tools": TOOL_SCHEMAS, "tool_choice": "auto"},
+        {
+            "model": model,
+            "temperature": 0.25,
+            "response_format": response_shape,
+            "messages": messages,
+            "tools": TOOL_SCHEMAS,
+            "tool_choice": "auto",
+        },
     )
 
     try:
@@ -154,14 +228,17 @@ def answer_help_question(
             messages.append(
                 {"role": "tool", "tool_call_id": call.get("id", ""), "content": json.dumps(result)}
             )
-        payload = _post_chat(api_key, {"model": CHAT_MODEL, "temperature": 0.3, "messages": messages})
+        payload = _post_chat(
+            api_key,
+            {"model": model, "temperature": 0.25, "response_format": response_shape, "messages": messages},
+        )
         try:
             choice_message = payload["choices"][0]["message"]
         except (KeyError, IndexError) as exc:
             logger.error("unexpected help-chat follow-up payload: %s", str(payload)[:500])
             raise RuntimeError("Help chat model returned an unexpected format") from exc
 
-    reply = (choice_message.get("content") or "").strip()
-    if not reply:
+    result = _structured_reply(choice_message)
+    if not result["reply"]:
         raise RuntimeError("Help chat model returned an empty reply")
-    return reply
+    return result

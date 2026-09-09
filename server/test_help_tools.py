@@ -12,6 +12,36 @@ class HelpToolsTests(unittest.TestCase):
             "Settings > Data & privacy",
         )
 
+    @patch("help_chat.calls_db.get_call")
+    def test_open_call_context_is_account_scoped_and_includes_page_delivery(self, get_call):
+        get_call.return_value = {
+            "id": "880",
+            "name": "Swati",
+            "phone": "+919004497128",
+            "callStatus": "Completed",
+            "status": "Qualified",
+            "channel": "Website Widget",
+            "agent": "Siya KHOPOLI",
+            "website": "shaporjipallonji.com",
+            "pagePath": "/shapoorji-pallonji-plot-khopoli/",
+            "arthaleadsStatus": "sent",
+        }
+
+        context = help_chat._open_record_context("/dashboard/calls/880", 7)
+
+        get_call.assert_called_once_with(880, 7)
+        self.assertIn("CURRENTLY OPEN CALL", context)
+        self.assertIn("/shapoorji-pallonji-plot-khopoli/", context)
+        self.assertIn("ArthaLeads delivery: sent", context)
+
+    def test_structured_reply_flags_are_normalized(self):
+        result = help_chat._structured_reply(
+            {"content": '{"reply":"Please try the retry button.","suggestTicket":true,"comingSoon":false}'}
+        )
+        self.assertEqual(result["reply"], "Please try the retry button.")
+        self.assertTrue(result["suggestTicket"])
+        self.assertFalse(result["comingSoon"])
+
     @patch("help_tools.calls_db.list_calls")
     def test_find_recent_calls_returns_source_and_crm_state(self, list_calls):
         list_calls.return_value = [

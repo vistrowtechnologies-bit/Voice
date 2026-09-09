@@ -450,7 +450,7 @@ export const fetchWidgetBackendUrl = () => get<{ backendUrl: string | null }>('/
 
 export const fetchHelpFaqs = () => get<HelpFaq[]>('/help/faqs')
 export const sendHelpChatMessage = (message: string, history: HelpChatMessage[], currentPage?: string) =>
-  send<{ reply: string }>('POST', '/help/chat', { message, history, currentPage })
+  send<{ reply: string; suggestTicket: boolean; comingSoon: boolean }>('POST', '/help/chat', { message, history, currentPage })
 export const submitHelpTicket = (ticket: {
   subject: string
   detail: string
