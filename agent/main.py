@@ -4624,6 +4624,10 @@ async def _hang_up(room_name: str) -> None:
 # call row is written before it either way, so exceeding this only costs the
 # extracted fields and the returning-caller summary.
 _POST_CALL_ANALYSIS_TIMEOUT_S = 8.0
+# How long the CRM delivery waits for that analysis before sending without it.
+# Slightly above the analysis bound so the normal path is "the analysis
+# finished or gave up", never "the delivery lost patience first".
+_CRM_ENRICH_WAIT_S = 9.0
 
 
 async def _post_call_analysis(
@@ -5946,14 +5950,37 @@ async def entrypoint(ctx: JobContext) -> None:
             logger.exception("failed to save call log for room %s", ctx.room.name)
 
         # Start the full CRM delivery as soon as the durable call row exists.
-        # This used to run after the optional post-call AI pass, recording
-        # upload and audio cleanup. Those steps can consume the worker's whole
-        # shutdown grace period, leaving a perfectly saved qualified lead with
-        # arthaleads_status=NULL because delivery was never reached. Run it in
-        # parallel with that slower cleanup so it gets the full grace window
-        # without delaying recording finalisation.
-        delivery_task = asyncio.create_task(
-            _deliver_to_integrations(
+        # It used to run after the post-call AI pass, the recording upload AND
+        # the audio cleanup; those can consume the worker's whole shutdown
+        # grace period, leaving a perfectly saved qualified lead with
+        # arthaleads_status=NULL because delivery was never reached.
+        #
+        # It waits for ONE of those three - the analysis - and runs in parallel
+        # with the other two. Starting before the analysis instead meant the
+        # CRM received _extra_lead_facts only and never the post-call read
+        # (interest_level, confirmed_requirement, business_summary), because
+        # `extracted` is still empty at this point. That read is the
+        # qualitative half a salesperson acts on, so the fix is to wait for
+        # the analysis specifically, not to start ahead of everything.
+        analysis_done = asyncio.Event()
+
+        async def _deliver_when_enriched() -> None:
+            try:
+                await asyncio.wait_for(
+                    analysis_done.wait(), timeout=_CRM_ENRICH_WAIT_S
+                )
+            except asyncio.TimeoutError:
+                # The analysis has its own 8s bound and sets the event even on
+                # failure, so this only fires if that path was itself skipped.
+                # Deliver anyway: a lead with fewer fields beats no lead.
+                logger.warning(
+                    "delivering to CRM without the post-call analysis — it did "
+                    "not finish within %ss (room=%s)",
+                    _CRM_ENRICH_WAIT_S, ctx.room.name,
+                )
+            # `extracted` is read HERE, not when the task was created, so
+            # whatever the analysis produced is included.
+            await _deliver_to_integrations(
                 cfg.get("account_id"),
                 allowed_keys=cfg.get("crm_integration_keys") or None,
                 lead={
@@ -5964,17 +5991,23 @@ async def entrypoint(ctx: JobContext) -> None:
                     "channel": call_context["call_type"],
                     "duration_seconds": (ended_at - started_at).total_seconds(),
                     "transcript": transcript,
-                    "extracted_data": _extra_lead_facts(lead_data),
+                    # Same merge the calls row gets - in-call facts seeded
+                    # first, the post-call read layered over them.
+                    "extracted_data": {**_extra_lead_facts(lead_data), **extracted},
                     "language": agent._reply_language,
                     "agent_name": cfg.get("name"),
                     "page_path": call_context.get("visitor_path") or "",
                 },
                 call_id=saved_call_id,
             )
-        )
+
+        delivery_task = asyncio.create_task(_deliver_when_enriched())
         # Enrichment, now that the record is safely on disk. Bounded so a
         # stalled provider can only cost the extracted fields/memory summary,
         # never the call itself.
+        if not transcript:
+            # No analysis will run, so nothing for the delivery to wait on.
+            analysis_done.set()
         if transcript:
             try:
                 extracted, memory_summary = await asyncio.wait_for(
@@ -5988,6 +6021,10 @@ async def entrypoint(ctx: JobContext) -> None:
                 )
             except Exception:
                 logger.exception("post-call analysis failed for room %s — call already saved", ctx.room.name)
+            # Released whatever happened above — success, timeout or error —
+            # so the CRM delivery is never left waiting on a step that already
+            # gave up. Set BEFORE the DB write so a slow write cannot delay it.
+            analysis_done.set()
             if extracted:
                 # Re-merge: this OVERWRITES the column, so dropping the
                 # in-call facts here would silently undo the seed above.
@@ -6030,9 +6067,16 @@ async def entrypoint(ctx: JobContext) -> None:
                 logger.warning("background audio aclose() timed out for room %s", ctx.room.name)
             except Exception:
                 logger.exception("failed to close background audio for room %s", ctx.room.name)
-        # Usually completed while analysis/recording ran; awaiting here keeps
-        # shutdown open only for any small remainder and observes the task.
-        await delivery_task
+        # Usually completed while the recording and audio cleanup ran; awaiting
+        # here keeps shutdown open only for any small remainder and observes
+        # the task. Guarded because there is no `finally` around the steps
+        # above: an exception in recording finalisation would otherwise leave
+        # this task orphaned, and the lead undelivered, with nothing but a
+        # "Task exception was never retrieved" warning to show for it.
+        try:
+            await delivery_task
+        except Exception:
+            logger.exception("CRM delivery failed for room %s", ctx.room.name)
         # Persist returning-caller memory after the log (independent of it).
         if want_memory and memory_summary and resolved_agent_id:
             db.save_caller_memory(cfg.get("account_id"), resolved_agent_id, agent._caller_phone, memory_summary)
