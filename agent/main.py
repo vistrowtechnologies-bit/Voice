@@ -3201,23 +3201,35 @@ class RealEstateAgent(Agent):
         # the safer conversational shape: let the recipient say "hello"
         # first, then speak. Keep the configured outbound opening pending and
         # release it from on_user_turn_completed after real speech arrives.
-        # REVERTED 2026-09-08. The hold that lived here - keep the opening
-        # back until the recipient speaks - was introduced this morning and
-        # regressed outbound badly: the recipient answered, heard nothing,
-        # said hello two or three times and hung up. Call 915 was 112 seconds
-        # of complete silence. The behaviour it replaced had been stable since
-        # 3 September and the operator confirms it worked: you pick up, you
-        # hear the opening.
+        # HISTORY, because this has now moved twice and the reasons matter.
         #
-        # Four commits went into patching around it (a watchdog, an STT frame
-        # threshold, a 0.3s fast path, a wider acknowledgement pattern) before
-        # it was clear the hold itself was the defect rather than its tuning.
+        # The hold was introduced 2026-09-08 and reverted the same day
+        # (aab6b33): recipients answered, heard nothing, said hello two or
+        # three times and hung up, and call 915 was 112 seconds of silence.
+        # Four commits went into patching around it before it was clear the
+        # hold was the defect rather than its tuning.
         #
-        # _wait_for_sip_answer in entrypoint() is still the gate: session.start
-        # does not happen until it clears, so this is not a return to greeting
-        # into a ringing handset. If a half-missed opener reappears, the fix is
-        # _release_held_opening_if_unheard's sibling - the interrupted-opener
-        # recovery, which restates why we called - not another hold.
+        # Restored 2026-09-09, because removing it brought back the failure it
+        # existed to prevent. The operator listened to a call recording and
+        # heard the RING TONE AND THE OPENING PLAYING OVER EACH OTHER: the
+        # agent greets while the handset is still ringing, so the recipient
+        # picks up partway through and catches only "...baat kar sakte hain?".
+        #
+        # The revert comment claimed _wait_for_sip_answer made this
+        # impossible. It does not. That gate waits for sip.callStatus=="active",
+        # and a direct probe against a ringing, unanswered handset saw "active"
+        # at 2.98s and wait_until_answered return at 3.39s, while the human on
+        # calls 915-919 actually answered at 9.3-16.6s. The gate is real but
+        # the signal underneath it is not trustworthy.
+        #
+        # What changed to make the hold safe is the RELEASE signal, not the
+        # hold. The first version waited for a transcript, so an utterance STT
+        # could not read left the agent mute forever. It now waits on voice
+        # activity - a human is on the line whether or not we caught the words
+        # - with a hard cap, and it sets greeting_played, whose staying False
+        # is what suppressed the silence check-in that should have rescued
+        # call 915. VAD stayed silent through 5.8-13.0s of ringback on all
+        # five of those calls, so it does not release into a ring tone.
         # first_speaker == 'user' means wait silently for the caller to open —
         # no greeting is ever queued, so away-tracking is valid immediately.
         if self._first_speaker == "user":
@@ -3281,6 +3293,39 @@ class RealEstateAgent(Agent):
                     "[latency] realtime greeting requested at +%.2fs", time.monotonic() - dispatch_t0
                 )
             return
+        if self._direction == "outbound":
+            # Hold the opening until we know a human is actually listening.
+            #
+            # sip.callStatus="active" does NOT mean answered. Probed directly
+            # against a ringing, unanswered handset: "active" appeared at
+            # 2.98s and create_sip_participant(wait_until_answered) returned
+            # at 3.39s, while on calls 915-919 the human really picked up at
+            # 9.3-16.6s. Greeting on that signal talks into ringback, which is
+            # audible on the call recording as the ring tone and the opening
+            # playing over each other — the recipient answers partway through
+            # and hears the tail, "...baat kar sakte hain?", with no idea who
+            # called or why.
+            #
+            # This hold existed until aab6b33 reverted it, because holding on
+            # a TRANSCRIPT left call 915 silent for 112 seconds when STT
+            # returned nothing for two short greetings. The fix is the release
+            # signal, not the hold: _release_held_opening_if_unheard waits on
+            # VOICE ACTIVITY, which means a human is on the line whether or
+            # not we understood the words, and VAD stayed silent through
+            # 5.8-13.0s of ringback on all five of those calls. It also sets
+            # greeting_played, whose staying False is what suppressed the
+            # silence check-in that should have rescued call 915, and it caps
+            # the wait so a silent-but-answered line is never left mute.
+            self.session.userdata["outbound_opening_pending"] = True
+            self._held_opening_task = asyncio.create_task(
+                self._release_held_opening_if_unheard()
+            )
+            logger.info(
+                "[latency] holding outbound opening until the recipient is heard "
+                "(cap %.0fs)", self._HELD_OPENING_HARD_CAP_S,
+            )
+            return
+
         try:
             if self._welcome_message:
                 # Operator wrote an exact opening line — speak it verbatim

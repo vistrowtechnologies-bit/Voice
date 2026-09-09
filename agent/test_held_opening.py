@@ -1,11 +1,15 @@
 """The outbound opening must never be held forever.
 
-CURRENTLY RESERVED, NOT WIRED IN. The hold this watchdog protected was
-reverted on 2026-09-08 - it regressed outbound badly and the behaviour it
-replaced had been stable since 3 September. on_enter now speaks the opening
-directly, so _release_held_opening_if_unheard is never started. These tests
-still pin its behaviour so that if a hold is ever reintroduced, its safety
-net comes back correct rather than being rewritten from memory.
+WIRED IN again as of 2026-09-09. on_enter holds the outbound opening and
+starts this watchdog; the hold was reverted on 2026-09-08 and restored when
+removing it brought back the failure it existed to prevent - a call recording
+with the ring tone and the opening playing over each other, so the recipient
+picks up partway through and hears only the tail of the line.
+
+What makes the hold safe this time is the release signal. The first version
+waited for a TRANSCRIPT, so an utterance STT could not read left the agent
+mute (call 915: 112 seconds). This waits on VOICE ACTIVITY, caps the wait,
+and sets greeting_played so the silence check-in is handed back.
 
 Call 915: 112 seconds, ZERO transcript turns, and VAD had the caller speaking
 twice - 349ms and 452ms, two short "hello"s that STT returned nothing for.
@@ -204,3 +208,36 @@ class RealAgentTimings(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TheHoldIsActuallyWiredIn(unittest.TestCase):
+    """The watchdog spent a day written, tested and never started.
+
+    Its tests all passed the whole time, because they call the method
+    directly. Nothing asserted that on_enter reaches it, so the safety net
+    existed and did nothing. These check the wiring itself.
+    """
+
+    def test_on_enter_holds_the_opening_for_outbound(self):
+        import inspect
+        src = inspect.getsource(main.RealEstateAgent.on_enter)
+        self.assertIn("outbound_opening_pending", src,
+                      "on_enter no longer holds the outbound opening")
+        self.assertIn("_release_held_opening_if_unheard", src,
+                      "the hold is set but its release watchdog is never started")
+
+    def test_the_hold_is_outbound_only(self):
+        # An inbound caller dialled US and is waiting to be greeted. Holding
+        # their opening would be silence on a call they initiated.
+        import inspect
+        src = inspect.getsource(main.RealEstateAgent.on_enter)
+        held = src.index("outbound_opening_pending")
+        guard = src.rindex('self._direction == "outbound"', 0, held)
+        self.assertLess(guard, held, "the hold is not guarded on direction")
+
+    def test_release_hands_back_the_silence_checkin(self):
+        # greeting_played staying False is what suppressed the away check-in
+        # and turned a missed opener into 112 seconds of nothing.
+        import inspect
+        src = inspect.getsource(main.RealEstateAgent._release_held_opening_if_unheard)
+        self.assertIn('greeting_played', src)
