@@ -204,6 +204,10 @@ class RealtimeStream(stt.SpeechStream):
         self._api_key = api_key
         self._stt_impl = stt
         self._speaking = False
+        # Open from vad.speech_start until transcript.final. Partials keep
+        # arriving (and improving) after speech_end, and the last of those is
+        # the only one whose words match the final.
+        self._utterance_open = False
         self._reconfigure: asyncio.Queue[dict] = asyncio.Queue()
         self._request_id = ""
 
@@ -289,12 +293,18 @@ class RealtimeStream(stt.SpeechStream):
 
         if kind == "vad.speech_start":
             self._speaking = True
+            self._utterance_open = True
             self._event_ch.send_nowait(
                 stt.SpeechEvent(type=stt.SpeechEventType.START_OF_SPEECH)
             )
             return
 
         if kind == "vad.speech_end":
+            # NOT the end of useful partials. Sarvam's recogniser lags the
+            # audio, so the partial that finally carries the COMPLETE
+            # utterance arrives AFTER speech_end (measured: speech_end 6768ms,
+            # complete partial 6809ms, final 7007ms). _speaking is therefore
+            # the wrong gate for preflights - see _utterance_open.
             self._speaking = False
             self._event_ch.send_nowait(
                 stt.SpeechEvent(type=stt.SpeechEventType.END_OF_SPEECH)
@@ -308,10 +318,22 @@ class RealtimeStream(stt.SpeechStream):
             # handler calls on_interim_transcript itself, so this covers the
             # interim path too rather than double-reporting it.
             #
-            # Guarded on _speaking to match livekit.agents.inference.stt: a
-            # partial arriving after the turn ended would start an LLM run for
-            # a turn that is already being answered.
-            if text and self._speaking:
+            # Gated on _utterance_open, NOT _speaking. Call 929 fired seven
+            # preemptive generations and livekit invalidated all seven:
+            # "the transcript, chat context, tools, or tool choice changed".
+            #
+            # Cause was here. _transcripts_equivalent (agent_activity.py:137 in
+            # 1.7.1) compares WORD LISTS ignoring punctuation and case, so the
+            # final's added "।" was never the problem - the words genuinely
+            # differed, because gating on _speaking dropped the one partial
+            # that completes the sentence and left a truncated fragment
+            # ("...वेबसाइट ब") as the last preflight.
+            #
+            # The window from speech_end to final is small (~200ms measured)
+            # but a VALID preflight beats a bigger invalid one: an invalidated
+            # run is cancelled and the LLM re-runs from scratch, which is
+            # strictly worse than not preempting at all.
+            if text and self._utterance_open:
                 self._event_ch.send_nowait(
                     stt.SpeechEvent(
                         type=stt.SpeechEventType.PREFLIGHT_TRANSCRIPT,
@@ -327,6 +349,7 @@ class RealtimeStream(stt.SpeechStream):
             return
 
         if kind == "transcript.final":
+            self._utterance_open = False
             text = (ev.get("text") or "").strip()
             if not text:
                 return
