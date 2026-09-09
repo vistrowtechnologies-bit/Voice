@@ -186,7 +186,8 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
 // while billing 2x, and "Standard" bills 1x - the old copy had it exactly
 // backwards.
 export const MODEL_OPTIONS = [
-  { value: 'gpt-4.1-mini', label: 'Vistrow Swift', tag: 'Recommended · most accurate in testing' },
+  { value: 'sarvam/sarvam-105b-conversations', label: 'Vistrow Bharat', tag: 'Recommended · fastest, built for Indian languages' },
+  { value: 'gpt-4.1-mini', label: 'Vistrow Swift', tag: 'Most accurate in testing' },
   { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite', tag: 'Same accuracy as Swift, a touch faster' },
   { value: 'gpt-4o-mini', label: 'Vistrow Standard', tag: 'Half the credits · slightly less accurate' },
 ] as const
@@ -272,9 +273,11 @@ export const MODEL_OPTIONS = [
 // Keep an explicit item type even while the selectable admin-only list is
 // empty. `[] as const` becomes readonly never[], which makes modelLabel's
 // compatibility lookup fail the TypeScript production build.
-export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: string }[] = [
-  { value: 'sarvam/sarvam-105b-conversations', label: 'Sarvam 105B Conversations', tag: 'Fast' },
-]
+// Keep the explicit item type even while this list is empty. `[] as const`
+// becomes readonly never[], which makes modelLabel's compatibility lookup fail
+// the TypeScript production build (tsc -b, which `tsc --noEmit` does not
+// reproduce - that difference shipped a broken Vercel build once already).
+export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: string }[] = []
 
 const PARKED_MODELS = [
   { value: 'gemini-live', label: 'Gemini Live 2.5 (Preview)' },

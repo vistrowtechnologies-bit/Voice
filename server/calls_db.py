@@ -202,7 +202,7 @@ CREATE TABLE IF NOT EXISTS agents (
     account_id INTEGER,
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
-    model TEXT DEFAULT 'gpt-4.1-mini',
+    model TEXT DEFAULT 'sarvam/sarvam-105b-conversations',
     voice TEXT DEFAULT 'google:chirp3:Aoede',
     language TEXT DEFAULT 'hi-IN',
     status TEXT DEFAULT 'live',
@@ -931,7 +931,7 @@ def _ensure_industry_demo_agents(conn: dbconn.Conn) -> None:
         "WHEN is_platform_demo = 1 THEN 1 ELSE 2 END, id LIMIT 1",
         (account_id,),
     ).fetchone()
-    model = source["model"] if source else "gpt-4.1-mini"
+    model = source["model"] if source else "sarvam/sarvam-105b-conversations"
     voice = source["voice"] if source else "pooja"
     language = source["language"] if source else "hi-IN"
     tone = source["tone"] if source else "casual"
@@ -1227,6 +1227,21 @@ def init_tables() -> None:
             # The dashboard has always listed mini as "recommended". Only
             # this default disagreed.
             conn.execute("ALTER TABLE agents ALTER COLUMN model SET DEFAULT 'gpt-4.1-mini'")
+            # 2026-09-09: forward again, to Vistrow Bharat
+            # (sarvam-105b-conversations). Measured on this product's real
+            # prompt and tools: equal quality to gpt-4.1-mini (9/12 each on the
+            # grounding benchmark) at roughly half the time to first token —
+            # 450-500ms median on live calls against 1,058ms over eight
+            # comparable ones — and it runs on the STT/TTS vendor this platform
+            # already depends on for Indic quality.
+            #
+            # Only the DEFAULT moves. Existing agents keep whatever they were
+            # configured with, exactly as the gpt-4.1 -> gpt-4.1-mini change
+            # above did: a tenant who chose a model must not have it swapped
+            # under them. SET DEFAULT is idempotent, so this needs no guard.
+            conn.execute(
+                "ALTER TABLE agents ALTER COLUMN model SET DEFAULT 'sarvam/sarvam-105b-conversations'"
+            )
             # Same reasoning as the model default above: the column default is
             # what provision_account_defaults' bare INSERT relies on, so a new
             # tenant's starter agent gets the fastest measured voice. Existing
@@ -3340,7 +3355,7 @@ def create_agent(data: dict, account_id: int) -> dict:
                     # agents already defaulted to gpt-4.1-mini a few hundred
                     # lines up; the two paths just disagreed. Existing agents
                     # keep whatever they were configured with.
-                    data.get("model", "gpt-4.1-mini"),
+                    data.get("model", "sarvam/sarvam-105b-conversations"),
                     data.get("voice", "google:chirp3:Aoede"),
                     data.get("language", "hi-IN"),
                     data.get("systemPrompt", ""),
