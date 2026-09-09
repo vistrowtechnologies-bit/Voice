@@ -34,14 +34,36 @@ text.
   which agent answers, business hours, and call routing.
 - **Outbound** — campaign calling: upload a contact list and the agent
   works through it (reminders, follow-ups, payment nudges) at scale.
-- **All Calls / History** — every call's transcript, recording, duration,
-  and captured lead info, across every channel (phone, web widget, both
-  inbound and outbound).
-- **Contacts** — the contact list used for outbound campaigns and lead
-  tracking.
-- **Integrations** — connect Google Calendar (real appointment booking
-  during a call), Slack or a generic webhook (push call/lead events
-  elsewhere), WhatsApp, and Google Sheets.
+- **All Calls History** — every call across phone, web, and Website Widget.
+  Summary cards show total, completed, failed/dropped, and in-progress
+  calls. Filter by channel or direction, search callers, change date order,
+  and drag any column divider to resize the table; the column button resets
+  saved widths. The Website / Page column shows both the domain and the
+  exact landing-page path captured by the widget. Click a caller to open a
+  call-details modal. Details contains the independently scrollable full
+  transcript, transcript and recording downloads, optional conversation
+  intelligence, CRM delivery state and retry, call facts, extracted lead
+  fields, and local notes. Other calls lists earlier calls from the same
+  phone number. There is no Diagnostics tab in the customer dashboard.
+- **Contacts** — a global contact list automatically updated from qualified
+  calls as well as manual/CSV imports. Search, import, export, add, delete,
+  or call contacts; view status, tags, source, and last-called time. Table
+  columns are draggable/resizable and saved in the browser. Tags is compact
+  by default, shows the first two tags plus a remaining count, and can still
+  be widened.
+- **Appointments** — calendar and list views for bookings created by an AI
+  agent or a team member. Filter by status/source, create an appointment
+  after checking available slots, reschedule it, or mark it confirmed,
+  completed, cancelled, or no-show. Workspace hours, timezone, slot length,
+  and booking rules live under Settings > Scheduling.
+- **Integrations** — connect ArthaLeads CRM, Zoho CRM, Facebook Lead Ads,
+  Slack, a generic CRM/webhook, WhatsApp, or Google Sheets. Connected
+  lead-delivery integrations receive every qualified lead in real time.
+  ArthaLeads receives the full transcript and captured website page path;
+  its delivery state and re-send control also appear in call details.
+  The Instant Lead Follow-up webhook queues externally captured leads for
+  an AI call while still applying Compliance rules. Integration cards show
+  connection, last-sync, and error status and can send a test where supported.
 - **Website Widget** — an embeddable "talk to us" button for the
   business's own website: a script tag or WordPress plugin, no phone
   number needed on the visitor's side. "Page rules" let a single site
@@ -60,8 +82,10 @@ text.
 - **Billing** — current plan, credit balance, and usage. One credit is
   roughly one minute of AI conversation, shared across web and phone
   calls.
-- **Settings** — workspace name, team members and roles (Owner/Admin/
-  Member/Viewer), and API keys for custom integrations.
+- **Settings** — Workspace details, Team & roles, Scheduling, My profile,
+  Sign-in & security, Preferences, and Data & privacy. Data & privacy can
+  export account data or request account deletion. Integrations, billing,
+  phone numbers, and website-widget controls link to their own sections.
 
 # Plans (quote these exact figures, nothing else)
 - Starter — Rs 2,999/month: 300 credits, 1 AI agent, web calling widget,
@@ -93,6 +117,12 @@ Kannada, Malayalam, Gujarati, Bengali, and Punjabi.
   support, rather than guessing.
 - Never invent pricing, credit amounts, or features beyond what's listed
   above.
+- When a user asks about a particular caller, phone number, landing page, or
+  CRM delivery, use the recent-call lookup tool. When they ask whether an
+  integration is connected or syncing, use the integration-status tool.
+- Do not mention or direct customers to call diagnostics; that dashboard tab
+  has been removed. For a suspected product fault, collect the page, caller
+  or call ID, what they expected, and what happened, then recommend support.
 """
 
 FAQS: list[dict] = [
@@ -134,7 +164,7 @@ FAQS: list[dict] = [
     },
     {
         "question": "Where do I find call transcripts and recordings?",
-        "answer": "Every call — inbound, outbound, or from the website widget — is logged under All Calls, with transcript, recording, and any captured lead info.",
+        "answer": "Every inbound, outbound, web, or Website Widget call is under All Calls History. Click the caller to open Details, where you can read or download the transcript, play or download the recording, see captured lead fields, and check CRM delivery.",
     },
     {
         "question": "Why won't the Save changes button on my website widget page work after adding a page rule?",
@@ -143,5 +173,21 @@ FAQS: list[dict] = [
     {
         "question": "How do I edit an agent's settings?",
         "answer": "Go to Agents and click Edit on the agent card — it opens that agent's own settings page with everything: persona, voice, knowledge base, speech settings, functions, webhooks, and memory.",
+    },
+    {
+        "question": "How can I see which landing page produced a call?",
+        "answer": "Open All Calls History and check Website / Page. Website Widget calls show the domain and exact captured path on separate lines; click the caller to see the same Page value in call Details.",
+    },
+    {
+        "question": "How do I check whether a lead reached my CRM?",
+        "answer": "Open the call in All Calls History and look at CRM status in Details. ArthaLeads shows Delivered, failed, or not sent, with the last attempt and a re-send button. Connection and last-sync status are under Integrations.",
+    },
+    {
+        "question": "Can I resize the Calls or Contacts table columns?",
+        "answer": "Yes. Drag a divider at the right edge of any column heading. Widths are saved in that browser; use the column reset button to restore defaults. Contacts keeps Tags compact initially but you can widen it.",
+    },
+    {
+        "question": "Where do I manage appointment availability?",
+        "answer": "Use Appointments to view, create, reschedule, or update bookings. Set workspace hours, timezone, slot length, and booking rules under Settings > Scheduling.",
     },
 ]

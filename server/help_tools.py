@@ -73,6 +73,35 @@ TOOL_SCHEMAS = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_recent_calls",
+            "description": "Find recent calls by caller name or phone number and return their channel, website landing page, lead status, agent, and ArthaLeads delivery status.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Caller name or phone number to search for.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum matching calls to return, default 5.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "integration_status",
+            "description": "List this workspace's integrations and whether each is connected, including last sync or last error. Never returns tokens or configuration secrets.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 
@@ -131,10 +160,58 @@ def contacts_stats(account_id: int, **_ignored) -> dict:
     return {"totalContacts": len(contacts), "byStatus": by_status}
 
 
+def find_recent_calls(account_id: int, query: str = "", limit: int = 5, **_ignored) -> dict:
+    query = str(query or "").strip()
+    if not query:
+        return {"error": "no caller name or phone number given"}
+    limit = max(1, min(int(limit or 5), 10))
+    calls = calls_db.list_calls(account_id, limit=limit, search=query)
+    return {
+        "query": query,
+        "matches": [
+            {
+                "callId": call["id"],
+                "name": call["name"],
+                "phone": call["phone"],
+                "callDate": call["callDate"],
+                "callStatus": call["callStatus"],
+                "leadStatus": call["status"],
+                "channel": call["channel"],
+                "direction": call["direction"],
+                "agent": call["agent"],
+                "website": call["website"],
+                "pagePath": call["pagePath"],
+                "arthaleadsStatus": call["arthaleadsStatus"],
+                "arthaleadsSyncedAt": call["arthaleadsSyncedAt"],
+            }
+            for call in calls[:limit]
+        ],
+    }
+
+
+def integration_status(account_id: int, **_ignored) -> dict:
+    integrations = calls_db.list_integrations(account_id)
+    return {
+        "integrations": [
+            {
+                "key": integration["key"],
+                "name": integration["name"],
+                "category": integration["category"],
+                "status": integration["status"],
+                "lastSync": integration["lastSync"],
+                "lastError": integration["lastError"],
+            }
+            for integration in integrations
+        ]
+    }
+
+
 TOOL_FUNCTIONS = {
     "dashboard_stats": dashboard_stats,
     "calls_on_date": calls_on_date,
     "hottest_leads": hottest_leads,
     "billing_snapshot": billing_snapshot,
     "contacts_stats": contacts_stats,
+    "find_recent_calls": find_recent_calls,
+    "integration_status": integration_status,
 }

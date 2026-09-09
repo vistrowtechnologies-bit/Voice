@@ -6,19 +6,46 @@ import { useAuth } from '../lib/auth'
 import type { HelpChatMessage, HelpFaq } from '../lib/types'
 import { Icon } from './Icon'
 
-// Page-specific quick questions, each backed by a real server/help_tools.py
-// function (dashboard_stats, calls_on_date, hottest_leads, billing_snapshot,
-// contacts_stats) - never a question the assistant can't actually answer
-// with real data. Keyed by route prefix, checked longest-first so
+// Page-specific quick questions backed either by current help documentation
+// or a read-only server/help_tools.py function when live account data is
+// required. Keyed by route prefix, checked longest-first so
 // /dashboard/calls doesn't fall through to the generic /dashboard entry.
 const PAGE_SUGGESTIONS: Record<string, { label: string; questions: string[] }> = {
   '/dashboard/calls': {
     label: 'All Calls History',
-    questions: ['How many calls came in today?', 'Show me my most recent qualified leads'],
+    questions: ['How many calls came in today?', 'How do I check whether a lead reached my CRM?', 'How can I see which landing page produced a call?'],
   },
   '/dashboard/contacts': {
     label: 'Contacts',
-    questions: ['How many contacts do I have?', 'How many are qualified?'],
+    questions: ['How many contacts do I have?', 'How many are qualified?', 'Can I resize the Contacts columns?'],
+  },
+  '/dashboard/appointments': {
+    label: 'Appointments',
+    questions: ['Where do I manage appointment availability?', 'How do I reschedule an appointment?'],
+  },
+  '/dashboard/integrations': {
+    label: 'Integrations',
+    questions: ['Which integrations are connected?', 'How are qualified leads sent to ArthaLeads?'],
+  },
+  '/dashboard/website-widget': {
+    label: 'Website Widget',
+    questions: ['How do page rules work?', 'How can I see which landing page produced a call?'],
+  },
+  '/dashboard/agents': {
+    label: 'Agents',
+    questions: ["How do I edit an agent's settings?", 'How do I connect a knowledge base?'],
+  },
+  '/dashboard/knowledge': {
+    label: 'Knowledge Base',
+    questions: ['Can I ground an agent in my own documents?', 'What does Strict Mode do?'],
+  },
+  '/dashboard/compliance': {
+    label: 'Compliance',
+    questions: ['How do I stay compliant with Do-Not-Call rules?'],
+  },
+  '/dashboard/settings': {
+    label: 'Settings',
+    questions: ['Where do I manage appointment availability?', 'How do I add teammates to my workspace?'],
   },
   '/dashboard/billing': {
     label: 'Billing',
@@ -103,7 +130,7 @@ export function HelpChatWidget() {
     setMessages(next)
     setSending(true)
     try {
-      const { reply } = await sendHelpChatMessage(trimmed, history, location.pathname)
+      const { reply } = await sendHelpChatMessage(trimmed, history, `${location.pathname}${location.search}`)
       setMessages([...next, { role: 'assistant', content: reply }])
     } catch {
       setError("Couldn't reach the help assistant - try again in a moment.")
