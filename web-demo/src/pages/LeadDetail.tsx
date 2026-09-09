@@ -290,12 +290,12 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           columns are side by side and each scrolls independently, so a long
           transcript no longer drags Call details and Notes up out of view -
           it stays inside its own card. */}
-      <div className="min-h-0 flex-1 overflow-y-auto lg:overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto lg:flex lg:flex-col lg:overflow-hidden">
 
       <div
         role="tablist"
         aria-label="Call information"
-        className="mx-4 mt-4 flex self-start gap-1.5 rounded-xl border border-border bg-surface-high/45 p-1 sm:mx-6"
+        className="mx-4 mt-4 flex shrink-0 self-start gap-1.5 rounded-xl border border-border bg-surface-high/45 p-1 sm:mx-6"
       >
         <button
           type="button"
@@ -366,7 +366,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
       </div>
 
       {tab === 'history' ? (
-        <section className="flex flex-col gap-3 p-4 sm:p-6">
+        <section className="flex flex-col gap-3 p-4 sm:p-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {!!history?.length && (
             <div className="relative max-w-sm">
               <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted" />
@@ -432,7 +432,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           </Card>
         </section>
       ) : tab === 'diagnostics' ? (
-        <section className="flex flex-col gap-4 p-4 sm:p-6">
+        <section className="flex flex-col gap-4 p-4 sm:p-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {!call.diagnosticsCaptured && (
             <div className="flex items-start gap-2 rounded-xl border border-amber/30 bg-amber/10 px-4 py-3 text-sm text-text">
               <Icon name="info" className="mt-0.5 shrink-0 text-[18px] text-amber" />
@@ -509,9 +509,9 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           pill, and credits/sentiment/duration are per-call facts that belong
           with the rest of them in Call details - a two-tile band spanning the
           full dialog gave them more weight than the transcript underneath. */}
-      <section className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:h-full lg:min-h-0 lg:grid-cols-3">
-        <Card className="flex flex-col gap-3 lg:col-span-2 lg:min-h-0">
-          <div className="flex items-center justify-between">
+      <section className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:min-h-0 lg:flex-1 lg:grid-cols-3 lg:overflow-hidden">
+        <Card className="flex min-w-0 flex-col gap-3 lg:col-span-2 lg:min-h-0 lg:overflow-hidden">
+          <div className="flex shrink-0 items-center justify-between">
             <h2 className="text-sm font-semibold text-text-muted">Call transcript</h2>
             {!!call.transcript?.length && (
               <button
@@ -523,7 +523,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
               </button>
             )}
           </div>
-          <div className="flex flex-col gap-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+          <div className="flex flex-col gap-2 lg:min-h-0 lg:flex-1 lg:overscroll-contain lg:overflow-y-auto lg:pb-4 lg:pr-2">
             {(call.transcript ?? []).map((line, i) => (
               <div
                 key={i}
@@ -543,7 +543,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           </div>
         </Card>
 
-        <div className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+        <div className="flex min-w-0 flex-col gap-4 lg:min-h-0 lg:overscroll-contain lg:overflow-y-auto lg:pb-6 lg:pr-2">
           <Card>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-text-muted">Conversation intelligence</h2>

@@ -638,6 +638,7 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
             "channel": _CHANNEL_LABELS.get(lead.get("channel"), lead.get("channel") or ""),
             "language": lead.get("language") or "",
             "agent_name": lead.get("agent_name") or "",
+            "page_path": lead.get("page_path") or "",
             "extracted_data": lead.get("extracted_data") or {},
         }
     url = (config.get("url") or "").strip()

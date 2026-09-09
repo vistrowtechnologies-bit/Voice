@@ -433,9 +433,9 @@ export function Contacts() {
     {
       key: 'tags',
       header: 'Tags',
-      width: 400,
-      minWidth: 120,
-      maxWidth: 720,
+      width: 220,
+      minWidth: 110,
+      maxWidth: 480,
       resizable: true,
       render: (c) => (
         <div className="flex min-w-0 flex-nowrap gap-1 overflow-hidden" title={c.tags.join(', ')}>

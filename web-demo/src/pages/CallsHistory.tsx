@@ -310,13 +310,18 @@ export function CallsHistory() {
     },
     {
       key: 'website',
-      header: 'Website',
-      width: 180,
+      header: 'Website / Page',
+      width: 230,
       minWidth: 110,
-      maxWidth: 360,
+      maxWidth: 460,
       resizable: true,
-      sortValue: (call) => call.website,
-      render: (call) => <span className="block truncate text-sm text-text-muted" title={call.website || undefined}>{call.website || '-'}</span>,
+      sortValue: (call) => `${call.website}${call.pagePath}`,
+      render: (call) => (
+        <div className="min-w-0 overflow-hidden" title={[call.website, call.pagePath].filter(Boolean).join('')}>
+          <span className="block truncate text-sm text-text-muted">{call.website || '-'}</span>
+          {call.pagePath && <span className="block truncate font-mono text-[11px] text-primary">{call.pagePath}</span>}
+        </div>
+      ),
     },
     {
       key: 'duration',

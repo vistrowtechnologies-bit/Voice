@@ -190,6 +190,7 @@ def _body_for(key: str, config: dict, lead: dict) -> dict | None:
             "channel": lead.get("channel") or "",
             "language": lead.get("language") or "",
             "agent_name": lead.get("agent_name") or "",
+            "page_path": lead.get("page_path") or "",
             "extracted_data": lead.get("extracted_data") or {},
         }
     url = (config.get("url") or "").strip()
@@ -432,6 +433,7 @@ def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
         "channel": call.get("channel") or "",
         "language": call.get("replyLanguage") or "",
         "agent_name": call.get("agent") or "",
+        "page_path": call.get("pagePath") or "",
         "extracted_data": call.get("extractedData") or {},
     }
     ok, detail = _post_json(_ARTHALEADS_URL, body)

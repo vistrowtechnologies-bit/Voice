@@ -4735,7 +4735,7 @@ async def entrypoint(ctx: JobContext) -> None:
         live_meta = json.loads(ctx.room.metadata) if ctx.room.metadata else {}
     except ValueError:
         live_meta = {}
-    for key in ("visitor_name", "visitor_phone", "visitor_email", "company"):
+    for key in ("visitor_name", "visitor_phone", "visitor_email", "visitor_path", "company"):
         if live_meta.get(key):
             call_context[key] = live_meta[key]
     if live_meta.get("custom_fields"):
@@ -5901,6 +5901,7 @@ async def entrypoint(ctx: JobContext) -> None:
         extracted: dict = {}
         memory_summary = ""
         saved_call_id: int | None = None
+        delivery_task: asyncio.Task | None = None
         try:
             saved_call_id = db.save_call(
                 {
@@ -5943,6 +5944,34 @@ async def entrypoint(ctx: JobContext) -> None:
             logger.info("saved call log for room %s (%d turns)", ctx.room.name, len(transcript))
         except Exception:
             logger.exception("failed to save call log for room %s", ctx.room.name)
+
+        # Start the full CRM delivery as soon as the durable call row exists.
+        # This used to run after the optional post-call AI pass, recording
+        # upload and audio cleanup. Those steps can consume the worker's whole
+        # shutdown grace period, leaving a perfectly saved qualified lead with
+        # arthaleads_status=NULL because delivery was never reached. Run it in
+        # parallel with that slower cleanup so it gets the full grace window
+        # without delaying recording finalisation.
+        delivery_task = asyncio.create_task(
+            _deliver_to_integrations(
+                cfg.get("account_id"),
+                allowed_keys=cfg.get("crm_integration_keys") or None,
+                lead={
+                    "type": "call_completed",
+                    "name": lead_data.get("name"),
+                    "phone": lead_data.get("phone"),
+                    "email": lead_data.get("email"),
+                    "channel": call_context["call_type"],
+                    "duration_seconds": (ended_at - started_at).total_seconds(),
+                    "transcript": transcript,
+                    "extracted_data": _extra_lead_facts(lead_data),
+                    "language": agent._reply_language,
+                    "agent_name": cfg.get("name"),
+                    "page_path": call_context.get("visitor_path") or "",
+                },
+                call_id=saved_call_id,
+            )
+        )
         # Enrichment, now that the record is safely on disk. Bounded so a
         # stalled provider can only cost the extracted fields/memory summary,
         # never the call itself.
@@ -6001,27 +6030,9 @@ async def entrypoint(ctx: JobContext) -> None:
                 logger.warning("background audio aclose() timed out for room %s", ctx.room.name)
             except Exception:
                 logger.exception("failed to close background audio for room %s", ctx.room.name)
-        # A separate, comprehensive delivery at call end — unlike the
-        # mid-call capture_lead/book_appointment fan-outs (small structured
-        # events for fast CRM visibility during the call), this one carries
-        # the full transcript, which is only known once the call is over.
-        await _deliver_to_integrations(
-            cfg.get("account_id"),
-            allowed_keys=cfg.get("crm_integration_keys") or None,
-            lead={
-                "type": "call_completed",
-                "name": lead_data.get("name"),
-                "phone": lead_data.get("phone"),
-                "email": lead_data.get("email"),
-                "channel": call_context["call_type"],
-                "duration_seconds": (ended_at - started_at).total_seconds(),
-                "transcript": transcript,
-                "extracted_data": extracted,
-                "language": agent._reply_language,
-                "agent_name": cfg.get("name"),
-            },
-            call_id=saved_call_id,
-        )
+        # Usually completed while analysis/recording ran; awaiting here keeps
+        # shutdown open only for any small remainder and observes the task.
+        await delivery_task
         # Persist returning-caller memory after the log (independent of it).
         if want_memory and memory_summary and resolved_agent_id:
             db.save_caller_memory(cfg.get("account_id"), resolved_agent_id, agent._caller_phone, memory_summary)
