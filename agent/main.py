@@ -42,6 +42,7 @@ from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarv
 
 import db
 import recording
+import sarvam_realtime_stt
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
 # dbconn.py is duplicated into agent/. Used here only to resolve a voice's
@@ -1757,6 +1758,29 @@ def _build_stt(speech_context: str | None = None, reply_language: str | None = N
     balance (observed in production as "Insufficient credits", which
     AgentSession treats as unrecoverable and closes the whole call) retries
     against Google Cloud STT instead of killing the session."""
+    if sarvam_realtime_stt.enabled():
+        # PROTOTYPE, off unless SARVAM_REALTIME_STT=1. The plugin below talks
+        # to Sarvam's LEGACY socket, which their docs describe as giving "only
+        # a final per utterance" - so it emits no PREFLIGHT_TRANSCRIPT, and
+        # AgentSession's preemptive generation (on by default) has therefore
+        # never fired on a single call. This path uses the realtime socket to
+        # feed it partials so the LLM runs under the endpointing wait instead
+        # of after it. Falls back to Google identically to the branch below.
+        realtime = sarvam_realtime_stt.RealtimeSTT(
+            language=_sarvam_stt_language(reply_language),
+            prompt=speech_context,
+        )
+        if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
+            return realtime
+        return SttFallbackAdapter([
+            realtime,
+            google.STT(
+                languages=["hi-IN", "en-IN"],
+                detect_language=True,
+                credentials_info=_GOOGLE_CREDENTIALS,
+            ),
+        ])
+
     sarvam_stt = sarvam.STT(
         # "unknown" is a first-class value on saaras:v3 covering 20+ Indian
         # languages (Hindi, Marathi, Malayalam, Gujarati, Tamil, Telugu,
