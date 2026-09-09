@@ -9,12 +9,14 @@ package in the image), same cheap mini model — one call per user message
 instead of single-shot JSON extraction.
 """
 
+import datetime
 import json
 import logging
 import os
 import re
 import urllib.error
 import urllib.request
+from zoneinfo import ZoneInfo
 
 import calls_db
 from help_content import HELP_DOC
@@ -137,6 +139,29 @@ def _structured_reply(choice_message: dict) -> dict:
     }
 
 
+def _deterministic_live_reply(
+    message: str, account_id: int, timezone_name: str = "Asia/Kolkata"
+) -> dict | None:
+    """Answer high-frequency metric chips without giving the model a chance
+    to confuse an all-time aggregate with a time-scoped question."""
+    if re.search(r"\bhow many\b.*\bcalls?\b.*\btoday\b|\btoday\b.*\bhow many\b.*\bcalls?\b", message, re.I):
+        try:
+            timezone = ZoneInfo(timezone_name)
+        except Exception:
+            timezone_name = "Asia/Kolkata"
+            timezone = ZoneInfo(timezone_name)
+        today = datetime.datetime.now(timezone).date().isoformat()
+        result = calls_db.calls_for_local_date(account_id, today, timezone_name)
+        count = int(result["count"])
+        noun = "call" if count == 1 else "calls"
+        return {
+            "reply": f"There were {count} {noun} today ({today}, {timezone_name}).",
+            "suggestTicket": False,
+            "comingSoon": False,
+        }
+    return None
+
+
 def _post_chat(api_key: str, body: dict) -> dict:
     request = urllib.request.Request(
         OPENAI_CHAT_URL,
@@ -157,7 +182,11 @@ def _post_chat(api_key: str, body: dict) -> dict:
 
 
 def answer_help_question(
-    message: str, history: list[dict], account_id: int, current_page: str | None = None
+    message: str,
+    history: list[dict],
+    account_id: int,
+    current_page: str | None = None,
+    timezone_name: str = "Asia/Kolkata",
 ) -> dict:
     """history is [{"role": "user"|"assistant", "content": "..."}, ...] in
     chronological order. Raises RuntimeError with a human-readable message
@@ -171,6 +200,10 @@ def answer_help_question(
         raise RuntimeError("Message is empty")
     text = text[:MAX_MESSAGE_CHARS]
 
+    deterministic = _deterministic_live_reply(text, account_id, timezone_name)
+    if deterministic:
+        return deterministic
+
     trimmed_history = [
         {"role": turn.get("role"), "content": str(turn.get("content", ""))[:MAX_MESSAGE_CHARS]}
         for turn in (history or [])[-MAX_HISTORY_TURNS:]
@@ -178,7 +211,13 @@ def answer_help_question(
     ]
 
     page_label = _page_label(current_page)
-    system_prompt = _SYSTEM_PROMPT_BASE
+    try:
+        timezone = ZoneInfo(timezone_name)
+    except Exception:
+        timezone_name = "Asia/Kolkata"
+        timezone = ZoneInfo(timezone_name)
+    today_local = datetime.datetime.now(timezone).date().isoformat()
+    system_prompt = f"{_SYSTEM_PROMPT_BASE}\n\nToday's date is {today_local} in {timezone_name}."
     if page_label:
         system_prompt += f"\n\nThe user is currently viewing: {page_label}."
     open_record = _open_record_context(current_page, account_id)
@@ -223,6 +262,8 @@ def answer_help_question(
                 args = json.loads(call.get("function", {}).get("arguments") or "{}")
             except json.JSONDecodeError:
                 args = {}
+            if name == "calls_on_date":
+                args["timezone_name"] = timezone_name
             fn = TOOL_FUNCTIONS.get(name)
             result = fn(account_id, **args) if fn else {"error": f"unknown tool {name}"}
             messages.append(

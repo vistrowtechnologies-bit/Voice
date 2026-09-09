@@ -116,19 +116,13 @@ def dashboard_stats(account_id: int, **_ignored) -> dict:
     }
 
 
-def calls_on_date(account_id: int, date: str = "", **_ignored) -> dict:
+def calls_on_date(account_id: int, date: str = "", timezone_name: str = "Asia/Kolkata", **_ignored) -> dict:
     if not date:
         return {"error": "no date given"}
-    # started_at is stored with a time component — compare only the date
-    # portion. days=0 pulls no window filter at the SQL level, so cap the
-    # scan at a generous recent-call limit and filter exactly in Python.
-    calls = calls_db.list_calls(account_id, limit=500)
-    matches = [c for c in calls if str(c["callDate"])[:10] == date]
-    return {
-        "date": date,
-        "count": len(matches),
-        "callers": [{"name": c["name"], "status": c["status"]} for c in matches[:10]],
-    }
+    try:
+        return calls_db.calls_for_local_date(account_id, date, timezone_name)
+    except ValueError as exc:
+        return {"error": str(exc)}
 
 
 def hottest_leads(account_id: int, limit: int = 5, **_ignored) -> dict:

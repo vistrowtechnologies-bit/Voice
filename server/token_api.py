@@ -3221,11 +3221,13 @@ def list_help_faqs(user: dict = Depends(current_user)) -> list[dict]:
 @app.post("/help/chat")
 def help_chat_message(req: HelpChatRequest, user: dict = Depends(current_user)) -> dict:
     try:
+        preferences = calls_db.get_user_preferences(user["id"])
         result = help_chat.answer_help_question(
             req.message,
             [turn.model_dump() for turn in req.history],
             account_id=user["account_id"],
             current_page=req.currentPage,
+            timezone_name=preferences.get("timezone") or "Asia/Kolkata",
         )
     except RuntimeError as exc:
         raise HTTPException(502, str(exc)) from exc

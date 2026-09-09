@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import help_tools
 import help_chat
@@ -41,6 +41,25 @@ class HelpToolsTests(unittest.TestCase):
         self.assertEqual(result["reply"], "Please try the retry button.")
         self.assertTrue(result["suggestTicket"])
         self.assertFalse(result["comingSoon"])
+
+    @patch("help_chat.calls_db.calls_for_local_date")
+    def test_today_calls_question_bypasses_model_and_all_time_summary(self, calls_for_local_date):
+        calls_for_local_date.return_value = {"count": 3}
+
+        result = help_chat._deterministic_live_reply("How many calls came in today?", 7)
+
+        self.assertEqual(result["reply"].split()[2], "3")
+        self.assertFalse(result["suggestTicket"])
+        calls_for_local_date.assert_called_once_with(7, ANY, "Asia/Kolkata")
+
+    @patch("help_tools.calls_db.calls_for_local_date")
+    def test_calls_on_date_uses_exact_unpaginated_query(self, calls_for_local_date):
+        calls_for_local_date.return_value = {"date": "2026-09-09", "count": 2, "callers": []}
+
+        result = help_tools.calls_on_date(7, date="2026-09-09")
+
+        calls_for_local_date.assert_called_once_with(7, "2026-09-09", "Asia/Kolkata")
+        self.assertEqual(result["count"], 2)
 
     @patch("help_tools.calls_db.list_calls")
     def test_find_recent_calls_returns_source_and_crm_state(self, list_calls):

@@ -25,7 +25,7 @@ import os
 import re
 import secrets
 import time
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import psycopg
 
@@ -2861,6 +2861,61 @@ def summary(account_id: int) -> dict:
             "totalMinutes": round((row["total_seconds"] or 0) / 60, 1),
             "avgDurationSeconds": row["avg_seconds"] or 0.0,
             "activeAgents": agents_live,
+        }
+    finally:
+        conn.close()
+
+
+def calls_for_local_date(account_id: int, date: str, timezone_name: str = "Asia/Kolkata") -> dict:
+    """Exact, unpaginated call totals for one local calendar date.
+
+    ``calls.started_at`` is naive UTC text. Convert the requested local day's
+    boundaries to matching UTC strings instead of comparing the stored UTC
+    date directly, which is wrong around midnight in India.
+    """
+    try:
+        local_date = datetime.date.fromisoformat(date)
+        timezone = ZoneInfo(timezone_name)
+    except (ValueError, ZoneInfoNotFoundError) as exc:
+        raise ValueError("Use a valid YYYY-MM-DD date and IANA timezone") from exc
+    start_local = datetime.datetime.combine(local_date, datetime.time.min, tzinfo=timezone)
+    end_local = start_local + datetime.timedelta(days=1)
+    start_utc = start_local.astimezone(datetime.timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
+    end_utc = end_local.astimezone(datetime.timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE direction = 'inbound') AS inbound,
+                   COUNT(*) FILTER (WHERE direction = 'outbound') AS outbound
+            FROM calls
+            WHERE account_id = ? AND COALESCE(test_run_id, '') = ''
+              AND started_at >= ? AND started_at < ?
+            """,
+            (account_id, start_utc, end_utc),
+        ).fetchone()
+        recent = conn.execute(
+            """
+            SELECT lead_name, lead_phone
+            FROM calls
+            WHERE account_id = ? AND COALESCE(test_run_id, '') = ''
+              AND started_at >= ? AND started_at < ?
+            ORDER BY started_at DESC LIMIT 10
+            """,
+            (account_id, start_utc, end_utc),
+        ).fetchall()
+        return {
+            "date": date,
+            "timezone": timezone_name,
+            "count": row["total"] or 0,
+            "inbound": row["inbound"] or 0,
+            "outbound": row["outbound"] or 0,
+            "callers": [
+                {"name": item["lead_name"] or "Unknown caller", "phone": item["lead_phone"] or ""}
+                for item in recent
+            ],
         }
     finally:
         conn.close()
