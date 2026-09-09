@@ -241,3 +241,34 @@ class TheHoldIsActuallyWiredIn(unittest.TestCase):
         import inspect
         src = inspect.getsource(main.RealEstateAgent._release_held_opening_if_unheard)
         self.assertIn('greeting_played', src)
+
+
+class TheFirstPlayingIsNotAReplay(unittest.TestCase):
+    """Call 935 logged "Agent replayed its opening line mid-call" as an error
+    for an opening that played exactly once.
+
+    The detector fires when greeting_played is set and the reply contains the
+    opener. Both held-opening paths set greeting_played BEFORE speaking it —
+    deliberately, so the silence check-in is handed back immediately — so the
+    one legitimate playing looks identical to a mid-call echo. on_enter sets
+    the flag after its say(), which is why this never surfaced until the hold
+    came back.
+    """
+
+    def test_both_hold_paths_mark_the_deliberate_playing(self):
+        import inspect
+        for fn in (main.RealEstateAgent._release_held_opening_if_unheard,
+                   main.RealEstateAgent.on_user_turn_completed):
+            with self.subTest(fn=fn.__name__):
+                src = inspect.getsource(fn)
+                self.assertIn("greeting_played", src)
+                self.assertIn("opening_being_played", src,
+                              f"{fn.__name__} plays the opener without marking it")
+
+    def test_the_suppression_is_one_shot(self):
+        # pop(), not get(): a SECOND appearance of the opener mid-call is the
+        # real defect this detector exists for and must still be reported.
+        import inspect, re
+        src = inspect.getsource(main)
+        line = next(l for l in src.splitlines() if "opening_being_played" in l and "pop" in l)
+        self.assertIn("pop(", line)

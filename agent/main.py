@@ -3176,6 +3176,7 @@ class RealEstateAgent(Agent):
         if not userdata.pop("outbound_opening_pending", False):
             return
         userdata["greeting_played"] = True
+        userdata["opening_being_played"] = True
         # logger only: _record_diagnostic is a closure inside entrypoint(),
         # not module scope, so calling it from an agent method raises
         # NameError - and it would raise here, outside the try below, killing
@@ -3562,6 +3563,7 @@ class RealEstateAgent(Agent):
         # introduction folded into that response.
         if _userdata.pop("outbound_opening_pending", False):
             _userdata["greeting_played"] = True
+            _userdata["opening_being_played"] = True
             if self._welcome_message and _looks_like_opening_ack(text):
                 logger.info("recipient speech confirmed; playing held outbound opening")
                 _opening = self.session.say(self._welcome_message)
@@ -5637,6 +5639,15 @@ async def entrypoint(ctx: JobContext) -> None:
         # latency-sensitive path in the call. Detect and record instead.
         _opener = (getattr(agent, "_welcome_message", "") or "").strip().lower()
         if _opener and len(_opener) > 25 and userdata.get("greeting_played"):
+            if _opener[:60] in text and userdata.pop("opening_being_played", False):
+                # The held-opening paths set greeting_played BEFORE speaking
+                # the opener (to hand the silence check-in back straight
+                # away), so the first legitimate playing looks exactly like a
+                # mid-call replay to the test above. Call 935 logged the
+                # error at 14,314ms for an opening that played exactly once.
+                # One-shot: any LATER echo is still a real defect and still
+                # reported.
+                return
             if _opener[:60] in text and not userdata.get("greeting_echo_seen"):
                 userdata["greeting_echo_seen"] = True
                 logger.warning("agent replayed its opening line mid-call: %r", item.text_content)
