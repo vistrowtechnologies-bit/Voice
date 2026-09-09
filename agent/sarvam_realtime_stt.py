@@ -85,11 +85,23 @@ class RealtimeOptions:
     mode: str = "transcribe"
     prompt: str | None = None
     sample_rate: int = SAMPLE_RATE
-    # Sarvam's own defaults, stated explicitly so a future tuning session
-    # changes a number here rather than discovering an implicit one.
     threshold: float = 0.3
-    silence_duration_ms: int = 500
-    min_speech_duration_ms: int = 250
+    # NOT Sarvam's defaults (500 / 250). Those cost call 934 real latency:
+    # turn-detected -> agent-speaking was 3,409ms median against 2,325ms on
+    # the legacy plugin path, because the plugin sets high_vad_sensitivity,
+    # which its own docs describe as a ~64ms end-of-speech boundary. Sarvam's
+    # server VAD gates when the FINAL transcript is released, so every extra
+    # millisecond of silence_duration_ms is added to every single turn.
+    #
+    # 120ms keeps a real pause distinguishable from the gap between words
+    # while staying far below the 500ms default. LiveKit's turn-detector-v1
+    # (eou ~401ms) still owns the actual turn decision; this only controls how
+    # soon the transcript is handed over.
+    silence_duration_ms: int = 120
+    # 250ms would drop a bare "hello". The legacy path lowered the first-turn
+    # minimum to 4 frames (~128ms) precisely because call 915 lost two 349ms
+    # and 452ms greetings and sat silent for 112 seconds.
+    min_speech_duration_ms: int = 100
     prefix_padding_ms: int = 300
 
     def query(self) -> dict:
@@ -128,8 +140,10 @@ class RealtimeSTT(stt.STT):
         stream_type: str = "fast",
         mode: str = "transcribe",
         threshold: float = 0.3,
-        silence_duration_ms: int = 500,
-        min_speech_duration_ms: int = 250,
+        # Mirror RealtimeOptions — _build_stt constructs this without passing
+        # them, so a mismatch here silently reinstates Sarvam's slow defaults.
+        silence_duration_ms: int = 120,
+        min_speech_duration_ms: int = 100,
         http_session: aiohttp.ClientSession | None = None,
     ) -> None:
         super().__init__(
