@@ -24,6 +24,7 @@ import type { ActiveCallInfo, CallRecord, Sentiment } from '../lib/types'
 // all (only visible under "All").
 const CHANNELS = ['All', 'Web', 'Website Widget', 'Phone']
 const PAGE_SIZE = 25
+const CALLS_TABLE_WIDTHS_KEY = 'calls-history-table-column-widths-v1'
 
 const SENTIMENT_STYLES: Record<Sentiment, string> = {
   positive: 'bg-cyan/20 text-cyan border-cyan/30',
@@ -94,6 +95,7 @@ export function CallsHistory() {
   const [channel, setChannel] = useState('All')
   const [search, setSearch] = useState('')
   const [sortDesc, setSortDesc] = useState(true)
+  const [tableLayoutVersion, setTableLayoutVersion] = useState(0)
   const [feedbackFilter, setFeedbackFilter] = useState(searchParams.get('feedback') || 'all')
   const [directionFilter, setDirectionFilter] = useState(searchParams.get('direction') || 'all')
   const [page, setPage] = useState(1)
@@ -201,12 +203,23 @@ export function CallsHistory() {
   const completed = calls.filter((c) => c.callStatus === 'completed').length
   const failed = calls.filter((c) => c.callStatus === 'failed').length
 
+  const resetColumnLayout = () => {
+    localStorage.removeItem(CALLS_TABLE_WIDTHS_KEY)
+    setTableLayoutVersion((version) => version + 1)
+  }
+
   const columns: DataTableColumn<GroupedCall>[] = [
     {
       key: 'caller',
       header: 'Caller',
       primary: true,
-      cellClassName: 'relative min-w-[180px] !p-0',
+      width: 220,
+      minWidth: 180,
+      maxWidth: 420,
+      sticky: 'left',
+      resizable: true,
+      sortValue: (call) => call.name,
+      cellClassName: 'relative !p-0',
       // state.backgroundLocation makes App.tsx keep THIS list rendered and
       // overlay the call as a modal (see App.tsx). Still a real <Link>, so
       // middle-click / open-in-new-tab still gets the standalone full page.
@@ -236,6 +249,11 @@ export function CallsHistory() {
     {
       key: 'status',
       header: 'Status',
+      width: 120,
+      minWidth: 90,
+      maxWidth: 180,
+      resizable: true,
+      sortValue: (call) => call.callStatus,
       render: (call) => (
         <span
           className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${
@@ -251,6 +269,11 @@ export function CallsHistory() {
     {
       key: 'channel',
       header: 'Channel',
+      width: 165,
+      minWidth: 110,
+      maxWidth: 280,
+      resizable: true,
+      sortValue: (call) => call.channel,
       render: (call) => (
         <div className="flex flex-col gap-1">
           <span className="text-sm text-text-muted">{call.channel}</span>
@@ -268,6 +291,11 @@ export function CallsHistory() {
     {
       key: 'direction',
       header: 'Direction',
+      width: 135,
+      minWidth: 105,
+      maxWidth: 210,
+      resizable: true,
+      sortValue: (call) => call.direction,
       // null for web/widget calls (direction is a phone-only concept) and
       // for phone calls recorded before this field existed.
       render: (call) =>
@@ -280,8 +308,26 @@ export function CallsHistory() {
           <span className="text-sm text-text-muted">-</span>
         ),
     },
-    { key: 'website', header: 'Website', render: (call) => <span className="text-sm text-text-muted">{call.website || '-'}</span> },
-    { key: 'duration', header: 'Duration', render: (call) => <span className="text-sm">{formatDuration(call.durationSeconds)}</span> },
+    {
+      key: 'website',
+      header: 'Website',
+      width: 180,
+      minWidth: 110,
+      maxWidth: 360,
+      resizable: true,
+      sortValue: (call) => call.website,
+      render: (call) => <span className="block truncate text-sm text-text-muted" title={call.website || undefined}>{call.website || '-'}</span>,
+    },
+    {
+      key: 'duration',
+      header: 'Duration',
+      width: 110,
+      minWidth: 90,
+      maxWidth: 180,
+      resizable: true,
+      sortValue: (call) => call.durationSeconds,
+      render: (call) => <span className="whitespace-nowrap text-sm">{formatDuration(call.durationSeconds)}</span>,
+    },
     // Owner-only - the thumbs prompt is in our public marketing widget, so
     // this rates US, not the tenant's own call handling.
     ...(isOwner
@@ -289,6 +335,11 @@ export function CallsHistory() {
           {
             key: 'feedback',
             header: 'Feedback',
+            width: 100,
+            minWidth: 85,
+            maxWidth: 160,
+            resizable: true,
+            sortValue: (call: GroupedCall) => call.feedback,
             render: (call: GroupedCall) => (
               <span className="text-sm">
                 {call.feedback === 'helpful' ? '👍' : call.feedback === 'not_helpful' ? '👎' : '—'}
@@ -300,6 +351,10 @@ export function CallsHistory() {
     {
       key: 'recording',
       header: 'Recording',
+      width: 110,
+      minWidth: 95,
+      maxWidth: 170,
+      resizable: true,
       render: (call) =>
         call.hasRecording ? (
           <button
@@ -341,14 +396,37 @@ export function CallsHistory() {
     {
       key: 'sentiment',
       header: 'Sentiment',
+      width: 120,
+      minWidth: 95,
+      maxWidth: 190,
+      resizable: true,
+      sortValue: (call) => call.sentiment,
       render: (call) => (
         <span className={`whitespace-nowrap rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${SENTIMENT_STYLES[call.sentiment]}`}>
           {call.sentiment}
         </span>
       ),
     },
-    { key: 'agent', header: 'Agent', render: (call) => <span className="text-sm text-text-muted">{call.agent}</span> },
-    { key: 'time', header: 'Time', render: (call) => <span className="text-sm text-text-muted">{formatDateTime(call.callDate)}</span> },
+    {
+      key: 'agent',
+      header: 'Agent',
+      width: 140,
+      minWidth: 100,
+      maxWidth: 260,
+      resizable: true,
+      sortValue: (call) => call.agent,
+      render: (call) => <span className="block truncate text-sm text-text-muted">{call.agent}</span>,
+    },
+    {
+      key: 'time',
+      header: 'Time',
+      width: 170,
+      minWidth: 135,
+      maxWidth: 260,
+      resizable: true,
+      sortValue: (call) => Date.parse(call.callDate),
+      render: (call) => <span className="whitespace-nowrap text-sm text-text-muted">{formatDateTime(call.callDate)}</span>,
+    },
   ]
 
   const emptyMessage =
@@ -493,23 +571,38 @@ export function CallsHistory() {
             <Icon name="swap_vert" className="text-[16px]" />
             {sortDesc ? 'Newest first' : 'Oldest first'}
           </button>
+          <button
+            type="button"
+            onClick={resetColumnLayout}
+            aria-label="Reset call history column widths"
+            title="Reset column widths"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted hover:border-primary hover:text-primary"
+          >
+            <Icon name="view_column" className="text-[18px]" />
+          </button>
         </div>
 
         {loading ? (
           <DataTable
+            key={tableLayoutVersion}
             columns={columns}
             rows={[]}
             rowKey={(call) => call.id}
             emptyMessage={emptyMessage}
             loading
+            columnDividers
+            columnWidthStorageKey={CALLS_TABLE_WIDTHS_KEY}
           />
         ) : (
           <DataTable
+            key={tableLayoutVersion}
             columns={columns}
             rows={visibleRows}
             rowKey={(call) => call.id}
             emptyMessage={emptyMessage}
             hoverRows={false}
+            columnDividers
+            columnWidthStorageKey={CALLS_TABLE_WIDTHS_KEY}
             footer={
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span>
