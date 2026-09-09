@@ -1,107 +1,70 @@
-# Bug report for Sarvam: `saaras:v3-realtime` stopped emitting `transcript.partial`
+# Sarvam realtime partials are ACCOUNT-GATED — resolved, with two questions left
 
-**Account:** vistrowai@gmail.com (Sarvam Startup Program, onboarded 2026-09-08)
 **Date:** 2026-09-09
-**Severity:** blocks our latency work — partials are the entire reason we moved to the realtime API
+**Status:** root cause found locally. Not a Sarvam defect. Do not send this as a bug report.
 
 ---
 
-## Summary
+## What we thought, and what it actually was
 
-`wss://api.sarvam.ai/speech-to-text-realtime/ws` with `model=saaras:v3-realtime`
-delivered **32 `transcript.partial` events** on our first test at approximately
-**06:00 UTC on 9 September 2026**, then **zero partials on every connection since** —
-at least 13 separate connections. `transcript.final` still arrives normally every time.
+We spent most of 9 September believing `saaras:v3-realtime` had stopped emitting
+`transcript.partial`: one run produced 32 partials at ~06:00 UTC and then 13+
+consecutive connections produced zero, across a controlled sweep of 8 parameter
+variants with byte-identical cached audio. The server's own `session.begin` echo
+confirmed `stream_type: "fast"` and `turn_detection: "vad"` each time, so the
+request was demonstrably correct.
 
-The server's own `session.begin` config echo confirms it accepted
-`stream_type: "fast"` and `turn_detection: "vad"`, i.e. the exact configuration
-documented to produce interim results.
+**The variable we had not controlled was the API key.**
 
-## Evidence
-
-Identical, byte-for-byte cached audio for every run below (6.14s of Hindi speech,
-16 kHz mono linear16, streamed in 20 ms frames at real-time pace, followed by
-0.9s of silence so VAD sees end-of-turn).
-
-### The server confirms the config that should give partials
-
-```
-session.begin config echo:
-    model            = 'saaras:v3-realtime'
-    stream_type      = 'fast'
-    mode             = 'transcribe'
-    turn_detection   = 'vad'
-    sample_rate      = 16000
-    encoding         = 'linear16'
-    language_code    = 'hi-IN'
-
-  baseline -> partials=0  final=True  error=None
-```
-
-### Parameter sweep — no variant produces partials
-
-| variant | partials | final |
+| key | account | `transcript.partial` events |
 |---|---|---|
-| baseline (`stream_type=fast`, `hi-IN`) | **0** | yes |
-| `stream_type=balanced` | **0** | yes |
-| `language_code=auto` | **0** | yes |
-| `language_code=en-IN` | **0** | yes |
-| `mode=verbatim` | **0** | yes |
-| `sample_rate=8000` | **0** | yes |
-| `endpointing=manual` | **0** | no |
-| `return_timestamps=true` | **0** | yes |
+| `sk_y8tek…` | vistrowai@gmail.com | **0** (13+ connections, 8 parameter variants) |
+| `sk_mva3i…` | vistrowtechnologies@gmail.com (holds the ₹25,000 Startup Program credits) | **32** |
 
-### What a working run looked like (first test, ~06:00 UTC)
+Same code, same audio, same parameters, minutes apart. **Realtime partial
+delivery is gated by account entitlement**, not by configuration, and not by a
+Sarvam-side incident. The single successful run at ~06:00 UTC was the old
+account exhausting whatever small allowance it had.
 
-Same code, same parameters:
+## The measurement that matters
+
+With the entitled key:
 
 ```
-   851ms  transcript.partial  'हाँ जी'
+   608ms  transcript.partial  'हाँ जी'
   ...
-  6471ms  transcript.partial  'हाँ जी बोलिए मुझे अपनी मिठाई की दुकान के लिए एक नई वेबसाइट बनवानी है'
-  6768ms  vad.speech_end
-  6809ms  transcript.partial  'हाँ जी बोलिए मुझे अपनी मिठाई की दुकान के लिए एक नई वेबसाइट बनवानी है'
-  7007ms  transcript.final    'हाँ जी बोलिए, मुझे अपनी मिठाई की दुकान के लिए एक नई वेबसाइट बनवानी है।'
+  5972ms  transcript.partial  'हाँ जी बोलिए मुझे अपनी मिठाई की दुकान के लिए एक नई वेबसाइट बनवानी है'   <- complete
+  6333ms  vad.speech_end
+  6375ms  transcript.partial  'हाँ जी बोलिए मुझे अपनी मिठाई की दुकान के लिए एक नई वेबसाइट बनवानी है'
+  6551ms  transcript.final    'हाँ जी बोलिए, मुझे अपनी मिठाई की दुकान के लिए एक नई वेबसाइट बनवानी है।'
 
-partials: 32   first at 851ms   final at 7007ms
+partials: 32   first at 608ms   final at 6551ms
 ```
 
-`vad.speech_start` and `vad.speech_end` still fire correctly in the failing runs.
-Only `transcript.partial` is missing.
+The partial at **5,972ms already carries the complete sentence** — 579 ms before
+the final. Our measured LLM time-to-first-token is 500 ms, so a preemptive
+generation started there produces its first token before the turn is even
+confirmed. `_transcripts_equivalent` compares word lists ignoring punctuation,
+so the final's added "।" does not invalidate it.
 
-### `saaras:v4-realtime` is unreachable
+## Still to raise with Sarvam
 
-Every connection attempt with `model=saaras:v4-realtime` terminates immediately:
+1. **Which account holds our Startup Program benefits?** Our onboarding form
+   (submitted 2026-09-08) put **vistrowai@gmail.com** in the Primary Email field
+   — the one labelled *"Startup credits & rate limits will be added to this
+   account"* and *"cannot be changed"*. But the ₹25,000 and, evidently, the
+   realtime entitlement are on **vistrowtechnologies@gmail.com**. These need to
+   be the same account, and the form says it cannot be changed by us.
 
-```
-aiohttp.client_exceptions.ClientConnectionResetError: Cannot write to closing transport
-```
+2. **`saaras:v4-realtime` is unreachable.** Every connection attempt terminates
+   immediately with no `error` event first:
+   `ClientConnectionResetError: Cannot write to closing transport`.
+   Worth re-testing on the entitled key before asking — it may be the same
+   gating.
 
-No `error` event is sent before the socket closes.
+## Lesson for us
 
-## Questions
-
-1. Is `transcript.partial` delivery gated by account tier or a feature flag? If so,
-   was something changed on our account on 9 September — the same day our Startup
-   Program onboarding was processed?
-2. Is `saaras:v4-realtime` restricted, and what enables it?
-3. Was there an incident affecting partial delivery on 9 September 2026?
-
-## Why this matters to us
-
-We run production voice agents on Sarvam STT + TTS for Indian-language telephony.
-Our measured per-turn pipeline is endpointing 402 ms + STT 200 ms + LLM 500 ms +
-TTS 147 ms. Partial transcripts let the LLM start before the turn ends
-(LiveKit's preemptive generation), which our measurements show would remove
-roughly 470 ms of every turn. In the one working run the last usable partial
-arrived **533 ms** before the final — comfortably more than our 500 ms LLM
-time-to-first-token.
-
-Without partials the realtime endpoint gives us nothing over the legacy socket,
-so we have had to disable it.
-
-## Reproduction
-
-Minimal client: connect, stream 20 ms base64 `audio_input` frames at real-time
-pace, count `transcript.partial` events before `transcript.final`. Happy to share
-the exact script and the cached wav on request.
+Thirteen connections, an 8-variant parameter sweep, and a cached-audio control —
+all rigorous, and all sweeping past the one variable that mattered because the
+key was read from `.env` and never varied. When an A/B is clean and the result
+still makes no sense, the uncontrolled variable is the environment itself.

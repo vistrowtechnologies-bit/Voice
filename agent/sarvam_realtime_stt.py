@@ -66,6 +66,13 @@ WS_URL = "wss://api.sarvam.ai/speech-to-text-realtime/ws"
 # cheaper than the accuracy loss.
 SAMPLE_RATE = 16000
 
+# Sarvam caps a single audio_input frame at 16,000 bytes on stream_type=fast
+# and rejects anything larger with a NON-FATAL chunk_too_large error — the
+# socket stays open, so the failure is silent and looks like a dead caller.
+# 640 bytes is 20ms of 16kHz mono PCM16, the same size the local probe used
+# when it got 32 partials, and small enough that partials come back promptly.
+_CHUNK_BYTES = 640
+
 
 @dataclass
 class RealtimeOptions:
@@ -208,6 +215,7 @@ class RealtimeStream(stt.SpeechStream):
         # arriving (and improving) after speech_end, and the last of those is
         # the only one whose words match the final.
         self._utterance_open = False
+        self._logged_frame_size = False
         self._reconfigure: asyncio.Queue[dict] = asyncio.Queue()
         self._request_id = ""
 
@@ -257,12 +265,34 @@ class RealtimeStream(stt.SpeechStream):
                 await ws.send_str(json.dumps({"event": "flush"}))
                 continue
             frame: rtc.AudioFrame = data
-            await ws.send_str(
-                json.dumps({
-                    "event": "audio_input",
-                    "audio": base64.b64encode(bytes(frame.data)).decode(),
-                })
-            )
+            raw = bytes(frame.data)
+            if not self._logged_frame_size:
+                # Frame cadence caps how fresh a partial can be: we cannot get
+                # a transcript for audio livekit has not handed us yet. Logged
+                # once per call so the ceiling is measurable rather than
+                # guessed at.
+                self._logged_frame_size = True
+                logger.info(
+                    "livekit frame size %d bytes (%.0fms at %dHz) -> %d chunks",
+                    len(raw), len(raw) / 2 / self._opts.sample_rate * 1000,
+                    self._opts.sample_rate, -(-len(raw) // _CHUNK_BYTES),
+                )
+            # Chunked, not sent whole. Call 933 produced one agent turn and
+            # then silence for 51 seconds because every frame was rejected:
+            #   chunk_too_large — "Audio frame 16812 bytes exceeds the
+            #   per-frame cap of 16000 bytes for stream_type 'fast'"
+            # LiveKit's frames are far larger than the 20ms buffers the local
+            # probe sent, so the cap was never hit in testing. The error is
+            # non-fatal, so the socket stayed open and the failure was silent:
+            # no audio reached the recogniser, no transcript came back, and
+            # the session marked the caller away.
+            for i in range(0, len(raw), _CHUNK_BYTES):
+                await ws.send_str(
+                    json.dumps({
+                        "event": "audio_input",
+                        "audio": base64.b64encode(raw[i : i + _CHUNK_BYTES]).decode(),
+                    })
+                )
         await ws.send_str(json.dumps({"event": "end"}))
 
     async def _send_reconfigures(self, ws: aiohttp.ClientWebSocketResponse) -> None:
@@ -371,6 +401,17 @@ class RealtimeStream(stt.SpeechStream):
             return
 
         if kind == "error":
+            # chunk_too_large is flagged non-fatal by Sarvam, but it means the
+            # audio was DISCARDED. Call 933 ran 51 seconds on one agent turn
+            # and total silence because every frame was rejected this way and
+            # the socket stayed open, so nothing surfaced the failure. Chunking
+            # now prevents it; if it ever fires again, raising hands the call
+            # to the Google fallback instead of pretending to transcribe.
+            if ev.get("code") == "chunk_too_large":
+                raise APIStatusError(
+                    f"sarvam realtime discarded audio: {ev.get('message')}",
+                    status_code=ev.get("status_code") or 400,
+                )
             # is_fatal distinguishes "your config.update was rejected, carry
             # on" from "this session is over". Treating both as fatal would
             # kill calls over a rejected tuning value.
