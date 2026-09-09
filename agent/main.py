@@ -3483,6 +3483,45 @@ class RealEstateAgent(Agent):
                 )
                 raise StopResponse()
 
+        # The same problem, for the whole rest of the call.
+        #
+        # Call 939, the "hello hello" spiral. The caller re-prompts roughly
+        # 1.2s after their own previous turn, but the agent needs ~400ms
+        # endpointing + ~450ms LLM + ~150ms TTS before any sound comes out.
+        # Their re-prompt lands INSIDE that window, and every new turn throws
+        # away the reply already in flight:
+        #
+        #     17903ms turn -> thinking -> 18657ms listening   (nothing said)
+        #     19060ms turn -> thinking -> 19933ms listening   (nothing said)
+        #     20336ms turn -> LLM ran  -> 22368ms listening   (nothing said)
+        #     22371ms turn -> LLM ran  -> 24774ms speaking    ("ठीक है," only)
+        #
+        # It is self-reinforcing: the discarded reply IS the silence that
+        # makes them say "हेलो" again. Three of eleven turns died this way,
+        # the caller heard a stammer, and they hung up.
+        #
+        # So a CONTENT-FREE re-prompt arriving while a reply is already being
+        # prepared is dropped rather than restarting it. The caller is asking
+        # "are you there?", and the honest answer is the reply we are already
+        # making — not a newer copy of it.
+        #
+        # Deliberately narrow. _looks_like_opening_ack matches bare greetings
+        # and acknowledgements only ("हेलो", "हाँ", "जी बोलिए"); anyone who
+        # says something real interrupts exactly as before. And it only fires
+        # while the agent is mid-reply, so a "हेलो" into genuine silence still
+        # gets answered.
+        _reply_in_flight = getattr(self.session, "agent_state", None) in ("thinking", "speaking")
+        if _reply_in_flight and text and _looks_like_opening_ack(text):
+            _userdata["latency_metrics"] = _userdata.get("latency_metrics") or {}
+            _userdata["latency_metrics"]["repromptsAbsorbed"] = (
+                _userdata["latency_metrics"].get("repromptsAbsorbed", 0) + 1
+            )
+            logger.info(
+                "caller re-prompted while a reply was already in flight — keeping "
+                "the reply instead of restarting it: %r", text,
+            )
+            raise StopResponse()
+
         _script_anomaly = _transcript_script_anomaly(text, self._reply_language)
         _transcript_suspect = _script_anomaly == "garbled"
         _userdata["turn_transcript_suspect"] = _transcript_suspect
