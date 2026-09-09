@@ -95,3 +95,35 @@ class TenantDefaults(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TheDefaultModelBillsCorrectly(unittest.TestCase):
+    """A model that is not listed falls through to "standard" = 1x credits.
+
+    Vistrow Bharat shipped that way and it was materially wrong. Measured on
+    this product's real 10k-token prompt, a Bharat turn costs ~Rs 0.299 against
+    Vistrow Swift's ~Rs 0.101: Sarvam does not cache the prompt (usage returns
+    prompt_tokens_details=None with all 10,018 tokens billed every turn) while
+    OpenAI caches 9,600 of 9,757 at a quarter rate. Billing it at 1x while
+    Swift bills 2x charged tenants half for the option costing us triple.
+    """
+
+    def test_the_default_model_is_not_billed_as_standard(self):
+        import calls_db
+        self.assertNotEqual(
+            calls_db.model_tier(EXPECTED_MODEL), "standard",
+            "the default model falls through to 1x credits — check model_tier",
+        )
+
+    def test_it_bills_the_same_tier_as_vistrow_swift(self):
+        import calls_db
+        self.assertEqual(
+            calls_db.model_tier(EXPECTED_MODEL),
+            calls_db.model_tier("gpt-4.1-mini"),
+        )
+
+    def test_a_future_sarvam_model_cannot_silently_bill_at_1x(self):
+        # Matched by prefix, not by name, so adding a model to the picker
+        # cannot quietly halve what it earns.
+        import calls_db
+        self.assertEqual(calls_db.model_tier("sarvam/sarvam-999b-future"), "premium")

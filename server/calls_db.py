@@ -6361,6 +6361,21 @@ def model_tier(model: str | None) -> str:
     # testing, so it must never bill a tenant at a premium rate.
     if name.startswith("groq/"):
         return "standard"
+    # Sarvam ("Vistrow Bharat") bills premium, matching Vistrow Swift.
+    #
+    # Prefixed rather than named, because falling through to "standard" is
+    # what happened when it shipped and that was materially wrong: measured on
+    # this product's real 10k-token prompt, a Bharat turn costs ~Rs 0.299
+    # against Swift's ~Rs 0.101. Sarvam does not cache the prompt — usage
+    # comes back with prompt_tokens_details=None and all 10,018 tokens billed
+    # on every turn, where OpenAI caches 9,600 of 9,757 at a quarter rate — so
+    # the vendor cost is roughly 3x Swift's despite lower headline rates.
+    # Billing it at 1x while Swift bills 2x meant charging tenants half for the
+    # option that costs us triple.
+    #
+    # A prefix also means the next Sarvam model cannot silently bill at 1x.
+    if name.startswith("sarvam/"):
+        return "premium"
     if name in _PREMIUM_PLUS_MODELS:
         return "premium_plus"
     if name in _PREMIUM_MODELS:

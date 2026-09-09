@@ -62,6 +62,46 @@ so the final's added "।" does not invalidate it.
    Worth re-testing on the entitled key before asking — it may be the same
    gating.
 
+## 3. Prompt caching does not appear to apply to our account
+
+Your pricing page lists a cached-input rate for `sarvam-105b-conversations`
+(₹10.98 / 1M against ₹29.28 / 1M uncached), but we see no evidence of caching.
+
+Two identical back-to-back requests, same 42,476-character system prompt:
+
+```
+call 1: prompt_tokens=10018  completion_tokens=20  prompt_tokens_details=None
+call 2: prompt_tokens=10018  completion_tokens=20  prompt_tokens_details=None
+```
+
+All 10,018 prompt tokens are billed on every turn and `prompt_tokens_details`
+is always `None`. For comparison, the same prompt on an OpenAI-compatible
+provider returns:
+
+```
+call 1: prompt=9757  cached=0
+call 2: prompt=9757  cached=9600     <- 98% cached from the second call on
+```
+
+**Questions**
+
+1. Is prompt caching available on `sarvam-105b-conversations`, and does it need
+   to be enabled or requested per account?
+2. Is there a parameter to opt in (an equivalent of OpenAI's
+   `prompt_cache_key`), or is it meant to be automatic above a token
+   threshold?
+3. Will `usage.prompt_tokens_details.cached_tokens` be populated when it is
+   active? We currently have no way to verify a cache hit.
+
+**Why it matters commercially.** This is a voice agent: the same large system
+prompt is re-sent on every conversational turn, so caching dominates the bill.
+Uncached, a turn costs us roughly ₹0.299 against ₹0.101 for the comparable
+OpenAI model — about 3x — even though your headline rates are lower. With
+caching at the published rate it would be roughly ₹0.116, and clearly the
+better choice on both latency and cost. We have made your model the default
+for new tenants on the strength of its latency (450-500ms time-to-first-token
+against 1,058ms), and we would like to keep it there.
+
 ## Lesson for us
 
 Thirteen connections, an 8-variant parameter sweep, and a cached-audio control —
