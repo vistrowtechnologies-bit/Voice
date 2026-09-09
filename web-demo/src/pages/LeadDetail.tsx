@@ -366,7 +366,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
       </div>
 
       {tab === 'history' ? (
-        <section className="flex flex-col gap-3 p-4 sm:p-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        <section key="history" className="flex flex-col gap-3 p-4 sm:p-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {!!history?.length && (
             <div className="relative max-w-sm">
               <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted" />
@@ -432,7 +432,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           </Card>
         </section>
       ) : tab === 'diagnostics' ? (
-        <section className="flex flex-col gap-4 p-4 sm:p-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        <section key="diagnostics" className="flex flex-col gap-4 p-4 sm:p-6 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
           {!call.diagnosticsCaptured && (
             <div className="flex items-start gap-2 rounded-xl border border-amber/30 bg-amber/10 px-4 py-3 text-sm text-text">
               <Icon name="info" className="mt-0.5 shrink-0 text-[18px] text-amber" />
@@ -446,8 +446,8 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
             </div>
           )}
 
-          <Card>
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold text-text">Call diagnostic timeline</h2>
                 <p className="mt-0.5 text-xs text-text-muted">
@@ -471,7 +471,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
             </div>
 
             {call.diagnosticEvents?.length ? (
-              <ol className="relative ml-2 border-l border-border">
+              <ol className="relative ml-2 min-h-0 flex-1 overscroll-contain overflow-y-auto border-l border-border pb-4 pr-2">
                 {call.diagnosticEvents.map((event) => (
                   <li key={event.id} className="relative pb-5 pl-6 last:pb-0">
                     <span
@@ -509,7 +509,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           pill, and credits/sentiment/duration are per-call facts that belong
           with the rest of them in Call details - a two-tile band spanning the
           full dialog gave them more weight than the transcript underneath. */}
-      <section className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:min-h-0 lg:flex-1 lg:grid-cols-3 lg:overflow-hidden">
+      <section key="details" className="grid grid-cols-1 gap-4 p-4 sm:p-6 lg:min-h-0 lg:flex-1 lg:grid-cols-3 lg:overflow-hidden">
         <Card className="flex min-w-0 flex-col gap-3 lg:col-span-2 lg:min-h-0 lg:overflow-hidden">
           <div className="flex shrink-0 items-center justify-between">
             <h2 className="text-sm font-semibold text-text-muted">Call transcript</h2>
@@ -543,7 +543,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           </div>
         </Card>
 
-        <div className="flex min-w-0 flex-col gap-4 lg:min-h-0 lg:overscroll-contain lg:overflow-y-auto lg:pb-6 lg:pr-2">
+        <div className="flex min-w-0 flex-col gap-4 lg:min-h-0 lg:overscroll-contain lg:overflow-y-auto lg:pr-2">
           <Card>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-text-muted">Conversation intelligence</h2>
