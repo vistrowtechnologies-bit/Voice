@@ -1237,95 +1237,6 @@ def _neutralize_caller_directed_gender(text: str) -> str:
     return _GENDERED_FUTURE.sub(_repl_future, text)
 
 
-# Words that could START an offer sentence. Only text containing one of these
-# is ever held back — everything else streams straight through, which is the
-# whole point: the first version buffered to a sentence terminator on EVERY
-# turn and cost a measured +339ms median (up to +418ms) on turns with no
-# offer in them at all. That is the same streaming-defeating mistake as the
-# sentence tokenizer in google_tts_streaming_patch, one layer higher up.
-_OFFER_TRIGGER = re.compile(
-    r"(offer|ऑफर|domain|डोमेन|hosting|होस्टिंग|free|फ्री|मुफ़्त|मुफ्त)", re.I
-)
-# How far past a trigger to keep reading before judging. One clause is not
-# enough — "वैसे अभी एक offer चल रहा है —" carries the trigger while the
-# domain/hosting pair that confirms it lands in the NEXT clause.
-_OFFER_LOOKAHEAD_CHARS = 90
-
-
-def _make_offer_turn_guard_transform(agent: "RealEstateAgent"):
-    """Drop the offer when the model bundles it onto another answer.
-
-    Agent 26's prompt says "One thing per turn — this includes the offer and
-    the summary", in capitals, with a worked example. A state gate in the
-    per-turn directive was added on top of that and still did not hold: phone
-    call 950 closed with an answer AND the offer in one turn, and the caller
-    dropped mid-sentence. Four attempts at asking have failed, so this
-    enforces it instead.
-
-    Not a ban. A turn that OPENS with the offer passes untouched — that is
-    the offer as its own turn, which is what the prompt asks for. And
-    suppression sets _offer_deferred so the next turn's directive tells the
-    model to make it properly, rather than silently costing the tenant their
-    strongest card.
-
-    Cost-free on ordinary turns, which the first version was not. Clauses
-    stream out as soon as they close, exactly like the gender guard beside
-    it; only a clause carrying an offer trigger word is held, and only until
-    there is enough text to judge it.
-    """
-    clause_boundary = re.compile(r"(?<=[।.!?,;:—])")
-
-    async def _transform(text):
-        said_something_else = False
-        suppressing = False
-        buffer = ""        # not yet split into clauses
-        held = ""          # a trigger fired; accumulating enough to judge
-
-        def _emit_or_hold(clause: str):
-            """Yield-able parts for one complete clause."""
-            nonlocal said_something_else, suppressing, held
-            if suppressing:
-                return []
-            if held or _OFFER_TRIGGER.search(clause):
-                held += clause
-                if len(held) < _OFFER_LOOKAHEAD_CHARS and not held.rstrip().endswith(
-                    ("।", ".", "!", "?")
-                ):
-                    return []          # keep reading before judging
-                out = _judge(held)
-                held = ""
-                return out
-            said_something_else = True
-            return [clause]
-
-        def _judge(chunk: str):
-            nonlocal suppressing, said_something_else
-            if _reply_made_offer(chunk):
-                if said_something_else:
-                    agent._offer_deferred = True
-                    suppressing = True
-                    logger.info(
-                        "offer suppressed — bundled onto another answer: %r", chunk[:80]
-                    )
-                    return []
-                agent._offer_already_made = True
-            said_something_else = True
-            return [chunk]
-
-        async for delta in text:
-            buffer += delta
-            *complete, buffer = clause_boundary.split(buffer)
-            for clause in complete:
-                for part in _emit_or_hold(clause):
-                    yield part
-        tail = held + buffer
-        if tail.strip() and not suppressing:
-            for part in (_judge(tail) if held or _OFFER_TRIGGER.search(tail) else [tail]):
-                yield part
-
-    return _transform
-
-
 def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
     """Correct caller-directed gender without holding a whole long sentence.
 
@@ -2676,10 +2587,6 @@ class RealEstateAgent(Agent):
         # first generation of a call, which is the greeting — that one has no
         # caller turn to build guidance from anyway.
         self._pending_turn_directive = ""
-        self._offer_already_made = False
-        # Set when a bundled offer is suppressed, so the next turn is told to
-        # make it on its own instead of the tenant losing it entirely.
-        self._offer_deferred = False
         # Starts allowed (>=4) so the opening line isn't penalised for having
         # no prior turn to compare against. Updated once per turn in
         # on_user_turn_completed from the previous reply, then read by the
@@ -4083,13 +3990,7 @@ class RealEstateAgent(Agent):
                 self._turns_since_filler = 0
             else:
                 self._turns_since_filler += 1
-            if _reply_made_offer(_last_assistant_text):
-                self._offer_already_made = True
-        _turn_shape = _turn_shape_instruction(
-            _last_assistant_text, self._offer_already_made, self._offer_deferred,
-        )
-        # One turn only — the directive above has now told it.
-        self._offer_deferred = False
+        _turn_shape = _turn_shape_instruction(_last_assistant_text)
 
         if self._public_demo_slug == "healthcare" and _HEALTHCARE_SYMPTOM_PATTERN.search(text):
             self._healthcare_symptom_mentioned = True
@@ -5062,52 +4963,36 @@ _PLACEHOLDER_NAMES = frozenset({
 
 # The running domain+hosting offer, in the scripts it actually gets spoken in.
 # Matched on the agent's OWN previous reply, so "say it once" becomes state
-# rather than a prompt rule the model has to remember across 40k characters.
-_OFFER_MARKERS = (
-    re.compile(r"(domain|डोमेन).{0,40}(hosting|होस्टिंग)", re.I | re.S),
-    re.compile(r"(hosting|होस्टिंग).{0,40}(domain|डोमेन)", re.I | re.S),
-)
+
+
+
 # A reply longer than this is a monologue on a phone call. Measured from call
 # 948: the turn that preceded the caller dropping was 200 characters and
-# bundled a WhatsApp confirmation, a team-callback promise AND the offer.
+# bundled a WhatsApp confirmation, a team-callback promise AND a promotion.
 _LONG_REPLY_CHARS = 150
 
 
-def _reply_made_offer(text: str) -> bool:
-    return any(p.search(text or "") for p in _OFFER_MARKERS)
-
-
-def _turn_shape_instruction(last_reply: str, offer_already_made: bool,
-                            offer_deferred: bool = False) -> str:
+def _turn_shape_instruction(last_reply: str) -> str:
     """A per-turn gate on turn SHAPE, not content.
 
-    Every tenant prompt in this product already says "one thing per turn" —
-    agent 26's says it three separate times, once in capitals with a worked
-    example of the exact failure. On call 948 the model still closed with a
-    WhatsApp confirmation, a team-callback promise and the offer in one
-    200-character turn, and the caller dropped mid-sentence.
+    Every tenant prompt in this product already says "one thing per turn".
+    Agent 26's said it three times, once in capitals with a worked example of
+    the exact failure, and call 950 still closed with an answer AND a
+    promotion in one 200-character turn — after which the caller dropped
+    mid-sentence.
 
     Same fix already used for fillers (see _turns_since_filler): "sparingly"
-    did not hold a cadence, so it became a counter and a per-turn instruction.
-    This block lands in the per-turn directive, which llm_node attaches as the
-    LAST system message before generation — the highest-attention position,
-    and the one the language/gender block was deliberately given for the same
-    reason.
+    did not hold a cadence, so it became a counter and a per-turn
+    instruction. This lands in the per-turn directive, which llm_node
+    attaches as the LAST system message before generation — the
+    highest-attention position, and the one the language/gender block was
+    deliberately given for the same reason.
+
+    The offer-specific half of this is gone: rather than police a promotion
+    the model kept bundling, the promotion was removed from the tenant's
+    system prompt, which is the only place it came from.
     """
     parts = []
-    if offer_deferred:
-        parts.append(
-            "Your last turn tried to add the offer onto another answer, so it was "
-            "NOT spoken. Make it now and make it the WHOLE turn: the free "
-            "domain-and-hosting offer and nothing else — no answer, no question, "
-            "no summary alongside it."
-        )
-    if offer_already_made:
-        parts.append(
-            "You have ALREADY made the free domain-and-hosting offer earlier in this "
-            "call. Do not mention it again — repeating a limited-period offer reads "
-            "as pressure."
-        )
     if last_reply and len(last_reply) > _LONG_REPLY_CHARS:
         parts.append(
             f"Your previous reply ran to {len(last_reply)} characters, which is a "
@@ -5115,9 +5000,9 @@ def _turn_shape_instruction(last_reply: str, offer_already_made: bool,
         )
     parts.append(
         "THIS TURN CARRIES EXACTLY ONE OF: (a) a short acknowledgement plus one "
-        "question, (b) the offer, or (c) the closing summary. Never two of them, "
-        "never all three. If you are confirming WhatsApp or saying the team will "
-        "call, that IS the closing summary and the turn ends there."
+        "question, or (b) the closing summary. Never both. If you are confirming "
+        "WhatsApp or saying the team will call, that IS the closing summary and "
+        "the turn ends there."
     )
     return " ".join(parts)
 
@@ -5720,11 +5605,7 @@ async def entrypoint(ctx: JobContext) -> None:
         # LiveKit's own built-in transform (livekit.agents.voice.
         # transcription.filters.filter_markdown), not hand-rolled - already
         # buffers correctly across split ** markers mid-stream.
-        tts_text_transforms=[
-            "filter_markdown",
-            _make_offer_turn_guard_transform(agent),
-            _make_caller_gender_guard_transform(agent),
-        ],
+        tts_text_transforms=["filter_markdown", _make_caller_gender_guard_transform(agent)],
         turn_handling=TurnHandlingOptions(
             interruption={
                 "min_words": min_words,
@@ -5990,13 +5871,19 @@ async def entrypoint(ctx: JobContext) -> None:
         userdata["post_checkin_pending"] = True
         session.generate_reply(
             instructions=(
-                "The caller has gone quiet for a few seconds. Check in warmly and briefly — "
-                "nothing else. Do NOT default to a stock \"are you still there?\" line — vary "
-                "it like a real person would: a soft filler first (\"हां\", \"तो\", \"अच्छा\"), "
-                "sometimes just their name with a questioning tone, sometimes referencing what "
-                "you just said (\"सुन पा रहे हैं?\", \"कुछ पूछना था?\"), sometimes a trailing "
-                "\"...?\" instead of a full question. Never repeat the same phrasing you used "
-                "earlier in this call."
+                # Deliberately gives NO example phrasings. The previous
+                # version asked the model to "vary it like a real person
+                # would" and then listed "सुन पा रहे हैं?" and "कुछ पूछना
+                # था?" as illustrations — and it produced, on call after
+                # call, the exact string "तो pranav, सुन पा रहे हैं आप? कुछ
+                # पूछना था?": both examples verbatim, plus the suggested
+                # "तो" filler, joined. An instruction with worked examples
+                # gets the examples back. Same lesson as the offer rule.
+                "The caller has gone quiet. Check in — warmly, briefly, and in "
+                "your own words for THIS conversation, referring to whatever you "
+                "were just talking about. One short line, nothing else. Do not use "
+                "a stock check-in phrase, and never reuse wording you have already "
+                "used on this call."
             )
         )
 
@@ -6120,6 +6007,24 @@ async def entrypoint(ctx: JobContext) -> None:
             if not userdata.get("greeting_played", False):
                 # Away fired before the opening line finished playing (slow
                 # cold start / TTS) — not real caller silence, ignore it.
+                return
+            if userdata.get("opening_being_played", False):
+                # greeting_played is set the moment the opening is RELEASED,
+                # not when its audio ends, so on an outbound call it flips
+                # true ~12s into a silence the caller never heard. The next
+                # away evaluation then sails past the guard above and checks
+                # in on top of the greeting. Call 953:
+                #
+                #   12:36:59.780  releasing the held outbound opening
+                #   12:37:00.091  FIRST AUDIO  "Namaste pranav, ..."
+                #   12:37:00.963  FIRST AUDIO  "तो pranav, सुन पा रहे हैं आप?"
+                #
+                # 872ms apart, with the greeting still playing. That is why
+                # this line turned up in every single call.
+                #
+                # opening_being_played is cleared where the opener's own text
+                # is seen going out, so it covers the real audio, not the
+                # release instant.
                 return
             if userdata.get("agent_state") in {"thinking", "speaking"}:
                 # Away fired while the AGENT's own reply is still generating
