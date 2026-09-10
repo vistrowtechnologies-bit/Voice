@@ -5356,12 +5356,41 @@ async def entrypoint(ctx: JobContext) -> None:
         except Exception:
             reason = "unknown_reason"
         status = "error" if reason in _FAILED_SIP_DISCONNECT_REASONS else "ok"
+        # LiveKit's enum is not a hangup cause. "client_initiated" only says a
+        # BYE arrived from the SIP peer — it does NOT distinguish the callee
+        # pressing end from the carrier tearing the call down, and on call 948
+        # that ambiguity was the whole question: the caller states they did not
+        # hang up, and nothing on our side ended it (max_call_duration_s is 420
+        # against a 132s call, no end_call, no silence hangup, no error).
+        #
+        # The answer lives in the SIP signalling: the Q.850 cause and any
+        # Reason header the carrier sent with the BYE. LiveKit surfaces those
+        # as sip.* participant attributes, and we were throwing them away.
+        # Capture whatever is present so the next occurrence is diagnosable
+        # instead of arguable — cause 16 (normal clearing) means the far end
+        # really did hang up, while 41/44/47 point at the carrier.
+        sip_detail = {}
+        try:
+            for key, value in dict(getattr(participant, "attributes", None) or {}).items():
+                if not key.startswith("sip."):
+                    continue
+                # Skip the ones we already log elsewhere and anything bulky;
+                # a diagnostic event must stay small and serializable.
+                if key in ("sip.phoneNumber", "sip.callStatus") or len(str(value)) > 200:
+                    continue
+                sip_detail[key.replace(".", "_")] = str(value)
+        except Exception:
+            pass
+        logger.info(
+            "caller disconnected: reason=%s sip_attrs=%s", reason, sip_detail or "(none)",
+        )
         _record_diagnostic(
             "lifecycle",
             "transport",
             "Caller media disconnected",
             status,
             reason=reason,
+            **sip_detail,
         )
         if status == "error":
             userdata["failure_reason"] = f"sip_{reason}"
