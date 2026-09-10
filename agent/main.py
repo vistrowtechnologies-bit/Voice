@@ -4,6 +4,7 @@ import logging
 import os
 import random
 import re
+import secrets
 import threading
 import time
 import wave
@@ -863,7 +864,22 @@ def _current_objective(
 # Kept, not deleted: if a tenant picks a slow TTS voice again the turn goes
 # back over 2s and this becomes worth having. Flip it on and re-measure
 # rather than re-deriving it.
-_BACKCHANNEL_ENABLED = False
+#
+# RE-ENABLED 2026-09-10, because the premise above is now measurably false.
+# It was switched off when the median turn was 1.59s, which put a 1.6s delay
+# on top of most turns — 9 fillers in call 898, 4 in call 899, reported both
+# times as interrupting. Phone call 950, measured end to end from
+# vad.speech_end to first audio:
+#
+#   1104  1008  1289  1044  980  971  939  7050  ms   median 1008ms
+#
+# The distribution is now bimodal, not slow-on-average: ordinary turns land
+# just over 1s, and a TOOL-CALLING turn costs 7s because it is two sequential
+# LLM round trips (one to emit the tool call, one to write the reply) — the
+# 7050ms turn above is log_lead recording a timeline. Seven seconds of dead
+# air is exactly the silence this was built for, and at the delay below no
+# ordinary turn can reach it.
+_BACKCHANNEL_ENABLED = True
 
 # The delay must clear the WHOLE median turn, not just the LLM leg. Set at
 # 0.9s it fired 9 times in one 3-minute call (898) and read as a verbal tic:
@@ -873,7 +889,13 @@ _BACKCHANNEL_ENABLED = False
 #
 # At 1.6s only a genuinely slow turn gets one (llm above ~1.45s), which is
 # roughly the top quarter of turns rather than all of them.
-_BACKCHANNEL_DELAY_S = 1.6
+#
+# Raised to 2.0s with the re-enable above. 1.6s was chosen against a 1.59s
+# median; the median is now 1008ms and the slowest ordinary turn measured on
+# call 950 was 1289ms. 2.0s sits clear of that whole cluster with room for
+# variance, so a filler can only land on a tool-call turn (~7s) — covering
+# five of those seven seconds instead of interrupting a one-second one.
+_BACKCHANNEL_DELAY_S = 2.0
 
 # Never spoken into the chat context (add_to_chat_ctx=False at the call site):
 # these are audio-only, so the LLM never sees them and cannot start copying
@@ -6283,6 +6305,11 @@ async def entrypoint(ctx: JobContext) -> None:
         memory_summary = ""
         saved_call_id: int | None = None
         delivery_task: asyncio.Task | None = None
+        # A high-entropy bearer token for the permanent CRM recording link.
+        # It is stored with the call (never exposed in normal dashboard call
+        # JSON) and lets ArthaLeads play the recording without a Vistrow user
+        # session or access to our private B2 bucket.
+        recording_share_token = secrets.token_urlsafe(32)
         try:
             saved_call_id = db.save_call(
                 {
@@ -6299,6 +6326,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     "direction": call_context.get("direction"),
                     "site_id": call_context["site_id"],
                     "page_path": call_context.get("visitor_path") or "",
+                    "recording_share_token": recording_share_token,
                     # Which dashboard agent took the call — explicit from room
                     # metadata when routed, otherwise whichever agent config
                     # actually loaded (the default/first one).
@@ -6374,6 +6402,13 @@ async def entrypoint(ctx: JobContext) -> None:
                     "language": agent._reply_language,
                     "agent_name": cfg.get("name"),
                     "page_path": call_context.get("visitor_path") or "",
+                    "call_id": saved_call_id,
+                    "recording_url": (
+                        f"{(os.environ.get('PUBLIC_BASE_URL') or 'https://api.vistrowvoice.com').rstrip('/')}"
+                        f"/public/calls/{saved_call_id}/recording?token={recording_share_token}"
+                        if saved_call_id else ""
+                    ),
+                    "recording_mime_type": "audio/wav",
                 },
                 call_id=saved_call_id,
             )

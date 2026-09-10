@@ -49,12 +49,20 @@ class BackchannelLine(unittest.TestCase):
         self.assertIn("hi", main._BACKCHANNEL_LINES)
         self.assertIn("en", main._BACKCHANNEL_LINES)
 
-    def test_disabled_by_default_after_the_tts_change(self):
-        # Turned off deliberately, not by accident. The whole turn is now
-        # ~1.59s on ElevenLabs, so the ~1.19s gap the ack was built to cover
-        # is too short for it to help - it lands on the answer. Two live
-        # calls (898, 899) reported it breaking the conversation flow.
-        self.assertFalse(main._BACKCHANNEL_ENABLED)
+    def test_it_can_no_longer_land_on_an_ordinary_turn(self):
+        """It was disabled because it fired on every turn, not because the
+        idea was wrong.
+
+        The reason given was a ~1.59s median turn against a 1.6s delay, which
+        put an ack on top of the answer — 9 of them in call 898, 4 in call
+        899, reported both times as breaking the flow. Phone call 950 measures
+        the median at 1008ms with the slowest ordinary turn at 1289ms, so the
+        premise no longer holds and the delay now clears that whole cluster.
+        See test_backchannel_threshold for the numbers it is held against.
+        """
+        self.assertTrue(main._BACKCHANNEL_ENABLED)
+        self.assertGreater(main._BACKCHANNEL_DELAY_S * 1000, 1289,
+                           "would fire on an ordinary turn again")
 
 
 if __name__ == "__main__":

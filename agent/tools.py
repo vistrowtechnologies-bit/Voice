@@ -639,6 +639,11 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
             "language": lead.get("language") or "",
             "agent_name": lead.get("agent_name") or "",
             "page_path": lead.get("page_path") or "",
+            # Stable Vistrow redirect, protected by a per-call opaque token.
+            # ArthaLeads stores this URL; it never receives the private B2 key.
+            "call_id": lead.get("call_id"),
+            "recording_url": lead.get("recording_url") or "",
+            "recording_mime_type": lead.get("recording_mime_type") or "audio/wav",
             "extracted_data": lead.get("extracted_data") or {},
         }
     url = (config.get("url") or "").strip()
@@ -807,6 +812,17 @@ async def _deliver_to_integrations(
                     continue
                 shaped = _integration_body(integ["key"], integ.get("config") or {}, lead)
                 if shaped is None:
+                    if integ["key"] == "arthaleads" and call_id is not None:
+                        missing = []
+                        if not (integ.get("config") or {}).get("token"):
+                            missing.append("token")
+                        if not lead.get("name"):
+                            missing.append("name")
+                        if not lead.get("phone"):
+                            missing.append("phone")
+                        reason = "Automatic delivery skipped: missing " + ", ".join(missing or ["required data"])
+                        logger.warning("arthaleads %s", reason.lower())
+                        db.set_call_arthaleads_status(call_id, "failed", reason)
                     continue
                 url, body = shaped
                 try:
@@ -1568,9 +1584,7 @@ async def log_lead(
 
     logger.info("lead updated: %s", {k: lead_data.get(k) for k in changed})
     event = {"type": "lead_update", **{k: lead_data.get(k, "") for k in _LEAD_FIELDS}}
-    # Deliberately not awaited, and deliberately no _tool_filler: there is now
-    # nothing to fill, because the caller hears the real reply instead of
-    # "One second..." followed by ~2s of webhook. See _fan_out_in_background.
+    # Still not awaited — the fan-out is genuinely off the speech path.
     _fan_out_in_background(context, event)
 
     # Hand the merged state back so the model can SEE what is now known
