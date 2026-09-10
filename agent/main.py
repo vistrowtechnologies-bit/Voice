@@ -1946,7 +1946,31 @@ def _build_stt(speech_context: str | None = None, reply_language: str | None = N
             mode="transcribe" if is_phone else "codemix",
             endpointing="vad",
             prompt=speech_context,
-            vad_min_silence_ms=500 if is_phone else 300,
+            # 300 on BOTH channels now, not Sarvam's telephony 500.
+            #
+            # Measured, streaming audio with a known silence point through
+            # this exact class: vad.speech_end fires 666ms after the caller
+            # actually goes quiet at 500, and 507ms at 300. That 666ms sat in
+            # front of every latency number in this file — everything else is
+            # timed from speech_end, which is already two thirds of a second
+            # late — and 666 + 300 of min_delay is 966ms of configured wait
+            # before any work starts.
+            #
+            # ElevenLabs publishes no VAD figure to copy; they give a budget
+            # and a method. The budget for STT plus endpointing together is
+            # ~150-700ms, which 966ms is comfortably outside, and the method
+            # is "tighten the silence threshold to the smallest value that
+            # does not truncate your users' natural pauses, then measure
+            # interruption rate in production". Sarvam's own tuning sequence
+            # says the same thing in the other direction: step it down until
+            # cutoffs appear.
+            #
+            # This is a DEVIATION from Sarvam's telephony reference, made
+            # deliberately and on the user's instruction to follow ElevenLabs
+            # here. Their 500 exists so line noise and mid-sentence pauses do
+            # not steal the floor from a caller. If real calls start clipping
+            # people who trail off, this number goes back to 500 first.
+            vad_min_silence_ms=300,
             vad_min_speech_ms=200 if is_phone else 80,
             vad_sot_threshold=0.7 if is_phone else 0.5,
         )
@@ -5733,7 +5757,13 @@ async def entrypoint(ctx: JobContext) -> None:
             # It is the ceiling a caller waits when the detector is unsure,
             # so it sets the worst case, not the median.
             endpointing=EndpointingOptions(
-                min_delay=0.3 if _is_phone_call else 0.22,
+                # 0.22 on both channels. It stacks directly on top of the
+                # VAD window above — Sarvam's guide names this exact trap,
+                # "500 ms of Sarvam silence plus a 0.5 s min_delay is a full
+                # second of dead air" — and we had fixed only their half of
+                # it. 507 + 220 = 727ms, at the top of ElevenLabs' 150-700ms
+                # budget instead of 250ms past it.
+                min_delay=0.22,
                 max_delay=2.5 if _is_phone_call else 2.0,
             ),
             # MUST live inside turn_handling. Passed as AgentSession's own

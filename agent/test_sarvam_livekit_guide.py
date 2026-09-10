@@ -39,10 +39,26 @@ class TheirStreamingStt(unittest.TestCase):
         # transliterating them.
         self.assertIn('mode="codemix"', SRC)
 
-    def test_vad_silence_is_per_channel(self):
-        # 500ms telephony, 300ms browser — the wideband path needs less
-        # confirmation than a phone line.
-        self.assertIn("vad_min_silence_ms=500 if is_phone else 300", SRC)
+    def test_vad_silence_deviates_from_their_telephony_value_on_purpose(self):
+        """300 on both channels, NOT Sarvam's telephony 500.
+
+        Measured by streaming audio with a known silence point through
+        sarvam.STTStreaming: vad.speech_end fires 666ms after the caller
+        actually goes quiet at 500, and 507ms at 300. Every other latency
+        figure in this repo is timed from speech_end, so that 666ms sat
+        invisibly in front of all of them.
+
+        Deviation taken on ElevenLabs' guidance instead: their published
+        budget for STT plus endpointing is ~150-700ms, and 666 + 300 of
+        min_delay is 966ms. Their method is "tighten the silence threshold to
+        the smallest value that does not truncate your users' natural pauses,
+        then measure interruption rate in production".
+
+        If real calls start clipping callers who trail off, THIS is the first
+        number to put back to 500 — it is the one protecting a noisy line.
+        """
+        self.assertIn("vad_min_silence_ms=300", SRC)
+        self.assertNotIn("vad_min_silence_ms=500", SRC)
 
 
 class TheStackedWaitIsGone(unittest.TestCase):
@@ -54,10 +70,16 @@ class TheStackedWaitIsGone(unittest.TestCase):
     def test_turn_detection_trusts_sarvams_speech_end(self):
         self.assertIn('turn_detection="stt"', SRC)
 
-    def test_min_delay_matches_their_examples_per_channel(self):
-        # Their two reference configs differ, and we clone both rather than
-        # picking a blend:  telephony 0.3 / 0.22 WebRTC.
-        self.assertIn("min_delay=0.3 if _is_phone_call else 0.22", SRC)
+    def test_min_delay_is_0_22_on_both_channels(self):
+        """Their telephony example says 0.3; we use their WebRTC 0.22 on both.
+
+        It stacks directly on the VAD window above, which is the trap their
+        own guide names: "500 ms of Sarvam silence plus a 0.5 s min_delay is
+        a full second of dead air." We had fixed only their half of it.
+        507 + 220 = 727ms, inside ElevenLabs' budget instead of 250ms past it.
+        """
+        self.assertIn("min_delay=0.22", SRC)
+        self.assertNotIn("min_delay=0.3", SRC)
         self.assertNotIn("min_delay=0.4", SRC)
 
     def test_max_delay_matches_theirs(self):
