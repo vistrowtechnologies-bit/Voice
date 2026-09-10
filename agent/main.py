@@ -3460,11 +3460,18 @@ class RealEstateAgent(Agent):
     # hang up. The operator then dials a second time, which is exactly the
     # "I have to make the call twice" they reported.
     #
-    # 12s outbound. It only ever costs anything in the call-936 case — a
-    # recipient who answers and stays completely silent — and that case still
-    # has VAD release in under a second the moment they make any sound, which
-    # most people do. Against that, the 4s cap was burning the opening on
-    # every first dial.
+    # 8s outbound. 12s was tried first and hit the call-936 case immediately:
+    # on call 952 the recipient answered, said nothing, and sat through
+    #
+    #   11:47:03  holding outbound opening (cap 12s)
+    #   11:47:15  releasing — no caller speech within 12s
+    #
+    # twelve seconds of silence, which is exactly the failure the 4s cap was
+    # chosen to avoid. 8s is the compromise between the two measured
+    # failures: long enough that a handset still ringing at 4s does not lose
+    # its greeting, short enough that a silent answerer does not conclude the
+    # line is dead. Any sound at all still releases via VAD in under a
+    # second, which is what actually happens on most calls.
     #
     # The durable fix is not a bigger number, it is telling ringback from a
     # live line. Measured on call 949's own recording, ringback is a strict
@@ -3485,7 +3492,7 @@ class RealEstateAgent(Agent):
     # What is left is the periodicity, which is real but needs live cycle
     # detection — a piece of work, not a constant. Until then this is a plain
     # trade, and the number to revisit if silent answerers start complaining.
-    _HELD_OPENING_HARD_CAP_S = 12.0
+    _HELD_OPENING_HARD_CAP_S = 8.0
 
     async def _release_held_opening_if_unheard(self) -> None:
         """Say the opening even when the recipient's speech never transcribes.
