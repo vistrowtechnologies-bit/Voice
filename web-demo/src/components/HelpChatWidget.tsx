@@ -167,7 +167,6 @@ export function HelpChatWidget() {
   const [ticketSending, setTicketSending] = useState(false)
   const [ticketResult, setTicketResult] = useState('')
   const [ticketError, setTicketError] = useState('')
-  const [hydratedStorageKey, setHydratedStorageKey] = useState('')
   const threadRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
   const location = useLocation()
@@ -176,29 +175,6 @@ export function HelpChatWidget() {
   const page = pageSuggestions(locationKey)
   const questions = visibleQuestions(page)
   const firstName = (user?.name || '').split(' ')[0] || 'there'
-  const storageKey = `vistrow-help-chat:${user?.accountId ?? 'guest'}:${user?.id ?? 'guest'}`
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(storageKey)
-      setMessages(stored ? JSON.parse(stored).slice(-12) : [])
-    } catch {
-      // A blocked or malformed localStorage entry should never break support.
-    } finally {
-      setHydratedStorageKey(storageKey)
-    }
-  }, [storageKey])
-
-  useEffect(() => {
-    if (hydratedStorageKey !== storageKey) return
-    try {
-      if (messages.length) localStorage.setItem(storageKey, JSON.stringify(messages.slice(-12)))
-      else localStorage.removeItem(storageKey)
-    } catch {
-      // Private browsing/storage limits: continue with in-memory chat.
-    }
-  }, [hydratedStorageKey, messages, storageKey])
-
   useEffect(() => {
     if (open && faqs.length === 0) {
       fetchHelpFaqs().then(setFaqs).catch(() => setFaqs([]))
@@ -281,6 +257,18 @@ export function HelpChatWidget() {
       { role: 'user', content: faq.question },
       { role: 'assistant', content: faq.answer, suggestTicket: false, comingSoon: false },
     ])
+  }
+
+  const closeChat = () => {
+    setOpen(false)
+    setMessages([])
+    setInput('')
+    setError('')
+    setShowFaqs(false)
+    setTicketOpen(false)
+    setTicketResult('')
+    setTicketError('')
+    setTicketFiles([])
   }
 
   const openTicket = (subject = '') => {
@@ -371,7 +359,7 @@ export function HelpChatWidget() {
                 </button>
               )}
               <button
-                onClick={() => setOpen(false)}
+                onClick={closeChat}
                 className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text"
                 aria-label="Close help chat"
               >
@@ -618,7 +606,8 @@ export function HelpChatWidget() {
           data-tour="help-chat"
           onClick={() => {
             setShowHint(false)
-            setOpen((v) => !v)
+            if (open) closeChat()
+            else setOpen(true)
           }}
           onPointerMove={tiltAvatar}
           onPointerLeave={resetAvatarTilt}
