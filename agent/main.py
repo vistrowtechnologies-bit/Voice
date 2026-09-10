@@ -3517,6 +3517,49 @@ class RealEstateAgent(Agent):
             if dispatch_t0 is not None:
                 logger.info("[latency] greeting say() returned at +%.2fs", time.monotonic() - dispatch_t0)
 
+    async def tts_node(self, text, model_settings=None):
+        """Timestamp text arriving at TTS, to find where streaming is lost.
+
+        Measured on call 944: the TTS request is issued when the LLM FINISHES
+        generating, not while it streams — median difference between "LLM
+        complete" and "TTS request issued" was +16ms across ten turns (turn 1:
+        1,128 vs 1,130; turn 3: 838 vs 841; turn 6: 1,254 vs 1,257).
+
+        Ruled out by measurement already: tool calls (1 of 10 turns), the text
+        transforms (first output at 62-93ms, they stream fine), the sentence
+        tokenizer (first sentence at 603ms, not 1,120ms), and the LLM itself
+        (TTFT 513ms, streams fine). Every component streams in isolation, yet
+        the request still waits for completion — so the loss is between them.
+
+        This logs when each chunk REACHES this node. If the first chunk lands
+        promptly, the loss is downstream (inside the TTS stream); if it lands
+        only at LLM completion, it is upstream in AgentActivity.
+        """
+        _t0 = time.monotonic()
+        _seen = 0
+
+        async def _timed(src):
+            nonlocal _seen
+            async for chunk in src:
+                _seen += 1
+                if _seen <= 3 or _seen % 25 == 0:
+                    logger.info(
+                        "[tts_node] chunk %d at +%.0fms len=%d %r",
+                        _seen, (time.monotonic() - _t0) * 1000, len(chunk), chunk[:24],
+                    )
+                yield chunk
+            logger.info(
+                "[tts_node] input ended at +%.0fms after %d chunks",
+                (time.monotonic() - _t0) * 1000, _seen,
+            )
+
+        _first_audio = None
+        async for frame in Agent.default.tts_node(self, _timed(text), model_settings):
+            if _first_audio is None:
+                _first_audio = (time.monotonic() - _t0) * 1000
+                logger.info("[tts_node] FIRST AUDIO at +%.0fms", _first_audio)
+            yield frame
+
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
