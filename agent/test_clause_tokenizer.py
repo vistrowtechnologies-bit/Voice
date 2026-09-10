@@ -35,8 +35,10 @@ class Splitting(unittest.TestCase):
         line = "समझ गई, manual handle होता है — daily roughly कितनी calls आती हैं?"
         out = ClauseTokenizer().tokenize(line)
         self.assertGreater(len(out), 1)
-        self.assertTrue(out[0].endswith("—"), out)
-        self.assertIn("समझ गई", out[0])
+        # The acknowledgement leads on its own — that is the chunk that
+        # reaches the synthesizer first and it is why the turn starts early.
+        self.assertEqual(out[0].strip(), "समझ गई,")
+        self.assertTrue(any(t.strip().endswith("—") for t in out), out)
 
     def test_first_chunk_is_a_small_fraction_of_the_turn(self):
         line = "अरे, वही तो मैं सोच रही थी — तो कॉल का क्या फायदा, बताइए।"
@@ -49,9 +51,18 @@ class Splitting(unittest.TestCase):
         self.assertEqual(joined.replace(" ", ""), line.replace(" ", ""))
 
     def test_short_fragments_do_not_get_their_own_synthesis_request(self):
-        # "अरे," alone is two syllables and a whole round trip.
+        # "अरे," is 4 characters — two syllables and a whole round trip.
+        from clause_tokenizer import _MIN_CLAUSE_CHARS
+
         out = ClauseTokenizer().tokenize("अरे, वही तो मैं सोच रही थी।")
-        self.assertTrue(all(len(t.strip()) >= 12 for t in out), out)
+        self.assertTrue(all(len(t.strip()) >= _MIN_CLAUSE_CHARS for t in out), out)
+
+    def test_the_openers_this_agent_actually_uses_do_split(self):
+        """"अच्छा," (6) and "समझ गई," (7) open most turns. A minimum above
+        them meant those turns never split — measured 1165ms vs 582ms."""
+        for opener in ("अच्छा,", "समझ गई,"):
+            out = ClauseTokenizer().tokenize(opener + " तो बताइए आगे क्या हुआ?")
+            self.assertGreater(len(out), 1, f"{opener} did not split: {out}")
 
     def test_plain_sentences_still_split_at_sentences(self):
         out = ClauseTokenizer().tokenize("पहला वाक्य पूरा हुआ। दूसरा वाक्य यहाँ है।")
@@ -184,6 +195,58 @@ class TheSplitIsWiredIn(unittest.TestCase):
 
         src = inspect.getsource(_PatchedSynthesizeStream._run_stream)
         self.assertIn("if not got_first:", src)
+
+
+class EmitsWithoutWaitingForWhatFollows(unittest.TestCase):
+    """Call 946 turn 3: the clause was complete at +457ms but only emitted at
+    +1413ms, when the LLM wrote the next clause. Audio landed at +1590ms."""
+
+    @staticmethod
+    def _run(pushes, flush=False):
+        """Push, then read whatever is available right now.
+
+        The stream's channel binds to the running loop, so it has to be built
+        inside the coroutine.
+        """
+
+        async def go():
+            stream = ClauseTokenizer().stream()
+            for chunk in pushes:
+                stream.push_text(chunk)
+            if flush:
+                stream.flush()
+            got = []
+            while True:
+                try:
+                    got.append(await asyncio.wait_for(stream.__anext__(), timeout=0.3))
+                except (asyncio.TimeoutError, StopAsyncIteration):
+                    await stream.aclose()
+                    return got
+
+        return asyncio.run(go())
+
+    def test_terminator_at_end_of_buffer_emits_immediately(self):
+        # Exactly what had arrived at +457ms on call 946 — nothing after "!".
+        got = self._run(["\nअरे वाह,", " रियल एस्टेट!"])
+        self.assertTrue(got, "clause withheld until the next clause exists")
+        # Both boundaries are complete by now and neither waited for the
+        # third chunk, which on call 946 did not arrive for another 956ms.
+        self.assertEqual(got[0].token.strip(), "अरे वाह,")
+        self.assertIn("रियल एस्टेट!", "".join(t.token for t in got))
+
+    def test_short_opener_waits_for_the_next_boundary(self):
+        self.assertFalse(self._run(["अरे,"]), "split after a 3-letter filler")
+
+    def test_no_boundary_means_no_emission_until_flush(self):
+        text = ["अच्छा तो फिर हम कल सुबह वापस कॉल"]
+        self.assertFalse(self._run(text))
+        self.assertTrue(self._run(text, flush=True))
+
+    def test_nothing_is_lost_across_the_boundaries(self):
+        line = "समझ गई, manual handle होता है — daily roughly कितनी calls आती हैं?"
+        got = self._run([line[i:i + 3] for i in range(0, len(line), 3)], flush=True)
+        joined = "".join(t.token for t in got)
+        self.assertEqual(joined.replace(" ", ""), line.replace(" ", ""))
 
 
 if __name__ == "__main__":
