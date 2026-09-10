@@ -11,6 +11,7 @@ Agent 26's prompt forbids exactly this, in capitals, with a worked example,
 three times over. Prompt text alone did not hold it — the same finding that
 turned "use fillers sparingly" into _turns_since_filler.
 """
+import asyncio
 import os
 import sys
 import unittest
@@ -101,3 +102,62 @@ class ItReachesTheModel(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheOfferGuardIsDeterministic(unittest.TestCase):
+    """Three prompt restatements and a directive gate all failed on the same
+    rule (call 950). This stops asking and enforces it in the text stream."""
+
+    @staticmethod
+    def _run(text, chunk=7):
+        class _A:
+            _offer_already_made = False
+            _offer_deferred = False
+        agent = _A()
+        transform = main._make_offer_turn_guard_transform(agent)
+
+        async def src():
+            for i in range(0, len(text), chunk):
+                yield text[i:i + chunk]
+
+        async def go():
+            return "".join([c async for c in transform(src())])
+
+        return asyncio.run(go()), agent
+
+    def test_the_bundled_turn_from_call_950_loses_the_offer(self):
+        out, agent = self._run(CALL_948_LAST_TURN)
+        self.assertNotIn("domain", out)
+        self.assertIn("इसी number पे details भेज देती हूँ", out)
+        self.assertTrue(agent._offer_deferred)
+        self.assertFalse(agent._offer_already_made)
+
+    def test_the_offer_as_its_own_turn_passes_untouched(self):
+        line = ("वैसे एक offer चल रहा है — एक साल का domain और hosting बिल्कुल free "
+                "मिल रहा है।")
+        out, agent = self._run(line)
+        self.assertEqual(out.replace(" ", ""), line.replace(" ", ""))
+        self.assertTrue(agent._offer_already_made)
+        self.assertFalse(agent._offer_deferred)
+
+    def test_an_ordinary_turn_is_untouched(self):
+        line = "ठीक है, तो बताइए। अभी आपका business क्या है?"
+        out, _ = self._run(line)
+        self.assertEqual(out.replace(" ", ""), line.replace(" ", ""))
+
+    def test_it_survives_arbitrary_chunk_boundaries(self):
+        for chunk in (1, 3, 5, 11, 40):
+            out, _ = self._run(CALL_948_LAST_TURN, chunk=chunk)
+            self.assertNotIn("hosting", out, f"leaked at chunk size {chunk}")
+
+    def test_everything_after_a_suppressed_offer_is_dropped_too(self):
+        line = ("ठीक है, हो जाएगा। एक offer है — domain और hosting free। "
+                "तो कब शुरू करें?")
+        out, _ = self._run(line)
+        self.assertNotIn("domain", out)
+        self.assertNotIn("कब शुरू करें", out)
+
+    def test_the_directive_then_asks_for_it_on_its_own(self):
+        out = main._turn_shape_instruction("", False, offer_deferred=True)
+        self.assertIn("WHOLE turn", out)
+        self.assertNotIn("WHOLE turn", main._turn_shape_instruction("", False, False))

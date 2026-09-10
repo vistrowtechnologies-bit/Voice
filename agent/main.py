@@ -1237,6 +1237,71 @@ def _neutralize_caller_directed_gender(text: str) -> str:
     return _GENDERED_FUTURE.sub(_repl_future, text)
 
 
+def _make_offer_turn_guard_transform(agent: "RealEstateAgent"):
+    """Drop the offer when the model bundles it onto another answer.
+
+    Agent 26's prompt says "One thing per turn — this includes the offer and
+    the summary", in capitals, with a worked example. A state gate in the
+    per-turn directive was added on top of that and still did not hold: phone
+    call 950 closed with
+
+        "दो हफ्ते में हो जाएगा, team check कर लेगी। वैसे एक offer चल रहा है
+         अभी — एक साल का domain और hosting बिल्कुल free है, बस पंद्रह..."
+
+    an answer AND the offer, and the caller dropped mid-sentence. Three
+    restatements and one directive gate have now failed on the same rule, so
+    this stops asking and enforces it: once a turn has already said something
+    else, a sentence that carries the offer is not spoken.
+
+    It is deliberately not a ban. A turn that OPENS with the offer passes
+    untouched — that is the offer as its own turn, which is what the prompt
+    asks for. And suppression sets _offer_deferred so the next turn's
+    directive tells the model to make it properly, rather than silently
+    costing the tenant their strongest card.
+
+    Streaming-safe: the offer lands at the end of these bundled turns, so a
+    per-sentence check never has to hold back the front of a reply — which is
+    the whole latency win in google_tts_streaming_patch.
+    """
+    sentence_end = re.compile(r"(?<=[।.!?])\s*")
+
+    async def _transform(text):
+        said_something_else = False
+        suppressing = False
+        buffer = ""
+
+        def _judge(sentence: str) -> str:
+            nonlocal said_something_else, suppressing
+            if suppressing:
+                return ""
+            if _reply_made_offer(sentence):
+                if said_something_else:
+                    agent._offer_deferred = True
+                    suppressing = True
+                    logger.info(
+                        "offer suppressed — bundled onto another answer: %r", sentence[:80]
+                    )
+                    return ""
+                agent._offer_already_made = True
+            if sentence.strip():
+                said_something_else = True
+            return sentence
+
+        async for chunk in text:
+            buffer += chunk
+            *complete, buffer = sentence_end.split(buffer)
+            for sentence in complete:
+                out = _judge(sentence)
+                if out:
+                    yield out
+        if buffer:
+            out = _judge(buffer)
+            if out:
+                yield out
+
+    return _transform
+
+
 def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
     """Correct caller-directed gender without holding a whole long sentence.
 
@@ -2120,7 +2185,27 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
     return adapter
 
 
-def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_name: str):
+# Telephony is 8kHz end to end. Both vendors say to synthesize at the line's
+# own rate rather than let something downsample for you — Sarvam's telephony
+# reference uses speech_sample_rate=8000, and ElevenLabs put it plainly: "the
+# telephony network is 8kHz mu-law end-to-end, so requesting it directly
+# avoids a transcoding step in your pipeline and matches what the carrier
+# expects."
+#
+# We cannot go the whole way. livekit-plugins-google's streaming path accepts
+# only OGG_OPUS and PCM — ask for MULAW and it logs "isn't supported by the
+# streaming_synthesize, fallbacking to PCM" and silently downgrades, so
+# ulaw_8000 out of Chirp 3 is not on offer while we stream. What IS on offer
+# is the half that costs us: 8kHz PCM removes the 24k -> 8k resample, and the
+# mu-law companding that remains is a table lookup in LiveKit's SIP bridge.
+#
+# Measured against live Chirp 3, interleaved: 24k 423ms to first audio
+# (spread 360-486), 8k 365ms (spread 353-389). Faster, and far steadier.
+_TELEPHONY_SAMPLE_RATE = 8000
+
+
+def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_name: str,
+               is_phone: bool = False):
     """Same fallback pattern as _build_stt, for TTS. Returns (tts, provider)
     — provider identifies the active TTS family, telling the caller which
     update_options kwarg shape to use for mid-call prosody/language updates
@@ -2172,6 +2257,10 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     on_user_turn_completed) silently can't reach it — a v3 call uses one
     fixed voice_settings for the whole call. Kept as a separate,
     clearly-labeled experimental option rather than replacing Flash."""
+    # 8kHz only on the phone leg. The browser widget is wideband and
+    # would lose real audio quality for a saving that only exists when
+    # something downstream is resampling to 8k anyway.
+    _rate = {"sample_rate": _TELEPHONY_SAMPLE_RATE} if is_phone else {}
     if speaker.startswith(_ELEVENLABS_V3_VOICE_PREFIX) and _ELEVENLABS_API_KEY:
         voice_id = speaker[len(_ELEVENLABS_V3_VOICE_PREFIX) :]
         base = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
@@ -2247,6 +2336,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 voice_name=voice_name.capitalize(),
                 model_name=google_model,
                 credentials_info=_GOOGLE_CREDENTIALS,
+                **_rate,
                 # Was never wired up before — every Google voice spoke at a
                 # fixed 1.0x regardless of the agent's Tone preset, unlike
                 # Sarvam/ElevenLabs below which both already read "pace" via
@@ -2264,6 +2354,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 voice_name=voice_name.capitalize(),
                 model_name=fallback_model,
                 credentials_info=_GOOGLE_CREDENTIALS,
+                **_rate,
                 speaking_rate=tone.get("pace", 1.0),
                 prompt=google_prompt,
             )
@@ -2316,6 +2407,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 language=voice_language,
                 voice_name=voice_name,
                 credentials_info=_GOOGLE_CREDENTIALS,
+                **_rate,
                 speaking_rate=tone.get("pace", 1.0),
             )
         else:
@@ -2324,6 +2416,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                     language=voice_language,
                     voice_name=voice_name,
                     credentials_info=_GOOGLE_CREDENTIALS,
+                **_rate,
                     speaking_rate=tone.get("pace", 1.0),
                 ),
                 sentence_tokenizer=tokenize.blingfire.SentenceTokenizer(retain_format=True),
@@ -2344,7 +2437,16 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         _use_clause_tokenizer(sarvam_safety_net, "sarvam TTS (Google fallback)")
         # max_retry_per_tts=5: see _google_fallback_tts docstring above —
         # real Google-side 504s need real retries, not a single attempt.
-        _adapter = TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=5)
+        # The adapter, not just the provider. TtsFallbackAdapter sets its own rate
+        # to max(t.sample_rate for t in tts) and RESAMPLES every provider to it —
+        # Sarvam's bulbul:v3 is 22050Hz, so asking Google alone for 8kHz made the
+        # audio go 8k -> 22.05k in the adapter and then 22.05k -> 8k again at the
+        # SIP bridge. Measured through the shipped path: 404ms to first audio
+        # against 343ms for plain 24k, frames arriving at 22050Hz. Two extra
+        # resamples for a change meant to remove one.
+        _adapter = TtsFallbackAdapter(
+            [google_tts, sarvam_safety_net], max_retry_per_tts=5, **_rate,
+        )
         # FallbackAdapter has no update_options, so a mid-call language switch
         # cannot reach the Google TTS through it. Stash the primary: this is
         # the only handle switch_reply_language has for swapping a Chirp 3
@@ -2378,9 +2480,10 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     # Same streaming fix as the two branches above — see the comment on the
     # google-native branch for why PatchedGeminiTTS applies here too.
     google_tts = PatchedGeminiTTS(
-        language=to_google_code(reply_language), credentials_info=_GOOGLE_CREDENTIALS
+        language=to_google_code(reply_language), credentials_info=_GOOGLE_CREDENTIALS,
+        **_rate,
     )
-    return TtsFallbackAdapter([sarvam_tts, google_tts]), "sarvam"
+    return TtsFallbackAdapter([sarvam_tts, google_tts], **_rate), "sarvam"
 
 
 def _parse_json_config(raw, default):
@@ -2526,6 +2629,9 @@ class RealEstateAgent(Agent):
         # caller turn to build guidance from anyway.
         self._pending_turn_directive = ""
         self._offer_already_made = False
+        # Set when a bundled offer is suppressed, so the next turn is told to
+        # make it on its own instead of the tenant losing it entirely.
+        self._offer_deferred = False
         # Starts allowed (>=4) so the opening line isn't penalised for having
         # no prior turn to compare against. Updated once per turn in
         # on_user_turn_completed from the previous reply, then read by the
@@ -3031,7 +3137,10 @@ class RealEstateAgent(Agent):
         instructions += date_instruction
         tone_name = config.get("tone") or DEFAULT_TONE
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
-        tts, tts_provider = _build_tts(reply_language, voice_value, base_tone, tone_name)
+        tts, tts_provider = _build_tts(
+            reply_language, voice_value, base_tone, tone_name,
+            is_phone=(call_type or "") == "phone",
+        )
         agent_tools = _build_tools(config)
         _model_name = config.get("model") or "gpt-4.1-mini"
         self._is_realtime = _model_name.startswith(_GEMINI_LIVE_PREFIX)
@@ -3876,7 +3985,11 @@ class RealEstateAgent(Agent):
                 self._turns_since_filler += 1
             if _reply_made_offer(_last_assistant_text):
                 self._offer_already_made = True
-        _turn_shape = _turn_shape_instruction(_last_assistant_text, self._offer_already_made)
+        _turn_shape = _turn_shape_instruction(
+            _last_assistant_text, self._offer_already_made, self._offer_deferred,
+        )
+        # One turn only — the directive above has now told it.
+        self._offer_deferred = False
 
         if self._public_demo_slug == "healthcare" and _HEALTHCARE_SYMPTOM_PATTERN.search(text):
             self._healthcare_symptom_mentioned = True
@@ -4864,7 +4977,8 @@ def _reply_made_offer(text: str) -> bool:
     return any(p.search(text or "") for p in _OFFER_MARKERS)
 
 
-def _turn_shape_instruction(last_reply: str, offer_already_made: bool) -> str:
+def _turn_shape_instruction(last_reply: str, offer_already_made: bool,
+                            offer_deferred: bool = False) -> str:
     """A per-turn gate on turn SHAPE, not content.
 
     Every tenant prompt in this product already says "one thing per turn" —
@@ -4881,6 +4995,13 @@ def _turn_shape_instruction(last_reply: str, offer_already_made: bool) -> str:
     reason.
     """
     parts = []
+    if offer_deferred:
+        parts.append(
+            "Your last turn tried to add the offer onto another answer, so it was "
+            "NOT spoken. Make it now and make it the WHOLE turn: the free "
+            "domain-and-hosting offer and nothing else — no answer, no question, "
+            "no summary alongside it."
+        )
     if offer_already_made:
         parts.append(
             "You have ALREADY made the free domain-and-hosting offer earlier in this "
@@ -5499,7 +5620,11 @@ async def entrypoint(ctx: JobContext) -> None:
         # LiveKit's own built-in transform (livekit.agents.voice.
         # transcription.filters.filter_markdown), not hand-rolled - already
         # buffers correctly across split ** markers mid-stream.
-        tts_text_transforms=["filter_markdown", _make_caller_gender_guard_transform(agent)],
+        tts_text_transforms=[
+            "filter_markdown",
+            _make_offer_turn_guard_transform(agent),
+            _make_caller_gender_guard_transform(agent),
+        ],
         turn_handling=TurnHandlingOptions(
             interruption={
                 "min_words": min_words,
