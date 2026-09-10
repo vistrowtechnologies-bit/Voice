@@ -191,6 +191,9 @@ def _body_for(key: str, config: dict, lead: dict) -> dict | None:
             "language": lead.get("language") or "",
             "agent_name": lead.get("agent_name") or "",
             "page_path": lead.get("page_path") or "",
+            "call_id": lead.get("call_id"),
+            "recording_url": lead.get("recording_url") or "",
+            "recording_mime_type": lead.get("recording_mime_type") or "audio/wav",
             "extracted_data": lead.get("extracted_data") or {},
         }
     url = (config.get("url") or "").strip()
@@ -417,6 +420,12 @@ def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
     if not (call.get("name") and call.get("phone")):
         return False, "This call has no name or phone number to send"
     transcript = call.get("transcript") or []
+    share_token = calls_db.ensure_call_recording_share_token(call_id, account_id)
+    public_base = calls_db.public_base_url() or "https://api.vistrowvoice.com"
+    recording_url = (
+        f"{public_base}/public/calls/{call_id}/recording?token={share_token}"
+        if share_token and call.get("hasRecording") else ""
+    )
     body = {
         "token": token,
         "name": call.get("name") or "Unknown caller",
@@ -434,6 +443,9 @@ def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
         "language": call.get("replyLanguage") or "",
         "agent_name": call.get("agent") or "",
         "page_path": call.get("pagePath") or "",
+        "call_id": call_id,
+        "recording_url": recording_url,
+        "recording_mime_type": "audio/wav",
         "extracted_data": call.get("extractedData") or {},
     }
     ok, detail = _post_json(_ARTHALEADS_URL, body)

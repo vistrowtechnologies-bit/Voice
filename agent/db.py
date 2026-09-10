@@ -168,6 +168,10 @@ def init_db() -> None:
                 # never the raw key surfaced to the frontend, only through a
                 # presigned URL route.
                 "recording_key",
+                # Opaque bearer used only by the CRM recording redirect.
+                # Kept separate from recording_key so the private B2 object
+                # name is never exposed to an integration or browser.
+                "recording_share_token",
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} TEXT")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS extracted_data TEXT DEFAULT ''")
@@ -1072,8 +1076,9 @@ def save_call(record: dict) -> int | None:
                     transcript_json, call_type, direction, site_id, agent_id, account_id,
                     extracted_data, latency_metrics_json, diagnostic_events_json,
                     failure_reason, disconnect_reason, tool_calls_json, page_path, test_run_id,
-                    test_scenario_id, test_scenario_key, test_scenario_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    test_scenario_id, test_scenario_key, test_scenario_name,
+                    recording_share_token
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -1116,6 +1121,7 @@ def save_call(record: dict) -> int | None:
                     record.get("test_scenario_id"),
                     record.get("test_scenario_key") or "",
                     record.get("test_scenario_name") or "",
+                    record.get("recording_share_token") or "",
                 ),
             )
             return cur.lastrowid

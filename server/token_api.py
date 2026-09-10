@@ -2579,6 +2579,27 @@ def get_call_recording_url(call_id: int, user: dict = Depends(current_user)) -> 
     return {"url": url}
 
 
+@app.get("/public/calls/{call_id}/recording", include_in_schema=False)
+def get_shared_call_recording(call_id: int, token: str = "") -> RedirectResponse:
+    """Permanent CRM-facing URL that redirects to a fresh short-lived B2 URL.
+
+    The URL itself contains a high-entropy per-call bearer. ArthaLeads can
+    safely store it, while the underlying private object key and B2
+    credentials never leave Vistrow. Each playback gets a fresh one-hour
+    storage signature instead of persisting an already-expired B2 URL.
+    """
+    key = calls_db.get_shared_call_recording_key(call_id, token)
+    if not key:
+        raise HTTPException(404, "Recording not found")
+    client, bucket = _b2_client()
+    if client is None:
+        raise HTTPException(503, "Recording storage not configured")
+    url = client.generate_presigned_url(
+        "get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=3600
+    )
+    return RedirectResponse(url, status_code=307, headers={"Cache-Control": "private, no-store"})
+
+
 @app.get("/calls/{call_id}/recording/download")
 def download_call_recording(call_id: int, user: dict = Depends(current_user)) -> Response:
     """The recording as an MP3, named after the caller, instead of the raw

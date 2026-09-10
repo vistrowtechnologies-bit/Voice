@@ -1043,6 +1043,9 @@ def init_tables() -> None:
                 # directly — _call_dict below exposes only a hasRecording
                 # bool; playback goes through a presigned-URL route instead.
                 ("recording_key", "TEXT"),
+                # Per-call opaque bearer for CRM playback. It is intentionally
+                # omitted from _call_dict and is only matched server-side.
+                ("recording_share_token", "TEXT"),
                 # Optional rating submitted from the widget completion UI.
                 ("feedback", "TEXT"),
                 ("connect_latency_ms", "INTEGER"),
@@ -2702,6 +2705,48 @@ def get_call_recording_key(call_id: int, account_id: int) -> str | None:
             "SELECT recording_key FROM calls WHERE id = ? AND account_id = ?", (call_id, account_id)
         ).fetchone()
         return row["recording_key"] if row else None
+    finally:
+        conn.close()
+
+
+def get_shared_call_recording_key(call_id: int, token: str) -> str | None:
+    """Resolve a CRM recording link without a dashboard session.
+
+    The token is a random, per-call bearer stored beside the private B2 key.
+    A single indexed primary-key lookup plus an exact token match avoids
+    exposing account ids, integration credentials, or storage object names.
+    """
+    if not token or len(token) > 128:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT recording_key FROM calls WHERE id = ? AND recording_share_token = ?",
+            (call_id, token),
+        ).fetchone()
+        return row["recording_key"] if row and row["recording_key"] else None
+    finally:
+        conn.close()
+
+
+def ensure_call_recording_share_token(call_id: int, account_id: int) -> str | None:
+    """Return/create the CRM bearer for historical calls sent manually."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT recording_share_token FROM calls WHERE id = ? AND account_id = ?",
+            (call_id, account_id),
+        ).fetchone()
+        if not row:
+            return None
+        token = row["recording_share_token"] or secrets.token_urlsafe(32)
+        if not row["recording_share_token"]:
+            with conn:
+                conn.execute(
+                    "UPDATE calls SET recording_share_token = ? WHERE id = ? AND account_id = ?",
+                    (token, call_id, account_id),
+                )
+        return token
     finally:
         conn.close()
 
