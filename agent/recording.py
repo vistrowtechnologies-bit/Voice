@@ -162,18 +162,33 @@ class CallRecorder:
             length = max(len(caller_pcm), len(agent_pcm))
             caller_pcm = caller_pcm + b"\x00" * (length - len(caller_pcm))
             agent_pcm = agent_pcm + b"\x00" * (length - len(agent_pcm))
-            # Saturates on overflow rather than wrapping, so simultaneous
-            # speech (interruptions/overlap) won't produce audible clipping
-            # artifacts the way a naive sample-sum would.
-            mixed = audioop.add(caller_pcm, agent_pcm, 2)
+            # STEREO: caller LEFT, agent RIGHT. These were summed into one
+            # mono track before, which made a recording impossible to reason
+            # about — on widget call 954 the ambience bed, the agent and the
+            # caller were one signal, and a transcription service turned the
+            # office babble underneath into a whole invented conversation
+            # about revenue and targets that never happened. Our own STT found
+            # zero words in that clip, which is how we know it was babble.
+            #
+            # Separated, each side is independently listenable and
+            # independently transcribable, so "who actually said this" stops
+            # being a matter of opinion. It also makes the ringback question
+            # answerable: caller-channel audio alone is what distinguishes a
+            # ringing line from a live one, and that could not be measured
+            # from the mixed file.
+            #
+            # The ambience bed stays. It rides on the agent's own track, so it
+            # lands in the right channel and the caller's channel stays clean.
+            stereo = audioop.tostereo(caller_pcm, 2, 1, 0)
+            stereo = audioop.add(stereo, audioop.tostereo(agent_pcm, 2, 0, 1), 2)
 
             fd, path = tempfile.mkstemp(suffix=".wav")
             os.close(fd)
             with wave.open(path, "wb") as wav_file:
-                wav_file.setnchannels(1)
+                wav_file.setnchannels(2)
                 wav_file.setsampwidth(2)
                 wav_file.setframerate(_SAMPLE_RATE)
-                wav_file.writeframes(mixed)
+                wav_file.writeframes(stereo)
             return path
         except Exception:
             logger.exception("failed to build recording WAV")

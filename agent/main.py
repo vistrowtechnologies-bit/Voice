@@ -541,6 +541,12 @@ def _facts_reminder(lead_data: dict, fact_status: dict | None = None) -> str:
             + "\n".join(known)
             + "\nIf the caller says they already told you something, they are right: it is in "
             "this list. Acknowledge once, briefly, and move to a fact you do NOT have."
+            "\n\nAND IF THEY CONTRADICT ANYTHING IN THIS LIST, THE CALLER IS RIGHT AND THIS "
+            "LIST IS WRONG. Say the corrected version back once, record it with the NEW "
+            "value in the same turn, and use only the new value from then on. Never repeat "
+            "the old one, and never ask a question built on it. This list is what was "
+            "captured earlier, not what is true — a caller correcting it is the single most "
+            "reliable signal on the call."
         )
     if unconfirmed:
         blocks.append(
@@ -4420,6 +4426,32 @@ class RealEstateAgent(Agent):
         # llm_node runs on BOTH the preemptive and the confirmed generation,
         # and after that equivalence check, so the directive still reaches the
         # model on every path without touching the context being compared.
+        # Built first, compared second. Whatever this turn produced has to be
+        # in the generation that answers it, and the preemptive run reached
+        # llm_node before any of it existed — it is carrying the PREVIOUS
+        # turn's copy.
+        #
+        # I moved this block into llm_node to stop it invalidating preemptive
+        # generation, and reasoned only about the language and gender lines,
+        # which come from self._reply_language / _voice_gender and are current
+        # on either path. The FACTS are in here too, and they are not.
+        #
+        # Widget call 954: the caller said "मेरे कंपनी का नाम Vistro
+        # Technologies है, यह IT कंपनी है", the agent answered "Vistro
+        # Technologies — noted" and then asked about their dental clinic. Four
+        # times. The caller asked if it was just babbling. Every one of those
+        # replies was a preemptive generation carrying the previous turn's
+        # facts reminder, which still said dental clinic — and this block is
+        # the LAST system message before generation, so stale facts arrive
+        # with the highest attention in the whole context.
+        #
+        # So: keep the win where the directive did not change, and give it up
+        # where it did. Adding the changed text to turn_ctx makes
+        # agent_activity's is_equivalent check fail, which throws the stale
+        # preemptive run away and regenerates against the new facts. It is
+        # duplicated in that generation (llm_node attaches it as well) but
+        # both copies are current, which is the point.
+        _previous_directive = self._pending_turn_directive
         self._pending_turn_directive = (
             _turn_shape
             + "\n\n"
@@ -4447,6 +4479,8 @@ class RealEstateAgent(Agent):
             # while the Treetopia row was in its context, and a price four
             # times the real one. Ground truth gets the final word.
         )
+        if self._pending_turn_directive != _previous_directive:
+            turn_ctx.add_message(role="system", content=self._pending_turn_directive)
 
         if emotion != self._current_emotion:
             self._current_emotion = emotion
