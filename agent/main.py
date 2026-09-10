@@ -1237,67 +1237,91 @@ def _neutralize_caller_directed_gender(text: str) -> str:
     return _GENDERED_FUTURE.sub(_repl_future, text)
 
 
+# Words that could START an offer sentence. Only text containing one of these
+# is ever held back — everything else streams straight through, which is the
+# whole point: the first version buffered to a sentence terminator on EVERY
+# turn and cost a measured +339ms median (up to +418ms) on turns with no
+# offer in them at all. That is the same streaming-defeating mistake as the
+# sentence tokenizer in google_tts_streaming_patch, one layer higher up.
+_OFFER_TRIGGER = re.compile(
+    r"(offer|ऑफर|domain|डोमेन|hosting|होस्टिंग|free|फ्री|मुफ़्त|मुफ्त)", re.I
+)
+# How far past a trigger to keep reading before judging. One clause is not
+# enough — "वैसे अभी एक offer चल रहा है —" carries the trigger while the
+# domain/hosting pair that confirms it lands in the NEXT clause.
+_OFFER_LOOKAHEAD_CHARS = 90
+
+
 def _make_offer_turn_guard_transform(agent: "RealEstateAgent"):
     """Drop the offer when the model bundles it onto another answer.
 
     Agent 26's prompt says "One thing per turn — this includes the offer and
     the summary", in capitals, with a worked example. A state gate in the
     per-turn directive was added on top of that and still did not hold: phone
-    call 950 closed with
+    call 950 closed with an answer AND the offer in one turn, and the caller
+    dropped mid-sentence. Four attempts at asking have failed, so this
+    enforces it instead.
 
-        "दो हफ्ते में हो जाएगा, team check कर लेगी। वैसे एक offer चल रहा है
-         अभी — एक साल का domain और hosting बिल्कुल free है, बस पंद्रह..."
+    Not a ban. A turn that OPENS with the offer passes untouched — that is
+    the offer as its own turn, which is what the prompt asks for. And
+    suppression sets _offer_deferred so the next turn's directive tells the
+    model to make it properly, rather than silently costing the tenant their
+    strongest card.
 
-    an answer AND the offer, and the caller dropped mid-sentence. Three
-    restatements and one directive gate have now failed on the same rule, so
-    this stops asking and enforces it: once a turn has already said something
-    else, a sentence that carries the offer is not spoken.
-
-    It is deliberately not a ban. A turn that OPENS with the offer passes
-    untouched — that is the offer as its own turn, which is what the prompt
-    asks for. And suppression sets _offer_deferred so the next turn's
-    directive tells the model to make it properly, rather than silently
-    costing the tenant their strongest card.
-
-    Streaming-safe: the offer lands at the end of these bundled turns, so a
-    per-sentence check never has to hold back the front of a reply — which is
-    the whole latency win in google_tts_streaming_patch.
+    Cost-free on ordinary turns, which the first version was not. Clauses
+    stream out as soon as they close, exactly like the gender guard beside
+    it; only a clause carrying an offer trigger word is held, and only until
+    there is enough text to judge it.
     """
-    sentence_end = re.compile(r"(?<=[।.!?])\s*")
+    clause_boundary = re.compile(r"(?<=[।.!?,;:—])")
 
     async def _transform(text):
         said_something_else = False
         suppressing = False
-        buffer = ""
+        buffer = ""        # not yet split into clauses
+        held = ""          # a trigger fired; accumulating enough to judge
 
-        def _judge(sentence: str) -> str:
-            nonlocal said_something_else, suppressing
+        def _emit_or_hold(clause: str):
+            """Yield-able parts for one complete clause."""
+            nonlocal said_something_else, suppressing, held
             if suppressing:
-                return ""
-            if _reply_made_offer(sentence):
+                return []
+            if held or _OFFER_TRIGGER.search(clause):
+                held += clause
+                if len(held) < _OFFER_LOOKAHEAD_CHARS and not held.rstrip().endswith(
+                    ("।", ".", "!", "?")
+                ):
+                    return []          # keep reading before judging
+                out = _judge(held)
+                held = ""
+                return out
+            said_something_else = True
+            return [clause]
+
+        def _judge(chunk: str):
+            nonlocal suppressing, said_something_else
+            if _reply_made_offer(chunk):
                 if said_something_else:
                     agent._offer_deferred = True
                     suppressing = True
                     logger.info(
-                        "offer suppressed — bundled onto another answer: %r", sentence[:80]
+                        "offer suppressed — bundled onto another answer: %r", chunk[:80]
                     )
-                    return ""
+                    return []
                 agent._offer_already_made = True
-            if sentence.strip():
-                said_something_else = True
-            return sentence
+            said_something_else = True
+            return [chunk]
 
-        async for chunk in text:
-            buffer += chunk
-            *complete, buffer = sentence_end.split(buffer)
-            for sentence in complete:
-                out = _judge(sentence)
-                if out:
-                    yield out
-        if buffer:
-            out = _judge(buffer)
-            if out:
-                yield out
+        async for delta in text:
+            buffer += delta
+            *complete, buffer = clause_boundary.split(buffer)
+            for clause in complete:
+                for part in _emit_or_hold(clause):
+                    yield part
+        tail = held + buffer
+        if tail.strip() and not suppressing:
+            for part in (_judge(tail) if held or _OFFER_TRIGGER.search(tail) else [tail]):
+                yield part
 
     return _transform
 

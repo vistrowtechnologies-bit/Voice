@@ -161,3 +161,73 @@ class TheOfferGuardIsDeterministic(unittest.TestCase):
         out = main._turn_shape_instruction("", False, offer_deferred=True)
         self.assertIn("WHOLE turn", out)
         self.assertNotIn("WHOLE turn", main._turn_shape_instruction("", False, False))
+
+
+class TheGuardMustNotDefeatStreaming(unittest.TestCase):
+    """The first version of this guard buffered to a sentence terminator on
+    every turn. Measured on call 952's own replies it cost +339ms median and
+    +418ms worst — on turns with no offer in them — and the live call showed
+    TTS time-to-first-audio going 320ms -> 879ms. That is the same mistake as
+    the sentence tokenizer in google_tts_streaming_patch, one layer up.
+
+    A clause must leave the guard as fast as it leaves the gender guard
+    beside it, unless it actually carries an offer trigger.
+    """
+
+    ORDINARY = [
+        "\nअच्छा, तो बताइए — अभी exactly क्या काम चल रहा है आपका?",
+        "\nसमझ गई। तो website नई बनवानी है या redesign करना है?",
+        "\nठीक है, direct enquiries वाली site चाहिए आपको। तो कब तक चाहिए?",
+        "Sure, tell me what your business does and I will take it from there.",
+    ]
+
+    @staticmethod
+    def _first_chunk_delay(make, text):
+        class _A:
+            _offer_already_made = False
+            _offer_deferred = False
+            _caller_gender = None
+
+        async def go():
+            tr = make(_A())
+            first = []
+
+            async def src():
+                for i in range(0, len(text), 3):
+                    yield text[i:i + 3]
+                    await asyncio.sleep(0.001)
+
+            n = 0
+            async for _ in tr(src()):
+                if not first:
+                    first.append(n)
+                n += 1
+            # deltas consumed before the first output — a rate-free measure
+            return first[0] if first else 10**6
+
+        return asyncio.run(go())
+
+    def test_ordinary_turns_leave_as_fast_as_the_gender_guard(self):
+        for text in self.ORDINARY:
+            with self.subTest(text=text[:32]):
+                offer = self._first_chunk_delay(main._make_offer_turn_guard_transform, text)
+                gender = self._first_chunk_delay(main._make_caller_gender_guard_transform, text)
+                self.assertLessEqual(offer, gender,
+                                     "the offer guard is holding a turn with no offer in it")
+
+    def test_a_turn_with_no_trigger_word_is_never_held(self):
+        """Nothing to judge means nothing to buffer."""
+        text = "\nठीक है, समझ गई। तो कब तक चाहिए आपको?"
+        self.assertFalse(main._OFFER_TRIGGER.search(text))
+        self.assertLessEqual(
+            self._first_chunk_delay(main._make_offer_turn_guard_transform, text), 8)
+
+    def test_the_trigger_catches_how_the_offer_actually_opens(self):
+        # Verbatim from call 950 and 952 — the trigger has to fire on the
+        # clause that OPENS the offer, not the one that confirms it, or the
+        # opening leaks out before the guard can judge.
+        for opener in ("वैसे अभी एक offer चल रहा है —",
+                       "Ek achhi baat — abhi offer chal raha hai",
+                       "एक साल का domain और hosting free"):
+            with self.subTest(opener=opener):
+                self.assertTrue(main._OFFER_TRIGGER.search(opener), opener)
