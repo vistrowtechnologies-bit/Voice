@@ -1,30 +1,45 @@
-"""Feed TTS at clause boundaries, not only at sentence ends.
+"""Decides where the first synthesis call is cut off.
 
-MEASURED on the widget (worker log, [tts_node] instrumentation):
+Google's streaming_synthesize does NOT stream out. MEASURED against Chirp 3
+HD with real credentials, interleaved, 4 repeats per condition: the first
+audio frame lands a near-constant ~165ms after the LAST character is pushed,
+whatever the input looks like.
 
-    turn D  chunk2 ' रियल एस्टेट!' at +435ms  -> FIRST AUDIO +614ms   (179ms)
-    turn F  no terminator, input ended +886ms -> FIRST AUDIO +1027ms  (141ms)
-    turn C  no terminator, input ended +1318ms -> FIRST AUDIO +1456ms (138ms)
+     30 chars  -> first audio  512ms   (150ms after input ended)
+     66 chars  -> first audio  856ms   (182ms after input ended)
+    102 chars  -> first audio 1192ms   (176ms after input ended)
 
-Audio always starts ~140-180ms after the first SENTENCE terminator. Where the
-reply has no early terminator the tokenizer holds everything until generation
-finishes, which is why it looked like "TTS waits for the LLM" — for these
-replies the first full stop IS the end of the reply:
+And it is length, not punctuation. The same 57-character line, once with an
+early full stop and once with an em-dash in the same position:
 
-    'अरे, वही तो मैं सोच रही थी — तो कॉल का क्या फायदा,'
-    'समझ गई, manual handle होता है —'
+    "अरे, वही तो सोच रही थी। तो कॉल का क्या फायदा, बताइए।"   728ms
+    "अरे, वही तो सोच रही थी — तो कॉल का क्या फायदा, बताइए।"  758ms
 
-Commas and em-dashes throughout, one "।" at the very end. A conversational
-Hindi agent writes like this constantly, so waiting for "।" waits for the whole
-turn.
+30ms apart — noise. An earlier reading of the [tts_node] logs said audio
+started 140-180ms after the first sentence TERMINATOR; the contrast above
+shows that was wrong. It was 140-180ms after the INPUT ENDED, and the turns
+that happened to have an early terminator were also the short ones.
 
-This splits on clause punctuation as well, so the first clause reaches the
-synthesizer as soon as it is complete. The TEXT IS NOT ALTERED — punctuation is
-retained and passed through, so prosody is unchanged; only the chunk boundaries
-move. Rewriting dashes into full stops would have changed how the line sounds.
+So chunking the input differently buys nothing on its own — the call still
+ends when the turn ends. What works is ending a CALL early, which is what
+google_tts_streaming_patch does: the first token out of this tokenizer is
+synthesized as its own request while the rest of the turn is still being
+written. This class decides where that single cut lands, and a conversational
+Hindi turn gives it commas and em-dashes to work with where it has no full
+stop until the very end:
 
-A minimum length keeps it from emitting "अरे," on its own, which would be a
-separate synthesis request for two syllables and sound clipped.
+    "समझ गई, manual handle होता है — daily roughly कितनी calls आती हैं?"
+    "अरे, वही तो मैं सोच रही थी — तो कॉल का क्या फायदा, बताइए।"
+
+Measured end-to-end against stock google.TTS on those two turns: 855 -> 541ms
+and 752 -> 506ms. Turns that already had an early sentence end, and turns with
+no internal punctuation at all, came out unchanged (-18ms, +3ms).
+
+The TEXT IS NOT ALTERED — punctuation is retained and passed through, so the
+words reaching Google are identical; only the cut point moves.
+
+A minimum length keeps it from cutting after "अरे,", which would spend a whole
+synthesis request on two syllables.
 """
 from __future__ import annotations
 

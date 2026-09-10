@@ -1,9 +1,10 @@
-"""The clause tokenizer, and that it actually reaches both TTS providers.
+"""The clause tokenizer and the two-call split it feeds.
 
-Guards the fix for the 970ms gap measured on the widget. [tts_node]
-instrumentation showed audio starting 140-180ms after the first SENTENCE
-terminator every time, and a conversational Hindi turn puts its only
-terminator at the very end, so streaming never streamed.
+Guards the fix for the 970ms gap on the widget. The mechanism is measured in
+clause_tokenizer.py and google_tts_streaming_patch.py: Google's
+streaming_synthesize emits nothing until its input ends (~165ms after the
+last character, whatever the punctuation), so the only lever is closing a
+call early. The tokenizer decides where that cut lands.
 """
 import asyncio
 import os
@@ -139,12 +140,50 @@ class WiredIntoBothProviders(unittest.TestCase):
         self.assertEqual(src.count("_use_clause_tokenizer("), 2, src.count("_use_clause_tokenizer("))
 
 
-class PromptTellsTheModelToPunctuate(unittest.TestCase):
-    def test_voice_style_asks_for_full_stops(self):
-        from prompts.voice_style import VOICE_STYLE_PROMPT
+class TheSplitIsWiredIn(unittest.TestCase):
+    """The tokenizer alone is a no-op — the win is one call per side of the
+    first cut. These guard the split itself, which the tokenizer only aims."""
 
-        self.assertIn("Punctuation is timing", VOICE_STYLE_PROMPT)
-        self.assertIn("full stop", VOICE_STYLE_PROMPT)
+    def test_run_stream_opens_two_calls(self):
+        import inspect
+        from google_tts_streaming_patch import _PatchedSynthesizeStream
+
+        src = inspect.getsource(_PatchedSynthesizeStream._run_stream)
+        self.assertEqual(src.count("_synthesize_call("), 2, src)
+
+    def test_first_call_opens_before_the_text_exists(self):
+        """Awaiting the first token before opening the gRPC call serialized
+        setup behind the LLM and cost 94-143ms on short turns. The generator
+        must do the awaiting from inside the open call."""
+        import inspect
+        from google_tts_streaming_patch import _PatchedSynthesizeStream
+
+        src = inspect.getsource(_PatchedSynthesizeStream._run_stream)
+        first_call = src.index("_synthesize_call(")
+        self.assertNotIn("await _next_token", src[:first_call], src[:first_call])
+
+    def test_one_segment_for_the_whole_turn(self):
+        """Two segments raise 'number of segments mismatch: expected 1'."""
+        import inspect
+        from google_tts_streaming_patch import _PatchedSynthesizeStream
+
+        whole = inspect.getsource(_PatchedSynthesizeStream)
+        self.assertEqual(whole.count("start_segment("), 1, whole.count("start_segment("))
+        self.assertEqual(whole.count("end_segment("), 1)
+
+    def test_a_one_clause_turn_does_not_open_an_empty_second_call(self):
+        import inspect
+        from google_tts_streaming_patch import _PatchedSynthesizeStream
+
+        src = inspect.getsource(_PatchedSynthesizeStream._run_stream)
+        self.assertIn("if second is None:", src)
+
+    def test_empty_turn_synthesizes_nothing(self):
+        import inspect
+        from google_tts_streaming_patch import _PatchedSynthesizeStream
+
+        src = inspect.getsource(_PatchedSynthesizeStream._run_stream)
+        self.assertIn("if not got_first:", src)
 
 
 if __name__ == "__main__":

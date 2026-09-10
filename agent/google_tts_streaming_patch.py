@@ -63,6 +63,25 @@ from livekit.plugins.google.tts import SynthesizeStream as GoogleSynthesizeStrea
 from clause_tokenizer import ClauseTokenizer
 
 
+async def _next_token(stream: tokenize.SentenceStream) -> str | None:
+    async for chunk in stream:
+        return chunk.token
+    return None
+
+
+async def _take_one(stream: tokenize.SentenceStream) -> AsyncGenerator[str, None]:
+    """Exactly one token, awaited from inside the open gRPC call."""
+    async for chunk in stream:
+        yield chunk.token
+        return
+
+
+async def _chain(first: str, rest: tokenize.SentenceStream) -> AsyncGenerator[str, None]:
+    yield first
+    async for chunk in rest:
+        yield chunk.token
+
+
 class _PatchedSynthesizeStream(GoogleSynthesizeStream):
     async def _run_stream(
         self,
@@ -70,35 +89,98 @@ class _PatchedSynthesizeStream(GoogleSynthesizeStream):
         output_emitter: tts.AudioEmitter,
         streaming_config: texttospeech.StreamingSynthesizeConfig,
     ) -> None:
+        """Synthesize the first clause as its own call, then the remainder.
+
+        MEASURED against Chirp 3 HD with real credentials, 4 interleaved
+        repeats per condition. Google's streaming_synthesize does not stream
+        out: the first audio frame arrives a near-constant ~165ms after the
+        LAST character is pushed, whatever the input looks like.
+
+            30 chars   -> first audio  512ms   (150ms after input ended)
+            66 chars   -> first audio  856ms   (182ms after input ended)
+           102 chars   -> first audio 1192ms   (176ms after input ended)
+
+        And it is length, not punctuation. Same 57-character line, once with
+        an early full stop and once with an em-dash in the same position:
+        728ms vs 758ms — noise. So feeding the call in clause-sized pieces
+        changes nothing; the call still ends when the turn ends.
+
+        The only lever is ending a call early. Closing the first clause as
+        its own request, with the remainder following as a second request fed
+        live at the same rate:
+
+            one call        832ms  [946, 833, 830, 821]
+            first clause
+              closed early  546ms  [549, 542, 545, 547]   -285ms
+
+        Two calls, not one per clause: every extra boundary is a prosody seam
+        and another request, and the win is entirely in the first one.
+        ClauseTokenizer (the stream's tokenizer) decides where that single cut
+        lands — see clause_tokenizer.py.
+        """
+        # ONE segment across both calls. The emitter is told upstream to
+        # expect exactly one per _run_stream ("number of segments mismatch"),
+        # and splitting the turn is our latency trick, not something the
+        # session should hear as two utterances.
+        output_emitter.start_segment(segment_id=utils.shortuuid())
+        try:
+            # The first call is opened BEFORE the first clause exists, and its
+            # generator waits for the text. Awaiting the token first instead
+            # cost 94-143ms on short turns: it serialized the gRPC setup
+            # behind the LLM rather than overlapping the two.
+            got_first = await self._synthesize_call(
+                _take_one(input_stream), output_emitter, streaming_config
+            )
+            if not got_first:  # empty turn
+                return
+
+            # Peeking is fine here — the first clause is already playing, so
+            # this waits in the shadow of its audio. It keeps a one-clause
+            # turn from paying for an empty second streaming_synthesize.
+            second = await _next_token(input_stream)
+            if second is None:
+                return
+            await self._synthesize_call(
+                _chain(second, input_stream), output_emitter, streaming_config
+            )
+        finally:
+            output_emitter.end_segment()
+
+    async def _synthesize_call(
+        self,
+        text_chunks: AsyncGenerator[str, None],
+        output_emitter: tts.AudioEmitter,
+        streaming_config: texttospeech.StreamingSynthesizeConfig,
+    ) -> bool:
+        """One streaming_synthesize call; returns whether any text was sent. Body below is upstream's, unchanged
+        apart from taking its text from `text_chunks` and re-sending
+        `prompt` on each call's first input — a Gemini-TTS prompt carries the
+        tone, so the second half must be styled the same as the first."""
         @utils.log_exceptions(logger=logger)
         async def input_generator() -> AsyncGenerator[texttospeech.StreamingSynthesizeRequest, None]:
             try:
                 yield texttospeech.StreamingSynthesizeRequest(streaming_config=streaming_config)
 
-                is_first_input = True
-                async for input in input_stream:
+                async for token in text_chunks:
                     self._mark_started()
+                    sent.append(True)
                     synthesis_input = texttospeech.StreamingSynthesisInput(
-                        markup=input.token if self._opts.use_markup else None,
-                        text=None if self._opts.use_markup else input.token,
-                        prompt=self._opts.prompt if is_first_input else None,
+                        markup=token if self._opts.use_markup else None,
+                        text=None if self._opts.use_markup else token,
+                        prompt=self._opts.prompt if len(sent) == 1 else None,
                     )
-                    is_first_input = False
                     yield texttospeech.StreamingSynthesizeRequest(input=synthesis_input)
             except Exception:
                 logger.exception("an error occurred while streaming input to google TTS")
 
+        sent: list[bool] = []
         input_gen = input_generator()
         try:
             stream = await self._tts._ensure_client().streaming_synthesize(
                 input_gen, timeout=self._conn_options.timeout
             )
-            output_emitter.start_segment(segment_id=utils.shortuuid())
-
             async for resp in stream:
                 output_emitter.push(resp.audio_content)
-
-            output_emitter.end_segment()
 
         except Cancelled:
             # A caller barge-in, not a provider failure — see module
@@ -119,6 +201,7 @@ class _PatchedSynthesizeStream(GoogleSynthesizeStream):
             except RuntimeError as e:
                 if "asynchronous generator is already running" not in str(e):
                     raise
+        return bool(sent)
 
 
 class PatchedGeminiTTS(GoogleTTS):
