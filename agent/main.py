@@ -2503,6 +2503,7 @@ class RealEstateAgent(Agent):
         # first generation of a call, which is the greeting — that one has no
         # caller turn to build guidance from anyway.
         self._pending_turn_directive = ""
+        self._offer_already_made = False
         # Starts allowed (>=4) so the opening line isn't penalised for having
         # no prior turn to compare against. Updated once per turn in
         # on_user_turn_completed from the previous reply, then read by the
@@ -3851,6 +3852,9 @@ class RealEstateAgent(Agent):
                 self._turns_since_filler = 0
             else:
                 self._turns_since_filler += 1
+            if _reply_made_offer(_last_assistant_text):
+                self._offer_already_made = True
+        _turn_shape = _turn_shape_instruction(_last_assistant_text, self._offer_already_made)
 
         if self._public_demo_slug == "healthcare" and _HEALTHCARE_SYMPTOM_PATTERN.search(text):
             self._healthcare_symptom_mentioned = True
@@ -4281,7 +4285,9 @@ class RealEstateAgent(Agent):
         # and after that equivalence check, so the directive still reaches the
         # model on every path without touching the context being compared.
         self._pending_turn_directive = (
-            _language_instruction
+            _turn_shape
+            + "\n\n"
+            + _language_instruction
             + ("\n\n" + _gender_instruction if _gender_instruction else "")
             + ("\n\n" + _personality_instruction if _personality_instruction else "")
             + ("\n\n" + _industry_turn_instruction if _industry_turn_instruction else "")
@@ -4817,6 +4823,60 @@ _PLACEHOLDER_NAMES = frozenset({
     "", "unknown", "unknown caller", "n/a", "na", "none", "null", "-", "--",
     "no name", "not available", "test", "customer", "lead",
 })
+
+
+# The running domain+hosting offer, in the scripts it actually gets spoken in.
+# Matched on the agent's OWN previous reply, so "say it once" becomes state
+# rather than a prompt rule the model has to remember across 40k characters.
+_OFFER_MARKERS = (
+    re.compile(r"(domain|डोमेन).{0,40}(hosting|होस्टिंग)", re.I | re.S),
+    re.compile(r"(hosting|होस्टिंग).{0,40}(domain|डोमेन)", re.I | re.S),
+)
+# A reply longer than this is a monologue on a phone call. Measured from call
+# 948: the turn that preceded the caller dropping was 200 characters and
+# bundled a WhatsApp confirmation, a team-callback promise AND the offer.
+_LONG_REPLY_CHARS = 150
+
+
+def _reply_made_offer(text: str) -> bool:
+    return any(p.search(text or "") for p in _OFFER_MARKERS)
+
+
+def _turn_shape_instruction(last_reply: str, offer_already_made: bool) -> str:
+    """A per-turn gate on turn SHAPE, not content.
+
+    Every tenant prompt in this product already says "one thing per turn" —
+    agent 26's says it three separate times, once in capitals with a worked
+    example of the exact failure. On call 948 the model still closed with a
+    WhatsApp confirmation, a team-callback promise and the offer in one
+    200-character turn, and the caller dropped mid-sentence.
+
+    Same fix already used for fillers (see _turns_since_filler): "sparingly"
+    did not hold a cadence, so it became a counter and a per-turn instruction.
+    This block lands in the per-turn directive, which llm_node attaches as the
+    LAST system message before generation — the highest-attention position,
+    and the one the language/gender block was deliberately given for the same
+    reason.
+    """
+    parts = []
+    if offer_already_made:
+        parts.append(
+            "You have ALREADY made the free domain-and-hosting offer earlier in this "
+            "call. Do not mention it again — repeating a limited-period offer reads "
+            "as pressure."
+        )
+    if last_reply and len(last_reply) > _LONG_REPLY_CHARS:
+        parts.append(
+            f"Your previous reply ran to {len(last_reply)} characters, which is a "
+            "monologue on a phone call. This turn: ONE sentence. Stop after it."
+        )
+    parts.append(
+        "THIS TURN CARRIES EXACTLY ONE OF: (a) a short acknowledgement plus one "
+        "question, (b) the offer, or (c) the closing summary. Never two of them, "
+        "never all three. If you are confirming WhatsApp or saying the team will "
+        "call, that IS the closing summary and the turn ends there."
+    )
+    return " ".join(parts)
 
 
 async def _hang_up(room_name: str) -> None:
