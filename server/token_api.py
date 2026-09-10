@@ -114,6 +114,10 @@ _PUBLIC_PATHS = {
 }
 _PUBLIC_PREFIXES = (
     "/auth/", "/invite/", "/widget-avatars/",
+    # CRM audio playback uses its own high-entropy per-call bearer token;
+    # requiring a Vistrow dashboard cookie here would make the link unusable
+    # inside ArthaLeads.
+    "/public/calls/",
     # Third-party webhook sender (Zapier et al) — no session; the route
     # itself checks the ?token= query param via
     # calls_db.account_id_for_lead_webhook_token instead.

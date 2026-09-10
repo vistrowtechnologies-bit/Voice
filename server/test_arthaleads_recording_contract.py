@@ -30,12 +30,13 @@ class ArthaLeadsRecordingContractTests(unittest.TestCase):
         self.assertIn("token=opaque", body["recording_url"])
 
     def test_public_route_uses_opaque_lookup_not_raw_storage_key(self):
-        source = Path(__file__).with_name("token_api.py").read_text()
-        source = source[source.index("def get_shared_call_recording("):]
+        module_source = Path(__file__).with_name("token_api.py").read_text()
+        source = module_source[module_source.index("def get_shared_call_recording("):]
         source = source[:source.index("\n@app.")]
         self.assertIn("get_shared_call_recording_key", source)
         self.assertNotIn('"recording_key"', source)
         self.assertNotIn("current_user", source)
+        self.assertIn('"/public/calls/",', module_source)
 
     def test_dashboard_call_json_does_not_expose_share_token(self):
         source = inspect.getsource(calls_db._call_dict)
