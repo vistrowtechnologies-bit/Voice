@@ -3973,11 +3973,31 @@ def update_contact(contact_id: int, data: dict, account_id: int) -> dict | None:
         phone = canonical_contact_phone(raw_phone) if raw_phone else ""
         if raw_phone and not phone:
             raise ValueError("Enter a valid phone number with country code")
+        new_norm_candidate = _normalize_phone(phone)
 
-        duplicate = conn.execute(
-            "SELECT id FROM contacts WHERE account_id = ? AND phone = ? AND id <> ? LIMIT 1",
-            (account_id, phone or None, contact_id),
-        ).fetchone()
+        # deleted_at IS NULL, like the SELECT that loaded `current` above.
+        # Without it a DELETED contact still blocks the number forever: an
+        # operator renaming "Unknown" to a real name gets "Another contact
+        # already uses this phone number" and no way to act on it, because the
+        # row it collides with is in the bin and not visible anywhere in the
+        # UI. Live case on account 2 — contacts 1926 and 1927 both hold
+        # 918080197945 and were deleted on 2026-09-08, so contact 2031 could
+        # not be renamed at all.
+        #
+        # Compared on the canonical form, not the raw string. The same person
+        # is stored four different ways on account 1 ("+91 8080197945",
+        # "+918080197945", "8080197945", "918080197945"), so an exact match on
+        # `phone` misses real duplicates and catches unreal ones the moment
+        # canonicalisation changes the value on save.
+        duplicate = None
+        for row in conn.execute(
+            "SELECT id, phone FROM contacts WHERE account_id = ? AND id <> ? "
+            "AND deleted_at IS NULL AND phone IS NOT NULL",
+            (account_id, contact_id),
+        ).fetchall():
+            if _normalize_phone(row["phone"] or "") == new_norm_candidate:
+                duplicate = row
+                break
         if phone and duplicate:
             raise ValueError("Another contact already uses this phone number")
 

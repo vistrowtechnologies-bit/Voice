@@ -284,11 +284,25 @@ class SilentRecipientsAreNotPunished(unittest.TestCase):
     re-introduced itself three times and they hung up.
     """
 
-    def test_the_cap_is_short_enough_to_survive(self):
-        # Anything beyond a few seconds of dead air on an answered call reads
-        # as a dropped line, and the recipient hangs up before the agent has
-        # said who it is.
-        self.assertLessEqual(main.RealEstateAgent._HELD_OPENING_HARD_CAP_S, 6.0)
+    def test_the_cap_bounds_both_failures(self):
+        """4s was too short and 20s was too long; both were measured.
+
+        At 20s, call 936 sat in 19 seconds of mutual silence and the opening
+        collided with the recipient finally speaking.
+
+        At 4s, call 949 released the greeting into ringback — "callee
+        answered" had fired 100ms after "still dialing", which is
+        sip.callStatus going active on 183 early media, not a pickup. The
+        recipient never spoke, so the interrupted-opener recovery never fired
+        either; they heard silence and hung up, and the operator had to dial
+        a second time.
+
+        A recipient who makes any sound is released by VAD in under a second
+        and never reaches this cap at all.
+        """
+        cap = main.RealEstateAgent._HELD_OPENING_HARD_CAP_S
+        self.assertGreaterEqual(cap, 8.0, "short enough to greet a ringing handset again")
+        self.assertLessEqual(cap, 15.0, "long enough to read as a dropped line (call 936)")
 
     def test_the_cap_still_leaves_room_for_a_greeting(self):
         # It must not be so tight that it fires before someone saying "hello"

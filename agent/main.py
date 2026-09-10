@@ -3416,7 +3416,52 @@ class RealEstateAgent(Agent):
     # "active" gets greeted into ringback again - but that case still has the
     # interrupted-opener recovery behind it, and 19 seconds of silence has no
     # recovery at all.
-    _HELD_OPENING_HARD_CAP_S = 4.0
+    #
+    # 2026-09-10: that accepted cost turned out to be mispriced. It does not
+    # merely "get greeted into ringback again" — it loses the call. Phone
+    # call 949, verbatim:
+    #
+    #   09:29:22.128  outbound leg still dialing — holding greeting
+    #   09:29:22.228  callee answered at +3.09s      <- 100ms later
+    #   09:29:23.691  holding outbound opening (cap 4s)
+    #   09:29:27.718  releasing — no caller speech within 4s
+    #   09:29:27.961  FIRST AUDIO                    <- into ringback
+    #   09:29:44.926  caller disconnected, never spoke
+    #
+    # "callee answered" 100ms after "still dialing" is sip.callStatus going
+    # active on 183 early media, which this file documents elsewhere as NOT
+    # meaning answered. The handset was still ringing. The interrupted-opener
+    # recovery that was supposed to backstop this never fires, because it
+    # needs the caller to speak and they never do — they hear silence and
+    # hang up. The operator then dials a second time, which is exactly the
+    # "I have to make the call twice" they reported.
+    #
+    # 12s outbound. It only ever costs anything in the call-936 case — a
+    # recipient who answers and stays completely silent — and that case still
+    # has VAD release in under a second the moment they make any sound, which
+    # most people do. Against that, the 4s cap was burning the opening on
+    # every first dial.
+    #
+    # The durable fix is not a bigger number, it is telling ringback from a
+    # live line. Measured on call 949's own recording, ringback is a strict
+    # 1.0s cycle:
+    #
+    #   0.0s -26.0   1.0s -26.0   2.0s -25.9   3.0s -26.0   dBFS
+    #   0.2s -99.0   1.2s -99.0   2.2s -99.0   3.2s -99.0
+    #   0.4s -16.6   1.4s -16.6   2.4s -16.6   3.4s -16.6
+    #   0.6s -13.1   1.6s -13.1   2.6s -13.1   3.6s -13.1
+    #
+    # breaking at 4.2s exactly when the greeting was released. Tempting to
+    # key on that -99 dBFS digital silence, and WRONG: the control says a
+    # live answered line (call 950, 150s of real conversation) sits at exact
+    # digital silence 39.4% of the time, MORE than ringback's 21%, because
+    # the SIP path sends silence packets whenever nobody is talking. Energy
+    # alone cannot separate them.
+    #
+    # What is left is the periodicity, which is real but needs live cycle
+    # detection — a piece of work, not a constant. Until then this is a plain
+    # trade, and the number to revisit if silent answerers start complaining.
+    _HELD_OPENING_HARD_CAP_S = 12.0
 
     async def _release_held_opening_if_unheard(self) -> None:
         """Say the opening even when the recipient's speech never transcribes.
