@@ -150,3 +150,34 @@ class Prewarm(unittest.TestCase):
                 raise RuntimeError("no network")
         obj = Boom()
         self.assertIs(main._prewarm_provider(obj, "test"), obj)
+
+
+class PrewarmNeedsALoop(unittest.TestCase):
+    """sarvam.TTS.prewarm() calls asyncio.create_task() internally.
+
+    Called without a running loop it raises "no running event loop" and leaves
+    an un-awaited coroutine behind. _build_tts runs inside the async entrypoint
+    in production but not in scripts or tests, and a provider that silently
+    failed to pre-connect looks identical to one that worked.
+    """
+
+    def test_skipped_cleanly_with_no_loop(self):
+        calls = []
+        class T:
+            def prewarm(self):
+                calls.append(1)
+                raise RuntimeError("no running event loop")
+        obj = T()
+        self.assertIs(main._prewarm_provider(obj, "test"), obj)
+        self.assertEqual(calls, [], "prewarm was called without a loop")
+
+    def test_called_when_a_loop_is_running(self):
+        import asyncio
+        calls = []
+        class T:
+            def prewarm(self):
+                calls.append(1)
+        async def run():
+            main._prewarm_provider(T(), "test")
+        asyncio.run(run())
+        self.assertEqual(calls, [1], "prewarm was skipped despite a running loop")

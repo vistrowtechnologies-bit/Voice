@@ -1769,6 +1769,17 @@ def _prewarm_provider(inst, what: str):
     fn = getattr(inst, "prewarm", None)
     if not callable(fn):
         return inst
+    # sarvam.TTS.prewarm() calls asyncio.create_task() internally, so it needs
+    # a RUNNING loop — called without one it raises "no running event loop"
+    # AND leaves an un-awaited coroutine behind. _build_tts runs inside the
+    # async entrypoint in production, but not in scripts or tests, and a
+    # provider that silently failed to pre-connect there would look identical
+    # to one that worked.
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        logger.debug("skipping prewarm for %s — no running event loop", what)
+        return inst
     try:
         fn()
     except Exception:
