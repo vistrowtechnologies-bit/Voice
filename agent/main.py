@@ -2499,6 +2499,10 @@ class RealEstateAgent(Agent):
         # call closes: no more clinical questions.
         self._appointment_booked = False
         self._booking_confirmed_this_turn = False
+        # Set by on_user_turn_completed, consumed by llm_node. Empty on the
+        # first generation of a call, which is the greeting — that one has no
+        # caller turn to build guidance from anyway.
+        self._pending_turn_directive = ""
         # Starts allowed (>=4) so the opening line isn't penalised for having
         # no prior turn to compare against. Updated once per turn in
         # on_user_turn_completed from the previous reply, then read by the
@@ -3540,6 +3544,32 @@ class RealEstateAgent(Agent):
             if dispatch_t0 is not None:
                 logger.info("[latency] greeting say() returned at +%.2fs", time.monotonic() - dispatch_t0)
 
+    # Per-turn guidance (language, gender, objective, one-shot nudges),
+    # computed in on_user_turn_completed and injected here instead of into
+    # the turn context — see the long comment at the assignment for why.
+    async def llm_node(self, chat_ctx, tools, model_settings=None):
+        """Attach this turn's directive without invalidating preemption.
+
+        llm_node runs for the preemptive generation AND for the confirmed
+        one, and runs AFTER agent_activity.py's equivalence check, so what we
+        add here never makes the two contexts differ.
+
+        The preemptive run reaches this before on_user_turn_completed has
+        processed the turn, so it sees the directive built during the PREVIOUS
+        turn. That is the same bet preemptive generation already makes by
+        running on an interim transcript. The parts that change fastest and
+        are most visible — the language and gender instructions — are built
+        from self._reply_language / self._voice_gender / self._caller_gender,
+        which switch_reply_language updates directly, so those are current
+        here regardless of which run this is.
+        """
+        directive = self._pending_turn_directive
+        if directive:
+            chat_ctx = chat_ctx.copy()
+            chat_ctx.add_message(role="system", content=directive)
+        async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
+            yield chunk
+
     async def tts_node(self, text, model_settings=None):
         """Timestamp text arriving at TTS, to find where streaming is lost.
 
@@ -4231,9 +4261,27 @@ class RealEstateAgent(Agent):
         _objective_text = _current_objective(
             _funnel_stage, _intent, _site_visit_suppressed, _wrap_up
         )
-        turn_ctx.add_message(
-            role="system",
-            content=_language_instruction
+        # NOT turn_ctx.add_message. Mutating the turn context here invalidated
+        # preemptive generation on EVERY turn — measured 6/6 on phone call 948
+        # and on the widget too:
+        #
+        #   WARNING  preemptive generation invalidated after
+        #            `on_user_turn_completed` because the transcript, chat
+        #            context, tools, or tool choice changed
+        #
+        # agent_activity.py takes `temp_mutable_chat_ctx = agent.chat_ctx.copy()`
+        # BEFORE calling this hook, and keeps the preemptive run only if
+        # `preemptive.chat_ctx.is_equivalent(temp_mutable_chat_ctx)`. The
+        # preemptive run copied the context before we appended, so appending
+        # here guarantees the two differ and the speculative LLM call is
+        # thrown away. We were paying the full ~500ms first-token time
+        # serially on every turn, and `preemptive_tts: True` was doing nothing.
+        #
+        # llm_node runs on BOTH the preemptive and the confirmed generation,
+        # and after that equivalence check, so the directive still reaches the
+        # model on every path without touching the context being compared.
+        self._pending_turn_directive = (
+            _language_instruction
             + ("\n\n" + _gender_instruction if _gender_instruction else "")
             + ("\n\n" + _personality_instruction if _personality_instruction else "")
             + ("\n\n" + _industry_turn_instruction if _industry_turn_instruction else "")
@@ -4256,7 +4304,6 @@ class RealEstateAgent(Agent):
             # from its own memory instead — "Treetopia is not listed with us"
             # while the Treetopia row was in its context, and a price four
             # times the real one. Ground truth gets the final word.
-            ,
         )
 
         if emotion != self._current_emotion:
@@ -4747,12 +4794,29 @@ def _substitute_template_vars(text: str, values: dict) -> str:
         key = match.group(1)
         if key.startswith("custom."):
             return str(values.get("custom", {}).get(key[7:], ""))
-        return str(values.get(key, ""))
+        value = str(values.get(key, ""))
+        if key in _NAME_TEMPLATE_VARS and value.strip().lower() in _PLACEHOLDER_NAMES:
+            # A CRM row with no real name still carries a placeholder, and it
+            # gets SPOKEN: phone call 948 opened with "Namaste Unknown, main
+            # Artha bol rahi hoon" to a live lead. Blank it and let the
+            # whitespace/punctuation cleanup below close the gap, exactly as
+            # for a missing value — "Namaste, main Artha bol rahi hoon".
+            return ""
+        return value
 
     filled = _TEMPLATE_VAR_RE.sub(repl, text)
     filled = re.sub(r"[ \t]{2,}", " ", filled)
     filled = re.sub(r" +([!?.,।])", r"\1", filled)
     return filled.strip()
+
+
+# Name tokens whose value is spoken aloud, and the CRM placeholders that must
+# never be. Compared case-insensitively after stripping.
+_NAME_TEMPLATE_VARS = frozenset({"name", "first_name", "last_name"})
+_PLACEHOLDER_NAMES = frozenset({
+    "", "unknown", "unknown caller", "n/a", "na", "none", "null", "-", "--",
+    "no name", "not available", "test", "customer", "lead",
+})
 
 
 async def _hang_up(room_name: str) -> None:
