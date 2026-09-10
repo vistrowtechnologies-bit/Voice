@@ -60,6 +60,8 @@ from livekit.plugins.google.log import logger
 from livekit.plugins.google.tts import TTS as GoogleTTS
 from livekit.plugins.google.tts import SynthesizeStream as GoogleSynthesizeStream
 
+from clause_tokenizer import ClauseTokenizer
+
 
 class _PatchedSynthesizeStream(GoogleSynthesizeStream):
     async def _run_stream(
@@ -121,7 +123,23 @@ class _PatchedSynthesizeStream(GoogleSynthesizeStream):
 
 class PatchedGeminiTTS(GoogleTTS):
     """Drop-in google.TTS subclass whose .stream() hands out the guarded
-    SynthesizeStream above instead of the stock (crash-prone-on-cancel) one."""
+    SynthesizeStream above instead of the stock (crash-prone-on-cancel) one,
+    and which chunks input at clause boundaries rather than sentence ends.
+
+    The tokenizer default is the third fix here, and it is worth as much as
+    the other two. Upstream defaults to `tokenize.blingfire.SentenceTokenizer`,
+    so `_run_stream` above receives nothing until a full sentence exists.
+    [tts_node] instrumentation on the widget measured audio starting 140-180ms
+    after the first sentence terminator every time — but a conversational
+    Hindi turn is usually one sentence held together with commas and em-dashes,
+    so "the first terminator" and "the end of the reply" are the same moment
+    and streaming never actually streams. ClauseTokenizer emits each clause as
+    soon as it closes; see clause_tokenizer.py for the measurements.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        kwargs.setdefault("tokenizer", ClauseTokenizer())
+        super().__init__(*args, **kwargs)
 
     def stream(
         self, *, conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS

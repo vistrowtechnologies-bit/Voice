@@ -47,6 +47,7 @@ import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
 # dbconn.py is duplicated into agent/. Used here only to resolve a voice's
 # gender so the LLM self-refers with the right grammatical gender.
+from clause_tokenizer import ClauseTokenizer
 from google_tts_streaming_patch import PatchedGeminiTTS
 from emotion import (
     GEMINI_EMOTION_PROMPT_DELTAS,
@@ -1751,6 +1752,26 @@ def _sarvam_stt_language(reply_language: str | None) -> str:
     return code if code in _SARVAM_STT_LANGUAGES else "unknown"
 
 
+def _use_clause_tokenizer(inst, what: str):
+    """Make a Sarvam TTS chunk at clauses, the way PatchedGeminiTTS now does.
+
+    sarvam.TTS keeps its sentence tokenizer in `_opts.word_tokenizer` and does
+    not expose it through __init__, so this reaches for the field directly and
+    no-ops if the attribute ever moves — a tenant on shubh/priya must keep
+    speaking either way. See clause_tokenizer.py for why sentence-level
+    chunking costs ~800ms on a conversational Hindi turn.
+    """
+    opts = getattr(inst, "_opts", None)
+    if opts is None or not hasattr(opts, "word_tokenizer"):
+        logger.debug("clause tokenizer not applied to %s — no _opts.word_tokenizer", what)
+        return inst
+    try:
+        opts.word_tokenizer = ClauseTokenizer()
+    except Exception:
+        logger.debug("clause tokenizer not applied to %s", what, exc_info=True)
+    return inst
+
+
 def _prewarm_provider(inst, what: str):
     """Open the provider's connections during setup, not on the first word.
 
@@ -2298,6 +2319,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             **tone,
         )
         _prewarm_provider(sarvam_safety_net, "sarvam TTS (Google fallback)")
+        _use_clause_tokenizer(sarvam_safety_net, "sarvam TTS (Google fallback)")
         # max_retry_per_tts=5: see _google_fallback_tts docstring above —
         # real Google-side 504s need real retries, not a single attempt.
         _adapter = TtsFallbackAdapter([google_tts, sarvam_safety_net], max_retry_per_tts=5)
@@ -2328,6 +2350,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     # The primary Sarvam voice — the one a tenant on shubh/priya actually
     # hears, so the ~300ms this saves lands on their first spoken word.
     _prewarm_provider(sarvam_tts, "sarvam TTS")
+    _use_clause_tokenizer(sarvam_tts, "sarvam TTS")
     if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
         return sarvam_tts, "sarvam"
     # Same streaming fix as the two branches above — see the comment on the
