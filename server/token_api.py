@@ -3221,7 +3221,7 @@ def list_help_faqs(user: dict = Depends(current_user)) -> list[dict]:
 @app.post("/help/chat")
 def help_chat_message(req: HelpChatRequest, user: dict = Depends(current_user)) -> dict:
     try:
-        preferences = calls_db.get_user_preferences(user["id"])
+        preferences = calls_db.get_user_preferences(user["user_id"])
         result = help_chat.answer_help_question(
             req.message,
             [turn.model_dump() for turn in req.history],

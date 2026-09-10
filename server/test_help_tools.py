@@ -61,6 +61,20 @@ class HelpToolsTests(unittest.TestCase):
         calls_for_local_date.assert_called_once_with(7, "2026-09-09", "Asia/Kolkata")
         self.assertEqual(result["count"], 2)
 
+    @patch.dict("help_chat.os.environ", {"OPENAI_API_KEY": "test-key"})
+    @patch("help_chat._post_chat")
+    def test_help_chat_uses_lowest_model_without_unsupported_temperature(self, post_chat):
+        post_chat.return_value = {
+            "choices": [{"message": {"content": '{"reply":"Open Agents.","suggestTicket":false,"comingSoon":false}'}}]
+        }
+
+        result = help_chat.answer_help_question("Where do I edit an agent?", [], 7)
+
+        payload = post_chat.call_args.args[1]
+        self.assertEqual(payload["model"], "gpt-5-nano")
+        self.assertNotIn("temperature", payload)
+        self.assertEqual(result["reply"], "Open Agents.")
+
     @patch("help_tools.calls_db.list_calls")
     def test_find_recent_calls_returns_source_and_crm_state(self, list_calls):
         list_calls.return_value = [

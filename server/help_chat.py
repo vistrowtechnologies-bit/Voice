@@ -25,8 +25,11 @@ from help_tools import TOOL_FUNCTIONS, TOOL_SCHEMAS
 logger = logging.getLogger("help-chat")
 
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
-CHAT_MODEL = "gpt-4.1-mini"
-CHAT_STRONG_MODEL = os.environ.get("HELP_CHAT_STRONG_MODEL", "gpt-4.1")
+# Cheapest GPT text model that still supports Chat Completions, function
+# calling, and structured JSON output. Help answers are grounded in our own
+# documentation/tools, so a larger general model adds cost without adding a
+# better source of truth.
+CHAT_MODEL = "gpt-5-nano"
 # Cap history sent to the model — this is a support-chat panel, not a
 # long-running conversation; the last few turns are enough context.
 MAX_HISTORY_TURNS = 6
@@ -118,10 +121,6 @@ def _open_record_context(current_page: str | None, account_id: int) -> str:
     }
     facts = "\n".join(f"- {label}: {value}" for label, value in fields.items() if value not in (None, ""))
     return f"CURRENTLY OPEN CALL (the user is looking at this record now):\n{facts}"
-
-
-def _needs_strong_model(message: str) -> bool:
-    return bool(re.search(r"not work|can'?t|cannot|broken|error|bug|failed|why (?:is|isn'?t|doesn'?t)", message, re.I))
 
 
 def _structured_reply(choice_message: dict) -> dict:
@@ -230,13 +229,11 @@ def answer_help_question(
         {"role": "user", "content": text},
     ]
 
-    model = CHAT_STRONG_MODEL if _needs_strong_model(text) else CHAT_MODEL
     response_shape = {"type": "json_object"}
     payload = _post_chat(
         api_key,
         {
-            "model": model,
-            "temperature": 0.25,
+            "model": CHAT_MODEL,
             "response_format": response_shape,
             "messages": messages,
             "tools": TOOL_SCHEMAS,
@@ -271,7 +268,7 @@ def answer_help_question(
             )
         payload = _post_chat(
             api_key,
-            {"model": model, "temperature": 0.25, "response_format": response_shape, "messages": messages},
+            {"model": CHAT_MODEL, "response_format": response_shape, "messages": messages},
         )
         try:
             choice_message = payload["choices"][0]["message"]
