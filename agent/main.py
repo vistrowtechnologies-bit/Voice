@@ -5275,10 +5275,17 @@ async def entrypoint(ctx: JobContext) -> None:
     # the resulting "are you still there?" lands as an interruption. Give
     # Artha callers a natural thinking window; tenant agents retain the
     # existing cadence unless their operator configures another value.
+    # 20.0 on a phone call is Sarvam's telephony reference value. Ours was
+    # 6.5 — under a third of it — which on a real line prompts a caller who
+    # merely paused to think. An operator's configured value still wins:
+    # this is the silence-reminder feature's default, not a cap.
     away_timeout = (
         silence_reminder_ms / 1000
         if silence_reminder_ms > 0
-        else (18.0 if cfg.get("is_platform_demo") else 6.5)
+        else (
+            20.0 if _is_phone_call
+            else (18.0 if cfg.get("is_platform_demo") else 6.5)
+        )
     )
     configured_silence_reminder_max = cfg.get("silence_reminder_max")
     silence_reminder_max = (
@@ -5367,6 +5374,19 @@ async def entrypoint(ctx: JobContext) -> None:
             # never a wrong thing said aloud — the framework only speaks the
             # generation tied to the confirmed final transcript.
             preemptive_generation={"preemptive_tts": True},
+            # Sarvam's telephony reference, for detecting a wedged call. The
+            # counters only reset when the agent reaches "speaking", so this
+            # fires when the caller has been talking for 45s and the agent
+            # has not managed to answer at all — not on a long single turn
+            # that got a reply. Default is None/None, i.e. no ceiling at all.
+            #
+            # What it does when it fires is worth knowing before enabling it:
+            # Agent.on_user_turn_exceeded generates a reply with
+            # allow_interruptions=False, so the agent cuts in and cannot be
+            # cut off. That is the point (the caller is not getting answers),
+            # but it is the one path in this session that speaks
+            # uninterruptibly.
+            user_turn_limit={"max_duration": 45.0},
             # Sarvam's saaras:v3 can take longer than livekit-agents' 3.0s
             # default max_delay to finalize a transcript on a longer
             # utterance. When that happens the framework commits the user's
@@ -5467,6 +5487,10 @@ async def entrypoint(ctx: JobContext) -> None:
         # timeout, not a call-length limit — a successful streaming response
         # continues normally once its first frames arrive, so this doesn't
         # cost latency on the (large majority of) healthy requests.
+        # 2 per Sarvam's telephony reference, down from livekit's default 3.
+        # It caps tool round-trips before the agent must speak, so the caller
+        # cannot sit through three silent tool calls in a row.
+        max_tool_steps=2,
         conn_options=SessionConnectOptions(tts_conn_options=APIConnectOptions(timeout=20.0)),
     )
     logger.info("[latency] AgentSession() constructed at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
