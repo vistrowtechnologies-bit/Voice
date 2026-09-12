@@ -78,6 +78,14 @@ export function DemoOrbCard({
    * cards. Omitted = the homepage's original purple, untouched. */
   accentHue?: string
 }) {
+  // Hidden QA entry point: /?pipeline=sarvam-livekit sends only this demo
+  // call to the dedicated demo worker's all-Sarvam LiveKit profile. It is
+  // intentionally a URL switch rather than a public product toggle while we
+  // collect latency and quality data.
+  const pipelineProfile =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('pipeline') === 'sarvam-livekit'
+      ? 'sarvam-livekit' as const
+      : undefined
   const [phase, setPhase] = useState<Phase>(() => (hasDemoCallsRemaining() ? 'idle' : 'capped'))
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
@@ -132,7 +140,7 @@ export function DemoOrbCard({
     if (!hasDemoCallsRemaining()) return Promise.resolve(null)
     const identity = randomId('visitor')
     const room = randomId('voice-agent-demo')
-    const request = fetchLiveKitToken(identity, room, undefined, demoSlug, language)
+    const request = fetchLiveKitToken(identity, room, undefined, demoSlug, language, undefined, pipelineProfile)
       .then(({ token: newToken, url }) => {
         const warmed = { token: newToken, url, identity, room, at: Date.now() }
         prewarmRef.current = warmed
@@ -151,7 +159,7 @@ export function DemoOrbCard({
     // to be a dependency — a stale closure here would silently warm the
     // homepage sales agent for an industry page. language is baked into the
     // room's metadata at creation for the same reason.
-  }, [demoSlug, language])
+  }, [demoSlug, language, pipelineProfile])
 
   // A warmed room carries its language in metadata, fixed when the room was
   // created — so a visitor who warms in Hindi and then picks French would be
@@ -207,7 +215,7 @@ export function DemoOrbCard({
       const isFresh = warm && Date.now() - warm.at < PREWARM_MAX_AGE_MS
       const room = isFresh ? warm.room : randomId('voice-agent-demo')
       const { token: newToken, url } =
-        isFresh ? warm : await fetchLiveKitToken(randomId('visitor'), room, undefined, demoSlug, language)
+        isFresh ? warm : await fetchLiveKitToken(randomId('visitor'), room, undefined, demoSlug, language, undefined, pipelineProfile)
       prewarmRef.current = null
       lastRoomNameRef.current = room
       setFeedbackSubmitted(false)
@@ -224,7 +232,7 @@ export function DemoOrbCard({
       }
       setPhase('denied')
     }
-  }, [cooldownUntil, prewarm, demoSlug, language])
+  }, [cooldownUntil, prewarm, demoSlug, language, pipelineProfile])
 
   // Ending the call shows a brief feedback prompt in the same card (only
   // when the call actually connected to an agent - creditChargedRef mirrors
@@ -274,8 +282,17 @@ export function DemoOrbCard({
   const handleAgentUnavailable = useCallback(() => {
     setToken(null)
     setServerUrl(null)
+    if (pipelineProfile) {
+      // Falling through to the non-LiveKit orchestrator would make this look
+      // like a successful Sarvam measurement when it was actually a
+      // different pipeline. Fail honestly and keep the A/B data clean.
+      releaseCallLock()
+      setErrorMessage('The Sarvam latency lab did not pick up. Please try again.')
+      setPhase('unreachable')
+      return
+    }
     setPhase('active-orchestrator')
-  }, [])
+  }, [pipelineProfile])
 
   const handleOrchestratorFailed = useCallback(() => {
     // Both providers failed for this attempt - genuinely over, unlike
@@ -347,7 +364,9 @@ export function DemoOrbCard({
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-cyan">{badgeLabel}</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-cyan">
+            {pipelineProfile ? 'Sarvam latency lab' : badgeLabel}
+          </span>
         </div>
 
         {isCallLive && token && serverUrl ? (

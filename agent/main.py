@@ -92,6 +92,12 @@ from tools import (
 )
 
 load_dotenv()
+
+# Isolated A/B profile for the hidden marketing demo route
+# `?pipeline=sarvam-livekit`. The public token endpoint accepts this exact
+# value only for the platform demo and dispatches it to the dedicated demo
+# worker; tenant rooms run on the separate implicit-dispatch worker.
+_SARVAM_LATENCY_PROFILE = "sarvam-livekit"
 # The agent deliberately does NOT migrate the schema. server/calls_db.py's
 # init_tables() owns that and creates every column this file reads —
 # checked column by column, all 19 the old call added.
@@ -1837,7 +1843,7 @@ def _prewarm_provider(inst, what: str):
 
 
 def _build_stt(speech_context: str | None = None, reply_language: str | None = None,
-               is_phone: bool = True):
+               is_phone: bool = True, sarvam_latency_lab: bool = False):
     """Sarvam saaras:v3 is the primary — Indian-language quality/latency it
     was actually chosen for. If GOOGLE_APPLICATION_CREDENTIALS_JSON is set,
     wraps it in a FallbackAdapter so a Sarvam outage or exhausted credit
@@ -1916,7 +1922,9 @@ def _build_stt(speech_context: str | None = None, reply_language: str | None = N
             vad_sot_threshold=0.7 if is_phone else 0.5,
         )
         _prewarm_provider(realtime, "sarvam STTStreaming")
-        if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
+        # A fallback would make the A/B result unknowable: a fast response
+        # could have come from Google rather than the Sarvam-only lane.
+        if sarvam_latency_lab or _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
             return realtime
         return SttFallbackAdapter([
             realtime,
@@ -2170,7 +2178,7 @@ _TELEPHONY_SAMPLE_RATE = 8000
 
 
 def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_name: str,
-               is_phone: bool = False):
+               is_phone: bool = False, sarvam_latency_lab: bool = False):
     """Same fallback pattern as _build_stt, for TTS. Returns (tts, provider)
     — provider identifies the active TTS family, telling the caller which
     update_options kwarg shape to use for mid-call prosody/language updates
@@ -2427,6 +2435,16 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         if speaker.startswith((_GOOGLE_VOICE_PREFIX, _GOOGLE_31_VOICE_PREFIX, _ELEVENLABS_VOICE_PREFIX, _ELEVENLABS_V3_VOICE_PREFIX))
         else speaker
     )
+    # Sarvam's current LiveKit production recipe uses a smaller 30-character
+    # buffer and linear PCM at the transport's native sample rate. Apply it
+    # only to the lab worker until the measured p50/p95 and interruption rate
+    # justify promoting it to production.
+    sarvam_lab_options = {
+        "min_buffer_size": 30,
+        "max_chunk_length": 150,
+        "output_audio_codec": "linear16",
+        "speech_sample_rate": _TELEPHONY_SAMPLE_RATE if is_phone else 24000,
+    } if sarvam_latency_lab else {}
     sarvam_tts = sarvam.TTS(
         target_language_code=reply_language,
         # v2 is retired vendor-side; v3 is the only model left.
@@ -2435,12 +2453,13 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             sarvam_speaker, (voice_catalog.get_voice(speaker) or {}).get("gender")
         ),
         **tone,
+        **sarvam_lab_options,
     )
     # The primary Sarvam voice — the one a tenant on shubh/priya actually
     # hears, so the ~300ms this saves lands on their first spoken word.
     _prewarm_provider(sarvam_tts, "sarvam TTS")
     _use_clause_tokenizer(sarvam_tts, "sarvam TTS")
-    if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
+    if sarvam_latency_lab or _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
         return sarvam_tts, "sarvam"
     # Same streaming fix as the two branches above — see the comment on the
     # google-native branch for why PatchedGeminiTTS applies here too.
@@ -2555,6 +2574,7 @@ class RealEstateAgent(Agent):
         # explicitly rather than read from call_context, which is a LOCAL of
         # entrypoint() and not in scope here — reading it crashed every call.
         call_type: str | None = None,
+        sarvam_latency_lab: bool = False,
     ) -> None:
         # Set FIRST, before any of the prompt assembly below can read it.
         # It was originally assigned further down, next to _welcome_message,
@@ -2564,6 +2584,7 @@ class RealEstateAgent(Agent):
         # cut the line. A constructor that reads its own attributes out of
         # order fails on every call, not on an edge case.
         self._direction = (direction or "").strip().lower()
+        self._sarvam_latency_lab = sarvam_latency_lab
         # Dashboard-managed settings (agents table, edited via the web UI)
         # override the code defaults, so prompt/voice/model/KB changes apply
         # on the next call without a redeploy. Missing table or empty fields
@@ -3101,6 +3122,7 @@ class RealEstateAgent(Agent):
         tts, tts_provider = _build_tts(
             reply_language, voice_value, base_tone, tone_name,
             is_phone=(call_type or "") == "phone",
+            sarvam_latency_lab=self._sarvam_latency_lab,
         )
         agent_tools = _build_tools(config)
         _model_name = config.get("model") or "gpt-4.1-mini"
@@ -3131,6 +3153,7 @@ class RealEstateAgent(Agent):
             stt=None if self._is_realtime else _build_stt(
                 _speech_context_prompt(config), reply_language,
                 is_phone=(call_type or "") == "phone",
+                sarvam_latency_lab=self._sarvam_latency_lab,
             ),
             # The public demo is judged turn-by-turn. A hard generation cap
             # prevents a missed prompt instruction from becoming a spoken
@@ -4890,6 +4913,7 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "test_scenario_id": None,
         "test_scenario_key": "",
         "test_scenario_name": "",
+        "pipeline_profile": "",
         # Set only by rooms we create directly for a call we ourselves placed
         # (see the new outbound-dial flow) - a real inbound call arriving via
         # the shared SIP trunk never has this in its room metadata, so the
@@ -4935,6 +4959,7 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "test_scenario_id": int(meta["test_scenario_id"]) if meta.get("test_scenario_id") is not None else None,
         "test_scenario_key": str(meta.get("test_scenario_key") or "")[:80],
         "test_scenario_name": str(meta.get("test_scenario_name") or "")[:120],
+        "pipeline_profile": str(meta.get("pipeline_profile") or "")[:40],
         # Campaign-dial personalization (see livekit_sip.tag_newest_room) —
         # substituted into {{company}}/{{custom.X}} tokens in the agent's own
         # prompt below, right before RealEstateAgent is constructed.
@@ -5125,6 +5150,7 @@ async def entrypoint(ctx: JobContext) -> None:
     _t0 = time.monotonic()
     logger.info("starting session in room %s", ctx.room.name)
     call_context = _call_context_from_job(ctx)
+    sarvam_latency_lab = call_context.get("pipeline_profile") == _SARVAM_LATENCY_PROFILE
     # The agent-config lookup is a synchronous psycopg call — run it in a
     # worker thread so it overlaps with connecting to the room and waiting
     # for the caller below, instead of blocking this process's event loop
@@ -5323,6 +5349,23 @@ async def entrypoint(ctx: JobContext) -> None:
         config = {**(config or {}), "language": _requested_language}
         cfg = config
         logger.info("demo language override -> %s (room=%s)", _requested_language, ctx.room.name)
+    if sarvam_latency_lab:
+        # Reuse the platform demo's prompt, tools and knowledge, but pin all
+        # three conversational providers for a fair end-to-end Sarvam test.
+        # This is worker-local configuration, never persisted to the agent row.
+        config = {
+            **(config or {}),
+            "model": "sarvam/sarvam-105b-conversations",
+            "voice": "simran",
+            "language": _requested_language or "hi-IN",
+            "ambient_noise": "off",
+        }
+        cfg = config
+        logger.info(
+            "Sarvam latency profile active: STT=saaras:v3-realtime LLM=sarvam-105b-conversations "
+            "TTS=bulbul:v3/simran channel=%s room=%s",
+            call_context.get("call_type"), ctx.room.name,
+        )
     def _record_eot_probability(probability: float, extra: dict) -> None:
         """Called for every end-of-turn prediction, before the framework acts
         on it. Logged as well as stored: the log line is what makes a single
@@ -5375,6 +5418,7 @@ async def entrypoint(ctx: JobContext) -> None:
         call_context["visitor_phone"],
         direction=call_context.get("direction"),
         call_type=call_context.get("call_type"),
+        sarvam_latency_lab=sarvam_latency_lab,
     )
     _agent_ready_ms = round((time.monotonic() - _t0) * 1000)
     logger.info("[latency] RealEstateAgent() constructed at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
@@ -5386,6 +5430,7 @@ async def entrypoint(ctx: JobContext) -> None:
         "lead_data": lead_data,
         "campaign_contact_id": call_context.get("campaign_contact_id"),
         "campaign_id": call_context.get("campaign_id"),
+        "pipeline_profile": call_context.get("pipeline_profile") or "",
         # Set True by capture_platform_lead/log_lead once either succeeds —
         # lets on_user_turn_completed's farewell check tell a captured lead
         # apart from one that's known but never got saved (call 779).

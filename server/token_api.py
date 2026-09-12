@@ -307,6 +307,7 @@ def _client_ip(request: Request) -> str:
 # deployment exactly, or rooms created with this explicit dispatch will
 # never get an agent.
 _PLATFORM_DEMO_AGENT_NAME = "platform-demo"
+_SARVAM_LATENCY_PROFILE = "sarvam-livekit"
 
 
 # LiveKit's default empty_timeout is 300s, which is why an abandoned prewarm
@@ -326,13 +327,25 @@ _DEMO_SELECTABLE_LANGUAGES = frozenset(voice_catalog.GOOGLE_TTS_LANGUAGES) | fro
 )
 
 
-def _demo_dispatch_kwargs(agent_id: int | None, *, default_is_demo: bool = False) -> dict:
+def _demo_dispatch_kwargs(
+    agent_id: int | None,
+    *,
+    default_is_demo: bool = False,
+    pipeline_profile: str = "",
+) -> dict:
     """kwargs to spread into CreateRoomRequest so this room explicitly
     dispatches to the dedicated demo agent when agent_id is the platform
     demo agent — every other room is left on implicit/default dispatch
     (unchanged behavior) so tenant traffic never touches this at all.
     default_is_demo covers /token's agentId=None case, which agent/db.py's
     get_agent_config resolves to the platform-demo agent by default."""
+    if pipeline_profile == _SARVAM_LATENCY_PROFILE:
+        # LiveKit currently caps this project at two Cloud Agents. The lab is
+        # therefore an isolated per-room pipeline inside the already
+        # dedicated platform-demo worker; metadata selects it only for this
+        # server-validated public demo profile. Tenant traffic is handled by
+        # the other (implicit-dispatch) worker and cannot reach this branch.
+        return {"agents": [RoomAgentDispatch(agent_name=_PLATFORM_DEMO_AGENT_NAME)]}
     is_demo = calls_db.is_public_demo_agent(agent_id) if agent_id is not None else default_is_demo
     if not is_demo:
         return {}
@@ -352,6 +365,11 @@ class TokenRequest(BaseModel):
     # catalog below and only ever applied to a demo agent (see agent/main.py's
     # entrypoint), so this cannot repoint a tenant's configured language.
     language: str | None = None
+    # Private A/B lane used from the marketing demo with
+    # ?pipeline=sarvam-livekit. It dispatches to the dedicated platform-demo
+    # worker, where this room alone gets Sarvam STT, LLM and TTS. The normal
+    # demo profile and every tenant call remain unchanged.
+    pipelineProfile: str | None = None
     # Conversation Testing Lab correlation. These are accepted only from an
     # authenticated dashboard session whose account owns agentId; public demo
     # callers cannot tag themselves as internal tests.
@@ -405,6 +423,15 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
     # A published industry-demo slug resolves to its agent server-side and
     # takes precedence over any agentId in the body — the slug is vouched
     # for (owner-set, live), a raw id from an unauthenticated caller is not.
+    pipeline_profile = (req.pipelineProfile or "").strip()
+    if pipeline_profile and pipeline_profile != _SARVAM_LATENCY_PROFILE:
+        raise HTTPException(400, "Unknown pipeline profile")
+    # Keep this public experiment pinned to the platform demo. It must never
+    # become a way for an unauthenticated caller to change a tenant or
+    # industry agent's runtime/provider configuration.
+    if pipeline_profile and (req.agentId is not None or req.demoSlug):
+        raise HTTPException(400, "The latency profile is available only on the platform demo")
+
     agent_id = req.agentId
     if req.demoSlug:
         agent_id = calls_db.agent_id_for_public_demo_slug(req.demoSlug)
@@ -457,6 +484,8 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
             raise HTTPException(400, "Choose a Testing Lab scenario.")
         meta["test_run_id"] = run_id
         meta["test_scenario_name"] = scenario_name
+    if pipeline_profile:
+        meta["pipeline_profile"] = pipeline_profile
     metadata = json.dumps(meta) if meta else None
     async with api.LiveKitAPI() as lkapi:
         await lkapi.room.create_room(
@@ -464,7 +493,11 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
                 name=req.room,
                 metadata=metadata,
                 empty_timeout=_ROOM_EMPTY_TIMEOUT_S,
-                **_demo_dispatch_kwargs(agent_id, default_is_demo=agent_id is None),
+                **_demo_dispatch_kwargs(
+                    agent_id,
+                    default_is_demo=agent_id is None,
+                    pipeline_profile=pipeline_profile,
+                ),
             )
         )
 

@@ -15,6 +15,9 @@ export async function fetchLiveKitToken(
    * the voice catalog, and only honoured for demo agents. */
   language?: string,
   testContext?: { runId: string; scenarioId?: number; scenarioKey?: string },
+  /** Isolated provider A/B lane. The server accepts only the named public
+   * Sarvam lab profile; normal demo and tenant calls remain unchanged. */
+  pipelineProfile?: 'sarvam-livekit',
 ): Promise<TokenResponse> {
   const res = await fetch('/api/token', {
     method: 'POST',
@@ -28,6 +31,7 @@ export async function fetchLiveKitToken(
       testRunId: testContext?.runId,
       testScenarioId: testContext?.scenarioId,
       testScenarioKey: testContext?.scenarioKey,
+      pipelineProfile,
     }),
   })
   if (!res.ok) {
