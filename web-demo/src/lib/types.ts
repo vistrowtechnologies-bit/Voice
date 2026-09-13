@@ -285,6 +285,8 @@ export interface AgentConfig {
   // Display name for `voice`, resolved server-side from the catalog. Never
   // the raw vendor string — see calls_db._agent_dict.
   voiceName?: string
+  /** Speech recognition engine. Independent from the LLM and speaking voice. */
+  sttProvider: 'sarvam' | 'google-chirp3'
   language: string
   status: 'live' | 'paused'
   systemPrompt: string

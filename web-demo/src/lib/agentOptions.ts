@@ -277,7 +277,9 @@ export const MODEL_OPTIONS = [
 // becomes readonly never[], which makes modelLabel's compatibility lookup fail
 // the TypeScript production build (tsc -b, which `tsc --noEmit` does not
 // reproduce - that difference shipped a broken Vercel build once already).
-export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: string }[] = []
+export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: string }[] = [
+  { value: 'gpt-5-nano', label: 'Vistrow Nano Lab', tag: 'Experimental · lowest OpenAI cost; measure quality before rollout' },
+]
 
 const PARKED_MODELS = [
   { value: 'gemini-live', label: 'Gemini Live 2.5 (Preview)' },

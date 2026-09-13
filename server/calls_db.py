@@ -204,6 +204,10 @@ CREATE TABLE IF NOT EXISTS agents (
     description TEXT DEFAULT '',
     model TEXT DEFAULT 'sarvam/sarvam-105b-conversations',
     voice TEXT DEFAULT 'google:chirp3:Aoede',
+    -- Speech recognition is independent from the LLM and TTS. Keep Sarvam
+    -- as the default for Indian names/code-mixing; Google Chirp 3 is an
+    -- explicit comparison/alternative selected from the agent editor.
+    stt_provider TEXT DEFAULT 'sarvam',
     language TEXT DEFAULT 'hi-IN',
     status TEXT DEFAULT 'live',
     system_prompt TEXT DEFAULT '',
@@ -1270,6 +1274,7 @@ def init_tables() -> None:
             # agents keep whatever they already chose - a DEFAULT only applies
             # to rows inserted without the column.
             conn.execute("ALTER TABLE agents ALTER COLUMN voice SET DEFAULT 'google:chirp3:Aoede'")
+            conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS stt_provider TEXT DEFAULT 'sarvam'")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TEXT")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'password'")
             # Existing accounts predate verified-email onboarding and must
@@ -3234,7 +3239,7 @@ def analytics(account_id: int) -> dict:
 # ---------------------------------------------------------------- agents
 
 _AGENT_FIELDS = (
-    "name", "description", "model", "voice", "language", "status",
+    "name", "description", "model", "voice", "stt_provider", "language", "status",
     "system_prompt", "kb_id", "tone", "is_platform_demo",
     "first_speaker", "welcome_message", "interruption_sensitivity",
     "silence_reminder_ms", "silence_reminder_max", "end_call_on_silence_ms",
@@ -3251,6 +3256,7 @@ _AGENT_BOOL_FIELDS = frozenset({"is_platform_demo", "memory_enabled", "live_cata
 _AGENT_JSON_FIELDS = frozenset({"custom_functions", "post_call_fields", "crm_integration_keys"})
 # camelCase (API) -> snake_case (column) for every field whose names differ.
 _AGENT_CAMEL_TO_SNAKE = {
+    "sttProvider": "stt_provider",
     "systemPrompt": "system_prompt",
     "kbId": "kb_id",
     "isPlatformDemo": "is_platform_demo",
@@ -3313,6 +3319,7 @@ def _agent_dict(row: dict) -> dict:
         # the catalog lives on this side; falls back to the raw string only
         # for a voice no longer in the catalog, which the UI then softens.
         "voiceName": (voice_catalog.get_voice(row["voice"]) or {}).get("name") or row["voice"],
+        "sttProvider": _row_get(row, "stt_provider") or "sarvam",
         "language": row["language"],
         "status": row["status"],
         "systemPrompt": row["system_prompt"],
@@ -3459,8 +3466,8 @@ def create_agent(data: dict, account_id: int) -> dict:
                 )
         with conn:
             cur = conn.execute(
-                "INSERT INTO agents (account_id, name, description, model, voice, language, system_prompt) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "INSERT INTO agents (account_id, name, description, model, voice, stt_provider, language, system_prompt) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                 (
                     account_id,
                     data.get("name", "Unnamed agent"),
@@ -3476,6 +3483,7 @@ def create_agent(data: dict, account_id: int) -> dict:
                     # keep whatever they were configured with.
                     data.get("model", "sarvam/sarvam-105b-conversations"),
                     data.get("voice", "google:chirp3:Aoede"),
+                    data.get("sttProvider", "sarvam"),
                     data.get("language", "hi-IN"),
                     data.get("systemPrompt", ""),
                 ),

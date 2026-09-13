@@ -128,6 +128,7 @@ function AgentEditorForm({
     model: agent.model,
     noiseCancellation: agent.noiseCancellation ?? '',
     voice: agent.voice,
+    sttProvider: agent.sttProvider || 'sarvam',
     language: agent.language,
     status: agent.status,
     systemPrompt: agent.systemPrompt,
@@ -333,6 +334,19 @@ function AgentEditorForm({
                 </option>
               ))}
             </select>
+          </Field>
+          <Field label="Speech recognition">
+            <select
+              value={form.sttProvider}
+              onChange={(e) => set('sttProvider', e.target.value as AgentForm['sttProvider'])}
+              className={inputCls}
+            >
+              <option value="sarvam">Vistrow Indic — recommended for Indian languages</option>
+              <option value="google-chirp3">Google Chirp 3 — comparison / fixed language</option>
+            </select>
+            <p className="mt-1 text-xs text-text-muted">
+              Recognition, reasoning, and voice are tested separately. Google Chirp 3 recognition is pinned to the default language; Vistrow Indic is better suited to Indian names and code-mixed speech.
+            </p>
           </Field>
           <Field label="Voice delivery">
             <select value={form.tone} onChange={(e) => set('tone', e.target.value as AgentForm['tone'])} className={inputCls}>

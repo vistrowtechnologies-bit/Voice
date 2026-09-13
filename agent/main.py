@@ -1843,7 +1843,8 @@ def _prewarm_provider(inst, what: str):
 
 
 def _build_stt(speech_context: str | None = None, reply_language: str | None = None,
-               is_phone: bool = True, sarvam_latency_lab: bool = False):
+               is_phone: bool = True, sarvam_latency_lab: bool = False,
+               stt_provider: str = "sarvam"):
     """Sarvam saaras:v3 is the primary — Indian-language quality/latency it
     was actually chosen for. If GOOGLE_APPLICATION_CREDENTIALS_JSON is set,
     wraps it in a FallbackAdapter so a Sarvam outage or exhausted credit
@@ -1871,6 +1872,29 @@ def _build_stt(speech_context: str | None = None, reply_language: str | None = N
     #
     # vad_min_silence_ms is per channel: 500ms on telephony, 300ms in the
     # browser, where the wideband path needs less confirmation.
+    if stt_provider == "google-chirp3":
+        if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
+            logger.warning(
+                "Google Chirp 3 STT selected but Google credentials are unavailable; using Sarvam STT"
+            )
+        else:
+            # Chirp 3 supports streaming recognition and a low-latency
+            # endpointing sensitivity. Pin the known agent language: Google
+            # accepts one locale here, while auto-detection across a broad
+            # language set caused the same cross-script errors we removed
+            # from the Sarvam path. asia-southeast1 is GA and is the nearest
+            # GA region to our India worker; it remains env-overridable.
+            google_language = to_google_code(reply_language or "hi-IN")
+            return google.STT(
+                languages=[google_language],
+                detect_language=False,
+                model="chirp_3",
+                location=os.environ.get("GOOGLE_SPEECH_LOCATION", "asia-southeast1"),
+                endpointing_sensitivity="ENDPOINTING_SENSITIVITY_SHORT",
+                enable_voice_activity_events=True,
+                credentials_info=_GOOGLE_CREDENTIALS,
+            )
+
     if sarvam_realtime_stt.enabled():
         # Sarvam's per-channel VAD table, in full. Their guide gives THREE
         # numbers per channel and only silence was set before, which is a
@@ -3154,6 +3178,7 @@ class RealEstateAgent(Agent):
                 _speech_context_prompt(config), reply_language,
                 is_phone=(call_type or "") == "phone",
                 sarvam_latency_lab=self._sarvam_latency_lab,
+                stt_provider=config.get("stt_provider") or "sarvam",
             ),
             # The public demo is judged turn-by-turn. A hard generation cap
             # prevents a missed prompt instruction from becoming a spoken
@@ -5486,6 +5511,17 @@ async def entrypoint(ctx: JobContext) -> None:
         # Raw per-turn timings are captured from LiveKit's provider metrics
         # below and persisted with the call for tenant/admin p50/p95 tuning.
         "latency_metrics": {
+            # Stable configured identities for like-for-like comparisons.
+            # LiveKit's provider metrics below record the provider that
+            # actually answered (including failover); this block records what
+            # the operator selected so the comparison script can detect a
+            # mismatch instead of accidentally crediting the fallback.
+            "stack": {
+                "stt": cfg.get("stt_provider") or "sarvam",
+                "llm": getattr(agent, "_model", "") or "",
+                "tts": getattr(agent, "_voice", "") or "",
+                "ttsProvider": getattr(agent, "_tts_provider", "") or "",
+            },
             "eouMs": [],
             # The end-of-turn probability behind each eouMs. A turn scoring
             # below the language's unlikely_threshold is what escalates the
@@ -5510,6 +5546,12 @@ async def entrypoint(ctx: JobContext) -> None:
             "onTurnCompletedMs": [],
             "llmTtftMs": [],
             "ttsTtfbMs": [],
+            # End-user latency measured from the caller's actual
+            # speaking -> listening transition until reply audio starts.
+            # This is intentionally captured from state events instead of
+            # adding independent provider arrays whose samples can be offset
+            # by greetings, cancellations, and retries.
+            "callerStopToFirstAudioMs": [],
             "providers": [],
         },
     }
@@ -6061,8 +6103,13 @@ async def entrypoint(ctx: JobContext) -> None:
         # can fall between two samples entirely. An event cannot be missed.
         if str(ev.new_state) == "speaking":
             userdata["speech_started_at"] = time.monotonic()
+            # A resumed/interjecting caller invalidates the previous stop;
+            # only the final stop before the next audible reply is measured.
+            userdata.pop("pending_caller_stop_at", None)
         elif userdata.get("speech_started_at") and str(ev.new_state) != "speaking":
-            userdata["speech_ended_at"] = time.monotonic()
+            stopped_at = time.monotonic()
+            userdata["speech_ended_at"] = stopped_at
+            userdata["pending_caller_stop_at"] = stopped_at
         _record_diagnostic(
             "state",
             "caller",
@@ -6125,6 +6172,18 @@ async def entrypoint(ctx: JobContext) -> None:
 
     def _on_agent_state_changed(ev) -> None:
         userdata["agent_state"] = str(ev.new_state)
+        if str(ev.new_state) == "speaking" and str(ev.old_state) != "speaking":
+            stopped_at = userdata.pop("pending_caller_stop_at", None)
+            if stopped_at is not None:
+                perceived_ms = round(max(0.0, time.monotonic() - stopped_at) * 1000)
+                userdata["latency_metrics"]["callerStopToFirstAudioMs"].append(perceived_ms)
+                _record_diagnostic(
+                    "metric",
+                    "turn",
+                    "Reply audio reached caller",
+                    "warning" if perceived_ms >= 1500 else "ok",
+                    durationMs=perceived_ms,
+                )
         _record_diagnostic(
             "state",
             "agent",

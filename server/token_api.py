@@ -2787,12 +2787,25 @@ def list_agents(user: dict = Depends(current_user)) -> list[dict]:
 # (9/12 each) and is roughly twice as fast on live calls — llmTtft 450-500ms
 # median against 1,058ms over eight comparable calls.
 _ADMIN_ONLY_MODEL_PREFIXES = ("groq/", "gemini-live")
+_ADMIN_ONLY_MODELS = {"gpt-5-nano"}
 
 
 def _guard_admin_only_model(data: dict | None, account_id: int) -> None:
     model = str((data or {}).get("model") or "")
-    if model.startswith(_ADMIN_ONLY_MODEL_PREFIXES) and not calls_db.is_platform_owner(account_id):
+    if (model.startswith(_ADMIN_ONLY_MODEL_PREFIXES) or model in _ADMIN_ONLY_MODELS) and not calls_db.is_platform_owner(account_id):
         raise HTTPException(400, "That model is available only to the Vistrow admin account.")
+
+
+def _guard_stt_provider(data: dict | None) -> None:
+    """Reject misspelled/forged provider values before they reach a call.
+
+    The runtime deliberately falls back when Google credentials are missing,
+    but an unknown value must not silently behave like Sarvam and make an A/B
+    result look valid when it was not.
+    """
+    provider = (data or {}).get("sttProvider", (data or {}).get("stt_provider"))
+    if provider is not None and provider not in {"sarvam", "google-chirp3"}:
+        raise HTTPException(400, "Unsupported speech-recognition provider.")
 
 
 def _guard_voice_tier(data: dict | None, account_id: int) -> None:
@@ -2822,6 +2835,7 @@ def _guard_voice_tier(data: dict | None, account_id: int) -> None:
 
 @app.post("/agents")
 def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    _guard_stt_provider(data)
     _guard_voice_tier(data, user["account_id"])
     _guard_admin_only_model(data, user["account_id"])
     try:
@@ -2832,6 +2846,7 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
 
 @app.patch("/agents/{agent_id}")
 def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    _guard_stt_provider(data)
     _guard_voice_tier(data, user["account_id"])
     _guard_admin_only_model(data, user["account_id"])
     for fields, feature in ((('kbId', 'kb_id'), 'knowledge'),
