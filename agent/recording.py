@@ -15,7 +15,6 @@ surface to the caller. Every public function swallows its own exceptions.
 
 import asyncio
 import audioop
-import io
 import logging
 import os
 import tempfile
@@ -221,8 +220,7 @@ def upload_recording(local_path: str, account_id: int | None, call_id: int | Non
             region_name=region,
         )
         key = f"recordings/{account_id or 0}/{call_id}.wav"
-        with open(local_path, "rb") as f:
-            client.upload_fileobj(io.BytesIO(f.read()), bucket, key, ExtraArgs={"ContentType": "audio/wav"})
+        client.upload_file(local_path, bucket, key, ExtraArgs={"ContentType": "audio/wav"})
         logger.info("recording: uploaded to B2 key=%s", key)
         return key
     except Exception:

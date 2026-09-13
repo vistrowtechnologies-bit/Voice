@@ -7304,6 +7304,18 @@ if __name__ == "__main__":
     # marketing site's own demo traffic its own permanently-warm replica,
     # isolated from autoscaling driven by tenant call volume.
     agent_name = os.environ.get("LIVEKIT_AGENT_NAME", "")
+    shutdown_process_timeout = float(os.environ.get("LIVEKIT_SHUTDOWN_PROCESS_TIMEOUT", "60"))
     cli.run_app(
-        WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=_prewarm, num_idle_processes=4, agent_name=agent_name)
+        WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            prewarm_fnc=_prewarm,
+            num_idle_processes=4,
+            agent_name=agent_name,
+            # The default is 10s. That was too tight for customer widget
+            # calls where shutdown must save the row, finalize a stereo WAV,
+            # upload it to B2, persist recording_key, and finish CRM delivery.
+            # Missing recordings on calls 956 and 962 had good call rows and
+            # CRM status, but recording_key stayed NULL.
+            shutdown_process_timeout=shutdown_process_timeout,
+        )
     )
