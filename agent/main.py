@@ -2634,6 +2634,12 @@ class RealEstateAgent(Agent):
         # first generation of a call, which is the greeting — that one has no
         # caller turn to build guidance from anyway.
         self._pending_turn_directive = ""
+        # Snapshot of lead_data values, taken each turn, to tell a
+        # CORRECTION (a fact's value actually changing) apart from routine
+        # progress (a new fact captured, funnel stage advancing, the
+        # objective text moving on) — see the invalidation comment below
+        # for why that distinction is the whole fix.
+        self._last_lead_data_snapshot: dict = {}
         # Starts allowed (>=4) so the opening line isn't penalised for having
         # no prior turn to compare against. Updated once per turn in
         # on_user_turn_completed from the previous reply, then read by the
@@ -3824,6 +3830,16 @@ class RealEstateAgent(Agent):
                 )
             _userdata["_eot_turn_preds"] = []
         _lead_data = _userdata.get("lead_data") or {}
+        # A value that existed last turn and is DIFFERENT this turn is a
+        # correction — the case that actually needs the preemptive run
+        # thrown away (call 954). A key that is new (was empty, now has a
+        # value) is routine progress, not a correction, and must NOT force
+        # it — see the invalidation comment further down.
+        _fact_corrected = any(
+            prev and _lead_data.get(k) and _lead_data[k] != prev
+            for k, prev in self._last_lead_data_snapshot.items()
+        )
+        self._last_lead_data_snapshot = dict(_lead_data)
         # Recomputed EVERY turn (not just when true) so a single bad
         # transcript cannot leave later, good facts marked unconfirmed.
         # Read by log_lead in tools.py when it decides a fact's status.
@@ -4489,13 +4505,14 @@ class RealEstateAgent(Agent):
         # the LAST system message before generation, so stale facts arrive
         # with the highest attention in the whole context.
         #
-        # So: keep the win where the directive did not change, and give it up
-        # where it did. Adding the changed text to turn_ctx makes
-        # agent_activity's is_equivalent check fail, which throws the stale
-        # preemptive run away and regenerates against the new facts. It is
-        # duplicated in that generation (llm_node attaches it as well) but
-        # both copies are current, which is the point.
-        _previous_directive = self._pending_turn_directive
+        # So: keep the win where nothing was corrected, and give it up where
+        # it was. Adding the changed text to turn_ctx makes agent_activity's
+        # is_equivalent check fail, which throws the stale preemptive run
+        # away and regenerates against the new facts. It is duplicated in
+        # that generation (llm_node attaches it as well) but both copies are
+        # current, which is the point. See _fact_corrected above for what
+        # actually triggers this now, and why comparing the whole directive
+        # text stopped working.
         self._pending_turn_directive = (
             _turn_shape
             + "\n\n"
@@ -4523,7 +4540,26 @@ class RealEstateAgent(Agent):
             # while the Treetopia row was in its context, and a price four
             # times the real one. Ground truth gets the final word.
         )
-        if self._pending_turn_directive != _previous_directive:
+        # NOT "if the directive changed at all". _facts_reminder_text and
+        # _objective_text change almost every turn in a real conversation —
+        # a new fact captured, the funnel stage advancing — so that
+        # condition was true on nearly every turn, which is preemptive
+        # generation's exact invalidation path. Phone call this session:
+        # `preemptive generation invalidated` fired on 5 of 6 turns, one
+        # turn cost 8.15s end to end, and the caller hung up. The fix this
+        # was meant to be undid itself the moment a real conversation with
+        # moving facts hit it — the 09-10 test that verified 6/6 kept used
+        # scripted turns whose facts never changed, so it never exercised
+        # this.
+        #
+        # _fact_corrected, computed above, is the actual failure mode from
+        # call 954: a value that changes is a correction and must not be
+        # spoken from stale memory. A value that appears for the first
+        # time is routine progress — the preemptive run simply does not
+        # have it yet, which is not wrong, only one turn behind, exactly
+        # the bet preemptive generation already makes on an interim
+        # transcript.
+        if _fact_corrected:
             turn_ctx.add_message(role="system", content=self._pending_turn_directive)
 
         if emotion != self._current_emotion:
