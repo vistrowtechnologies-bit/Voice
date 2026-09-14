@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from './Icon'
+import { trackMarketingCta } from '../lib/analytics'
 import { hostBucket } from '../lib/hostBuckets'
 
 export function SectionEyebrow({ children }: { children: string }) {
@@ -20,6 +21,7 @@ export function TalkToArthaButton({ className }: { className?: string }) {
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault()
+    trackMarketingCta('talk_to_artha_live', 'marketing_talk_to_artha_button')
     const el = document.getElementById('live-demo')
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -113,6 +115,7 @@ export function CTABand({
             <TalkToArthaButton className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-dark px-7 py-3.5 text-sm font-bold text-white shadow-[0_14px_36px_-12px_rgba(168,85,247,0.7)] transition-transform hover:-translate-y-0.5" />
             <Link
               to="/contact"
+              onClick={() => trackMarketingCta('book_demo', 'cta_band')}
               className="rounded-full border border-border bg-surface/80 px-7 py-3.5 text-center text-sm font-bold text-text backdrop-blur transition-colors hover:border-primary hover:text-primary"
             >
               Book a demo
@@ -152,6 +155,7 @@ export function PageHero({
           <TalkToArthaButton />
           <Link
             to="/contact"
+            onClick={() => trackMarketingCta('book_demo', 'page_hero_center')}
             className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
           >
             Book a demo
@@ -171,6 +175,7 @@ export function PageHero({
           <TalkToArthaButton />
           <Link
             to="/contact"
+            onClick={() => trackMarketingCta('book_demo', 'page_hero_split')}
             className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
           >
             Book a demo

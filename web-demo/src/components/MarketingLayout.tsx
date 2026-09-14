@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Icon } from './Icon'
 import { BRAND } from '../lib/brand'
+import { trackMarketingCta } from '../lib/analytics'
 import { NAV, FOOTER_COLUMNS, CONTACT_EMAIL, CONTACT_PHONE } from '../lib/marketingContent'
 import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
@@ -246,7 +247,10 @@ function MobileNav({ onClose }: { onClose: () => void }) {
           </NavLink>
           <NavLink
             to="/contact"
-            onClick={onClose}
+            onClick={() => {
+              trackMarketingCta('book_demo', 'mobile_header')
+              onClose()
+            }}
             className="rounded-full bg-gradient-to-br from-primary to-primary-dark px-5 py-2.5 text-center text-sm font-bold text-white"
           >
             Book a demo
@@ -305,6 +309,7 @@ function Header() {
             </NavLink>
             <NavLink
               to="/contact"
+              onClick={() => trackMarketingCta('book_demo', 'desktop_header')}
               className="hidden rounded-full bg-gradient-to-br from-primary to-primary-dark px-5 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90 sm:block"
             >
               Book a demo

@@ -11,7 +11,7 @@ import {
   recordDemoCall,
 } from '../lib/demoCallCap'
 import { fetchLiveKitToken, randomId, submitDemoFeedback } from '../lib/livekit'
-import { trackQualifyLead } from '../lib/analytics'
+import { trackMarketingCta, trackQualifyLead } from '../lib/analytics'
 import { useOrchestratorCall } from '../lib/orchestratorCall'
 
 type Phase = 'idle' | 'consent' | 'connecting' | 'active' | 'active-orchestrator' | 'denied' | 'capped' | 'unreachable' | 'feedback'
@@ -504,6 +504,7 @@ export function DemoOrbCard({
             {exhausted && (
               <Link
                 to="/contact"
+                onClick={() => trackMarketingCta('book_demo', 'demo_card_exhausted')}
                 className="mt-4 rounded-full bg-primary px-5 py-2 text-xs font-bold text-bg transition-opacity hover:opacity-90"
               >
                 Book a demo

@@ -3,6 +3,7 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout, NavLink } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { SectionEyebrow } from '../../components/MarketingBits'
+import { trackMarketingCta } from '../../lib/analytics'
 import { PLANS, SHARED_PLAN_FEATURES, planHighlights } from '../../lib/plans'
 
 const FAQ = [
@@ -72,7 +73,13 @@ export function Pricing() {
                 {planHighlights(plan).map((feat) => <li key={feat} className="flex items-start gap-2 text-sm text-text-muted"><Icon name="check_circle" className="mt-0.5 text-[16px] text-cyan" />{feat}</li>)}
               </ul>
               <p className="mt-5 text-xs text-text-muted">{plan.key === 'starter' ? 'Need campaigns, CRM integration, or a live catalog? Choose Growth.' : plan.key === 'growth' ? 'Need API access or premium voices? Choose Scale.' : 'Need more agents or capacity? Talk to us about a custom plan.'}</p>
-              <NavLink to="/contact" className="mt-6 rounded-full border border-primary px-5 py-3 text-center text-sm font-bold text-primary">Discuss {plan.name}</NavLink>
+              <NavLink
+                to="/contact"
+                onClick={() => trackMarketingCta('talk_to_sales', `pricing_plan_${plan.key}`)}
+                className="mt-6 rounded-full border border-primary px-5 py-3 text-center text-sm font-bold text-primary"
+              >
+                Discuss {plan.name}
+              </NavLink>
             </div>
           ))}
         </div>
@@ -98,6 +105,7 @@ export function Pricing() {
           </p>
           <NavLink
             to="/contact"
+            onClick={() => trackMarketingCta('talk_to_sales', 'pricing_custom')}
             className="mt-6 inline-block rounded-full bg-gradient-to-br from-primary to-primary-dark px-6 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
           >
             Talk to sales

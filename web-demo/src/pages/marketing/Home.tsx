@@ -9,6 +9,7 @@ import { CTABand, TalkToArthaButton } from '../../components/MarketingBits'
 import { RotatingGreeting, ScriptMarquee } from '../../components/BharatBits'
 import { Reveal } from '../../components/Reveal'
 import arthaAvatar from '../../assets/artha-avatar.png'
+import { trackMarketingCta } from '../../lib/analytics'
 import {
   HOME_FEATURES,
   HOW_IT_WORKS,
@@ -173,6 +174,7 @@ export function Home() {
             <TalkToArthaButton />
             <Link
               to="/contact"
+              onClick={() => trackMarketingCta('book_demo', 'home_hero')}
               className="rounded-full border border-border px-6 py-3 text-sm font-bold text-text transition-colors hover:border-primary"
             >
               Book a demo
@@ -490,8 +492,20 @@ export function Home() {
           ))}
         </div>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link to="/signup" className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-white hover:opacity-90">Join public beta</Link>
-          <Link to="/contact" className="rounded-full border border-border px-6 py-3 text-sm font-bold hover:border-primary">Talk to us about volume</Link>
+          <Link
+            to="/signup"
+            onClick={() => trackMarketingCta('join_beta', 'home_bottom')}
+            className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-white hover:opacity-90"
+          >
+            Join public beta
+          </Link>
+          <Link
+            to="/contact"
+            onClick={() => trackMarketingCta('talk_to_sales', 'home_bottom')}
+            className="rounded-full border border-border px-6 py-3 text-sm font-bold hover:border-primary"
+          >
+            Talk to us about volume
+          </Link>
         </div>
       </section>
 
