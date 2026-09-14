@@ -105,8 +105,8 @@ CATALOG: list[dict] = [
     {"value": "google:charon", "name": "Arin", "gender": "male", "tier": "premium", "multilingual": True, "note": "One voice, every language · switches mid-call"},
     # Explicit opt-in test voices for the newer preview model. Keep a distinct
     # value prefix so existing Mira/Arin agents remain on the stable 2.5 model.
-    {"value": "google31:kore", "name": "Mira Next (Preview)", "gender": "female", "tier": "standard", "multilingual": True, "preview": True, "note": "Next-generation multilingual preview · testing only"},
-    {"value": "google31:charon", "name": "Arin Next (Preview)", "gender": "male", "tier": "standard", "multilingual": True, "preview": True, "note": "Next-generation multilingual preview · testing only"},
+    {"value": "google31:kore", "name": "Mira Next (Preview)", "gender": "female", "tier": "standard", "multilingual": True, "preview": True, "note": "Prompt emotion + modulation · testing only"},
+    {"value": "google31:charon", "name": "Arin Next (Preview)", "gender": "male", "tier": "standard", "multilingual": True, "preview": True, "note": "Prompt emotion + modulation · testing only"},
     # Google Cloud Standard — locale-specific economy alternatives.
     {"value": "google:en-IN-Standard-D", "name": "Aarav (English)", "gender": "female", "tier": "lite", "force_lang": "en"},
     {"value": "google:en-IN-Standard-B", "name": "Kabir (English)", "gender": "male", "tier": "lite", "force_lang": "en"},

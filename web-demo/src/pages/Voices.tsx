@@ -428,7 +428,7 @@ export function Voices() {
             <TierGroup
               entries={previewVoices()}
               label="Vistrow Next Preview"
-              note="experimental · testing only · billed at 1x credits"
+              note="experimental · prompt emotion/modulation · billed at 1x credits"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}

@@ -2325,35 +2325,31 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             # cancel-time aclose() race that originally forced non-streaming
             # here. Not yet applied to the google-native branch below.
             google_prompt = GEMINI_TONE_PROMPTS.get(tone_name, GEMINI_TONE_PROMPTS[DEFAULT_TONE])
-            google_tts = PatchedGeminiTTS(
-                # Our own codes are Sarvam's spelling; Gemini wants or-IN for
-                # Odia and bn-BD for Bengali, and rejects od-IN/bn-IN as
-                # unknown locales. Every Gemini handoff goes through this.
-                language=to_google_code(reply_language),
-                voice_name=voice_name.capitalize(),
-                model_name=google_model,
-                credentials_info=_GOOGLE_CREDENTIALS,
+            google_tts_kwargs = {
+                "language": to_google_code(reply_language),
+                "voice_name": voice_name.capitalize(),
+                "credentials_info": _GOOGLE_CREDENTIALS,
                 **_rate,
-                # Was never wired up before — every Google voice spoke at a
-                # fixed 1.0x regardless of the agent's Tone preset, unlike
-                # Sarvam/ElevenLabs below which both already read "pace" via
-                # **tone. Same TONE_PRESETS pace values now apply here too
-                # (professional=0.95, balanced=1.0, casual=1.08).
-                speaking_rate=tone.get("pace", 1.0),
                 # Gemini-TTS' real emotion mechanism — see GEMINI_TONE_PROMPTS
                 # in emotion.py. Reinforced per-turn with the caller's
                 # detected emotion in on_user_turn_completed.
-                prompt=google_prompt,
+                "prompt": google_prompt,
+            }
+            if google_prefix != _GOOGLE_31_VOICE_PREFIX:
+                # Stable Gemini 2.5 personas intentionally follow the agent's
+                # base Tone pace. The newer 3.1 preview voices are different:
+                # their selling point is prompt-driven emotion/modulation, and
+                # adding a numeric speed override makes them feel unnaturally
+                # pace-tuned. Leave their pace to Gemini's style prompt.
+                google_tts_kwargs["speaking_rate"] = tone.get("pace", 1.0)
+            google_tts = PatchedGeminiTTS(
+                **google_tts_kwargs,
+                model_name=google_model,
             )
             fallback_model = _GOOGLE_25_MODEL if google_model == _GOOGLE_31_MODEL else _GOOGLE_31_MODEL
             google_model_fallback = PatchedGeminiTTS(
-                language=to_google_code(reply_language),
-                voice_name=voice_name.capitalize(),
                 model_name=fallback_model,
-                credentials_info=_GOOGLE_CREDENTIALS,
-                **_rate,
-                speaking_rate=tone.get("pace", 1.0),
-                prompt=google_prompt,
+                **google_tts_kwargs,
             )
             provider = "google-multilingual-31" if google_model == _GOOGLE_31_MODEL else "google-multilingual"
             return _google_fallback_tts(google_tts, google_model_fallback, google_model, reply_language, tone_name), provider
