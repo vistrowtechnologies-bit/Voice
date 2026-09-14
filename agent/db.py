@@ -96,6 +96,36 @@ _PREMIUM_MODELS = {"gpt-4.1-mini", "gemini-3.5-flash-lite", "gemini-3.6-flash"}
 _PREMIUM_PLUS_MODELS = {"gpt-4.1", "gpt-4o"}
 
 
+def log_platform_error(message: str, *, source: str = "agent", level: str = "error",
+                        account_id: int | None = None, context: str = "") -> None:
+    """Best-effort write to error_events, the table the superadmin's System
+    Health page reads.
+
+    calls_db.py's own schema comment for this table already says "the
+    backend and agent worker append here" — but nothing in agent/ ever
+    actually did. The 3+ day GCP Chirp3 billing outage (PermissionDenied on
+    every TTS call from 09-11) and the max_output_tokens truncation bug that
+    silently dropped calls both ran their whole course without a single row
+    landing here, because this function didn't exist. Call it from the few
+    real, already-deduplicated failure points (TTS provider availability
+    transitions, background fan-out failures) rather than per-call-turn
+    logging, which would flood the feed.
+
+    Must never raise: a monitoring write failing must not break the live
+    call it's reporting on, so every error here is swallowed after logging
+    locally.
+    """
+    try:
+        conn = dbconn.connect()
+        with conn:
+            conn.execute(
+                "INSERT INTO error_events (account_id, source, level, message, context) VALUES (?, ?, ?, ?, ?)",
+                (account_id, source, level, message[:500], context[:2000]),
+            )
+    except Exception:
+        logger.exception("log_platform_error: failed to write error_events row")
+
+
 def _trial_credits_exhausted(conn, account_id: int) -> bool:
     """Fail closed for exhausted unpaid/trial workspaces.
 

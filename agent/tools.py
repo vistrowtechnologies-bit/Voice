@@ -64,10 +64,15 @@ def _fan_out_in_background(context: RunContext, event: dict) -> None:
             await _publish_event(context, event)
             await _post_webhook(event)
             await _fan_out_integrations(context, event)
-        except Exception:
+        except Exception as exc:
             # Never let a webhook failure surface as a tool error: the lead is
             # already recorded in lead_data and persisted with the call.
             logger.exception("background lead fan-out failed")
+            db.log_platform_error(
+                "background lead fan-out failed",
+                source="agent_fanout", account_id=(context.userdata or {}).get("account_id"),
+                context=f"{type(exc).__name__}: {exc}",
+            )
 
     task = asyncio.create_task(_run())
     _BACKGROUND_FANOUT.add(task)

@@ -2146,12 +2146,20 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
                     primary_model,
                     fallback_model,
                 )
+                db.log_platform_error(
+                    f"Google TTS {primary_model} unavailable — silently using {fallback_model} instead",
+                    source="agent_tts", level="warning",
+                )
         elif safety_net is not None and ev.tts is safety_net:
             if ev.available:
                 logger.info("Gemini outage safety net (Monika) no longer needed")
             else:
                 logger.error(
                     "Both Gemini TTS models unavailable — falling back to Monika (ElevenLabs) until either recovers"
+                )
+                db.log_platform_error(
+                    "Both Gemini TTS models unavailable — using ElevenLabs safety net",
+                    source="agent_tts", level="error",
                 )
 
     adapter.on("tts_availability_changed", _on_availability_changed)

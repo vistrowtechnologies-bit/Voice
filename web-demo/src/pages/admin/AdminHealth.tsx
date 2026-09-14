@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { adminHealth, type AdminHealth as Data } from '../../lib/adminApi'
-import { AdminCard, EmptyState, PageHeader, Pill, StatCard, timeAgo } from '../../components/AdminUI'
+import { AdminCard, BarList, EmptyState, PageHeader, Pill, StatCard, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
 export function AdminHealth() {
@@ -70,6 +70,24 @@ export function AdminHealth() {
                 )}
               </div>
             ))}
+          </div>
+        </AdminCard>
+
+        <AdminCard className="overflow-hidden lg:col-span-3">
+          <div className="border-b border-border px-5 py-3">
+            <div className="font-display text-base font-semibold">How calls ended, last 24h</div>
+            <div className="mt-0.5 text-xs text-text-muted">
+              A spike in "client_initiated" across many accounts usually isn't callers hanging up — it's the shape a
+              silent mid-call failure makes (agent goes dead air, the carrier drops the leg). Worth a look whenever
+              one reason dominates.
+            </div>
+          </div>
+          <div className="p-5">
+            {d.disconnectReasons24h?.length ? (
+              <BarList items={d.disconnectReasons24h.map((r) => ({ label: r.reason, value: r.count }))} />
+            ) : (
+              <EmptyState icon="call_end" message="No calls in the last 24h." />
+            )}
           </div>
         </AdminCard>
       </div>

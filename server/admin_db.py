@@ -611,7 +611,28 @@ def system_health() -> dict:
         error_count_24h = conn.execute(
             "SELECT COUNT(*) c FROM error_events WHERE created_at::timestamp >= now() - INTERVAL '24 hours'"
         ).fetchone()["c"]
-        return {"dbOk": db_ok, "errors": errors, "errorCount24h": error_count_24h}
+
+        # Platform-wide disconnect_reason breakdown, last 24h. This is the
+        # aggregate the max_output_tokens truncation bug should have shown
+        # up in on its own: a spike in "client_initiated" endings across
+        # many tenants' calls is exactly the shape a silent mid-call
+        # truncation produces (agent goes dead air, carrier drops the
+        # leg) — the per-call detail page already had disconnect_reason,
+        # nothing rolled it up so a pattern could be seen instead of found
+        # one transcript at a time.
+        disconnects = [
+            dict(r)
+            for r in conn.execute(
+                """SELECT COALESCE(NULLIF(disconnect_reason, ''), '(none)') reason, COUNT(*) count
+                   FROM calls
+                   WHERE started_at::timestamp >= now() - INTERVAL '24 hours'
+                   GROUP BY 1 ORDER BY 2 DESC"""
+            ).fetchall()
+        ]
+        return {
+            "dbOk": db_ok, "errors": errors, "errorCount24h": error_count_24h,
+            "disconnectReasons24h": disconnects,
+        }
     finally:
         conn.close()
 
@@ -670,6 +691,17 @@ VENDOR_CATALOG = [
     {"key": "elevenlabs", "name": "ElevenLabs", "category": "Speech", "mode": "live"},
     {"key": "openai", "name": "OpenAI", "category": "LLM", "category_note": "conversation + KB + help chat", "mode": "manual"},
     {"key": "gemini", "name": "Google Gemini", "category": "LLM", "mode": "manual"},
+    # Separate from "Google Gemini" above: this is the GCP *billing account*
+    # that Chirp3/Gemini TTS actually bills against, not the Gemini API key.
+    # It went uncovered here entirely — no entry existed while its payment
+    # method sat unattached for 3+ days (from 09-11), silently breaking
+    # every Chirp3 call platform-wide with a PermissionDenied that nothing
+    # in this catalog would have surfaced. "manual" until a real Cloud
+    # Billing API live-check is built (needs a signed-JWT OAuth exchange
+    # from the service account creds, which is more than a GET+API-key —
+    # see vendor_live.py's own bar for what earns a live checker).
+    {"key": "gcp_billing", "name": "Google Cloud (Chirp3/TTS billing)", "category": "Speech",
+     "category_note": "billing account behind google:chirp3/gemini TTS, not the Gemini API key above", "mode": "manual"},
     {"key": "livekit", "name": "LiveKit Cloud", "category": "Calling infra", "mode": "manual"},
     {"key": "enablex", "name": "EnableX", "category": "Telephony", "mode": "manual"},
     {"key": "b2", "name": "Backblaze B2", "category": "Recording storage", "mode": "manual"},

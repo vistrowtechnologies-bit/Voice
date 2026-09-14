@@ -259,6 +259,7 @@ export interface AdminHealth {
     created_at: string
   }[]
   apiKeys: { name: string; configured: boolean }[]
+  disconnectReasons24h: { reason: string; count: number }[]
 }
 
 export interface AdminPrivacyRequest {
