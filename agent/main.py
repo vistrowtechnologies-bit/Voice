@@ -3185,8 +3185,25 @@ class RealEstateAgent(Agent):
             # The public demo is judged turn-by-turn. A hard generation cap
             # prevents a missed prompt instruction from becoming a spoken
             # sales monologue; Indian scripts consume more tokens than the
-            # same sentence in English, so 160 still leaves room for two
+            # same sentence in English, so this still leaves room for two
             # short multilingual sentences plus a tool call.
+            #
+            # Was 120/220 until call 969: a phone reply cut off mid-clause
+            # ("... तो mainly आप", no continuation, no period) with nothing
+            # downstream to blame — TTS fully synthesized and played exactly
+            # that fragment, 8+s before the caller's line dropped. The
+            # livekit-agents ChatChunk the LLM plugin yields us never carries
+            # finish_reason (checked: llm/llm.py's ChatChunk has only
+            # id/delta/usage), so a length-capped stop is invisible to our
+            # code — it looks identical to a clean stop. A raw call to
+            # Sarvam's API for a comparably-styled reply came back at 145
+            # completion tokens against a 220 cap, and their response schema
+            # carries a `reasoning_content` field alongside the visible
+            # `content` one, which — if populated, as it can be on a harder
+            # turn — would burn from the same max_completion_tokens budget
+            # before any spoken text is generated. 220 was too close to that
+            # line. Raised well clear of it; still a real ceiling against a
+            # runaway reply, just not one a normal turn should ever reach.
             llm=_rt if self._is_realtime else _build_llm(
                 # gpt-4.1-mini, not gpt-4.1. An agent with no model set used
                 # to fall back to gpt-4.1, which is on a 30,000 TPM limit —
@@ -3197,7 +3214,7 @@ class RealEstateAgent(Agent):
                 # 2x. The dashboard has always labelled mini "recommended";
                 # only the fallback disagreed.
                 _model_name,
-                max_output_tokens=120 if self._is_platform_demo else 220,
+                max_output_tokens=200 if self._is_platform_demo else 400,
             ),
             tts=None if self._is_realtime else tts,
             tools=agent_tools,
