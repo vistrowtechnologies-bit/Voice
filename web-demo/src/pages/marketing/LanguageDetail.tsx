@@ -6,6 +6,29 @@ import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
 import { LANGUAGES, SOLUTIONS } from '../../lib/marketingContent'
 
+const LANGUAGE_SEO_META: Record<string, { title: string; description: string }> = {
+  hindi: {
+    title: 'Hindi AI Voice Calling Agent for Phone & Web | Vistrow Voice',
+    description:
+      'Build a Hindi and Hinglish AI voice calling agent for inbound calls, outbound campaigns, website conversations, lead qualification, and appointment booking.',
+  },
+  kannada: {
+    title: 'Kannada AI Voice Calling Agent for Customer Calls | Vistrow Voice',
+    description:
+      'Use a Kannada AI voice calling agent for Bengaluru and Karnataka customer calls, with Kannada-English code-switching, lead qualification, transcripts, and CRM-ready records.',
+  },
+  telugu: {
+    title: 'Telugu AI Voice Agent for Phone & Website Calls | Vistrow Voice',
+    description:
+      'Handle Telugu customer calls across phone and website conversations. Artha qualifies leads, answers approved questions, books next steps, and records every call.',
+  },
+  marathi: {
+    title: 'Marathi AI Voice Calling Agent for Maharashtra | Vistrow Voice',
+    description:
+      'Answer Pune, Mumbai, and Maharashtra customer calls with a Marathi AI voice agent that can switch to Hindi or English and save structured call outcomes.',
+  },
+}
+
 // One template renders all ten language pages, keyed by :slug - same
 // approach as ProductDetail/SolutionDetail. These exist for long-tail
 // search ("AI voice agent in Tamil"), which is why each one carries its
@@ -14,8 +37,13 @@ export function LanguageDetail() {
   const { slug } = useParams()
   const lang = LANGUAGES.find((l) => l.slug === slug)
   if (!lang) return <Navigate to="/languages" replace />
+  const seoMeta = LANGUAGE_SEO_META[lang.slug] ?? {
+    title: `${lang.name} AI Voice Agent for Customer Calls | Vistrow Voice`,
+    description: `Handle inbound, outbound, and website customer conversations with a ${lang.name} AI voice agent that supports natural English code-switching and 24/7 availability.`,
+  }
 
   const faqs = [
+    ...(lang.seoFaq ? [lang.seoFaq] : []),
     {
       q: `Can the AI agent handle a full call in ${lang.name}?`,
       a: `Yes - Artha answers, qualifies, and books entirely in ${lang.name}, including numbers, dates, and Indian names. It isn't a translation layer bolted onto an English agent.`,
@@ -47,8 +75,8 @@ export function LanguageDetail() {
   return (
     <MarketingLayout>
       <Seo
-        title={`AI Voice Agent in ${lang.name} - Vistrow Voice`}
-        description={`AI voice agents for ${lang.name} customer calls, with natural code-switching, qualification, and appointment booking - available 24/7.`}
+        title={seoMeta.title}
+        description={seoMeta.description}
         path={`/languages/${lang.slug}`}
         jsonLd={faqJsonLd}
       />
@@ -74,6 +102,55 @@ export function LanguageDetail() {
           <div className="rounded-2xl border border-border bg-surface p-7 text-center">
             <p className="font-display text-2xl font-bold">24/7</p>
             <p className="mt-3 text-sm text-text-muted">No shift, no hold music, no voicemail</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
+          <div className="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/[0.12] via-surface to-surface p-7 sm:p-8">
+            <SectionEyebrow>Search fit</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">
+              Built for people searching “{lang.searchIntent ?? `${lang.name} AI voice agent`}”.
+            </h2>
+            <p className="mt-4 leading-relaxed text-text-muted">
+              This page is for teams that need a real {lang.name} voice agent on live calls — not a
+              translated chatbot, not an IVR recording, and not a human queue that only works during office hours.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-border bg-surface p-6">
+              <h3 className="font-display text-lg font-semibold">Best-fit call types</h3>
+              <ul className="mt-4 space-y-3 text-sm leading-relaxed text-text-muted">
+                {(lang.localUseCases ?? [
+                  `${lang.name} inbound enquiries from website, phone, and campaigns`,
+                  `${lang.name} support, reminders, and follow-up conversations`,
+                  `${lang.name} qualification calls logged for your team`,
+                ]).map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <Icon name="check_circle" className="mt-0.5 shrink-0 text-[16px] text-primary" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-surface p-6">
+              <h3 className="font-display text-lg font-semibold">What the agent does</h3>
+              <ul className="mt-4 space-y-3 text-sm leading-relaxed text-text-muted">
+                {(lang.callBehaviors ?? [
+                  `Speaks ${lang.name} naturally and follows English code-switching`,
+                  'Collects caller intent, timeline, and next-step preference',
+                  'Saves transcript, summary, recording, and CRM-ready call data',
+                ]).map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <Icon name="check_circle" className="mt-0.5 shrink-0 text-[16px] text-cyan" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </section>

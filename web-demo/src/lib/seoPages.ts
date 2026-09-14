@@ -76,6 +76,29 @@ const LANGUAGE_PAGES = [
   ['odia', 'Odia', 'ଓଡ଼ିଆ'],
 ] as const
 
+const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { title: string; description: string }>> = {
+  hindi: {
+    title: 'Hindi AI Voice Calling Agent for Phone & Web | Vistrow Voice',
+    description:
+      'Build a Hindi and Hinglish AI voice calling agent for inbound calls, outbound campaigns, website conversations, lead qualification, and appointment booking.',
+  },
+  kannada: {
+    title: 'Kannada AI Voice Calling Agent for Customer Calls | Vistrow Voice',
+    description:
+      'Use a Kannada AI voice calling agent for Bengaluru and Karnataka customer calls, with Kannada-English code-switching, lead qualification, transcripts, and CRM-ready records.',
+  },
+  telugu: {
+    title: 'Telugu AI Voice Agent for Phone & Website Calls | Vistrow Voice',
+    description:
+      'Handle Telugu customer calls across phone and website conversations. Artha qualifies leads, answers approved questions, books next steps, and records every call.',
+  },
+  marathi: {
+    title: 'Marathi AI Voice Calling Agent for Maharashtra | Vistrow Voice',
+    description:
+      'Answer Pune, Mumbai, and Maharashtra customer calls with a Marathi AI voice agent that can switch to Hindi or English and save structured call outcomes.',
+  },
+}
+
 export const SEO_PAGES: SeoPage[] = [
   page(
     '/',
@@ -215,8 +238,9 @@ export const SEO_PAGES: SeoPage[] = [
   ...LANGUAGE_PAGES.map(([slug, name, native]) =>
     page(
       `/languages/${slug}`,
-      `${name} AI Voice Agent for Customer Calls | Vistrow Voice`,
-      `Handle inbound, outbound, and website customer conversations with a ${name} AI voice agent that supports natural English code-switching and 24/7 availability.`,
+      LANGUAGE_SEO_META[slug]?.title ?? `${name} AI Voice Agent for Customer Calls | Vistrow Voice`,
+      LANGUAGE_SEO_META[slug]?.description ??
+        `Handle inbound, outbound, and website customer conversations with a ${name} AI voice agent that supports natural English code-switching and 24/7 availability.`,
       `language-${slug}`,
       `${native} ${name} customer calls handled by the Vistrow Voice AI agent orb`,
       'language',

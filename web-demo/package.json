@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && tsx scripts/prerender.mjs",
     "generate:og": "tsx scripts/generate-og-images.mjs",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:seo": "node scripts/test-language-seo.mjs"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.21",

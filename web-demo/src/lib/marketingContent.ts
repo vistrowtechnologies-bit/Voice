@@ -627,14 +627,114 @@ export interface LanguagePage {
   greeting: string
   /** One-line positioning for the landing page hero. */
   blurb: string
+  /** Search-intent phrase this page should visibly answer. */
+  searchIntent?: string
+  /** Local business contexts where this language matters most. */
+  localUseCases?: string[]
+  /** Practical call behaviors that make the language support feel real. */
+  callBehaviors?: string[]
+  /** Extra FAQ tuned to the language's highest search opportunity. */
+  seoFaq?: { q: string; a: string }
 }
 
 export const LANGUAGES: LanguagePage[] = [
-  { slug: 'hindi', name: 'Hindi', native: 'हिन्दी', code: 'hi-IN', region: 'North & Central India', greeting: 'नमस्ते', blurb: 'The default for most Indian call flows - including the everyday Hinglish your customers actually speak, not textbook Hindi.' },
-  { slug: 'marathi', name: 'Marathi', native: 'मराठी', code: 'mr-IN', region: 'Maharashtra', greeting: 'नमस्कार', blurb: 'Answer Pune and Mumbai callers in Marathi instead of defaulting them into Hindi or English.' },
+  {
+    slug: 'hindi',
+    name: 'Hindi',
+    native: 'हिन्दी',
+    code: 'hi-IN',
+    region: 'North & Central India',
+    greeting: 'नमस्ते',
+    blurb: 'The default for most Indian call flows - including the everyday Hinglish your customers actually speak, not textbook Hindi.',
+    searchIntent: 'best AI voice phone calling agent in Hindi',
+    localUseCases: [
+      'Real estate enquiries from Hindi and Hinglish-speaking buyers',
+      'Support calls where customers switch between Hindi and English',
+      'Outbound follow-ups, reminders, and appointment booking across North India',
+    ],
+    callBehaviors: [
+      'Greets in Hindi, then follows natural Hinglish without restarting the call',
+      'Captures budget, location, timeline, and intent in CRM-ready notes',
+      'Handles numbers, dates, names, and project details clearly for sales teams',
+    ],
+    seoFaq: {
+      q: 'Is this a Hindi voice bot or a real AI phone calling agent?',
+      a: 'It is a real AI phone calling agent: it speaks, listens, qualifies the caller, answers approved questions, and logs the conversation. It is not just a recorded Hindi IVR or a translated chatbot.',
+    },
+  },
+  {
+    slug: 'marathi',
+    name: 'Marathi',
+    native: 'मराठी',
+    code: 'mr-IN',
+    region: 'Maharashtra',
+    greeting: 'नमस्कार',
+    blurb: 'Answer Pune and Mumbai callers in Marathi instead of defaulting them into Hindi or English.',
+    searchIntent: 'Marathi AI voice calling agent for Maharashtra businesses',
+    localUseCases: [
+      'Pune, Mumbai, Nashik, and Nagpur property enquiries',
+      'Local support calls where Marathi builds trust faster than English',
+      'Follow-up calls for appointments, site visits, payments, and renewals',
+    ],
+    callBehaviors: [
+      'Starts in Marathi and can shift into Hindi or English when the caller does',
+      'Asks clear qualification questions without sounding like a rigid IVR',
+      'Creates structured summaries for sales, support, and operations teams',
+    ],
+    seoFaq: {
+      q: 'Can one agent handle Marathi plus Hindi or English?',
+      a: 'Yes. Many Maharashtra calls naturally mix Marathi with Hindi or English. Artha can keep the same call going and match the caller instead of transferring them to another bot.',
+    },
+  },
   { slug: 'tamil', name: 'Tamil', native: 'தமிழ்', code: 'ta-IN', region: 'Tamil Nadu', greeting: 'வணக்கம்', blurb: 'Tamil callers rarely accept a Hindi-first IVR. Give them an agent that opens in their own language.' },
-  { slug: 'telugu', name: 'Telugu', native: 'తెలుగు', code: 'te-IN', region: 'Andhra Pradesh & Telangana', greeting: 'నమస్కారం', blurb: 'Handle Hyderabad and coastal Andhra call volume in Telugu, around the clock.' },
-  { slug: 'kannada', name: 'Kannada', native: 'ಕನ್ನಡ', code: 'kn-IN', region: 'Karnataka', greeting: 'ನಮಸ್ಕಾರ', blurb: 'Serve Bengaluru and wider Karnataka in Kannada, with English code-switching where it feels natural.' },
+  {
+    slug: 'telugu',
+    name: 'Telugu',
+    native: 'తెలుగు',
+    code: 'te-IN',
+    region: 'Andhra Pradesh & Telangana',
+    greeting: 'నమస్కారం',
+    blurb: 'Handle Hyderabad and coastal Andhra call volume in Telugu, around the clock.',
+    searchIntent: 'Telugu voice agent for customer calls',
+    localUseCases: [
+      'Hyderabad real estate, education, healthcare, and service enquiries',
+      'Inbound calls from Andhra Pradesh and Telangana customers',
+      'Outbound confirmation, reminder, and lead qualification campaigns',
+    ],
+    callBehaviors: [
+      'Keeps the conversation in Telugu while understanding English product terms',
+      'Collects caller needs, urgency, location, and next-step preference',
+      'Records transcripts and summaries so teams can review every call later',
+    ],
+    seoFaq: {
+      q: 'Can Artha handle Telugu callers on both phone and website calls?',
+      a: 'Yes. The same Telugu AI voice agent can answer phone calls and website voice-widget conversations, then save the transcript, summary, and lead details for your team.',
+    },
+  },
+  {
+    slug: 'kannada',
+    name: 'Kannada',
+    native: 'ಕನ್ನಡ',
+    code: 'kn-IN',
+    region: 'Karnataka',
+    greeting: 'ನಮಸ್ಕಾರ',
+    blurb: 'Serve Bengaluru and wider Karnataka in Kannada, with English code-switching where it feels natural.',
+    searchIntent: 'best AI voice calling agent in Kannada',
+    localUseCases: [
+      'Bengaluru and Karnataka property enquiries where English-only calling loses context',
+      'Support and booking calls for local customers who prefer Kannada',
+      'Campaign follow-ups where the agent must understand Kannada plus English terms',
+    ],
+    callBehaviors: [
+      'Opens in Kannada and handles natural Kannada-English code-switching',
+      'Qualifies callers with budget, timeline, location, and purpose questions',
+      'Pushes clean call records into your dashboard and connected CRM workflows',
+    ],
+    seoFaq: {
+      q: 'Why use a Kannada AI voice calling agent instead of an English bot?',
+      a: 'Kannada callers explain needs more clearly when the call starts in Kannada. Artha keeps the conversation local, then captures structured lead data for your team.',
+    },
+  },
   { slug: 'bengali', name: 'Bengali', native: 'বাংলা', code: 'bn-IN', region: 'West Bengal', greeting: 'নমস্কার', blurb: 'Kolkata and West Bengal callers, answered in Bengali on the first ring.' },
   { slug: 'gujarati', name: 'Gujarati', native: 'ગુજરાતી', code: 'gu-IN', region: 'Gujarat', greeting: 'નમસ્તે', blurb: 'Built for Gujarat’s business-heavy call patterns - enquiries, follow-ups, and payment reminders in Gujarati.' },
   { slug: 'malayalam', name: 'Malayalam', native: 'മലയാളം', code: 'ml-IN', region: 'Kerala', greeting: 'നമസ്കാരം', blurb: 'Answer Kerala enquiries in Malayalam instead of routing them to an English-only queue.' },
