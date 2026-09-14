@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS agents (
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
     model TEXT DEFAULT 'sarvam/sarvam-105b-conversations',
-    voice TEXT DEFAULT 'google:chirp3:Aoede',
+    voice TEXT DEFAULT 'pooja',  -- 2026-09-14: Chirp3 blocked by GCP billing, see history
     -- Speech recognition is independent from the LLM and TTS. Keep Sarvam
     -- as the default for Indian names/code-mixing; Google Chirp 3 is an
     -- explicit comparison/alternative selected from the agent editor.
@@ -1278,7 +1278,17 @@ def init_tables() -> None:
             # tenant's starter agent gets the fastest measured voice. Existing
             # agents keep whatever they already chose - a DEFAULT only applies
             # to rows inserted without the column.
-            conn.execute("ALTER TABLE agents ALTER COLUMN voice SET DEFAULT 'google:chirp3:Aoede'")
+            #
+            # 2026-09-14: was 'google:chirp3:Aoede'. Google Cloud billing for
+            # the project backing Chirp3/Gemini TTS went past-due on 09-11,
+            # so every call requiring it fails with PermissionDenied
+            # regardless of the ~Rs27k credit still sitting unused behind
+            # that gate - the credit doesn't waive the payment-method
+            # requirement. Switched to Sarvam, which has no dependency on
+            # that billing account at all. Revert once Chirp3 is confirmed
+            # working again (add a payment method on the "Main" billing
+            # account, console.cloud.google.com/billing).
+            conn.execute("ALTER TABLE agents ALTER COLUMN voice SET DEFAULT 'pooja'")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS stt_provider TEXT DEFAULT 'sarvam'")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TEXT")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'password'")
@@ -3488,7 +3498,13 @@ def create_agent(data: dict, account_id: int) -> dict:
                     # lines up; the two paths just disagreed. Existing agents
                     # keep whatever they were configured with.
                     data.get("model", "sarvam/sarvam-105b-conversations"),
-                    data.get("voice", "google:chirp3:Aoede"),
+                    # 2026-09-14: was "google:chirp3:Aoede". Google Cloud's
+                    # billing account went past-due 09-11, blocking every
+                    # Chirp3/Gemini TTS call platform-wide until a payment
+                    # method is added - see docs/... latency notes. Sarvam
+                    # has no billing dependency on that account, so it's the
+                    # default until Chirp3 is confirmed working again.
+                    data.get("voice", "pooja"),
                     data.get("sttProvider", "sarvam"),
                     data.get("language", "hi-IN"),
                     data.get("systemPrompt", ""),

@@ -1,27 +1,34 @@
 """What a brand-new tenant gets by default.
 
-The combination is not arbitrary - it is the fastest measured on real calls:
-Chirp 3 HD (Kiara HD) for TTS, and sarvam-105b-conversations ("Vistrow
-Bharat") for the LLM.
+The LLM is sarvam-105b-conversations ("Vistrow Bharat") - moved from
+gpt-4.1-mini on 2026-09-09. Measured on this product's real prompt and
+tools, it is equal on quality - 9/12 each on the grounding benchmark - at
+roughly half the time to first token: 450-500ms median on live calls
+against 1,058ms over eight comparable ones.
 
-The model moved from gpt-4.1-mini on 2026-09-09. Measured on this product's
-real prompt and tools, it is equal on quality - 9/12 each on the grounding
-benchmark - at roughly half the time to first token: 450-500ms median on live
-calls against 1,058ms over eight comparable ones. The TTS alternatives cost
-real time too: Sarvam bulbul:v3 adds ~150ms and the Gemini TTS models add
-~760ms (agent 4 measured 837-1,742ms on google31:kore before it was moved).
+The TTS voice is pooja (Sarvam), not Chirp 3 HD, as of 2026-09-14. Chirp 3
+measured fastest of the TTS options on real calls and was the default until
+then - see google_tts_streaming_patch.py and the latency notes for those
+numbers, which still stand. It was moved off default because Google Cloud's
+billing account for the project backing Chirp3/Gemini TTS went past-due on
+09-11, and every call requiring it now fails with PermissionDenied
+regardless of the ~Rs27k free credit still sitting unused behind that gate -
+the credit does not waive the payment-method requirement. Sarvam has no
+dependency on that account. Move this back to Chirp 3 once a payment method
+is added (console.cloud.google.com/billing) and it is confirmed reachable
+again on a real call, not just assumed from the account page looking fixed.
 
-Four separate places decide this and they used to disagree with each other -
-the schema column default said 'pooja', create_agent said 'shubh', and the
-seeded picker menu contained neither of the above. These tests pin all four
-together so a change to one is not silently undone by another.
+Four separate places decide the voice default and they have disagreed with
+each other before - the schema column default said 'pooja', create_agent
+said 'shubh', and the seeded picker menu contained neither. These tests pin
+all four together so a change to one is not silently undone by another.
 """
 import os, re, sys, unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import voice_catalog
 
-EXPECTED_VOICE = "google:chirp3:Aoede"   # Kiara HD
+EXPECTED_VOICE = "pooja"   # Sarvam bulbul:v3 - see module docstring for why
 EXPECTED_MODEL = "sarvam/sarvam-105b-conversations"   # Vistrow Bharat
 _DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calls_db.py")
 

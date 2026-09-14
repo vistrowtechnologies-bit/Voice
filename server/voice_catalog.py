@@ -188,7 +188,17 @@ _BASE_TIERS = {"lite", "standard"}
 # The Sarvam voices stay in the menu: an account that has been using one
 # must not find it missing, and they are the fallback whenever
 # GOOGLE_APPLICATION_CREDENTIALS_JSON is absent.
-DEFAULT_ACCOUNT_VOICES = ["google:chirp3:Aoede", "shubh", "priya"]
+#
+# 2026-09-14: pooja leads instead of Chirp 3. Google Cloud's billing account
+# for the project backing Chirp3/Gemini TTS went past-due on 09-11 and every
+# call requiring it now fails with PermissionDenied, regardless of the
+# ~Rs27k free credit still sitting unused behind that gate - the credit does
+# not waive the payment-method requirement. Sarvam has no dependency on that
+# account. Move Chirp 3 back to the front once a payment method is added
+# (console.cloud.google.com/billing) and it is confirmed reachable again -
+# see test_tenant_defaults.py, which pins this and the other three places
+# that must agree with it.
+DEFAULT_ACCOUNT_VOICES = ["pooja", "shubh", "priya", "google:chirp3:Aoede"]
 
 # Fixed audition script, per language. Because it's fixed, each voice is
 # synthesized at most once per language ever (then cached in Postgres) — see
