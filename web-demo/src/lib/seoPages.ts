@@ -43,6 +43,8 @@ export interface OgCardSpec {
   native?: string
 }
 
+import { BUYER_GUIDES, COMPARE_VENDORS, DEMO_CALLS, LOCAL_REAL_ESTATE_PAGES } from './seoExpansionContent'
+
 const page = (
   path: string,
   title: string,
@@ -273,6 +275,50 @@ export const SEO_PAGES: SeoPage[] = [
     'Traditional IVR keypad compared with a conversational Vistrow Voice AI orb',
     'page',
     'AI Voice vs IVR',
+  ),
+  ...COMPARE_VENDORS.map((vendor) =>
+    page(
+      `/compare/${vendor.slug}`,
+      vendor.title,
+      vendor.description,
+      `compare-${vendor.slug}`,
+      `Vistrow Voice compared with ${vendor.name} for AI voice calling buyers`,
+      'page',
+      `Vistrow Voice vs ${vendor.name}`,
+    ),
+  ),
+  ...BUYER_GUIDES.map((guide) =>
+    page(
+      `/${guide.slug}`,
+      guide.title,
+      guide.description,
+      guide.slug,
+      `${guide.headline} buyer guide from Vistrow Voice`,
+      'page',
+      guide.headline,
+    ),
+  ),
+  ...LOCAL_REAL_ESTATE_PAGES.map((entry) =>
+    page(
+      `/solutions/real-estate/${entry.slug}`,
+      entry.title,
+      entry.description,
+      entry.slug,
+      `${entry.language} real estate AI calling agent for ${entry.city}`,
+      'solution',
+      `${entry.language} Real Estate`,
+    ),
+  ),
+  ...DEMO_CALLS.map((demo) =>
+    page(
+      `/demo-calls/${demo.slug}`,
+      `${demo.title} | Vistrow Voice`,
+      demo.description,
+      `demo-${demo.slug}`,
+      `${demo.title} transcript and CRM-ready call output example`,
+      'page',
+      demo.title,
+    ),
   ),
   page(
     '/security',
@@ -521,6 +567,29 @@ export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
   pricing: { eyebrow: 'VOICE AI PRICING', headline: 'Start small. Scale every conversation.', proof: 'Phone + Web  \u00b7  Usage visibility  \u00b7  No hidden model names', accent: '#9333ea', hue: '0deg' },
   integrations: { eyebrow: 'VOICE AI INTEGRATIONS', headline: 'Your calls. Your CRM. Already synced.', proof: 'CRM  \u00b7  WhatsApp  \u00b7  Slack  \u00b7  Sheets  \u00b7  Webhooks', accent: '#0e7490', hue: '-91deg' },
   'vs-ivr': { eyebrow: 'AI VOICE VS IVR', headline: 'Stop making callers press buttons.', proof: 'Natural answers  \u00b7  Language switching  \u00b7  Complete records', accent: '#b45309', hue: '129deg' },
+  ...Object.fromEntries(
+    COMPARE_VENDORS.map((vendor) => [
+      `compare-${vendor.slug}`,
+      {
+        eyebrow: 'BUYER COMPARISON',
+        headline: `Vistrow Voice vs ${vendor.name}`,
+        proof: 'Latency  ·  Languages  ·  CRM output  ·  Call records',
+        accent: '#9333ea',
+        hue: '0deg',
+      },
+    ]),
+  ),
+  'best-ai-voice-calling-software-india': { eyebrow: 'BUYER GUIDE', headline: 'Choose AI voice calling software that works on real calls.', proof: 'India languages  ·  Phone + Web  ·  CRM-ready', accent: '#0e7490', hue: '-91deg' },
+  'ai-voice-bot-pricing-india': { eyebrow: 'PRICING GUIDE', headline: 'What AI voice bot pricing really includes.', proof: 'Telephony  ·  STT  ·  LLM  ·  TTS  ·  Storage', accent: '#b45309', hue: '129deg' },
+  'hindi-ai-calling-agent-real-estate': { eyebrow: 'HINDI REAL ESTATE AI', headline: 'Qualify property leads in Hindi and Hinglish.', proof: 'Budget  ·  Location  ·  Site visits  ·  CRM', accent: '#9333ea', hue: '0deg', native: 'हिन्दी' },
+  'marathi-ai-calling-agent-mumbai-real-estate': { eyebrow: 'MARATHI REAL ESTATE AI', headline: 'Marathi property calls for Mumbai and Pune.', proof: 'Buyer enquiries  ·  Follow-up  ·  Site visits', accent: '#9333ea', hue: '0deg', native: 'मराठी' },
+  'kannada-ai-voice-bot-bangalore-real-estate': { eyebrow: 'KANNADA REAL ESTATE AI', headline: 'Kannada voice bot for Bengaluru property leads.', proof: 'Kannada + English  ·  CRM-ready records', accent: '#9333ea', hue: '0deg', native: 'ಕನ್ನಡ' },
+  'telugu-ai-calling-agent-hyderabad-real-estate': { eyebrow: 'TELUGU REAL ESTATE AI', headline: 'Telugu AI calling for Hyderabad property leads.', proof: 'Phone + Web  ·  Transcript  ·  Lead fields', accent: '#9333ea', hue: '0deg', native: 'తెలుగు' },
+  'gujarati-ai-calling-agent-ahmedabad-real-estate': { eyebrow: 'GUJARATI REAL ESTATE AI', headline: 'Gujarati calls for Ahmedabad property teams.', proof: 'Qualification  ·  Summary  ·  CRM handoff', accent: '#9333ea', hue: '0deg', native: 'ગુજરાતી' },
+  'demo-hindi-real-estate-lead-qualification': { eyebrow: 'DEMO CALL', headline: 'Hindi real estate lead qualification call.', proof: 'Transcript  ·  Summary  ·  CRM fields', accent: '#9333ea', hue: '0deg', native: 'हिन्दी' },
+  'demo-marathi-site-visit-booking': { eyebrow: 'DEMO CALL', headline: 'Marathi site visit booking call.', proof: 'Intent  ·  Preferred time  ·  Follow-up', accent: '#9333ea', hue: '0deg', native: 'मराठी' },
+  'demo-kannada-inbound-property-enquiry': { eyebrow: 'DEMO CALL', headline: 'Kannada inbound property enquiry call.', proof: 'Project question  ·  Budget  ·  Sales handoff', accent: '#9333ea', hue: '0deg', native: 'ಕನ್ನಡ' },
+  'demo-telugu-website-widget-call': { eyebrow: 'DEMO CALL', headline: 'Telugu website widget voice call.', proof: 'Browser voice  ·  Page source  ·  CRM-ready', accent: '#9333ea', hue: '0deg', native: 'తెలుగు' },
   security: { eyebrow: 'SECURITY & TRUST', headline: 'Enterprise controls around every conversation.', proof: 'Workspace isolation  \u00b7  Access controls  \u00b7  Retention', accent: '#047857', hue: '-126deg' },
   docs: { eyebrow: 'DOCUMENTATION', headline: 'Go from signup to your first live call.', proof: 'Agent  \u2192  Knowledge  \u2192  Channel  \u2192  Test  \u2192  Launch', accent: '#0e7490', hue: '-91deg' },
   about: { eyebrow: 'ABOUT VISTROW VOICE', headline: 'Building the voice layer for every customer conversation.', proof: 'Multilingual  \u00b7  Real-time  \u00b7  Grounded  \u00b7  Dependable', accent: '#9333ea', hue: '0deg' },
