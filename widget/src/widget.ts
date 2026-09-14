@@ -25,6 +25,16 @@ const label = scriptEl?.dataset.label || 'Talk to us'
 const agentName = scriptEl?.dataset.agentName || 'Artha'
 const ctaLabel = scriptEl?.dataset.ctaLabel || ''
 const ctaUrl = scriptEl?.dataset.ctaUrl || ''
+// The embedding site's own privacy policy. Under India's DPDP Act the site
+// that embeds this widget is the data fiduciary for its visitors, so the
+// consent dialog links THEIR policy when they set data-privacy-url, and
+// Vistrow's otherwise.
+const privacyUrl = scriptEl?.dataset.privacyUrl || ''
+// Bumping this re-asks every visitor, including ones who accepted the old
+// wording - do it whenever the consent text below materially changes. Kept
+// in lockstep with web-demo/src/components/DemoOrbCard.tsx.
+const CONSENT_VERSION = '2026-09-14'
+const CONSENT_STORAGE_KEY = `__vistrowConsent:${CONSENT_VERSION}`
 // 'default' (or the attribute missing entirely) keeps today's animated
 // orb video exactly as-is - every other catalog key is a static color
 // variant (widget_avatars.py) rendered as a plain <img> instead.
@@ -361,6 +371,10 @@ const CSS = `
 .av-button { pointer-events: auto; }
 .av-button:focus-visible,.av-primary:focus-visible,.av-secondary:focus-visible,.av-submit:focus-visible,.av-chat-send-btn:focus-visible,.av-complete-action:focus-visible { outline:3px solid rgba(192,132,252,.72);outline-offset:3px; }
 .av-notice { display:block; max-width:280px; margin:2px auto 0; color:#7d7694; font-size:10.5px; line-height:1.45; text-align:center; }
+.av-consent { padding:24px 20px 22px; display:flex; flex-direction:column; gap:10px; }
+.av-consent h2 { margin:0; font-size:19px; line-height:1.25; }
+.av-consent p { margin:0; color:#b8b2cf; font-size:12.5px; line-height:1.55; }
+.av-consent a { color:#c4b5fd; text-decoration:underline; }
 .av-branding { display: block; text-align: center; padding: 7px 0; font-size: 10px; font-weight: 600; letter-spacing: .02em; color: #6b6383; text-decoration: none; border-top: 1px solid #241f38; background: #140f1c; }
 .av-branding:hover { color: #a78bda; }
 audio { display: none; }
@@ -475,6 +489,29 @@ function widgetHtml(label: string): string {
             This conversation is transcribed, and may be recorded, to provide and
             improve this service. Do not share passwords or payment details.
           </span>
+        </div>
+
+        <!-- DPDP consent gate. Shown before the microphone is ever requested,
+             on the first voice call per browser (per CONSENT_VERSION). Nothing
+             personal leaves the page until Accept: any pre-call form details
+             are only sent with /widget/token, which runs after this. -->
+        <div id="av-consent" class="av-consent" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="av-consent-title">
+          <h2 id="av-consent-title">Before we talk</h2>
+          <p>
+            This voice conversation is recorded and transcribed so ${agentName} can
+            respond and so this business can follow up with you. The recording,
+            transcript and any details you share are stored and processed by
+            third-party service providers on its behalf.
+          </p>
+          <p>
+            Please don’t share passwords, card numbers or other sensitive details.
+            You can stop at any time by ending the call. Read the
+            <a id="av-consent-privacy" href="#" target="_blank" rel="noopener noreferrer">privacy policy</a>.
+          </p>
+          <div class="av-choice">
+            <button id="av-consent-accept" class="av-primary">Accept and start</button>
+            <button id="av-consent-cancel" class="av-secondary">Cancel</button>
+          </div>
         </div>
 
         <div id="av-form" class="av-form" style="display:none;">
@@ -595,6 +632,14 @@ function init(): void {
   const welcomeAvatarEl = shadow.getElementById('av-welcome-avatar') as HTMLDivElement
   const chooseVoiceBtn = shadow.getElementById('av-choose-voice') as HTMLButtonElement
   const chooseChatBtn = shadow.getElementById('av-choose-chat') as HTMLButtonElement
+  const consentEl = shadow.getElementById('av-consent') as HTMLDivElement
+  const consentAcceptBtn = shadow.getElementById('av-consent-accept') as HTMLButtonElement
+  const consentCancelBtn = shadow.getElementById('av-consent-cancel') as HTMLButtonElement
+  const consentPrivacyLink = shadow.getElementById('av-consent-privacy') as HTMLAnchorElement
+  // Assigned as a property, never interpolated into the markup, and only an
+  // http(s) URL is accepted - a data-attribute value must not become markup
+  // or a javascript: link.
+  consentPrivacyLink.href = /^https?:\/\//i.test(privacyUrl) ? privacyUrl : 'https://vistrowvoice.com/privacy'
 
   const formEl = shadow.getElementById('av-form') as HTMLDivElement
   const nameFieldEl = shadow.getElementById('av-name-field') as HTMLDivElement
@@ -1059,6 +1104,7 @@ function init(): void {
   // whichever show*() function reveals its own.
   function hideAllPanelViews(): void {
     endChatBtn.style.display = 'none'
+    consentEl.style.display = 'none'
     welcomeEl.style.display = 'none'
     formEl.style.display = 'none'
     chatEl.style.display = 'none'
@@ -1583,7 +1629,33 @@ function init(): void {
     }
   }
 
+  // Consent survives the page in localStorage; consentGrantedAt covers
+  // browsers where storage is blocked (sandboxed iframes, strict privacy
+  // modes), so an Accept still counts for the rest of this page view.
+  let consentGrantedAt = ''
+  function storedConsentAt(): string {
+    if (consentGrantedAt) return consentGrantedAt
+    try { return localStorage.getItem(CONSENT_STORAGE_KEY) || '' } catch { return '' }
+  }
+  let pendingCallArgs: [string, string, string] | null = null
+  function showConsent(name: string, phone: string, email: string): void {
+    pendingCallArgs = [name, phone, email]
+    hideAllPanelViews()
+    openPanel()
+    consentEl.style.display = 'flex'
+    trackEvent('consent_shown', { version: CONSENT_VERSION })
+    consentAcceptBtn.focus()
+  }
+
   async function startCall(name: string, phone: string, email: string, attempt = 0): Promise<void> {
+    // DPDP gate. Every voice entry point - the welcome choice, the pre-call
+    // form, and the no-form direct start - funnels through here, so this is
+    // the single place it can't be bypassed. The internal retry (attempt=1)
+    // is the same call continuing and was already consented to.
+    if (attempt === 0 && !storedConsentAt()) {
+      showConsent(name, phone, email)
+      return
+    }
     // Only gates a fresh, user-initiated attempt - the internal 15s
     // agent-join watchdog's own automatic retry (attempt=1) must still run
     // even if a cooldown started moments ago, since that's the SAME attempt
@@ -1665,7 +1737,7 @@ function init(): void {
       const res = await fetch(`${apiBase}/widget/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteKey, identity: randomId('visitor'), name, phone, email, room: reusableWarmRoom, path: location.pathname }),
+        body: JSON.stringify({ siteKey, identity: randomId('visitor'), name, phone, email, room: reusableWarmRoom, path: location.pathname, consentVersion: CONSENT_VERSION, consentAcceptedAt: storedConsentAt() }),
       })
       warmRoom = null
       if (!res.ok) {
@@ -1846,6 +1918,20 @@ function init(): void {
   greeting.addEventListener('click', handleButtonClick)
   chooseVoiceBtn.addEventListener('click', () => continueWith('voice'))
   chooseChatBtn.addEventListener('click', () => continueWith('chat'))
+  consentAcceptBtn.addEventListener('click', () => {
+    consentGrantedAt = new Date().toISOString()
+    try { localStorage.setItem(CONSENT_STORAGE_KEY, consentGrantedAt) } catch { /* storage blocked: in-memory for this page */ }
+    trackEvent('consent_accepted', { version: CONSENT_VERSION })
+    const args = pendingCallArgs ?? ['', '', '']
+    pendingCallArgs = null
+    void startCall(args[0], args[1], args[2])
+  })
+  consentCancelBtn.addEventListener('click', () => {
+    pendingCallArgs = null
+    trackEvent('consent_declined', { version: CONSENT_VERSION })
+    hideAllPanelViews()
+    showWelcome()
+  })
   greetingClose.addEventListener('click', (e) => {
     e.stopPropagation()
     rememberGreetingDismissal()

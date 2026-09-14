@@ -18,6 +18,9 @@ export async function fetchLiveKitToken(
   /** Isolated provider A/B lane. The server accepts only the named public
    * Sarvam lab profile; normal demo and tenant calls remain unchanged. */
   pipelineProfile?: 'sarvam-livekit',
+  /** DPDP notice acceptance from the demo orb's consent dialog. The server
+   * stamps its own receipt time next to acceptedAt as the call's evidence. */
+  consent?: { version: string; acceptedAt: string },
 ): Promise<TokenResponse> {
   const res = await fetch('/api/token', {
     method: 'POST',
@@ -26,6 +29,8 @@ export async function fetchLiveKitToken(
       identity,
       room,
       agentId,
+      consentVersion: consent?.version,
+      consentAcceptedAt: consent?.acceptedAt,
       demoSlug,
       language,
       testRunId: testContext?.runId,

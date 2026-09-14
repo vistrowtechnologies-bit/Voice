@@ -352,6 +352,29 @@ def _demo_dispatch_kwargs(
     return {"agents": [RoomAgentDispatch(agent_name=_PLATFORM_DEMO_AGENT_NAME)]}
 
 
+def _consent_evidence(version: str, accepted_at: str, surface: str) -> str:
+    """DPDP notice-acceptance evidence for the call row, as a JSON string.
+
+    Both public surfaces - the embeddable widget and the marketing demo orb -
+    show a consent dialog before the microphone is opened, and send back the
+    notice version the visitor accepted. The server's own receipt time sits
+    next to the browser's, because a visitor's clock is not evidence. Empty
+    when nothing was sent: phone calls, and a stale cached widget bundle from
+    before the gate existed.
+    """
+    from datetime import datetime, timezone
+
+    version = (version or "").strip()[:40]
+    if not version:
+        return ""
+    return json.dumps({
+        "version": version,
+        "surface": surface,
+        "client_accepted_at": (accepted_at or "").strip()[:40],
+        "server_received_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
 class TokenRequest(BaseModel):
     identity: str
     room: str = "voice-agent-demo"
@@ -376,6 +399,11 @@ class TokenRequest(BaseModel):
     testRunId: str | None = None
     testScenarioId: int | None = None
     testScenarioKey: str | None = None
+    # DPDP notice acceptance from the demo orb's consent dialog. Recorded,
+    # never required: a missing value is stored as absent evidence rather
+    # than blocking the call.
+    consentVersion: str | None = None
+    consentAcceptedAt: str | None = None
 
 
 _BUILTIN_TEST_SCENARIOS = {
@@ -441,6 +469,8 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
     meta: dict = {}
     if agent_id is not None:
         meta["agent_id"] = agent_id
+    if req.consentVersion:
+        meta["visitor_consent"] = _consent_evidence(req.consentVersion, req.consentAcceptedAt or "", "demo")
     if req.language:
         # Reject anything not in the catalog rather than passing it through:
         # an unknown code reaches the TTS as a locale it does not know, and
@@ -5046,6 +5076,12 @@ class WidgetTokenRequest(BaseModel):
     email: str
     room: str | None = None
     path: str = ""
+    # DPDP notice acceptance, sent once the visitor clicks Accept on the
+    # widget's consent dialog. Empty from a widget bundle older than the gate
+    # (a copy cached on a tenant's page) - recorded as absent, not rejected,
+    # so a stale browser cache cannot take every embed down at once.
+    consentVersion: str = ""
+    consentAcceptedAt: str = ""
 
 
 @app.post("/widget/token")
@@ -5109,6 +5145,8 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
 
     import secrets
 
+    if not req.consentVersion:
+        logger.info("widget token without consent evidence (stale bundle?) site_key=%s", masked_key)
     resolved_agent_id = calls_db.resolve_site_page(site, req.path)["agentId"]
     metadata = json.dumps(
         {
@@ -5123,6 +5161,7 @@ async def create_widget_token(req: WidgetTokenRequest) -> dict:
             # visitor-supplied (location.pathname), not sanitized beyond
             # being JSON-safe.
             "visitor_path": (req.path or "")[:300],
+            "visitor_consent": _consent_evidence(req.consentVersion, req.consentAcceptedAt, "widget"),
         }
     )
     # Reuse the room /widget/warm pre-created (and the agent may already be

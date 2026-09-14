@@ -186,6 +186,7 @@ def init_db() -> None:
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS failure_reason TEXT")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS tool_calls_json TEXT DEFAULT ''")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS page_path TEXT DEFAULT ''")
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS consent_json TEXT DEFAULT ''")
     finally:
         conn.close()
 
@@ -1077,8 +1078,8 @@ def save_call(record: dict) -> int | None:
                     extracted_data, latency_metrics_json, diagnostic_events_json,
                     failure_reason, disconnect_reason, tool_calls_json, page_path, test_run_id,
                     test_scenario_id, test_scenario_key, test_scenario_name,
-                    recording_share_token
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    recording_share_token, consent_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -1122,6 +1123,7 @@ def save_call(record: dict) -> int | None:
                     record.get("test_scenario_key") or "",
                     record.get("test_scenario_name") or "",
                     record.get("recording_share_token") or "",
+                    record.get("consent_json") or "",
                 ),
             )
             return cur.lastrowid

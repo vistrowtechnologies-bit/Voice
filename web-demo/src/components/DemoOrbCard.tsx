@@ -14,7 +14,7 @@ import { fetchLiveKitToken, randomId, submitDemoFeedback } from '../lib/livekit'
 import { trackQualifyLead } from '../lib/analytics'
 import { useOrchestratorCall } from '../lib/orchestratorCall'
 
-type Phase = 'idle' | 'connecting' | 'active' | 'active-orchestrator' | 'denied' | 'capped' | 'unreachable' | 'feedback'
+type Phase = 'idle' | 'consent' | 'connecting' | 'active' | 'active-orchestrator' | 'denied' | 'capped' | 'unreachable' | 'feedback'
 
 // How long the visitor's browser waits for the AI agent to actually join the
 // room after connecting. A healthy dispatch + (cold) worker start is a few
@@ -50,6 +50,37 @@ function claimCallLock(): boolean {
 }
 function releaseCallLock(): void {
   ;(window as unknown as Record<string, boolean>)[CALL_LOCK_KEY] = false
+}
+
+// DPDP consent gate, shown before the mic prompt and before any token that
+// would carry this visitor into a room. Same version AND storage key as the
+// embeddable widget (widget/src/widget.ts CONSENT_VERSION) - on this site
+// both surfaces share an origin, so accepting on one counts for the other.
+// Bump both together whenever the consent wording materially changes.
+const CONSENT_VERSION = '2026-09-14'
+const CONSENT_STORAGE_KEY = `__vistrowConsent:${CONSENT_VERSION}`
+// Module-level so every DemoOrbCard on the page shares it, and so an Accept
+// still counts where localStorage is blocked (strict privacy modes).
+let consentGrantedAt = ''
+function readConsent(): string {
+  if (consentGrantedAt) return consentGrantedAt
+  try {
+    return window.localStorage.getItem(CONSENT_STORAGE_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+function grantConsent(): void {
+  consentGrantedAt = new Date().toISOString()
+  try {
+    window.localStorage.setItem(CONSENT_STORAGE_KEY, consentGrantedAt)
+  } catch {
+    // storage blocked: in-memory for this page view
+  }
+}
+function consentArg(): { version: string; acceptedAt: string } | undefined {
+  const acceptedAt = readConsent()
+  return acceptedAt ? { version: CONSENT_VERSION, acceptedAt } : undefined
 }
 
 // The recurring "LIVE DEMO" card - tapping the orb starts the call right
@@ -131,8 +162,8 @@ export function DemoOrbCard({
   // sits on for minutes before clicking would otherwise hand them a token
   // for a room whose job already gave up and exited.
   const PREWARM_MAX_AGE_MS = 60_000
-  const prewarmRef = useRef<{ token: string; url: string; identity: string; room: string; at: number } | null>(null)
-  const prewarmPromiseRef = useRef<Promise<{ token: string; url: string; identity: string; room: string; at: number } | null> | null>(null)
+  const prewarmRef = useRef<{ token: string; url: string; identity: string; room: string; at: number; consented: boolean } | null>(null)
+  const prewarmPromiseRef = useRef<Promise<{ token: string; url: string; identity: string; room: string; at: number; consented: boolean } | null> | null>(null)
   const prewarm = useCallback(() => {
     const cached = prewarmRef.current
     if (cached && Date.now() - cached.at < PREWARM_MAX_AGE_MS) return Promise.resolve(cached)
@@ -140,9 +171,10 @@ export function DemoOrbCard({
     if (!hasDemoCallsRemaining()) return Promise.resolve(null)
     const identity = randomId('visitor')
     const room = randomId('voice-agent-demo')
-    const request = fetchLiveKitToken(identity, room, undefined, demoSlug, language, undefined, pipelineProfile)
+    const consent = consentArg()
+    const request = fetchLiveKitToken(identity, room, undefined, demoSlug, language, undefined, pipelineProfile, consent)
       .then(({ token: newToken, url }) => {
-        const warmed = { token: newToken, url, identity, room, at: Date.now() }
+        const warmed = { token: newToken, url, identity, room, at: Date.now(), consented: !!consent }
         prewarmRef.current = warmed
         return warmed
       })
@@ -196,6 +228,12 @@ export function DemoOrbCard({
       return
     }
     if (cooldownUntil !== null && Date.now() < cooldownUntil) return
+    // DPDP gate - ahead of the call lock, the mic prompt and any token fetch,
+    // so nothing is held or requested while the visitor is still deciding.
+    if (!readConsent()) {
+      setPhase('consent')
+      return
+    }
     if (!claimCallLock()) {
       setErrorMessage('A conversation is already active on this page — please finish it first.')
       setPhase('unreachable')
@@ -212,10 +250,10 @@ export function DemoOrbCard({
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true })
       const warm = (await warming) ?? prewarmRef.current
-      const isFresh = warm && Date.now() - warm.at < PREWARM_MAX_AGE_MS
+      const isFresh = warm && warm.consented && Date.now() - warm.at < PREWARM_MAX_AGE_MS
       const room = isFresh ? warm.room : randomId('voice-agent-demo')
       const { token: newToken, url } =
-        isFresh ? warm : await fetchLiveKitToken(randomId('visitor'), room, undefined, demoSlug, language, undefined, pipelineProfile)
+        isFresh ? warm : await fetchLiveKitToken(randomId('visitor'), room, undefined, demoSlug, language, undefined, pipelineProfile, consentArg())
       prewarmRef.current = null
       lastRoomNameRef.current = room
       setFeedbackSubmitted(false)
@@ -233,6 +271,12 @@ export function DemoOrbCard({
       setPhase('denied')
     }
   }, [cooldownUntil, prewarm, demoSlug, language, pipelineProfile])
+
+  const handleConsentAccept = useCallback(() => {
+    grantConsent()
+    void handleStart()
+  }, [handleStart])
+  const handleConsentCancel = useCallback(() => setPhase('idle'), [])
 
   // Ending the call shows a brief feedback prompt in the same card (only
   // when the call actually connected to an agent - creditChargedRef mirrors
@@ -391,6 +435,8 @@ export function DemoOrbCard({
           </LiveKitRoom>
         ) : isCallLiveOrchestrator ? (
           <InlineOrchestratorCallBody onEnded={handleDisconnected} onFailed={handleOrchestratorFailed} onConnected={chargeDemoCall} />
+        ) : phase === 'consent' ? (
+          <ConsentPrompt onAccept={handleConsentAccept} onCancel={handleConsentCancel} />
         ) : phase === 'feedback' ? (
           <FeedbackPrompt submitted={feedbackSubmitted} onRate={handleFeedback} onDone={handleFeedbackDone} />
         ) : (
@@ -835,4 +881,47 @@ function AgentVisual({ agentParticipant }: { agentParticipant: RemoteParticipant
 function AgentStateLabel({ agentParticipant }: { agentParticipant: RemoteParticipant }) {
   const agentState = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
   return <p className="mt-5 text-sm text-text-muted">{STATE_LABELS[agentState ?? ''] ?? WAITING_LABEL}</p>
+}
+
+// The recording/processing notice a visitor must accept before the first
+// demo call. Wording kept equivalent to the widget's dialog so both public
+// surfaces make the same commitment under the same CONSENT_VERSION.
+function ConsentPrompt({ onAccept, onCancel }: { onAccept: () => void; onCancel: () => void }) {
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="demo-consent-title" className="my-6 flex w-full max-w-sm flex-col gap-3 text-left">
+      <h3 id="demo-consent-title" className="font-display text-2xl font-semibold">
+        Before we talk
+      </h3>
+      <p className="text-sm text-text-muted">
+        This voice conversation is recorded and transcribed so Artha can respond and so we can follow up with you.
+        The recording, transcript and any details you share are stored and processed by third-party service
+        providers on our behalf.
+      </p>
+      <p className="text-sm text-text-muted">
+        Please don’t share passwords, card numbers or other sensitive details. You can stop at any time by ending the
+        call. Read our{' '}
+        <Link to="/privacy" className="text-primary underline">
+          privacy policy
+        </Link>
+        .
+      </p>
+      <div className="mt-2 flex gap-3">
+        <button
+          type="button"
+          onClick={onAccept}
+          autoFocus
+          className="rounded-full bg-primary px-5 py-2 text-xs font-bold text-bg transition-opacity hover:opacity-90"
+        >
+          Accept and start
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-full border border-border bg-bg px-5 py-2 text-xs font-bold transition-opacity hover:opacity-90"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
 }

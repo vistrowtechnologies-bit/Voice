@@ -65,19 +65,49 @@ class EveryPathIsCovered(unittest.TestCase):
         Counting **_rate on its own would also match the fallback adapters,
         which is how this assertion first passed while one construction was
         still missing it — check each site, not a total.
+
+        Matches BOTH how credentials_info shows up: a bare kwarg
+        (`credentials_info=_GOOGLE_CREDENTIALS,`) at three sites, and inside a
+        shared `google_tts_kwargs` dict literal (`"credentials_info":
+        _GOOGLE_CREDENTIALS,`) that gets spread into two Gemini-persona
+        constructions with `**google_tts_kwargs` — 31f16ef refactored those
+        two into a shared dict without changing this string search, which is
+        how a real construction dropped off this test's radar entirely rather
+        than failing it.
         """
         lines = _BUILD_TTS.splitlines()
         missing = []
         for i, line in enumerate(lines):
-            if "credentials_info=_GOOGLE_CREDENTIALS," not in line:
+            has_bare = "credentials_info=_GOOGLE_CREDENTIALS," in line
+            has_dict_entry = '"credentials_info": _GOOGLE_CREDENTIALS,' in line
+            if not (has_bare or has_dict_entry):
                 continue
-            if not any("**_rate" in l for l in lines[i + 1:i + 3]):
+            window = lines[i + 1:i + 3]
+            ok = any("**_rate" in l for l in window)
+            if has_dict_entry:
+                # The dict itself carries **_rate a couple of lines further
+                # down (after the other kwargs), and separately the dict is
+                # spread into each PatchedGeminiTTS(**google_tts_kwargs, ...)
+                # call — that spread IS the rate reaching the construction,
+                # so accept it as covered too.
+                ok = ok or any("**_rate" in l for l in lines[i:i + 8])
+            if not ok:
                 missing.append(line.strip())
         self.assertEqual(missing, [], f"Google TTS built without the rate: {missing}")
 
     def test_there_are_the_five_google_paths_we_think(self):
-        """A new branch added without the rate should trip this, not slip by."""
-        self.assertEqual(_BUILD_TTS.count("credentials_info=_GOOGLE_CREDENTIALS,"), 5)
+        """A new branch added without the rate should trip this, not slip by.
+
+        Counts actual construction call sites (PatchedGeminiTTS(...) /
+        google.TTS(...)), not a literal credentials_info string — 31f16ef put
+        two of them behind a shared `google_tts_kwargs` dict spread with
+        `**google_tts_kwargs` into TWO separate constructions, so counting
+        the dict's one `"credentials_info": ...` entry undercounts by one.
+        Constructions are what must each carry the rate; credentials_info is
+        just how this test used to recognise one.
+        """
+        sites = (_BUILD_TTS.count("PatchedGeminiTTS(") + _BUILD_TTS.count("google.TTS("))
+        self.assertEqual(sites, 5)
 
     def test_the_fallback_adapters_get_it_too(self):
         """The one that actually decides the wire rate."""

@@ -1092,6 +1092,11 @@ def init_tables() -> None:
                 # no way to answer "which page did this lead come from".
                 # Widget calls only; '' for phone/browser.
                 ("page_path", "TEXT DEFAULT ''"),
+                # DPDP notice acceptance for widget and demo calls: which
+                # consent version the visitor accepted, when their browser
+                # says they did, and when the server received it. '' when
+                # none was sent (phone calls; stale cached widget bundles).
+                ("consent_json", "TEXT DEFAULT ''"),
                 # Conversation Testing Lab correlation. A unique run id ties
                 # the browser test to the durable call row; scenario fields
                 # make old results understandable even if the saved scenario
@@ -2518,6 +2523,7 @@ def _call_dict(
         # before the column existed.
         "disconnectReason": _row_get(row, "disconnect_reason") or "",
         "pagePath": _row_get(row, "page_path") or "",
+        "consent": _row_get(row, "consent_json") or "",
         "testRunId": _row_get(row, "test_run_id") or "",
         "testScenarioId": _row_get(row, "test_scenario_id"),
         "testScenarioKey": _row_get(row, "test_scenario_key") or "",

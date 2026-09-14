@@ -4925,6 +4925,7 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         "visitor_phone": None,
         "visitor_email": None,
         "visitor_path": None,
+        "visitor_consent": None,
         "company": "",
         "custom_fields": {},
         "campaign_contact_id": None,
@@ -4975,6 +4976,9 @@ def _call_context_from_job(ctx: JobContext) -> dict:
         # location.pathname at widget-open time — stamped by /widget/token,
         # used only to answer "which page did this lead come from" later.
         "visitor_path": meta.get("visitor_path"),
+        # DPDP notice-acceptance evidence, stamped server-side by /widget/token
+        # or /api/token after the visitor accepted the consent dialog.
+        "visitor_consent": meta.get("visitor_consent"),
         "direction": meta.get("direction"),
         "test_run_id": str(meta.get("test_run_id") or "")[:80],
         "test_scenario_id": int(meta["test_scenario_id"]) if meta.get("test_scenario_id") is not None else None,
@@ -5221,7 +5225,7 @@ async def entrypoint(ctx: JobContext) -> None:
         live_meta = json.loads(ctx.room.metadata) if ctx.room.metadata else {}
     except ValueError:
         live_meta = {}
-    for key in ("visitor_name", "visitor_phone", "visitor_email", "visitor_path", "company"):
+    for key in ("visitor_name", "visitor_phone", "visitor_email", "visitor_path", "visitor_consent", "company"):
         if live_meta.get(key):
             call_context[key] = live_meta[key]
     if live_meta.get("custom_fields"):
@@ -6596,6 +6600,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     "direction": call_context.get("direction"),
                     "site_id": call_context["site_id"],
                     "page_path": call_context.get("visitor_path") or "",
+                    "consent_json": call_context.get("visitor_consent") or "",
                     "recording_share_token": recording_share_token,
                     # Which dashboard agent took the call — explicit from room
                     # metadata when routed, otherwise whichever agent config
