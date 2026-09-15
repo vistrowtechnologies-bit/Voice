@@ -76,6 +76,12 @@ class RepeatedOpener(unittest.TestCase):
         self.assertNotEqual(out[0].strip().rstrip(","), "हम्म")
         self.assertIn(out[0].strip().rstrip(","), DEVA)
 
+    def test_call_982_latency_filler_does_not_reset_the_opener(self):
+        _speak(self.agent, ["\nदेखिए,", " price depend करता है।"])
+        self.assertEqual("".join(_speak(self.agent, ["हाँ.", ".", "."])), "हाँ...")
+        out = _speak(self.agent, ["\nदेखिए,", " exact cost team बताएगी।"])
+        self.assertNotEqual(out[0].strip().rstrip(","), "देखिए")
+
     def test_a_word_that_merely_starts_like_one_is_not_an_opener(self):
         _speak(self.agent, ["\nOkay,", " next?"])
         self.assertEqual("".join(_speak(self.agent, ["\nOkaying the plan,", " next step?"])),

@@ -1323,7 +1323,13 @@ _BARE_OPENER = re.compile(
 _SWAP_OPENERS = {"deva": ["अच्छा", "जी", "ओके", "हम्म"], "latin": ["Achha", "Okay", "Right", "Hmm"]}
 
 
+_BACKCHANNEL_WORDS = {line.rstrip(".… ") for lines in _BACKCHANNEL_LINES.values() for line in lines}
+
+
 def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
+    # Call 982: the "हाँ..." latency filler reset the opener memory, so "देखिए" ran twice.
+    if head.strip().rstrip(".… ") in _BACKCHANNEL_WORDS:
+        return head
     match = _BARE_OPENER.match(head)
     if not match:
         agent._last_opener = ""
