@@ -50,6 +50,9 @@ import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # gender so the LLM self-refers with the right grammatical gender.
 from clause_tokenizer import ClauseTokenizer
 from google_tts_streaming_patch import PatchedGeminiTTS
+import backchannel_patch
+
+backchannel_patch.apply()
 from emotion import (
     GEMINI_EMOTION_PROMPT_DELTAS,
     GEMINI_TONE_PROMPTS,
@@ -1293,6 +1296,48 @@ def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
                 yield phrase if agent._caller_gender == "female" else _neutralize_caller_directed_gender(phrase)
         if buffer:
             yield buffer if agent._caller_gender == "female" else _neutralize_caller_directed_gender(buffer)
+
+    return _transform
+
+
+_BARE_OPENER = re.compile(
+    r"^(?P<lead>\s*)(?P<word>ठीक है|समझ गई|समझ गया|अच्छा|हाँ जी|noted|got it|okay|ok|right|achha|acha|"
+    r"theek hai|samajh gayi)(?=[\s,।.!?—-]|$)",
+    re.IGNORECASE,
+)
+_SWAP_OPENERS = {"deva": ["अच्छा", "जी", "ओके", "हम्म"], "latin": ["Achha", "Okay", "Right", "Hmm"]}
+
+
+def _vary_opener(agent: "RealEstateAgent", head: str) -> str:
+    match = _BARE_OPENER.match(head)
+    if not match:
+        agent._last_opener = ""
+        return head
+    word = match.group("word").lower()
+    if word != getattr(agent, "_last_opener", ""):
+        agent._last_opener = word
+        return head
+    pool = _SWAP_OPENERS["deva" if re.search(r"[ऀ-ॿ]", word) else "latin"]
+    swap = random.choice([p for p in pool if p.lower() != word])
+    agent._last_opener = swap.lower()
+    return match.group("lead") + swap + head[match.end():]
+
+
+def _make_repeated_opener_transform(agent: "RealEstateAgent"):
+    # Call 978: 7 of 8 replies opened "ठीक है,"/"समझ गई,"; prompt rewording did not stop it.
+    async def _transform(text):
+        head = ""
+        async for chunk in text:
+            if head is None:
+                yield chunk
+                continue
+            head += chunk
+            if not _BARE_OPENER.match(head) and len(head) < 24 and not re.search(r"[,।.!?—]", head):
+                continue
+            yield _vary_opener(agent, head)
+            head = None
+        if head:
+            yield _vary_opener(agent, head)
 
     return _transform
 
@@ -5802,7 +5847,11 @@ async def entrypoint(ctx: JobContext) -> None:
         # LiveKit's own built-in transform (livekit.agents.voice.
         # transcription.filters.filter_markdown), not hand-rolled - already
         # buffers correctly across split ** markers mid-stream.
-        tts_text_transforms=["filter_markdown", _make_caller_gender_guard_transform(agent)],
+        tts_text_transforms=[
+            "filter_markdown",
+            _make_repeated_opener_transform(agent),
+            _make_caller_gender_guard_transform(agent),
+        ],
         turn_handling=TurnHandlingOptions(
             interruption={
                 "min_words": min_words,

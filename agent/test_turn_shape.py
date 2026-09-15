@@ -79,14 +79,17 @@ class TheOfferMachineryIsGone(unittest.TestCase):
     def test_no_offer_transform(self):
         self.assertNotIn("_make_offer_turn_guard_transform", self.src)
 
-    def test_only_two_text_transforms(self):
+    def test_only_known_text_transforms(self):
         """Every transform sits between the LLM and the TTS, so each one is a
-        chance to re-break streaming."""
+        chance to re-break streaming. The repeated-opener transform is allowed
+        because it never holds text back (test_repeated_opener proves the first
+        chunk leaves unchanged)."""
         i = self.src.index("tts_text_transforms=")
         block = self.src[i:i + 240]
         self.assertIn("filter_markdown", block)
+        self.assertIn("_make_repeated_opener_transform", block)
         self.assertIn("_make_caller_gender_guard_transform", block)
-        self.assertEqual(block.count("_make_"), 1)
+        self.assertEqual(block.count("_make_"), 2)
 
 
 if __name__ == "__main__":

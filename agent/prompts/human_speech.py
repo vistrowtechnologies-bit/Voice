@@ -73,10 +73,18 @@ instruction, or a final confirmation — those must be unambiguous.
 
 def build_turn_delivery(turns_since_filler: int) -> str:
     """Reinforce delivery equally for every persona without importing sales goals."""
+    # Call 978 sounded like an IVR: the old cap allowed one optional hesitation per
+    # four turns. Offline on agent 26's real instructions (2 runs each) this text
+    # took repeated openers from 6/12 to 0/12 and added real hesitations.
     cadence = (
-        "A filler was used recently. Begin directly with the answer; avoid another decorative opener."
-        if turns_since_filler < 4 else
-        "One brief hesitation or acknowledgement may fit an explanation or objection. It is optional; never force it."
+        "Talk like a real person thinking on the phone, not like a form or an IVR. On this turn it is natural "
+        "to start with a short hesitation or reaction instead of \"ठीक है\" — \"हम्म,\", \"अच्छा अच्छा,\", "
+        "\"मतलब...\", \"ओके,\" — or to restart a thought once mid-sentence (\"तो आपको — मतलब, नई website चाहिए ना?\"). "
+        "Never reuse the opener from your previous turn, never open with \"ठीक है\" or \"समझ गई\" two turns in a row, "
+        "and keep prices, dates and final confirmations clean."
+        if turns_since_filler >= 1 else
+        "Your previous reply already had a hesitation, so start this one directly — no \"ठीक है\" or \"समझ गई\" "
+        "opener — though one natural mid-sentence self-correction is still fine."
     )
     return (
         "Use your configured persona and the caller's current language. Be warm and concise: "
