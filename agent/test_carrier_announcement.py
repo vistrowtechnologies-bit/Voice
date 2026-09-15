@@ -56,6 +56,14 @@ class CarrierAnnouncementDetection(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertTrue(main._CARRIER_UNAVAILABLE_PATTERN.search(text))
 
+    def test_call_983_marathi_number_busy(self):
+        # Verbatim first line of the call-983 transcript — नंबर, not क्रमांक (already
+        # covered). The follow-up line ("please try again after a while") is deliberately
+        # NOT asserted here: on its own it's plausible from a real caller too, and this
+        # first line is what the detector actually needs — it already checks the first 3
+        # outbound turns, not just the first one, so this alone is enough to catch the call.
+        self.assertTrue(main._CARRIER_UNAVAILABLE_PATTERN.search("आपण डायल केलेला नंबर सध्या व्यस्त आहे."))
+
     def test_a_human_on_another_call_is_not_an_announcement(self):
         for text in (
             "मैं अभी दूसरे कॉल पर हूँ, बाद में बात करते हैं",
@@ -74,6 +82,7 @@ class CarrierAnnouncementDetection(unittest.TestCase):
             "हाँ जी बोलिए",
             "Sorry, I'm busy right now, can you call me later?",
             "मैं अभी व्यस्त हूँ, थोड़ी देर बाद कॉल कीजिए",
+            "मी सध्या व्यस्त आहे, नंतर बोलूया",  # "I'm busy right now" — no "नंबर" or "डायल केलेला", must not match
             "My phone was switched off, that's why you couldn't reach me",
             "Haan, main abhi busy hoon",
             "I dialed your number yesterday but nobody picked up",

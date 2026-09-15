@@ -1150,8 +1150,9 @@ _CARRIER_UNAVAILABLE_PATTERN = re.compile(
     r"पहुँच\s+से\s+बाहर|पहुंच\s+से\s+बाहर|"
     # Gujarati: "તમે જે નંબર ડાયલ કર્યો છે"
     r"નંબર\s+ડાયલ|ડાયલ\s+કરેલ\s+નંબર|"
-    # Marathi: "आपण डायल केलेला क्रमांक"
-    r"डायल\s+केलेला\s+क्रमांक|"
+    # Marathi: "आपण डायल केलेला क्रमांक" / "आपण डायल केलेला नंबर सध्या व्यस्त आहे" (call 983 — same
+    # meaning, different word for "number": नंबर here, क्रमांक above; both need covering).
+    r"डायल\s+केलेला\s+(क्रमांक|नंबर)|नंबर\s+सध्या\s+व्यस्त|"
     # Call 980, busy on another call: "आपने जिस व्यक्ति को कॉल किया है…", "…सध्या इतर कोणाशी
     # बोलत आहे", and the English line as STT wrote it ("द पर्सन यू हैव कॉल्ड…").
     r"person\s+you\s+(have\s+)?call(ed|led)|पर्सन\s+यू\s+हैव\s+कॉल्ड|"
