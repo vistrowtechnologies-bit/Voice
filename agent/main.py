@@ -1317,7 +1317,7 @@ def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
 
 _BARE_OPENER = re.compile(
     r"^(?P<lead>\s*)(?P<word>ठीक है|समझ गई|समझ गया|अच्छा|हाँ जी|noted|got it|okay|ok|right|achha|acha|"
-    r"theek hai|samajh gayi|हम्म|मतलब|ओके|जी|hmm|matlab)(?=[\s,।.!?—-]|$)",
+    r"theek hai|samajh gayi|हम्म|मतलब|ओके|देखिए|जी|hmm|matlab|dekhiye)(?=[\s,।.!?—-]|$)",
     re.IGNORECASE,
 )
 _SWAP_OPENERS = {"deva": ["अच्छा", "जी", "ओके", "हम्म"], "latin": ["Achha", "Okay", "Right", "Hmm"]}
@@ -4057,6 +4057,7 @@ class RealEstateAgent(Agent):
             if _first_outbound_turn and text and _VOICEMAIL_GREETING_PATTERN.search(text):
                 _room = _userdata.get("room")
                 logger.info("voicemail detected on outbound call (room=%s)", getattr(_room, "name", None))
+                _userdata["voicemail_detected"] = True
                 business_name = getattr(self, "_business_name", "") or ""
                 closing = (
                     f"Hi, this is a call from {business_name}. Sorry we missed you — please call us back "
@@ -5280,7 +5281,9 @@ async def _post_call_analysis(
     if want_summary:
         directives.append(
             'Include a "summary" string of 1-3 sentences capturing who the caller is and what '
-            "they wanted, written to help recognize and help them on a future call."
+            "they wanted, written to help recognize and help them on a future call. The "
+            "assistant lines are OUR agent, speaking for our business; only the user lines are "
+            "the caller. Never describe the caller as being from our business."
         )
     system = (
         "You extract structured data from a voice-call transcript. " + " ".join(directives)
@@ -6720,6 +6723,9 @@ async def entrypoint(ctx: JobContext) -> None:
             agent._memory_enabled
             and bool(agent._caller_phone)
             and not (agent._public_demo_slug or agent._is_platform_demo)
+            # Call 981 opened "you were busy on another call" — remembered from call 980's carrier recording.
+            and not userdata.get("failure_reason")
+            and not userdata.get("voicemail_detected")
         )
         # The post-call LLM pass used to run HERE, before save_call, and gate
         # it. It is an optional enrichment (operator-defined fields + a

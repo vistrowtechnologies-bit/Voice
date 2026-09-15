@@ -66,6 +66,8 @@ _CLAUSE = re.compile(r"(?<=[।.!?,;:—])\s*")
 # while still refusing "अरे," at 4.
 _MIN_CLAUSE_CHARS = 6
 
+_HAS_SPEAKABLE = re.compile(r"\w")
+
 
 def _split_clauses(text: str, *, min_len: int = _MIN_CLAUSE_CHARS,
                    retain_format: bool = True) -> list[tuple[str, int, int]]:
@@ -90,7 +92,7 @@ def _split_clauses(text: str, *, min_len: int = _MIN_CLAUSE_CHARS,
         start = m.end()
     if start < len(text):
         tail = text[start:]
-        if tail.strip():
+        if _HAS_SPEAKABLE.search(tail):
             out.append((tail if retain_format else tail.strip(), start, len(text)))
     return out
 
@@ -162,7 +164,8 @@ class _ClauseStream(tokenize.SentenceStream):
 
     def _emit(self, token: str) -> None:
         token = token if self._retain else token.strip()
-        if token.strip():
+        # Call 981: a leftover "." from "हम्म..." went out alone; Sarvam 400s on text with no letters.
+        if _HAS_SPEAKABLE.search(token):
             self._event_ch.send_nowait(
                 tokenize.TokenData(token=token, segment_id=self._seg)
             )
