@@ -44,6 +44,28 @@ class CarrierAnnouncementDetection(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertTrue(main._CARRIER_UNAVAILABLE_PATTERN.search(text))
 
+    def test_call_980_busy_on_another_call(self):
+        # Verbatim from the call-980 transcript, in the pieces STT delivered them.
+        for text in (
+            "केलेला आहे. सध्या इतर कोणाशी बोलत आहे. आपण प्रतीक्षा करू शकता किंवा नंतर पुन्हा प्रयत्न करू शकता.",
+            "आपने जिस व्यक्ति को कॉल किया है, वह अभी दूसरे कॉल पर व्यस्त है।",
+            "कृपया प्रतीक्षा करिए। या कुछ समय पश्चात प्रयास करें।",
+            "द पर्सन यू हैव कॉल्ड इज स्पीकिंग टू समवन एल्स।",
+            "The person you have called is speaking to someone else",
+        ):
+            with self.subTest(text=text):
+                self.assertTrue(main._CARRIER_UNAVAILABLE_PATTERN.search(text))
+
+    def test_a_human_on_another_call_is_not_an_announcement(self):
+        for text in (
+            "मैं अभी दूसरे कॉल पर हूँ, बाद में बात करते हैं",
+            "Sorry, I'm speaking to someone else, call me later",
+            "आपने किसको कॉल किया है?",
+            "थोड़ी देर बाद कॉल कीजिए",
+        ):
+            with self.subTest(text=text):
+                self.assertIsNone(main._CARRIER_UNAVAILABLE_PATTERN.search(text))
+
     def test_does_not_fire_on_a_live_human(self):
         # Every one of these is something a real person says when they pick
         # up. Firing here would hang up on a prospect.

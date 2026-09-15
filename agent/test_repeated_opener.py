@@ -70,6 +70,12 @@ class RepeatedOpener(unittest.TestCase):
         self.assertEqual(out, "\nAbhi, पिछली बार आपने enquiry की थी।")
         self.assertEqual("".join(_speak(self.agent, ["\nठीक है,", " आगे?"])), "\nठीक है, आगे?")
 
+    def test_call_980_repeated_hmm_is_swapped(self):
+        _speak(self.agent, ["\nहम्म,", " तो बताइए?"])
+        out = _speak(self.agent, ["\nहम्म,", " website किस लिए चाहिए?"])
+        self.assertNotEqual(out[0].strip().rstrip(","), "हम्म")
+        self.assertIn(out[0].strip().rstrip(","), DEVA)
+
     def test_a_word_that_merely_starts_like_one_is_not_an_opener(self):
         _speak(self.agent, ["\nOkay,", " next?"])
         self.assertEqual("".join(_speak(self.agent, ["\nOkaying the plan,", " next step?"])),

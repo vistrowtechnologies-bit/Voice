@@ -1151,6 +1151,10 @@ _CARRIER_UNAVAILABLE_PATTERN = re.compile(
     r"નંબર\s+ડાયલ|ડાયલ\s+કરેલ\s+નંબર|"
     # Marathi: "आपण डायल केलेला क्रमांक"
     r"डायल\s+केलेला\s+क्रमांक|"
+    # Call 980, busy on another call: "आपने जिस व्यक्ति को कॉल किया है…", "…सध्या इतर कोणाशी
+    # बोलत आहे", and the English line as STT wrote it ("द पर्सन यू हैव कॉल्ड…").
+    r"person\s+you\s+(have\s+)?call(ed|led)|पर्सन\s+यू\s+हैव\s+कॉल्ड|"
+    r"जिस\s+व्यक्ति\s+को\s+कॉल\s+किया|इतर\s+कोणाशी\s+बोलत\s+आहे|कुछ\s+समय\s+पश्चात\s+प्रयास|"
     # Tamil / Telugu / Kannada equivalents of "the number you dialled"
     r"டயல்\s+செய்த\s+எண்|డయల్\s+చేసిన\s+నంబర్|ಡಯಲ್\s+ಮಾಡಿದ\s+ಸಂಖ್ಯೆ",
     re.IGNORECASE,
@@ -1313,7 +1317,7 @@ def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
 
 _BARE_OPENER = re.compile(
     r"^(?P<lead>\s*)(?P<word>ठीक है|समझ गई|समझ गया|अच्छा|हाँ जी|noted|got it|okay|ok|right|achha|acha|"
-    r"theek hai|samajh gayi)(?=[\s,।.!?—-]|$)",
+    r"theek hai|samajh gayi|हम्म|मतलब|ओके|जी|hmm|matlab)(?=[\s,।.!?—-]|$)",
     re.IGNORECASE,
 )
 _SWAP_OPENERS = {"deva": ["अच्छा", "जी", "ओके", "हम्म"], "latin": ["Achha", "Okay", "Right", "Hmm"]}
@@ -4015,7 +4019,10 @@ class RealEstateAgent(Agent):
         # recorded voicemail prompt, skip the normal LLM pitch entirely:
         # leave one short line and hang up rather than talking to a
         # machine for the rest of the call.
-        if not _userdata.get("voicemail_checked") and _userdata.get("direction") == "outbound":
+        _userdata["outbound_turns_seen"] = _userdata.get("outbound_turns_seen", 0) + 1
+        _first_outbound_turn = not _userdata.get("voicemail_checked")
+        # Call 980's busy announcement arrived in three pieces and the first did not match.
+        if _userdata.get("direction") == "outbound" and (_first_outbound_turn or _userdata["outbound_turns_seen"] <= 3):
             _userdata["voicemail_checked"] = True
             # Checked BEFORE voicemail: a carrier announcement is not a
             # mailbox and there is nobody on the line to hear a closing line,
@@ -4047,7 +4054,7 @@ class RealEstateAgent(Agent):
                 _userdata["failure_reason"] = "carrier_unavailable"
                 await _hang_up(getattr(_room, "name", "") or "")
                 raise StopResponse()
-            if text and _VOICEMAIL_GREETING_PATTERN.search(text):
+            if _first_outbound_turn and text and _VOICEMAIL_GREETING_PATTERN.search(text):
                 _room = _userdata.get("room")
                 logger.info("voicemail detected on outbound call (room=%s)", getattr(_room, "name", None))
                 business_name = getattr(self, "_business_name", "") or ""
