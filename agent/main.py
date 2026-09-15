@@ -4959,6 +4959,19 @@ async def _wait_for_sip_answer(ctx: JobContext, participant, t0: float, timeout:
     return False
 
 
+async def _record_unanswered_campaign_dial(call_context: dict, why: str) -> None:
+    # The dialer records 'placed' when the dial goes out; only we learn nobody answered.
+    contact_id = call_context.get("campaign_contact_id")
+    campaign_id = call_context.get("campaign_id")
+    if not (contact_id and campaign_id):
+        return
+    logger.info("campaign contact %s not reached (%s) — recording no_answer", contact_id, why)
+    try:
+        await asyncio.to_thread(db.record_campaign_voicemail, int(contact_id), int(campaign_id), "no_answer")
+    except Exception:
+        logger.exception("could not record no_answer for contact %s", contact_id)
+
+
 def _call_context_from_job(ctx: JobContext) -> dict:
     """Room metadata names which dashboard agent should handle this call, and
     (for phone/widget calls) which number or site it came in on:
@@ -5262,6 +5275,7 @@ async def entrypoint(ctx: JobContext) -> None:
         # this escaped as an unhandled exception and crashed the job. Nothing
         # is wrong and there is nothing to tear down; the room is already gone.
         logger.info("room %s disconnected before anyone joined — nothing to do", ctx.room.name)
+        await _record_unanswered_campaign_dial(call_context, "room closed before anyone joined")
         return
     except asyncio.TimeoutError:
         # Returning here drops the agent out of the room but leaves the room
@@ -5271,6 +5285,7 @@ async def entrypoint(ctx: JobContext) -> None:
         # (the widget warms on form-open, the demo orb on hover), so that tail
         # was the bulk of our agent-session minutes. Tear the room down now.
         logger.warning("no caller joined room %s within 90s — abandoning job", ctx.room.name)
+        await _record_unanswered_campaign_dial(call_context, "no caller joined within 90s")
         await _hang_up(ctx.room.name)
         return
     _caller_joined_ms = round((time.monotonic() - _t0) * 1000)
@@ -6952,6 +6967,7 @@ async def entrypoint(ctx: JobContext) -> None:
     if call_context.get("direction") == "outbound" and not await _wait_for_sip_answer(
         ctx, first_participant, _t0
     ):
+        await _record_unanswered_campaign_dial(call_context, "leg ended before it was answered")
         await _hang_up(ctx.room.name)
         return
     if call_context.get("direction") == "outbound":

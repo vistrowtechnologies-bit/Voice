@@ -1269,6 +1269,11 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
                     "next_attempt_at = ? WHERE id = ?",
                     (outcome, outcome, next_at, contact_id),
                 )
+                # The dialer auto-completes once the last dial goes out, before this lands.
+                conn.execute(
+                    "UPDATE campaigns SET status = 'running' WHERE id = ? AND status = 'completed'",
+                    (campaign_id,),
+                )
         logger.info("recorded %s for campaign contact %s", outcome, contact_id)
     except Exception:
         logger.exception("could not record campaign voicemail for contact %s", contact_id)
