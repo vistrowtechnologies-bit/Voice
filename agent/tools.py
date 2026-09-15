@@ -1891,6 +1891,7 @@ async def end_call(context: RunContext) -> str:
             )
     if context.userdata is not None:
         context.userdata["ending_call"] = True
+        context.userdata["ending_call_from_tool"] = True
     return (
         "The caller is done. Give one short, warm goodbye line right now (thank them, wish them well) "
         "and then stop — do not ask any further questions or add anything after the goodbye."

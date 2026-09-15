@@ -310,6 +310,17 @@ def _looks_like_farewell(text: str) -> bool:
     return any(word in lowered for word in _FAREWELL_WORDS)
 
 
+def _caller_reopened_conversation(userdata: dict, text: str) -> bool:
+    # Call 979: end_call armed a hang-up, the caller asked the price, and the line dropped after the answer.
+    return bool(
+        userdata.get("ending_call")
+        and userdata.get("ending_call_from_tool")
+        and (text or "").strip()
+        and not _looks_like_farewell(text)
+        and not backchannel_patch.is_backchannel(text)
+    )
+
+
 # capture_platform_lead/log_lead (tools.py) both write into userdata["lead_data"]
 # already — this just reflects that dict back into the model's own context each
 # turn instead of leaving it to re-derive "what did I already ask" from
@@ -3884,6 +3895,10 @@ class RealEstateAgent(Agent):
         text = new_message.text_content
         self._booking_confirmed_this_turn = False
         _userdata = self.session.userdata
+        if _caller_reopened_conversation(_userdata, text):
+            _userdata["ending_call"] = False
+            _userdata["ending_call_from_tool"] = False
+            logger.info("caller kept talking after end_call — cancelling the pending hang-up: %r", (text or "")[:80])
         # Close out the turn's end-of-turn predictions (see
         # _record_eot_probability). The last prediction of a turn is the one
         # the framework acted on; if it escalated, nobody spoke again and the
@@ -6340,7 +6355,13 @@ async def entrypoint(ctx: JobContext) -> None:
         # actually finish playing (agent state drops out of "speaking")
         # before tearing the room down, so the farewell is never cut off
         # mid-sentence.
-        if userdata.get("ending_call") and ev.old_state == "speaking" and ev.new_state != "speaking":
+        if (
+            userdata.get("ending_call")
+            and ev.old_state == "speaking"
+            and ev.new_state != "speaking"
+            # A goodbye cut off by the caller talking is not a finished goodbye.
+            and userdata.get("user_state") != "speaking"
+        ):
             userdata["ending_call"] = False
             asyncio.create_task(_hang_up(ctx.room.name))
 
