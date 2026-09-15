@@ -40,6 +40,7 @@ from livekit.agents.types import NOT_GIVEN, APIConnectOptions
 from livekit.agents.voice.agent_session import SessionConnectOptions
 from google.genai import types as genai_types
 from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarvam
+from sarvam_early_flush_patch import EarlyFlushTTS
 
 import db
 import recording
@@ -2494,7 +2495,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         # above applies to Mira/Arin, which are the tenant/marketing Flash
         # voices requested here.
         safety_speaker = "ritu" if (voice_catalog.get_voice(speaker) or {}).get("gender") == "female" else "shubh"
-        sarvam_safety_net = sarvam.TTS(
+        sarvam_safety_net = EarlyFlushTTS(
             target_language_code=reply_language,
             model="bulbul:v3",
             speaker=safety_speaker,
@@ -2539,7 +2540,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         "output_audio_codec": "linear16",
         "speech_sample_rate": _TELEPHONY_SAMPLE_RATE if is_phone else 24000,
     } if sarvam_latency_lab else {}
-    sarvam_tts = sarvam.TTS(
+    sarvam_tts = EarlyFlushTTS(
         target_language_code=reply_language,
         # v2 is retired vendor-side; v3 is the only model left.
         model="bulbul:v3",
