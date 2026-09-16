@@ -1201,6 +1201,18 @@ def init_tables() -> None:
                 # array = "all connected" (today's behavior, unchanged for
                 # every agent created before this field existed).
                 ("crm_integration_keys", "TEXT DEFAULT '[]'"),
+                # Operator-defined {{variable}} names this agent can use in
+                # its prompt/welcome messages beyond the built-in ones
+                # (first_name, last_name, name, phone, company) and whatever
+                # a campaign CSV happens to supply under custom.KEY - see
+                # AgentDetail.tsx's Variables panel. [{name, defaultValue}].
+                # agent/main.py's _substitute_template_vars falls back to
+                # defaultValue only when the real per-call data has nothing
+                # for that name, so a variable defined here never overrides
+                # a genuine CSV/contact value - it just fills the gap when
+                # one wasn't supplied, instead of the prompt reading a
+                # literal blank or "{{enquiry_bhk}}" left unsubstituted.
+                ("variables", "TEXT DEFAULT '[]'"),
             ):
                 conn.execute(f"ALTER TABLE agents ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # Generic display price for live-catalog feeds (for example
@@ -3274,13 +3286,13 @@ _AGENT_FIELDS = (
     "custom_functions", "post_call_fields", "webhook_url", "memory_enabled",
     "emotion_intensity", "ambient_noise", "ambient_volume", "business_name", "public_demo_slug",
     "emergency_fallback_number", "crm_integration_keys",
-    "live_catalog_enabled",
+    "live_catalog_enabled", "variables",
 )
 # INTEGER columns fed from a JSON bool (Postgres has no bool->int cast).
 _AGENT_BOOL_FIELDS = frozenset({"is_platform_demo", "memory_enabled", "live_catalog_enabled"})
 # TEXT columns that hold a JSON array — the frontend sends a real
 # array/object, stored as a JSON string, parsed back out in _agent_dict.
-_AGENT_JSON_FIELDS = frozenset({"custom_functions", "post_call_fields", "crm_integration_keys"})
+_AGENT_JSON_FIELDS = frozenset({"custom_functions", "post_call_fields", "crm_integration_keys", "variables"})
 # camelCase (API) -> snake_case (column) for every field whose names differ.
 _AGENT_CAMEL_TO_SNAKE = {
     "sttProvider": "stt_provider",
@@ -3372,6 +3384,7 @@ def _agent_dict(row: dict) -> dict:
         "transferPhone": row["transfer_phone"] or "",
         "emergencyFallbackNumber": _row_get(row, "emergency_fallback_number") or "",
         "crmIntegrationKeys": _load_json_field(_row_get(row, "crm_integration_keys"), []),
+        "variables": _load_json_field(_row_get(row, "variables"), []),
         "customFunctions": _load_json_field(row["custom_functions"], []),
         "postCallFields": _load_json_field(row["post_call_fields"], []),
         "webhookUrl": row["webhook_url"] or "",

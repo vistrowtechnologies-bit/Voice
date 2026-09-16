@@ -27,7 +27,12 @@ import {
   voiceLabel,
   voicePickerGroups,
 } from '../lib/agentOptions'
-import type { AgentConfig, CustomFunction, Integration, KnowledgeBase, PostCallField, VoiceEntry } from '../lib/types'
+import type { AgentConfig, AgentVariable, CustomFunction, Integration, KnowledgeBase, PostCallField, VoiceEntry } from '../lib/types'
+
+// Must match agent/main.py's template_vars keys exactly (the substitution
+// call site, not calls_db.py) - these are the only names that are always
+// filled from the contact record with no dashboard configuration needed.
+const BUILTIN_TEMPLATE_VARS = ['first_name', 'last_name', 'name', 'phone', 'company']
 
 type AgentForm = Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>
 
@@ -153,6 +158,7 @@ function AgentEditorForm({
     transferPhone: agent.transferPhone ?? '',
     emergencyFallbackNumber: agent.emergencyFallbackNumber ?? '',
     customFunctions: agent.customFunctions ?? [],
+    variables: agent.variables ?? [],
     postCallFields: agent.postCallFields ?? [],
     webhookUrl: agent.webhookUrl ?? '',
     memoryEnabled: agent.memoryEnabled ?? false,
@@ -256,6 +262,14 @@ function AgentEditorForm({
 
   const inputCls =
     'w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary'
+
+  // Offered after typing "{{" in a Welcome Message field - the built-ins
+  // agent/main.py always fills from the contact record, plus whatever this
+  // agent has defined in its own Variables panel below.
+  const variableSuggestions = [
+    ...BUILTIN_TEMPLATE_VARS,
+    ...form.variables.map((v) => v.name).filter(Boolean),
+  ]
 
   return (
     <div className="flex flex-col gap-4">
@@ -459,6 +473,7 @@ function AgentEditorForm({
                   value={form.welcomeMessage}
                   onChange={(v) => set('welcomeMessage', v)}
                   placeholder="e.g. Hi, thanks for calling Acme - how can I help?"
+                  suggestions={variableSuggestions}
                   className={inputCls}
                 />
               </Field>
@@ -467,6 +482,7 @@ function AgentEditorForm({
                   value={form.welcomeMessageOutbound ?? ''}
                   onChange={(v) => set('welcomeMessageOutbound', v)}
                   placeholder="e.g. Hi {{first_name}}, Mira from Acme - do you have two minutes?"
+                  suggestions={variableSuggestions}
                   className={inputCls}
                 />
               </Field>
@@ -655,6 +671,14 @@ function AgentEditorForm({
             value={form.maxCallDurationS}
             onChange={(n) => set('maxCallDurationS', Math.round(n))}
             hint="0 = no limit. The call ends automatically after this long."
+            inputCls={inputCls}
+          />
+        </Panel>
+
+        <Panel icon="data_object" title="Variables" subtitle="Custom {{variable}} names this agent can use, with a fallback value">
+          <VariablesEditor
+            value={form.variables}
+            onChange={(v) => set('variables', v)}
             inputCls={inputCls}
           />
         </Panel>
@@ -1010,6 +1034,56 @@ function PostCallFieldsEditor({
         className="self-start rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-bold text-text-muted hover:border-primary hover:text-text"
       >
         + Add field
+      </button>
+    </div>
+  )
+}
+
+function VariablesEditor({
+  value,
+  onChange,
+  inputCls,
+}: {
+  value: AgentVariable[]
+  onChange: (v: AgentVariable[]) => void
+  inputCls: string
+}) {
+  const update = (i: number, patch: Partial<AgentVariable>) =>
+    onChange(value.map((v, idx) => (idx === i ? { ...v, ...patch } : v)))
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[11px] text-text-muted">
+        Define a {'{{variable}}'} the prompt or welcome message can use. The default value is only spoken when a
+        real call has nothing for that name - a genuine CRM/CSV value always wins.
+      </p>
+      {value.map((v, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <input
+            value={v.name}
+            onChange={(e) => update(i, { name: e.target.value.replace(/[^a-zA-Z0-9_.]/g, '_') })}
+            placeholder="variable_name"
+            className={`${inputCls} w-40 font-mono text-xs`}
+          />
+          <input
+            value={v.defaultValue}
+            onChange={(e) => update(i, { defaultValue: e.target.value })}
+            placeholder="Default value, e.g. 3BHK"
+            className={`${inputCls} flex-1`}
+          />
+          <button
+            onClick={() => onChange(value.filter((_, idx) => idx !== i))}
+            aria-label="Remove variable"
+            className="text-text-muted hover:text-destructive"
+          >
+            <Icon name="close" className="text-[14px]" />
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={() => onChange([...value, { name: '', defaultValue: '' }])}
+        className="self-start rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-bold text-text-muted hover:border-primary hover:text-text"
+      >
+        + Add variable
       </button>
     </div>
   )

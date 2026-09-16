@@ -5228,7 +5228,7 @@ def _call_context_from_job(ctx: JobContext) -> dict:
 _TEMPLATE_VAR_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
 
 
-def _substitute_template_vars(text: str, values: dict) -> str:
+def _substitute_template_vars(text: str, values: dict, defaults: dict | None = None) -> str:
     """Fill {{first_name}}/{{last_name}}/{{name}}/{{phone}}/{{company}}/
     {{custom.KEY}} tokens in an operator-authored agent prompt with this
     call's contact data (from a campaign dial's CSV import — see
@@ -5237,26 +5237,36 @@ def _substitute_template_vars(text: str, values: dict) -> str:
     literal braces, since a stray "{{whatever}}" read aloud by the TTS would
     be far more jarring to a caller than a silently-dropped clause.
 
+    `defaults` is the agent's own dashboard-defined {{variable}} fallbacks
+    (calls_db.py's variables column, AgentDetail.tsx's Variables panel) —
+    keyed by the exact text between the braces, so it covers both a plain
+    {{enquiry_bhk}} and a {{custom.enquiry_bhk}} an operator chose to name
+    that way. Only consulted when the real per-call value is empty, so a
+    genuine CSV/contact value always wins - this exists to fill the gap
+    when one wasn't supplied, never to override one that was.
+
     A blank value still leaves the token's surrounding punctuation/spacing
     behind (e.g. "नमस्कार {{name}}! मैं..." -> "नमस्कार !" — a stray space
     before the "!" that reads as broken, not just quiet). The cleanup pass
     below collapses runs of whitespace and drops any space sitting directly
     before punctuation, so a skipped variable disappears cleanly instead of
     leaving the hole visible."""
+    defaults = defaults or {}
 
     def repl(match: re.Match) -> str:
         key = match.group(1)
         if key.startswith("custom."):
-            return str(values.get("custom", {}).get(key[7:], ""))
-        value = str(values.get(key, ""))
-        if key in _NAME_TEMPLATE_VARS and value.strip().lower() in _PLACEHOLDER_NAMES:
-            # A CRM row with no real name still carries a placeholder, and it
-            # gets SPOKEN: phone call 948 opened with "Namaste Unknown, main
-            # Artha bol rahi hoon" to a live lead. Blank it and let the
-            # whitespace/punctuation cleanup below close the gap, exactly as
-            # for a missing value — "Namaste, main Artha bol rahi hoon".
-            return ""
-        return value
+            value = str(values.get("custom", {}).get(key[7:], ""))
+        else:
+            value = str(values.get(key, ""))
+            if key in _NAME_TEMPLATE_VARS and value.strip().lower() in _PLACEHOLDER_NAMES:
+                # A CRM row with no real name still carries a placeholder, and it
+                # gets SPOKEN: phone call 948 opened with "Namaste Unknown, main
+                # Artha bol rahi hoon" to a live lead. Blank it and let the
+                # whitespace/punctuation cleanup below close the gap, exactly as
+                # for a missing value — "Namaste, main Artha bol rahi hoon".
+                value = ""
+        return value if value else str(defaults.get(key, ""))
 
     filled = _TEMPLATE_VAR_RE.sub(repl, text)
     filled = re.sub(r"[ \t]{2,}", " ", filled)
@@ -5581,16 +5591,25 @@ async def entrypoint(ctx: JobContext) -> None:
             "company": call_context["company"],
             "custom": call_context["custom_fields"],
         }
+        template_defaults = {
+            v["name"]: v.get("defaultValue", "")
+            for v in _parse_json_config(config.get("variables"), [])
+            if isinstance(v, dict) and v.get("name")
+        }
         config = {
             **config,
-            "system_prompt": _substitute_template_vars(config.get("system_prompt") or "", template_vars),
+            "system_prompt": _substitute_template_vars(
+                config.get("system_prompt") or "", template_vars, template_defaults
+            ),
             # welcome_message is spoken verbatim by on_enter() (see
             # RealEstateAgent.on_enter) — it never goes through the LLM, so
             # an unsubstituted {{name}} would be read aloud by the TTS
             # literally, e.g. "Hello Name" instead of the caller's name.
-            "welcome_message": _substitute_template_vars(config.get("welcome_message") or "", template_vars),
+            "welcome_message": _substitute_template_vars(
+                config.get("welcome_message") or "", template_vars, template_defaults
+            ),
             "welcome_message_outbound": _substitute_template_vars(
-                config.get("welcome_message_outbound") or "", template_vars
+                config.get("welcome_message_outbound") or "", template_vars, template_defaults
             ),
         }
         cfg = config

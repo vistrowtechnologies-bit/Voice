@@ -171,5 +171,45 @@ class PlaceholderNamesAreNotSpokenAloud(unittest.TestCase):
         self.assertEqual(f("from {{company}}.", {"company": "Lead"}), "from Lead.")
 
 
+class DashboardVariableDefaultsFillTheGap(unittest.TestCase):
+    """AgentDetail.tsx's Variables panel - a fallback for when the real
+    per-call value (CRM/CSV) has nothing, never an override for one that
+    does."""
+
+    def test_missing_value_falls_back_to_the_defined_default(self):
+        import main
+
+        f = main._substitute_template_vars
+        self.assertEqual(
+            f("BHK: {{enquiry_bhk}}.", {}, {"enquiry_bhk": "3BHK"}),
+            "BHK: 3BHK.",
+        )
+
+    def test_real_value_always_wins_over_the_default(self):
+        import main
+
+        f = main._substitute_template_vars
+        self.assertEqual(
+            f("BHK: {{enquiry_bhk}}.", {"enquiry_bhk": "2BHK"}, {"enquiry_bhk": "3BHK"}),
+            "BHK: 2BHK.",
+        )
+
+    def test_default_applies_to_a_custom_prefixed_name_too(self):
+        import main
+
+        f = main._substitute_template_vars
+        self.assertEqual(
+            f("Source: {{custom.lead_source}}.", {"custom": {}}, {"custom.lead_source": "MagicBricks"}),
+            "Source: MagicBricks.",
+        )
+
+    def test_no_default_defined_still_blanks_cleanly(self):
+        import main
+
+        f = main._substitute_template_vars
+        self.assertEqual(f("Hi {{enquiry_bhk}}!", {}, {}), "Hi!")
+        self.assertEqual(f("Hi {{enquiry_bhk}}!", {}, None), "Hi!")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -276,6 +276,16 @@ export interface PostCallField {
   description: string
 }
 
+export interface AgentVariable {
+  /** The exact text between {{ and }} - "enquiry_bhk", or an operator's
+   * own choice of "custom.enquiry_bhk" to also match a CSV column of that
+   * name (see agent/main.py's _substitute_template_vars). */
+  name: string
+  /** Spoken/used only when the real per-call data has nothing for this
+   * name - never overrides a genuine CRM/CSV value. */
+  defaultValue: string
+}
+
 export interface AgentConfig {
   id: number
   name: string
@@ -324,6 +334,7 @@ export interface AgentConfig {
   webhookUrl: string
   // Connected integration keys this agent fans out to (empty = all connected)
   crmIntegrationKeys: string[]
+  variables: AgentVariable[]
   memoryEnabled: boolean
   liveCatalogEnabled: boolean
   createdAt: string
