@@ -1280,6 +1280,43 @@ def _neutralize_caller_directed_gender(text: str) -> str:
     return _GENDERED_FUTURE.sub(_repl_future, text)
 
 
+def _build_transcript(
+    history_items: list,
+    tts_full_texts: list[str],
+    caller_gender: str | None,
+) -> list[dict]:
+    """Build the saved transcript from session history.
+
+    Call 985: an interrupted assistant turn's item.text_content is
+    livekit-agents' synchronized_transcript — a pacing ESTIMATE of how much
+    the caller heard, computed by counting "hyphens" per word via a
+    Frank-Liang (English-only) hyphenator. Verified directly against that
+    hyphenator: every Devanagari word — "है" (2 chars) and
+    "आवश्यकतानुसार" (13 chars) alike — comes back as exactly one hyphen,
+    so its estimate of "how far the audio got" is unreliable for
+    Hindi/Hinglish text. Prefer the full text tts_node captured for any
+    turn the framework marked interrupted, matched positionally: both
+    lists advance once per assistant turn that actually reached TTS with
+    non-empty text, in the same order.
+    """
+    tts_turn_idx = 0
+    transcript = []
+    for item in history_items:
+        text = getattr(item, "text_content", None)
+        if not text:
+            continue
+        if item.role == "assistant":
+            if getattr(item, "interrupted", False) and tts_turn_idx < len(tts_full_texts):
+                full = tts_full_texts[tts_turn_idx]
+                if full and len(full) > len(text):
+                    text = full
+            tts_turn_idx += 1
+            if caller_gender != "female":
+                text = _neutralize_caller_directed_gender(text)
+        transcript.append({"role": item.role, "text": text})
+    return transcript
+
+
 def _make_caller_gender_guard_transform(agent: "RealEstateAgent"):
     """Correct caller-directed gender without holding a whole long sentence.
 
@@ -3889,11 +3926,13 @@ class RealEstateAgent(Agent):
         """
         _t0 = time.monotonic()
         _seen = 0
+        _full_text: list[str] = []
 
         async def _timed(src):
             nonlocal _seen
             async for chunk in src:
                 _seen += 1
+                _full_text.append(chunk)
                 if _seen <= 3 or _seen % 25 == 0:
                     logger.info(
                         "[tts_node] chunk %d at +%.0fms len=%d %r",
@@ -3904,6 +3943,17 @@ class RealEstateAgent(Agent):
                 "[tts_node] input ended at +%.0fms after %d chunks",
                 (time.monotonic() - _t0) * 1000, _seen,
             )
+            # Call 985: an interrupted turn's saved chat-history text comes from
+            # livekit-agents' synchronized_transcript, which paces words against
+            # playback using Frank-Liang (English-only) hyphenation — every
+            # Devanagari word counts as exactly 1 "hyphen" regardless of length
+            # (verified directly: "है" and "आवश्यकतानुसार" both hyphenate_word to
+            # a single piece), so its estimate of "how much the caller heard" is
+            # unreliable for Hindi/Hinglish text. Keep the real full text here so
+            # log_call() can use it instead for any turn marked interrupted.
+            if not hasattr(self, "_tts_full_texts"):
+                self._tts_full_texts = []
+            self._tts_full_texts.append("".join(_full_text))
 
         _first_audio = None
         async for frame in Agent.default.tts_node(self, _timed(text), model_settings):
@@ -6723,18 +6773,11 @@ async def entrypoint(ctx: JobContext) -> None:
         # caller. Every review of a call is done on the transcript, so it read
         # as a live bug that had in fact only ever existed on the page. Same
         # function, so the record now matches what was actually said.
-        transcript = [
-            {
-                "role": item.role,
-                "text": (
-                    item.text_content
-                    if item.role != "assistant" or agent._caller_gender == "female"
-                    else _neutralize_caller_directed_gender(item.text_content)
-                ),
-            }
-            for item in session.history.items
-            if getattr(item, "text_content", None)
-        ]
+        transcript = _build_transcript(
+            session.history.items,
+            getattr(agent, "_tts_full_texts", []),
+            agent._caller_gender,
+        )
         resolved_agent_id = call_context["agent_id"] or cfg.get("id")
         # A demo caller is not someone to remember between visits — that is
         # CRM state about a real customer, and the demos are a shop window.
