@@ -40,7 +40,18 @@ from livekit.agents.types import NOT_GIVEN, APIConnectOptions
 from livekit.agents.voice.agent_session import SessionConnectOptions
 from google.genai import types as genai_types
 from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarvam
-from sarvam_early_flush_patch import EarlyFlushTTS
+# EarlyFlushTTS (sarvam_early_flush_patch) is NOT wired in below — call 984,
+# 2026-09-16: it intermittently ends the whole reply after the first clause
+# instead of just starting it early. Confirmed directly, not assumed: the
+# call recording showed the greeting playing only 1.33s of audio instead of
+# ~10.9s, and test_sarvam_early_flush_completeness.py reproduces it offline
+# against the real Sarvam API — the greeting truncates to ~1.3s on some
+# runs and completes normally on others, same code path, same text. The
+# earlier verification before shipping measured TIME-TO-FIRST-AUDIO
+# extensively and never checked that the FULL reply's audio still arrives —
+# a real gap in that testing, not a case the fix was checked against and
+# passed. Left in the tree for whoever picks this up again, but nothing may
+# construct EarlyFlushTTS until that completeness test passes reliably.
 
 import db
 import recording
@@ -2496,7 +2507,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         # above applies to Mira/Arin, which are the tenant/marketing Flash
         # voices requested here.
         safety_speaker = "ritu" if (voice_catalog.get_voice(speaker) or {}).get("gender") == "female" else "shubh"
-        sarvam_safety_net = EarlyFlushTTS(
+        sarvam_safety_net = sarvam.TTS(
             target_language_code=reply_language,
             model="bulbul:v3",
             speaker=safety_speaker,
@@ -2541,7 +2552,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         "output_audio_codec": "linear16",
         "speech_sample_rate": _TELEPHONY_SAMPLE_RATE if is_phone else 24000,
     } if sarvam_latency_lab else {}
-    sarvam_tts = EarlyFlushTTS(
+    sarvam_tts = sarvam.TTS(
         target_language_code=reply_language,
         # v2 is retired vendor-side; v3 is the only model left.
         model="bulbul:v3",
