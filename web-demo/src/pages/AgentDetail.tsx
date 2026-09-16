@@ -4,6 +4,7 @@ import { AmbiencePreviewButton } from '../components/AmbiencePreviewButton'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { UpgradeRequiredModal } from '../components/UpgradeRequiredModal'
+import { VariableInput } from '../components/VariableInput'
 import { VoicePreviewButton } from '../components/VoicePreviewButton'
 import { useAuth } from '../lib/auth'
 import {
@@ -461,17 +462,17 @@ function AgentEditorForm({
           {form.firstSpeaker === 'agent' && (
             <>
               <Field label="Welcome message — inbound (blank = auto-generated)">
-                <input
+                <VariableInput
                   value={form.welcomeMessage}
-                  onChange={(e) => set('welcomeMessage', e.target.value)}
+                  onChange={(v) => set('welcomeMessage', v)}
                   placeholder="e.g. Hi, thanks for calling Acme - how can I help?"
                   className={inputCls}
                 />
               </Field>
               <Field label="Welcome message — outbound (blank = use the inbound one)">
-                <input
-                  value={form.welcomeMessageOutbound}
-                  onChange={(e) => set('welcomeMessageOutbound', e.target.value)}
+                <VariableInput
+                  value={form.welcomeMessageOutbound ?? ''}
+                  onChange={(v) => set('welcomeMessageOutbound', v)}
                   placeholder="e.g. Hi {{first_name}}, Mira from Acme - do you have two minutes?"
                   className={inputCls}
                 />
