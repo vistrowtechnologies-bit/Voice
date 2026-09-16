@@ -447,18 +447,11 @@ function AgentEditorForm({
           </div>
         </div>
 
-        {/* Conversation start */}
+        {/* Conversation start - the "Who speaks first" select itself now
+            lives up in the settings grid (see the comment by "Background
+            ambience"), paired with Caller noise suppression instead of
+            dangling here alone; this block just holds what it controls. */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Who speaks first">
-            <select
-              value={form.firstSpeaker}
-              onChange={(e) => set('firstSpeaker', e.target.value as AgentForm['firstSpeaker'])}
-              className={inputCls}
-            >
-              <option value="agent">AI speaks first (greets the caller)</option>
-              <option value="user">Caller speaks first (agent waits)</option>
-            </select>
-          </Field>
           {form.firstSpeaker === 'agent' && (
             <>
               <Field label="Welcome message — inbound (blank = auto-generated)">
