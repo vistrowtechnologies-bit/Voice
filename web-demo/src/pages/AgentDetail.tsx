@@ -281,7 +281,21 @@ function AgentEditorForm({
               ))}
             </select>
           </Field>
-          <Field label="Voice">
+          <Field
+            label="Voice"
+            hint={
+              myVoices.length === 0 ? (
+                'Loading your voices…'
+              ) : (
+                <>
+                  Only voices you’ve added appear here.{' '}
+                  <Link to="/dashboard/voices" className="text-primary hover:underline">
+                    Manage voices →
+                  </Link>
+                </>
+              )
+            }
+          >
             <div className="flex items-center gap-2">
               <select value={form.voice} onChange={(e) => set('voice', e.target.value)} className={inputCls}>
                 {/* Current voice isn't in this account's menu (a legacy voice, or
@@ -316,18 +330,6 @@ function AgentEditorForm({
                 )
               })()}
             </div>
-            <span className="text-[10px] text-text-muted">
-              {myVoices.length === 0 ? (
-                'Loading your voices…'
-              ) : (
-                <>
-                  Only voices you’ve added appear here.{' '}
-                  <Link to="/dashboard/voices" className="text-primary hover:underline">
-                    Manage voices →
-                  </Link>
-                </>
-              )}
-            </span>
           </Field>
           <Field label="Default language">
             <select value={form.language} onChange={(e) => set('language', e.target.value)} className={inputCls}>
@@ -391,6 +393,16 @@ function AgentEditorForm({
                   {o.label} - {o.description}
                 </option>
               ))}
+            </select>
+          </Field>
+          <Field label="Who speaks first">
+            <select
+              value={form.firstSpeaker}
+              onChange={(e) => set('firstSpeaker', e.target.value as AgentForm['firstSpeaker'])}
+              className={inputCls}
+            >
+              <option value="agent">AI speaks first (greets the caller)</option>
+              <option value="user">Caller speaks first (agent waits)</option>
             </select>
           </Field>
           {/* Full-width rather than one grid cell: the sound picker, its
@@ -1015,11 +1027,12 @@ function Field({
   children,
 }: {
   label: string
-  /** Explanatory text moved out of an inline paragraph and into a hover
-   * tooltip on a small info icon - a block of prose under one field pushed
-   * that field's whole row taller than its neighbor in the two-column grid,
-   * so sibling rows on the other side drifted out of alignment with it. */
-  hint?: string
+  /** Explanatory text (or a small chunk of markup, e.g. a "Manage voices"
+   * link) moved out of an inline paragraph and into a hover tooltip on a
+   * small info icon - a block of prose under one field pushed that field's
+   * whole row taller than its neighbor in the two-column grid, so sibling
+   * rows on the other side drifted out of alignment with it. */
+  hint?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -1028,8 +1041,8 @@ function Field({
         {label}
         {hint && (
           <span className="group relative inline-flex">
-            <Icon name="info" className="!text-sm cursor-help normal-case text-text-muted/70 hover:text-text-muted" label={hint} />
-            <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 w-56 -translate-x-1/2 rounded-md border border-border bg-surface-high px-2.5 py-1.5 text-[11px] font-normal normal-case leading-snug tracking-normal text-text opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+            <Icon name="info" className="!text-sm cursor-help normal-case text-text-muted/70 hover:text-text-muted" label={`More info about ${label}`} />
+            <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 w-56 -translate-x-1/2 rounded-md border border-border bg-surface-high px-2.5 py-1.5 text-[11px] font-normal normal-case leading-snug tracking-normal text-text opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 [&_a]:pointer-events-auto">
               {hint}
             </span>
           </span>

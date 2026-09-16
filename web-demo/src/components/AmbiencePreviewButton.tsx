@@ -40,8 +40,16 @@ export function AmbiencePreviewButton({
     }
   }
 
-  // Stop on unmount, and whenever a different sound is selected.
-  useEffect(() => cleanup, [file])
+  // Stop on unmount, and whenever a different sound is selected. cleanup()
+  // alone left the button showing "stop" after the sound changed - it
+  // silences the audio but was never resetting the displayed icon back to
+  // "play", since nothing here touched `state`.
+  useEffect(() => {
+    return () => {
+      cleanup()
+      setState('idle')
+    }
+  }, [file])
 
   // Live-adjust an already-playing preview as the volume slider moves,
   // instead of making the operator stop and restart it to hear a change.
