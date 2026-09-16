@@ -63,8 +63,10 @@ import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 from clause_tokenizer import ClauseTokenizer
 from google_tts_streaming_patch import PatchedGeminiTTS
 import backchannel_patch
+import preemptive_diag_patch
 
 backchannel_patch.apply()
+preemptive_diag_patch.apply()
 from emotion import (
     GEMINI_EMOTION_PROMPT_DELTAS,
     GEMINI_TONE_PROMPTS,
