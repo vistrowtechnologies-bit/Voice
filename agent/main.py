@@ -318,6 +318,32 @@ _AMBIENT_CLIPS = {
     "hold_music": BuiltinAudioClip.HOLD_MUSIC,
 }
 
+# Call 990: "call_center" at the dashboard's 10% slider was reported far
+# louder than "office" ever was at that setting. Measured (decoded each
+# .ogg, RMS of the raw samples) rather than guessed — the bundled clips are
+# not mastered anywhere near the same loudness:
+#   office            -55.4 dBFS RMS  (what the original volume=3.0 "present,
+#                                       not competing" calibration was for)
+#   city              -35.9 dBFS RMS
+#   call_center       -26.0 dBFS RMS  (~29 dB hotter than office at volume=1.0)
+#   keyboard_typing   -39.3 dBFS RMS
+#   keyboard_typing2  -38.8 dBFS RMS
+#   forest            -51.9 dBFS RMS
+#   hold_music        -19.3 dBFS RMS  (~36 dB hotter than office)
+# The slider must produce the same PERCEIVED loudness regardless of which
+# clip is picked, so each ratio here is office's RMS divided by that clip's
+# own RMS - it cancels out the source-file loudness difference, leaving
+# every clip tracking office's already call-validated loudness curve.
+_AMBIENT_CLIP_GAIN_RATIO = {
+    "office": 1.0,
+    "city": 0.1064,
+    "call_center": 0.0342,
+    "keyboard_typing": 0.1570,
+    "keyboard_typing2": 0.1486,
+    "forest": 0.6706,
+    "hold_music": 0.0158,
+}
+
 
 # Deliberately narrow and low-ambiguity — a false positive here just adds a
 # harmless system nudge the model can ignore, but a word like "बस" ("enough"/
@@ -7279,10 +7305,15 @@ async def entrypoint(ctx: JobContext) -> None:
             # same range: 0.5 (the default, matching every agent created
             # before the slider existed) lands exactly on the 3.0 this used
             # to be hardcoded to; 1.0 reaches 6.0, well short of clipping.
+            # This range was only ever measured for "office" - every other
+            # clip is scaled by _AMBIENT_CLIP_GAIN_RATIO so the slider means
+            # the same perceived loudness no matter which sound is picked
+            # (see that dict's comment for the call-990 bug this fixes).
             _volume_norm = cfg.get("ambient_volume")
             _volume_norm = 0.5 if _volume_norm is None else float(_volume_norm)
+            _gain_ratio = _AMBIENT_CLIP_GAIN_RATIO.get(_ambient_preset, 1.0)
             background_audio = BackgroundAudioPlayer(
-                ambient_sound=AudioConfig(_ambient_clip, volume=_volume_norm * 6.0, fade_in=1.5)
+                ambient_sound=AudioConfig(_ambient_clip, volume=_volume_norm * 6.0 * _gain_ratio, fade_in=1.5)
             )
             await background_audio.start(room=ctx.room, agent_session=session)
             background_audio_holder["player"] = background_audio
