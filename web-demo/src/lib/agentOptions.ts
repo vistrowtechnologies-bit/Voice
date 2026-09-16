@@ -344,12 +344,22 @@ export const EMOTION_INTENSITIES = [
   { value: 'subtle', label: 'Subtle', description: 'A light shift in delivery when the caller sounds frustrated, confused, or excited.' },
   { value: 'strong', label: 'Strong', description: 'Full reactivity - the default. Noticeably warmer or calmer depending on the caller.' },
 ] as const
-// A quiet, looping office-ambience track mixed into the agent's own audio -
-// matches agent/main.py's ambient_noise handling exactly. Off by default:
-// unproven on real calls, so an operator opts in per agent.
+// A quiet, looping ambience track mixed into the agent's own audio - every
+// clip livekit-agents ships, matching agent/main.py's _AMBIENT_CLIPS keys
+// exactly. Off by default: unproven on real calls, so an operator opts in
+// per agent. `file` is served from web-demo/public/ambience/ for the
+// dashboard's own preview player - the same .ogg livekit-agents bundles,
+// copied in rather than fetched at runtime, since it's a fixed built-in
+// asset that never changes.
 export const AMBIENT_NOISE_OPTIONS = [
-  { value: 'off', label: 'Off', description: 'Clean, studio-quiet audio - the default.' },
-  { value: 'on', label: 'On', description: 'A subtle office-ambience loop, mixed in quietly under the agent’s voice.' },
+  { value: 'off', label: 'Off', icon: 'volume_off', file: null, description: 'Clean, studio-quiet audio - the default.' },
+  { value: 'office', label: 'Office', icon: 'apartment', file: '/ambience/office.ogg', description: 'A quiet office - the original ambience track.' },
+  { value: 'city', label: 'City', icon: 'location_city', file: '/ambience/city.ogg', description: 'Distant street and traffic noise.' },
+  { value: 'call_center', label: 'Call center', icon: 'support_agent', file: '/ambience/call-center.ogg', description: 'A busy room of overlapping voices, like a real support floor.' },
+  { value: 'keyboard_typing', label: 'Keyboard typing', icon: 'keyboard', file: '/ambience/keyboard-typing.ogg', description: 'Someone typing nearby, as if taking notes on the call.' },
+  { value: 'keyboard_typing2', label: 'Keyboard typing (alt)', icon: 'keyboard', file: '/ambience/keyboard-typing2.ogg', description: 'A second, lighter typing texture.' },
+  { value: 'forest', label: 'Forest', icon: 'forest', file: '/ambience/forest.ogg', description: 'Birdsong and wind - for an outdoor or rural setting.' },
+  { value: 'hold_music', label: 'Hold music', icon: 'music_note', file: '/ambience/hold-music.ogg', description: 'A looping instrumental track, like a caller on hold.' },
 ] as const
 export const LANGUAGES = [
   ['hi-IN', 'Hindi'],

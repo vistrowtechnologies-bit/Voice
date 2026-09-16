@@ -293,7 +293,10 @@ export interface AgentConfig {
   kbId: number | null
   tone: 'professional' | 'balanced' | 'casual'
   emotionIntensity: 'off' | 'subtle' | 'strong'
-  ambientNoise: 'off' | 'on'
+  // 'on' is legacy (predates the picker) and means the same as 'office'.
+  ambientNoise: 'off' | 'on' | 'office' | 'city' | 'call_center' | 'keyboard_typing' | 'keyboard_typing2' | 'forest' | 'hold_music'
+  /** 0.0-1.0. Only meaningful when ambientNoise isn't 'off'. */
+  ambientVolume: number
   isPlatformDemo: boolean
   // Conversation start
   firstSpeaker: 'agent' | 'user'

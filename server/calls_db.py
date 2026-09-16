@@ -1149,15 +1149,26 @@ def init_tables() -> None:
                 ("webhook_url", "TEXT DEFAULT ''"),
                 ("memory_enabled", "INTEGER DEFAULT 0"),
                 ("live_catalog_enabled", "INTEGER DEFAULT 0"),
-                # Low-volume looping office-ambience track mixed into the
-                # agent's outbound audio (agent/main.py, via LiveKit's own
+                # Low-volume looping ambience track mixed into the agent's
+                # outbound audio (agent/main.py, via LiveKit's own
                 # BackgroundAudioPlayer) - makes a synthetic voice feel like
                 # it's actually in a physical space instead of an unnaturally
                 # silent studio recording, which is itself a tell that gives
-                # away an AI caller. "off"/"on"; defaults off since it's
-                # unproven on real calls - existing agents don't change
-                # behavior until an operator opts in.
+                # away an AI caller. "off", or one of the preset keys in
+                # agent/main.py's _AMBIENT_CLIPS ("office", "city",
+                # "call_center", "keyboard_typing", "keyboard_typing2",
+                # "forest", "hold_music"). Defaults off since it's unproven
+                # on real calls - existing agents don't change behavior
+                # until an operator opts in. The legacy value "on" (from
+                # when this was a plain toggle) still means "office" -
+                # agent/main.py maps it, so old rows keep working unmigrated.
                 ("ambient_noise", "TEXT DEFAULT 'off'"),
+                # Raw gain multiplier for the ambience track above, as a
+                # normalized 0.0-1.0 slider value - agent/main.py maps it to
+                # the actual AudioConfig gain range. 0.5 is the default so
+                # every agent created before this field existed keeps
+                # exactly the volume it always had (raw gain 3.0).
+                ("ambient_volume", "REAL DEFAULT 0.5"),
                 # The business this agent answers AS, spoken aloud by the
                 # generic persona ("Hi, Sunrise Care Clinic — what can I do
                 # for you?"). Blank falls back to the account's own name
@@ -3261,7 +3272,7 @@ _AGENT_FIELDS = (
     "silence_reminder_ms", "silence_reminder_max", "end_call_on_silence_ms",
     "max_call_duration_s", "enabled_functions", "transfer_phone",
     "custom_functions", "post_call_fields", "webhook_url", "memory_enabled",
-    "emotion_intensity", "ambient_noise", "business_name", "public_demo_slug",
+    "emotion_intensity", "ambient_noise", "ambient_volume", "business_name", "public_demo_slug",
     "emergency_fallback_number", "crm_integration_keys",
     "live_catalog_enabled",
 )
@@ -3293,6 +3304,7 @@ _AGENT_CAMEL_TO_SNAKE = {
     "memoryEnabled": "memory_enabled",
     "emotionIntensity": "emotion_intensity",
     "ambientNoise": "ambient_noise",
+    "ambientVolume": "ambient_volume",
     "businessName": "business_name",
     "publicDemoSlug": "public_demo_slug",
     "emergencyFallbackNumber": "emergency_fallback_number",
@@ -3343,6 +3355,7 @@ def _agent_dict(row: dict) -> dict:
         "tone": row["tone"] or "balanced",
         "emotionIntensity": row["emotion_intensity"] or "strong",
         "ambientNoise": row["ambient_noise"] or "off",
+        "ambientVolume": _row_get(row, "ambient_volume") if _row_get(row, "ambient_volume") is not None else 0.5,
         "businessName": _row_get(row, "business_name") or "",
         "publicDemoSlug": _row_get(row, "public_demo_slug") or "",
         "isPlatformDemo": bool(row["is_platform_demo"]),

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { AmbiencePreviewButton } from '../components/AmbiencePreviewButton'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { UpgradeRequiredModal } from '../components/UpgradeRequiredModal'
@@ -135,7 +136,9 @@ function AgentEditorForm({
     kbId: agent.kbId,
     tone: agent.tone || 'balanced',
     emotionIntensity: agent.emotionIntensity || 'strong',
-    ambientNoise: agent.ambientNoise || 'off',
+    // 'on' predates the sound picker and always meant the office track.
+    ambientNoise: agent.ambientNoise === 'on' ? 'office' : agent.ambientNoise || 'off',
+    ambientVolume: agent.ambientVolume ?? 0.5,
     isPlatformDemo: agent.isPlatformDemo,
     firstSpeaker: agent.firstSpeaker || 'agent',
     welcomeMessage: agent.welcomeMessage || '',
@@ -335,7 +338,10 @@ function AgentEditorForm({
               ))}
             </select>
           </Field>
-          <Field label="Speech recognition">
+          <Field
+            label="Speech recognition"
+            hint="Recognition, reasoning, and voice are tested separately. Google Chirp 3 recognition is pinned to the default language; Vistrow Indic is better suited to Indian names and code-mixed speech."
+          >
             <select
               value={form.sttProvider}
               onChange={(e) => set('sttProvider', e.target.value as AgentForm['sttProvider'])}
@@ -344,9 +350,6 @@ function AgentEditorForm({
               <option value="sarvam">Vistrow Indic — recommended for Indian languages</option>
               <option value="google-chirp3">Google Chirp 3 — comparison / fixed language</option>
             </select>
-            <p className="mt-1 text-xs text-text-muted">
-              Recognition, reasoning, and voice are tested separately. Google Chirp 3 recognition is pinned to the default language; Vistrow Indic is better suited to Indian names and code-mixed speech.
-            </p>
           </Field>
           <Field label="Voice delivery">
             <select value={form.tone} onChange={(e) => set('tone', e.target.value as AgentForm['tone'])} className={inputCls}>
@@ -357,7 +360,10 @@ function AgentEditorForm({
               ))}
             </select>
           </Field>
-          <Field label="Emotion intensity">
+          <Field
+            label="Emotion intensity"
+            hint="Adaptive delivery is available on expressive multilingual voices. Other voices keep their configured delivery. This responds to conversation wording, not a measurement of vocal emotion."
+          >
             <select
               disabled={!form.voice.startsWith('google:') && !form.voice.startsWith('google31:') || form.voice.startsWith('google:chirp3:')}
               value={form.emotionIntensity}
@@ -370,9 +376,11 @@ function AgentEditorForm({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-text-muted">Adaptive delivery is available on expressive multilingual voices. Other voices keep their configured delivery. This responds to conversation wording, not a measurement of vocal emotion.</p>
           </Field>
-          <Field label="Caller noise suppression">
+          <Field
+            label="Caller noise suppression"
+            hint="Filters background noise out of the caller's audio before transcription. If callers say they spoke but the transcript is empty, set this to Off."
+          >
             <select
               value={form.noiseCancellation ?? ''}
               onChange={(e) => set('noiseCancellation', e.target.value as AgentForm['noiseCancellation'])}
@@ -384,21 +392,46 @@ function AgentEditorForm({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-text-muted">Filters background noise out of the caller's audio before transcription. If callers say they spoke but the transcript is empty, set this to Off.</p>
           </Field>
-          <Field label="Background ambience">
-            <select
-              value={form.ambientNoise}
-              onChange={(e) => set('ambientNoise', e.target.value as AgentForm['ambientNoise'])}
-              className={inputCls}
-            >
-              {AMBIENT_NOISE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label} - {o.description}
-                </option>
-              ))}
-            </select>
-          </Field>
+          {/* Full-width rather than one grid cell: the sound picker, its
+              preview button, and the volume slider need more room than the
+              half-width column gives, and a row this much taller than its
+              neighbor would throw off the two-column grid's alignment the
+              same way the paragraph hints used to (see Field's hint prop). */}
+          <div className="flex flex-col gap-3 sm:col-span-2">
+            <Field label="Background ambience">
+              <div className="flex items-center gap-2">
+                <select
+                  value={form.ambientNoise}
+                  onChange={(e) => set('ambientNoise', e.target.value as AgentForm['ambientNoise'])}
+                  className={inputCls}
+                >
+                  {AMBIENT_NOISE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label} - {o.description}
+                    </option>
+                  ))}
+                </select>
+                <AmbiencePreviewButton
+                  file={AMBIENT_NOISE_OPTIONS.find((o) => o.value === form.ambientNoise)?.file ?? null}
+                  volume={form.ambientVolume}
+                />
+              </div>
+            </Field>
+            {form.ambientNoise !== 'off' && (
+              <Field label={`Background volume - ${Math.round(form.ambientVolume * 100)}%`}>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={form.ambientVolume}
+                  onChange={(e) => set('ambientVolume', Number(e.target.value))}
+                  className="w-full accent-primary"
+                />
+              </Field>
+            )}
+          </div>
         </div>
 
         {/* Conversation start */}
@@ -976,10 +1009,32 @@ function PostCallFieldsEditor({
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  /** Explanatory text moved out of an inline paragraph and into a hover
+   * tooltip on a small info icon - a block of prose under one field pushed
+   * that field's whole row taller than its neighbor in the two-column grid,
+   * so sibling rows on the other side drifted out of alignment with it. */
+  hint?: string
+  children: React.ReactNode
+}) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{label}</span>
+      <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-text-muted">
+        {label}
+        {hint && (
+          <span className="group relative inline-flex">
+            <Icon name="info" className="!text-sm cursor-help normal-case text-text-muted/70 hover:text-text-muted" label={hint} />
+            <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 w-56 -translate-x-1/2 rounded-md border border-border bg-surface-high px-2.5 py-1.5 text-[11px] font-normal normal-case leading-snug tracking-normal text-text opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+              {hint}
+            </span>
+          </span>
+        )}
+      </span>
       {children}
     </label>
   )

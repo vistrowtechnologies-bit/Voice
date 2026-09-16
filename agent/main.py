@@ -303,6 +303,21 @@ _ELEVENLABS_SIMILARITY_BOOST = 0.75
 # this multiplier controls the strength of Gemini's per-turn style prompt.
 _EMOTION_INTENSITY_MULTIPLIERS = {"off": 0.0, "subtle": 0.5, "strong": 1.0}
 
+# Dashboard-facing "Background ambience" picker (see AgentDetail.tsx).
+# Every clip livekit-agents ships — "off" plays nothing. Keys match
+# calls_db.py's ambient_noise column and web-demo's AMBIENT_NOISE_OPTIONS
+# exactly; a value that matches none of these (a bad row, or the legacy
+# "on") is handled by the caller, not here.
+_AMBIENT_CLIPS = {
+    "office": BuiltinAudioClip.OFFICE_AMBIENCE,
+    "city": BuiltinAudioClip.CITY_AMBIENCE,
+    "call_center": BuiltinAudioClip.CROWDED_ROOM,
+    "keyboard_typing": BuiltinAudioClip.KEYBOARD_TYPING,
+    "keyboard_typing2": BuiltinAudioClip.KEYBOARD_TYPING2,
+    "forest": BuiltinAudioClip.FOREST_AMBIENCE,
+    "hold_music": BuiltinAudioClip.HOLD_MUSIC,
+}
+
 
 # Deliberately narrow and low-ambiguity — a false positive here just adds a
 # harmless system nudge the model can ignore, but a word like "बस" ("enough"/
@@ -7221,22 +7236,34 @@ async def entrypoint(ctx: JobContext) -> None:
     #
     # If muted-PSTN reports ever come back, this is the first thing to
     # suspect - re-add `and call_context["call_type"] != "phone"`.
-    if cfg.get("ambient_noise") == "on":
+    _ambient_preset = cfg.get("ambient_noise") or "off"
+    if _ambient_preset == "on":
+        # Legacy value from when this was a plain on/off toggle - the only
+        # sound that ever existed was the office bed, so keep old rows
+        # working unmigrated.
+        _ambient_preset = "office"
+    _ambient_clip = _AMBIENT_CLIPS.get(_ambient_preset)
+    if _ambient_clip is not None:
         try:
+            # volume here is a raw gain multiplier, NOT the 0.0-1.0 range
+            # AudioConfig's docstring implies: it is applied as
+            # `samples *= volume` and then clipped. Values above 1.0 are
+            # both legal and necessary here, because the bundled clips are
+            # themselves very quiet - measured by decoding the office one:
+            # peak amplitude 435 of int16's 32767, RMS 55, i.e. -55.5 dBFS
+            # at volume=1.0. So 0.05 (-81 dBFS) and 0.3 (-66 dBFS) were both
+            # inaudible on real calls. 3.0 lands near -46 dBFS: present
+            # under the voice without competing with it. Clipping only
+            # starts around 75x, so there is plenty of headroom above that.
+            #
+            # The dashboard's slider is 0.0-1.0, normalized against this
+            # same range: 0.5 (the default, matching every agent created
+            # before the slider existed) lands exactly on the 3.0 this used
+            # to be hardcoded to; 1.0 reaches 6.0, well short of clipping.
+            _volume_norm = cfg.get("ambient_volume")
+            _volume_norm = 0.5 if _volume_norm is None else float(_volume_norm)
             background_audio = BackgroundAudioPlayer(
-                # volume here is a raw gain multiplier, NOT the 0.0-1.0 range
-                # AudioConfig's docstring implies: it is applied as
-                # `samples *= volume` and then clipped. Values above 1.0 are
-                # both legal and necessary here, because the bundled clip is
-                # itself very quiet - measured by decoding it: peak amplitude
-                # 435 of int16's 32767, RMS 55, i.e. -55.5 dBFS at volume=1.0.
-                # So 0.05 (-81 dBFS) and 0.3 (-66 dBFS) were both inaudible on
-                # real calls. 3.0 lands near -46 dBFS: present under the voice
-                # without competing with it. Clipping only starts around 75x,
-                # so there is plenty of headroom to raise this further.
-                ambient_sound=AudioConfig(
-                    BuiltinAudioClip.OFFICE_AMBIENCE, volume=3.0, fade_in=1.5
-                )
+                ambient_sound=AudioConfig(_ambient_clip, volume=_volume_norm * 6.0, fade_in=1.5)
             )
             await background_audio.start(room=ctx.room, agent_session=session)
             background_audio_holder["player"] = background_audio
