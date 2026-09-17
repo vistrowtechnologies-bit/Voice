@@ -1343,6 +1343,57 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
         conn.close()
 
 
+def finish_campaign_contact(contact_id: int, campaign_id: int, outcome: str) -> None:
+    """Resolve an in-flight campaign contact when its call ends.
+
+    The dialer leaves a placed contact 'calling' for the whole call (that is
+    what makes its concurrency cap count live calls), so the agent owns the
+    final state. outcome is 'connected' (-> 'done') or 'no_answer' (retries if
+    attempts remain, same rule as record_campaign_voicemail).
+
+    A no-op unless the row is still 'calling': the unanswered-leg, carrier-
+    announcement and voicemail paths may already have resolved it mid-call,
+    and those more specific outcomes must win. Best-effort, never raises.
+    """
+    conn = dbconn.connect()
+    try:
+        with conn:
+            row = conn.execute(
+                "SELECT status, attempts FROM campaign_contacts WHERE id = ?", (contact_id,)
+            ).fetchone()
+            if row is None or row["status"] != "calling":
+                return
+            if outcome != "no_answer":
+                conn.execute(
+                    "UPDATE campaign_contacts SET status = 'done', outcome = 'connected', "
+                    "next_attempt_at = NULL WHERE id = ? AND status = 'calling'",
+                    (contact_id,),
+                )
+            else:
+                camp = conn.execute(
+                    "SELECT max_attempts, retry_minutes FROM campaigns WHERE id = ?", (campaign_id,)
+                ).fetchone()
+                max_attempts = (camp["max_attempts"] if camp else 1) or 1
+                retry_minutes = (camp["retry_minutes"] if camp else 60) or 60
+                attempts = row["attempts"] or 1
+                next_at = None
+                if attempts < max_attempts:
+                    next_at = (
+                        datetime.datetime.now(datetime.timezone.utc)
+                        + datetime.timedelta(minutes=retry_minutes)
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+                conn.execute(
+                    "UPDATE campaign_contacts SET status = 'no_answer', outcome = 'no answer', "
+                    "next_attempt_at = ? WHERE id = ? AND status = 'calling'",
+                    (next_at, contact_id),
+                )
+        logger.info("campaign contact %s finished as %s", contact_id, outcome)
+    except Exception:
+        logger.exception("could not finish campaign contact %s", contact_id)
+    finally:
+        conn.close()
+
+
 def set_call_recording(call_id: int | None, recording_key: str) -> None:
     """Attaches this call's R2 recording key after upload finishes — same
     save-now-update-later shape as set_call_arthaleads_status above, since

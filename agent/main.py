@@ -54,7 +54,9 @@ from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarv
 # construct EarlyFlushTTS until that completeness test passes reliably.
 
 import db
+import numpy as np
 import recording
+import ringback
 import sarvam_realtime_stt
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
@@ -3649,6 +3651,44 @@ class RealEstateAgent(Agent):
     # detection — a piece of work, not a constant. Until then this is a plain
     # trade, and the number to revisit if silent answerers start complaining.
     _HELD_OPENING_HARD_CAP_S = 8.0
+    # The hard cap above is measured from SIP "active", and on campaign 20
+    # (2026-09-17) 10 of 16 outbound legs were still ringing at 8s: carriers
+    # report active on 183 early media. agent/ringback.py detects the ring
+    # tone live; while it is locked the hard cap does not release the
+    # opening. Validated offline on all 16 recordings: every ringback leg
+    # locked by 3.5-5.0s, and none of the 3 real conversations ever locked.
+    #
+    # Once ringback ends (a pickup, or the network giving up) the opening is
+    # released this long afterwards unless the recipient speaks first - short,
+    # so a silent answerer (call 936) is not left waiting.
+    _POST_RINGBACK_RELEASE_S = 2.0
+    # Still ringing this long after "active" means nobody is answering. Longest
+    # observed ringback after active was 19s.
+    _RINGBACK_GIVE_UP_S = 60.0
+
+    async def _give_up_on_ringback(self, held_for: float) -> None:
+        """Still ringing long after SIP "active": nobody answered. End the
+        call silently and let the campaign contact retry, instead of greeting
+        a ring tone and billing it as a completed call."""
+        userdata = self.session.userdata
+        if not userdata.pop("outbound_opening_pending", False):
+            return
+        logger.warning(
+            "[ringback] still ringing %.0fs after SIP answer - treating as not answered", held_for
+        )
+        userdata["failure_reason"] = "ringback_no_answer"
+        userdata["ending_call"] = True
+        contact_id = userdata.get("campaign_contact_id")
+        campaign_id = userdata.get("campaign_id")
+        if contact_id and campaign_id:
+            try:
+                await asyncio.to_thread(
+                    db.finish_campaign_contact, int(contact_id), int(campaign_id), "no_answer"
+                )
+            except Exception:
+                logger.exception("could not record no_answer for contact %s", contact_id)
+        room = userdata.get("room")
+        await _hang_up(getattr(room, "name", "") or "")
 
     async def _release_held_opening_if_unheard(self) -> None:
         """Say the opening even when the recipient's speech never transcribes.
@@ -3663,7 +3703,7 @@ class RealEstateAgent(Agent):
         userdata = self.session.userdata
         started = time.monotonic()
         reason = f"no caller speech within {self._HELD_OPENING_HARD_CAP_S:.0f}s"
-        while time.monotonic() - started < self._HELD_OPENING_HARD_CAP_S:
+        while True:
             if not userdata.get("outbound_opening_pending"):
                 return  # released normally, by a real transcript
             began = userdata.get("speech_started_at")
@@ -3684,6 +3724,21 @@ class RealEstateAgent(Agent):
                         f"(waited {grace:.1f}s)"
                     )
                     break
+            now = time.monotonic()
+            if userdata.get("ringback_active"):
+                if now - started >= self._RINGBACK_GIVE_UP_S:
+                    await self._give_up_on_ringback(now - started)
+                    return
+                await asyncio.sleep(0.05)
+                continue
+            deadline = started + self._HELD_OPENING_HARD_CAP_S
+            cleared_at = userdata.get("ringback_cleared_at")
+            if cleared_at:
+                deadline = max(deadline, cleared_at + self._POST_RINGBACK_RELEASE_S)
+            if now >= deadline:
+                if cleared_at:
+                    reason = f"ringback ended {now - cleared_at:.1f}s ago and no caller speech"
+                break
             await asyncio.sleep(0.05)
         # pop, not read: whoever clears the flag first wins, so a transcript
         # arriving in this same instant cannot produce two openings.
@@ -5610,7 +5665,26 @@ async def entrypoint(ctx: JobContext) -> None:
     # wherever log_call itself gets registered — otherwise a mid-setup
     # exception would leak the row and permanently eat one of the account's
     # concurrent-call slots.
-    ctx.add_shutdown_callback(lambda: asyncio.to_thread(db.end_call_room, ctx.room.name))
+    # Facts the campaign contact's final state is decided from at call end.
+    _call_facts = {"ringback_seen": False, "caller_spoke": False}
+
+    async def _release_call_slot() -> None:
+        # livekit-agents runs shutdown callbacks concurrently (asyncio.gather),
+        # so the campaign contact is resolved HERE, before the active_calls row
+        # the dialer's stale-call reaper checks for liveness is removed.
+        # A dialled leg that rang but nobody ever spoke on is not a contact.
+        contact_id = call_context.get("campaign_contact_id")
+        campaign_id = call_context.get("campaign_id")
+        if contact_id and campaign_id:
+            outcome = (
+                "no_answer"
+                if _call_facts["ringback_seen"] and not _call_facts["caller_spoke"]
+                else "connected"
+            )
+            await asyncio.to_thread(db.finish_campaign_contact, int(contact_id), int(campaign_id), outcome)
+        await asyncio.to_thread(db.end_call_room, ctx.room.name)
+
+    ctx.add_shutdown_callback(_release_call_slot)
     if config and (
         ("{{" in (config.get("system_prompt") or ""))
         or ("{{" in (config.get("welcome_message") or ""))
@@ -6393,6 +6467,7 @@ async def entrypoint(ctx: JobContext) -> None:
         # can fall between two samples entirely. An event cannot be missed.
         if str(ev.new_state) == "speaking":
             userdata["speech_started_at"] = time.monotonic()
+            _call_facts["caller_spoke"] = True
             # A resumed/interjecting caller invalidates the previous stop;
             # only the final stop before the next audible reply is measured.
             userdata.pop("pending_caller_stop_at", None)
@@ -7191,6 +7266,54 @@ async def entrypoint(ctx: JobContext) -> None:
             "milestone", "connection", "Callee answered", "ok",
             sipCallStatus="active",
         )
+
+        async def _monitor_ringback() -> None:
+            # See agent/ringback.py and _POST_RINGBACK_RELEASE_S. Runs until the
+            # opening has been played; its verdict only ever delays the held
+            # opening's hard-cap release, never a release on caller speech.
+            stream = None
+            try:
+                track = None
+                track_deadline = time.monotonic() + 5.0
+                while track is None and time.monotonic() < track_deadline:
+                    for pub in (first_participant.track_publications or {}).values():
+                        if pub.kind == rtc.TrackKind.KIND_AUDIO and pub.track is not None:
+                            track = pub.track
+                            break
+                    if track is None:
+                        await asyncio.sleep(0.05)
+                if track is None:
+                    logger.info("[ringback] no caller audio track within 5s - hard cap unchanged")
+                    return
+                detector = ringback.RingbackDetector(ringback.SAMPLE_RATE)
+                stream = rtc.AudioStream.from_track(
+                    track=track, sample_rate=ringback.SAMPLE_RATE, num_channels=1
+                )
+                began = time.monotonic()
+                async for ev in stream:
+                    detector.add(np.frombuffer(bytes(ev.frame.data), dtype=np.int16))
+                    was = userdata.get("ringback_active")
+                    userdata["ringback_active"] = detector.active
+                    if detector.active and not was:
+                        _call_facts["ringback_seen"] = True
+                        logger.info("[ringback] ring tone detected %.1fs after SIP answer", time.monotonic() - began)
+                    elif was and detector.active is False:
+                        userdata["ringback_cleared_at"] = time.monotonic()
+                        logger.info("[ringback] ring tone ended %.1fs after SIP answer", time.monotonic() - began)
+                    if userdata.get("greeting_played") or userdata.get("ending_call"):
+                        break
+                    if time.monotonic() - began > 75.0:
+                        break
+            except Exception:
+                logger.warning("[ringback] monitor failed", exc_info=True)
+            finally:
+                # Never leave the hold waiting on a verdict nobody will update.
+                if not userdata.get("greeting_played"):
+                    userdata["ringback_active"] = None
+                if stream is not None:
+                    await stream.aclose()
+
+        asyncio.create_task(_monitor_ringback())
     logger.info("[latency] session.start() beginning at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     await session.start(
         agent=agent,
