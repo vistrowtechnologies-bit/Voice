@@ -56,6 +56,18 @@ def _orchestrator_headers() -> dict[str, str]:
 # in the dashboard.
 _TICK_SECONDS = 15
 
+# Gap between individual dials placed within the SAME tick. Without this, a
+# campaign at concurrency=3 placed all 3 calls back-to-back with no delay at
+# all - confirmed live (campaign 20, 2026-09-17): three real outbound SIP
+# calls landed at 11:48:56.387/.388/.481, sub-100ms apart. Three brand-new
+# LiveKit rooms plus three STT/TTS/LLM pipelines all cold-starting at the
+# same instant is a real resource-contention spike, not just a number - it's
+# what the operator heard as crackling audio and some calls not landing.
+# "Concurrent" still means concurrent (all `slots` calls are in flight
+# together for most of their duration); this only staggers the moment each
+# one is FIRST placed.
+_DIAL_STAGGER_SECONDS = 2.0
+
 _started = False
 _lock = threading.Lock()
 
@@ -141,10 +153,14 @@ def _dial_one(campaign: dict) -> None:
     headroom = calls_db.concurrent_call_limit(account_id) - calls_db.count_active_calls(account_id)
     slots = min(slots, max(0, headroom))
 
+    dialed_one_already = False
     for _ in range(slots):
         contact = calls_db.claim_next_campaign_contact(cid)
         if contact is None:
             break
+        if dialed_one_already:
+            time.sleep(_DIAL_STAGGER_SECONDS)
+        dialed_one_already = True
         try:
             if _on_orchestrator_pipeline(account_id):
                 result = _place_via_orchestrator(
