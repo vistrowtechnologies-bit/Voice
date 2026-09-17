@@ -353,6 +353,10 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
     cached = _agent_config_cache.get(agent_id)
     now = time.monotonic()
     if cached is not None and now - cached[0] < _AGENT_CONFIG_CACHE_TTL_S:
+        logger.info(
+            "get_agent_config: CACHE HIT agent_id=%s crm_integration_keys=%r VERSION=v2fix",
+            agent_id, cached[1].get("crm_integration_keys") if cached[1] else None,
+        )
         return cached[1]
     conn = dbconn.connect()
     try:
@@ -383,10 +387,15 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
             # which never contains "arthaleads". That silently broke
             # automatic CRM delivery for every agent with this field set
             # (confirmed live: calls 1003-1004, and every call for agent 3).
+            _raw_cik = result.get("crm_integration_keys")
             try:
-                result["crm_integration_keys"] = json.loads(result.get("crm_integration_keys") or "[]")
+                result["crm_integration_keys"] = json.loads(_raw_cik or "[]")
             except (TypeError, ValueError):
                 result["crm_integration_keys"] = []
+            logger.info(
+                "get_agent_config: FRESH FETCH agent_id=%s raw=%r parsed=%r VERSION=v2fix",
+                agent_id, _raw_cik, result["crm_integration_keys"],
+            )
         # A workspace catalog is deliberately agent-scoped. Merely syncing a
         # feed must never expose its data to every agent in the tenant.
         if result and result.get("account_id") and result.get("live_catalog_enabled"):
