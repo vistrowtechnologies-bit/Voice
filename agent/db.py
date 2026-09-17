@@ -373,6 +373,20 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
                 "ORDER BY a.is_platform_demo DESC, a.id LIMIT 1"
             ).fetchone()
         result = dict(row) if row else None
+        if result:
+            # `SELECT a.*` returns crm_integration_keys as its raw stored
+            # TEXT ("[]", '["arthaleads"]', ...), never parsed. Every caller
+            # does `cfg.get("crm_integration_keys") or None` expecting a real
+            # list; against the raw string, `"[]" or None` is the non-empty
+            # string "[]" (truthy), and get_delivery_integrations's
+            # `set(allowed_keys)` then iterates its CHARACTERS - {'[', ']'} -
+            # which never contains "arthaleads". That silently broke
+            # automatic CRM delivery for every agent with this field set
+            # (confirmed live: calls 1003-1004, and every call for agent 3).
+            try:
+                result["crm_integration_keys"] = json.loads(result.get("crm_integration_keys") or "[]")
+            except (TypeError, ValueError):
+                result["crm_integration_keys"] = []
         # A workspace catalog is deliberately agent-scoped. Merely syncing a
         # feed must never expose its data to every agent in the tenant.
         if result and result.get("account_id") and result.get("live_catalog_enabled"):
@@ -922,19 +936,6 @@ def get_delivery_integrations(
             "AND key IN ('webhook', 'slack', 'whatsapp', 'sheets', 'arthaleads', 'zoho_crm')",
             (account_id,),
         ).fetchall()
-        connected_keys = [r["key"] for r in rows]
-        # TEMP DIAGNOSTIC (call 1003/1004 investigation): the previous round
-        # of this same diagnostic showed connected_keys=['arthaleads'],
-        # allowed_keys=[] and result_keys=[] together on one line - which is
-        # impossible if `if allowed_keys:` really saw a plain falsy empty
-        # list, since that would skip the filter entirely. Logging the
-        # truthiness and real type directly removes any doubt about what
-        # `allowed_keys` actually is at runtime (e.g. a wrapper type whose
-        # repr prints "[]" but whose __bool__ isn't the plain list's).
-        logger.info(
-            "get_delivery_integrations: account_id=%s connected_keys=%s allowed_keys=%r type=%s bool=%s",
-            account_id, connected_keys, allowed_keys, type(allowed_keys).__name__, bool(allowed_keys),
-        )
         if allowed_keys:
             allowed = set(allowed_keys)
             rows = [r for r in rows if r["key"] in allowed]
