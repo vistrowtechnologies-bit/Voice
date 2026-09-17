@@ -914,6 +914,7 @@ def get_delivery_integrations(
     conn = dbconn.connect()
     try:
         if not plan_policy.account_policy(conn, account_id)["features"]["crm"]:
+            logger.info("get_delivery_integrations: account_id=%s plan blocks crm feature", account_id)
             return []
         rows = conn.execute(
             "SELECT key, config_json FROM integrations "
@@ -925,7 +926,14 @@ def get_delivery_integrations(
             allowed = set(allowed_keys)
             rows = [r for r in rows if r["key"] in allowed]
         return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
-    except psycopg.Error:
+    except Exception:
+        # Was `except psycopg.Error` — silent and unlogged, so a call whose
+        # lead never reached the CRM left zero trace of why: not psycopg.Error
+        # (e.g. plan_policy's own EntitlementError, or a driver exception this
+        # narrower clause didn't catch) surfaced as an unhandled exception in
+        # the caller instead, indistinguishable from "not connected" once
+        # _deliver_to_integrations's outer try/except absorbed it too.
+        logger.warning("get_delivery_integrations failed for account_id=%s", account_id, exc_info=True)
         return []
     finally:
         conn.close()
