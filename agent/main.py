@@ -1811,11 +1811,20 @@ def _build_llm(model: str, *, max_output_tokens: int = 220):
         api_key = os.environ.get("SARVAM_API_KEY")
         if not api_key:
             raise RuntimeError(f"{model} is selected, but SARVAM_API_KEY is not configured.")
+        # prompt_cache_key was missing here entirely - verified directly
+        # against the real API (not assumed): the same 1,120-token system
+        # prompt sent twice with no cache key came back
+        # prompt_tokens_details: null both times, but the identical request
+        # WITH this key came back cached_tokens: 1088 (97%) on the very next
+        # call. Sarvam's own rate card prices cached input at ₹10.98/1M vs
+        # ₹29.28/1M uncached - a 62% cut on our single largest cost line
+        # (54% of API spend) that every call was silently missing.
         return openai.LLM(
             model=model.split("/", 1)[1],
             api_key=api_key,
             base_url="https://api.sarvam.ai/v1",
             max_completion_tokens=max_output_tokens,
+            prompt_cache_key="vistrow-voice-agent-v1",
         )
     # Bound spoken replies and give OpenAI a stable cache-routing key.  The
     # exact prompt prefix still has to match before it can be reused, so this

@@ -85,7 +85,7 @@ export interface CallRecord {
   // not the same as "failed". Separate from the integration's own
   // last_sync/last_error, which only reflect the most recent attempt
   // across every call.
-  arthaleadsStatus: 'sent' | 'failed' | null
+  arthaleadsStatus: 'sent' | 'failed' | 'skipped' | null
   arthaleadsSyncedAt: string | null
   arthaleadsError: string | null
   // Never the raw storage key - just whether a recording exists. Fetch a

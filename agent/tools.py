@@ -794,6 +794,21 @@ async def _deliver_to_integrations(
         return
     logger.info("integration fan-out: account_id=%s integrations=%s", account_id, [i["key"] for i in integrations])
     if not integrations:
+        # A NULL arthaleads_status here used to be indistinguishable from
+        # "never even tried" whether the cause was no connection or a plan
+        # restriction — this call had a real lead skipped with zero visible
+        # reason on its own dashboard row. Distinguish the plan case.
+        if call_id is not None and account_id is not None:
+            try:
+                status = db.get_arthaleads_plan_status(account_id)
+            except Exception:
+                status = {"connected": False, "plan_allows_crm": False}
+            if status["connected"] and not status["plan_allows_crm"]:
+                db.set_call_arthaleads_status(
+                    call_id,
+                    "skipped",
+                    "Automatic CRM sync needs the Growth plan or higher — use Re-send, or upgrade to enable it automatically.",
+                )
         return
     try:
         timeout = aiohttp.ClientTimeout(total=5)

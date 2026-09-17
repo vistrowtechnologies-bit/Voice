@@ -931,6 +931,32 @@ def get_delivery_integrations(
         conn.close()
 
 
+def get_arthaleads_plan_status(account_id: int | None) -> dict:
+    """Whether ArthaLeads is connected, and whether this account's current
+    plan allows the automatic mid-call/end-of-call delivery that
+    get_delivery_integrations silently skips when it doesn't (the "crm"
+    feature, Growth plan or higher). Used only so a call whose automatic
+    delivery was skipped for that reason can say so on its own dashboard
+    row instead of sitting at "Not sent" with no explanation — the manual
+    Re-send button in server/integrations_dispatch.py has no plan check at
+    all, so it still works regardless of what this reports."""
+    if account_id is None:
+        return {"connected": False, "plan_allows_crm": False}
+    conn = dbconn.connect()
+    try:
+        plan_allows = plan_policy.account_policy(conn, account_id)["features"]["crm"]
+        row = conn.execute(
+            "SELECT status FROM integrations WHERE account_id = ? AND key = 'arthaleads'",
+            (account_id,),
+        ).fetchone()
+        connected = bool(row) and row["status"] == "connected"
+        return {"connected": connected, "plan_allows_crm": plan_allows}
+    except Exception:
+        return {"connected": False, "plan_allows_crm": False}
+    finally:
+        conn.close()
+
+
 def try_start_call(room_name: str, account_id: int | None, config: dict | None = None) -> bool:
     """Claims a concurrent-call slot for this account, if one is free.
     Returns False (call the entrypoint must decline) once the account is at

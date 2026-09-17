@@ -517,6 +517,10 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
                 <span className="flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">
                   <Icon name="error" className="text-[14px]" /> Failed
                 </span>
+              ) : call.arthaleadsStatus === 'skipped' ? (
+                <span className="flex items-center gap-1 rounded-full bg-amber/10 px-2.5 py-1 text-xs font-semibold text-amber">
+                  <Icon name="lock" className="text-[14px]" /> Plan restricted
+                </span>
               ) : (
                 <span className="rounded-full bg-surface-high px-2.5 py-1 text-xs font-semibold text-text-muted">Not sent</span>
               )}
@@ -529,13 +533,17 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
                     ? 'Delivered'
                     : call.arthaleadsStatus === 'failed'
                       ? 'Delivery failed'
-                      : 'Not sent yet'
+                      : call.arthaleadsStatus === 'skipped'
+                        ? 'Automatic delivery skipped'
+                        : 'Not sent yet'
                 }
               />
               {call.arthaleadsSyncedAt && <Row label="Last attempt" value={formatDateTime(call.arthaleadsSyncedAt)} />}
             </dl>
-            {call.arthaleadsStatus === 'failed' && call.arthaleadsError && (
-              <p className="mt-2 text-xs text-destructive">{call.arthaleadsError}</p>
+            {(call.arthaleadsStatus === 'failed' || call.arthaleadsStatus === 'skipped') && call.arthaleadsError && (
+              <p className={`mt-2 text-xs ${call.arthaleadsStatus === 'skipped' ? 'text-amber' : 'text-destructive'}`}>
+                {call.arthaleadsError}
+              </p>
             )}
             {pushResult && (
               <p className={`mt-2 text-xs font-semibold ${pushResult.ok ? 'text-success' : 'text-destructive'}`}>
