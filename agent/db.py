@@ -923,20 +923,21 @@ def get_delivery_integrations(
             (account_id,),
         ).fetchall()
         connected_keys = [r["key"] for r in rows]
+        # TEMP DIAGNOSTIC (call 1003/1004 investigation): the previous round
+        # of this same diagnostic showed connected_keys=['arthaleads'],
+        # allowed_keys=[] and result_keys=[] together on one line - which is
+        # impossible if `if allowed_keys:` really saw a plain falsy empty
+        # list, since that would skip the filter entirely. Logging the
+        # truthiness and real type directly removes any doubt about what
+        # `allowed_keys` actually is at runtime (e.g. a wrapper type whose
+        # repr prints "[]" but whose __bool__ isn't the plain list's).
+        logger.info(
+            "get_delivery_integrations: account_id=%s connected_keys=%s allowed_keys=%r type=%s bool=%s",
+            account_id, connected_keys, allowed_keys, type(allowed_keys).__name__, bool(allowed_keys),
+        )
         if allowed_keys:
             allowed = set(allowed_keys)
             rows = [r for r in rows if r["key"] in allowed]
-        # TEMP DIAGNOSTIC (call 1003/1004 investigation): connected_keys came
-        # back empty live even though a direct query against the same
-        # production DB, moments earlier, returned arthaleads for this exact
-        # account_id - and neither the plan-block branch above nor the
-        # except below logged anything, so the empty result traces to
-        # either this SELECT or the allowed_keys filter. Remove once the
-        # cause is confirmed.
-        logger.info(
-            "get_delivery_integrations: account_id=%s connected_keys=%s allowed_keys=%s result_keys=%s",
-            account_id, connected_keys, allowed_keys, [r["key"] for r in rows],
-        )
         return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
     except Exception:
         # Was `except psycopg.Error` — silent and unlogged, so a call whose
