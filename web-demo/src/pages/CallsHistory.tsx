@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
+import { Card } from '../components/ui/Card'
 import { DataTable } from '../components/ui/DataTable'
 import type { DataTableColumn } from '../components/ui/DataTable'
 import { StatTile } from '../components/ui/StatTile'
@@ -107,6 +108,7 @@ export function CallsHistory() {
   const recordingRequestRef = useRef<string | null>(null)
   const [recordingCallId, setRecordingCallId] = useState<string | null>(null)
   const [recordingState, setRecordingState] = useState<'idle' | 'loading' | 'playing' | 'paused' | 'error'>('idle')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const loadCallData = useCallback(async () => {
     const [historyResult, activeResult] = await Promise.allSettled([fetchAllCalls(), fetchActiveCalls()])
@@ -196,9 +198,64 @@ export function CallsHistory() {
   }, [calls, channel, feedbackFilter, directionFilter, search, sortDesc])
 
   useEffect(() => setPage(1), [channel, feedbackFilter, directionFilter, search, sortDesc])
+  // A selection made under one filter/page rarely means anything once the
+  // list underneath it changes shape - carrying it over risks a bulk action
+  // silently touching rows the operator never actually looked at.
+  useEffect(() => setSelected(new Set()), [channel, feedbackFilter, directionFilter, search])
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount)
   const visibleRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // Scoped to the current page, not every filtered row across all pages -
+  // "select all" ticking boxes for callers the operator can't currently see
+  // would be a surprising bulk-export/delete footgun.
+  const allVisibleSelected = visibleRows.length > 0 && visibleRows.every((c) => selected.has(c.id))
+  const toggleAllVisible = () => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (allVisibleSelected) visibleRows.forEach((c) => next.delete(c.id))
+      else visibleRows.forEach((c) => next.add(c.id))
+      return next
+    })
+  }
+
+  const selectedCalls = filtered.filter((call) => selected.has(call.id))
+
+  const downloadSelectedCalls = () => {
+    const escapeCell = (value: string) => `"${value.replace(/"/g, '""')}"`
+    const rows = [
+      ['Caller', 'Phone', 'Status', 'Channel', 'Direction', 'Website', 'Page', 'Duration (s)', 'Sentiment', 'Agent', 'Time'],
+      ...selectedCalls.map((call) => [
+        call.name,
+        call.phone,
+        call.callStatus,
+        call.channel,
+        call.direction ?? '',
+        call.website,
+        call.pagePath,
+        String(call.durationSeconds),
+        call.sentiment,
+        call.agent,
+        call.callDate,
+      ]),
+    ]
+    const csv = rows.map((row) => row.map((cell) => escapeCell(String(cell ?? ''))).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `vistrow-selected-calls-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   const completed = calls.filter((c) => c.callStatus === 'completed').length
   const failed = calls.filter((c) => c.callStatus === 'failed').length
@@ -209,6 +266,36 @@ export function CallsHistory() {
   }
 
   const columns: DataTableColumn<GroupedCall>[] = [
+    {
+      key: 'select',
+      header: (
+        <input
+          type="checkbox"
+          checked={allVisibleSelected}
+          onChange={toggleAllVisible}
+          onClick={(event) => event.stopPropagation()}
+          aria-label="Select all calls on this page"
+          title="Select all calls on this page"
+          className="h-4 w-4 accent-primary"
+        />
+      ),
+      headerLabel: 'selection',
+      hideOnCard: true,
+      width: 44,
+      minWidth: 44,
+      maxWidth: 44,
+      sticky: 'left',
+      render: (call) => (
+        <input
+          type="checkbox"
+          checked={selected.has(call.id)}
+          onChange={() => toggleOne(call.id)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Select call from ${call.name}`}
+          className="h-4 w-4 accent-primary"
+        />
+      ),
+    },
     {
       key: 'caller',
       header: 'Caller',
@@ -469,6 +556,26 @@ export function CallsHistory() {
       </PageHeader>
 
       <section className="flex flex-col gap-6 p-4 sm:p-6">
+        {selected.size > 0 && (
+          <Card padding="sm" className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-bold">{selected.size} selected</span>
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-text"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={downloadSelectedCalls}
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-text hover:border-primary hover:text-primary"
+            >
+              <Icon name="download" className="text-[16px]" />
+              Export selected
+            </button>
+          </Card>
+        )}
         {loadError && (
           <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
             <Icon name="error" className="text-[19px] text-destructive" />
