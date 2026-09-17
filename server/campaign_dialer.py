@@ -70,6 +70,19 @@ _TICK_SECONDS = 15
 # together for most of their duration); this only staggers the moment each
 # one is FIRST placed.
 _DIAL_STAGGER_SECONDS = 2.0
+# EnableX enforces CPS across the whole SIP trunk, not per campaign (their
+# reply, 2026-09-17: 5-6 running campaigns each dialing on the same tick is
+# 5-6 INVITEs at once). So the stagger is global: every dial from every
+# campaign waits until _DIAL_STAGGER_SECONDS after the previous one.
+_last_dial_at = 0.0
+
+
+def _pace_dial() -> None:
+    global _last_dial_at
+    wait = _last_dial_at + _DIAL_STAGGER_SECONDS - time.monotonic()
+    if wait > 0:
+        time.sleep(wait)
+    _last_dial_at = time.monotonic()
 
 _started = False
 _lock = threading.Lock()
@@ -161,14 +174,11 @@ def _dial_one(campaign: dict) -> None:
     headroom = calls_db.concurrent_call_limit(account_id) - calls_db.count_active_calls(account_id)
     slots = min(slots, max(0, headroom))
 
-    dialed_one_already = False
     for _ in range(slots):
         contact = calls_db.claim_next_campaign_contact(cid)
         if contact is None:
             break
-        if dialed_one_already:
-            time.sleep(_DIAL_STAGGER_SECONDS)
-        dialed_one_already = True
+        _pace_dial()
         try:
             if _on_orchestrator_pipeline(account_id):
                 result = _place_via_orchestrator(

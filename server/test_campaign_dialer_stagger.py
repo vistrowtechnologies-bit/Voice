@@ -28,19 +28,21 @@ def _base_campaign(**overrides):
     return campaign
 
 
-class DialsWithinATickAreStaggered(unittest.TestCase):
-    def _run_with_contacts(self, n_contacts):
-        contacts = [
-            {"id": i, "phone": f"+91900000000{i}", "name": f"lead{i}"}
-            for i in range(n_contacts)
-        ]
+class DialsAreStaggered(unittest.TestCase):
+    def setUp(self):
+        self.clock = [1000.0]
+        campaign_dialer._last_dial_at = 0.0
 
-        def claim(_cid):
-            return contacts.pop(0) if contacts else None
+    def _sleep(self, s):
+        self.sleeps.append(round(s, 6))
+        self.clock[0] += s
 
-        sleeps = []
+    def _run(self, campaigns_with_contacts):
+        """campaigns_with_contacts: list of (campaign, n_contacts), dialed in one tick."""
+        self.sleeps, dial_times = [], []
         with patch.object(campaign_dialer, "calls_db") as mock_db, \
-             patch.object(campaign_dialer.time, "sleep", side_effect=lambda s: sleeps.append(s)), \
+             patch.object(campaign_dialer.time, "sleep", side_effect=self._sleep), \
+             patch.object(campaign_dialer.time, "monotonic", side_effect=lambda: self.clock[0]), \
              patch.object(campaign_dialer, "_on_orchestrator_pipeline", return_value=False):
             mock_db.require_feature.return_value = None
             mock_db.within_calling_window.return_value = (True, "")
@@ -48,30 +50,40 @@ class DialsWithinATickAreStaggered(unittest.TestCase):
             mock_db.reap_stale_campaign_calls.return_value = 0
             mock_db.concurrent_call_limit.return_value = 30
             mock_db.count_active_calls.return_value = 0
-            mock_db.claim_next_campaign_contact.side_effect = claim
-            mock_db.place_outbound_call_direct.return_value = {"ok": True}
+            mock_db.place_outbound_call_direct.side_effect = lambda *a, **k: dial_times.append(self.clock[0]) or {"ok": True}
             mock_db.campaign_has_open_work.return_value = False
-            campaign_dialer._dial_one(_base_campaign())
-        return sleeps, mock_db
+            for campaign, n in campaigns_with_contacts:
+                contacts = [{"id": i, "phone": f"+9190000{i}", "name": f"l{i}"} for i in range(n)]
+                mock_db.claim_next_campaign_contact.side_effect = lambda _cid, c=contacts: c.pop(0) if c else None
+                campaign_dialer._dial_one(campaign)
+        return dial_times
 
     def test_three_concurrent_dials_are_staggered_not_simultaneous(self):
-        sleeps, mock_db = self._run_with_contacts(3)
-        # 3 dials placed, but only 2 gaps between them - never a sleep before
-        # the very first one (that would just slow down every tick for
-        # nothing).
-        self.assertEqual(mock_db.place_outbound_call_direct.call_count, 3)
-        self.assertEqual(sleeps, [campaign_dialer._DIAL_STAGGER_SECONDS] * 2)
+        times = self._run([(_base_campaign(), 3)])
+        self.assertEqual(len(times), 3)
+        self.assertEqual([b - a for a, b in zip(times, times[1:])], [campaign_dialer._DIAL_STAGGER_SECONDS] * 2)
 
     def test_a_single_dial_is_never_delayed(self):
-        sleeps, mock_db = self._run_with_contacts(1)
-        self.assertEqual(mock_db.place_outbound_call_direct.call_count, 1)
-        self.assertEqual(sleeps, [])
+        self.assertEqual(len(self._run([(_base_campaign(), 1)])), 1)
+        self.assertEqual(self.sleeps, [])
 
     def test_running_out_of_contacts_early_stops_staggering_too(self):
-        # concurrency=3 but only 1 contact left - must not sleep waiting for
-        # dials that are never going to happen.
-        sleeps, mock_db = self._run_with_contacts(1)
-        self.assertEqual(sleeps, [])
+        self._run([(_base_campaign(concurrency=3), 1)])
+        self.assertEqual(self.sleeps, [])
+
+    def test_stagger_is_global_across_campaigns(self):
+        # EnableX: CPS is enforced on the whole trunk. Six campaigns with one
+        # due contact each must not produce six INVITEs in the same instant.
+        campaigns = [(_base_campaign(id=100 + i), 1) for i in range(6)]
+        times = self._run(campaigns)
+        self.assertEqual(len(times), 6)
+        gaps = [b - a for a, b in zip(times, times[1:])]
+        self.assertTrue(all(g >= campaign_dialer._DIAL_STAGGER_SECONDS for g in gaps), gaps)
+
+    def test_no_wait_when_last_dial_was_long_ago(self):
+        campaign_dialer._last_dial_at = self.clock[0] - 60
+        self._run([(_base_campaign(), 1)])
+        self.assertEqual(self.sleeps, [])
 
 
 if __name__ == "__main__":
