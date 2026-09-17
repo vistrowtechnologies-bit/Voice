@@ -922,9 +922,21 @@ def get_delivery_integrations(
             "AND key IN ('webhook', 'slack', 'whatsapp', 'sheets', 'arthaleads', 'zoho_crm')",
             (account_id,),
         ).fetchall()
+        connected_keys = [r["key"] for r in rows]
         if allowed_keys:
             allowed = set(allowed_keys)
             rows = [r for r in rows if r["key"] in allowed]
+        # TEMP DIAGNOSTIC (call 1003/1004 investigation): connected_keys came
+        # back empty live even though a direct query against the same
+        # production DB, moments earlier, returned arthaleads for this exact
+        # account_id - and neither the plan-block branch above nor the
+        # except below logged anything, so the empty result traces to
+        # either this SELECT or the allowed_keys filter. Remove once the
+        # cause is confirmed.
+        logger.info(
+            "get_delivery_integrations: account_id=%s connected_keys=%s allowed_keys=%s result_keys=%s",
+            account_id, connected_keys, allowed_keys, [r["key"] for r in rows],
+        )
         return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
     except Exception:
         # Was `except psycopg.Error` — silent and unlogged, so a call whose
