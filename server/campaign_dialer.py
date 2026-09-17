@@ -3,9 +3,12 @@
 A single daemon thread that walks every 'running' campaign and places its due
 calls, honoring three limits on every dial:
 
-  1. Compliance — each dial goes through calls_db.place_test_call, which scrubs
-     the DNC list and enforces the calling window before a ring leaves the box.
+  1. Compliance — each dial goes through calls_db.check_call_allowed (inside
+     livekit_sip.place_outbound_call), which scrubs the DNC list and enforces
+     the calling window before a ring leaves the box.
   2. Concurrency — never more than a campaign's `concurrency` calls in flight.
+     A contact stays 'calling' until the agent resolves it at call end, so
+     campaign_inflight() counts live calls, not dials placed this tick.
   3. Retry backoff — a failed/no-answer contact isn't retried until its
      next_attempt_at, up to the campaign's max_attempts.
 
@@ -135,6 +138,11 @@ def _dial_one(campaign: dict) -> None:
         calls_db.set_campaign_status(cid, "paused", account_id)
         return
 
+    # Reaping never dials, so it runs even outside the calling window.
+    reaped = calls_db.reap_stale_campaign_calls(cid)
+    if reaped:
+        logger.warning("campaign %s: resolved %s stale in-flight contact(s) no agent reconciled", cid, reaped)
+
     # Calling window is the same gate real dials use; skip the whole campaign
     # this tick if we're outside it (no point claiming contacts we can't dial).
     allowed, _reason = calls_db.within_calling_window(account_id)
@@ -196,7 +204,7 @@ def _dial_one(campaign: dict) -> None:
         if result.get("blocked"):
             calls_db.record_campaign_dial_result(contact["id"], cid, "blocked", result.get("error", ""))
         elif result.get("ok"):
-            calls_db.record_campaign_dial_result(contact["id"], cid, "placed")
+            calls_db.record_campaign_dial_result(contact["id"], cid, "placed", room_name=result.get("room"))
         else:
             logger.warning("dial not placed for contact %s: %s", contact["id"], result.get("error"))
             calls_db.record_campaign_dial_result(contact["id"], cid, "failed")

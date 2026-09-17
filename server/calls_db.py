@@ -1383,6 +1383,10 @@ def init_tables() -> None:
             conn.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS deleted_at TEXT")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS company TEXT DEFAULT ''")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS custom_fields TEXT DEFAULT '{}'")
+            # The LiveKit room a dial went into, so the dialer can tell a
+            # contact whose call is still live (room in active_calls) from one
+            # whose agent job never ran or crashed before reconciling it.
+            conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS room_name TEXT")
             # Curated avatar color + custom greeting bubble, added after the
             # widget shipped with a hardcoded orb video and greeting line.
             conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_avatar TEXT DEFAULT 'default'")
@@ -5459,75 +5463,137 @@ def claim_next_campaign_contact(campaign_id: int) -> dict | None:
             ).fetchone()
             if row is None:
                 return None
-            conn.execute(
+            # Conditional on the status we just read: a SELECT followed by an
+            # unconditional UPDATE is not atomic under READ COMMITTED, so two
+            # overlapping ticks (or replicas) could both claim and dial the
+            # same contact. Losing the race claims nothing this tick.
+            cur = conn.execute(
                 f"UPDATE campaign_contacts SET status = 'calling', attempts = attempts + 1, "
-                f"last_attempt_at = {_NOW} WHERE id = ?",
-                (row["id"],),
+                f"last_attempt_at = {_NOW}, room_name = NULL WHERE id = ? AND status = ?",
+                (row["id"], row["status"]),
             )
+            if cur.rowcount != 1:
+                return None
             return dict(row)
     finally:
         conn.close()
 
 
-def record_campaign_dial_result(contact_id: int, campaign_id: int, outcome: str, blocked_reason: str = "") -> None:
-    """Set a contact's terminal/retry state after a dial attempt. 'placed'
-    means the call went out (terminal success for the dialer's purposes —
-    conversation outcome is attributed later by phone match). 'blocked' is
-    terminal (compliance). 'no_answer'/'failed'/'voicemail' schedule a retry
-    if attempts remain, else go terminal.
+def record_campaign_dial_result(
+    contact_id: int,
+    campaign_id: int,
+    outcome: str,
+    blocked_reason: str = "",
+    room_name: str | None = None,
+    only_if_calling: bool = False,
+) -> None:
+    """Record what happened to one dial attempt.
 
-    'voicemail' is reported by the AGENT, not the dialer, and always AFTER a
-    'placed' — the dialer records the dial going out and cannot know a machine
-    picked up. It is deliberately allowed to overwrite a 'done'/'placed' row
-    for that reason: reaching an answering machine is not reaching the person,
-    and counting it as contact both overstates the campaign and denies the
-    contact a retry they should get."""
+    'placed' means the dial was handed to the carrier. The contact STAYS
+    'calling' - the call is in flight - and the agent resolves it when the
+    call ends (agent/db.py finish_campaign_contact). This used to write
+    'done' at dial time, so campaign_inflight() (which counts 'calling')
+    always read 0 and every tick launched a full batch on top of calls still
+    live: campaign 20 was set to 3 concurrent and peaked at 10, and the
+    dashboard's "Answered" (= done) showed 10 when 3 people actually talked.
+
+    'blocked' is terminal (compliance). 'no_answer'/'failed'/'voicemail'
+    schedule a retry if attempts remain, else go terminal.
+
+    only_if_calling makes every write conditional on the row still being
+    'calling', so a background reconciler can never overwrite an outcome the
+    agent already recorded for the same call."""
+    guard = " AND status = 'calling'" if only_if_calling else ""
     conn = _connect()
     try:
         with conn:
             camp = conn.execute(
                 "SELECT max_attempts, retry_minutes FROM campaigns WHERE id = ?", (campaign_id,)
             ).fetchone()
-            max_attempts = camp["max_attempts"] if camp else 1
-            retry_minutes = camp["retry_minutes"] if camp else 60
+            # `or` guards: a NULL retry_minutes crashed timedelta() below and
+            # stranded the contact. agent/db.py's copy of this rule already had them.
+            max_attempts = (camp["max_attempts"] if camp else 1) or 1
+            retry_minutes = (camp["retry_minutes"] if camp else 60) or 60
             contact = conn.execute(
                 "SELECT attempts FROM campaign_contacts WHERE id = ?", (contact_id,)
             ).fetchone()
-            attempts = contact["attempts"] if contact else 1
+            attempts = (contact["attempts"] if contact else 1) or 1
 
-            if outcome == "voicemail" and attempts >= max_attempts:
+            if outcome == "placed":
                 conn.execute(
-                    "UPDATE campaign_contacts SET status = 'voicemail', outcome = 'voicemail', "
-                    "next_attempt_at = NULL WHERE id = ?",
-                    (contact_id,),
-                )
-            elif outcome == "placed":
-                conn.execute(
-                    "UPDATE campaign_contacts SET status = 'done', outcome = 'placed', next_attempt_at = NULL WHERE id = ?",
-                    (contact_id,),
+                    "UPDATE campaign_contacts SET outcome = 'dialing', room_name = ? "
+                    "WHERE id = ? AND status = 'calling'",
+                    (room_name, contact_id),
                 )
             elif outcome == "blocked":
                 conn.execute(
-                    "UPDATE campaign_contacts SET status = 'blocked', outcome = ?, next_attempt_at = NULL WHERE id = ?",
+                    "UPDATE campaign_contacts SET status = 'blocked', outcome = ?, next_attempt_at = NULL "
+                    "WHERE id = ?" + guard,
                     (blocked_reason or "Blocked by compliance", contact_id),
                 )
-            else:  # no_answer / failed
-                if attempts >= max_attempts:
-                    conn.execute(
-                        "UPDATE campaign_contacts SET status = ?, outcome = ?, next_attempt_at = NULL WHERE id = ?",
-                        (outcome, outcome.replace("_", " "), contact_id),
-                    )
-                else:
-                    next_at = (
-                        datetime.datetime.now(datetime.timezone.utc)
-                        + datetime.timedelta(minutes=retry_minutes)
-                    ).strftime("%Y-%m-%d %H:%M:%S")
-                    conn.execute(
-                        "UPDATE campaign_contacts SET status = ?, next_attempt_at = ? WHERE id = ?",
-                        (outcome, next_at, contact_id),
-                    )
+            elif attempts >= max_attempts:  # no_answer / failed / voicemail, terminal
+                conn.execute(
+                    "UPDATE campaign_contacts SET status = ?, outcome = ?, next_attempt_at = NULL "
+                    "WHERE id = ?" + guard,
+                    (outcome, outcome.replace("_", " "), contact_id),
+                )
+            else:  # no_answer / failed / voicemail, retry
+                next_at = (
+                    datetime.datetime.now(datetime.timezone.utc)
+                    + datetime.timedelta(minutes=retry_minutes)
+                ).strftime("%Y-%m-%d %H:%M:%S")
+                conn.execute(
+                    "UPDATE campaign_contacts SET status = ?, outcome = ?, next_attempt_at = ? "
+                    "WHERE id = ?" + guard,
+                    (outcome, outcome.replace("_", " "), next_at, contact_id),
+                )
     finally:
         conn.close()
+
+
+# A campaign contact still 'calling' this long after its dial, whose room is
+# not in active_calls, never had an agent resolve it (job never dispatched,
+# admission denied before registering, or the worker died). Well past the
+# 90s ring timeout in agent/main.py _wait_for_sip_answer plus dispatch time.
+_CAMPAIGN_CALL_STALE_S = 180
+# Same, for a dial with no room recorded (orchestrator pipeline, or a crash
+# between claim and placement) - nothing to check liveness against, so wait
+# far longer than any real call before giving up on it.
+_CAMPAIGN_CALL_STALE_NO_ROOM_S = 1800
+
+
+def reap_stale_campaign_calls(campaign_id: int) -> int:
+    """Resolve 'calling' contacts whose call is provably over but was never
+    reconciled, so they neither hold a concurrency slot forever nor keep the
+    campaign from completing. Resolved as 'failed', which retries if attempts
+    remain. Returns how many were reaped."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT cc.id, cc.last_attempt_at, cc.room_name, "
+            "EXISTS (SELECT 1 FROM active_calls ac WHERE ac.room_name = cc.room_name) AS live "
+            "FROM campaign_contacts cc WHERE cc.campaign_id = ? AND cc.status = 'calling'",
+            (campaign_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    reaped = 0
+    for r in rows:
+        if r["live"]:
+            continue
+        try:
+            last = datetime.datetime.strptime(str(r["last_attempt_at"])[:19], "%Y-%m-%d %H:%M:%S").replace(
+                tzinfo=datetime.timezone.utc
+            )
+        except (TypeError, ValueError):
+            continue
+        limit = _CAMPAIGN_CALL_STALE_S if r["room_name"] else _CAMPAIGN_CALL_STALE_NO_ROOM_S
+        if (now - last).total_seconds() < limit:
+            continue
+        record_campaign_dial_result(r["id"], campaign_id, "failed", only_if_calling=True)
+        reaped += 1
+    return reaped
 
 
 def campaign_has_open_work(campaign_id: int) -> bool:

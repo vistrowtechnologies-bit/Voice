@@ -180,11 +180,15 @@ export function Outbound() {
   }, [agents, campaignSearch, campaigns, filter, sort])
 
   const totals = useMemo(() => {
-    const t = { contacts: 0, attempts: 0, answered: 0, blocked: 0, running: 0 }
+    // "dialed" counts contacts that have been dialed at least once (including
+    // calls in flight), not individual attempts - retries are not in stats.
+    // "connected" is `done`: a contact is only marked done when its call ends
+    // after being answered by a person, not when the dial is handed off.
+    const t = { contacts: 0, dialed: 0, connected: 0, blocked: 0, running: 0 }
     for (const c of campaigns) {
       t.contacts += c.stats.total
-      t.attempts += c.stats.done + c.stats.no_answer + c.stats.failed + (c.stats.voicemail ?? 0)
-      t.answered += c.stats.done
+      t.dialed += c.stats.done + c.stats.calling + c.stats.no_answer + c.stats.failed + (c.stats.voicemail ?? 0)
+      t.connected += c.stats.done
       t.blocked += c.stats.blocked
       if (c.status === 'running') t.running += 1
     }
@@ -313,8 +317,8 @@ export function Outbound() {
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <StatCard label="Total contacts" value={totals.contacts} />
-          <StatCard label="Dial attempts" value={totals.attempts} tone="text-cyan" />
-          <StatCard label="Answered" value={totals.answered} tone="text-success" />
+          <StatCard label="Contacts dialed" value={totals.dialed} tone="text-cyan" />
+          <StatCard label="Connected" value={totals.connected} tone="text-success" />
           <StatCard label="Blocked (DNC/window)" value={totals.blocked} tone="text-amber" />
           <StatCard label="Running now" value={totals.running} tone="text-cyan" />
         </div>
@@ -776,7 +780,7 @@ export function Outbound() {
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-text-muted">
-                      <span><b className="text-success">{s.done}</b> answered</span>
+                      <span><b className="text-success">{s.done}</b> connected</span>
                       <span><b className="text-cyan">{s.calling}</b> calling</span>
                       <span><b className="text-text-muted">{s.pending}</b> pending</span>
                       <span><b className="text-amber">{s.no_answer}</b> no-answer</span>
