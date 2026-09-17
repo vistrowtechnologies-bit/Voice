@@ -353,10 +353,6 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
     cached = _agent_config_cache.get(agent_id)
     now = time.monotonic()
     if cached is not None and now - cached[0] < _AGENT_CONFIG_CACHE_TTL_S:
-        logger.info(
-            "get_agent_config: CACHE HIT agent_id=%s crm_integration_keys=%r VERSION=v2fix",
-            agent_id, cached[1].get("crm_integration_keys") if cached[1] else None,
-        )
         return cached[1]
     conn = dbconn.connect()
     try:
@@ -387,15 +383,10 @@ def get_agent_config(agent_id: int | None = None) -> dict | None:
             # which never contains "arthaleads". That silently broke
             # automatic CRM delivery for every agent with this field set
             # (confirmed live: calls 1003-1004, and every call for agent 3).
-            _raw_cik = result.get("crm_integration_keys")
             try:
-                result["crm_integration_keys"] = json.loads(_raw_cik or "[]")
+                result["crm_integration_keys"] = json.loads(result.get("crm_integration_keys") or "[]")
             except (TypeError, ValueError):
                 result["crm_integration_keys"] = []
-            logger.info(
-                "get_agent_config: FRESH FETCH agent_id=%s raw=%r parsed=%r VERSION=v2fix",
-                agent_id, _raw_cik, result["crm_integration_keys"],
-            )
         # A workspace catalog is deliberately agent-scoped. Merely syncing a
         # feed must never expose its data to every agent in the tenant.
         if result and result.get("account_id") and result.get("live_catalog_enabled"):
@@ -575,6 +566,20 @@ def prewarm_caches() -> None:
     now = time.monotonic()
     configs = [dict(r) for r in rows]
     for cfg in configs:
+        # Same raw-TEXT-to-list parsing get_agent_config does below - this
+        # function runs its own `SELECT a.*` and used to skip it entirely,
+        # so every agent prewarmed here (i.e. every live agent, before its
+        # first real call) cached crm_integration_keys as the STRING "[]"
+        # (or '["arthaleads"]') for a full 600s. get_agent_config's own
+        # cache-hit branch just returns that cached dict verbatim, so its
+        # fix never ran either - confirmed live: calls kept logging
+        # "CACHE HIT ... crm_integration_keys='[]'" straight through two
+        # redeploys and a forced restart, because prewarm re-populated the
+        # cache with unparsed data before every single one of those calls.
+        try:
+            cfg["crm_integration_keys"] = json.loads(cfg.get("crm_integration_keys") or "[]")
+        except (TypeError, ValueError):
+            cfg["crm_integration_keys"] = []
         _agent_config_cache[cfg["id"]] = (now, cfg)
     # get_agent_config(None) — an unrouted browser call — resolves to the
     # platform-demo agent, else the lowest id. Mirror that ordering here so
@@ -932,14 +937,12 @@ def get_delivery_integrations(
     integration keys (an agent's crm_integration_keys) — an empty/None list
     means "all connected", the behavior every agent had before this field
     existed."""
-    logger.info("get_delivery_integrations: ENTERED account_id=%s allowed_keys=%r VERSION=v2fix", account_id, allowed_keys)
     if account_id is None:
-        logger.info("get_delivery_integrations: account_id is None, returning [] VERSION=v2fix")
         return []
     conn = dbconn.connect()
     try:
         if not plan_policy.account_policy(conn, account_id)["features"]["crm"]:
-            logger.info("get_delivery_integrations: account_id=%s plan blocks crm feature VERSION=v2fix", account_id)
+            logger.info("get_delivery_integrations: account_id=%s plan blocks crm feature", account_id)
             return []
         rows = conn.execute(
             "SELECT key, config_json FROM integrations "
@@ -950,7 +953,6 @@ def get_delivery_integrations(
         if allowed_keys:
             allowed = set(allowed_keys)
             rows = [r for r in rows if r["key"] in allowed]
-        logger.info("get_delivery_integrations: account_id=%s returning keys=%s VERSION=v2fix", account_id, [r["key"] for r in rows])
         return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
     except Exception:
         # Was `except psycopg.Error` — silent and unlogged, so a call whose

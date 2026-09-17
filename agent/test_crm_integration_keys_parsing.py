@@ -62,6 +62,39 @@ class CrmIntegrationKeysAreParsedIntoARealList(unittest.TestCase):
             cfg = db.get_agent_config(9)
         self.assertEqual(cfg["crm_integration_keys"], [])
 
+    def test_prewarm_caches_also_parses_it_not_just_get_agent_config(self):
+        # The actual live bug: prewarm_caches runs its OWN `SELECT a.*` and
+        # writes straight into _agent_config_cache, bypassing
+        # get_agent_config's parsing entirely. get_agent_config's own
+        # cache-hit branch returns whatever is already there verbatim, so
+        # fixing get_agent_config alone was provably not enough - five live
+        # test calls, across two redeploys and a forced `lk agent restart`,
+        # all still logged crm_integration_keys='[]' as a string because
+        # prewarm had already seeded the cache before any of them ran.
+        agent_rows = [
+            {"id": 17, "account_id": 1, "kb_id": None, "is_platform_demo": False,
+             "crm_integration_keys": "[]"},
+            {"id": 3, "account_id": 1, "kb_id": None, "is_platform_demo": False,
+             "crm_integration_keys": '["arthaleads"]'},
+        ]
+
+        def _execute(sql, *args, **kwargs):
+            cursor = MagicMock()
+            cursor.fetchall.return_value = agent_rows if "FROM agents" in sql else []
+            return cursor
+
+        conn = MagicMock()
+        conn.execute.side_effect = _execute
+        with patch.object(db.dbconn, "connect", return_value=conn), \
+             patch.object(db, "get_kb", return_value=None), \
+             patch.object(db, "get_compliance_config", return_value=None):
+            db.prewarm_caches()
+        self.assertEqual(db._agent_config_cache[17][1]["crm_integration_keys"], [])
+        self.assertEqual(db._agent_config_cache[3][1]["crm_integration_keys"], ["arthaleads"])
+        # get_agent_config must now serve that same parsed value from cache.
+        self.assertEqual(db.get_agent_config(17)["crm_integration_keys"], [])
+        self.assertEqual(db.get_agent_config(3)["crm_integration_keys"], ["arthaleads"])
+
     def test_get_delivery_integrations_now_matches_a_parsed_list(self):
         # End-to-end: with the real (parsed) list, arthaleads must survive
         # the allowed_keys filter instead of being silently dropped.
