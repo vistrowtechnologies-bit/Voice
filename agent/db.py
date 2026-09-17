@@ -923,12 +923,14 @@ def get_delivery_integrations(
     integration keys (an agent's crm_integration_keys) — an empty/None list
     means "all connected", the behavior every agent had before this field
     existed."""
+    logger.info("get_delivery_integrations: ENTERED account_id=%s allowed_keys=%r VERSION=v2fix", account_id, allowed_keys)
     if account_id is None:
+        logger.info("get_delivery_integrations: account_id is None, returning [] VERSION=v2fix")
         return []
     conn = dbconn.connect()
     try:
         if not plan_policy.account_policy(conn, account_id)["features"]["crm"]:
-            logger.info("get_delivery_integrations: account_id=%s plan blocks crm feature", account_id)
+            logger.info("get_delivery_integrations: account_id=%s plan blocks crm feature VERSION=v2fix", account_id)
             return []
         rows = conn.execute(
             "SELECT key, config_json FROM integrations "
@@ -939,6 +941,7 @@ def get_delivery_integrations(
         if allowed_keys:
             allowed = set(allowed_keys)
             rows = [r for r in rows if r["key"] in allowed]
+        logger.info("get_delivery_integrations: account_id=%s returning keys=%s VERSION=v2fix", account_id, [r["key"] for r in rows])
         return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
     except Exception:
         # Was `except psycopg.Error` — silent and unlogged, so a call whose
