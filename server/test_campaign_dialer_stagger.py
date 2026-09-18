@@ -88,5 +88,82 @@ class DialsAreStaggered(unittest.TestCase):
         self.assertEqual(self.sleeps, [])
 
 
+class CampaignScheduleAndRate(unittest.TestCase):
+    """A campaign's own schedule narrows the account window, and its own dial
+    rate can only be slower than the trunk-wide stagger."""
+
+    def setUp(self):
+        campaign_dialer._last_dial_at = 0.0
+
+    def _tick(self, campaign_extra, now_local=None):
+        import datetime
+        placed = []
+        contacts = [{"id": 1, "phone": "+91990", "name": "x"}]
+        with patch.object(campaign_dialer, "calls_db") as db, \
+             patch.object(campaign_dialer, "_OUTBOUND_CHANNELS", 99), \
+             patch.object(campaign_dialer, "_on_orchestrator_pipeline", return_value=False), \
+             patch.object(campaign_dialer.time, "sleep", lambda s: None):
+            db.require_feature.return_value = None
+            db.within_calling_window.return_value = (True, "")
+            db.campaign_inflight.return_value = 0
+            db.campaign_inflight_all.return_value = 0
+            db.reap_stale_campaign_calls.return_value = 0
+            db.concurrent_call_limit.return_value = 30
+            db.count_active_calls.return_value = 0
+            db.campaign_has_open_work.return_value = False
+            db.account_local_now.return_value = now_local or datetime.datetime(2026, 9, 14, 10, 0)
+            db.claim_next_campaign_contact.side_effect = lambda cid: contacts.pop(0) if contacts else None
+            db.place_outbound_call_direct.side_effect = lambda *a, **k: placed.append(k["campaign_contact_id"]) or {"ok": True}
+            campaign_dialer._dial_one(_base_campaign(**campaign_extra))
+        return placed
+
+    def test_dials_inside_the_campaigns_own_window(self):
+        self.assertEqual(len(self._tick({"window_start": "09:00", "window_end": "12:00"})), 1)
+
+    def test_does_not_dial_outside_it(self):
+        import datetime
+        placed = self._tick({"window_start": "09:00", "window_end": "12:00"},
+                            now_local=datetime.datetime(2026, 9, 14, 20, 0))
+        self.assertEqual(placed, [])
+
+    def test_does_not_dial_on_an_inactive_day(self):
+        import datetime
+        placed = self._tick({"active_days": "Mon,Tue"},
+                            now_local=datetime.datetime(2026, 9, 19, 10, 0))  # Saturday
+        self.assertEqual(placed, [])
+
+    def test_campaign_without_a_schedule_is_unaffected(self):
+        self.assertEqual(len(self._tick({})), 1)
+
+
+class CampaignDialRate(unittest.TestCase):
+    def test_attempts_per_minute_becomes_a_gap(self):
+        self.assertEqual(campaign_dialer._campaign_gap_seconds({"attempts_per_minute": 6}), 10.0)
+        self.assertEqual(campaign_dialer._campaign_gap_seconds({"attempts_per_minute": 0}), 0.0)
+        self.assertEqual(campaign_dialer._campaign_gap_seconds({}), 0.0)
+        self.assertEqual(campaign_dialer._campaign_gap_seconds({"attempts_per_minute": "x"}), 0.0)
+
+    def test_a_campaign_can_never_dial_faster_than_the_trunk_allows(self):
+        # 600/min would be 0.1s between dials; the trunk floor is 2s.
+        clock = [1000.0]
+        campaign_dialer._last_dial_at = 0.0
+        slept = []
+        with patch.object(campaign_dialer.time, "monotonic", side_effect=lambda: clock[0]), \
+             patch.object(campaign_dialer.time, "sleep", side_effect=lambda s: (slept.append(s), clock.__setitem__(0, clock[0] + s))):
+            campaign_dialer._pace_dial(campaign_dialer._campaign_gap_seconds({"attempts_per_minute": 600}))
+            campaign_dialer._pace_dial(campaign_dialer._campaign_gap_seconds({"attempts_per_minute": 600}))
+        self.assertEqual(slept, [campaign_dialer._DIAL_STAGGER_SECONDS])
+
+    def test_a_slower_campaign_rate_is_honoured(self):
+        clock = [1000.0]
+        campaign_dialer._last_dial_at = 0.0
+        slept = []
+        with patch.object(campaign_dialer.time, "monotonic", side_effect=lambda: clock[0]), \
+             patch.object(campaign_dialer.time, "sleep", side_effect=lambda s: (slept.append(s), clock.__setitem__(0, clock[0] + s))):
+            campaign_dialer._pace_dial(10.0)
+            campaign_dialer._pace_dial(10.0)
+        self.assertEqual(slept, [10.0])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

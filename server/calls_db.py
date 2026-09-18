@@ -32,6 +32,7 @@ import psycopg
 import dbconn
 import voice_catalog
 import plan_policy
+import campaign_window
 import retry_rules
 from industry_demos import INDUSTRY_DEMOS
 from widget_avatars import is_valid_avatar_key
@@ -525,6 +526,11 @@ CREATE TABLE IF NOT EXISTS campaigns (
     max_attempts INTEGER DEFAULT 1,
     retry_minutes INTEGER DEFAULT 60,
     retry_policy TEXT DEFAULT '',
+    -- window_start/window_end are declared above; they shipped with the table
+    -- and sat unused until the campaign schedule was built on them.
+    active_days TEXT DEFAULT '',
+    end_date TEXT DEFAULT '',
+    attempts_per_minute INTEGER DEFAULT 0,
     concurrency INTEGER DEFAULT 1,
     started_at TEXT,
     completed_at TEXT,
@@ -1379,6 +1385,12 @@ def init_tables() -> None:
                 # "use max_attempts/retry_minutes", which is what every
                 # campaign created before this column did.
                 ("retry_policy", "TEXT DEFAULT ''"),
+                # A campaign's own calling schedule, which can only narrow the
+                # account's compliance window (see campaign_window.py), and
+                # its own dial rate. All empty/0 = account window, global rate.
+                ("active_days", "TEXT DEFAULT ''"),
+                ("end_date", "TEXT DEFAULT ''"),
+                ("attempts_per_minute", "INTEGER DEFAULT 0"),
             ):
                 conn.execute(f"ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # Company + free-form custom fields (from CSV/API imports) added
@@ -5102,8 +5114,9 @@ def create_campaign(data: dict, account_id: int) -> int:
                 f"""
                 INSERT INTO campaigns
                     (account_id, name, agent_id, from_number, contact_tag, scheduled_date,
-                     max_attempts, retry_minutes, concurrency, retry_policy, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, {'?' if scheduled_date else "'draft'"})
+                     max_attempts, retry_minutes, concurrency, retry_policy,
+                     window_start, window_end, active_days, end_date, attempts_per_minute, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, {'?' if scheduled_date else "'draft'"})
                 RETURNING id
                 """,
                 (
@@ -5120,6 +5133,12 @@ def create_campaign(data: dict, account_id: int) -> int:
                     # the dialer uses, so a malformed policy can never reach
                     # the retry path (see retry_rules.py).
                     json.dumps(retry_rules.parse(data.get("retryPolicy"))),
+                    str(data.get("windowStart") or ""),
+                    str(data.get("windowEnd") or ""),
+                    ",".join(data.get("activeDays") or []) if isinstance(data.get("activeDays"), list)
+                    else str(data.get("activeDays") or ""),
+                    str(data.get("endDate") or ""),
+                    max(0, int(data.get("attemptsPerMinute") or 0)),
                     *(["scheduled"] if scheduled_date else []),
                 ),
             )
@@ -5484,6 +5503,14 @@ def campaign_preflight(campaign_id: int, account_id: int, channel_limit: int = 2
     window_open, window_reason = within_calling_window(account_id)
     if not window_open:
         warnings.append(f"{window_reason} Dialling starts when the window opens.")
+    else:
+        # The campaign's own schedule, checked exactly as the dialer checks it,
+        # so this report cannot disagree with what actually happens.
+        blocked = campaign_window.campaign_block_reason(campaign, account_local_now(account_id))
+        if blocked:
+            window_open = False
+            window_reason = f"Not dialling now: {blocked}."
+            warnings.append(f"{window_reason} Dialling starts when the campaign's schedule allows it.")
 
     requested = max(1, int(campaign.get("concurrency") or 1))
     effective = max(1, min(requested, max(1, int(channel_limit or 1))))
@@ -8090,6 +8117,17 @@ def save_compliance(account_id: int, data: dict) -> dict:
             cfg[k] = data[k]
     set_setting(_COMPLIANCE_KEY, json.dumps(cfg), account_id)
     return cfg
+
+
+def account_local_now(account_id: int, at: datetime.datetime | None = None) -> datetime.datetime:
+    """Now, in the tenant's configured timezone — the clock every calling
+    window is judged against (the account's, and each campaign's own)."""
+    cfg = get_compliance(account_id)
+    try:
+        tz = ZoneInfo(cfg.get("timezone") or "Asia/Kolkata")
+    except (ZoneInfoNotFoundError, ValueError):
+        tz = ZoneInfo("Asia/Kolkata")
+    return (at or datetime.datetime.now(datetime.timezone.utc)).astimezone(tz)
 
 
 def within_calling_window(account_id: int, at: datetime.datetime | None = None) -> tuple[bool, str]:

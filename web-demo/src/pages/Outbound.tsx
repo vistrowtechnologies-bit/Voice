@@ -27,6 +27,7 @@ import type { AgentConfig, Campaign, CampaignContact, PhoneNumber } from '../lib
 import { hasRole, useAuth } from '../lib/auth'
 
 const FILTERS = ['All', 'Running', 'Scheduled', 'Draft', 'Paused', 'Completed']
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 const CREATE_STEPS = ['Audience', 'Calling setup', 'Review', 'Pre-flight'] as const
 
 // Only the outcomes an operator actually asked to treat differently end up in
@@ -169,6 +170,13 @@ export function Outbound() {
     retryBusy: '' as number | '',
     retryVoicemail: '' as number | '',
     shortCallSeconds: '' as number | '',
+    // The campaign's own schedule + rate. Blank = use the workspace calling
+    // window and the default dial rate.
+    windowStart: '',
+    windowEnd: '',
+    activeDays: [] as string[],
+    endDate: '',
+    attemptsPerMinute: '' as number | '',
   }
   const [form, setForm] = useState(blank)
   const [segmentCount, setSegmentCount] = useState<number | null>(null)
@@ -283,6 +291,11 @@ export function Outbound() {
       retryMinutes: form.retryMinutes,
       concurrency: form.concurrency,
       retryPolicy: buildRetryPolicy(form),
+      windowStart: form.windowStart,
+      windowEnd: form.windowEnd,
+      activeDays: form.activeDays,
+      endDate: form.endDate,
+      attemptsPerMinute: form.attemptsPerMinute === '' ? 0 : form.attemptsPerMinute,
     }
     if (form.scheduledDate) {
       payload.scheduledDate = toUtcSql(form.scheduledDate)
@@ -750,6 +763,86 @@ export function Outbound() {
                     </label>
                   </div>
                 </div>
+
+                <div className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:col-span-2 sm:p-4">
+                  <div>
+                    <p className="text-sm font-semibold">Call only at certain times (optional)</p>
+                    <p className="text-xs text-text-muted">
+                      Narrows your workspace calling window for this campaign only — it can never
+                      widen it. Leave blank to use the workspace window.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-semibold text-text-muted">From</span>
+                      <input
+                        type="time"
+                        value={form.windowStart}
+                        onChange={(event) => setForm({ ...form, windowStart: event.target.value })}
+                        className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-semibold text-text-muted">To</span>
+                      <input
+                        type="time"
+                        value={form.windowEnd}
+                        onChange={(event) => setForm({ ...form, windowEnd: event.target.value })}
+                        className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-semibold text-text-muted">Stop after</span>
+                      <input
+                        type="date"
+                        value={form.endDate}
+                        onChange={(event) => setForm({ ...form, endDate: event.target.value })}
+                        className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-semibold text-text-muted">Calls per minute</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={form.attemptsPerMinute}
+                        placeholder="no limit"
+                        onChange={(event) =>
+                          setForm({ ...form, attemptsPerMinute: event.target.value === '' ? '' : Math.max(0, Number(event.target.value) || 0) })
+                        }
+                        className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none placeholder:text-text-muted focus:border-primary"
+                      />
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {WEEKDAYS.map((day) => {
+                      const on = form.activeDays.includes(day)
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              activeDays: on
+                                ? form.activeDays.filter((d) => d !== day)
+                                : [...form.activeDays, day],
+                            })
+                          }
+                          className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                            on ? 'border-primary bg-primary/10 text-primary' : 'border-border text-text-muted hover:border-primary'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      )
+                    })}
+                    <span className="self-center text-[11px] text-text-muted">
+                      {form.activeDays.length === 0 ? 'Any day the workspace window allows' : 'Only these days'}
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -768,6 +861,17 @@ export function Outbound() {
                         form.retryBusy !== '' ? `busy ${form.retryBusy}x` : '',
                         form.retryVoicemail !== '' ? `voicemail ${form.retryVoicemail}x` : '',
                         form.shortCallSeconds !== '' ? `under ${form.shortCallSeconds}s counts as missed` : '',
+                      ].filter(Boolean).join(' · ')}
+                    />
+                  )}
+                  {(form.windowStart || form.activeDays.length > 0 || form.endDate || form.attemptsPerMinute !== '') && (
+                    <ReviewRow
+                      label="Calling schedule"
+                      value={[
+                        form.windowStart && form.windowEnd ? `${form.windowStart}-${form.windowEnd}` : '',
+                        form.activeDays.length > 0 ? form.activeDays.join(', ') : '',
+                        form.endDate ? `until ${form.endDate}` : '',
+                        form.attemptsPerMinute !== '' ? `${form.attemptsPerMinute}/min` : '',
                       ].filter(Boolean).join(' · ')}
                     />
                   )}

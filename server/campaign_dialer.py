@@ -31,6 +31,7 @@ import urllib.error
 import urllib.request
 
 import calls_db
+import campaign_window
 import plan_policy
 
 logger = logging.getLogger("vistrow-dialer")
@@ -86,12 +87,33 @@ _last_dial_at = 0.0
 _OUTBOUND_CHANNELS = max(1, int(os.environ.get("OUTBOUND_CHANNEL_LIMIT", "2") or 2))
 
 
-def _pace_dial() -> None:
+def _pace_dial(min_gap_seconds: float = _DIAL_STAGGER_SECONDS) -> None:
+    """Hold until the trunk may carry another INVITE.
+
+    min_gap_seconds is the campaign's own, slower rate when it set one — it can
+    only ever be larger than the trunk-wide stagger, because that stagger is
+    what keeps us inside the carrier's CPS limit.
+    """
     global _last_dial_at
-    wait = _last_dial_at + _DIAL_STAGGER_SECONDS - time.monotonic()
+    gap = max(_DIAL_STAGGER_SECONDS, float(min_gap_seconds or 0))
+    wait = _last_dial_at + gap - time.monotonic()
     if wait > 0:
         time.sleep(wait)
     _last_dial_at = time.monotonic()
+
+
+def _campaign_gap_seconds(campaign: dict) -> float:
+    """A campaign's 'attempts per minute' as a gap between dials (0 = no limit).
+
+    Sarvam exposes dial rate as attempts per second; per MINUTE is the honest
+    unit at our scale, where the trunk-wide floor is already one dial every
+    two seconds.
+    """
+    try:
+        per_minute = int(campaign.get("attempts_per_minute") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return 60.0 / per_minute if per_minute > 0 else 0.0
 
 _started = False
 _lock = threading.Lock()
@@ -171,6 +193,12 @@ def _dial_one(campaign: dict) -> None:
     if not allowed:
         return
 
+    # The campaign's own schedule narrows (never widens) the account window.
+    blocked = campaign_window.campaign_block_reason(campaign, calls_db.account_local_now(account_id))
+    if blocked:
+        logger.debug("campaign %s not dialling: %s", cid, blocked)
+        return
+
     inflight = calls_db.campaign_inflight(cid)
     slots = max(0, int(campaign.get("concurrency", 1) or 1) - inflight)
 
@@ -198,7 +226,7 @@ def _dial_one(campaign: dict) -> None:
         contact = calls_db.claim_next_campaign_contact(cid)
         if contact is None:
             break
-        _pace_dial()
+        _pace_dial(_campaign_gap_seconds(campaign))
         try:
             if _on_orchestrator_pipeline(account_id):
                 result = _place_via_orchestrator(
