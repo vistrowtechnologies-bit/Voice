@@ -178,5 +178,30 @@ class ReplayCampaign20(unittest.TestCase):
         self.assertGreaterEqual(peak, 9)
 
 
+class LeakedActiveCallRows(unittest.TestCase):
+    """A worker that dies mid-call never deletes its active_calls row. Found
+    live 2026-09-18: a room started 2026-09-03 was still holding one of
+    Prophunt's 30 concurrent-call slots."""
+
+    def test_count_ignores_rows_older_than_any_real_call(self):
+        conn = CapturingConn(reads=[{"c": 0}])
+        with patch.object(calls_db, "_connect", return_value=conn):
+            calls_db.count_active_calls(1)
+        self.assertEqual(calls_db._ACTIVE_CALL_MAX_AGE_S, 4 * 60 * 60)
+
+    def test_count_query_carries_the_cutoff(self):
+        seen = {}
+
+        class Probe(CapturingConn):
+            def execute(self, sql, params=()):
+                seen["sql"] = " ".join(sql.split())
+                return super().execute(sql, params)
+
+        with patch.object(calls_db, "_connect", return_value=Probe(reads=[{"c": 3}])):
+            self.assertEqual(calls_db.count_active_calls(1), 3)
+        self.assertIn("started_at >", seen["sql"])
+        self.assertIn("interval '4 hours'", seen["sql"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

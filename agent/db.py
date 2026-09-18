@@ -1027,6 +1027,14 @@ def try_start_call(room_name: str, account_id: int | None, config: dict | None =
             plan = row["plan"] or ""
             limit = CONCURRENT_CALL_LIMITS.get(plan, 0)
         if limit is not None:
+            # Rows older than any real call are leaks from a worker that
+            # died before its shutdown callback ran; they must not lock a
+            # tenant out of calling (see server/calls_db.count_active_calls).
+            conn.execute(
+                "DELETE FROM active_calls WHERE account_id = ? AND started_at <= "
+                "to_char((now() AT TIME ZONE 'UTC') - interval '4 hours', 'YYYY-MM-DD HH24:MI:SS')",
+                (account_id,),
+            )
             current = conn.execute(
                 "SELECT COUNT(*) c FROM active_calls WHERE account_id = ?", (account_id,)
             ).fetchone()["c"]

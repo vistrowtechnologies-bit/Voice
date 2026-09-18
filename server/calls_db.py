@@ -3438,6 +3438,17 @@ def require_feature(account_id: int, feature: str) -> dict:
         conn.close()
 
 
+# A row here is deleted by the agent's shutdown callback. If a worker dies
+# mid-call that never runs, and the row then eats one of the account's
+# concurrent-call slots forever — found live 2026-09-18: a room from
+# 2026-09-03 still held a slot on Prophunt's account. No real call outlives
+# this cutoff, so anything older is a leak and does not count.
+_ACTIVE_CALL_MAX_AGE_S = 4 * 60 * 60
+_ACTIVE_CALL_CUTOFF = (
+    "to_char((now() AT TIME ZONE 'UTC') - interval '4 hours', 'YYYY-MM-DD HH24:MI:SS')"
+)
+
+
 def count_active_calls(account_id: int) -> int:
     """How many calls this account has live right now, per the active_calls
     table (see its schema comment). Used by the campaign dialer to skip
@@ -3448,7 +3459,9 @@ def count_active_calls(account_id: int) -> int:
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT COUNT(*) c FROM active_calls WHERE account_id = ?", (account_id,)
+            "SELECT COUNT(*) c FROM active_calls WHERE account_id = ? "
+            f"AND started_at > {_ACTIVE_CALL_CUTOFF}",
+            (account_id,),
         ).fetchone()
         return row["c"] if row else 0
     finally:
