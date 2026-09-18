@@ -1351,6 +1351,28 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
         conn.close()
 
 
+def link_campaign_contact_call(contact_id: int, call_id: int) -> None:
+    """Point a campaign contact at the call row it produced.
+
+    The dashboard reads campaign_contacts.call_id to show a campaign outcome
+    beside each call (server/calls_db.py), but until now nothing ever wrote
+    it, so that column was always empty and a campaign's claimed outcome
+    could not be checked against the call it came from. Best-effort: a missed
+    link must never fail a call teardown.
+    """
+    conn = dbconn.connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE campaign_contacts SET call_id = ? WHERE id = ? AND call_id IS NULL",
+                (call_id, contact_id),
+            )
+    except Exception:
+        logger.exception("could not link contact %s to call %s", contact_id, call_id)
+    finally:
+        conn.close()
+
+
 def finish_campaign_contact(contact_id: int, campaign_id: int, outcome: str) -> None:
     """Resolve an in-flight campaign contact when its call ends.
 

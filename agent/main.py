@@ -6996,6 +6996,19 @@ async def entrypoint(ctx: JobContext) -> None:
         except Exception:
             logger.exception("failed to save call log for room %s", ctx.room.name)
 
+        # Link the campaign contact to the call it produced, so a campaign's
+        # recorded outcome can be checked against the actual call (the
+        # dashboard reads this column; nothing wrote it before).
+        if saved_call_id and call_context.get("campaign_contact_id"):
+            try:
+                await asyncio.to_thread(
+                    db.link_campaign_contact_call,
+                    int(call_context["campaign_contact_id"]),
+                    int(saved_call_id),
+                )
+            except Exception:
+                logger.exception("could not link campaign contact to call %s", saved_call_id)
+
         # Start the full CRM delivery as soon as the durable call row exists.
         # It used to run after the post-call AI pass, the recording upload AND
         # the audio cleanup; those can consume the worker's whole shutdown
