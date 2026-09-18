@@ -5710,7 +5710,12 @@ async def entrypoint(ctx: JobContext) -> None:
     # exception would leak the row and permanently eat one of the account's
     # concurrent-call slots.
     # Facts the campaign contact's final state is decided from at call end.
-    _call_facts = {"ringback_seen": False, "caller_spoke": False}
+    # started_monotonic, not the billed started_at: this is only used to tell a
+    # real conversation from a pick-up-and-hang-up, and it must be readable
+    # from the shutdown callback even on a call that ended before the billing
+    # clock was set.
+    _call_facts = {"ringback_seen": False, "caller_spoke": False,
+                   "started_monotonic": time.monotonic()}
 
     async def _release_call_slot() -> None:
         # livekit-agents runs shutdown callbacks concurrently (asyncio.gather),
@@ -5725,7 +5730,15 @@ async def entrypoint(ctx: JobContext) -> None:
                 if _call_facts["ringback_seen"] and not _call_facts["caller_spoke"]
                 else "connected"
             )
-            await asyncio.to_thread(db.finish_campaign_contact, int(contact_id), int(campaign_id), outcome)
+            await asyncio.to_thread(
+                db.finish_campaign_contact,
+                int(contact_id),
+                int(campaign_id),
+                outcome,
+                # Lets a campaign that opted in treat a 4-second "hello, no
+                # thanks" as worth another try (retry_policy short_call).
+                time.monotonic() - _call_facts["started_monotonic"],
+            )
         await asyncio.to_thread(db.end_call_room, ctx.room.name)
 
     ctx.add_shutdown_callback(_release_call_slot)

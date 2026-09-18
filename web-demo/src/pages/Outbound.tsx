@@ -29,6 +29,32 @@ import { hasRole, useAuth } from '../lib/auth'
 const FILTERS = ['All', 'Running', 'Scheduled', 'Draft', 'Paused', 'Completed']
 const CREATE_STEPS = ['Audience', 'Calling setup', 'Review', 'Pre-flight'] as const
 
+// Only the outcomes an operator actually asked to treat differently end up in
+// the policy; anything omitted falls back to the campaign's Max attempts /
+// Retry after (see server/retry_rules.py).
+function buildRetryPolicy(form: {
+  retryBusy: number | ''
+  retryVoicemail: number | ''
+  shortCallSeconds: number | ''
+  retryMinutes: number
+}): Record<string, Record<string, number>> {
+  const policy: Record<string, Record<string, number>> = {}
+  if (form.retryBusy !== '' && Number(form.retryBusy) > 0) {
+    policy.busy = { attempts: Number(form.retryBusy), gapMinutes: form.retryMinutes }
+  }
+  if (form.retryVoicemail !== '' && Number(form.retryVoicemail) > 0) {
+    policy.voicemail = { attempts: Number(form.retryVoicemail), gapMinutes: form.retryMinutes }
+  }
+  if (form.shortCallSeconds !== '' && Number(form.shortCallSeconds) > 0) {
+    policy.short_call = {
+      underSeconds: Number(form.shortCallSeconds),
+      attempts: 2,
+      gapMinutes: form.retryMinutes,
+    }
+  }
+  return policy
+}
+
 const STATUS_STYLE: Record<string, string> = {
   running: 'border-cyan/30 bg-cyan/10 text-cyan',
   scheduled: 'border-magenta/30 bg-magenta/10 text-magenta',
@@ -138,6 +164,11 @@ export function Outbound() {
     concurrency: 1,
     scheduledDate: '', // datetime-local string, empty = launch on demand
     segment: '' as string, // '' | 'fresh' | 'followup' | 'failed_retry'
+    // Per-outcome retry rules. Empty attempts = "use the blanket Max attempts
+    // above", which is what every campaign did before these existed.
+    retryBusy: '' as number | '',
+    retryVoicemail: '' as number | '',
+    shortCallSeconds: '' as number | '',
   }
   const [form, setForm] = useState(blank)
   const [segmentCount, setSegmentCount] = useState<number | null>(null)
@@ -251,6 +282,7 @@ export function Outbound() {
       maxAttempts: form.maxAttempts,
       retryMinutes: form.retryMinutes,
       concurrency: form.concurrency,
+      retryPolicy: buildRetryPolicy(form),
     }
     if (form.scheduledDate) {
       payload.scheduledDate = toUtcSql(form.scheduledDate)
@@ -664,6 +696,60 @@ export function Outbound() {
                   />
                   <span className="text-[11px] text-text-muted">Timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
                 </label>
+
+                <div className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:col-span-2 sm:p-4">
+                  <div>
+                    <p className="text-sm font-semibold">Treat some outcomes differently (optional)</p>
+                    <p className="text-xs text-text-muted">
+                      Leave blank to use the attempts above for every outcome. A busy line is worth
+                      trying again sooner than a voicemail box.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-semibold text-text-muted">Busy — attempts</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={form.retryBusy}
+                        placeholder={String(form.maxAttempts)}
+                        onChange={(event) =>
+                          setForm({ ...form, retryBusy: event.target.value === '' ? '' : Math.max(1, Number(event.target.value) || 1) })
+                        }
+                        className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none placeholder:text-text-muted focus:border-primary"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-semibold text-text-muted">Voicemail — attempts</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={form.retryVoicemail}
+                        placeholder={String(form.maxAttempts)}
+                        onChange={(event) =>
+                          setForm({ ...form, retryVoicemail: event.target.value === '' ? '' : Math.max(1, Number(event.target.value) || 1) })
+                        }
+                        className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none placeholder:text-text-muted focus:border-primary"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-semibold text-text-muted">Call under (seconds) counts as missed</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={120}
+                        value={form.shortCallSeconds}
+                        placeholder="off"
+                        onChange={(event) =>
+                          setForm({ ...form, shortCallSeconds: event.target.value === '' ? '' : Math.max(0, Number(event.target.value) || 0) })
+                        }
+                        className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none placeholder:text-text-muted focus:border-primary"
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -675,6 +761,16 @@ export function Outbound() {
                   <ReviewRow label="Call from" value={form.fromNumber} />
                   <ReviewRow label="Calling agent" value={effectiveAgent?.name ?? 'Not selected'} />
                   <ReviewRow label="Dial policy" value={`${form.maxAttempts} attempt${form.maxAttempts === 1 ? '' : 's'}${form.maxAttempts > 1 ? ` · retry after ${form.retryMinutes} min` : ''} · ${form.concurrency} concurrent`} />
+                  {Object.keys(buildRetryPolicy(form)).length > 0 && (
+                    <ReviewRow
+                      label="Retry rules"
+                      value={[
+                        form.retryBusy !== '' ? `busy ${form.retryBusy}x` : '',
+                        form.retryVoicemail !== '' ? `voicemail ${form.retryVoicemail}x` : '',
+                        form.shortCallSeconds !== '' ? `under ${form.shortCallSeconds}s counts as missed` : '',
+                      ].filter(Boolean).join(' · ')}
+                    />
+                  )}
                   <ReviewRow label="Start" value={form.scheduledDate ? new Date(form.scheduledDate).toLocaleString() : 'Save as draft or launch now'} />
                 </div>
                 <div className="flex flex-col gap-2 rounded-lg border border-cyan/30 bg-cyan/5 p-4 text-xs text-text-muted">

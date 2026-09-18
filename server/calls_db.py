@@ -32,6 +32,7 @@ import psycopg
 import dbconn
 import voice_catalog
 import plan_policy
+import retry_rules
 from industry_demos import INDUSTRY_DEMOS
 from widget_avatars import is_valid_avatar_key
 
@@ -523,6 +524,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     -- long to wait between attempts, and how many calls may be in flight at once.
     max_attempts INTEGER DEFAULT 1,
     retry_minutes INTEGER DEFAULT 60,
+    retry_policy TEXT DEFAULT '',
     concurrency INTEGER DEFAULT 1,
     started_at TEXT,
     completed_at TEXT,
@@ -1373,6 +1375,10 @@ def init_tables() -> None:
                 ("concurrency", "INTEGER DEFAULT 1"),
                 ("started_at", "TEXT"),
                 ("completed_at", "TEXT"),
+                # Per-outcome retry rules (see retry_rules.py). Empty means
+                # "use max_attempts/retry_minutes", which is what every
+                # campaign created before this column did.
+                ("retry_policy", "TEXT DEFAULT ''"),
             ):
                 conn.execute(f"ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # Company + free-form custom fields (from CSV/API imports) added
@@ -5096,8 +5102,8 @@ def create_campaign(data: dict, account_id: int) -> int:
                 f"""
                 INSERT INTO campaigns
                     (account_id, name, agent_id, from_number, contact_tag, scheduled_date,
-                     max_attempts, retry_minutes, concurrency, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, {'?' if scheduled_date else "'draft'"})
+                     max_attempts, retry_minutes, concurrency, retry_policy, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, {'?' if scheduled_date else "'draft'"})
                 RETURNING id
                 """,
                 (
@@ -5110,6 +5116,10 @@ def create_campaign(data: dict, account_id: int) -> int:
                     max(1, int(data.get("maxAttempts", 1) or 1)),
                     max(1, int(data.get("retryMinutes", 60) or 60)),
                     max(1, int(data.get("concurrency", 1) or 1)),
+                    # Stored as given but normalised through the same reader
+                    # the dialer uses, so a malformed policy can never reach
+                    # the retry path (see retry_rules.py).
+                    json.dumps(retry_rules.parse(data.get("retryPolicy"))),
                     *(["scheduled"] if scheduled_date else []),
                 ),
             )
@@ -5758,16 +5768,24 @@ def record_campaign_dial_result(
     try:
         with conn:
             camp = conn.execute(
-                "SELECT max_attempts, retry_minutes FROM campaigns WHERE id = ?", (campaign_id,)
+                "SELECT max_attempts, retry_minutes, retry_policy FROM campaigns WHERE id = ?",
+                (campaign_id,),
             ).fetchone()
             # `or` guards: a NULL retry_minutes crashed timedelta() below and
             # stranded the contact. agent/db.py's copy of this rule already had them.
             max_attempts = (camp["max_attempts"] if camp else 1) or 1
             retry_minutes = (camp["retry_minutes"] if camp else 60) or 60
+            # _row_get: the column may not exist yet on the boot that adds it.
+            policy = _row_get(camp, "retry_policy", "") if camp else ""
             contact = conn.execute(
                 "SELECT attempts FROM campaign_contacts WHERE id = ?", (contact_id,)
             ).fetchone()
             attempts = (contact["attempts"] if contact else 1) or 1
+            # Per-outcome rule when the campaign has one, else the campaign's
+            # own max_attempts/retry_minutes (see retry_rules.py).
+            retry_again, retry_minutes = retry_rules.resolve(
+                policy, outcome, attempts, max_attempts, retry_minutes
+            )
 
             if outcome == "placed":
                 conn.execute(
@@ -5781,7 +5799,7 @@ def record_campaign_dial_result(
                     "WHERE id = ?" + guard,
                     (blocked_reason or "Blocked by compliance", contact_id),
                 )
-            elif attempts >= max_attempts:  # no_answer / failed / voicemail, terminal
+            elif not retry_again:  # no_answer / failed / voicemail, terminal
                 conn.execute(
                     "UPDATE campaign_contacts SET status = ?, outcome = ?, next_attempt_at = NULL "
                     "WHERE id = ?" + guard,

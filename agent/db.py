@@ -23,6 +23,7 @@ import psycopg
 from zoneinfo import ZoneInfo
 
 import dbconn
+import retry_rules
 import plan_policy
 import voice_catalog
 
@@ -1343,6 +1344,15 @@ def set_call_extracted_data(call_id: int | None, extracted: dict) -> None:
         conn.close()
 
 
+def _row_value(row, key, default=""):
+    """Safe column read for a row that may predate a newly-added column —
+    mirrors server/calls_db.py's _row_get."""
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+
+
 def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = "voicemail") -> None:
     """Correct a campaign contact from 'placed' to what actually picked up.
 
@@ -1368,17 +1378,23 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
     try:
         with conn:
             camp = conn.execute(
-                "SELECT max_attempts, retry_minutes FROM campaigns WHERE id = ?", (campaign_id,)
+                "SELECT max_attempts, retry_minutes, retry_policy FROM campaigns WHERE id = ?",
+                (campaign_id,),
             ).fetchone()
             max_attempts = (camp["max_attempts"] if camp else 1) or 1
             retry_minutes = (camp["retry_minutes"] if camp else 60) or 60
+            policy = _row_value(camp, "retry_policy")
             row = conn.execute(
                 "SELECT attempts FROM campaign_contacts WHERE id = ?", (contact_id,)
             ).fetchone()
             if row is None:
                 return
             attempts = row["attempts"] or 1
-            if attempts >= max_attempts:
+            # Same per-outcome rules the server applies to a dial result.
+            retry_again, retry_minutes = retry_rules.resolve(
+                policy, outcome, attempts, max_attempts, retry_minutes
+            )
+            if not retry_again:
                 conn.execute(
                     "UPDATE campaign_contacts SET status = ?, outcome = ?, "
                     "next_attempt_at = NULL WHERE id = ?",
@@ -1428,13 +1444,20 @@ def link_campaign_contact_call(contact_id: int, call_id: int) -> None:
         conn.close()
 
 
-def finish_campaign_contact(contact_id: int, campaign_id: int, outcome: str) -> None:
+def finish_campaign_contact(
+    contact_id: int, campaign_id: int, outcome: str, duration_seconds: float | None = None
+) -> None:
     """Resolve an in-flight campaign contact when its call ends.
 
     The dialer leaves a placed contact 'calling' for the whole call (that is
     what makes its concurrency cap count live calls), so the agent owns the
     final state. outcome is 'connected' (-> 'done') or 'no_answer' (retries if
     attempts remain, same rule as record_campaign_voicemail).
+
+    A campaign can opt into treating a very short connected call as a
+    non-conversation worth retrying (retry_policy's short_call.underSeconds —
+    somebody picked up and hung up straight away). Off unless configured, so
+    a connected call stays 'done' by default.
 
     A no-op unless the row is still 'calling': the unanswered-leg, carrier-
     announcement and voicemail paths may already have resolved it mid-call,
@@ -1448,7 +1471,18 @@ def finish_campaign_contact(contact_id: int, campaign_id: int, outcome: str) -> 
             ).fetchone()
             if row is None or row["status"] != "calling":
                 return
-            if outcome != "no_answer":
+            if outcome == "connected" and duration_seconds is not None:
+                camp_policy = conn.execute(
+                    "SELECT retry_policy FROM campaigns WHERE id = ?", (campaign_id,)
+                ).fetchone()
+                threshold = retry_rules.short_call_seconds(_row_value(camp_policy, "retry_policy"))
+                if threshold and duration_seconds < threshold:
+                    logger.info(
+                        "campaign contact %s: connected call lasted %.1fs (under %ss) — treating as short_call",
+                        contact_id, duration_seconds, threshold,
+                    )
+                    outcome = "short_call"
+            if outcome not in ("no_answer", "short_call"):
                 conn.execute(
                     "UPDATE campaign_contacts SET status = 'done', outcome = 'connected', "
                     "next_attempt_at = NULL WHERE id = ? AND status = 'calling'",
@@ -1456,21 +1490,25 @@ def finish_campaign_contact(contact_id: int, campaign_id: int, outcome: str) -> 
                 )
             else:
                 camp = conn.execute(
-                    "SELECT max_attempts, retry_minutes FROM campaigns WHERE id = ?", (campaign_id,)
+                    "SELECT max_attempts, retry_minutes, retry_policy FROM campaigns WHERE id = ?",
+                    (campaign_id,),
                 ).fetchone()
                 max_attempts = (camp["max_attempts"] if camp else 1) or 1
                 retry_minutes = (camp["retry_minutes"] if camp else 60) or 60
                 attempts = row["attempts"] or 1
+                retry_again, retry_minutes = retry_rules.resolve(
+                    _row_value(camp, "retry_policy"), outcome, attempts, max_attempts, retry_minutes
+                )
                 next_at = None
-                if attempts < max_attempts:
+                if retry_again:
                     next_at = (
                         datetime.datetime.now(datetime.timezone.utc)
                         + datetime.timedelta(minutes=retry_minutes)
                     ).strftime("%Y-%m-%d %H:%M:%S")
                 conn.execute(
-                    "UPDATE campaign_contacts SET status = 'no_answer', outcome = 'no answer', "
+                    "UPDATE campaign_contacts SET status = 'no_answer', outcome = ?, "
                     "next_attempt_at = ? WHERE id = ? AND status = 'calling'",
-                    (next_at, contact_id),
+                    ("short call" if outcome == "short_call" else "no answer", next_at, contact_id),
                 )
         logger.info("campaign contact %s finished as %s", contact_id, outcome)
     except Exception:
