@@ -618,6 +618,61 @@ def prewarm_caches() -> None:
         _phone_number_cache[_normalize_sip_number(number)] = (now, d)
 
 
+def get_inbound_route(number: str) -> dict | None:
+    """The inbound route configured for a dialled number, or None.
+
+    None means "no route configured", which must keep today's behaviour of
+    answering every call — see agent/inbound_rules.py. A DB failure also
+    returns None on purpose: a database problem must not stop us answering
+    a customer's call.
+    """
+    key = _normalize_sip_number(number)
+    conn = dbconn.connect()
+    try:
+        row = conn.execute(
+            "SELECT id, account_id, phone_number, agent_id, timezone, max_concurrent, "
+            "start_date, end_date, window_start, window_end, active_days, status "
+            "FROM inbound_routes WHERE phone_number = ? ORDER BY id DESC LIMIT 1",
+            (key,),
+        ).fetchone()
+        return dict(row) if row else None
+    except psycopg.Error:
+        logger.warning("inbound route lookup failed for %s", key, exc_info=True)
+        return None
+    finally:
+        conn.close()
+
+
+def live_calls_on_number(account_id: int, number: str) -> int:
+    """Calls in progress on one of our numbers, for a route's concurrency cap.
+
+    Inbound rooms are named from the LiveKit dispatch rule's room_prefix,
+    "phone-<digits of the dialled number>" (server/livekit_sip.py), so the
+    prefix identifies the number a live call came in on. An OUTBOUND call
+    dialling that same number would share the prefix, but that means calling
+    our own number, which no campaign does.
+
+    Returns 0 on any failure: the cap is a courtesy limit, not a security
+    boundary, and must never be the reason a call is dropped by accident.
+    """
+    digits = "".join(c for c in (number or "") if c.isdigit())
+    if not digits:
+        return 0
+    conn = dbconn.connect()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) c FROM active_calls WHERE account_id = ? AND room_name LIKE ? "
+            "AND started_at::timestamp > (now() AT TIME ZONE 'UTC') - interval '4 hours'",
+            (account_id, f"phone-{digits}%"),
+        ).fetchone()
+        return int(row["c"]) if row else 0
+    except psycopg.Error:
+        logger.warning("live call count failed for %s", number, exc_info=True)
+        return 0
+    finally:
+        conn.close()
+
+
 # Per-tenant compliance config (server/calls_db.py owns the settings row under
 # "compliance.config"). Cached and prewarmed like the others because it is read
 # on the call path: an uncached read here would put a fresh connection round

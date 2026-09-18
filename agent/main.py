@@ -9,6 +9,7 @@ import threading
 import time
 import wave
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -56,6 +57,7 @@ from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarv
 import db
 import numpy as np
 import recording
+import inbound_rules
 import ringback
 import sarvam_realtime_stt
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
@@ -3662,9 +3664,17 @@ class RealEstateAgent(Agent):
     # released this long afterwards unless the recipient speaks first - short,
     # so a silent answerer (call 936) is not left waiting.
     _POST_RINGBACK_RELEASE_S = 2.0
-    # Still ringing this long after "active" means nobody is answering. Longest
-    # observed ringback after active was 19s.
-    _RINGBACK_GIVE_UP_S = 60.0
+    # Still ringing this long after "active" means nobody is answering.
+    #
+    # 30s, not 60s: on SIP a ringing call holds a carrier channel for its
+    # whole ring, and channels are what EnableX sells (3 on this account), so
+    # every extra ringing second is capacity that cannot dial anyone else.
+    # Measured on all 16 campaign-20 recordings (2026-09-18): continuous
+    # ringback never survived past 23.0s, and none of the 4 calls a human
+    # actually answered ever locked the detector at all — so this cannot cut
+    # off someone who picks up, it only stops us holding a channel open on a
+    # phone nobody is answering.
+    _RINGBACK_GIVE_UP_S = 30.0
 
     async def _give_up_on_ringback(self, held_for: float) -> None:
         """Still ringing long after SIP "active": nobody answered. End the
@@ -5623,6 +5633,40 @@ async def entrypoint(ctx: JobContext) -> None:
             # its result so a failure inside it can't surface as an unhandled
             # "exception was never retrieved" warning on a call that succeeded.
             stale_task.add_done_callback(lambda t: t.cancelled() or t.exception())
+
+        # The number's inbound route (business hours, active days, date
+        # range, concurrency). Until 2026-09-18 these were stored and never
+        # read, so an operator's "Mon-Fri 9-5, 1 call" did nothing. A number
+        # with no route, or any lookup failure, still answers — see
+        # agent/inbound_rules.py.
+        if call_context["direction"] == "inbound":
+            route = await asyncio.to_thread(db.get_inbound_route, dialled_number)
+            if route:
+                try:
+                    tz = ZoneInfo(route.get("timezone") or "Asia/Kolkata")
+                except (ZoneInfoNotFoundError, ValueError):
+                    tz = ZoneInfo("Asia/Kolkata")
+                live = await asyncio.to_thread(
+                    db.live_calls_on_number,
+                    route.get("account_id") or (owner or {}).get("account_id"),
+                    dialled_number,
+                )
+                # This call has not claimed its slot yet (try_start_call runs
+                # below), so `live` counts the OTHER calls in progress.
+                reason = inbound_rules.route_rejection(
+                    route, datetime.now(timezone.utc).astimezone(tz), live
+                )
+                if reason:
+                    logger.info(
+                        "inbound call to %s declined: %s (live=%s, room=%s)",
+                        dialled_number, reason, live, ctx.room.name,
+                    )
+                    # The config lookup is still in flight; retrieve its
+                    # result so a failure in it can't surface as an unhandled
+                    # "exception was never retrieved" warning.
+                    config_task.add_done_callback(lambda t: t.cancelled() or t.exception())
+                    await _hang_up(ctx.room.name)
+                    return
 
     config = await config_task
     _config_ready_ms = round((time.monotonic() - _t0) * 1000)
