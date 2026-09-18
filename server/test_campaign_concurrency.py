@@ -199,7 +199,7 @@ class LeakedActiveCallRows(unittest.TestCase):
 
         with patch.object(calls_db, "_connect", return_value=Probe(reads=[{"c": 3}])):
             self.assertEqual(calls_db.count_active_calls(1), 3)
-        self.assertIn("started_at >", seen["sql"])
+        self.assertIn("started_at::timestamp >", seen["sql"])
         self.assertIn("interval '4 hours'", seen["sql"])
 
 

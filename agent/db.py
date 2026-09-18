@@ -1031,8 +1031,8 @@ def try_start_call(room_name: str, account_id: int | None, config: dict | None =
             # died before its shutdown callback ran; they must not lock a
             # tenant out of calling (see server/calls_db.count_active_calls).
             conn.execute(
-                "DELETE FROM active_calls WHERE account_id = ? AND started_at <= "
-                "to_char((now() AT TIME ZONE 'UTC') - interval '4 hours', 'YYYY-MM-DD HH24:MI:SS')",
+                "DELETE FROM active_calls WHERE account_id = ? AND started_at::timestamp <= "
+                "(now() AT TIME ZONE 'UTC') - interval '4 hours'",
                 (account_id,),
             )
             current = conn.execute(

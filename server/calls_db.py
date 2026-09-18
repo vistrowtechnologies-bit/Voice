@@ -2962,9 +2962,12 @@ def summary(account_id: int) -> dict:
 def calls_for_local_date(account_id: int, date: str, timezone_name: str = "Asia/Kolkata") -> dict:
     """Exact, unpaginated call totals for one local calendar date.
 
-    ``calls.started_at`` is naive UTC text. Convert the requested local day's
-    boundaries to matching UTC strings instead of comparing the stored UTC
-    date directly, which is wrong around midnight in India.
+    ``calls.started_at`` is UTC text in two shapes: older rows are
+    'YYYY-MM-DD HH:MM:SS', newer ones ISO ('...T...+00:00'). Comparing the
+    column as TEXT against a space-separated boundary silently drops every
+    ISO row, because 'T' sorts after ' ' — this reported 0 calls on a day
+    that had 12 (checked against production, 2026-09-18). Both shapes cast
+    cleanly to timestamp, so compare as timestamps.
     """
     try:
         local_date = datetime.date.fromisoformat(date)
@@ -2985,7 +2988,8 @@ def calls_for_local_date(account_id: int, date: str, timezone_name: str = "Asia/
                    COUNT(*) FILTER (WHERE direction = 'outbound') AS outbound
             FROM calls
             WHERE account_id = ? AND COALESCE(test_run_id, '') = ''
-              AND started_at >= ? AND started_at < ?
+              AND started_at::timestamp >= ?::timestamp
+              AND started_at::timestamp <  ?::timestamp
             """,
             (account_id, start_utc, end_utc),
         ).fetchone()
@@ -2994,7 +2998,8 @@ def calls_for_local_date(account_id: int, date: str, timezone_name: str = "Asia/
             SELECT lead_name, lead_phone
             FROM calls
             WHERE account_id = ? AND COALESCE(test_run_id, '') = ''
-              AND started_at >= ? AND started_at < ?
+              AND started_at::timestamp >= ?::timestamp
+              AND started_at::timestamp <  ?::timestamp
             ORDER BY started_at DESC LIMIT 10
             """,
             (account_id, start_utc, end_utc),
@@ -3444,9 +3449,7 @@ def require_feature(account_id: int, feature: str) -> dict:
 # 2026-09-03 still held a slot on Prophunt's account. No real call outlives
 # this cutoff, so anything older is a leak and does not count.
 _ACTIVE_CALL_MAX_AGE_S = 4 * 60 * 60
-_ACTIVE_CALL_CUTOFF = (
-    "to_char((now() AT TIME ZONE 'UTC') - interval '4 hours', 'YYYY-MM-DD HH24:MI:SS')"
-)
+_ACTIVE_CALL_CUTOFF = "(now() AT TIME ZONE 'UTC') - interval '4 hours'"
 
 
 def count_active_calls(account_id: int) -> int:
@@ -3460,7 +3463,7 @@ def count_active_calls(account_id: int) -> int:
     try:
         row = conn.execute(
             "SELECT COUNT(*) c FROM active_calls WHERE account_id = ? "
-            f"AND started_at > {_ACTIVE_CALL_CUTOFF}",
+            f"AND started_at::timestamp > {_ACTIVE_CALL_CUTOFF}",
             (account_id,),
         ).fetchone()
         return row["c"] if row else 0
@@ -6935,7 +6938,9 @@ def _credits_used_in_period(conn, account_id: int, rates: dict, period_start: st
     )
     params: list = [account_id, "test-phone-%", "test-agent-%"]
     if period_start:
-        query += " AND started_at >= ?"
+        # Cast, never compare as text: started_at is stored in two shapes
+        # (see calls_for_local_date) and 'T' sorts after ' '.
+        query += " AND started_at::timestamp >= ?::timestamp"
         params.append(period_start)
     query += " GROUP BY call_type, voice, model"
 
@@ -7290,7 +7295,8 @@ def overage_for_account_period(account_id: int, plan: str, period_start: str, pe
             "SELECT COALESCE(call_type, 'browser') call_type, voice, model, "
             "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls "
             "WHERE account_id = ? AND room_name NOT LIKE ? AND room_name NOT LIKE ? "
-            "AND started_at >= ? AND started_at < ? GROUP BY call_type, voice, model"
+            "AND started_at::timestamp >= ?::timestamp AND started_at::timestamp < ?::timestamp "
+            "GROUP BY call_type, voice, model"
         )
         used = 0.0
         for row in conn.execute(
