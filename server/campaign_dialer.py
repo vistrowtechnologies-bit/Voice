@@ -227,10 +227,15 @@ def _dial_one(campaign: dict) -> None:
         if contact is None:
             break
         _pace_dial(_campaign_gap_seconds(campaign))
+        # claim_next_campaign_contact returns the row as it was BEFORE the
+        # attempt counter was incremented, so contact["attempts"] is how many
+        # times this person has already been rung — which is exactly the
+        # rotation index (0 = first attempt = from_number).
+        caller_id = calls_db.campaign_caller_id(campaign, contact.get("attempts") or 0)
         try:
             if _on_orchestrator_pipeline(account_id):
                 result = _place_via_orchestrator(
-                    contact["phone"], from_number, account_id, agent_id, contact
+                    contact["phone"], caller_id, account_id, agent_id, contact
                 )
             else:
                 # wait_for_answer=False on purpose: this loop places up to
@@ -243,7 +248,7 @@ def _dial_one(campaign: dict) -> None:
                 # recorded result honest.
                 result = calls_db.place_outbound_call_direct(
                     contact["phone"],
-                    from_number,
+                    caller_id,
                     account_id,
                     agent_id,
                     contact_name=contact.get("name", ""),

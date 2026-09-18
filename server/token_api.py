@@ -3497,10 +3497,17 @@ def create_campaign(data: dict = Body(...), user: dict = Depends(require_role("m
     # from it and its assigned agent answers. Reject early with a clear message
     # rather than letting the dialer silently pause a mis-configured campaign.
     from_number = (data.get("fromNumber") or "").strip()
-    if from_number:
+    rotation = data.get("fromNumbers") or []
+    if isinstance(rotation, str):
+        rotation = [n.strip() for n in rotation.split(",") if n.strip()]
+    if from_number or rotation:
         owned = {n["number"] for n in calls_db.list_phone_numbers(user["account_id"])}
-        if from_number not in owned:
+        if from_number and from_number not in owned:
             raise HTTPException(400, "That from-number isn't one of your numbers")
+        # Caller-ID rotation dials from these too, so they need the same check.
+        for extra in rotation:
+            if extra not in owned:
+                raise HTTPException(400, f"{extra} isn't one of your numbers")
     campaign_id = calls_db.create_campaign(data, user["account_id"])
     detail = calls_db.campaign_detail(campaign_id, user["account_id"])
     if detail is not None and detail["stats"]["total"] == 0:

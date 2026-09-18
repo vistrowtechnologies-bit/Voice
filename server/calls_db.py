@@ -531,6 +531,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     active_days TEXT DEFAULT '',
     end_date TEXT DEFAULT '',
     attempts_per_minute INTEGER DEFAULT 0,
+    from_numbers TEXT DEFAULT '',
     concurrency INTEGER DEFAULT 1,
     started_at TEXT,
     completed_at TEXT,
@@ -1391,6 +1392,9 @@ def init_tables() -> None:
                 ("active_days", "TEXT DEFAULT ''"),
                 ("end_date", "TEXT DEFAULT ''"),
                 ("attempts_per_minute", "INTEGER DEFAULT 0"),
+                # Extra caller IDs to rotate through on retries (comma
+                # separated). Empty = always dial from from_number.
+                ("from_numbers", "TEXT DEFAULT ''"),
             ):
                 conn.execute(f"ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # Company + free-form custom fields (from CSV/API imports) added
@@ -5115,8 +5119,9 @@ def create_campaign(data: dict, account_id: int) -> int:
                 INSERT INTO campaigns
                     (account_id, name, agent_id, from_number, contact_tag, scheduled_date,
                      max_attempts, retry_minutes, concurrency, retry_policy,
-                     window_start, window_end, active_days, end_date, attempts_per_minute, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, {'?' if scheduled_date else "'draft'"})
+                     window_start, window_end, active_days, end_date, attempts_per_minute,
+                     from_numbers, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, {'?' if scheduled_date else "'draft'"})
                 RETURNING id
                 """,
                 (
@@ -5139,6 +5144,8 @@ def create_campaign(data: dict, account_id: int) -> int:
                     else str(data.get("activeDays") or ""),
                     str(data.get("endDate") or ""),
                     max(0, int(data.get("attemptsPerMinute") or 0)),
+                    ",".join(data.get("fromNumbers") or []) if isinstance(data.get("fromNumbers"), list)
+                    else str(data.get("fromNumbers") or ""),
                     *(["scheduled"] if scheduled_date else []),
                 ),
             )
@@ -5709,6 +5716,31 @@ def campaign_inflight(campaign_id: int) -> int:
         return row["c"]
     finally:
         conn.close()
+
+
+def campaign_caller_id(campaign: dict, attempts_before_this_one: int) -> str:
+    """Which of the campaign's numbers to dial this attempt from.
+
+    A number that has already rung someone twice is easier for a carrier to
+    flag, so a campaign may carry several caller IDs and move to the next one
+    on each retry. Empty or single-entry pools keep dialling from
+    from_number, which is what every campaign does today.
+
+    The first attempt always uses from_number, so a campaign that never
+    retries is unaffected by rotation being configured at all.
+    """
+    primary = (campaign.get("from_number") or "").strip()
+    raw = campaign.get("from_numbers") or ""
+    pool = [n.strip() for n in str(raw).split(",") if n.strip()]
+    if primary and primary not in pool:
+        pool.insert(0, primary)
+    if len(pool) < 2:
+        return primary
+    try:
+        index = max(0, int(attempts_before_this_one or 0))
+    except (TypeError, ValueError):
+        index = 0
+    return pool[index % len(pool)]
 
 
 def campaign_inflight_all() -> int:

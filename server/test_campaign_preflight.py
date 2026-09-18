@@ -161,3 +161,35 @@ class TestDial(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class CallerIdRotation(unittest.TestCase):
+    """A number that has rung the same person twice is easier for a carrier to
+    flag, so retries can move to the next caller ID. Off unless configured."""
+
+    POOL = {"from_number": "+917713128715", "from_numbers": "+917713128717,+917713128718"}
+
+    def test_single_number_campaign_never_rotates(self):
+        campaign = {"from_number": "+917713128715", "from_numbers": ""}
+        for attempts in range(4):
+            self.assertEqual(calls_db.campaign_caller_id(campaign, attempts), "+917713128715")
+
+    def test_first_attempt_always_uses_the_primary_number(self):
+        self.assertEqual(calls_db.campaign_caller_id(self.POOL, 0), "+917713128715")
+
+    def test_each_retry_moves_to_the_next_number(self):
+        self.assertEqual(calls_db.campaign_caller_id(self.POOL, 1), "+917713128717")
+        self.assertEqual(calls_db.campaign_caller_id(self.POOL, 2), "+917713128718")
+
+    def test_it_wraps_back_round(self):
+        self.assertEqual(calls_db.campaign_caller_id(self.POOL, 3), "+917713128715")
+
+    def test_primary_listed_twice_is_not_dialled_twice_in_a_row(self):
+        campaign = {"from_number": "+917713128715", "from_numbers": "+917713128715,+917713128717"}
+        self.assertEqual(calls_db.campaign_caller_id(campaign, 0), "+917713128715")
+        self.assertEqual(calls_db.campaign_caller_id(campaign, 1), "+917713128717")
+
+    def test_junk_values_fall_back_to_the_primary(self):
+        for attempts in (None, "x", -2):
+            self.assertEqual(calls_db.campaign_caller_id(self.POOL, attempts), "+917713128715")
+        self.assertEqual(calls_db.campaign_caller_id({"from_number": "+91771", "from_numbers": " , ,"}, 5), "+91771")
