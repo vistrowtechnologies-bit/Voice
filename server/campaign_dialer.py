@@ -76,6 +76,15 @@ _DIAL_STAGGER_SECONDS = 2.0
 # campaign waits until _DIAL_STAGGER_SECONDS after the previous one.
 _last_dial_at = 0.0
 
+# Outbound channels available on the SIP trunk. EnableX sells "dedicated
+# capacity" per channel and REJECTS any call past it (their reply,
+# 2026-09-17), and the same pool serves inbound — so this is the number of
+# channels bought MINUS the ones reserved for inbound. It is a trunk-wide
+# ceiling: the sum of live dials across every campaign and every tenant
+# stays at or below it, and a new dial only goes out when a live one ends.
+# Campaign concurrency still applies on top and can only be lower.
+_OUTBOUND_CHANNELS = max(1, int(os.environ.get("OUTBOUND_CHANNEL_LIMIT", "2") or 2))
+
 
 def _pace_dial() -> None:
     global _last_dial_at
@@ -164,6 +173,17 @@ def _dial_one(campaign: dict) -> None:
 
     inflight = calls_db.campaign_inflight(cid)
     slots = max(0, int(campaign.get("concurrency", 1) or 1) - inflight)
+
+    # Trunk-wide channel ceiling, shared by every campaign and tenant. A
+    # campaign set to 3 on a 2-channel trunk dials 2, then one more each time
+    # a live call ends — the carrier would reject the third outright.
+    trunk_free = _OUTBOUND_CHANNELS - calls_db.campaign_inflight_all()
+    if trunk_free < slots:
+        logger.info(
+            "campaign %s: %s slot(s) held back, trunk has %s outbound channel(s)",
+            cid, slots - max(0, trunk_free), _OUTBOUND_CHANNELS,
+        )
+    slots = min(slots, max(0, trunk_free))
 
     # Account-wide plan cap, separate from (and often tighter than) the
     # campaign's own concurrency setting — a campaign can't dial past it even

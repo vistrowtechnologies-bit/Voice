@@ -111,7 +111,11 @@ class Reaper(unittest.TestCase):
 
 
 class ReplayCampaign20(unittest.TestCase):
-    """16 contacts, concurrency 3, 15s ticks, 50s calls - through the real dialer."""
+    """16 contacts, concurrency 3, 15s ticks, 50s calls - through the real dialer.
+
+    The trunk ceiling is lifted here so this measures the concurrency fix
+    alone; TrunkChannelCeiling covers the channel limit.
+    """
 
     def _replay(self, placed_marks_done: bool):
         clock = {"t": 0.0}
@@ -125,6 +129,7 @@ class ReplayCampaign20(unittest.TestCase):
         db.count_active_calls.return_value = 0
         db.reap_stale_campaign_calls.return_value = 0
         db.campaign_inflight.side_effect = lambda cid: sum(c["status"] == "calling" for c in contacts.values())
+        db.campaign_inflight_all.side_effect = lambda: sum(c["status"] == "calling" for c in contacts.values())
 
         def claim(cid):
             for c in contacts.values():
@@ -154,6 +159,7 @@ class ReplayCampaign20(unittest.TestCase):
 
         with patch.object(campaign_dialer, "calls_db", db), \
              patch.object(campaign_dialer, "_on_orchestrator_pipeline", return_value=False), \
+             patch.object(campaign_dialer, "_OUTBOUND_CHANNELS", 99), \
              patch.object(campaign_dialer.time, "sleep", side_effect=sleep):
             campaign = {"id": 20, "account_id": 2, "from_number": "+917713128715", "agent_id": 26, "concurrency": 3}
             for _ in range(200):
@@ -201,6 +207,55 @@ class LeakedActiveCallRows(unittest.TestCase):
             self.assertEqual(calls_db.count_active_calls(1), 3)
         self.assertIn("started_at::timestamp >", seen["sql"])
         self.assertIn("interval '4 hours'", seen["sql"])
+
+
+class TrunkChannelCeiling(unittest.TestCase):
+    """EnableX rejects calls beyond the channels bought, and inbound shares
+    that pool. Operator's rule (2026-09-18): 3 channels total - 1 held for
+    inbound, 2 for outbound - so a campaign set to 3 dials 2 and starts the
+    third only when one of those two ends.
+    """
+
+    def _tick(self, concurrency, campaign_inflight, trunk_inflight, channels=2):
+        placed = []
+        db = MagicMock()
+        db.within_calling_window.return_value = (True, "")
+        db.concurrent_call_limit.return_value = 10 ** 9
+        db.count_active_calls.return_value = 0
+        db.reap_stale_campaign_calls.return_value = 0
+        db.campaign_inflight.return_value = campaign_inflight
+        db.campaign_inflight_all.return_value = trunk_inflight
+        db.campaign_has_open_work.return_value = True
+        pool = iter(range(100))
+        db.claim_next_campaign_contact.side_effect = lambda cid: {"id": next(pool), "phone": "+91900", "name": "x"}
+        db.place_outbound_call_direct.side_effect = lambda *a, **k: placed.append(k["campaign_contact_id"]) or {"ok": True, "room": "r"}
+        with patch.object(campaign_dialer, "calls_db", db), \
+             patch.object(campaign_dialer, "_OUTBOUND_CHANNELS", channels), \
+             patch.object(campaign_dialer, "_on_orchestrator_pipeline", return_value=False), \
+             patch.object(campaign_dialer.time, "sleep", lambda s: None):
+            campaign_dialer._dial_one({"id": 20, "account_id": 2, "from_number": "+91771", "agent_id": 26, "concurrency": concurrency})
+        return len(placed)
+
+    def test_campaign_set_to_3_only_fills_the_2_channels(self):
+        self.assertEqual(self._tick(concurrency=3, campaign_inflight=0, trunk_inflight=0), 2)
+
+    def test_one_call_ends_one_new_call_goes_out(self):
+        # 2 were live, 1 just ended -> exactly one replacement dial
+        self.assertEqual(self._tick(concurrency=3, campaign_inflight=1, trunk_inflight=1), 1)
+
+    def test_nothing_dials_while_the_trunk_is_full(self):
+        self.assertEqual(self._tick(concurrency=3, campaign_inflight=2, trunk_inflight=2), 0)
+
+    def test_another_tenants_campaign_consumes_the_same_channels(self):
+        # This campaign has nothing live, but the trunk is already full.
+        self.assertEqual(self._tick(concurrency=3, campaign_inflight=0, trunk_inflight=2), 0)
+
+    def test_campaign_concurrency_still_wins_when_lower(self):
+        self.assertEqual(self._tick(concurrency=1, campaign_inflight=0, trunk_inflight=0), 1)
+
+    def test_default_reserves_a_channel_for_inbound(self):
+        # 3 bought, 1 reserved for inbound -> 2 outbound.
+        self.assertEqual(campaign_dialer._OUTBOUND_CHANNELS, 2)
 
 
 if __name__ == "__main__":

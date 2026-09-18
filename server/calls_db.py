@@ -5457,6 +5457,23 @@ def campaign_inflight(campaign_id: int) -> int:
         conn.close()
 
 
+def campaign_inflight_all() -> int:
+    """Live campaign dials across every campaign and tenant.
+
+    Carrier channels are a property of the SIP trunk, not of one campaign:
+    EnableX rejects any call beyond the number of channels bought, and that
+    pool is shared with inbound. A per-campaign cap alone cannot honour it,
+    so the dialer also checks this.
+    """
+    conn = _connect()
+    try:
+        return conn.execute(
+            "SELECT COUNT(*) c FROM campaign_contacts WHERE status = 'calling'"
+        ).fetchone()["c"]
+    finally:
+        conn.close()
+
+
 def claim_next_campaign_contact(campaign_id: int) -> dict | None:
     """Atomically pick and lock the next dialable contact for a campaign:
     a pending one, or a no_answer/failed one whose next_attempt_at is due.

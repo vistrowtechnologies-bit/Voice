@@ -43,10 +43,12 @@ class DialsAreStaggered(unittest.TestCase):
         with patch.object(campaign_dialer, "calls_db") as mock_db, \
              patch.object(campaign_dialer.time, "sleep", side_effect=self._sleep), \
              patch.object(campaign_dialer.time, "monotonic", side_effect=lambda: self.clock[0]), \
+             patch.object(campaign_dialer, "_OUTBOUND_CHANNELS", 99), \
              patch.object(campaign_dialer, "_on_orchestrator_pipeline", return_value=False):
             mock_db.require_feature.return_value = None
             mock_db.within_calling_window.return_value = (True, "")
             mock_db.campaign_inflight.return_value = 0
+            mock_db.campaign_inflight_all.return_value = 0
             mock_db.reap_stale_campaign_calls.return_value = 0
             mock_db.concurrent_call_limit.return_value = 30
             mock_db.count_active_calls.return_value = 0
