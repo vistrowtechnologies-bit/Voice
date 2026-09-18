@@ -32,6 +32,7 @@ import livekit_sip
 import llm_warmer
 import project_sync
 import razorpay_client
+import retention_worker
 import widget_avatars
 import widget_chat
 import voice_catalog
@@ -67,6 +68,9 @@ calls_db.init_tables()
 campaign_dialer.start_dialer()
 # Daily Postgres backup to B2 (see db_backup.py) — same daemon-thread shape.
 db_backup.start_backup_scheduler()
+# Applies each tenant's retention window daily. Before this, retention ran
+# only while somebody had the Compliance page open (see retention_worker.py).
+retention_worker.start_retention_worker()
 # Keeps OpenAI's prompt cache warm for agents actually taking calls right
 # now (see llm_warmer.py) — cuts a measured 2106ms->902ms cold-cache tax.
 llm_warmer.start_llm_warmer()
