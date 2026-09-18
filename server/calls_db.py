@@ -5397,6 +5397,223 @@ def campaign_detail(campaign_id: int, account_id: int) -> dict | None:
         conn.close()
 
 
+# What a campaign is expected to achieve per channel, used to estimate a run's
+# length. A ringing SIP call holds a channel for its whole ring, so the cost of
+# an attempt is mostly ring time when few people answer — the same relationship
+# Sarvam documents for sizing SIP capacity. Both figures are measured from
+# campaign 20 (2026-09-17): 4 of 16 answered, ~50s of talk on the ones that did.
+_PREFLIGHT_ANSWER_RATE = 0.25
+_PREFLIGHT_TALK_S = 50.0
+_PREFLIGHT_RING_S = 30.0
+
+
+def campaign_preflight(campaign_id: int, account_id: int, channel_limit: int = 2) -> dict | None:
+    """What would happen if this campaign started now.
+
+    Campaign 20 went out to 16 real leads with nobody having checked that the
+    numbers were dialable, that the calling window was open, or that the
+    configured concurrency was achievable — and it could not have been
+    checked, because nothing reported it. This answers those questions
+    BEFORE a dial, with the same gates the dialer itself uses, so the
+    numbers here and the numbers at dial time cannot drift apart.
+
+    `blockers` stop a launch; `warnings` are worth reading first.
+    """
+    conn = _connect()
+    try:
+        camp = conn.execute(
+            "SELECT * FROM campaigns WHERE id = ? AND account_id = ?", (campaign_id, account_id)
+        ).fetchone()
+        if camp is None:
+            return None
+        campaign = dict(camp)
+        contacts = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT id, name, phone, status FROM campaign_contacts WHERE campaign_id = ?",
+                (campaign_id,),
+            ).fetchall()
+        ]
+    finally:
+        conn.close()
+
+    blockers: list[str] = []
+    warnings: list[str] = []
+
+    from_number = (campaign.get("from_number") or "").strip()
+    if not from_number:
+        blockers.append("This campaign has no calling number.")
+    else:
+        owned = {n["number"] for n in list_phone_numbers(account_id)}
+        if from_number not in owned:
+            blockers.append(f"{from_number} is not one of your numbers.")
+
+    agent_id = campaign.get("agent_id")
+    if not agent_id and from_number:
+        agent_id = (get_phone_number_by_number(from_number) or {}).get("agentId")
+    if not agent_id:
+        blockers.append("No agent is assigned to this campaign or its number.")
+
+    # Every contact still waiting to be dialled, checked through the same
+    # DNC gate the dialer applies (check_call_allowed) rather than a
+    # re-implementation of it.
+    queued = [c for c in contacts if c["status"] in ("pending", "no_answer", "failed", "voicemail")]
+    no_phone = [c for c in queued if not _normalize_phone(c.get("phone"))]
+    on_dnc = [c for c in queued if c not in no_phone and is_dnc(account_id, c["phone"])]
+    dialable = [c for c in queued if c not in no_phone and c not in on_dnc]
+
+    if not contacts:
+        blockers.append("This campaign has no contacts.")
+    elif not dialable:
+        blockers.append("No contact in this campaign can be dialled right now.")
+    if no_phone:
+        warnings.append(f"{len(no_phone)} contact(s) have no usable phone number and will be skipped.")
+    if on_dnc:
+        warnings.append(f"{len(on_dnc)} contact(s) are on your Do-Not-Call list and will not be dialled.")
+
+    window_open, window_reason = within_calling_window(account_id)
+    if not window_open:
+        warnings.append(f"{window_reason} Dialling starts when the window opens.")
+
+    requested = max(1, int(campaign.get("concurrency") or 1))
+    effective = max(1, min(requested, max(1, int(channel_limit or 1))))
+    if effective < requested:
+        warnings.append(
+            f"Concurrency is set to {requested}, but only {effective} outbound "
+            f"channel(s) are available, so {effective} call(s) will run at a time."
+        )
+
+    # Channel-seconds per attempt: a ring costs the channel too, which is why
+    # a low answer rate makes a run longer than "contacts x talk time".
+    per_attempt_s = (
+        (1 - _PREFLIGHT_ANSWER_RATE) * _PREFLIGHT_RING_S
+        + _PREFLIGHT_ANSWER_RATE * _PREFLIGHT_TALK_S
+    )
+    estimated_s = (len(dialable) * per_attempt_s / effective) if dialable else 0.0
+
+    return {
+        "campaignId": campaign_id,
+        "name": campaign.get("name") or "",
+        "fromNumber": from_number,
+        "agentId": agent_id,
+        "contacts": len(contacts),
+        "dialable": len(dialable),
+        "missingPhone": len(no_phone),
+        "onDnc": len(on_dnc),
+        "dncSample": [c["name"] or c["phone"] for c in on_dnc[:5]],
+        "windowOpen": window_open,
+        "windowReason": "" if window_open else window_reason,
+        "requestedConcurrency": requested,
+        "effectiveConcurrency": effective,
+        "channelLimit": int(channel_limit or 1),
+        "estimatedMinutes": round(estimated_s / 60.0, 1),
+        "blockers": blockers,
+        "warnings": warnings,
+        "canLaunch": not blockers,
+    }
+
+
+# Sarvam's campaign wizard offers a test dial to at most five internal
+# numbers; the same ceiling applies here, for the same reason — this is a
+# rehearsal, not a way to run a campaign without the campaign's own limits.
+CAMPAIGN_TEST_DIAL_MAX = 5
+
+
+def campaign_test_dial(
+    campaign_id: int,
+    account_id: int,
+    numbers: list[str],
+    preview_contact_id: int | None = None,
+) -> dict:
+    """Dial your own numbers with this campaign's agent, before it launches.
+
+    Campaign 20 was launched straight at 16 real leads, and everything wrong
+    with it — greeting into ringback, broken audio — would have been obvious
+    on one call to a phone in the room. These calls use the campaign's real
+    agent, number and contact variables, but are marked is_test, so they stay
+    out of the tenant's call log and credit usage, and they carry no
+    campaign_contact_id, so they can never touch campaign progress.
+
+    Compliance still applies: each number goes through the same
+    check_call_allowed gate as a real dial (DNC, then calling window).
+    """
+    conn = _connect()
+    try:
+        camp = conn.execute(
+            "SELECT * FROM campaigns WHERE id = ? AND account_id = ?", (campaign_id, account_id)
+        ).fetchone()
+        if camp is None:
+            return {"ok": False, "error": "Campaign not found"}
+        campaign = dict(camp)
+        preview = None
+        if preview_contact_id:
+            row = conn.execute(
+                "SELECT name, phone, company, custom_fields FROM campaign_contacts "
+                "WHERE id = ? AND campaign_id = ?",
+                (preview_contact_id, campaign_id),
+            ).fetchone()
+            preview = dict(row) if row else None
+        if preview is None:
+            row = conn.execute(
+                "SELECT name, phone, company, custom_fields FROM campaign_contacts "
+                "WHERE campaign_id = ? ORDER BY id LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            preview = dict(row) if row else {}
+    finally:
+        conn.close()
+
+    cleaned = [n.strip() for n in numbers if (n or "").strip()]
+    if not cleaned:
+        return {"ok": False, "error": "Enter at least one number to test dial"}
+    if len(cleaned) > CAMPAIGN_TEST_DIAL_MAX:
+        return {"ok": False, "error": f"Test dial is limited to {CAMPAIGN_TEST_DIAL_MAX} numbers"}
+
+    from_number = (campaign.get("from_number") or "").strip()
+    if not from_number:
+        return {"ok": False, "error": "This campaign has no calling number"}
+    agent_id = campaign.get("agent_id") or (get_phone_number_by_number(from_number) or {}).get("agentId")
+    if not agent_id:
+        return {"ok": False, "error": "Assign an agent to this campaign or its number first"}
+
+    results = []
+    for number in cleaned:
+        allowed, reason = check_call_allowed(account_id, number)
+        if not allowed:
+            results.append({"number": number, "ok": False, "blocked": True, "error": reason})
+            continue
+        try:
+            outcome = place_outbound_call_direct(
+                number,
+                from_number,
+                account_id,
+                agent_id,
+                contact_name=preview.get("name", "") or "",
+                contact_company=preview.get("company", "") or "",
+                contact_custom_fields=preview.get("custom_fields", "{}") or "{}",
+                wait_for_answer=False,
+                # Keeps it out of the call log and credits, exactly like the
+                # dashboard's own test-call button.
+                is_test=True,
+            )
+        except Exception as exc:
+            logger.exception("campaign %s test dial to %s failed", campaign_id, number)
+            results.append({"number": number, "ok": False, "error": str(exc)})
+            continue
+        results.append({
+            "number": number,
+            "ok": bool(outcome.get("ok")),
+            "error": outcome.get("error", ""),
+            "room": outcome.get("room", ""),
+        })
+
+    return {
+        "ok": any(r["ok"] for r in results),
+        "results": results,
+        "previewContact": preview.get("name") or preview.get("phone") or "",
+    }
+
+
 def list_campaigns_with_stats(account_id: int) -> list[dict]:
     conn = _connect()
     try:

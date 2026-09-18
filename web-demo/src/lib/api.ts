@@ -293,6 +293,39 @@ export const fetchCampaignSegmentCount = (segment: string, tag: string) => {
 export const updateCampaignStatus = (id: number, status: string) =>
   send<Campaign>('PATCH', `/campaigns/${id}`, { status })
 
+export interface CampaignPreflight {
+  campaignId: number
+  name: string
+  fromNumber: string
+  contacts: number
+  dialable: number
+  missingPhone: number
+  onDnc: number
+  dncSample: string[]
+  windowOpen: boolean
+  windowReason: string
+  requestedConcurrency: number
+  effectiveConcurrency: number
+  channelLimit: number
+  estimatedMinutes: number
+  blockers: string[]
+  warnings: string[]
+  canLaunch: boolean
+}
+
+export interface CampaignTestDialResult {
+  ok: boolean
+  error?: string
+  previewContact?: string
+  results?: { number: string; ok: boolean; blocked?: boolean; error?: string }[]
+}
+
+export const fetchCampaignPreflight = (id: number) =>
+  get<CampaignPreflight>(`/campaigns/${id}/preflight`)
+
+export const campaignTestDial = (id: number, numbers: string[], previewContactId?: number) =>
+  send<CampaignTestDialResult>('POST', `/campaigns/${id}/test-dial`, { numbers, previewContactId })
+
 // ------------------------------------------------------------ compliance
 
 export interface ComplianceSettings {

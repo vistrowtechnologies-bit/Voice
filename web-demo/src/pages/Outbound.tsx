@@ -5,14 +5,17 @@ import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import {
+  campaignTestDial,
   createCampaign,
   fetchAgents,
   fetchCampaign,
+  fetchCampaignPreflight,
   fetchCampaignSegmentCount,
   fetchCampaigns,
   fetchPhoneNumbers,
   updateCampaignStatus,
 } from '../lib/api'
+import type { CampaignPreflight, CampaignTestDialResult } from '../lib/api'
 
 const SEGMENTS = [
   { value: '', label: 'All' },
@@ -24,7 +27,7 @@ import type { AgentConfig, Campaign, CampaignContact, PhoneNumber } from '../lib
 import { hasRole, useAuth } from '../lib/auth'
 
 const FILTERS = ['All', 'Running', 'Scheduled', 'Draft', 'Paused', 'Completed']
-const CREATE_STEPS = ['Audience', 'Calling setup', 'Review'] as const
+const CREATE_STEPS = ['Audience', 'Calling setup', 'Review', 'Pre-flight'] as const
 
 const STATUS_STYLE: Record<string, string> = {
   running: 'border-cyan/30 bg-cyan/10 text-cyan',
@@ -113,6 +116,15 @@ export function Outbound() {
   const [expanded, setExpanded] = useState<number | null>(null)
   const [detail, setDetail] = useState<Campaign | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Pre-flight: a campaign is created as a draft first, then checked, and only
+  // started when the operator says so. Campaign 20 went straight to 16 real
+  // leads with nothing verified.
+  const [pendingId, setPendingId] = useState<number | null>(null)
+  const [preflight, setPreflight] = useState<CampaignPreflight | null>(null)
+  const [preflightLoading, setPreflightLoading] = useState(false)
+  const [testNumbers, setTestNumbers] = useState('')
+  const [testDialing, setTestDialing] = useState(false)
+  const [testResult, setTestResult] = useState<CampaignTestDialResult | null>(null)
 
   const blank = {
     name: '',
@@ -252,7 +264,12 @@ export function Outbound() {
         setError('Campaign created, but no contacts matched - add contacts or check the tag before launching.')
       }
       if (launchNow && created?.id && !form.scheduledDate && created.stats.total > 0) {
-        await updateCampaignStatus(created.id, 'running')
+        // Deliberately NOT started here. The campaign exists as a draft; the
+        // operator sees what it would do, can rehearse it against their own
+        // phone, and starts it themselves.
+        await reload()
+        await openPreflight(created.id)
+        return
       }
       setShowNew(false)
       setCreateStep(0)
@@ -263,6 +280,66 @@ export function Outbound() {
     } finally {
       setCreating(false)
     }
+  }
+
+  const openPreflight = async (campaignId: number) => {
+    setPendingId(campaignId)
+    setPreflight(null)
+    setTestResult(null)
+    setTestNumbers('')
+    setError(null)
+    setShowNew(true)
+    setCreateStep(3)
+    setPreflightLoading(true)
+    try {
+      setPreflight(await fetchCampaignPreflight(campaignId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not run the pre-flight check.')
+    } finally {
+      setPreflightLoading(false)
+    }
+  }
+
+  const runTestDial = async () => {
+    if (!pendingId) return
+    const numbers = testNumbers.split(/[\n,]/).map((n) => n.trim()).filter(Boolean)
+    if (numbers.length === 0) return
+    setTestDialing(true)
+    setTestResult(null)
+    setError(null)
+    try {
+      setTestResult(await campaignTestDial(pendingId, numbers))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not place the test call.')
+    } finally {
+      setTestDialing(false)
+    }
+  }
+
+  const startCheckedCampaign = async () => {
+    if (!pendingId) return
+    setCreating(true)
+    setError(null)
+    try {
+      await updateCampaignStatus(pendingId, 'running')
+      closeWizard()
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start the campaign.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const closeWizard = () => {
+    setShowNew(false)
+    setCreateStep(0)
+    setForm(blank)
+    setPendingId(null)
+    setPreflight(null)
+    setTestResult(null)
+    setTestNumbers('')
+    setError(null)
   }
 
   const toggleExpand = (c: Campaign) => {
@@ -378,15 +455,21 @@ export function Outbound() {
           <div className="flex flex-col gap-5 rounded-xl border border-primary/40 bg-surface p-4 sm:p-5">
             <div className="flex flex-col gap-4 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-base font-bold text-text">Create outbound campaign</h2>
-                <p className="mt-0.5 text-xs text-text-muted">Build the audience, confirm the calling setup, then save or launch.</p>
+                <h2 className="text-base font-bold text-text">
+                  {createStep === 3 ? 'Before this campaign calls anyone' : 'Create outbound campaign'}
+                </h2>
+                <p className="mt-0.5 text-xs text-text-muted">
+                  {createStep === 3
+                    ? 'Saved as a draft. Check what it will do — and hear it yourself — then start it.'
+                    : 'Build the audience, confirm the calling setup, then save or launch.'}
+                </p>
               </div>
               <ol className="flex items-center gap-1" aria-label="Campaign creation progress">
                 {CREATE_STEPS.map((step, index) => (
                   <li key={step} className="flex items-center">
                     <button
-                      onClick={() => index < createStep && setCreateStep(index)}
-                      disabled={index > createStep}
+                      onClick={() => createStep !== 3 && index < createStep && setCreateStep(index)}
+                      disabled={index > createStep || createStep === 3}
                       aria-current={index === createStep ? 'step' : undefined}
                       className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold ${
                         index === createStep
@@ -599,12 +682,85 @@ export function Outbound() {
               </div>
             )}
 
+            {createStep === 3 && (
+              <div className="flex flex-col gap-4">
+                {preflightLoading && <p className="text-sm text-text-muted">Checking the campaign…</p>}
+                {preflight && (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <PreflightStat label="Will be dialed" value={String(preflight.dialable)} tone="text-text" />
+                      <PreflightStat
+                        label="At a time"
+                        value={String(preflight.effectiveConcurrency)}
+                        tone={preflight.effectiveConcurrency < preflight.requestedConcurrency ? 'text-amber' : 'text-text'}
+                      />
+                      <PreflightStat label="Takes about" value={`${preflight.estimatedMinutes} min`} tone="text-text" />
+                    </div>
+
+                    {preflight.blockers.map((b) => (
+                      <div key={b} className="flex items-start gap-2 rounded-lg border-l-[3px] border-destructive bg-destructive/5 px-3 py-2 text-sm">
+                        <Icon name="block" className="mt-0.5 text-[16px] text-destructive" />
+                        <span>{b}</span>
+                      </div>
+                    ))}
+                    {preflight.warnings.map((w) => (
+                      <div key={w} className="flex items-start gap-2 rounded-lg border-l-[3px] border-amber bg-amber/5 px-3 py-2 text-sm">
+                        <Icon name="warning" className="mt-0.5 text-[16px] text-amber" />
+                        <span>{w}</span>
+                      </div>
+                    ))}
+                    {preflight.blockers.length === 0 && preflight.warnings.length === 0 && (
+                      <div className="flex items-start gap-2 rounded-lg border-l-[3px] border-success bg-success/5 px-3 py-2 text-sm">
+                        <Icon name="check_circle" className="mt-0.5 text-[16px] text-success" />
+                        <span>Nothing to flag. {preflight.dialable} contact(s) ready on {preflight.fromNumber}.</span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-2.5 rounded-lg border border-border p-3 sm:p-4">
+                      <div>
+                        <p className="text-sm font-semibold">Hear it first</p>
+                        <p className="text-xs text-text-muted">
+                          Call your own number with this campaign's agent and contact details. Test calls
+                          stay out of your call history, credits and campaign results.
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <input
+                          value={testNumbers}
+                          onChange={(event) => setTestNumbers(event.target.value)}
+                          placeholder="+91… (up to 5, comma separated)"
+                          className="flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none transition-colors placeholder:text-text-muted focus:border-primary"
+                        />
+                        <button
+                          onClick={runTestDial}
+                          disabled={testDialing || !testNumbers.trim()}
+                          className="flex items-center justify-center gap-1.5 rounded-lg border border-primary px-4 py-2 text-sm font-bold text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
+                        >
+                          <Icon name="call" className="text-[16px]" />
+                          {testDialing ? 'Calling…' : 'Test call me'}
+                        </button>
+                      </div>
+                      {testResult?.results?.map((r) => (
+                        <p key={r.number} className={`text-xs ${r.ok ? 'text-success' : 'text-amber'}`}>
+                          {r.number}: {r.ok ? 'calling you now' : r.error || 'could not be placed'}
+                        </p>
+                      ))}
+                      {testResult && !testResult.results && testResult.error && (
+                        <p className="text-xs text-amber">{testResult.error}</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
               <button
                 onClick={() => {
-                  if (createStep === 0) {
-                    setShowNew(false)
-                    setError(null)
+                  if (createStep === 0 || createStep === 3) {
+                    // Step 3's campaign already exists as a draft, so there is
+                    // nothing to go back to — leaving keeps it as a draft.
+                    closeWizard()
                   } else {
                     setCreateStep((step) => step - 1)
                     setError(null)
@@ -613,9 +769,18 @@ export function Outbound() {
                 disabled={creating}
                 className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted transition-colors hover:border-primary hover:text-text disabled:opacity-50"
               >
-                {createStep === 0 ? 'Cancel' : 'Back'}
+                {createStep === 0 ? 'Cancel' : createStep === 3 ? 'Keep as draft' : 'Back'}
               </button>
-              {createStep < 2 ? (
+              {createStep === 3 ? (
+                <button
+                  onClick={startCheckedCampaign}
+                  disabled={creating || preflightLoading || !preflight?.canLaunch}
+                  className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Icon name="play_arrow" className="text-[16px]" />
+                  {creating ? 'Starting…' : 'Start calling'}
+                </button>
+              ) : createStep < 2 ? (
                 <button
                   onClick={() => {
                     setError(null)
@@ -735,7 +900,7 @@ export function Outbound() {
                         <div className="flex gap-1.5">
                           {(c.status === 'draft' || c.status === 'paused') && (
                             <button
-                              onClick={() => setStatus(c, 'running')}
+                              onClick={() => (c.status === 'draft' ? openPreflight(c.id) : setStatus(c, 'running'))}
                               className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-bg hover:opacity-90"
                             >
                               <Icon name="play_arrow" className="text-[15px]" />
@@ -849,6 +1014,15 @@ function StatCard({ label, value, tone = 'text-text' }: { label: string; value: 
       <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{label}</p>
       <p className={`mt-1 text-xl font-bold ${tone}`}>{value}</p>
     </Card>
+  )
+}
+
+function PreflightStat({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <div className="rounded-lg border border-border px-3 py-2.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{label}</p>
+      <p className={`text-xl font-bold ${tone}`}>{value}</p>
+    </div>
   )
 }
 

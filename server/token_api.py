@@ -3510,11 +3510,51 @@ def create_campaign(data: dict = Body(...), user: dict = Depends(require_role("m
     return detail or {"id": campaign_id}
 
 
+@app.get("/campaigns/{campaign_id}/preflight")
+def campaign_preflight(campaign_id: int, user: dict = Depends(current_user)) -> dict:
+    """What would happen if this campaign started now — read-only, dials nobody."""
+    report = calls_db.campaign_preflight(
+        campaign_id, user["account_id"], channel_limit=campaign_dialer._OUTBOUND_CHANNELS
+    )
+    if report is None:
+        raise HTTPException(404, "Campaign not found")
+    return report
+
+
+@app.post("/campaigns/{campaign_id}/test-dial")
+def campaign_test_dial(
+    campaign_id: int, data: dict = Body(...), user: dict = Depends(require_role("member"))
+) -> dict:
+    """Rehearse a campaign against your own numbers before it goes to leads."""
+    numbers = data.get("numbers") or []
+    if not isinstance(numbers, list):
+        raise HTTPException(400, "numbers must be a list")
+    return calls_db.campaign_test_dial(
+        campaign_id,
+        user["account_id"],
+        [str(n) for n in numbers],
+        preview_contact_id=data.get("previewContactId"),
+    )
+
+
 @app.patch("/campaigns/{campaign_id}")
 def update_campaign(campaign_id: int, data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     status = data.get("status", "paused")
     if status not in _CAMPAIGN_STATES:
         raise HTTPException(400, "Invalid campaign status")
+    # Launching is the one transition that starts dialling real people, so it
+    # is the one that checks first. Campaign 20 launched with nothing
+    # verified. Only hard blockers stop it (no number, no agent, nobody
+    # dialable) — each of those would otherwise have the dialer silently
+    # pause the campaign a tick later, with the reason only in server logs.
+    if status == "running":
+        report = calls_db.campaign_preflight(
+            campaign_id, user["account_id"], channel_limit=campaign_dialer._OUTBOUND_CHANNELS
+        )
+        if report is None:
+            raise HTTPException(404, "Campaign not found")
+        if report["blockers"]:
+            raise HTTPException(400, " ".join(report["blockers"]))
     calls_db.set_campaign_status(campaign_id, status, user["account_id"])
     detail = calls_db.campaign_detail(campaign_id, user["account_id"])
     if detail is None:
