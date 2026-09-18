@@ -174,6 +174,10 @@ export function Outbound() {
     return () => clearInterval(t)
   }, [anyRunning, expanded])
 
+  // Step 3 is reached from three places: a campaign just created, a draft, or
+  // a paused campaign. Only the last one is resuming rather than starting.
+  const pendingIsPaused = campaigns.find((c) => c.id === pendingId)?.status === 'paused'
+
   const filtered = useMemo(() => {
     const query = campaignSearch.trim().toLowerCase()
     const rows = campaigns.filter(
@@ -460,7 +464,9 @@ export function Outbound() {
                 </h2>
                 <p className="mt-0.5 text-xs text-text-muted">
                   {createStep === 3
-                    ? 'Saved as a draft. Check what it will do — and hear it yourself — then start it.'
+                    ? pendingIsPaused
+                      ? 'Paused since it last ran. Check what it will do now — and hear it yourself — then resume it.'
+                      : 'Saved as a draft. Check what it will do — and hear it yourself — then start it.'
                     : 'Build the audience, confirm the calling setup, then save or launch.'}
                 </p>
               </div>
@@ -769,7 +775,13 @@ export function Outbound() {
                 disabled={creating}
                 className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted transition-colors hover:border-primary hover:text-text disabled:opacity-50"
               >
-                {createStep === 0 ? 'Cancel' : createStep === 3 ? 'Keep as draft' : 'Back'}
+                {createStep === 0
+                  ? 'Cancel'
+                  : createStep === 3
+                    ? pendingIsPaused
+                      ? 'Leave paused'
+                      : 'Keep as draft'
+                    : 'Back'}
               </button>
               {createStep === 3 ? (
                 <button
@@ -778,7 +790,7 @@ export function Outbound() {
                   className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Icon name="play_arrow" className="text-[16px]" />
-                  {creating ? 'Starting…' : 'Start calling'}
+                  {creating ? 'Starting…' : pendingIsPaused ? 'Resume calling' : 'Start calling'}
                 </button>
               ) : createStep < 2 ? (
                 <button
@@ -900,7 +912,7 @@ export function Outbound() {
                         <div className="flex gap-1.5">
                           {(c.status === 'draft' || c.status === 'paused') && (
                             <button
-                              onClick={() => (c.status === 'draft' ? openPreflight(c.id) : setStatus(c, 'running'))}
+                              onClick={() => openPreflight(c.id)}
                               className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-bg hover:opacity-90"
                             >
                               <Icon name="play_arrow" className="text-[15px]" />
