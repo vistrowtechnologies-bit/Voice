@@ -105,6 +105,7 @@ from tools import (
     drain_background_fanout,
     end_call,
     log_lead,
+    do_not_call,
     request_callback,
     switch_reply_language,
     transfer_call,
@@ -2728,6 +2729,10 @@ def _build_tools(config: dict) -> list:
             # Always on, never optional: it is the only thing standing between a
             # caller who could not be given a slot and being forgotten entirely.
             request_callback,
+            # Also never optional. "Don't call me again" was heard and then
+            # lost — nothing recorded it, so the next campaign rang them
+            # again. An opt-out an operator can switch off is not an opt-out.
+            do_not_call,
             log_lead,
             capture_platform_lead,
             switch_reply_language,

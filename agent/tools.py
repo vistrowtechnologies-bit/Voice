@@ -1224,6 +1224,48 @@ async def check_calendar_availability(
 
 
 @function_tool
+async def do_not_call(context: RunContext, reason: str = "") -> str:
+    """Record that this person does not want to be called again, and stop calling them.
+
+    Call this the moment someone asks not to be contacted — "don't call me
+    again", "remove me from your list", "stop calling", or the same in any
+    language. Do it even if they are annoyed and hang up straight after, and
+    even if the rest of the call went nowhere: this is the one thing that
+    must never be missed.
+
+    Do NOT call this when someone is merely busy, asks to be called later, or
+    says no to the offer but not to being contacted — use request_callback or
+    simply close warmly instead.
+
+    Args:
+        reason: Their own words, briefly, if they gave a reason.
+    """
+    userdata = context.userdata or {}
+    phone = (userdata.get("visitor_phone") or "").strip()
+    if not phone:
+        # A widget call has no number to suppress; say the right thing anyway.
+        logger.info("do_not_call requested but this call has no phone number")
+        return (
+            "There is no phone number on this call to add to the do-not-call list. Apologise, "
+            "assure them they will not be contacted again, and close the call politely."
+        )
+    if _is_demo(context):
+        logger.info("demo agent: simulating do-not-call for %s", phone)
+        added = True
+    else:
+        added = await asyncio.to_thread(
+            db.record_do_not_call, userdata.get("account_id"), phone, reason
+        )
+    await _publish_event(context, {"type": "do_not_call", "phone": phone, "reason": reason})
+    logger.info("do-not-call recorded mid-call for %s (new: %s)", phone, added)
+    return (
+        "Done — they will not be called again. Apologise briefly for the interruption, thank "
+        "them for their time, and end the call. Do not pitch, do not ask why, and do not offer "
+        "to call back."
+    )
+
+
+@function_tool
 async def request_callback(
     context: RunContext,
     name: str,

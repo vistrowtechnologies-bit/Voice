@@ -1422,6 +1422,53 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
         conn.close()
 
 
+def _normalize_dnc_phone(phone: str) -> str:
+    """Digits-only DNC key — MUST match server/calls_db.py's _normalize_phone,
+    because that is what check_call_allowed compares against before a dial. A
+    number stored under a different key is a number we would keep calling.
+    """
+    digits = "".join(c for c in (phone or "") if c.isdigit())
+    if len(digits) > 10:
+        if digits.startswith("91") and len(digits) == 12:
+            digits = digits[2:]
+        elif digits.startswith("0") and len(digits) == 11:
+            digits = digits[1:]
+    return digits
+
+
+def record_do_not_call(account_id: int | None, phone: str, reason: str = "") -> bool:
+    """Add a number to this tenant's Do-Not-Call list, mid-call.
+
+    Until now, "don't call me again" was heard by the agent and then lost:
+    nothing wrote it anywhere, so the next campaign rang them again. The
+    dialer already checks this list before every dial (check_call_allowed),
+    so a row here is enough to stop that.
+
+    Idempotent, and never raises — the caller has already been told we will
+    stop calling, and a failure here must not also break their call.
+    """
+    norm = _normalize_dnc_phone(phone)
+    if not account_id or not norm:
+        return False
+    conn = dbconn.connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                "INSERT INTO dnc_list (account_id, phone, phone_norm, reason, source) "
+                "VALUES (?, ?, ?, ?, 'call_opt_out') ON CONFLICT(account_id, phone_norm) "
+                "DO NOTHING RETURNING id",
+                (account_id, (phone or "").strip(), norm, reason or "Asked not to be called again"),
+            )
+            added = cur.fetchone() is not None
+        logger.info("do-not-call recorded for %s (new row: %s)", norm, added)
+        return added
+    except Exception:
+        logger.exception("could not record do-not-call for %s", norm)
+        return False
+    finally:
+        conn.close()
+
+
 def link_campaign_contact_call(contact_id: int, call_id: int) -> None:
     """Point a campaign contact at the call row it produced.
 
