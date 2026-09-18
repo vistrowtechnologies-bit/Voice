@@ -3507,6 +3507,21 @@ def create_campaign(data: dict = Body(...), user: dict = Depends(require_role("m
         # An empty queue is almost always a wrong tag / empty upload — tell the
         # operator instead of creating a campaign that can never dial anyone.
         logger.info("campaign %s created with no contacts", campaign_id)
+    # A scheduled campaign is promoted to running by the dialer, with nobody
+    # watching — it is the one path to dialling that no operator ever sees a
+    # pre-flight for. So check it now, while the person who scheduled it is
+    # still here: keep the work as a draft rather than letting it fail
+    # quietly at its start time with the reason only in a server log.
+    if detail is not None and detail.get("status") == "scheduled":
+        report = calls_db.campaign_preflight(
+            campaign_id, user["account_id"], channel_limit=campaign_dialer._OUTBOUND_CHANNELS
+        )
+        if report and report["blockers"]:
+            calls_db.set_campaign_status(campaign_id, "draft", user["account_id"])
+            raise HTTPException(
+                400,
+                "Saved as a draft instead of scheduling: " + " ".join(report["blockers"]),
+            )
     return detail or {"id": campaign_id}
 
 
