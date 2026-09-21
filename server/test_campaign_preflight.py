@@ -193,3 +193,33 @@ class CallerIdRotation(unittest.TestCase):
         for attempts in (None, "x", -2):
             self.assertEqual(calls_db.campaign_caller_id(self.POOL, attempts), "+917713128715")
         self.assertEqual(calls_db.campaign_caller_id({"from_number": "+91771", "from_numbers": " , ,"}, 5), "+91771")
+
+
+class ConsentBasis(unittest.TestCase):
+    """Why a tenant may call this audience. India's TCCCPR treats a call
+    someone invited very differently from one they did not, so the answer has
+    to be recorded when the campaign is built — not reconstructed later."""
+
+    def test_missing_basis_is_flagged_but_does_not_block(self):
+        r = run_preflight(campaign=dict(CAMPAIGN, consent_basis=""))
+        self.assertTrue(r["canLaunch"])
+        self.assertTrue(any("consent basis" in w for w in r["warnings"]), r["warnings"])
+        self.assertEqual(r["consentBasisLabel"], "Not stated")
+
+    def test_an_invited_audience_is_not_flagged(self):
+        r = run_preflight(campaign=dict(CAMPAIGN, consent_basis="inquiry"))
+        self.assertEqual(r["consentBasis"], "inquiry")
+        self.assertEqual(r["consentBasisLabel"], "They enquired with us")
+        self.assertFalse(any("consent" in w for w in r["warnings"]), r["warnings"])
+
+    def test_a_bought_list_is_called_out_as_promotional(self):
+        r = run_preflight(campaign=dict(CAMPAIGN, consent_basis="list"))
+        warning = " ".join(r["warnings"])
+        self.assertIn("140-series", warning)
+        self.assertIn("scrubbing", warning)
+
+    def test_every_basis_has_a_readable_label(self):
+        for key in calls_db.CONSENT_BASES:
+            self.assertTrue(calls_db.consent_basis_label(key))
+        self.assertEqual(calls_db.consent_basis_label("something-else"), "something-else")
+        self.assertEqual(calls_db.consent_basis_label(None), "Not stated")

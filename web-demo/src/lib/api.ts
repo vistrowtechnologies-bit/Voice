@@ -296,6 +296,8 @@ export const updateCampaignStatus = (id: number, status: string) =>
 export interface CampaignPreflight {
   campaignId: number
   name: string
+  consentBasis: string
+  consentBasisLabel: string
   fromNumber: string
   contacts: number
   dialable: number

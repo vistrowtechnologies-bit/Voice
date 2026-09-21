@@ -532,6 +532,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     end_date TEXT DEFAULT '',
     attempts_per_minute INTEGER DEFAULT 0,
     from_numbers TEXT DEFAULT '',
+    consent_basis TEXT DEFAULT '',
     concurrency INTEGER DEFAULT 1,
     started_at TEXT,
     completed_at TEXT,
@@ -771,6 +772,10 @@ CREATE TABLE IF NOT EXISTS campaign_contacts (
     next_attempt_at TEXT,
     outcome TEXT DEFAULT '',
     call_id INTEGER,
+    -- Snapshot of the campaign's declared consent basis, for the same reason
+    -- name/company are snapshotted: an audit has to be answerable months
+    -- later, after the campaign and the contact have both moved on.
+    consent_basis TEXT DEFAULT '',
     created_at TEXT DEFAULT {_NOW}
 );
 
@@ -1395,6 +1400,10 @@ def init_tables() -> None:
                 # Extra caller IDs to rotate through on retries (comma
                 # separated). Empty = always dial from from_number.
                 ("from_numbers", "TEXT DEFAULT ''"),
+                # Why this audience may be called (see CONSENT_BASES). Recorded
+                # per campaign and snapshotted onto every contact it queues, so
+                # the answer survives the contact being edited or deleted.
+                ("consent_basis", "TEXT DEFAULT ''"),
             ):
                 conn.execute(f"ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # Company + free-form custom fields (from CSV/API imports) added
@@ -1409,6 +1418,7 @@ def init_tables() -> None:
             # contact whose call is still live (room in active_calls) from one
             # whose agent job never ran or crashed before reconciling it.
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS room_name TEXT")
+            conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS consent_basis TEXT DEFAULT ''")
             # Curated avatar color + custom greeting bubble, added after the
             # widget shipped with a hardcoded orb video and greeting line.
             conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_avatar TEXT DEFAULT 'default'")
@@ -5114,14 +5124,15 @@ def create_campaign(data: dict, account_id: int) -> int:
     try:
         with conn:
             scheduled_date = data.get("scheduledDate") or None
+            consent_basis = str(data.get("consentBasis") or "").strip()
             cur = conn.execute(
                 f"""
                 INSERT INTO campaigns
                     (account_id, name, agent_id, from_number, contact_tag, scheduled_date,
                      max_attempts, retry_minutes, concurrency, retry_policy,
                      window_start, window_end, active_days, end_date, attempts_per_minute,
-                     from_numbers, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, {'?' if scheduled_date else "'draft'"})
+                     from_numbers, consent_basis, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, {'?' if scheduled_date else "'draft'"})
                 RETURNING id
                 """,
                 (
@@ -5146,6 +5157,7 @@ def create_campaign(data: dict, account_id: int) -> int:
                     max(0, int(data.get("attemptsPerMinute") or 0)),
                     ",".join(data.get("fromNumbers") or []) if isinstance(data.get("fromNumbers"), list)
                     else str(data.get("fromNumbers") or ""),
+                    str(data.get("consentBasis") or "").strip(),
                     *(["scheduled"] if scheduled_date else []),
                 ),
             )
@@ -5171,9 +5183,10 @@ def create_campaign(data: dict, account_id: int) -> int:
                     continue
                 seen.add(norm)
                 conn.execute(
-                    "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, company, custom_fields) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (campaign_id, account_id, name, phone.strip(), norm, company, custom_fields),
+                    "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, "
+                    "company, custom_fields, consent_basis) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (campaign_id, account_id, name, phone.strip(), norm, company, custom_fields,
+                     consent_basis),
                 )
             return campaign_id
     finally:
@@ -5355,10 +5368,16 @@ def ingest_inbound_lead(
             ).fetchone()
             if dup:
                 return {"ok": True, "campaign_id": campaign_id, "contact_id": dup["id"], "deduped": True}
+            # Inherit the campaign's declared basis, so a contact added after
+            # launch is as answerable as one queued at creation.
+            basis_row = conn.execute(
+                "SELECT consent_basis FROM campaigns WHERE id = ?", (campaign_id,)
+            ).fetchone()
             cur = conn.execute(
                 "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, "
-                "company, custom_fields) VALUES (?, ?, ?, ?, ?, '', ?) RETURNING id",
-                (campaign_id, account_id, (name or "").strip(), phone.strip(), norm, json.dumps(fields)),
+                "company, custom_fields, consent_basis) VALUES (?, ?, ?, ?, ?, '', ?, ?) RETURNING id",
+                (campaign_id, account_id, (name or "").strip(), phone.strip(), norm,
+                 json.dumps(fields), _row_get(basis_row, "consent_basis", "") or ""),
             )
             contact_id = cur.fetchone()["id"]
         return {"ok": True, "campaign_id": campaign_id, "contact_id": contact_id, "deduped": False}
@@ -5535,9 +5554,23 @@ def campaign_preflight(campaign_id: int, account_id: int, channel_limit: int = 2
     )
     estimated_s = (len(dialable) * per_attempt_s / effective) if dialable else 0.0
 
+    basis = (campaign.get("consent_basis") or "").strip()
+    if not basis:
+        warnings.append(
+            "No consent basis recorded for this audience — say why these people may be called, "
+            "so the campaign can be accounted for later."
+        )
+    elif basis == "list":
+        warnings.append(
+            "This audience is a bought or third-party list. In India that is promotional calling: "
+            "it needs a 140-series number and DND scrubbing, which this account is not set up for."
+        )
+
     return {
         "campaignId": campaign_id,
         "name": campaign.get("name") or "",
+        "consentBasis": basis,
+        "consentBasisLabel": consent_basis_label(basis),
         "fromNumber": from_number,
         "agentId": agent_id,
         "contacts": len(contacts),
@@ -5716,6 +5749,24 @@ def campaign_inflight(campaign_id: int) -> int:
         return row["c"]
     finally:
         conn.close()
+
+
+# Why a tenant is allowed to call this audience. India's TCCCPR draws the line
+# between a call someone invited and one they did not: the first is ordinary
+# business, the second is promotional and carries registration, 140-series and
+# scrubbing obligations. Recording which one an operator declared is what makes
+# that answerable later — by us, or by them to a regulator.
+CONSENT_BASES = {
+    "inquiry": "They enquired with us",
+    "customer": "Existing customer or ongoing business",
+    "opt_in": "Explicitly opted in to being called",
+    "list": "Bought or third-party list",
+    "": "Not stated",
+}
+
+
+def consent_basis_label(value: str) -> str:
+    return CONSENT_BASES.get((value or "").strip(), (value or "").strip() or "Not stated")
 
 
 def campaign_caller_id(campaign: dict, attempts_before_this_one: int) -> str:

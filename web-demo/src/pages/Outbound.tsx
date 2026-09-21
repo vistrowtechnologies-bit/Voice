@@ -28,6 +28,16 @@ import { hasRole, useAuth } from '../lib/auth'
 
 const FILTERS = ['All', 'Running', 'Scheduled', 'Draft', 'Paused', 'Completed']
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
+
+// Why this audience may be called. India's TCCCPR treats an invited call very
+// differently from an uninvited one, and the answer is far easier to record
+// now than to reconstruct if anyone ever asks.
+const CONSENT_BASES = [
+  { value: 'inquiry', label: 'They enquired with us' },
+  { value: 'customer', label: 'Existing customer' },
+  { value: 'opt_in', label: 'They opted in' },
+  { value: 'list', label: 'Bought or third-party list' },
+] as const
 const CREATE_STEPS = ['Audience', 'Calling setup', 'Review', 'Pre-flight'] as const
 
 // Only the outcomes an operator actually asked to treat differently end up in
@@ -177,6 +187,7 @@ export function Outbound() {
     activeDays: [] as string[],
     endDate: '',
     attemptsPerMinute: '' as number | '',
+    consentBasis: '' as string,
   }
   const [form, setForm] = useState(blank)
   const [segmentCount, setSegmentCount] = useState<number | null>(null)
@@ -296,6 +307,7 @@ export function Outbound() {
       activeDays: form.activeDays,
       endDate: form.endDate,
       attemptsPerMinute: form.attemptsPerMinute === '' ? 0 : form.attemptsPerMinute,
+      consentBasis: form.consentBasis,
     }
     if (form.scheduledDate) {
       payload.scheduledDate = toUtcSql(form.scheduledDate)
@@ -560,6 +572,25 @@ export function Outbound() {
                     placeholder="For example: September lead follow-up"
                     className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none transition-colors placeholder:text-text-muted focus:border-primary"
                   />
+                </label>
+
+                <label className="flex max-w-xl flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-text-muted">Why may we call these people?</span>
+                  <select
+                    value={form.consentBasis}
+                    onChange={(event) => setForm({ ...form, consentBasis: event.target.value })}
+                    className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none transition-colors focus:border-primary"
+                  >
+                    <option value="">Select a reason</option>
+                    {CONSENT_BASES.map((basis) => (
+                      <option key={basis.value} value={basis.value}>{basis.label}</option>
+                    ))}
+                  </select>
+                  <span className="text-[11px] text-text-muted">
+                    {form.consentBasis === 'list'
+                      ? 'A bought list is promotional calling in India — it needs a 140-series number and DND scrubbing.'
+                      : 'Recorded with every contact, so the campaign can be accounted for later.'}
+                  </span>
                 </label>
 
                 <div className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:p-4">
@@ -851,6 +882,10 @@ export function Outbound() {
                 <div className="divide-y divide-border rounded-lg border border-border">
                   <ReviewRow label="Campaign" value={form.name} />
                   <ReviewRow label="Audience" value={`${audienceCount} contact${audienceCount === 1 ? '' : 's'} · ${form.source === 'tag' ? 'saved contacts' : 'pasted list'}`} />
+                  <ReviewRow
+                    label="Why we may call"
+                    value={CONSENT_BASES.find((b) => b.value === form.consentBasis)?.label ?? 'Not stated'}
+                  />
                   <ReviewRow label="Call from" value={form.fromNumber} />
                   <ReviewRow label="Calling agent" value={effectiveAgent?.name ?? 'Not selected'} />
                   <ReviewRow label="Dial policy" value={`${form.maxAttempts} attempt${form.maxAttempts === 1 ? '' : 's'}${form.maxAttempts > 1 ? ` · retry after ${form.retryMinutes} min` : ''} · ${form.concurrency} concurrent`} />
