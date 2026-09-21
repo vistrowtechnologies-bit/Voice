@@ -6556,6 +6556,54 @@ async def entrypoint(ctx: JobContext) -> None:
 
         backchannel_task["handle"] = asyncio.create_task(_watch())
 
+    # How long a bridged-in colleague has to pick up before the agent takes
+    # the call back. Longer than a normal ring so a slow answer still lands,
+    # short enough that a caller is not left listening to nothing.
+    _HANDOFF_ANSWER_WAIT_S = 45.0
+
+    @ctx.room.on("participant_connected")
+    def _on_participant_connected(participant) -> None:
+        """A colleague dialled in by transfer_call has actually joined."""
+        identity = getattr(participant, "identity", "") or ""
+        if not identity.startswith("human-"):
+            return
+        userdata.pop("handoff_pending", None)
+        userdata["handed_off"] = True
+        logger.info("colleague %s joined — the agent is standing down", identity)
+
+    async def _watch_handoff() -> None:
+        """Take the call back if the colleague never picks up.
+
+        Without this the agent would sit silent forever on an unanswered
+        transfer: handed_off is what stops it replying, and the caller has no
+        idea anything failed. Sarvam's docs call this out as the failure mode
+        that looks like success.
+        """
+        while True:
+            await asyncio.sleep(1.0)
+            pending = userdata.get("handoff_pending")
+            if not pending:
+                continue
+            started = userdata.setdefault("handoff_started_at", time.monotonic())
+            if userdata.get("handed_off") or userdata.get("ending_call"):
+                return
+            if time.monotonic() - started < _HANDOFF_ANSWER_WAIT_S:
+                continue
+            userdata.pop("handoff_pending", None)
+            userdata.pop("handoff_started_at", None)
+            logger.info("colleague %s never joined — the agent is taking the call back", pending)
+            try:
+                session.generate_reply(
+                    instructions=(
+                        "Your colleague did not pick up. Tell the caller that in one short "
+                        "line, apologise briefly, and offer to take their number for a "
+                        "callback. Then carry on helping them yourself."
+                    )
+                )
+            except Exception:
+                logger.exception("could not resume the call after a failed handoff")
+            return
+
     def _on_user_state_changed(ev) -> None:
         userdata["user_state"] = str(ev.new_state)
         # Stamped here, not sampled by the watchdog's poll loop: a 349ms
@@ -7423,6 +7471,8 @@ async def entrypoint(ctx: JobContext) -> None:
                     await stream.aclose()
 
         asyncio.create_task(_monitor_ringback())
+    # Only ever does anything after a transfer has dialled somebody in.
+    asyncio.create_task(_watch_handoff())
     logger.info("[latency] session.start() beginning at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     await session.start(
         agent=agent,

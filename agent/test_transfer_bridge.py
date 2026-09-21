@@ -75,9 +75,14 @@ class BridgeFallback(unittest.TestCase):
         self.assertEqual(request.sip_trunk_id, "ST_8YX6YkEkTymg")
         self.assertIn("join this call", reply)
 
-    def test_the_agent_is_told_to_stay_quiet_afterwards(self):
+    def test_the_agent_does_not_go_quiet_while_the_phone_is_only_ringing(self):
+        # The colleague has been dialled, not reached. Silencing the agent
+        # here is how an unanswered transfer becomes a caller listening to
+        # nothing — the failure Sarvam's docs call out as looking like
+        # success. main.py flips handed_off when they actually join.
         reply, ctx = self._run(fake_api(refer_fails=True))
-        self.assertTrue(ctx.userdata["handed_off"])
+        self.assertNotIn("handed_off", ctx.userdata)
+        self.assertEqual(ctx.userdata["handoff_pending"], "human-917020950304")
         self.assertIn("stay quiet", reply)
 
     def test_a_working_refer_is_still_preferred(self):
@@ -123,6 +128,25 @@ class AgentGoesQuiet(unittest.TestCase):
         import main
         with self.assertRaises(main.StopResponse):
             self._turn({"handed_off": True})
+
+
+class UnansweredHandoff(unittest.TestCase):
+    """A colleague who never picks up must hand the call back to the agent."""
+
+    def test_the_watcher_constants_are_sane(self):
+        import inspect, main
+        source = inspect.getsource(main.entrypoint)
+        self.assertIn("_HANDOFF_ANSWER_WAIT_S = 45.0", source)
+        # The flag that silences the agent is only ever set on a real join.
+        self.assertIn('userdata["handed_off"] = True', source)
+        self.assertIn('identity.startswith("human-")', source)
+
+    def test_a_joining_colleague_is_what_silences_the_agent(self):
+        import inspect, main
+        source = inspect.getsource(main.entrypoint)
+        join_block = source.split('def _on_participant_connected')[1].split('async def')[0]
+        self.assertIn('handed_off', join_block)
+        self.assertIn('handoff_pending', join_block)
 
 
 if __name__ == "__main__":

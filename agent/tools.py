@@ -2557,7 +2557,13 @@ async def transfer_call(context: RunContext) -> str:
                 # outbound call (see _bridge_in_human).
                 logger.info("REFER refused, bridging the colleague in instead")
                 if await _bridge_in_human(lkapi, room, dest):
-                    userdata["handed_off"] = True
+                    # NOT handed off yet — that flag silences the agent, and
+                    # the colleague's phone is only ringing. Sarvam's own docs
+                    # warn about exactly this: a number that rings out looks
+                    # like a completed transfer. main.py flips the flag when
+                    # they actually join, and gives up if they never do.
+                    digits = "".join(c for c in dest if c.isdigit())
+                    userdata["handoff_pending"] = f"human-{digits}"
                     return (
                         "Their colleague is being called now and will join this call in a moment. "
                         "Tell the caller that in one short line, then stay quiet and let the two of "
