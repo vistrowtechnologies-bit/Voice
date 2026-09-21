@@ -2684,6 +2684,27 @@ def _parse_json_config(raw, default):
         return default
 
 
+def _transfer_instructions(config: dict) -> str:
+    """Tell the agent it can put someone through, when it actually can.
+
+    The tool's own description was not enough: on call 1035 (2026-09-21) a
+    caller asked four times to be connected to a colleague and the agent
+    answered "फिलहाल कॉल ट्रांसफर करना संभव नहीं है" every time, without ever
+    calling transfer_call. The prompt tells it not to offer what no tool
+    supports; nothing told it that this one now does.
+    """
+    if not (config.get("transfer_phone") or "").strip():
+        return ""
+    return (
+        "\n\n# Putting someone through\n"
+        "You CAN transfer this call to a colleague. The moment the caller asks for a person, "
+        "a human, a manager, or names someone they want to speak to, call transfer_call and "
+        "say one short line while it connects. Never tell them a transfer is impossible, and "
+        "never offer a callback instead of trying. Only if transfer_call itself reports that "
+        "it could not go through do you apologise and offer to take their number."
+    )
+
+
 def _build_tools(config: dict) -> list:
     """The agent's live tool set. Core lead-capture + KB tools are always on
     (they're how the call does its job); enabled_functions only gates the
@@ -3330,6 +3351,7 @@ class RealEstateAgent(Agent):
                     "confirm it plainly, and end the call."
                 )
             )
+        instructions += _transfer_instructions(config)
         # LAST. Everything above this line is identical between two calls on
         # the same agent, so it is one cacheable prefix; only these ~100
         # tokens change. See where date_instruction is built for the numbers.
