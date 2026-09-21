@@ -2382,18 +2382,36 @@ async def web_search(context: RunContext, query: str) -> str:
         return "Web search failed right now — answer from what you already know, don't mention the error."
 
 
+# Both shapes a phone participant's identity takes, verified against real
+# calls (2026-09-21): LiveKit names an INBOUND caller "sip_<trunk slug>",
+# while an OUTBOUND callee is named by our own dial code as "sip-<number>"
+# (server/livekit_sip.py). Matching only the underscore form meant transfer
+# never worked on an outbound call — it fell through to the "this is a web
+# call" branch and the agent told the caller it could not transfer them.
+_SIP_IDENTITY_PREFIXES = ("sip-", "sip_")
+
+
 def _find_sip_participant(room) -> str | None:
     """Identity of the phone caller in the room, or None on a web call.
 
-    A phone caller joins via LiveKit SIP — kind == PARTICIPANT_KIND_SIP, and
-    by our dispatch convention their identity is prefixed "sip_". A browser
-    visitor has neither, so transfer is a no-op for web calls."""
+    kind is checked against the SIP enum itself, not its string form: the
+    enum stringifies to "3", so the old `"SIP" in str(kind)` test could never
+    be true and the identity prefix was doing all the work on its own.
+    """
     if room is None:
         return None
+    try:
+        from livekit import rtc
+
+        sip_kind = getattr(rtc.ParticipantKind, "PARTICIPANT_KIND_SIP", None)
+    except Exception:  # pragma: no cover - rtc always present on a real call
+        sip_kind = None
     for participant in room.remote_participants.values():
-        kind = str(getattr(participant, "kind", "")).upper()
         identity = participant.identity or ""
-        if "SIP" in kind or identity.startswith("sip_"):
+        kind = getattr(participant, "kind", None)
+        if (sip_kind is not None and kind == sip_kind) or identity.lower().startswith(
+            _SIP_IDENTITY_PREFIXES
+        ):
             return identity
     return None
 
