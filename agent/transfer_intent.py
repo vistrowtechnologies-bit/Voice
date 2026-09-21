@@ -28,6 +28,13 @@ _ACTION = r"""(?:
     | put\s+me\s+(?:through|on)
     | (?:speak|talk|baat)\s*(?:to|with|kar|karni|karna|karaao|karao|kara)?
     | जोड़|कनेक्ट|ट्रांसफर|बात\s*कर|बात\s*करा|मिला
+    # Speech recognition mangles English words spoken inside a Hindi
+    # sentence, and the mangled form is what we actually receive. These are
+    # transcriptions seen on real calls, not guesses: "connect" came through
+    # as "कमेंट" on call 1051 (2026-09-21). Each is anchored to a following
+    # imperative so an ordinary "comment" cannot trigger a transfer.
+    | (?:कमेंट|कनैक्ट|कनेक)\s*(?:कीजिए|किजिए|करो|कर\s*दो|करा|कीजिये)
+    | ट्रान्सफर
 )"""
 
 _PERSON = r"""(?:
@@ -40,6 +47,8 @@ _PERSON = r"""(?:
     # Callers switch script mid-sentence: "रियल पर्सन", "ह्यूमन", "एजेंट".
     | पर्सन|ह्यूमन|पर्सनल\s*एजेंट|स्टाफ
     | सुमन|शुभमन   # names an operator may ask for by mistranscription
+    # "agent" as speech recognition actually returned it (call 1051).
+    | एज\s*ऑन|एजन्ट|एजेण्ट|ऐजेंट
 )"""
 
 _ACTION_RE = re.compile(_ACTION, re.IGNORECASE | re.VERBOSE)

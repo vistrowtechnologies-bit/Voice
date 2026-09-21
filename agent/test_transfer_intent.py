@@ -27,6 +27,17 @@ class RealCallersAskingForAHuman(unittest.TestCase):
         ):
             self.assertTrue(wants(said), said)
 
+    def test_what_speech_recognition_actually_returned(self):
+        # Call 1051 (2026-09-21): the caller asked to be put through and the
+        # transcript came back with "agent" as "एज ऑन" and "connect" as
+        # "कमेंट". The detector has to work on what STT gives us, not on
+        # what was said.
+        self.assertTrue(wants("आप मुझे आपके एज ऑन से कमेंट कीजिए।"))
+
+    def test_the_word_comment_alone_is_not_a_transfer(self):
+        for said in ("aapka comment kya hai", "मैंने कमेंट पढ़ा", "comment section dekh lijiye"):
+            self.assertFalse(wants(said), said)
+
     def test_plain_english(self):
         for said in (
             "connect me to a human",
