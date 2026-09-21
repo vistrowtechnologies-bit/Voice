@@ -533,6 +533,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     attempts_per_minute INTEGER DEFAULT 0,
     from_numbers TEXT DEFAULT '',
     consent_basis TEXT DEFAULT '',
+    pause_reason TEXT DEFAULT '',
     concurrency INTEGER DEFAULT 1,
     started_at TEXT,
     completed_at TEXT,
@@ -1404,6 +1405,9 @@ def init_tables() -> None:
                 # per campaign and snapshotted onto every contact it queues, so
                 # the answer survives the contact being edited or deleted.
                 ("consent_basis", "TEXT DEFAULT ''"),
+                # Why the dialer stopped this campaign by itself (empty when
+                # an operator paused it, or when it is running).
+                ("pause_reason", "TEXT DEFAULT ''"),
             ):
                 conn.execute(f"ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # Company + free-form custom fields (from CSV/API imports) added
@@ -5396,6 +5400,11 @@ def set_campaign_status(campaign_id: int, status: str, account_id: int) -> None:
         with conn:
             sets = ["status = ?"]
             params: list = [status]
+            if status != "paused":
+                # An operator moving the campaign on has dealt with whatever
+                # stopped it; a stale reason would keep warning about a
+                # problem that is over.
+                sets.append("pause_reason = ''")
             if status == "running":
                 sets.append("started_at = COALESCE(started_at, " + _NOW + ")")
             if status in ("completed", "cancelled"):
@@ -5792,6 +5801,49 @@ def campaign_caller_id(campaign: dict, attempts_before_this_one: int) -> str:
     except (TypeError, ValueError):
         index = 0
     return pool[index % len(pool)]
+
+
+def pause_campaign_with_reason(campaign_id: int, account_id: int, reason: str) -> None:
+    """Stop a campaign the dialer cannot safely continue, and say why.
+
+    Used by the carrier circuit breaker: an outage is neither this
+    campaign's fault nor its contacts', so it stops rather than grinding
+    through the list. The reason is what turns a silently paused campaign
+    into something an operator can act on (see notifications()).
+    """
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE campaigns SET status = 'paused', pause_reason = ? "
+                "WHERE id = ? AND account_id = ? AND status = 'running'",
+                (reason, campaign_id, account_id),
+            )
+    finally:
+        conn.close()
+    logger.warning("campaign %s paused by the dialer: %s", campaign_id, reason)
+
+
+def release_campaign_contact(contact_id: int) -> None:
+    """Undo a claim for a call that never actually went out.
+
+    claim_next_campaign_contact spends an attempt up front, which is right
+    when a dial reaches the network and wrong when it never leaves the
+    building: a carrier outage would otherwise burn every contact's attempts
+    on calls nobody ever received. Returns the contact to 'pending' with its
+    attempt given back, so the list survives the outage intact.
+    """
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE campaign_contacts SET status = 'pending', "
+                "attempts = GREATEST(attempts - 1, 0), outcome = '', room_name = NULL "
+                "WHERE id = ? AND status = 'calling'",
+                (contact_id,),
+            )
+    finally:
+        conn.close()
 
 
 def campaign_inflight_all() -> int:
@@ -7516,6 +7568,28 @@ def notifications(account_id: int) -> list[dict]:
                 })
         except psycopg.Error:
             logger.warning("notifications: failed-calls section failed", exc_info=True)
+
+        # --- campaigns the dialer stopped by itself ---------------------
+        # A campaign paused by the carrier circuit breaker is otherwise
+        # indistinguishable from one an operator paused on purpose, and
+        # nobody would know calling had stopped until they went looking.
+        try:
+            rows = conn.execute(
+                "SELECT id, name, pause_reason FROM campaigns WHERE account_id = ? "
+                "AND status = 'paused' AND COALESCE(pause_reason, '') <> '' ORDER BY id DESC",
+                (account_id,),
+            ).fetchall()
+            for row in rows:
+                items.append({
+                    "id": f"campaign-paused:{row['id']}:{hash(row['pause_reason']) & 0xffff}",
+                    "severity": "critical",
+                    "title": f"Campaign “{row['name']}” was paused automatically",
+                    "body": row["pause_reason"],
+                    "to": "/dashboard/outbound",
+                    "at": None,
+                })
+        except psycopg.Error:
+            logger.warning("notifications: paused-campaign section failed", exc_info=True)
 
         # --- calls that dropped without a real conversation -------------
         # Mirrors _status()'s "failed" heuristic (under 10s, no lead

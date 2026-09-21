@@ -86,6 +86,59 @@ _last_dial_at = 0.0
 # Campaign concurrency still applies on top and can only be lower.
 _OUTBOUND_CHANNELS = max(1, int(os.environ.get("OUTBOUND_CHANNEL_LIMIT", "2") or 2))
 
+# Carrier circuit breaker.
+#
+# On 2026-09-21 EnableX answered every INVITE with "100 Trying" and then
+# never routed the call: each dial died after a 30s timeout, for every
+# destination, for hours. A dialer that keeps going through an outage like
+# that burns one attempt per contact on calls nobody ever received, and with
+# retries enabled it burns those too — a 100-contact list can be spent on a
+# problem that has nothing to do with the contacts.
+#
+# So after this many dials in a row fail to LEAVE THE BUILDING, running
+# campaigns are paused with the reason recorded, and each contact is handed
+# back unspent. One success anywhere resets the count.
+_CARRIER_FAILURE_LIMIT = max(2, int(os.environ.get("CARRIER_FAILURE_LIMIT", "3") or 3))
+
+# Errors that mean the call never reached the person: the carrier or the
+# media platform did not take it. A rejection aimed at THIS number (an
+# invalid number, a blocked destination) is a fact about the contact and
+# must still spend their attempt, or a bad row would be retried forever.
+_CARRIER_ERROR_MARKERS = (
+    "timed out", "timeout", "unavailable", "connection", "twirp",
+    "no trunk", "internal error", "503", "504",
+)
+
+_consecutive_dial_failures = 0
+
+
+def _looks_like_carrier_trouble(error: str) -> bool:
+    text = (error or "").lower()
+    return any(marker in text for marker in _CARRIER_ERROR_MARKERS)
+
+
+def _note_dial_outcome(placed: bool) -> int:
+    """Track dials that never left the building. Returns the current streak."""
+    global _consecutive_dial_failures
+    _consecutive_dial_failures = 0 if placed else _consecutive_dial_failures + 1
+    return _consecutive_dial_failures
+
+
+def _trip_breaker(reason: str) -> None:
+    """Pause every running campaign — an outage is never campaign-specific."""
+    global _consecutive_dial_failures
+    _consecutive_dial_failures = 0
+    try:
+        running = calls_db.running_campaigns()
+    except Exception:
+        logger.exception("could not list running campaigns to pause them")
+        return
+    for campaign in running:
+        try:
+            calls_db.pause_campaign_with_reason(campaign["id"], campaign["account_id"], reason)
+        except Exception:
+            logger.exception("could not pause campaign %s", campaign.get("id"))
+
 
 def _pace_dial(min_gap_seconds: float = _DIAL_STAGGER_SECONDS) -> None:
     """Hold until the trunk may carry another INVITE.
@@ -147,6 +200,34 @@ def _place_via_orchestrator(to_number: str, from_number: str, account_id: int, a
             return json.loads(resp.read().decode())
     except urllib.error.URLError as e:
         return {"ok": False, "error": f"Could not reach orchestrator: {e}"}
+
+
+def _handle_failed_dial(contact_id: int, campaign_id: int, error: str) -> bool:
+    """Record a dial that did not go out. True when the breaker just tripped.
+
+    A carrier failure hands the contact back unspent — they were never
+    called, so it must not count against them — while a rejection aimed at
+    this particular number is recorded against the contact as before.
+    """
+    if not _looks_like_carrier_trouble(error):
+        _note_dial_outcome(placed=True)
+        calls_db.record_campaign_dial_result(contact_id, campaign_id, "failed")
+        return False
+
+    calls_db.release_campaign_contact(contact_id)
+    streak = _note_dial_outcome(placed=False)
+    logger.warning(
+        "dial never left the building (%s of %s in a row): %s",
+        streak, _CARRIER_FAILURE_LIMIT, error,
+    )
+    if streak < _CARRIER_FAILURE_LIMIT:
+        return False
+    _trip_breaker(
+        f"Paused automatically: {streak} calls in a row could not be placed "
+        f"({error.strip()[:120]}). Your contacts were not called and keep their "
+        f"attempts. Resume once calling is working again."
+    )
+    return True
 
 
 def _dial_one(campaign: dict) -> None:
@@ -260,17 +341,21 @@ def _dial_one(campaign: dict) -> None:
                     campaign_contact_id=contact["id"],
                     campaign_id=cid,
                 )
-        except Exception:
+        except Exception as exc:
             logger.exception("dial failed for contact %s", contact["id"])
-            calls_db.record_campaign_dial_result(contact["id"], cid, "failed")
+            if _handle_failed_dial(contact["id"], cid, str(exc)):
+                return
             continue
         if result.get("blocked"):
+            _note_dial_outcome(placed=True)
             calls_db.record_campaign_dial_result(contact["id"], cid, "blocked", result.get("error", ""))
         elif result.get("ok"):
+            _note_dial_outcome(placed=True)
             calls_db.record_campaign_dial_result(contact["id"], cid, "placed", room_name=result.get("room"))
         else:
             logger.warning("dial not placed for contact %s: %s", contact["id"], result.get("error"))
-            calls_db.record_campaign_dial_result(contact["id"], cid, "failed")
+            if _handle_failed_dial(contact["id"], cid, result.get("error", "")):
+                return
 
     # Auto-complete once nothing is pending, in flight, or awaiting retry.
     if not calls_db.campaign_has_open_work(cid):
