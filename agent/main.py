@@ -2746,7 +2746,13 @@ def _build_tools(config: dict) -> list:
 
     if _on("end_call"):
         tools.append(end_call)
-    if (config.get("transfer_phone") or "").strip() and _on("transfer_call"):
+    # Governed by the transfer number alone, which is what the dashboard says
+    # and the only thing an operator can actually express: there is no
+    # transfer toggle in the UI, so transfer_call can only be absent from
+    # enabled_functions by accident. Agent 26 was in exactly that state on
+    # 2026-09-21 — a transfer number saved on an agent whose list read
+    # "end_call", which silently meant no transfer tool at all.
+    if (config.get("transfer_phone") or "").strip():
         tools.append(transfer_call)
     if TAVILY_API_KEY and _on("web_search"):
         tools.append(web_search)
