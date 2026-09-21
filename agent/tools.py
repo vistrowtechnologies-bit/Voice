@@ -2421,23 +2421,68 @@ def _find_sip_participant(room) -> str | None:
 _TRUNK_ADDRESS_CACHE: dict[str, str] = {}
 
 
-async def _trunk_address(lkapi) -> str:
-    """Host of our outbound SIP trunk, or '' if it cannot be determined."""
+async def _outbound_trunk(lkapi) -> tuple[str, str]:
+    """(trunk id, host) of our outbound SIP trunk — ('', '') if unknown."""
     if "address" in _TRUNK_ADDRESS_CACHE:
-        return _TRUNK_ADDRESS_CACHE["address"]
-    address = ""
+        return _TRUNK_ADDRESS_CACHE.get("id", ""), _TRUNK_ADDRESS_CACHE["address"]
+    trunk_id = address = ""
     try:
         from livekit import api
 
         trunks = await lkapi.sip.list_sip_outbound_trunk(api.ListSIPOutboundTrunkRequest())
         for trunk in getattr(trunks, "items", []) or []:
             if getattr(trunk, "address", ""):
-                address = trunk.address
+                trunk_id, address = getattr(trunk, "sip_trunk_id", ""), trunk.address
                 break
     except Exception:
-        logger.warning("could not read the outbound SIP trunk address", exc_info=True)
-    _TRUNK_ADDRESS_CACHE["address"] = address
-    return address
+        logger.warning("could not read the outbound SIP trunk", exc_info=True)
+    _TRUNK_ADDRESS_CACHE["id"], _TRUNK_ADDRESS_CACHE["address"] = trunk_id, address
+    return trunk_id, address
+
+
+async def _trunk_address(lkapi) -> str:
+    """Host of our outbound SIP trunk, or '' if it cannot be determined."""
+    return (await _outbound_trunk(lkapi))[1]
+
+
+async def _bridge_in_human(lkapi, room, dest: str) -> bool:
+    """Dial the colleague INTO this call instead of handing the call away.
+
+    A SIP REFER asks the carrier to move the caller elsewhere, and EnableX
+    will not do it for us: a tel: target came back "603 Declined (Non sip:
+    uri) (permission_denied)", and a sip: target on our own trunk was
+    accepted without error while the destination phone never rang (calls
+    1036 and 1037, 2026-09-21).
+
+    Dialling the colleague into the same room needs nothing from the carrier
+    beyond an ordinary outbound call, and everyone can hear each other while
+    the agent bows out — so the handoff can be warm. It costs a second
+    channel for as long as the two of them talk, which matters on a trunk
+    with very few channels.
+    """
+    from livekit import api
+
+    trunk_id, _address = await _outbound_trunk(lkapi)
+    if not trunk_id:
+        logger.warning("no outbound trunk available to bridge a colleague in")
+        return False
+    digits = "".join(c for c in (dest or "") if c.isdigit())
+    if not digits:
+        return False
+    await lkapi.sip.create_sip_participant(
+        api.CreateSIPParticipantRequest(
+            sip_trunk_id=trunk_id,
+            sip_call_to=f"+{digits}",
+            room_name=room.name,
+            participant_identity=f"human-{digits}",
+            participant_name="Team member",
+            # The caller stays with the agent while this rings, so they are
+            # never left listening to silence.
+            wait_until_answered=False,
+        )
+    )
+    logger.info("bridged colleague +%s into room %s", digits, room.name)
+    return True
 
 
 async def _transfer_uris(lkapi, dest: str) -> list[str]:
@@ -2507,6 +2552,17 @@ async def transfer_call(context: RunContext) -> str:
                     logger.warning("transfer to %s refused: %s", transfer_to, exc)
                     last_error = exc
             else:
+                # Every REFER was refused. Dial the colleague into this call
+                # instead — it needs nothing from the carrier beyond a normal
+                # outbound call (see _bridge_in_human).
+                logger.info("REFER refused, bridging the colleague in instead")
+                if await _bridge_in_human(lkapi, room, dest):
+                    userdata["handed_off"] = True
+                    return (
+                        "Their colleague is being called now and will join this call in a moment. "
+                        "Tell the caller that in one short line, then stay quiet and let the two of "
+                        "them talk — do not ask anything else."
+                    )
                 raise last_error or RuntimeError("no transfer target")
         finally:
             await lkapi.aclose()

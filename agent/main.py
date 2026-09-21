@@ -4118,6 +4118,12 @@ class RealEstateAgent(Agent):
         text = new_message.text_content
         self._booking_confirmed_this_turn = False
         _userdata = self.session.userdata
+        # A colleague has been dialled into this call (tools._bridge_in_human).
+        # The two of them are talking now; an agent that keeps answering would
+        # be talking over a real conversation.
+        if _userdata.get("handed_off"):
+            logger.info("handed off to a colleague — staying quiet: %r", (text or "")[:60])
+            raise StopResponse()
         if _caller_reopened_conversation(_userdata, text):
             _userdata["ending_call"] = False
             _userdata["ending_call_from_tool"] = False
