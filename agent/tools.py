@@ -2416,6 +2416,51 @@ def _find_sip_participant(room) -> str | None:
     return None
 
 
+# The outbound trunk's host, looked up once per worker: a transfer target has
+# to be a SIP URI on the trunk that carries the call, not a bare tel: number.
+_TRUNK_ADDRESS_CACHE: dict[str, str] = {}
+
+
+async def _trunk_address(lkapi) -> str:
+    """Host of our outbound SIP trunk, or '' if it cannot be determined."""
+    if "address" in _TRUNK_ADDRESS_CACHE:
+        return _TRUNK_ADDRESS_CACHE["address"]
+    address = ""
+    try:
+        from livekit import api
+
+        trunks = await lkapi.sip.list_sip_outbound_trunk(api.ListSIPOutboundTrunkRequest())
+        for trunk in getattr(trunks, "items", []) or []:
+            if getattr(trunk, "address", ""):
+                address = trunk.address
+                break
+    except Exception:
+        logger.warning("could not read the outbound SIP trunk address", exc_info=True)
+    _TRUNK_ADDRESS_CACHE["address"] = address
+    return address
+
+
+async def _transfer_uris(lkapi, dest: str) -> list[str]:
+    """Transfer targets to try, best first.
+
+    An operator types a plain number into the dashboard. EnableX rejects that
+    as "Non sip: uri", so the SIP form on our own trunk is tried first and the
+    tel: form is kept as a fallback for providers that prefer it.
+    """
+    dest = (dest or "").strip()
+    if dest.startswith(("sip:", "tel:")):
+        return [dest]
+    digits = "".join(c for c in dest if c.isdigit())
+    if not digits:
+        return []
+    address = await _trunk_address(lkapi)
+    uris = []
+    if address:
+        uris.append(f"sip:{digits}@{address}")
+    uris.append(f"tel:+{digits}")
+    return uris
+
+
 @function_tool
 async def transfer_call(context: RunContext) -> str:
     """Transfer the caller to a human team member. Call this ONLY when the
@@ -2437,20 +2482,32 @@ async def transfer_call(context: RunContext) -> str:
             "This is a web call, which can't be transferred to a phone. Offer to have the team call "
             "them back at a number they give you, and capture it."
         )
-    transfer_to = dest if dest.startswith(("tel:", "sip:")) else f"tel:{dest}"
     try:
         from livekit import api
 
         lkapi = api.LiveKitAPI()
         try:
-            await lkapi.sip.transfer_sip_participant(
-                api.TransferSIPParticipantRequest(
-                    participant_identity=sip_identity,
-                    room_name=room.name,
-                    transfer_to=transfer_to,
-                    play_dialtone=True,
-                )
-            )
+            candidates = await _transfer_uris(lkapi, dest)
+            last_error: Exception | None = None
+            for transfer_to in candidates:
+                try:
+                    await lkapi.sip.transfer_sip_participant(
+                        api.TransferSIPParticipantRequest(
+                            participant_identity=sip_identity,
+                            room_name=room.name,
+                            transfer_to=transfer_to,
+                            play_dialtone=True,
+                        )
+                    )
+                    break
+                except Exception as exc:
+                    # EnableX declines a bare tel: URI with "603 Declined
+                    # (Non sip: uri)" (call 1036, 2026-09-21), so a refused
+                    # form is tried in its other shape before giving up.
+                    logger.warning("transfer to %s refused: %s", transfer_to, exc)
+                    last_error = exc
+            else:
+                raise last_error or RuntimeError("no transfer target")
         finally:
             await lkapi.aclose()
         logger.info("transferred caller %s to %s", sip_identity, transfer_to)
