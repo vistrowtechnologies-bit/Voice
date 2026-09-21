@@ -151,3 +151,66 @@ class UnansweredHandoff(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class CallerAsksForAPerson(unittest.TestCase):
+    """The handoff is triggered by what the caller said, not by the model's
+    mood. Three live calls on 2026-09-21 had the tool registered, the number
+    set and a prompt telling the agent to transfer — and produced a refusal,
+    a correct transfer, and a promised callback plus hang-up."""
+
+    def _turn(self, said, userdata):
+        """Drive the handoff decision alone — the rest of the turn pipeline
+        needs a fully built agent and is not what these tests are about."""
+        import main
+        agent = main.RealEstateAgent.__new__(main.RealEstateAgent)
+        session = MagicMock()
+        session.userdata = userdata
+        with patch.object(type(agent), "session", property(lambda self: session)):
+            handled = asyncio.run(agent._handoff_if_requested(said, userdata))
+        return session, handled
+
+    def _userdata(self, **kw):
+        return {"transfer_phone": "+917020950304", "room": FakeRoom(),
+                "lead_data": {}, "latency_metrics": {}, **kw}
+
+    def test_a_request_transfers_without_waiting_for_the_model(self):
+        import main
+        with patch.object(main, "transfer_call") as tool:
+            tool.__wrapped__ = AsyncMock(return_value="connecting you now")
+            session, stopped = self._turn("आप मुझे आपके एजेंट से कनेक्ट कीजिए।", self._userdata())
+        tool.__wrapped__.assert_awaited_once()
+        self.assertTrue(stopped, "the model must not also answer this turn")
+        session.generate_reply.assert_called_once()
+
+    def test_ordinary_conversation_is_untouched(self):
+        import main
+        with patch.object(main, "transfer_call") as tool:
+            tool.__wrapped__ = AsyncMock(return_value="x")
+            self._turn("मुझे नई वेबसाइट बनवानी है", self._userdata())
+        tool.__wrapped__.assert_not_awaited()
+
+    def test_an_agent_without_a_transfer_number_never_tries(self):
+        import main
+        with patch.object(main, "transfer_call") as tool:
+            tool.__wrapped__ = AsyncMock(return_value="x")
+            self._turn("connect me to a human", self._userdata(transfer_phone=""))
+        tool.__wrapped__.assert_not_awaited()
+
+    def test_it_only_fires_once_per_call(self):
+        import main
+        data = self._userdata()
+        with patch.object(main, "transfer_call") as tool:
+            tool.__wrapped__ = AsyncMock(return_value="connecting you now")
+            self._turn("connect me to a human", data)
+            self._turn("connect me to a human please", data)
+        self.assertEqual(tool.__wrapped__.await_count, 1)
+
+    def test_a_failing_transfer_leaves_the_agent_able_to_retry(self):
+        import main
+        data = self._userdata()
+        with patch.object(main, "transfer_call") as tool:
+            tool.__wrapped__ = AsyncMock(side_effect=RuntimeError("livekit down"))
+            session, stopped = self._turn("connect me to a human", data)
+        self.assertFalse(stopped, "the model should still answer if the transfer blew up")
+        self.assertNotIn("transfer_started", data)

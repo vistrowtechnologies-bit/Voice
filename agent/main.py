@@ -9,6 +9,7 @@ import threading
 import time
 import wave
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 
@@ -58,6 +59,7 @@ import db
 import numpy as np
 import recording
 import inbound_rules
+import transfer_intent
 import ringback
 import sarvam_realtime_stt
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
@@ -4112,6 +4114,39 @@ class RealEstateAgent(Agent):
                 logger.info("[tts_node] FIRST AUDIO at +%.0fms", _first_audio)
             yield frame
 
+    async def _handoff_if_requested(self, text: str, userdata: dict) -> bool:
+        """Put the caller through when they ask, without consulting the model.
+
+        With the tool registered, the number set and a prompt telling it to
+        transfer, three live calls on 2026-09-21 produced three different
+        behaviours: a refusal, a correct transfer, and a promised callback
+        followed by a hang-up. A handoff is not a matter of taste, so it is
+        decided from what the caller actually said — the same way ringback
+        and carrier announcements already are.
+
+        Returns True when the transfer has been started and the model should
+        stay out of this turn.
+        """
+        if not userdata.get("transfer_phone"):
+            return False
+        if userdata.get("handoff_pending") or userdata.get("transfer_started"):
+            return False
+        if not transfer_intent.wants_human(text):
+            return False
+
+        userdata["transfer_started"] = True
+        logger.info("caller asked for a person — transferring: %r", (text or "")[:80])
+        try:
+            outcome = await transfer_call.__wrapped__(SimpleNamespace(userdata=userdata))
+        except Exception:
+            # Leave the flag clear so a later request can try again, and let
+            # the model answer this turn rather than leaving dead air.
+            logger.exception("transfer failed after an explicit request")
+            userdata.pop("transfer_started", None)
+            return False
+        self.session.generate_reply(instructions=outcome)
+        return True
+
     async def on_user_turn_completed(
         self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
     ) -> None:
@@ -4123,6 +4158,9 @@ class RealEstateAgent(Agent):
         # be talking over a real conversation.
         if _userdata.get("handed_off"):
             logger.info("handed off to a colleague — staying quiet: %r", (text or "")[:60])
+            raise StopResponse()
+
+        if await self._handoff_if_requested(text, _userdata):
             raise StopResponse()
         if _caller_reopened_conversation(_userdata, text):
             _userdata["ending_call"] = False
