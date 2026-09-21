@@ -26,6 +26,7 @@ from livekit.protocol.room import (
     RoomConfiguration,
     UpdateRoomMetadataRequest,
 )
+from google.protobuf import duration_pb2
 from livekit.protocol.sip import (
     CreateSIPDispatchRuleRequest,
     CreateSIPInboundTrunkRequest,
@@ -115,6 +116,11 @@ async def ensure_outbound_trunk(address: str, caller_id: str) -> str:
 # created (the normal case deletes the room itself, see below). Same value
 # token_api.py's widget/browser rooms use.
 _OUTBOUND_ROOM_EMPTY_TIMEOUT_S = 120
+
+
+# How long an outbound call may ring before we stop it. See the comment at
+# the ringing_timeout below for why this is not left to the carrier.
+_RINGING_TIMEOUT = duration_pb2.Duration(seconds=35)
 
 
 async def place_outbound_call(
@@ -225,6 +231,15 @@ async def place_outbound_call(
                     room_name=room_name,
                     participant_identity=f"sip-{to_number.lstrip('+')}",
                     participant_name=visitor_name or to_number,
+                    # Stop ringing an unanswered phone at 35s. Left unset,
+                    # LiveKit rings until the carrier gives up — call 1055
+                    # (2026-09-21) rang for 94 seconds — and on SIP a ringing
+                    # call holds one of the trunk's channels for its whole
+                    # duration. With three channels on this account that is
+                    # a third of our capacity spent on a phone nobody is
+                    # answering. 35s is past a normal pickup and matches the
+                    # agent's own 30s ringback give-up.
+                    ringing_timeout=_RINGING_TIMEOUT,
                     # Callers that dial one number and want a real answered/
                     # not-answered result (a dashboard test call) block here.
                     # The campaign dialer must NOT: it places several calls
