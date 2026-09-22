@@ -4803,7 +4803,24 @@ def create_site(data: dict = Body(...), user: dict = Depends(current_user)) -> d
 
 @app.get("/widget/avatar-catalog")
 def widget_avatar_catalog(user: dict = Depends(current_user)) -> dict:
-    return {"avatars": [{"key": k, "label": v} for k, v in widget_avatars.WIDGET_AVATAR_CATALOG.items()]}
+    """The pickable avatars, and which of them move.
+
+    hasVideo is read off the disk rather than hardcoded, so the dashboard
+    swatch shows the same thing the call button will: Artha waves in the
+    picker because artha.mp4 exists, and a still-only key would not. An
+    operator picking a face should not have to publish it to find out
+    whether it moves.
+    """
+    return {
+        "avatars": [
+            {
+                "key": key,
+                "label": label,
+                "hasVideo": (WIDGET_AVATARS_DIR / f"{key}.mp4").is_file(),
+            }
+            for key, label in widget_avatars.WIDGET_AVATAR_CATALOG.items()
+        ]
+    }
 
 
 

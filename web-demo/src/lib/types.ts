@@ -627,6 +627,9 @@ export interface SitePageRoute {
 export interface WidgetAvatarOption {
   key: string
   label: string
+  // True when the avatar has a video loop (artha.mp4 today). The picker
+  // shows the moving version so the swatch matches the live call button.
+  hasVideo?: boolean
 }
 
 export interface HelpFaq {

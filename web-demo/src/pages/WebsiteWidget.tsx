@@ -844,7 +844,21 @@ function AvatarPicker({
           }`}
         >
           {backendUrl ? (
-            <img src={`${backendUrl}/widget-avatars/${opt.key}.png`} alt={opt.label} className="h-full w-full object-cover" />
+            // An avatar with a video is shown moving, because that is what
+            // the call button will do - a still swatch for Artha sold the
+            // one thing that distinguishes her as a stock photo.
+            opt.hasVideo ? (
+              <video
+                src={`${backendUrl}/widget-avatars/${opt.key}.mp4`}
+                className="h-full w-full object-cover"
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+            ) : (
+              <img src={`${backendUrl}/widget-avatars/${opt.key}.png`} alt={opt.label} className="h-full w-full object-cover" />
+            )
           ) : (
             <span className="h-full w-full bg-surface-high" />
           )}
