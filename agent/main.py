@@ -60,6 +60,7 @@ import numpy as np
 import recording
 import inbound_rules
 import transfer_intent
+import jev_intent
 import ringback
 import sarvam_realtime_stt
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
@@ -4142,7 +4143,14 @@ class RealEstateAgent(Agent):
         if userdata.get("handoff_pending") or userdata.get("transfer_started"):
             return False
         if not transfer_intent.wants_human(text):
-            return False
+            # The regex misses requests with no person-word in them ("जी कनेक्ट
+            # कीजिए मुझे आप।"). jev_intent asks a decision model, but only for
+            # the 0.18% of turns that carry a connect/transfer word, and it
+            # answers False on any failure — so a slow or throttled model
+            # leaves this turn exactly as it is today.
+            if not await jev_intent.asks_for_human(text):
+                return False
+            logger.info("jev read this as a handoff request: %r", (text or "")[:80])
 
         userdata["transfer_started"] = True
         logger.info("caller asked for a person — transferring: %r", (text or "")[:80])
@@ -6622,15 +6630,84 @@ async def entrypoint(ctx: JobContext) -> None:
     # short enough that a caller is not left listening to nothing.
     _HANDOFF_ANSWER_WAIT_S = 45.0
 
-    @ctx.room.on("participant_connected")
-    def _on_participant_connected(participant) -> None:
-        """A colleague dialled in by transfer_call has actually joined."""
+    async def _stand_down_when_answered(participant) -> None:
+        """Go quiet once the colleague is really on the line — not before.
+
+        A SIP participant EXISTS from the moment dialling starts, which is
+        the same trap _wait_for_sip_answer was written for on the greeting
+        path. Standing down on its arrival cost a real caller 90 seconds of
+        silence on call 1073 (2026-09-22): EnableX answered the colleague's
+        leg itself in 800ms and cleared it 80ms later, the phone never rang,
+        and the agent — already mute — ignored the caller asking to be
+        connected three more times before they hung up.
+        """
         identity = getattr(participant, "identity", "") or ""
-        if not identity.startswith("human-"):
+        try:
+            answered = await _wait_for_sip_answer(
+                ctx, participant, time.monotonic(), timeout=_HANDOFF_ANSWER_WAIT_S
+            )
+        except Exception:
+            logger.exception("could not tell whether colleague %s answered", identity)
+            return
+        # _watch_handoff takes the call back when this never answers.
+        if not answered:
+            return
+        # A carrier that answers on the colleague's behalf and hangs up can
+        # do it while we wait for their audio, so confirm they are still
+        # here before muting ourselves.
+        if identity not in ctx.room.remote_participants:
+            logger.info("colleague %s left before the handoff completed", identity)
             return
         userdata.pop("handoff_pending", None)
         userdata["handed_off"] = True
-        logger.info("colleague %s joined — the agent is standing down", identity)
+        logger.info("colleague %s answered — the agent is standing down", identity)
+
+    def _take_call_back(why: str) -> None:
+        """Resume talking to the caller after a handoff that did not hold."""
+        userdata.pop("handed_off", None)
+        userdata.pop("handoff_pending", None)
+        userdata.pop("handoff_started_at", None)
+        userdata.pop("transfer_started", None)
+        logger.info("taking the call back: %s", why)
+        try:
+            session.generate_reply(
+                instructions=(
+                    "Your colleague could not be reached. Tell the caller that in one "
+                    "short line, apologise briefly, and offer to take their number for "
+                    "a callback. Then carry on helping them yourself."
+                )
+            )
+        except Exception:
+            logger.exception("could not resume the call after a failed handoff")
+
+    @ctx.room.on("participant_connected")
+    def _on_participant_connected(participant) -> None:
+        """A colleague dialled in by transfer_call is ringing — not yet joined."""
+        identity = getattr(participant, "identity", "") or ""
+        if not identity.startswith("human-"):
+            return
+        logger.info("colleague %s is ringing — holding the caller with the agent", identity)
+        asyncio.create_task(_stand_down_when_answered(participant))
+
+    @ctx.room.on("participant_disconnected")
+    def _on_colleague_disconnected(participant) -> None:
+        """The colleague's leg dropped — the caller must not be left in silence.
+
+        Named apart from _on_participant_disconnected above, which watches the
+        caller's own leg: both are registered on the same event, and reusing
+        the name would rebind it for anything that looks it up later.
+
+        Waiting out _HANDOFF_ANSWER_WAIT_S here would be 45 seconds of
+        nothing for a leg we already know is gone.
+        """
+        identity = getattr(participant, "identity", "") or ""
+        if not identity.startswith("human-"):
+            return
+        if not (userdata.get("handed_off") or userdata.get("handoff_pending")):
+            return
+        if userdata.get("ending_call"):
+            return
+        _take_call_back(f"colleague {identity} left the call")
 
     async def _watch_handoff() -> None:
         """Take the call back if the colleague never picks up.
@@ -6650,19 +6727,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 return
             if time.monotonic() - started < _HANDOFF_ANSWER_WAIT_S:
                 continue
-            userdata.pop("handoff_pending", None)
-            userdata.pop("handoff_started_at", None)
-            logger.info("colleague %s never joined — the agent is taking the call back", pending)
-            try:
-                session.generate_reply(
-                    instructions=(
-                        "Your colleague did not pick up. Tell the caller that in one short "
-                        "line, apologise briefly, and offer to take their number for a "
-                        "callback. Then carry on helping them yourself."
-                    )
-                )
-            except Exception:
-                logger.exception("could not resume the call after a failed handoff")
+            _take_call_back(f"colleague {pending} never answered")
             return
 
     def _on_user_state_changed(ev) -> None:
