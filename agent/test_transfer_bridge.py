@@ -86,8 +86,16 @@ class BridgeFallback(unittest.TestCase):
         self.assertIn("stay quiet", reply)
 
     def test_a_working_refer_is_still_preferred(self):
+        # A REFER that genuinely moves the caller takes them out of the room,
+        # and nothing is dialled in. See AcceptedButNotDelivered for the case
+        # where the carrier accepts it and does nothing.
         api = fake_api(refer_fails=False)
-        reply, ctx = self._run(api)
+
+        async def gone(room, identity, seconds):
+            return False
+
+        with patch.object(tools, "_still_here", new=gone):
+            reply, ctx = self._run(api)
         api.sip.create_sip_participant.assert_not_awaited()
         self.assertNotIn("handed_off", ctx.userdata)
 
@@ -166,6 +174,8 @@ class CallerAsksForAPerson(unittest.TestCase):
         agent = main.RealEstateAgent.__new__(main.RealEstateAgent)
         session = MagicMock()
         session.userdata = userdata
+        session.say = AsyncMock()
+        agent._reply_language = "en-IN"
         with patch.object(type(agent), "session", property(lambda self: session)):
             handled = asyncio.run(agent._handoff_if_requested(said, userdata))
         return session, handled
@@ -181,7 +191,11 @@ class CallerAsksForAPerson(unittest.TestCase):
             session, stopped = self._turn("आप मुझे आपके एजेंट से कनेक्ट कीजिए।", self._userdata())
         tool.__wrapped__.assert_awaited_once()
         self.assertTrue(stopped, "the model must not also answer this turn")
-        session.generate_reply.assert_called_once()
+        # Spoken with session.say, not generate_reply: raising StopResponse
+        # cancels a queued reply, which is why call 1066 went silent on the
+        # caller the moment they asked to be put through.
+        session.say.assert_awaited_once()
+        self.assertIn("connect", session.say.await_args.args[0].lower())
 
     def test_ordinary_conversation_is_untouched(self):
         import main
@@ -214,3 +228,63 @@ class CallerAsksForAPerson(unittest.TestCase):
             session, stopped = self._turn("connect me to a human", data)
         self.assertFalse(stopped, "the model should still answer if the transfer blew up")
         self.assertNotIn("transfer_started", data)
+
+
+class AcceptedButNotDelivered(unittest.TestCase):
+    """EnableX accepts our REFER and then does not move the caller.
+
+    Calls 1037 and 1066 (2026-09-21/22): the REFER returned no error, the
+    agent believed the handoff was done, and the destination phone never
+    rang. The caller was left with an agent that had stopped trying. A real
+    transfer takes the caller OUT of the room, so their continued presence
+    is the proof it did not happen.
+    """
+
+    def setUp(self):
+        tools._TRANSFER_HOLD_LINE = None
+        tools._TRANSFER_CACHE = None
+
+    def _run(self, caller_leaves):
+        room = FakeRoom()
+        api = fake_api(refer_fails=False)
+
+        async def still_here(r, identity, seconds):
+            return not caller_leaves
+
+        ctx = FakeContext(transfer_phone="+917020950304", room=room)
+        with patch("livekit.api.LiveKitAPI", return_value=api), \
+             patch.object(tools, "_publish_event", new=AsyncMock()), \
+             patch.object(tools, "_is_demo", return_value=False), \
+             patch.object(tools, "_still_here", new=still_here):
+            reply = asyncio.run(transfer_call(ctx))
+        return reply, ctx, api
+
+    def test_a_caller_still_on_the_line_means_the_transfer_failed(self):
+        reply, ctx, api = self._run(caller_leaves=False)
+        api.sip.create_sip_participant.assert_awaited_once()
+        self.assertEqual(ctx.userdata["handoff_pending"], "human-917020950304")
+        self.assertIn("join this call", reply)
+
+    def test_a_caller_who_left_was_genuinely_transferred(self):
+        reply, ctx, api = self._run(caller_leaves=True)
+        api.sip.create_sip_participant.assert_not_awaited()
+        self.assertNotIn("handoff_pending", ctx.userdata)
+        self.assertIn("connecting them", reply)
+
+
+class StillHere(unittest.IsolatedAsyncioTestCase):
+    async def test_it_returns_false_as_soon_as_they_leave(self):
+        room = FakeRoom()
+        import asyncio as aio
+
+        async def drop():
+            await aio.sleep(0.6)
+            room.remote_participants.clear()
+
+        task = aio.create_task(drop())
+        self.assertFalse(await tools._still_here(room, "sip-918080197945", 5.0))
+        await task
+
+    async def test_it_returns_true_when_they_stay(self):
+        room = FakeRoom()
+        self.assertTrue(await tools._still_here(room, "sip-918080197945", 1.0))

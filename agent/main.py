@@ -155,6 +155,16 @@ LANGUAGE_SWITCH_CONFIRMATION_TURNS = 3
 # 2023-11-05. India-focused product, so IST rather than the room's UTC clock.
 _IST = timezone(timedelta(hours=5, minutes=30))
 
+# Spoken the moment a caller asks to be put through, before anything is
+# dialled. Short on purpose: the transfer takes a second or two, and the
+# caller has to know the silence is intentional — on call 1066 the line
+# simply went quiet on them.
+_TRANSFER_HOLD_LINE = {
+    "hi": "Bilkul, main abhi connect kar rahi hoon. Ek second line par rahiye.",
+    "en": "Of course, connecting you now. One moment please.",
+}
+
+
 # Fixed opening lines spoken verbatim (session.say(), no LLM round-trip) for
 # the Vistrow marketing site's live demo widget only — a first-time visitor
 # clicking "Talk to Artha live" was waiting 6-7s of dead air for
@@ -4136,6 +4146,19 @@ class RealEstateAgent(Agent):
 
         userdata["transfer_started"] = True
         logger.info("caller asked for a person — transferring: %r", (text or "")[:80])
+
+        # Say it BEFORE the transfer, and say it with session.say rather than
+        # generate_reply: raising StopResponse below cancels a queued reply,
+        # so on call 1066 the caller asked to be put through and the line
+        # simply went silent on them. A person being handed over has to hear
+        # that it is happening.
+        try:
+            await self.session.say(_TRANSFER_HOLD_LINE.get(
+                (self._reply_language or "").split("-")[0], _TRANSFER_HOLD_LINE["en"]
+            ))
+        except Exception:
+            logger.warning("could not announce the transfer", exc_info=True)
+
         try:
             outcome = await transfer_call.__wrapped__(SimpleNamespace(userdata=userdata))
         except Exception:
@@ -4144,7 +4167,7 @@ class RealEstateAgent(Agent):
             logger.exception("transfer failed after an explicit request")
             userdata.pop("transfer_started", None)
             return False
-        self.session.generate_reply(instructions=outcome)
+        logger.info("transfer outcome: %s", outcome[:80])
         return True
 
     async def on_user_turn_completed(

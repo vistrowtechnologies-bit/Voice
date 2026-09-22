@@ -2445,6 +2445,22 @@ async def _trunk_address(lkapi) -> str:
     return (await _outbound_trunk(lkapi))[1]
 
 
+# How long to wait before deciding a REFER did not actually move the caller.
+# Long enough for a carrier to act on it, short enough that a caller is not
+# left in silence wondering.
+_REFER_SETTLE_S = 6.0
+
+
+async def _still_here(room, identity: str, seconds: float) -> bool:
+    """Whether this participant is still in the room after `seconds`."""
+    deadline = asyncio.get_running_loop().time() + seconds
+    while asyncio.get_running_loop().time() < deadline:
+        await asyncio.sleep(0.5)
+        if identity not in (room.remote_participants or {}):
+            return False
+    return identity in (room.remote_participants or {})
+
+
 async def _bridge_in_human(lkapi, room, dest: str) -> bool:
     """Dial the colleague INTO this call instead of handing the call away.
 
@@ -2572,6 +2588,31 @@ async def transfer_call(context: RunContext) -> str:
                 raise last_error or RuntimeError("no transfer target")
         finally:
             await lkapi.aclose()
+        logger.info("REFER accepted for %s to %s", sip_identity, transfer_to)
+
+        # Accepted is not delivered. EnableX accepted this exact REFER on
+        # calls 1037 and 1066 (2026-09-21/22) and the destination phone never
+        # rang — the caller was left sitting with an agent that thought it
+        # had handed them over. A real transfer takes the caller out of this
+        # room, so if they are still here a few seconds later it did not
+        # happen, and the colleague is dialled in instead.
+        if await _still_here(room, sip_identity, _REFER_SETTLE_S):
+            logger.warning(
+                "REFER was accepted but %s is still on the call — bridging instead", sip_identity
+            )
+            if await _bridge_in_human(lkapi, room, dest):
+                digits = "".join(c for c in dest if c.isdigit())
+                userdata["handoff_pending"] = f"human-{digits}"
+                return (
+                    "Their colleague is being called now and will join this call in a moment. "
+                    "Tell the caller that in one short line, then stay quiet and let the two of "
+                    "them talk — do not ask anything else."
+                )
+            return (
+                "The transfer couldn't go through. Apologize briefly, offer to take their number "
+                "for a callback, and carry on helping them yourself."
+            )
+
         logger.info("transferred caller %s to %s", sip_identity, transfer_to)
         return (
             "Tell the caller you're connecting them to a team member now, one short line, then stop — "
