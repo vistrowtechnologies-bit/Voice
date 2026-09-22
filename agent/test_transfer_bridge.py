@@ -59,9 +59,12 @@ class BridgeFallback(unittest.TestCase):
         tools._TRUNK_ADDRESS_CACHE.clear()
 
     def _run(self, api, **userdata):
+        # These cover the REFER path, which is opt-in since EnableX confirmed
+        # they do not support it (see CarrierWithoutRefer).
         ctx = FakeContext(transfer_phone="+917020950304", room=FakeRoom(), **userdata)
         with patch("livekit.api.LiveKitAPI", return_value=api), \
              patch.object(tools, "_publish_event", new=AsyncMock()), \
+             patch.object(tools, "_PREFER_BRIDGE", False), \
              patch.object(tools, "_is_demo", return_value=False):
             return asyncio.run(transfer_call(ctx)), ctx
 
@@ -254,6 +257,7 @@ class AcceptedButNotDelivered(unittest.TestCase):
         ctx = FakeContext(transfer_phone="+917020950304", room=room)
         with patch("livekit.api.LiveKitAPI", return_value=api), \
              patch.object(tools, "_publish_event", new=AsyncMock()), \
+             patch.object(tools, "_PREFER_BRIDGE", False), \
              patch.object(tools, "_is_demo", return_value=False), \
              patch.object(tools, "_still_here", new=still_here):
             reply = asyncio.run(transfer_call(ctx))
@@ -288,3 +292,48 @@ class StillHere(unittest.IsolatedAsyncioTestCase):
     async def test_it_returns_true_when_they_stay(self):
         room = FakeRoom()
         self.assertTrue(await tools._still_here(room, "sip-918080197945", 1.0))
+
+
+class CarrierWithoutRefer(unittest.TestCase):
+    """EnableX, 2026-09-22: "we dont support this refer / as of now".
+
+    Before saying so they accepted two of our REFERs without error and
+    delivered neither (SCL_BL7QgPCe4Ajh, SCL_Tpxrsu9XXDkF). Trying it first
+    only spends the caller's patience in silence.
+    """
+
+    def _run(self, prefer_bridge):
+        api = fake_api(refer_fails=False)
+        ctx = FakeContext(transfer_phone="+917020950304", room=FakeRoom())
+        with patch("livekit.api.LiveKitAPI", return_value=api), \
+             patch.object(tools, "_publish_event", new=AsyncMock()), \
+             patch.object(tools, "_is_demo", return_value=False), \
+             patch.object(tools, "_PREFER_BRIDGE", prefer_bridge):
+            reply = asyncio.run(transfer_call(ctx))
+        return reply, ctx, api
+
+    def test_refer_is_not_even_attempted(self):
+        reply, ctx, api = self._run(prefer_bridge=True)
+        api.sip.transfer_sip_participant.assert_not_awaited()
+        api.sip.create_sip_participant.assert_awaited_once()
+        self.assertEqual(ctx.userdata["handoff_pending"], "human-917020950304")
+
+    def test_a_provider_that_supports_refer_still_gets_it(self):
+        async def gone(room, identity, seconds):
+            return False
+
+        with patch.object(tools, "_still_here", new=gone):
+            reply, ctx, api = self._run(prefer_bridge=False)
+        api.sip.transfer_sip_participant.assert_awaited_once()
+        api.sip.create_sip_participant.assert_not_awaited()
+
+    def test_a_failed_bridge_is_told_to_the_caller(self):
+        api = fake_api(refer_fails=False, bridge_fails=True)
+        ctx = FakeContext(transfer_phone="+917020950304", room=FakeRoom())
+        with patch("livekit.api.LiveKitAPI", return_value=api), \
+             patch.object(tools, "_publish_event", new=AsyncMock()), \
+             patch.object(tools, "_is_demo", return_value=False), \
+             patch.object(tools, "_PREFER_BRIDGE", True):
+            reply = asyncio.run(transfer_call(ctx))
+        self.assertIn("couldn't go through", reply)
+        self.assertNotIn("handoff_pending", ctx.userdata)

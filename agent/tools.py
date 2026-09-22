@@ -2445,6 +2445,17 @@ async def _trunk_address(lkapi) -> str:
     return (await _outbound_trunk(lkapi))[1]
 
 
+# Whether to skip SIP REFER entirely and dial the colleague into the call.
+#
+# EnableX told us plainly on 2026-09-22 that they do not support REFER, and
+# before that they accepted two of ours without error and delivered neither
+# (calls SCL_BL7QgPCe4Ajh and SCL_Tpxrsu9XXDkF). Trying it first only buys
+# the caller several seconds of silence. Set TRANSFER_PREFER_BRIDGE=0 on a
+# trunk whose provider does support REFER — it hands the call away entirely
+# and frees our channel, which bridging does not.
+_PREFER_BRIDGE = os.environ.get("TRANSFER_PREFER_BRIDGE", "1").strip() not in ("0", "false", "False")
+
+
 # How long to wait before deciding a REFER did not actually move the caller.
 # Long enough for a carrier to act on it, short enough that a caller is not
 # left in silence wondering.
@@ -2548,6 +2559,24 @@ async def transfer_call(context: RunContext) -> str:
 
         lkapi = api.LiveKitAPI()
         try:
+            if _PREFER_BRIDGE:
+                # EnableX confirmed on 2026-09-22: "we dont support this
+                # refer". Attempting it anyway costs the caller the REFER
+                # round trip plus the settle wait below, in dead air, before
+                # we start dialling the colleague they asked for.
+                logger.info("carrier does not support REFER — bridging the colleague in")
+                if await _bridge_in_human(lkapi, room, dest):
+                    digits = "".join(c for c in dest if c.isdigit())
+                    userdata["handoff_pending"] = f"human-{digits}"
+                    return (
+                        "Their colleague is being called now and will join this call in a moment. "
+                        "Tell the caller that in one short line, then stay quiet and let the two of "
+                        "them talk — do not ask anything else."
+                    )
+                return (
+                    "The transfer couldn't go through. Apologize briefly, offer to take their number "
+                    "for a callback, and carry on helping them yourself."
+                )
             candidates = await _transfer_uris(lkapi, dest)
             last_error: Exception | None = None
             for transfer_to in candidates:
