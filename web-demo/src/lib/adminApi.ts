@@ -362,7 +362,10 @@ export const CREDIT_RATES_REF: Record<string, number> = { browser: 1, phone: 1.5
 
 export const adminSupportTickets = (status = '') => aget<SupportTicket[]>(`/support/tickets${qs({ status })}`)
 export const adminSupportTicket = (id: number) => aget<SupportTicket>(`/support/tickets/${id}`)
-export const adminReplySupportTicket = (id: number, body: string) =>
-  apost<SupportTicket>(`/support/tickets/${id}/messages`, { body })
+export const adminReplySupportTicket = (
+  id: number,
+  body: string,
+  attachments: { filename: string; contentType: string; content: string }[] = [],
+) => apost<SupportTicket>(`/support/tickets/${id}/messages`, { body, attachments })
 export const adminUpdateSupportTicket = (id: number, change: { status?: string; priority?: string }) =>
   apatch<SupportTicket>(`/support/tickets/${id}`, change)

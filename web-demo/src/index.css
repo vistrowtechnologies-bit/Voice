@@ -215,6 +215,13 @@ a[class*="border-cyan"]:not([class*=" bg-"]):not([class^="bg-"]) * {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 
+/* A text field that sits inside a bordered composer box: the box shows focus
+   (focus-within), so the field itself must not draw a second ring inside it. */
+[data-dashboard-root] .vv-bare-field:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 /* Solid actions should feel raised on hover and physically respond on press.
    The shadow is token-built, so it remains subtle in both light and dark. */
 [data-dashboard-root] :is(button, a[href])[class*="bg-primary"]:not(:disabled):hover {

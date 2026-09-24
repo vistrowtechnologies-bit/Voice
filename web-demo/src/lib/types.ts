@@ -712,12 +712,24 @@ export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent'
 export type TicketCategory = 'general' | 'technical' | 'billing' | 'feature' | 'account'
 
+export interface SupportTicketFile {
+  id: string
+  filename: string
+  contentType: string
+  size: number
+  /** False when storage wasn't configured: the file went by email only. */
+  downloadable: boolean
+  /** Deleted from storage 14 days after the ticket was solved. */
+  purged?: boolean
+}
+
 export interface SupportTicketMessage {
   id: number
   authorType: 'customer' | 'support'
   authorName: string
   body: string
   createdAt: string
+  attachments: SupportTicketFile[]
 }
 
 export interface SupportTicket {
@@ -733,7 +745,7 @@ export interface SupportTicket {
   subject: string
   detail: string
   currentPage: string
-  attachments: { filename: string; contentType: string; size: number }[]
+  attachments: SupportTicketFile[]
   createdAt: string
   updatedAt: string
   resolvedAt: string | null

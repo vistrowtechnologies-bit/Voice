@@ -33,6 +33,8 @@ import llm_warmer
 import project_sync
 import razorpay_client
 import retention_worker
+import storage
+import support_files
 import notification_worker
 import widget_avatars
 import widget_chat
@@ -75,6 +77,8 @@ retention_worker.start_retention_worker()
 # Sends the emails behind Settings → Preferences → Notifications, which were
 # saved and never sent before 2026-09-24 (see notification_worker.py).
 notification_worker.start_notification_worker()
+# Deletes support-ticket attachments 14 days after a ticket is solved.
+support_files.start_support_file_purge()
 # Keeps OpenAI's prompt cache warm for agents actually taking calls right
 # now (see llm_warmer.py) — cuts a measured 2106ms->902ms cold-cache tax.
 llm_warmer.start_llm_warmer()
@@ -2630,27 +2634,8 @@ def get_call(call_id: int, user: dict = Depends(current_user)) -> dict:
     return call
 
 
-def _b2_client():
-    """Boto3 S3-compatible client for Backblaze B2, or None if the storage
-    env vars aren't configured — every caller checks for None and raises its
-    own 503, since the exact message differs (recording vs download)."""
-    endpoint_url = os.environ.get("B2_ENDPOINT_URL")
-    key_id = os.environ.get("B2_KEY_ID")
-    application_key = os.environ.get("B2_APPLICATION_KEY")
-    bucket = os.environ.get("B2_BUCKET_NAME")
-    region = os.environ.get("B2_REGION")
-    if not (endpoint_url and key_id and application_key and bucket and region):
-        return None, None
-    import boto3
-
-    client = boto3.client(
-        "s3",
-        endpoint_url=endpoint_url,
-        aws_access_key_id=key_id,
-        aws_secret_access_key=application_key,
-        region_name=region,
-    )
-    return client, bucket
+# Moved to storage.py so background jobs (support_files) can use it too.
+_b2_client = storage.b2_client
 
 
 @app.get("/calls/{call_id}/recording")
@@ -3333,6 +3318,78 @@ class HelpTicketAttachment(BaseModel):
     content: str
 
 
+# Screenshots are the point: a retina capture is 1-3 MB, which the old 600 KB
+# cap rejected. Zendesk allows 50 MB; 5 MB x 3 keeps a JSON request sane.
+_TICKET_FILE_MAX_BYTES = 5 * 1024 * 1024
+_TICKET_FILES_MAX = 3
+# Only these render inline. Anything else (HTML, SVG, PDFs, logs) is served
+# as a download: an uploaded HTML or SVG shown inline from our API origin
+# would run its script there.
+_INLINE_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+
+
+def _read_ticket_files(items: list[HelpTicketAttachment]) -> list[dict]:
+    if len(items) > _TICKET_FILES_MAX:
+        raise HTTPException(400, f"Attach at most {_TICKET_FILES_MAX} files")
+    files = []
+    for item in items:
+        filename = re.sub(r"[^A-Za-z0-9._ -]", "_", item.filename.strip())[:120] or "attachment"
+        try:
+            raw = base64.b64decode(item.content, validate=True)
+        except Exception as exc:
+            raise HTTPException(400, f"Could not read attachment: {filename}") from exc
+        if len(raw) > _TICKET_FILE_MAX_BYTES:
+            raise HTTPException(400, f"{filename} is larger than 5 MB")
+        content_type = re.sub(r"[^a-z0-9.+/-]", "", (item.contentType or "").lower())[:100] or "application/octet-stream"
+        files.append({"filename": filename, "contentType": content_type, "raw": raw, "b64": item.content})
+    return files
+
+
+def _store_ticket_files(account_id: int, ticket_id: int, files: list[dict]) -> list[dict]:
+    """Keep each file in private storage so it can be shown in the thread,
+    not only emailed. Without storage configured the files still go out by
+    email, as before, but are listed without a download."""
+    client, bucket = _b2_client()
+    stored = []
+    for f in files:
+        file_id = secrets.token_hex(8)
+        meta = {"id": file_id, "filename": f["filename"], "contentType": f["contentType"], "size": len(f["raw"])}
+        if client is not None and bucket is not None:
+            key = f"support/{account_id}/{ticket_id}/{file_id}-{f['filename']}"
+            try:
+                client.put_object(Bucket=bucket, Key=key, Body=f["raw"], ContentType=f["contentType"])
+                meta["key"] = key
+            except Exception:
+                logger.exception("support attachment upload failed (ticket %s)", ticket_id)
+        stored.append(meta)
+    return stored
+
+
+def _stream_ticket_file(ticket: dict, file_id: str) -> StreamingResponse:
+    meta = next((a for a in calls_db.ticket_file_index(ticket["id"]) if a.get("id") == file_id), None)
+    if not meta or not meta.get("key"):
+        raise HTTPException(404, "File not found")
+    client, bucket = _b2_client()
+    if client is None or bucket is None:
+        raise HTTPException(503, "File storage is not configured")
+    try:
+        obj = client.get_object(Bucket=bucket, Key=meta["key"])
+    except Exception:
+        logger.exception("support attachment read failed (ticket %s)", ticket["id"])
+        raise HTTPException(404, "File not found")
+    inline = meta.get("contentType") in _INLINE_IMAGE_TYPES
+    safe_name = meta["filename"].replace('"', "")
+    return StreamingResponse(
+        obj["Body"].iter_chunks(),
+        media_type=meta["contentType"] if inline else "application/octet-stream",
+        headers={
+            "Content-Disposition": f'{"inline" if inline else "attachment"}; filename="{safe_name}"',
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, max-age=300",
+        },
+    )
+
+
 class HelpTicketRequest(BaseModel):
     subject: str
     detail: str
@@ -3376,26 +3433,8 @@ def create_help_ticket(req: HelpTicketRequest, request: Request, user: dict = De
         priority = "normal"
     if not subject or not detail:
         raise HTTPException(400, "Add a subject and describe the issue")
-    if len(req.attachments) > 3:
-        raise HTTPException(400, "Attach at most 3 files")
-
-    email_attachments: list[dict] = []
-    attachment_metadata: list[dict] = []
-    for item in req.attachments:
-        filename = re.sub(r"[^A-Za-z0-9._ -]", "_", item.filename.strip())[:120] or "attachment"
-        try:
-            raw = base64.b64decode(item.content, validate=True)
-        except Exception as exc:
-            raise HTTPException(400, f"Could not read attachment: {filename}") from exc
-        if len(raw) > 600 * 1024:
-            raise HTTPException(400, f"{filename} is larger than 600 KB")
-        content_type = (item.contentType or "application/octet-stream")[:100]
-        email_attachments.append(
-            {"filename": filename, "contentType": content_type, "content": item.content}
-        )
-        attachment_metadata.append(
-            {"filename": filename, "contentType": content_type, "size": len(raw)}
-        )
+    files = _read_ticket_files(req.attachments)
+    email_attachments = [{"filename": f["filename"], "contentType": f["contentType"], "content": f["b64"]} for f in files]
 
     current_page = req.currentPage.strip()[:500]
     ticket_id = calls_db.create_support_ticket(
@@ -3408,9 +3447,11 @@ def create_help_ticket(req: HelpTicketRequest, request: Request, user: dict = De
         subject,
         detail,
         current_page,
-        attachment_metadata,
+        [],
         priority,
     )
+    if files:
+        calls_db.set_support_ticket_attachments(ticket_id, _store_ticket_files(user["account_id"], ticket_id, files))
     body = "".join(
         f"<p style='margin:5px 0'><strong>{html.escape(label)}:</strong> {html.escape(value)}</p>"
         for label, value in [
@@ -3515,7 +3556,8 @@ def _email_ticket_reply(request: Request, ticket: dict, body: str, author: str, 
 
 
 class TicketMessageRequest(BaseModel):
-    body: str
+    body: str = ""
+    attachments: list[HelpTicketAttachment] = PydanticField(default_factory=list)
 
 
 class TicketUpdateRequest(BaseModel):
@@ -3543,16 +3585,36 @@ def reply_help_ticket(
     ticket_id: int, req: TicketMessageRequest, request: Request, user: dict = Depends(current_user)
 ) -> dict:
     body = req.body.strip()[:5_000]
-    if not body:
-        raise HTTPException(400, "Write a message first")
+    files = _read_ticket_files(req.attachments)
+    if not body and not files:
+        raise HTTPException(400, "Write a message or attach a file")
     user = _ticket_author(user)
+    if calls_db.get_support_ticket(ticket_id, user["account_id"]) is None:
+        raise HTTPException(404, "Ticket not found")
     ticket = calls_db.add_support_ticket_message(
-        ticket_id, "customer", body, user.get("user_id"), user.get("name", ""), account_id=user["account_id"]
+        ticket_id, "customer", body, user.get("user_id"), user.get("name", ""), account_id=user["account_id"],
+        attachments=_store_ticket_files(user["account_id"], ticket_id, files),
     )
     if ticket is None:
         raise HTTPException(404, "Ticket not found")
     _email_ticket_reply(request, ticket, body, user.get("name") or user.get("email", ""), to_support=True)
     return ticket
+
+
+@app.get("/help/tickets/{ticket_id}/files/{file_id}")
+def get_help_ticket_file(ticket_id: int, file_id: str, user: dict = Depends(current_user)) -> StreamingResponse:
+    ticket = calls_db.get_support_ticket(ticket_id, user["account_id"])
+    if ticket is None:
+        raise HTTPException(404, "Ticket not found")
+    return _stream_ticket_file(ticket, file_id)
+
+
+@app.get("/admin/support/tickets/{ticket_id}/files/{file_id}")
+def admin_get_ticket_file(ticket_id: int, file_id: str, admin: dict = Depends(require_platform_owner)) -> StreamingResponse:
+    ticket = calls_db.get_support_ticket(ticket_id)
+    if ticket is None:
+        raise HTTPException(404, "Ticket not found")
+    return _stream_ticket_file(ticket, file_id)
 
 
 @app.patch("/help/tickets/{ticket_id}")
@@ -3585,9 +3647,16 @@ def admin_reply_ticket(
     ticket_id: int, req: TicketMessageRequest, request: Request, admin: dict = Depends(require_platform_owner)
 ) -> dict:
     body = req.body.strip()[:5_000]
-    if not body:
-        raise HTTPException(400, "Write a reply first")
-    ticket = calls_db.add_support_ticket_message(ticket_id, "support", body, admin.get("user_id"), "Vistrow Voice Support")
+    files = _read_ticket_files(req.attachments)
+    if not body and not files:
+        raise HTTPException(400, "Write a reply or attach a file")
+    existing = calls_db.get_support_ticket(ticket_id)
+    if existing is None:
+        raise HTTPException(404, "Ticket not found")
+    ticket = calls_db.add_support_ticket_message(
+        ticket_id, "support", body, admin.get("user_id"), "Vistrow Voice Support",
+        attachments=_store_ticket_files(existing["accountId"], ticket_id, files),
+    )
     if ticket is None:
         raise HTTPException(404, "Ticket not found")
     admin_db.write_audit(admin["user_id"], admin["email"], "support_reply", ticket["accountId"], detail=f"VV-{ticket_id}")

@@ -109,5 +109,30 @@ class Updates(unittest.TestCase):
         self.assertEqual(conn.execute.call_args.args[1][-1], "normal")
 
 
+class Attachments(unittest.TestCase):
+    def test_storage_keys_never_reach_the_browser(self):
+        files = calls_db._public_files('[{"id":"a1","filename":"shot.png","contentType":"image/png","size":10,"key":"support/2/9/a1-shot.png"}]')
+        self.assertEqual(files, [{"id": "a1", "filename": "shot.png", "contentType": "image/png", "size": 10, "downloadable": True, "purged": False}])
+        self.assertNotIn("key", files[0])
+
+    def test_unstored_file_is_listed_but_not_downloadable(self):
+        self.assertFalse(calls_db._public_files('[{"id":"a1","filename":"x.log"}]')[0]["downloadable"])
+        self.assertEqual(calls_db._public_files("not json"), [])
+
+    def test_file_index_covers_the_opening_message_and_every_reply(self):
+        conn = _conn(fetchone={"attachments_json": '[{"id":"t1","key":"k1"}]'},
+                     fetchall=[{"attachments_json": '[{"id":"m1","key":"k2"}]'}, {"attachments_json": "[]"}])
+        with patch.object(calls_db, "_connect", return_value=conn):
+            self.assertEqual([f["id"] for f in calls_db.ticket_file_index(9)], ["t1", "m1"])
+
+    def test_reply_stores_its_files(self):
+        conn = _conn(fetchone={"id": 41, "account_id": 2, "status": "open"})
+        with patch.object(calls_db, "_connect", return_value=conn), \
+             patch.object(calls_db, "get_support_ticket", return_value={"id": 41}):
+            calls_db.add_support_ticket_message(41, "customer", "", account_id=2, attachments=[{"id": "m1", "key": "k"}])
+        insert = next(c for c in conn.execute.call_args_list if "INSERT INTO support_ticket_messages" in c.args[0])
+        self.assertIn('"m1"', insert.args[1][-1])
+
+
 if __name__ == "__main__":
     unittest.main()

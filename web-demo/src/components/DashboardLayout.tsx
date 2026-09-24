@@ -184,7 +184,7 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
         )}
       </div>
       <nav className="flex min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {NAV_GROUPS.map((group) => (
+        {NAV_GROUPS.filter((group) => !group.pinned).map((group) => (
           <div key={group.title}>
             <div className="mb-1 flex h-6 items-center px-3">
               <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{group.title}</span>
@@ -213,6 +213,29 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           </div>
         ))}
       </nav>
+      {/* Help sits outside the scrolling list (like Claude's and Linear's
+          sidebars), so it is always visible however short the window is.
+          The menu scrolls with a hidden scrollbar, and it used to be the one
+          item that fell below the fold with nothing hinting it was there. */}
+      <div className="mb-2 flex flex-col gap-0.5 border-t border-border pt-2">
+        {NAV_GROUPS.filter((group) => group.pinned).flatMap((group) => group.items).map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              `flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                isActive
+                  ? 'bg-surface-high font-medium text-text shadow-[inset_3px_0_0_var(--color-primary)]'
+                  : 'text-text-muted hover:bg-surface-high hover:text-text'
+              }`
+            }
+          >
+            <Icon name={item.icon} className="shrink-0 text-[19px]" />
+            <span className="min-w-0 truncate">{item.label}</span>
+          </NavLink>
+        ))}
+      </div>
       {user?.isPlatformOwner && !user?.impersonating && (
         <NavLink
           to="/admin"

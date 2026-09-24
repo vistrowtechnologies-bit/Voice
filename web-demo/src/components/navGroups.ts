@@ -14,6 +14,9 @@ export interface NavItem {
 export interface NavGroup {
   title: string
   items: NavItem[]
+  /** Rendered pinned at the bottom of the sidebar instead of in the
+   * scrolling list; still searchable from the command palette. */
+  pinned?: boolean
 }
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -55,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'Help',
+    pinned: true,
     items: [{ to: '/dashboard/support', label: 'Help & Support', icon: 'support_agent' }],
   },
 ]

@@ -498,8 +498,9 @@ export const submitHelpTicket = (ticket: {
 export const fetchSupportTickets = (status = '') =>
   get<SupportTicket[]>(`/help/tickets${status ? `?status=${encodeURIComponent(status)}` : ''}`)
 export const fetchSupportTicket = (id: number) => get<SupportTicket>(`/help/tickets/${id}`)
-export const replySupportTicket = (id: number, body: string) =>
-  send<SupportTicket>('POST', `/help/tickets/${id}/messages`, { body })
+export type TicketUpload = { filename: string; contentType: string; content: string }
+export const replySupportTicket = (id: number, body: string, attachments: TicketUpload[] = []) =>
+  send<SupportTicket>('POST', `/help/tickets/${id}/messages`, { body, attachments })
 export const setSupportTicketStatus = (id: number, status: 'resolved' | 'open') =>
   send<SupportTicket>('PATCH', `/help/tickets/${id}`, { status })
 

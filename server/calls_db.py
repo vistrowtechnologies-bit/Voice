@@ -1559,6 +1559,7 @@ def init_tables() -> None:
                 ("resolved_at", "TEXT"),
             ):
                 conn.execute(f"ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS {column} {coltype}")
+            conn.execute("ALTER TABLE support_ticket_messages ADD COLUMN IF NOT EXISTS attachments_json TEXT DEFAULT '[]'")
             _migrate_phones_to_e164(conn)
     finally:
         conn.close()
@@ -6201,6 +6202,20 @@ def create_support_ticket(
         conn.close()
 
 
+def _public_files(raw_json) -> list[dict]:
+    """Attachment metadata as the browser sees it: the storage key stays on
+    the server; `downloadable` says whether a copy was stored."""
+    try:
+        files = json.loads(raw_json or "[]")
+    except ValueError:
+        return []
+    return [
+        {"id": f.get("id", ""), "filename": f.get("filename", ""), "contentType": f.get("contentType", ""),
+         "size": f.get("size", 0), "downloadable": bool(f.get("key")), "purged": bool(f.get("purged"))}
+        for f in files
+    ]
+
+
 def _ticket_row(row) -> dict:
     return {
         "id": row["id"],
@@ -6213,7 +6228,7 @@ def _ticket_row(row) -> dict:
         "subject": row["subject"],
         "detail": row["detail"],
         "currentPage": row["current_page"] or "",
-        "attachments": json.loads(row["attachments_json"] or "[]"),
+        "attachments": _public_files(row["attachments_json"]),
         "createdAt": row["created_at"],
         "updatedAt": _row_get(row, "updated_at") or row["created_at"],
         "resolvedAt": _row_get(row, "resolved_at"),
@@ -6272,6 +6287,7 @@ def get_support_ticket(ticket_id: int, account_id: int | None = None) -> dict | 
                 "authorName": m["author_name"] or "",
                 "body": m["body"],
                 "createdAt": m["created_at"],
+                "attachments": _public_files(_row_get(m, "attachments_json")),
             }
             for m in conn.execute(
                 "SELECT * FROM support_ticket_messages WHERE ticket_id = ? ORDER BY id", (ticket_id,)
@@ -6289,6 +6305,7 @@ def add_support_ticket_message(
     author_user_id: int | None = None,
     author_name: str = "",
     account_id: int | None = None,
+    attachments: list[dict] | None = None,
 ) -> dict | None:
     """Append a reply and move the ticket along: a customer reply reopens a
     resolved/closed ticket; a support reply on an open ticket marks it in
@@ -6307,9 +6324,10 @@ def add_support_ticket_message(
                 return None
             conn.execute(
                 "INSERT INTO support_ticket_messages "
-                "(ticket_id, account_id, author_type, author_user_id, author_name, body) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (ticket_id, row["account_id"], author_type, author_user_id, author_name, body),
+                "(ticket_id, account_id, author_type, author_user_id, author_name, body, attachments_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (ticket_id, row["account_id"], author_type, author_user_id, author_name, body,
+                 json.dumps(attachments or [])),
             )
             status = row["status"] or "open"
             if author_type == "customer" and status in ("resolved", "closed"):
@@ -6325,6 +6343,32 @@ def add_support_ticket_message(
     finally:
         conn.close()
     return get_support_ticket(ticket_id)
+
+
+def set_support_ticket_attachments(ticket_id: int, files: list[dict]) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("UPDATE support_tickets SET attachments_json = ? WHERE id = ?", (json.dumps(files), ticket_id))
+    finally:
+        conn.close()
+
+
+def ticket_file_index(ticket_id: int) -> list[dict]:
+    """Every file on a ticket — the opening message's and every reply's —
+    WITH storage keys, for the download route only. Callers must already have
+    checked the ticket belongs to the requester."""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT attachments_json FROM support_tickets WHERE id = ?", (ticket_id,)).fetchone()
+        files = json.loads((row["attachments_json"] if row else None) or "[]")
+        for m in conn.execute(
+            "SELECT attachments_json FROM support_ticket_messages WHERE ticket_id = ?", (ticket_id,)
+        ).fetchall():
+            files += json.loads(m["attachments_json"] or "[]")
+        return files
+    finally:
+        conn.close()
 
 
 def update_support_ticket(

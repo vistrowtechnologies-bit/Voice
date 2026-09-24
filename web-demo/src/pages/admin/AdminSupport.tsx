@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AdminCard, EmptyState, PageHeader } from '../../components/AdminUI'
 import { PriorityChip, StatusChip, TicketThread } from '../../components/SupportTicketParts'
-import { CATEGORY_LABELS, ticketTime } from '../../lib/support'
+import { CATEGORY_LABELS, ticketTime, toUploads } from '../../lib/support'
 import {
   adminReplySupportTicket,
   adminSupportTicket,
@@ -147,7 +147,7 @@ export function AdminSupport() {
                 ticket={selected}
                 viewer="support"
                 replyPlaceholder="Reply to the customer — they get it by email and in their dashboard…"
-                onReply={async (body) => applyUpdate(await adminReplySupportTicket(selected.id, body))}
+                onReply={async (body, files) => applyUpdate(await adminReplySupportTicket(selected.id, body, await toUploads(files)))}
               />
             </div>
           ) : (
