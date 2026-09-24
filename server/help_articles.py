@@ -509,10 +509,21 @@ def get_article(slug: str) -> dict | None:
     return next((a for a in all_articles() if a["slug"] == slug), None)
 
 
+# Words that appear in most questions and most titles ("How do I…") and so
+# ranked unrelated articles above the right one.
+_STOP_WORDS = {
+    "how", "the", "and", "for", "can", "what", "why", "does", "with", "you", "your", "are",
+    "our", "get", "use", "set", "from", "into", "this", "that", "any", "all", "want",
+}
+
+
 def search(query: str, limit: int = 5) -> list[dict]:
     """Plain keyword ranking: title hits weigh most, then summary, then body.
     Good enough for ~40 articles, and the bot and the page rank identically."""
-    words = [w for w in "".join(c.lower() if c.isalnum() else " " for c in query).split() if len(w) > 2]
+    words = [
+        w for w in "".join(c.lower() if c.isalnum() else " " for c in query).split()
+        if len(w) > 2 and w not in _STOP_WORDS
+    ]
     if not words:
         return []
     scored = []

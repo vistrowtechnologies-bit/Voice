@@ -581,7 +581,13 @@ export function Support() {
   useEffect(() => {
     fetchHelpTopics().then((d) => setTopics(d.topics)).catch(() => setTopics([]))
   }, [])
-  useEffect(() => window.scrollTo({ top: 0 }), [selectedId, article, view, composing])
+  useEffect(() => {
+    // Braces matter: current Chrome's window.scrollTo() returns a Promise,
+    // and an arrow that returned it handed React a non-function "cleanup" —
+    // the whole page went blank on the next navigation (TypeError: l is not
+    // a function), found opening an article on 2026-09-24.
+    window.scrollTo({ top: 0 })
+  }, [selectedId, article, view, composing])
 
   let body
   if (composing) {
