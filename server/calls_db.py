@@ -6334,11 +6334,16 @@ def add_support_ticket_message(
                 status = "open"
             elif author_type == "support" and status == "open":
                 status = "in_progress"
+            # resolved_at is also the clock for deleting stored files 14 days
+            # after solving (support_files.py). Reopening clears it; a file
+            # added to a ticket that stays solved restarts it, so that file
+            # still gets its full 14 days instead of going the next day.
             conn.execute(
                 f"UPDATE support_tickets SET status = ?, updated_at = {_NOW}, "
-                "resolved_at = CASE WHEN ? IN ('resolved', 'closed') THEN resolved_at ELSE NULL END "
+                "resolved_at = CASE WHEN ? NOT IN ('resolved', 'closed') THEN NULL "
+                f"WHEN ? THEN {_NOW} ELSE resolved_at END "
                 "WHERE id = ?",
-                (status, status, ticket_id),
+                (status, status, bool(attachments), ticket_id),
             )
     finally:
         conn.close()
@@ -6380,7 +6385,9 @@ def update_support_ticket(
             raise ValueError(f"Unknown status {status!r}")
         sets.append("status = ?")
         params.append(status)
-        sets.append(f"resolved_at = CASE WHEN ? IN ('resolved', 'closed') THEN {_NOW} ELSE NULL END")
+        # Resolved -> Closed keeps the first solve time, so files are deleted
+        # 14 days after the ticket was first solved, not re-extended.
+        sets.append(f"resolved_at = CASE WHEN ? IN ('resolved', 'closed') THEN COALESCE(resolved_at, {_NOW}) ELSE NULL END")
         params.append(status)
     if priority is not None:
         if priority not in SUPPORT_PRIORITIES:

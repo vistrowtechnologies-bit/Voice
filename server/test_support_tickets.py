@@ -72,6 +72,22 @@ class StatusFollowsTheConversation(unittest.TestCase):
     def test_support_reply_does_not_reopen_a_resolved_ticket(self):
         self.assertEqual(self._reply("support", "resolved"), "resolved")
 
+    def _update_params(self, author, current_status, attachments):
+        conn = _conn(fetchone={"id": 41, "account_id": 2, "status": current_status})
+        with patch.object(calls_db, "_connect", return_value=conn), \
+             patch.object(calls_db, "get_support_ticket", return_value={"id": 41}):
+            calls_db.add_support_ticket_message(41, author, "x", attachments=attachments)
+        return next(c for c in conn.execute.call_args_list if c.args[0].startswith("UPDATE support_tickets")).args
+
+    def test_a_file_added_to_a_solved_ticket_restarts_the_file_clock(self):
+        sql, params = self._update_params("support", "resolved", [{"id": "f", "key": "k"}])
+        self.assertIn("WHEN ? THEN", sql)
+        self.assertEqual(params, ("resolved", "resolved", True, 41))
+
+    def test_a_plain_reply_on_a_solved_ticket_keeps_the_clock(self):
+        _, params = self._update_params("support", "resolved", None)
+        self.assertEqual(params, ("resolved", "resolved", False, 41))
+
     def test_only_known_authors(self):
         with self.assertRaises(ValueError):
             calls_db.add_support_ticket_message(41, "robot", "x")
@@ -83,6 +99,12 @@ class Updates(unittest.TestCase):
             calls_db.update_support_ticket(41, status="deleted")
         with self.assertRaises(ValueError):
             calls_db.update_support_ticket(41, priority="p0")
+
+    def test_closing_a_solved_ticket_keeps_its_first_solve_time(self):
+        conn = _conn(rowcount=1)
+        with patch.object(calls_db, "_connect", return_value=conn), patch.object(calls_db, "get_support_ticket", return_value={}):
+            calls_db.update_support_ticket(41, status="closed")
+        self.assertIn("COALESCE(resolved_at,", conn.execute.call_args_list[0].args[0])
 
     def test_customer_update_is_scoped_and_misses_other_workspaces(self):
         conn = _conn(rowcount=0)

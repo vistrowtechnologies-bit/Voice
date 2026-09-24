@@ -10,11 +10,11 @@ export function useAttachments() {
     if (!incoming.length) return
     const tooBig = incoming.filter((f) => f.size > MAX_ATTACHMENT_BYTES)
     const ok = incoming.filter((f) => f.size <= MAX_ATTACHMENT_BYTES)
-    setFiles((prev) => {
-      if (prev.length + ok.length > MAX_ATTACHMENTS) setError(`Up to ${MAX_ATTACHMENTS} files per message.`)
-      else setError(tooBig.length ? `${tooBig.map((f) => f.name || 'Pasted image').join(', ')}: over 5 MB.` : '')
-      return [...prev, ...ok].slice(0, MAX_ATTACHMENTS)
-    })
+    // Plain computation from the current list — no side effects inside a
+    // state updater, which React may run twice.
+    if (files.length + ok.length > MAX_ATTACHMENTS) setError(`Up to ${MAX_ATTACHMENTS} files per message.`)
+    else setError(tooBig.length ? `${tooBig.map((f) => f.name || 'Pasted image').join(', ')}: over 5 MB.` : '')
+    setFiles([...files, ...ok].slice(0, MAX_ATTACHMENTS))
   }
   const remove = (i: number) => setFiles((prev) => prev.filter((_, idx) => idx !== i))
   const clear = () => {
