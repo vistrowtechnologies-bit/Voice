@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 
 import calls_db
 from help_content import HELP_DOC
+import help_articles
 from help_tools import TOOL_FUNCTIONS, TOOL_SCHEMAS
 
 logger = logging.getLogger("help-chat")
@@ -44,7 +45,9 @@ whenever the question needs an actual number or a live fact instead of general p
 Never guess or estimate a number that a tool could answer.
 
 Return exactly one JSON object with no text outside it:
-{{"reply":"plain-text answer","suggestTicket":false,"comingSoon":false}}
+{{"reply":"plain-text answer","suggestTicket":false,"comingSoon":false,"articleSlug":""}}
+- For any how-to question, call search_help_articles first and answer from the best article; put
+  that article's slug in articleSlug so the user can open the full guide. Leave it "" otherwise.
 - suggestTicket is true only for a likely product bug, persistent technical failure, billing/account
   issue, or something the documented troubleshooting cannot resolve. It must stay false for normal
   how-to questions.
@@ -131,10 +134,15 @@ def _structured_reply(choice_message: dict) -> dict:
         # Defensive compatibility if an upstream model ignores JSON mode.
         return {"reply": content, "suggestTicket": False, "comingSoon": False}
     reply = str(parsed.get("reply") or parsed.get("answer") or "").strip()
+    slug = str(parsed.get("articleSlug") or "").strip()
+    article = help_articles.get_article(slug) if slug else None
     return {
         "reply": reply,
         "suggestTicket": bool(parsed.get("suggestTicket", False)),
         "comingSoon": bool(parsed.get("comingSoon", False)),
+        # Only a slug that really exists reaches the UI — never a link the
+        # model made up.
+        "article": {"slug": article["slug"], "title": article["title"]} if article else None,
     }
 
 

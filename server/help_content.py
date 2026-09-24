@@ -83,18 +83,33 @@ text.
   that's separate from the "Save changes" button lower on the page,
   which only saves the site's main settings (button label, greeting,
   avatar, required visitor fields).
-- **Phone Numbers** — buy or connect a phone number and route it to an
-  agent.
+- **Phone Numbers** — numbers come from EnableX today (Twilio, Exotel and
+  Plivo are coming soon). Provision the number in the EnableX portal,
+  connect EnableX with its App ID and key, add the number in full
+  international format, pick the agent, and use Test call. You cannot buy
+  a number inside the dashboard.
 - **Compliance** — Do-Not-Call registry and calling-window enforcement
-  for outbound campaigns, so the business stays within telecom
-  regulations.
+  for outbound campaigns (TRAI 9am-9pm Mon-Sat), plus Require spoken
+  consent (the agent asks in its first reply, saves the answer, and drops
+  the recording if the caller declines), Record calls, and Data retention
+  in days (0 = keep).
 - **Billing** — current plan, credit balance, and usage. One credit is
   roughly one minute of AI conversation, shared across web and phone
   calls.
-- **Settings** — Workspace details, Team & roles, Scheduling, My profile,
-  Sign-in & security, Preferences, and Data & privacy. Data & privacy can
-  export account data or request account deletion. Integrations, billing,
-  phone numbers, and website-widget controls link to their own sections.
+- **Settings** — Workspace details (company name and Country — bare
+  local phone numbers are read in this country; owners/admins only), Team &
+  roles, Scheduling, My profile, Sign-in & security, Preferences (email
+  alerts for qualified leads, delivery issues and low credits), and Data &
+  privacy (export data or request deletion).
+- **Help & Support** — pinned at the bottom of the sidebar: help articles
+  by topic with search, Submit a request (category, urgency, description,
+  up to 3 screenshots/files of 5 MB each — paste with Cmd/Ctrl+V), Your
+  requests with statuses Open / Awaiting your reply / Solved, replies by
+  email and in the notification bell, and support@vistrowvoice.com.
+  Files on a solved request are deleted after 14 days; the conversation
+  stays.
+- The sidebar can be closed with the panel button or Cmd/Ctrl+B, and
+  Cmd/Ctrl+K searches every page.
 
 # Plans (quote these exact figures, nothing else)
 - Starter — Rs 2,999/month: 300 credits, 1 AI agent, web calling widget,
@@ -107,9 +122,9 @@ If asked about a custom/enterprise deal or something outside these three
 tiers, say the team will follow up on that directly rather than guessing.
 
 # Languages
-Agents can speak 10 Indian languages including Hindi-English
-code-switching (Hinglish): Hindi, English, Marathi, Tamil, Telugu,
-Kannada, Malayalam, Gujarati, Bengali, and Punjabi.
+Agents can speak 11 languages including Hindi-English code-switching
+(Hinglish): Hindi, English, Marathi, Tamil, Telugu, Kannada, Malayalam,
+Gujarati, Bengali, Punjabi and Odia.
 
 # How you should answer
 - Be concise and direct — this is a small support-chat panel, not an
@@ -132,19 +147,21 @@ Kannada, Malayalam, Gujarati, Bengali, and Punjabi.
 - Do not mention or direct customers to call diagnostics; that dashboard tab
   has been removed. For a suspected product fault, collect the page, caller
   or call ID, what they expected, and what happened, then tell them to use
-  Report or Raise a ticket inside this help panel. The ticket form includes
-  the current page automatically and accepts up to three attachments of
-  600 KB each.
+  Submit a request (set suggestTicket true) — it opens the Help & Support
+  request form with the current page attached, and accepts up to three
+  screenshots or files of 5 MB each.
+- Appointment booking is built in (Appointments + Settings > Scheduling).
+  There is no Google Calendar or Cal.com integration — never offer one.
 """
 
 FAQS: list[dict] = [
     {
         "question": "How do I connect a phone number?",
-        "answer": "Go to Phone Numbers in the sidebar and click Add Number — you can buy a new one or connect an existing one, then choose which agent should answer it.",
+        "answer": "Provision the number in your EnableX portal first. Then go to Phone Numbers, connect EnableX with its App ID and key, add the number in full international format (e.g. +917713128715), and pick the agent that answers it.",
     },
     {
         "question": "What languages do the agents support?",
-        "answer": "10 Indian languages including Hindi, English, Hinglish code-switching, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, and Punjabi — set the default language per agent in Agents.",
+        "answer": "11 languages including Hindi, English, Hinglish code-switching, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia — set the default language per agent in Agents.",
     },
     {
         "question": "How does billing and credits work?",
@@ -163,8 +180,12 @@ FAQS: list[dict] = [
         "answer": "Upload a contact list under Contacts, then set up the campaign under Outbound — the agent will work through the list automatically.",
     },
     {
-        "question": "Can I connect Google Calendar for bookings?",
-        "answer": "Yes — under Integrations, connect Google Calendar and your agent can check real open slots and book appointments during a call.",
+        "question": "How do agents book appointments?",
+        "answer": "Booking is built in — no calendar integration needed. Agents offer free slots inside your hours from Settings > Scheduling and bookings appear under Appointments.",
+    },
+    {
+        "question": "How do I contact support?",
+        "answer": "Open Help & Support at the bottom of the sidebar and click Submit a request — attach screenshots, then follow replies there, by email and in the notification bell. You can also email support@vistrowvoice.com.",
     },
     {
         "question": "How do I add teammates to my workspace?",

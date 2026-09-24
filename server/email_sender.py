@@ -147,6 +147,7 @@ def send_email(
     html: str,
     from_address: str = _DEFAULT_FROM,
     attachments: list[dict] | None = None,
+    reply_to: str | None = None,
 ) -> bool:
     """Best-effort send. Returns True only on a confirmed handoff to a provider.
 
@@ -155,7 +156,7 @@ def send_email(
     invites@. Still overridden globally by EMAIL_FROM if that's set."""
     resend_key = os.environ.get("RESEND_API_KEY")
     if resend_key:
-        return _send_resend(resend_key, to, subject, html, from_address, attachments)
+        return _send_resend(resend_key, to, subject, html, from_address, attachments, reply_to)
     if os.environ.get("SMTP_HOST"):
         return _send_smtp(to, subject, html, from_address, attachments)
     logger.warning(
@@ -173,8 +174,13 @@ def _send_resend(
     html: str,
     from_address: str = _DEFAULT_FROM,
     attachments: list[dict] | None = None,
+    reply_to: str | None = None,
 ) -> bool:
     body = {"from": _from_address(from_address), "to": [to], "subject": subject, "html": html}
+    if reply_to:
+        # Support-ticket emails set a per-ticket address here so a reply from
+        # Gmail lands back in the ticket (see support_inbound.py).
+        body["reply_to"] = reply_to
     if attachments:
         body["attachments"] = [
             {"filename": item["filename"], "content": item["content"]}

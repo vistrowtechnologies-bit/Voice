@@ -59,7 +59,7 @@ class StatusFollowsTheConversation(unittest.TestCase):
         with patch.object(calls_db, "_connect", return_value=conn), \
              patch.object(calls_db, "get_support_ticket", return_value={"id": 41}):
             calls_db.add_support_ticket_message(41, author, "a reply", account_id=2 if author == "customer" else None)
-        update = next(c for c in conn.execute.call_args_list if c.args[0].startswith("UPDATE support_tickets"))
+        update = next(c for c in conn.execute.call_args_list if c.args[0].startswith("UPDATE support_tickets SET status"))
         return update.args[1][0]
 
     def test_customer_reply_reopens_a_resolved_ticket(self):
@@ -77,7 +77,7 @@ class StatusFollowsTheConversation(unittest.TestCase):
         with patch.object(calls_db, "_connect", return_value=conn), \
              patch.object(calls_db, "get_support_ticket", return_value={"id": 41}):
             calls_db.add_support_ticket_message(41, author, "x", attachments=attachments)
-        return next(c for c in conn.execute.call_args_list if c.args[0].startswith("UPDATE support_tickets")).args
+        return next(c for c in conn.execute.call_args_list if c.args[0].startswith("UPDATE support_tickets SET status")).args
 
     def test_a_file_added_to_a_solved_ticket_restarts_the_file_clock(self):
         sql, params = self._update_params("support", "resolved", [{"id": "f", "key": "k"}])
@@ -153,7 +153,73 @@ class Attachments(unittest.TestCase):
              patch.object(calls_db, "get_support_ticket", return_value={"id": 41}):
             calls_db.add_support_ticket_message(41, "customer", "", account_id=2, attachments=[{"id": "m1", "key": "k"}])
         insert = next(c for c in conn.execute.call_args_list if "INSERT INTO support_ticket_messages" in c.args[0])
-        self.assertIn('"m1"', insert.args[1][-1])
+        self.assertIn('"m1"', insert.args[1][-2])  # attachments_json; source_ref is last
+
+
+class InternalNotes(unittest.TestCase):
+    """A note is the support team's private scratchpad."""
+
+    def test_customer_reads_leave_notes_out_by_default(self):
+        conn = _conn(fetchone={"id": 2, "account_id": 2, "user_email": "", "category": "general", "status": "open",
+                               "subject": "s", "detail": "d", "current_page": "", "attachments_json": "[]", "created_at": "x"})
+        with patch.object(calls_db, "_connect", return_value=conn):
+            calls_db.get_support_ticket(2, account_id=2)
+        messages_sql = conn.execute.call_args_list[1].args[0]
+        self.assertIn("author_type <> 'note'", messages_sql)
+
+    def test_admin_can_ask_for_notes(self):
+        conn = _conn(fetchone={"id": 2, "account_id": 2, "user_email": "", "category": "general", "status": "open",
+                               "subject": "s", "detail": "d", "current_page": "", "attachments_json": "[]", "created_at": "x"})
+        with patch.object(calls_db, "_connect", return_value=conn):
+            calls_db.get_support_ticket(2, include_notes=True)
+        self.assertNotIn("'note'", conn.execute.call_args_list[1].args[0])
+
+    def test_notes_never_count_as_the_last_reply_or_a_message(self):
+        self.assertEqual(calls_db._TICKET_SELECT.count("author_type <> 'note'"), 2)
+
+    def test_a_note_changes_nothing_on_the_ticket(self):
+        conn = _conn(fetchone={"id": 41, "account_id": 2, "status": "resolved"})
+        with patch.object(calls_db, "_connect", return_value=conn), \
+             patch.object(calls_db, "get_support_ticket", return_value={"id": 41}) as fetch:
+            calls_db.add_support_ticket_message(41, "note", "customer is on the Growth plan")
+        self.assertFalse(any(c.args[0].startswith("UPDATE support_tickets") for c in conn.execute.call_args_list))
+        self.assertTrue(fetch.call_args.kwargs["include_notes"])
+
+    def test_note_files_are_not_downloadable_by_the_customer(self):
+        conn = _conn(fetchone={"attachments_json": "[]"}, fetchall=[])
+        with patch.object(calls_db, "_connect", return_value=conn):
+            calls_db.ticket_file_index(9)
+        self.assertIn("author_type <> 'note'", conn.execute.call_args_list[1].args[0])
+
+    def test_a_customer_reply_returns_the_customer_view(self):
+        conn = _conn(fetchone={"id": 41, "account_id": 2, "status": "open"})
+        with patch.object(calls_db, "_connect", return_value=conn), \
+             patch.object(calls_db, "get_support_ticket", return_value={"id": 41}) as fetch:
+            calls_db.add_support_ticket_message(41, "customer", "hi", account_id=2)
+        self.assertFalse(fetch.call_args.kwargs["include_notes"])
+
+
+class FirstResponseRatingAssignment(unittest.TestCase):
+    def test_first_support_reply_is_timed_once(self):
+        conn = _conn(fetchone={"id": 41, "account_id": 2, "status": "open"})
+        with patch.object(calls_db, "_connect", return_value=conn), patch.object(calls_db, "get_support_ticket", return_value={}):
+            calls_db.add_support_ticket_message(41, "support", "hello")
+        self.assertTrue(any("first_response_at = COALESCE(first_response_at" in c.args[0] for c in conn.execute.call_args_list))
+
+    def test_rating_only_on_a_solved_request_of_your_own(self):
+        conn = _conn(rowcount=0)
+        with patch.object(calls_db, "_connect", return_value=conn):
+            self.assertIsNone(calls_db.rate_support_ticket(41, 2, "good"))
+        sql, params = conn.execute.call_args.args
+        self.assertIn("status IN ('resolved', 'closed')", sql)
+        self.assertEqual(params[-2:], (41, 2))
+        with self.assertRaises(ValueError):
+            calls_db.rate_support_ticket(41, 2, "5 stars")
+
+    def test_assign_only_to_the_support_team(self):
+        with patch.object(calls_db, "support_team_members", return_value=[{"id": 2, "name": "V", "email": "v@x"}]):
+            with self.assertRaises(ValueError):
+                calls_db.assign_support_ticket(41, 99)
 
 
 if __name__ == "__main__":

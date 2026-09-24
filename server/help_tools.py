@@ -10,11 +10,24 @@ tenant-isolation rule every other query in calls_db.py already follows.
 """
 
 import calls_db
+import help_articles
 
 # OpenAI tool schemas — passed verbatim in the chat completion's `tools`
 # array. Keep descriptions short but specific: the model picks a function
 # based on these strings, and a vague description picks the wrong tool.
 TOOL_SCHEMAS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_help_articles",
+            "description": "Search the help centre's articles for how to use a page or feature. Use this for any how-to question before answering, and name the article in your reply.",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "The user's question in a few keywords."}},
+                "required": ["query"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -200,7 +213,19 @@ def integration_status(account_id: int, **_ignored) -> dict:
     }
 
 
+def search_help_articles(account_id: int, query: str = "", **_ignored) -> dict:
+    """Same ranking the help centre's search box uses, so the bot and the
+    page point at the same article."""
+    return {
+        "articles": [
+            {"slug": a["slug"], "title": a["title"], "topic": a["topicTitle"], "body": a["body"]}
+            for a in help_articles.search(query, limit=3)
+        ]
+    }
+
+
 TOOL_FUNCTIONS = {
+    "search_help_articles": search_help_articles,
     "dashboard_stats": dashboard_stats,
     "calls_on_date": calls_on_date,
     "hottest_leads": hottest_leads,

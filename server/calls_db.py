@@ -1560,6 +1560,17 @@ def init_tables() -> None:
             ):
                 conn.execute(f"ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE support_ticket_messages ADD COLUMN IF NOT EXISTS attachments_json TEXT DEFAULT '[]'")
+            # Inbound-email replies record Resend's email id here, so a
+            # retried webhook can never add the same reply twice.
+            conn.execute("ALTER TABLE support_ticket_messages ADD COLUMN IF NOT EXISTS source_ref TEXT")
+            for column, coltype in (
+                ("csat_rating", "TEXT"),        # 'good' | 'bad', after solving
+                ("csat_comment", "TEXT DEFAULT ''"),
+                ("csat_at", "TEXT"),
+                ("assigned_user_id", "INTEGER"),  # platform-team member handling it
+                ("first_response_at", "TEXT"),    # first support reply
+            ):
+                conn.execute(f"ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS {column} {coltype}")
             _migrate_phones_to_e164(conn)
     finally:
         conn.close()
@@ -6235,15 +6246,24 @@ def _ticket_row(row) -> dict:
         "accountName": _row_get(row, "account_name") or "",
         "messageCount": int(_row_get(row, "message_count") or 0),
         "lastAuthor": _row_get(row, "last_author") or "customer",
+        "rating": _row_get(row, "csat_rating"),
+        "ratingComment": _row_get(row, "csat_comment") or "",
+        "firstResponseAt": _row_get(row, "first_response_at"),
+        "assignedUserId": _row_get(row, "assigned_user_id"),
+        "assigneeName": _row_get(row, "assignee_name") or "",
     }
 
 
+# Internal notes (author_type 'note') are the support team's private
+# scratchpad: they never count as the last reply, never as a message, and
+# are only returned when a caller explicitly asks for them (admin inbox).
 _TICKET_SELECT = (
-    "SELECT t.*, a.name AS account_name, "
-    "(SELECT COUNT(*) FROM support_ticket_messages m WHERE m.ticket_id = t.id) AS message_count, "
-    "(SELECT m.author_type FROM support_ticket_messages m WHERE m.ticket_id = t.id "
+    "SELECT t.*, a.name AS account_name, u.name AS assignee_name, "
+    "(SELECT COUNT(*) FROM support_ticket_messages m WHERE m.ticket_id = t.id AND m.author_type <> 'note') AS message_count, "
+    "(SELECT m.author_type FROM support_ticket_messages m WHERE m.ticket_id = t.id AND m.author_type <> 'note' "
     " ORDER BY m.id DESC LIMIT 1) AS last_author "
-    "FROM support_tickets t LEFT JOIN accounts a ON a.id = t.account_id"
+    "FROM support_tickets t LEFT JOIN accounts a ON a.id = t.account_id "
+    "LEFT JOIN users u ON u.id = t.assigned_user_id"
 )
 
 
@@ -6266,9 +6286,11 @@ def list_support_tickets(account_id: int | None = None, status: str = "") -> lis
         conn.close()
 
 
-def get_support_ticket(ticket_id: int, account_id: int | None = None) -> dict | None:
+def get_support_ticket(ticket_id: int, account_id: int | None = None, include_notes: bool = False) -> dict | None:
     """One ticket with its conversation. Scoped to account_id when given, so
-    a workspace can never read another workspace's ticket by guessing ids."""
+    a workspace can never read another workspace's ticket by guessing ids.
+    Internal notes are left out unless include_notes is set — the default is
+    the customer-safe view, so a forgotten flag can't leak a note."""
     conn = _connect()
     try:
         sql = _TICKET_SELECT + " WHERE t.id = ?"
@@ -6290,7 +6312,10 @@ def get_support_ticket(ticket_id: int, account_id: int | None = None) -> dict | 
                 "attachments": _public_files(_row_get(m, "attachments_json")),
             }
             for m in conn.execute(
-                "SELECT * FROM support_ticket_messages WHERE ticket_id = ? ORDER BY id", (ticket_id,)
+                "SELECT * FROM support_ticket_messages WHERE ticket_id = ? "
+                + ("" if include_notes else "AND author_type <> 'note' ")
+                + "ORDER BY id",
+                (ticket_id,),
             ).fetchall()
         ]
         return ticket
@@ -6306,12 +6331,13 @@ def add_support_ticket_message(
     author_name: str = "",
     account_id: int | None = None,
     attachments: list[dict] | None = None,
+    source_ref: str | None = None,
 ) -> dict | None:
     """Append a reply and move the ticket along: a customer reply reopens a
     resolved/closed ticket; a support reply on an open ticket marks it in
     progress. Returns the updated ticket, or None if it isn't theirs."""
-    if author_type not in ("customer", "support"):
-        raise ValueError("author_type must be customer or support")
+    if author_type not in ("customer", "support", "note"):
+        raise ValueError("author_type must be customer, support or note")
     conn = _connect()
     try:
         with conn:
@@ -6322,32 +6348,46 @@ def add_support_ticket_message(
             row = conn.execute(sql, tuple(params)).fetchone()
             if row is None:
                 return None
+            if source_ref and conn.execute(
+                "SELECT 1 FROM support_ticket_messages WHERE source_ref = ?", (source_ref,)
+            ).fetchone():
+                return None  # this inbound email was already added
             conn.execute(
                 "INSERT INTO support_ticket_messages "
-                "(ticket_id, account_id, author_type, author_user_id, author_name, body, attachments_json) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "(ticket_id, account_id, author_type, author_user_id, author_name, body, attachments_json, source_ref) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (ticket_id, row["account_id"], author_type, author_user_id, author_name, body,
-                 json.dumps(attachments or [])),
+                 json.dumps(attachments or []), source_ref),
             )
-            status = row["status"] or "open"
-            if author_type == "customer" and status in ("resolved", "closed"):
-                status = "open"
-            elif author_type == "support" and status == "open":
-                status = "in_progress"
-            # resolved_at is also the clock for deleting stored files 14 days
-            # after solving (support_files.py). Reopening clears it; a file
-            # added to a ticket that stays solved restarts it, so that file
-            # still gets its full 14 days instead of going the next day.
-            conn.execute(
-                f"UPDATE support_tickets SET status = ?, updated_at = {_NOW}, "
-                "resolved_at = CASE WHEN ? NOT IN ('resolved', 'closed') THEN NULL "
-                f"WHEN ? THEN {_NOW} ELSE resolved_at END "
-                "WHERE id = ?",
-                (status, status, bool(attachments), ticket_id),
-            )
+            if author_type != "note":
+                # (A private note changes nothing the customer can see: no
+                # status change, no "last activity" bump, no email.)
+                if author_type == "support":
+                    conn.execute(
+                        f"UPDATE support_tickets SET first_response_at = COALESCE(first_response_at, {_NOW}) WHERE id = ?",
+                        (ticket_id,),
+                    )
+                status = row["status"] or "open"
+                if author_type == "customer" and status in ("resolved", "closed"):
+                    status = "open"
+                elif author_type == "support" and status == "open":
+                    status = "in_progress"
+                # resolved_at is also the clock for deleting stored files 14
+                # days after solving (support_files.py). Reopening clears it;
+                # a file added to a ticket that stays solved restarts it, so
+                # that file still gets its full 14 days.
+                conn.execute(
+                    f"UPDATE support_tickets SET status = ?, updated_at = {_NOW}, "
+                    "resolved_at = CASE WHEN ? NOT IN ('resolved', 'closed') THEN NULL "
+                    f"WHEN ? THEN {_NOW} ELSE resolved_at END "
+                    "WHERE id = ?",
+                    (status, status, bool(attachments), ticket_id),
+                )
     finally:
         conn.close()
-    return get_support_ticket(ticket_id)
+    # The team (support replies and notes) sees its notes; a customer's own
+    # reply gets the customer-safe view.
+    return get_support_ticket(ticket_id, include_notes=author_type in ("support", "note"))
 
 
 def set_support_ticket_attachments(ticket_id: int, files: list[dict]) -> None:
@@ -6359,7 +6399,7 @@ def set_support_ticket_attachments(ticket_id: int, files: list[dict]) -> None:
         conn.close()
 
 
-def ticket_file_index(ticket_id: int) -> list[dict]:
+def ticket_file_index(ticket_id: int, include_notes: bool = False) -> list[dict]:
     """Every file on a ticket — the opening message's and every reply's —
     WITH storage keys, for the download route only. Callers must already have
     checked the ticket belongs to the requester."""
@@ -6368,12 +6408,64 @@ def ticket_file_index(ticket_id: int) -> list[dict]:
         row = conn.execute("SELECT attachments_json FROM support_tickets WHERE id = ?", (ticket_id,)).fetchone()
         files = json.loads((row["attachments_json"] if row else None) or "[]")
         for m in conn.execute(
-            "SELECT attachments_json FROM support_ticket_messages WHERE ticket_id = ?", (ticket_id,)
+            "SELECT attachments_json FROM support_ticket_messages WHERE ticket_id = ?"
+            + ("" if include_notes else " AND author_type <> 'note'"),
+            (ticket_id,),
         ).fetchall():
             files += json.loads(m["attachments_json"] or "[]")
         return files
     finally:
         conn.close()
+
+
+def rate_support_ticket(ticket_id: int, account_id: int, rating: str, comment: str = "") -> dict | None:
+    """The customer's verdict once a request is solved: 'good' or 'bad', with
+    an optional comment. Only on a solved request, and only their own."""
+    if rating not in ("good", "bad"):
+        raise ValueError("rating must be good or bad")
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                f"UPDATE support_tickets SET csat_rating = ?, csat_comment = ?, csat_at = {_NOW} "
+                "WHERE id = ? AND account_id = ? AND status IN ('resolved', 'closed')",
+                (rating, (comment or "").strip()[:1000], ticket_id, account_id),
+            )
+            if cur.rowcount == 0:
+                return None
+    finally:
+        conn.close()
+    return get_support_ticket(ticket_id, account_id)
+
+
+def support_team_members() -> list[dict]:
+    """Who a ticket can be assigned to: users of the platform-owner account."""
+    conn = _connect()
+    try:
+        return [
+            {"id": r["id"], "name": r["name"] or r["email"], "email": r["email"]}
+            for r in conn.execute(
+                "SELECT u.id, u.name, u.email FROM users u JOIN accounts a ON a.id = u.account_id "
+                "WHERE a.is_platform_owner = 1 ORDER BY u.name"
+            ).fetchall()
+        ]
+    finally:
+        conn.close()
+
+
+def assign_support_ticket(ticket_id: int, user_id: int | None) -> dict | None:
+    if user_id is not None and user_id not in {m["id"] for m in support_team_members()}:
+        raise ValueError("Can only assign to a member of the support team")
+    conn = _connect()
+    try:
+        with conn:
+            if conn.execute(
+                "UPDATE support_tickets SET assigned_user_id = ? WHERE id = ?", (user_id, ticket_id)
+            ).rowcount == 0:
+                return None
+    finally:
+        conn.close()
+    return get_support_ticket(ticket_id, include_notes=True)
 
 
 def update_support_ticket(
@@ -7872,6 +7964,29 @@ def notifications(account_id: int) -> list[dict]:
                 })
         except psycopg.Error:
             logger.warning("notifications: integrations section failed", exc_info=True)
+
+        # --- support replied and is waiting on the customer --------------
+        # Keyed by the reply's id, so each new answer re-notifies even after
+        # the previous one was dismissed.
+        try:
+            for r in conn.execute(
+                "SELECT t.id, t.subject, m.id AS mid FROM support_tickets t "
+                "JOIN LATERAL (SELECT id, author_type FROM support_ticket_messages "
+                "  WHERE ticket_id = t.id AND author_type <> 'note' ORDER BY id DESC LIMIT 1) m ON true "
+                "WHERE t.account_id = ? AND t.status NOT IN ('resolved', 'closed') AND m.author_type = 'support' "
+                "ORDER BY m.id DESC LIMIT 5",
+                (account_id,),
+            ).fetchall():
+                items.append({
+                    "id": f"support-reply:{r['mid']}",
+                    "severity": "info",
+                    "title": f"Support replied on VV-{r['id']}",
+                    "body": (r["subject"] or "")[:160],
+                    "to": f"/dashboard/support?ticket={r['id']}",
+                    "at": None,
+                })
+        except psycopg.Error:
+            logger.warning("notifications: support section failed", exc_info=True)
 
         # --- calls that ended badly in the last 24h ---------------------
         # Grouped per day, not per call: one row per failed call would bury
