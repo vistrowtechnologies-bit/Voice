@@ -20,6 +20,7 @@ import os
 import sys
 import time
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("LIVEKIT_URL", "ws://x")
@@ -132,9 +133,17 @@ class TheFanOutStillHappens(Harness):
 
         tools._post_webhook = boom
         ctx = FakeContext()
-        result = await log_lead(ctx, name="Rahul Deshmukh", phone="9876543210")
-        self.assertIn("Saved", result)
-        await tools.drain_background_fanout(timeout=5)
+        # Stubbed, not real: log_platform_error writes to whatever database
+        # DATABASE_URL points at, and a dev shell with the repo .env loaded
+        # points at PRODUCTION. Unstubbed, every run of this suite put a fake
+        # "webhook 500" in the live System Health feed (69 of them by
+        # 2026-09-24, burying the real errors).
+        with patch.object(tools.db, "log_platform_error") as logged:
+            result = await log_lead(ctx, name="Rahul Deshmukh", phone="9876543210")
+            self.assertIn("Saved", result)
+            await tools.drain_background_fanout(timeout=5)
+        logged.assert_called_once()
+        self.assertIn("webhook 500", logged.call_args.kwargs["context"])
 
 
 class TasksAreNotGarbageCollected(Harness):
