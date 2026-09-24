@@ -299,7 +299,7 @@ export function HelpChatWidget() {
         currentPage: locationKey,
         attachments,
       })
-      setTicketResult(`Ticket ${result.ticketId} created. Our support team will follow up by email.`)
+      setTicketResult(`Ticket ${result.ticketId} created. Follow it in Help & Support — we'll reply there and by email.`)
       setTicketFiles([])
     } catch (ticketError) {
       setTicketError(ticketError instanceof Error ? ticketError.message : 'Could not create the ticket. Please try again.')

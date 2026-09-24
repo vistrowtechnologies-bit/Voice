@@ -3333,6 +3333,7 @@ class HelpTicketRequest(BaseModel):
     subject: str
     detail: str
     category: str = "general"
+    priority: str = "normal"
     currentPage: str = ""
     attachments: list[HelpTicketAttachment] = PydanticField(default_factory=list)
 
@@ -3359,12 +3360,15 @@ def help_chat_message(req: HelpChatRequest, user: dict = Depends(current_user)) 
 
 
 @app.post("/help/tickets")
-def create_help_ticket(req: HelpTicketRequest, user: dict = Depends(current_user)) -> dict:
+def create_help_ticket(req: HelpTicketRequest, request: Request, user: dict = Depends(current_user)) -> dict:
     subject = req.subject.strip()[:160]
     detail = req.detail.strip()[:5_000]
     category = req.category.strip().lower()
-    if category not in {"general", "technical", "billing", "feature", "account"}:
+    if category not in calls_db.SUPPORT_CATEGORIES:
         category = "general"
+    priority = req.priority.strip().lower()
+    if priority not in calls_db.SUPPORT_PRIORITIES:
+        priority = "normal"
     if not subject or not detail:
         raise HTTPException(400, "Add a subject and describe the issue")
     if len(req.attachments) > 3:
@@ -3391,13 +3395,16 @@ def create_help_ticket(req: HelpTicketRequest, user: dict = Depends(current_user
     current_page = req.currentPage.strip()[:500]
     ticket_id = calls_db.create_support_ticket(
         user["account_id"],
-        user.get("id"),
+        # The session dict carries "user_id"; this read user.get("id") and so
+        # stored every ticket with no author.
+        user.get("user_id"),
         user.get("email", ""),
         category,
         subject,
         detail,
         current_page,
         attachment_metadata,
+        priority,
     )
     body = "".join(
         f"<p style='margin:5px 0'><strong>{html.escape(label)}:</strong> {html.escape(value)}</p>"
@@ -3406,6 +3413,7 @@ def create_help_ticket(req: HelpTicketRequest, user: dict = Depends(current_user
             ("Workspace", str(user.get("account_name") or user["account_id"])),
             ("User", f"{user.get('name', '')} ({user.get('email', '')})"),
             ("Category", category),
+            ("Priority", priority),
             ("Page", current_page or "-"),
             ("Subject", subject),
         ]
@@ -3420,7 +3428,7 @@ def create_help_ticket(req: HelpTicketRequest, user: dict = Depends(current_user
         body_html=body,
     )
     sent = email_sender.send_email(
-        os.environ.get("SUPPORT_NOTIFY_EMAIL") or "support@vistrowvoice.com",
+        _support_inbox(),
         f"[VV-{ticket_id}] {subject}",
         rendered,
         email_sender.FROM_SUPPORT,
@@ -3428,7 +3436,160 @@ def create_help_ticket(req: HelpTicketRequest, user: dict = Depends(current_user
     )
     if sent:
         calls_db.mark_support_ticket_emailed(ticket_id, user["account_id"])
-    return {"ok": True, "ticketId": f"VV-{ticket_id}", "emailSent": sent}
+    _email_ticket_confirmation(request, user, ticket_id, subject, detail)
+    return {"ok": True, "ticketId": f"VV-{ticket_id}", "id": ticket_id, "emailSent": sent}
+
+
+_SUPPORT_INBOX = "support@vistrowvoice.com"
+
+
+def _support_inbox() -> str:
+    return os.environ.get("SUPPORT_NOTIFY_EMAIL") or _SUPPORT_INBOX
+
+
+def _ticket_link(request: Request, ticket_id: int) -> str:
+    return f"{_app_base_url(request)}/dashboard/support?ticket={ticket_id}"
+
+
+def _email_ticket_confirmation(request: Request, user: dict, ticket_id: int, subject: str, detail: str) -> None:
+    """Tell the person who raised it that it landed, with its number."""
+    to = (user.get("email") or "").strip()
+    if not to:
+        return
+    html_body = email_sender.render_email(
+        preheader=f"We've got your request VV-{ticket_id}",
+        heading=f"We've got your request · VV-{ticket_id}",
+        body_html=(
+            f"<p>Thanks for reaching out. Your ticket <strong>VV-{ticket_id}</strong> "
+            f"(“{html.escape(subject)}”) is with our support team. We'll reply here by email "
+            "and in the dashboard — you can add details or files any time from the ticket.</p>"
+            "<div style='margin-top:14px;padding:14px;border-radius:10px;background:#f6f3ff;"
+            f"white-space:pre-wrap'>{html.escape(detail)}</div>"
+        ),
+        cta_label="View your ticket",
+        cta_url=_ticket_link(request, ticket_id),
+    )
+    email_sender.send_email(to, f"[VV-{ticket_id}] We've got your request", html_body, email_sender.FROM_SUPPORT)
+
+
+def _email_ticket_reply(request: Request, ticket: dict, body: str, author: str, to_support: bool) -> None:
+    """A new message on a ticket: support hears about customer replies, and
+    the customer hears about support replies — the conversation should not
+    depend on anyone checking the dashboard."""
+    to = _support_inbox() if to_support else (ticket.get("userEmail") or "").strip()
+    if not to:
+        return
+    who = f"{author} ({ticket.get('accountName') or 'workspace'})" if to_support else "Vistrow Voice Support"
+    html_body = email_sender.render_email(
+        preheader=f"New reply on VV-{ticket['id']}: {ticket['subject']}",
+        heading=f"New reply on VV-{ticket['id']}",
+        body_html=(
+            f"<p><strong>{html.escape(who)}</strong> replied on “{html.escape(ticket['subject'])}”:</p>"
+            "<div style='margin-top:10px;padding:14px;border-radius:10px;background:#f6f3ff;"
+            f"white-space:pre-wrap'>{html.escape(body)}</div>"
+        ),
+        cta_label="Open the ticket",
+        cta_url=(f"{_app_base_url(request)}/admin/support?ticket={ticket['id']}" if to_support
+                 else _ticket_link(request, ticket["id"])),
+    )
+    email_sender.send_email(to, f"[VV-{ticket['id']}] {ticket['subject']}", html_body, email_sender.FROM_SUPPORT)
+
+
+class TicketMessageRequest(BaseModel):
+    body: str
+
+
+class TicketUpdateRequest(BaseModel):
+    status: str | None = None
+    priority: str | None = None
+
+
+@app.get("/help/tickets")
+def list_help_tickets(status: str = "", user: dict = Depends(current_user)) -> list[dict]:
+    """This workspace's tickets — every teammate sees them, so whoever is
+    around can follow up on an issue someone else raised."""
+    return calls_db.list_support_tickets(user["account_id"], status)
+
+
+@app.get("/help/tickets/{ticket_id}")
+def get_help_ticket(ticket_id: int, user: dict = Depends(current_user)) -> dict:
+    ticket = calls_db.get_support_ticket(ticket_id, user["account_id"])
+    if ticket is None:
+        raise HTTPException(404, "Ticket not found")
+    return ticket
+
+
+@app.post("/help/tickets/{ticket_id}/messages")
+def reply_help_ticket(
+    ticket_id: int, req: TicketMessageRequest, request: Request, user: dict = Depends(current_user)
+) -> dict:
+    body = req.body.strip()[:5_000]
+    if not body:
+        raise HTTPException(400, "Write a message first")
+    ticket = calls_db.add_support_ticket_message(
+        ticket_id, "customer", body, user.get("user_id"), user.get("name", ""), account_id=user["account_id"]
+    )
+    if ticket is None:
+        raise HTTPException(404, "Ticket not found")
+    _email_ticket_reply(request, ticket, body, user.get("name") or user.get("email", ""), to_support=True)
+    return ticket
+
+
+@app.patch("/help/tickets/{ticket_id}")
+def update_help_ticket(ticket_id: int, req: TicketUpdateRequest, user: dict = Depends(current_user)) -> dict:
+    """Customers can mark their own ticket resolved, or reopen it — setting
+    priority or "in progress" is the support team's call."""
+    if req.status not in ("resolved", "open"):
+        raise HTTPException(400, "You can mark a ticket resolved or reopen it")
+    ticket = calls_db.update_support_ticket(ticket_id, status=req.status, account_id=user["account_id"])
+    if ticket is None:
+        raise HTTPException(404, "Ticket not found")
+    return ticket
+
+
+@app.get("/admin/support/tickets")
+def admin_list_tickets(status: str = "", admin: dict = Depends(require_platform_owner)) -> list[dict]:
+    return calls_db.list_support_tickets(None, status)
+
+
+@app.get("/admin/support/tickets/{ticket_id}")
+def admin_get_ticket(ticket_id: int, admin: dict = Depends(require_platform_owner)) -> dict:
+    ticket = calls_db.get_support_ticket(ticket_id)
+    if ticket is None:
+        raise HTTPException(404, "Ticket not found")
+    return ticket
+
+
+@app.post("/admin/support/tickets/{ticket_id}/messages")
+def admin_reply_ticket(
+    ticket_id: int, req: TicketMessageRequest, request: Request, admin: dict = Depends(require_platform_owner)
+) -> dict:
+    body = req.body.strip()[:5_000]
+    if not body:
+        raise HTTPException(400, "Write a reply first")
+    ticket = calls_db.add_support_ticket_message(ticket_id, "support", body, admin.get("user_id"), "Vistrow Voice Support")
+    if ticket is None:
+        raise HTTPException(404, "Ticket not found")
+    admin_db.write_audit(admin["user_id"], admin["email"], "support_reply", ticket["accountId"], detail=f"VV-{ticket_id}")
+    _email_ticket_reply(request, ticket, body, "Vistrow Voice Support", to_support=False)
+    return ticket
+
+
+@app.patch("/admin/support/tickets/{ticket_id}")
+def admin_update_ticket(
+    ticket_id: int, req: TicketUpdateRequest, admin: dict = Depends(require_platform_owner)
+) -> dict:
+    try:
+        ticket = calls_db.update_support_ticket(ticket_id, status=req.status, priority=req.priority)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if ticket is None:
+        raise HTTPException(404, "Ticket not found")
+    admin_db.write_audit(
+        admin["user_id"], admin["email"], "support_update", ticket["accountId"],
+        detail=f"VV-{ticket_id} status={req.status} priority={req.priority}",
+    )
+    return ticket
 
 
 # ----------------------------------------------------------- campaigns

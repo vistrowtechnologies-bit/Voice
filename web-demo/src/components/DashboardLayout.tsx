@@ -183,7 +183,7 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           </button>
         )}
       </div>
-      <nav className="flex min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-4">
+      <nav className="flex min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {NAV_GROUPS.map((group) => (
           <div key={group.title}>
             <div className="mb-1 flex h-6 items-center px-3">

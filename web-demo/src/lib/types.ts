@@ -707,3 +707,37 @@ export interface AppNotification {
   to: string
   at: string | null
 }
+
+export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
+export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent'
+export type TicketCategory = 'general' | 'technical' | 'billing' | 'feature' | 'account'
+
+export interface SupportTicketMessage {
+  id: number
+  authorType: 'customer' | 'support'
+  authorName: string
+  body: string
+  createdAt: string
+}
+
+export interface SupportTicket {
+  id: number
+  /** "VV-12" — the number quoted in emails. */
+  ref: string
+  accountId: number
+  accountName: string
+  userEmail: string
+  category: TicketCategory
+  priority: TicketPriority
+  status: TicketStatus
+  subject: string
+  detail: string
+  currentPage: string
+  attachments: { filename: string; contentType: string; size: number }[]
+  createdAt: string
+  updatedAt: string
+  resolvedAt: string | null
+  messageCount: number
+  lastAuthor: 'customer' | 'support'
+  messages?: SupportTicketMessage[]
+}

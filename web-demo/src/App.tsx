@@ -14,6 +14,7 @@ import { AdminAudit } from './pages/admin/AdminAudit'
 import { AdminHealth } from './pages/admin/AdminHealth'
 import { AdminVendorCredits } from './pages/admin/AdminVendorCredits'
 import { AdminPrivacyRequests } from './pages/admin/AdminPrivacyRequests'
+import { AdminSupport } from './pages/admin/AdminSupport'
 import { AdminSettings } from './pages/admin/AdminSettings'
 import { Home } from './pages/marketing/Home'
 import { ProductOverview } from './pages/marketing/ProductOverview'
@@ -62,6 +63,7 @@ import { Integrations } from './pages/Integrations'
 import { PhoneNumbers } from './pages/PhoneNumbers'
 import { Billing } from './pages/Billing'
 import { Compliance } from './pages/Compliance'
+import { Support } from './pages/Support'
 import { LeadDetail } from './pages/LeadDetail'
 import { WebsiteWidget } from './pages/WebsiteWidget'
 import { Settings } from './pages/Settings'
@@ -184,6 +186,7 @@ function App() {
         <Route path="/dashboard/integrations" element={guard(<Integrations />)} />
         <Route path="/dashboard/numbers" element={guard(<PhoneNumbers />)} />
         <Route path="/dashboard/compliance" element={guard(<Compliance />)} />
+        <Route path="/dashboard/support" element={guard(<Support />)} />
         <Route path="/dashboard/website-widget" element={guard(<WebsiteWidget />)} />
         <Route path="/dashboard/billing" element={guard(<Billing />)} />
         <Route path="/dashboard/settings" element={guard(<Settings />)} />
@@ -203,6 +206,7 @@ function App() {
         <Route path="/admin/health" element={<RequireOwner><AdminHealth /></RequireOwner>} />
         <Route path="/admin/vendor-credits" element={<RequireOwner><AdminVendorCredits /></RequireOwner>} />
         <Route path="/admin/privacy-requests" element={<RequireOwner><AdminPrivacyRequests /></RequireOwner>} />
+        <Route path="/admin/support" element={<RequireOwner><AdminSupport /></RequireOwner>} />
         <Route path="/admin/settings" element={<RequireOwner><AdminSettings /></RequireOwner>} />
         <Route path="*" element={<NotFound />} />
       </Routes>

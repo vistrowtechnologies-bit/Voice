@@ -53,4 +53,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/dashboard/settings', label: 'Settings', icon: 'settings', tour: 'nav-settings' },
     ],
   },
+  {
+    title: 'Help',
+    items: [{ to: '/dashboard/support', label: 'Help & Support', icon: 'support_agent' }],
+  },
 ]

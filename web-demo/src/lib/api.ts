@@ -1,6 +1,7 @@
 import type {
   ActiveCallInfo,
   AgentConfig,
+  SupportTicket,
   Analytics,
   Appointment,
   AppointmentStatus,
@@ -490,9 +491,17 @@ export const submitHelpTicket = (ticket: {
   subject: string
   detail: string
   category: string
+  priority?: string
   currentPage: string
   attachments: { filename: string; contentType: string; content: string }[]
-}) => send<{ ok: boolean; ticketId: string; emailSent: boolean }>('POST', '/help/tickets', ticket)
+}) => send<{ ok: boolean; ticketId: string; id: number; emailSent: boolean }>('POST', '/help/tickets', ticket)
+export const fetchSupportTickets = (status = '') =>
+  get<SupportTicket[]>(`/help/tickets${status ? `?status=${encodeURIComponent(status)}` : ''}`)
+export const fetchSupportTicket = (id: number) => get<SupportTicket>(`/help/tickets/${id}`)
+export const replySupportTicket = (id: number, body: string) =>
+  send<SupportTicket>('POST', `/help/tickets/${id}/messages`, { body })
+export const setSupportTicketStatus = (id: number, status: 'resolved' | 'open') =>
+  send<SupportTicket>('PATCH', `/help/tickets/${id}`, { status })
 
 // --------------------------------------------------------------- helpers
 

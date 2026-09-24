@@ -1,3 +1,5 @@
+import type { SupportTicket } from './types'
+
 // Super-admin (platform owner) API client. Mirrors the /admin/* backend, which
 // is gated by require_platform_owner (404 to everyone else). Same credentials-
 // included fetch style as lib/api.ts so the session cookie rides along.
@@ -26,6 +28,19 @@ async function apost<T = unknown>(path: string, body?: unknown): Promise<T> {
   })
   if (res.status === 401) onUnauthorized()
   if (!res.ok) throw new Error(`POST ${path} failed (${res.status})`)
+  return res.json()
+}
+
+async function apatch<T = unknown>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`/api/admin${path}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (res.status === 401) onUnauthorized()
+  if (!res.ok) throw new Error(`PATCH ${path} failed (${res.status})`)
   return res.json()
 }
 
@@ -342,3 +357,12 @@ export const PLAN_LABELS: Record<string, string> = { free: 'Free', starter: 'Sta
 // per-channel credit rates, shown on the admin Settings page for reference.
 export const PLAN_PRICING_REF: Record<string, number> = { free: 0, starter: 2999, growth: 5999, scale: 12999 }
 export const CREDIT_RATES_REF: Record<string, number> = { browser: 1, phone: 1.5, widget: 1 }
+
+// ----------------------------------------------------------- support inbox
+
+export const adminSupportTickets = (status = '') => aget<SupportTicket[]>(`/support/tickets${qs({ status })}`)
+export const adminSupportTicket = (id: number) => aget<SupportTicket>(`/support/tickets/${id}`)
+export const adminReplySupportTicket = (id: number, body: string) =>
+  apost<SupportTicket>(`/support/tickets/${id}/messages`, { body })
+export const adminUpdateSupportTicket = (id: number, change: { status?: string; priority?: string }) =>
+  apatch<SupportTicket>(`/support/tickets/${id}`, change)

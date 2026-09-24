@@ -35,7 +35,7 @@ export function AdminAudit() {
 
   return (
     <>
-      <PageHeader title="Support & Audit" subtitle="Every super-admin action, immutably logged for accountability." />
+      <PageHeader title="Audit log" subtitle="Every super-admin action, immutably logged for accountability." />
 
       <div className="mb-4 flex gap-2">
         {tabs.map((t) => (
