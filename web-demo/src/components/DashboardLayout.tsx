@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { NAV_GROUPS } from './navGroups'
 import { CommandPalette } from './CommandPalette'
 import { NotificationBell } from './NotificationBell'
@@ -15,6 +15,15 @@ import { HelpChatWidget } from './HelpChatWidget'
 import { Icon } from './Icon'
 import { OnboardingModal } from './OnboardingModal'
 import vistrowMark from '../assets/vistrow-mark.png'
+
+/** Desktop sidebar state, shared with PageHeader so the "open sidebar"
+ * button can sit in the top bar while the sidebar is slid away — the way the
+ * Claude desktop app does it. */
+const SidebarContext = createContext<{ open: boolean; toggle: () => void }>({ open: true, toggle: () => {} })
+
+const SIDEBAR_KEY = 'vistrow.sidebar.collapsed'
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+const TOGGLE_SHORTCUT = isMac ? '⌘B' : 'Ctrl+B'
 
 function initials(name: string): string {
   return (name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('') || '?').toUpperCase()
@@ -37,7 +46,7 @@ export function ThemeSwitcher() {
 }
 
 
-function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
+function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const workspace = user?.accountName || BRAND.defaultWorkspace
@@ -60,10 +69,6 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
     }
   }, [open])
 
-  // A width/anchor change while the menu is open can leave the popup in the
-  // wrong place. Close it whenever the persistent sidebar mode changes.
-  useEffect(() => setOpen(false), [collapsed])
-
   const go = (to: string) => {
     setOpen(false)
     onNavigate?.()
@@ -81,9 +86,7 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={collapsed ? `${workspace} account menu` : undefined}
-        title={collapsed ? `${workspace} account menu` : undefined}
-        className={`flex w-full items-center gap-2 rounded-lg py-1 text-left transition-colors hover:bg-surface-high ${collapsed ? 'justify-center px-1' : 'px-2'}`}
+        className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left transition-colors hover:bg-surface-high"
       >
         {user?.avatarUrl ? (
           <img src={user.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full border border-primary/30 object-cover" />
@@ -92,18 +95,18 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
             {initials(workspace)}
           </div>
         )}
-        <div className={`min-w-0 flex-1 ${collapsed ? 'hidden' : ''}`}>
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{workspace}</p>
           <p className="truncate text-[11px] text-text-muted">{user?.name || 'Admin'}</p>
         </div>
-        <Icon name={open ? 'expand_more' : 'expand_less'} className={`text-[18px] text-text-muted ${collapsed ? 'hidden' : ''}`} />
+        <Icon name={open ? 'expand_more' : 'expand_less'} className="text-[18px] text-text-muted" />
       </button>
 
       {open && (
         <div
           role="menu"
           aria-label={`${workspace} account actions`}
-          className={`absolute z-50 overflow-hidden rounded-xl border border-border bg-surface shadow-xl ${collapsed ? 'bottom-0 left-full ml-3 w-64' : 'bottom-full left-0 mb-2 w-full'}`}
+          className="absolute bottom-full left-0 z-50 mb-2 w-full overflow-hidden rounded-xl border border-border bg-surface shadow-xl"
         >
           <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
             {user?.avatarUrl ? (
@@ -159,52 +162,32 @@ function AccountMenu({ onNavigate, collapsed = false }: { onNavigate?: () => voi
   )
 }
 
-function SidebarContent({
-  onNavigate,
-  collapsed = false,
-  onToggleCollapse,
-  toggleLabel,
-}: {
-  onNavigate?: () => void
-  collapsed?: boolean
-  onToggleCollapse?: () => void
-  toggleLabel?: string
-}) {
+function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onClose?: () => void }) {
   const { user } = useAuth()
   return (
     <>
-      <div className={`relative mb-6 flex h-10 items-center ${collapsed ? 'justify-center' : 'gap-2 px-3'}`}>
-        {collapsed ? (
-          <img src={vistrowMark} alt={BRAND.name} className="h-8 w-8 rounded-lg" />
-        ) : (
-          <>
-            <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
-            <div className="min-w-0 flex-1">
-              <span className="block truncate text-base font-semibold leading-tight tracking-tight">{BRAND.name}</span>
-              <span className="block text-[10px] uppercase tracking-widest text-text-muted">Enterprise</span>
-            </div>
-            {onToggleCollapse && (
-              <button
-                onClick={onToggleCollapse}
-                aria-label={toggleLabel ?? 'Collapse sidebar'}
-                title={toggleLabel}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-text-muted transition-colors hover:border-border hover:bg-surface-high hover:text-primary"
-              >
-                <Icon name="view_sidebar" className="text-[19px]" />
-              </button>
-            )}
-          </>
+      <div className="mb-5 flex h-10 items-center gap-2 pl-2">
+        <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
+        <div className="min-w-0 flex-1">
+          <span className="block truncate text-base font-semibold leading-tight tracking-tight">{BRAND.name}</span>
+          <span className="block text-[10px] uppercase tracking-widest text-text-muted">Enterprise</span>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="Close sidebar"
+            title={`Close sidebar (${TOGGLE_SHORTCUT})`}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-high hover:text-primary"
+          >
+            <Icon name="left_panel_close" className="text-[20px]" />
+          </button>
         )}
       </div>
       <nav className="flex min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-4">
         {NAV_GROUPS.map((group) => (
           <div key={group.title}>
-            <div className={`mb-1 flex h-6 items-center ${collapsed ? 'px-3' : 'px-4'}`} aria-hidden={collapsed || undefined}>
-              {collapsed ? (
-                <span className="h-px w-full bg-border" />
-              ) : (
-                <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{group.title}</span>
-              )}
+            <div className="mb-1 flex h-6 items-center px-3">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{group.title}</span>
             </div>
             <div className="flex flex-col gap-0.5">
               {group.items.map((item) => (
@@ -214,18 +197,16 @@ function SidebarContent({
                   end={item.to === '/dashboard'}
                   onClick={onNavigate}
                   data-tour={item.tour}
-                  aria-label={collapsed ? item.label : undefined}
-                  title={collapsed ? item.label : undefined}
                   className={({ isActive }) =>
-                    `flex w-full min-w-0 items-center rounded-lg py-2 text-sm transition-colors ${collapsed ? 'justify-center px-2' : 'gap-3 px-4'} ${
+                    `flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                       isActive
-                        ? 'border-l-[3px] border-primary bg-surface-high text-text'
-                        : 'text-text-muted hover:bg-surface-high'
+                        ? 'bg-surface-high font-medium text-text shadow-[inset_3px_0_0_var(--color-primary)]'
+                        : 'text-text-muted hover:bg-surface-high hover:text-text'
                     }`
                   }
                 >
                   <Icon name={item.icon} className="shrink-0 text-[19px]" />
-                  <span className={collapsed ? 'sr-only' : 'min-w-0 truncate'}>{item.label}</span>
+                  <span className="min-w-0 truncate">{item.label}</span>
                 </NavLink>
               ))}
             </div>
@@ -236,15 +217,13 @@ function SidebarContent({
         <NavLink
           to="/admin"
           onClick={onNavigate}
-          aria-label={collapsed ? 'Admin panel' : undefined}
-          title={collapsed ? 'Admin panel' : undefined}
-          className={`mb-3 flex items-center rounded-lg border border-destructive/40 bg-destructive/10 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 ${collapsed ? 'justify-center px-2' : 'gap-3 px-4'}`}
+          className="mb-3 flex items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20"
         >
           <Icon name="shield_person" className="text-[19px]" />
-          <span className={collapsed ? 'sr-only' : ''}>Admin panel</span>
+          <span>Admin panel</span>
         </NavLink>
       )}
-      <AccountMenu onNavigate={onNavigate} collapsed={collapsed} />
+      <AccountMenu onNavigate={onNavigate} />
     </>
   )
 }
@@ -262,6 +241,7 @@ export function PageHeader({
 }) {
   const [credits, setCredits] = useState<number | null>(null)
   const { pathname } = useLocation()
+  const sidebar = useContext(SidebarContext)
   // Agent creation belongs to the Agents page. Showing it on the overview
   // duplicated Quick actions and displaced dashboard-specific controls.
   const showNewAgent = pathname === '/dashboard/agents'
@@ -274,6 +254,16 @@ export function PageHeader({
 
   return (
     <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/90 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:px-6">
+      {!sidebar.open && (
+        <button
+          onClick={sidebar.toggle}
+          aria-label="Open sidebar"
+          title={`Open sidebar (${TOGGLE_SHORTCUT})`}
+          className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-primary lg:flex"
+        >
+          <Icon name="left_panel_open" className="text-[20px]" />
+        </button>
+      )}
       <div className="min-w-0 flex-1">
         <h1 className="text-lg font-semibold leading-tight">{title}</h1>
         {subtitle && <p className="mt-0.5 text-xs leading-snug text-text-muted sm:truncate">{subtitle}</p>}
@@ -328,20 +318,43 @@ function ImpersonationBanner({ accountName }: { accountName: string }) {
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const [sidebarHovered, setSidebarHovered] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => typeof window !== 'undefined' && localStorage.getItem('vistrow.sidebar.collapsed') === 'true',
-  )
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
 
-  const toggleSidebar = () => {
+  const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((current) => {
       const next = !current
-      if (typeof window !== 'undefined') localStorage.setItem('vistrow.sidebar.collapsed', String(next))
+      try {
+        localStorage.setItem(SIDEBAR_KEY, String(next))
+      } catch {
+        // Private mode / blocked storage: the toggle still works this visit.
+      }
       return next
     })
-  }
+  }, [])
 
-  const sidebarExpanded = !sidebarCollapsed || sidebarHovered
+  // The first-run tour points at sidebar links, so it keeps the sidebar open.
+  const tourActive = !!user && user.onboarded && !user.tourCompleted
+  const sidebarOpen = !sidebarCollapsed || tourActive
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
+        // Leave Cmd/Ctrl+B to text fields (bold in rich editors).
+        const el = e.target as HTMLElement | null
+        if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return
+        e.preventDefault()
+        toggleSidebar()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [toggleSidebar])
 
   useEffect(() => {
     if (!mobileNavOpen) return
@@ -361,6 +374,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   }, [])
 
   return (
+    <SidebarContext.Provider value={{ open: sidebarOpen, toggle: toggleSidebar }}>
     <div data-dashboard-root className="min-h-screen bg-bg text-text">
       {/* Mounted once for the whole dashboard - it is keyboard-summoned, so
           it has no trigger in the layout and renders nothing until opened. */}
@@ -368,22 +382,13 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {user?.impersonating && <ImpersonationBanner accountName={user.accountName} />}
       <aside
         data-dashboard-sidebar
-        onMouseEnter={() => sidebarCollapsed && setSidebarHovered(true)}
-        onMouseLeave={() => setSidebarHovered(false)}
-        onFocusCapture={() => sidebarCollapsed && setSidebarHovered(true)}
-        onBlurCapture={(event) => {
-          if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
-          setSidebarHovered(false)
-        }}
-        className={`fixed left-0 z-30 hidden flex-col overflow-x-hidden border-r border-border bg-surface p-3 transition-[width,box-shadow] duration-200 ease-out lg:flex ${sidebarExpanded ? 'w-[280px]' : 'w-20'} ${sidebarCollapsed && sidebarHovered ? 'shadow-2xl' : ''} ${
-          user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'
-        }`}
+        aria-hidden={!sidebarOpen || undefined}
+        inert={!sidebarOpen || undefined}
+        className={`fixed left-0 z-30 hidden w-[248px] flex-col overflow-x-hidden border-r border-border bg-surface px-2 py-3 transition-transform duration-200 ease-out motion-reduce:transition-none lg:flex ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'}`}
       >
-        <SidebarContent
-          collapsed={!sidebarExpanded}
-          onToggleCollapse={toggleSidebar}
-          toggleLabel={sidebarCollapsed ? 'Keep sidebar open' : 'Collapse sidebar'}
-        />
+        <SidebarContent onClose={tourActive ? undefined : toggleSidebar} />
       </aside>
 
       {mobileNavOpen && (
@@ -399,7 +404,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className={`min-w-0 transition-[margin] duration-200 ease-out ${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-[280px]'} ${user?.impersonating ? 'pt-9' : ''}`}>
+      <div className={`min-w-0 transition-[margin] duration-200 ease-out motion-reduce:transition-none ${sidebarOpen ? 'lg:ml-[248px]' : 'lg:ml-0'} ${user?.impersonating ? 'pt-9' : ''}`}>
         <div className="flex items-center gap-3 border-b border-border px-4 py-3 lg:hidden">
           <button
             aria-label="Open navigation"
@@ -423,5 +428,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {user && user.onboarded && !user.tourCompleted && <DashboardTour />}
       {user && <HelpChatWidget />}
     </div>
+    </SidebarContext.Provider>
   )
 }
