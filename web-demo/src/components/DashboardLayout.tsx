@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import { BRAND } from '../lib/brand'
 import { adminExitImpersonation } from '../lib/adminApi'
 import { useAuth } from '../lib/auth'
+import { helpTopicFor } from '../lib/support'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { DashboardTour } from './DashboardTour'
 import { HelpChatWidget } from './HelpChatWidget'
@@ -265,6 +266,8 @@ export function PageHeader({
   const [credits, setCredits] = useState<number | null>(null)
   const { pathname } = useLocation()
   const sidebar = useContext(SidebarContext)
+  // Each page links to the help-centre topic that explains it.
+  const helpTopic = helpTopicFor(pathname)
   // Agent creation belongs to the Agents page. Showing it on the overview
   // duplicated Quick actions and displaced dashboard-specific controls.
   const showNewAgent = pathname === '/dashboard/agents'
@@ -297,6 +300,16 @@ export function PageHeader({
             <Icon name="toll" className="text-[15px] text-cyan" />
             {credits} credits
           </span>
+        )}
+        {helpTopic && (
+          <Link
+            to={`/dashboard/support?topic=${helpTopic}`}
+            aria-label="Help for this page"
+            title="Help for this page"
+            className="flex h-10 items-center gap-1 rounded-full border border-border bg-surface px-3 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary sm:h-8"
+          >
+            <Icon name="help" className="text-[17px]" /> Help
+          </Link>
         )}
         <NotificationBell />
         <ThemeSwitcher />

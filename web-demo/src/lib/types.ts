@@ -642,6 +642,8 @@ export interface HelpChatMessage {
   content: string
   suggestTicket?: boolean
   comingSoon?: boolean
+  /** A help-centre article the bot answered from (only real slugs). */
+  article?: { slug: string; title: string } | null
 }
 
 export interface ApiKey {
@@ -725,7 +727,8 @@ export interface SupportTicketFile {
 
 export interface SupportTicketMessage {
   id: number
-  authorType: 'customer' | 'support'
+  /** 'note' = the support team's private note; only the admin inbox sees these. */
+  authorType: 'customer' | 'support' | 'note'
   authorName: string
   body: string
   createdAt: string
@@ -751,5 +754,34 @@ export interface SupportTicket {
   resolvedAt: string | null
   messageCount: number
   lastAuthor: 'customer' | 'support'
+  rating: 'good' | 'bad' | null
+  ratingComment: string
+  firstResponseAt: string | null
+  assignedUserId: number | null
+  assigneeName: string
   messages?: SupportTicketMessage[]
+}
+
+export interface HelpArticle {
+  slug: string
+  title: string
+  summary: string
+  body: string
+}
+
+export interface HelpTopic {
+  slug: string
+  title: string
+  icon: string
+  /** The dashboard page this topic explains. */
+  route: string
+  articles: HelpArticle[]
+}
+
+export interface HelpSearchHit {
+  slug: string
+  title: string
+  summary: string
+  topicSlug: string
+  topicTitle: string
 }

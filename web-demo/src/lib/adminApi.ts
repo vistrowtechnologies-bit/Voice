@@ -369,3 +369,18 @@ export const adminReplySupportTicket = (
 ) => apost<SupportTicket>(`/support/tickets/${id}/messages`, { body, attachments })
 export const adminUpdateSupportTicket = (id: number, change: { status?: string; priority?: string }) =>
   apatch<SupportTicket>(`/support/tickets/${id}`, change)
+export const adminAddSupportNote = (id: number, body: string) =>
+  apost<SupportTicket>(`/support/tickets/${id}/notes`, { body })
+export const adminSupportTeam = () => aget<{ id: number; name: string; email: string }[]>('/support/team')
+export async function adminAssignSupportTicket(id: number, userId: number | null): Promise<SupportTicket> {
+  const res = await fetch(`/api/admin/support/tickets/${id}/assignee`, {
+    method: 'PUT',
+    credentials: 'include',
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  })
+  if (res.status === 401) onUnauthorized()
+  if (!res.ok) throw new Error(`PUT assignee failed (${res.status})`)
+  return res.json()
+}

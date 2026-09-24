@@ -184,13 +184,17 @@ export function TicketThread({
   ticket,
   viewer,
   onReply,
+  onNote,
   replyPlaceholder,
 }: {
   ticket: SupportTicket
   viewer: 'customer' | 'support'
   onReply: (body: string, files: File[]) => Promise<void>
+  /** Support inbox only: a private note the customer never sees. */
+  onNote?: (body: string) => Promise<void>
   replyPlaceholder: string
 }) {
+  const [mode, setMode] = useState<'reply' | 'note'>('reply')
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
@@ -220,11 +224,19 @@ export function TicketThread({
     },
     ...(ticket.messages ?? []).map((m) => ({
       key: String(m.id),
-      mine: m.authorType === viewer,
-      who: m.authorType === 'support' ? 'Vistrow Voice Support' : viewer === 'customer' ? 'You' : m.authorName || 'Customer',
+      mine: m.authorType === viewer || m.authorType === 'note',
+      who:
+        m.authorType === 'note'
+          ? `Internal note · ${m.authorName || 'Support'}`
+          : m.authorType === 'support'
+            ? 'Vistrow Voice Support'
+            : viewer === 'customer'
+              ? 'You'
+              : m.authorName || 'Customer',
       body: m.body,
       at: m.createdAt,
       support: m.authorType === 'support',
+      note: m.authorType === 'note',
       files: m.attachments ?? [],
     })),
   ]
@@ -235,7 +247,8 @@ export function TicketThread({
     setSending(true)
     setError('')
     try {
-      await onReply(body, attachments.files)
+      if (mode === 'note' && onNote) await onNote(body)
+      else await onReply(body, attachments.files)
       setDraft('')
       attachments.clear()
     } catch (err) {
@@ -250,8 +263,9 @@ export function TicketThread({
       <ol className="flex flex-col gap-3">
         {entries.map((e) => (
           <li key={e.key} className={`flex ${e.mine ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] rounded-2xl border px-4 py-3 ${e.mine ? 'border-primary/30 bg-primary/10' : e.support ? 'border-border bg-surface-high' : 'border-border bg-surface'}`}>
+            <div className={`max-w-[85%] rounded-2xl border px-4 py-3 ${'note' in e && e.note ? 'border-dashed border-amber/50 bg-amber/10' : e.mine ? 'border-primary/30 bg-primary/10' : e.support ? 'border-border bg-surface-high' : 'border-border bg-surface'}`}>
               <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-text-muted">
+                {'note' in e && e.note && <Icon name="lock" className="text-[14px] text-amber" />}
                 {e.support && <Icon name="support_agent" className="text-[14px] text-primary" />}
                 {e.who} · {ticketTime(e.at)}
               </p>
@@ -275,9 +289,19 @@ export function TicketThread({
         </div>
       )}
 
+      {onNote && (
+        <div className="flex gap-1" role="tablist" aria-label="Reply or note">
+          {(['reply', 'note'] as const).map((m) => (
+            <button key={m} role="tab" aria-selected={mode === m} onClick={() => setMode(m)} className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${mode === m ? (m === 'note' ? 'bg-amber/15 text-amber' : 'bg-primary/10 text-primary') : 'text-text-muted hover:bg-surface-high'}`}>
+              <Icon name={m === 'note' ? 'lock' : 'reply'} className="text-[15px]" />
+              {m === 'note' ? 'Internal note' : 'Reply to customer'}
+            </button>
+          ))}
+        </div>
+      )}
       <div
-        onPaste={attachments.onPaste}
-        className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3 transition-shadow focus-within:border-primary focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_15%,transparent)]"
+        onPaste={mode === 'note' ? undefined : attachments.onPaste}
+        className={`flex flex-col gap-2 rounded-xl border p-3 ${mode === 'note' ? 'border-dashed border-amber/50 bg-amber/5' : 'border-border bg-surface'} transition-shadow focus-within:border-primary focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_15%,transparent)]`}
       >
         <label htmlFor={`reply-${ticket.id}`} className="sr-only">Reply</label>
         <textarea
@@ -289,10 +313,16 @@ export function TicketThread({
           }}
           rows={3}
           maxLength={5000}
-          placeholder={solved && viewer === 'customer' ? 'Still need help? Reply to reopen this request…' : replyPlaceholder}
+          placeholder={
+            mode === 'note'
+              ? 'Only your team sees this — it is never sent to the customer.'
+              : solved && viewer === 'customer'
+                ? 'Still need help? Reply to reopen this request…'
+                : replyPlaceholder
+          }
           className="vv-bare-field w-full resize-y bg-transparent text-sm outline-none placeholder:text-text-muted"
         />
-        <AttachmentPicker state={attachments} compact />
+        {mode === 'reply' && <AttachmentPicker state={attachments} compact />}
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] text-text-muted">
             {error ? <span className="text-destructive">{error}</span> : 'Paste a screenshot with ⌘V · Ctrl/⌘ + Enter to send'}
@@ -303,7 +333,7 @@ export function TicketThread({
             className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             <Icon name="send" className="text-[16px]" />
-            {sending ? 'Sending…' : solved && viewer === 'customer' ? 'Reply & reopen' : 'Send reply'}
+            {sending ? 'Sending…' : mode === 'note' ? 'Add note' : solved && viewer === 'customer' ? 'Reply & reopen' : 'Send reply'}
           </button>
         </div>
       </div>

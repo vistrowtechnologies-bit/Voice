@@ -86,3 +86,32 @@ export async function toUploads(files: File[]) {
     })),
   )
 }
+
+/** Which help-centre topic explains each dashboard page (server/help_articles.py
+ * TOPICS[*].route → slug; test_help_articles.py keeps the two in step). */
+export const HELP_TOPIC_BY_ROUTE: Record<string, string> = {
+  '/dashboard': 'getting-started',
+  '/dashboard/agents': 'agents',
+  '/dashboard/testing': 'testing-lab',
+  '/dashboard/voices': 'voices',
+  '/dashboard/knowledge': 'knowledge-base',
+  '/dashboard/inbound': 'inbound',
+  '/dashboard/outbound': 'outbound',
+  '/dashboard/calls': 'calls',
+  '/dashboard/contacts': 'contacts',
+  '/dashboard/appointments': 'appointments',
+  '/dashboard/integrations': 'integrations',
+  '/dashboard/website-widget': 'website-widget',
+  '/dashboard/numbers': 'phone-numbers',
+  '/dashboard/compliance': 'compliance',
+  '/dashboard/billing': 'billing',
+  '/dashboard/settings': 'settings',
+}
+
+/** The topic for the current page, matching the longest route prefix. */
+export function helpTopicFor(pathname: string): string | null {
+  const match = Object.keys(HELP_TOPIC_BY_ROUTE)
+    .filter((route) => pathname === route || (route !== '/dashboard' && pathname.startsWith(`${route}/`)))
+    .sort((a, b) => b.length - a.length)[0]
+  return match ? HELP_TOPIC_BY_ROUTE[match] : null
+}

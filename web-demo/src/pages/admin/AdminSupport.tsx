@@ -3,8 +3,12 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { AdminCard, EmptyState, PageHeader } from '../../components/AdminUI'
 import { PriorityChip, StatusChip, TicketThread } from '../../components/SupportTicketParts'
 import { CATEGORY_LABELS, ticketTime, toUploads } from '../../lib/support'
+import { Icon } from '../../components/Icon'
 import {
+  adminAddSupportNote,
+  adminAssignSupportTicket,
   adminReplySupportTicket,
+  adminSupportTeam,
   adminSupportTicket,
   adminSupportTickets,
   adminUpdateSupportTicket,
@@ -19,6 +23,32 @@ const FILTERS = [
   { id: 'closed', label: 'Closed' },
 ] as const
 
+// Internal target only — shown to the team, never promised to customers.
+const FIRST_RESPONSE_TARGET_HOURS = 24
+
+const utcMs = (text: string | null) => (text ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(text) ? text : `${text.replace(' ', 'T')}Z`) : NaN)
+
+function hoursLabel(ms: number) {
+  const h = ms / 3_600_000
+  return h < 1 ? `${Math.max(1, Math.round(h * 60))}m` : h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`
+}
+
+/** "Answered in 2h", or "Overdue 26h" when nobody has replied past the target. */
+function FirstResponse({ ticket }: { ticket: SupportTicket }) {
+  const opened = utcMs(ticket.createdAt)
+  if (ticket.firstResponseAt) {
+    return <span className="text-[11px] text-text-muted">Answered in {hoursLabel(utcMs(ticket.firstResponseAt) - opened)}</span>
+  }
+  if (ticket.status === 'resolved' || ticket.status === 'closed') return null
+  const waited = Date.now() - opened
+  const overdue = waited > FIRST_RESPONSE_TARGET_HOURS * 3_600_000
+  return (
+    <span className={`text-[11px] font-semibold ${overdue ? 'text-destructive' : 'text-amber'}`}>
+      {overdue ? 'Overdue' : 'Waiting'} {hoursLabel(waited)}
+    </span>
+  )
+}
+
 /** Every workspace's tickets in one inbox. A reply here is emailed to the
  * person who raised the ticket and shows in their Help & Support page. */
 export function AdminSupport() {
@@ -28,6 +58,10 @@ export function AdminSupport() {
   const [rows, setRows] = useState<SupportTicket[] | null>(null)
   const [selected, setSelected] = useState<SupportTicket | null>(null)
   const [saving, setSaving] = useState(false)
+  const [team, setTeam] = useState<{ id: number; name: string; email: string }[]>([])
+  useEffect(() => {
+    adminSupportTeam().then(setTeam).catch(() => setTeam([]))
+  }, [])
 
   const load = useCallback(() => {
     setRows(null)
@@ -94,6 +128,11 @@ export function AdminSupport() {
                         <span className="ml-auto text-[11px] font-semibold text-amber">Awaiting us</span>
                       )}
                     </span>
+                    <span className="flex items-center gap-2">
+                      <FirstResponse ticket={t} />
+                      {t.assigneeName && <span className="text-[11px] text-text-muted">· {t.assigneeName}</span>}
+                      {t.rating && <Icon name={t.rating === 'good' ? 'thumb_up' : 'thumb_down'} className={`text-[14px] ${t.rating === 'good' ? 'text-success' : 'text-destructive'}`} />}
+                    </span>
                     <span className="truncate text-sm font-semibold">{t.subject}</span>
                     <span className="truncate text-[11px] text-text-muted">
                       {t.accountName || `Account ${t.accountId}`} · {t.userEmail} · {ticketTime(t.updatedAt)}
@@ -122,7 +161,26 @@ export function AdminSupport() {
                     · {selected.userEmail} · opened {ticketTime(selected.createdAt)}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <label className="flex flex-col gap-1 text-[11px] font-semibold text-text-muted">
+                    Assignee
+                    <select
+                      disabled={saving}
+                      value={selected.assignedUserId ?? ''}
+                      onChange={async (e) => {
+                        setSaving(true)
+                        try {
+                          applyUpdate(await adminAssignSupportTicket(selected.id, e.target.value ? Number(e.target.value) : null))
+                        } finally {
+                          setSaving(false)
+                        }
+                      }}
+                      className="rounded-lg border border-border bg-surface-high px-2 py-1.5 text-xs outline-none focus:border-primary"
+                    >
+                      <option value="">Unassigned</option>
+                      {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </label>
                   <label className="flex flex-col gap-1 text-[11px] font-semibold text-text-muted">
                     Status
                     <select disabled={saving} value={selected.status} onChange={(e) => change({ status: e.target.value })} className="rounded-lg border border-border bg-surface-high px-2 py-1.5 text-xs outline-none focus:border-primary">
@@ -143,9 +201,19 @@ export function AdminSupport() {
                   </label>
                 </div>
               </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <FirstResponse ticket={selected} />
+                {selected.rating && (
+                  <span className={`flex items-center gap-1 rounded-full border px-2 py-0.5 font-semibold ${selected.rating === 'good' ? 'border-success/40 bg-success/10 text-success' : 'border-destructive/40 bg-destructive/10 text-destructive'}`}>
+                    <Icon name={selected.rating === 'good' ? 'thumb_up' : 'thumb_down'} className="text-[14px]" />
+                    Customer rated it {selected.rating === 'good' ? 'good' : 'not good'}{selected.ratingComment ? `: "${selected.ratingComment}"` : ''}
+                  </span>
+                )}
+              </div>
               <TicketThread
                 ticket={selected}
                 viewer="support"
+                onNote={async (body) => applyUpdate(await adminAddSupportNote(selected.id, body))}
                 replyPlaceholder="Reply to the customer — they get it by email and in their dashboard…"
                 onReply={async (body, files) => applyUpdate(await adminReplySupportTicket(selected.id, body, await toUploads(files)))}
               />

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import arthaAvatar from '../assets/artha-avatar.png'
-import { fetchHelpFaqs, sendHelpChatMessage, submitHelpTicket } from '../lib/api'
+import { fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { HelpChatMessage, HelpFaq } from '../lib/types'
 import { Icon } from './Icon'
@@ -117,14 +117,6 @@ function visibleQuestions(page: PageHelp | null) {
   return [...new Set([...(page?.questions || []), ...GLOBAL_SUGGESTIONS])].slice(0, 4)
 }
 
-const fileContent = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(reader.error)
-    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '')
-    reader.readAsDataURL(file)
-  })
-
 const HELP_NAVIGATION = [
   { label: 'All Calls History', to: '/dashboard/calls' },
   { label: 'Contacts', to: '/dashboard/contacts' },
@@ -159,14 +151,6 @@ export function HelpChatWidget() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [ratings, setRatings] = useState<Record<number, 'up' | 'down'>>({})
-  const [ticketOpen, setTicketOpen] = useState(false)
-  const [ticketSubject, setTicketSubject] = useState('')
-  const [ticketDetail, setTicketDetail] = useState('')
-  const [ticketCategory, setTicketCategory] = useState('technical')
-  const [ticketFiles, setTicketFiles] = useState<File[]>([])
-  const [ticketSending, setTicketSending] = useState(false)
-  const [ticketResult, setTicketResult] = useState('')
-  const [ticketError, setTicketError] = useState('')
   const threadRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
   const location = useLocation()
@@ -240,6 +224,7 @@ export function HelpChatWidget() {
           content: result.reply,
           suggestTicket: result.suggestTicket,
           comingSoon: result.comingSoon,
+          article: result.article,
         },
       ])
     } catch {
@@ -265,47 +250,16 @@ export function HelpChatWidget() {
     setInput('')
     setError('')
     setShowFaqs(false)
-    setTicketOpen(false)
-    setTicketResult('')
-    setTicketError('')
-    setTicketFiles([])
   }
 
+  // One request form for the whole product: the bubble used to carry its own
+  // (600 KB files, no priority, no link to the request afterwards). It now
+  // hands off to Help & Support's form with the question and this page.
   const openTicket = (subject = '') => {
-    setTicketSubject(subject || messages.filter((message) => message.role === 'user').at(-1)?.content || '')
-    setTicketDetail('')
-    setTicketResult('')
-    setTicketError('')
-    setTicketOpen(true)
-  }
-
-  const sendTicket = async () => {
-    if (!ticketSubject.trim() || !ticketDetail.trim() || ticketSending) return
-    setTicketSending(true)
-    setTicketResult('')
-    setTicketError('')
-    try {
-      const attachments = await Promise.all(
-        ticketFiles.map(async (file) => ({
-          filename: file.name,
-          contentType: file.type || 'application/octet-stream',
-          content: await fileContent(file),
-        })),
-      )
-      const result = await submitHelpTicket({
-        subject: ticketSubject.trim(),
-        detail: ticketDetail.trim(),
-        category: ticketCategory,
-        currentPage: locationKey,
-        attachments,
-      })
-      setTicketResult(`Ticket ${result.ticketId} created. Follow it in Help & Support — we'll reply there and by email.`)
-      setTicketFiles([])
-    } catch (ticketError) {
-      setTicketError(ticketError instanceof Error ? ticketError.message : 'Could not create the ticket. Please try again.')
-    } finally {
-      setTicketSending(false)
-    }
+    const question = subject || messages.filter((message) => message.role === 'user').at(-1)?.content || ''
+    const params = new URLSearchParams({ new: '1', subject: question.slice(0, 160), page: locationKey })
+    closeChat()
+    navigate(`/dashboard/support?${params.toString()}`)
   }
 
   return (
@@ -425,6 +379,11 @@ export function HelpChatWidget() {
                         <div className="rounded-xl border border-border bg-surface-high px-3 py-2 text-xs leading-relaxed text-text">
                           {m.content}
                         </div>
+                        {m.article && (
+                          <button type="button" onClick={() => navigate(`/dashboard/support?article=${m.article!.slug}`)} className="mt-1.5 flex items-center gap-1 rounded-md border border-primary/30 px-2 py-1 text-[10px] font-semibold text-primary hover:bg-primary/5">
+                            <Icon name="article" className="text-[12px]" /> Read: {m.article.title}
+                          </button>
+                        )}
                         {m.comingSoon && (
                           <span className="mt-1.5 inline-flex rounded-full border border-primary/25 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold text-primary">
                             Coming soon
@@ -456,7 +415,7 @@ export function HelpChatWidget() {
                             }}
                             className={`flex h-6 w-6 items-center justify-center rounded-full hover:bg-surface-high ${ratings[i] === 'down' ? 'text-destructive' : ''}`}
                             aria-label="Unhelpful answer"
-                            title="Not helpful - raise a ticket"
+                            title="Not helpful - submit a request"
                           >
                             <Icon name="thumb_down" className="text-[14px]" />
                           </button>
@@ -470,7 +429,7 @@ export function HelpChatWidget() {
                             onClick={() => openTicket(messages[i - 1]?.role === 'user' ? messages[i - 1].content : '')}
                             className="mt-1.5 flex items-center gap-1 rounded-md border border-destructive/35 bg-destructive/5 px-2 py-1 text-[10px] font-semibold text-destructive hover:bg-destructive/10"
                           >
-                            <Icon name="confirmation_number" className="text-[12px]" /> Raise a ticket
+                            <Icon name="confirmation_number" className="text-[12px]" /> Submit a request
                           </button>
                         )}
                       </div>
@@ -505,58 +464,13 @@ export function HelpChatWidget() {
               <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
                 <p>{error}</p>
                 <button type="button" onClick={() => openTicket()} className="mt-2 rounded-md border border-destructive/40 px-2 py-1 font-semibold">
-                  Raise a ticket
+                  Submit a request
                 </button>
               </div>
             )}
           </div>
 
-          {ticketOpen && (
-            <section className="max-h-[330px] shrink-0 overflow-y-auto border-t border-border bg-surface-high/35 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-sm font-semibold"><Icon name="confirmation_number" className="text-[17px] text-primary" /> Raise a support ticket</h3>
-                <button type="button" onClick={() => setTicketOpen(false)} aria-label="Close ticket form" className="text-text-muted hover:text-text"><Icon name="expand_more" className="text-[18px]" /></button>
-              </div>
-              {ticketResult ? (
-                <div className="rounded-lg border border-success/30 bg-success/10 p-3 text-xs text-success">{ticketResult}</div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <input value={ticketSubject} onChange={(event) => setTicketSubject(event.target.value)} maxLength={160} placeholder="What do you need help with?" className="rounded-lg border border-border bg-surface px-3 py-2 text-xs outline-none focus:border-primary" />
-                  <textarea value={ticketDetail} onChange={(event) => setTicketDetail(event.target.value)} maxLength={5000} placeholder="Describe what happened, what you expected, and any call ID…" className="h-20 resize-none rounded-lg border border-border bg-surface px-3 py-2 text-xs outline-none focus:border-primary" />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select value={ticketCategory} onChange={(event) => setTicketCategory(event.target.value)} className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs outline-none">
-                      <option value="technical">Technical issue</option>
-                      <option value="billing">Billing</option>
-                      <option value="account">Account</option>
-                      <option value="feature">Feature request</option>
-                      <option value="general">General question</option>
-                    </select>
-                    <label className="cursor-pointer rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-muted hover:border-primary">
-                      <Icon name="attach_file" className="mr-1 align-middle text-[14px]" /> Attach
-                      <input
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={(event) => {
-                          const selected = Array.from(event.target.files || []).slice(0, 3)
-                          const valid = selected.filter((file) => file.size <= 600 * 1024)
-                          setTicketFiles(valid)
-                          if (valid.length !== selected.length) setTicketError('Each attachment must be 600 KB or smaller.')
-                        }}
-                      />
-                    </label>
-                  </div>
-                  {ticketFiles.length > 0 && <p className="truncate text-[10px] text-text-muted">{ticketFiles.map((file) => file.name).join(', ')}</p>}
-                  {ticketError && <p className="text-[10px] text-destructive">{ticketError}</p>}
-                  <button type="button" onClick={sendTicket} disabled={ticketSending || !ticketSubject.trim() || !ticketDetail.trim()} className="flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-bg disabled:opacity-50">
-                    <Icon name="send" className="text-[14px]" /> {ticketSending ? 'Submitting…' : 'Submit ticket'}
-                  </button>
-                </div>
-              )}
-            </section>
-          )}
-
-          {!ticketOpen && (
+          {(
             <form
               onSubmit={(e) => {
                 e.preventDefault()

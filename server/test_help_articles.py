@@ -1,5 +1,6 @@
 """The help centre and the help bot share one set of articles."""
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import help_articles
@@ -16,6 +17,16 @@ class Content(unittest.TestCase):
         app = (Path(__file__).resolve().parent.parent / "web-demo" / "src" / "App.tsx").read_text()
         for topic in help_articles.TOPICS:
             self.assertIn(f'path="{topic["route"]}"', app, topic["slug"])
+
+    def test_every_page_help_button_points_at_a_real_topic(self):
+        import re
+        support_ts = (Path(__file__).resolve().parent.parent / "web-demo" / "src" / "lib" / "support.ts").read_text()
+        block = support_ts.split("HELP_TOPIC_BY_ROUTE")[1].split("}")[0]
+        pairs = dict(re.findall(r"'(/dashboard[^']*)': '([a-z-]+)'", block))
+        topics = {t["slug"]: t["route"] for t in help_articles.TOPICS}
+        for route, slug in pairs.items():
+            self.assertIn(slug, topics, f"{route} -> {slug}")
+            self.assertEqual(topics[slug], route, f"{slug} explains {topics[slug]}, not {route}")
 
     def test_no_stale_facts(self):
         text = " ".join(a["body"] for a in help_articles.all_articles())

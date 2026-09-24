@@ -2,6 +2,8 @@ import type {
   ActiveCallInfo,
   AgentConfig,
   SupportTicket,
+  HelpTopic,
+  HelpSearchHit,
   Analytics,
   Appointment,
   AppointmentStatus,
@@ -486,7 +488,7 @@ export const fetchWidgetBackendUrl = () => get<{ backendUrl: string | null }>('/
 
 export const fetchHelpFaqs = () => get<HelpFaq[]>('/help/faqs')
 export const sendHelpChatMessage = (message: string, history: HelpChatMessage[], currentPage?: string) =>
-  send<{ reply: string; suggestTicket: boolean; comingSoon: boolean }>('POST', '/help/chat', { message, history, currentPage })
+  send<{ reply: string; suggestTicket: boolean; comingSoon: boolean; article: { slug: string; title: string } | null }>('POST', '/help/chat', { message, history, currentPage })
 export const submitHelpTicket = (ticket: {
   subject: string
   detail: string
@@ -503,6 +505,11 @@ export const replySupportTicket = (id: number, body: string, attachments: Ticket
   send<SupportTicket>('POST', `/help/tickets/${id}/messages`, { body, attachments })
 export const setSupportTicketStatus = (id: number, status: 'resolved' | 'open') =>
   send<SupportTicket>('PATCH', `/help/tickets/${id}`, { status })
+export const rateSupportTicket = (id: number, rating: 'good' | 'bad', comment = '') =>
+  send<SupportTicket>('POST', `/help/tickets/${id}/rating`, { rating, comment })
+export const fetchHelpTopics = () => get<{ topics: HelpTopic[] }>('/help/articles')
+export const searchHelpArticles = (q: string) =>
+  get<HelpSearchHit[]>(`/help/articles/search?q=${encodeURIComponent(q)}`)
 
 // --------------------------------------------------------------- helpers
 
