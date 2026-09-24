@@ -109,6 +109,7 @@ from tools import (
     end_call,
     log_lead,
     do_not_call,
+    record_consent,
     request_callback,
     switch_reply_language,
     transfer_call,
@@ -2721,6 +2722,31 @@ def _transfer_instructions(config: dict) -> str:
     )
 
 
+def _requires_spoken_consent(config: dict) -> bool:
+    """Compliance → "Require spoken consent". Until 2026-09-24 the dashboard
+    saved this and nothing read it: a tenant who switched it on believed
+    callers were being asked, and none were."""
+    return bool(db.get_compliance_config(config.get("account_id")).get("require_consent"))
+
+
+def _consent_instructions(config: dict) -> str:
+    if config.get("is_platform_demo") or not _requires_spoken_consent(config):
+        return ""
+    records = bool(db.get_compliance_config(config.get("account_id")).get("record_calls"))
+    what = (
+        "this call is recorded and their details are used to follow up with them"
+        if records else "their details are used to follow up with them"
+    )
+    return (
+        "\n\n# Consent — required before anything else\n"
+        f"In your very first reply after the greeting, tell the caller in one short sentence, in "
+        f"their language, that {what}, and ask if that is okay. Ask nothing else in that turn. "
+        "As soon as they answer, call record_consent with their answer. Until they have clearly "
+        "agreed, do not ask for or log any personal detail. If they decline, respect it for the "
+        "rest of the call."
+    )
+
+
 def _build_tools(config: dict) -> list:
     """The agent's live tool set. Core lead-capture + KB tools are always on
     (they're how the call does its job); enabled_functions only gates the
@@ -2791,6 +2817,8 @@ def _build_tools(config: dict) -> list:
     # "end_call", which silently meant no transfer tool at all.
     if (config.get("transfer_phone") or "").strip():
         tools.append(transfer_call)
+    if not config.get("is_platform_demo") and _requires_spoken_consent(config):
+        tools.append(record_consent)
     if TAVILY_API_KEY and _on("web_search"):
         tools.append(web_search)
     # Offered only when this specific agent has been assigned the tenant's
@@ -3376,6 +3404,7 @@ class RealEstateAgent(Agent):
                 )
             )
         instructions += _transfer_instructions(config)
+        instructions += _consent_instructions(config)
         # LAST. Everything above this line is identical between two calls on
         # the same agent, so it is one cacheable prefix; only the caller's own
         # details and these ~100 tokens change. See where date_instruction is
@@ -7261,7 +7290,11 @@ async def entrypoint(ctx: JobContext) -> None:
                     "direction": call_context.get("direction"),
                     "site_id": call_context["site_id"],
                     "page_path": call_context.get("visitor_path") or "",
-                    "consent_json": call_context.get("visitor_consent") or "",
+                    "consent_json": (
+                        json.dumps(userdata["spoken_consent"], ensure_ascii=False)
+                        if userdata.get("spoken_consent")
+                        else call_context.get("visitor_consent") or ""
+                    ),
                     "recording_share_token": recording_share_token,
                     # Which dashboard agent took the call — explicit from room
                     # metadata when routed, otherwise whichever agent config
@@ -7405,6 +7438,20 @@ async def entrypoint(ctx: JobContext) -> None:
         if recorder is not None:
             try:
                 local_path = await recorder.stop()
+                spoken = userdata.get("spoken_consent") or {}
+                if local_path and _requires_spoken_consent(cfg) and not spoken.get("granted"):
+                    # Consent is required and was not given — declined, or
+                    # the caller left before answering. Fail closed: the
+                    # recording is discarded, never uploaded.
+                    logger.info(
+                        "discarding recording for room %s: spoken consent %s",
+                        ctx.room.name, "declined" if spoken else "never given",
+                    )
+                    try:
+                        os.remove(local_path)
+                    except OSError:
+                        pass
+                    local_path = None
                 if local_path:
                     # boto3's upload is blocking network I/O — run it off the
                     # event loop so it doesn't stall every other concurrent

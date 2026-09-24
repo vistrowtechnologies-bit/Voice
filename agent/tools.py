@@ -1225,6 +1225,37 @@ async def check_calendar_availability(
 
 
 @function_tool
+async def record_consent(context: RunContext, granted: bool, words: str = "") -> str:
+    """Record the caller's answer to the consent question you asked at the start of the call.
+
+    Call this once, as soon as they answer. granted=true only for a clear yes
+    ("haan", "ok", "sure", "theek hai"); anything else — no, not sure, a
+    question back, silence — is granted=false.
+
+    Args:
+        granted: True only if the caller clearly agreed.
+        words: Their answer, briefly, in their own words.
+    """
+    # Not `context.userdata or {}`: an empty dict is falsy, and the answer
+    # would be written to a throwaway dict the call-end code never reads.
+    userdata = context.userdata if context.userdata is not None else {}
+    userdata["spoken_consent"] = {
+        "granted": bool(granted),
+        "words": (words or "")[:200],
+        "at": datetime.now(timezone.utc).isoformat(),
+    }
+    await _publish_event(context, {"type": "consent", "granted": bool(granted)})
+    logger.info("spoken consent recorded: granted=%s", bool(granted))
+    if granted:
+        return "Consent recorded. Carry on with the call normally."
+    return (
+        "They declined. Acknowledge it in one short, friendly line: this call will not be "
+        "recorded and you will not save their details. You may still answer their questions, "
+        "but do not ask for or log their name, phone, email or any other personal detail."
+    )
+
+
+@function_tool
 async def do_not_call(context: RunContext, reason: str = "") -> str:
     """Record that this person does not want to be called again, and stop calling them.
 
