@@ -2949,6 +2949,14 @@ class RealEstateAgent(Agent):
                 "not correct or lecture the caller unless they clearly ask about another company."
             )
             instructions += "\n\n" + build_industry_demo_style(self._public_demo_slug, business_name)
+        # Everything specific to THIS caller (their name/number, what we
+        # remember about them) is collected here and appended at the very end,
+        # just before date_instruction — never mid-prompt. Prompt caching only
+        # reuses the prefix up to the first differing character, so a caller's
+        # number sitting before the knowledge base made the KB, voice style and
+        # lead-capture rules (most of the prompt) a fresh, full-price prefix on
+        # every call. Same reasoning as date_instruction below.
+        caller_tail = ""
         if visitor_name and visitor_phone:
             # Website-widget calls collect these in a pre-call form, so the
             # agent already has them — this both stops it re-asking (the
@@ -2959,7 +2967,7 @@ class RealEstateAgent(Agent):
             # the name in the opening line, not just "you know it" — the
             # model won't reliably use it unprompted otherwise.
             first_name = visitor_name.strip().split()[0]
-            instructions += (
+            caller_tail += (
                 f"\n\n# Caller context\nThe caller already gave their name ({visitor_name}) and phone "
                 f"number ({visitor_phone}) before this call started. Greet them by name — start your very "
                 f'first sentence of the call with their first name (e.g. "Hi {first_name}, ..."). You '
@@ -2970,7 +2978,7 @@ class RealEstateAgent(Agent):
             # Inbound phone call: the caller's number came from caller ID
             # (see _caller_number_from_sip), not from anything they typed or
             # said, so there's no name yet — only skip re-asking the number.
-            instructions += (
+            caller_tail += (
                 f"\n\n# Caller context\nThis call arrived from {visitor_phone} (caller ID), so you "
                 "already have the caller's phone number — never ask for it. If you need their name "
                 "for the brochure/callback/site-visit, ask for that only."
@@ -3175,7 +3183,7 @@ class RealEstateAgent(Agent):
         if self._memory_enabled and self._caller_phone and config.get("id"):
             prior = db.get_caller_memory(config["id"], self._caller_phone)
             if prior:
-                instructions += (
+                caller_tail += (
                     "\n\n# What you remember about this caller\n"
                     "You've spoken with this caller before. Here's what you know from last time — "
                     "greet them like someone you recognize and use this naturally, don't recite it "
@@ -3366,8 +3374,10 @@ class RealEstateAgent(Agent):
             )
         instructions += _transfer_instructions(config)
         # LAST. Everything above this line is identical between two calls on
-        # the same agent, so it is one cacheable prefix; only these ~100
-        # tokens change. See where date_instruction is built for the numbers.
+        # the same agent, so it is one cacheable prefix; only the caller's own
+        # details and these ~100 tokens change. See where date_instruction is
+        # built for the numbers, and caller_tail for why it is not mid-prompt.
+        instructions += caller_tail
         instructions += date_instruction
         tone_name = config.get("tone") or DEFAULT_TONE
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
@@ -7079,6 +7089,15 @@ async def entrypoint(ctx: JobContext) -> None:
             # later agent-state events had already happened.
             request_duration_ms = round(max(0.0, metric.duration) * 1000)
             first_output_offset_ms = max(0, collected_offset_ms - request_duration_ms + duration_ms)
+            # Prompt-cache hit rate, per turn. Without this the only evidence
+            # that caching works was one-off API tests; a prompt change that
+            # puts a per-call value mid-prompt silently doubles input cost.
+            logger.info(
+                "[llm-cache] %s prompt=%s cached=%s (%.0f%%) room=%s",
+                model, metric.prompt_tokens, metric.prompt_cached_tokens,
+                100 * metric.prompt_cached_tokens / metric.prompt_tokens if metric.prompt_tokens else 0,
+                ctx.room.name,
+            )
             _record_diagnostic(
                 "metric", "llm", "AI response started",
                 "warning" if duration_ms >= 1500 else "ok",
@@ -7087,6 +7106,8 @@ async def entrypoint(ctx: JobContext) -> None:
                 observedAtOffsetMs=collected_offset_ms,
                 provider=provider,
                 model=model,
+                promptTokens=metric.prompt_tokens,
+                cachedTokens=metric.prompt_cached_tokens,
             )
         elif metric_type == "tts_metrics" and not metric.cancelled:
             duration_ms = round(max(0.0, metric.ttfb) * 1000)
