@@ -6180,7 +6180,10 @@ def create_support_ticket(
             cursor = conn.execute(
                 "INSERT INTO support_tickets "
                 "(account_id, user_id, user_email, category, subject, detail, current_page, "
-                f"attachments_json, priority, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, {_NOW})",
+                # RETURNING id is what dbconn's lastrowid reads. Without it every
+                # ticket raised a 500 after inserting and rolled back — which is
+                # why none had ever been filed from the help bubble either.
+                f"attachments_json, priority, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, {_NOW}) RETURNING id",
                 (
                     account_id,
                     user_id,

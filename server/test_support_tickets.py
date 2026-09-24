@@ -92,6 +92,15 @@ class Updates(unittest.TestCase):
         self.assertTrue(sql.endswith("WHERE id = ? AND account_id = ?"))
         self.assertEqual(params[-2:], (41, 3))
 
+    def test_new_ticket_insert_returns_its_id(self):
+        # dbconn's lastrowid fetches the INSERT's result row; with no
+        # RETURNING id it raised on every ticket and the insert rolled back.
+        conn = _conn()
+        conn.execute.return_value.lastrowid = 7
+        with patch.object(calls_db, "_connect", return_value=conn):
+            calls_db.create_support_ticket(2, 5, "a@b.c", "technical", "s", "d", "/x", [])
+        self.assertTrue(conn.execute.call_args.args[0].rstrip().endswith("RETURNING id"))
+
     def test_new_ticket_priority_falls_back_to_normal(self):
         conn = _conn()
         conn.execute.return_value.lastrowid = 7
