@@ -4,6 +4,7 @@ import { useAuth } from '../../lib/auth'
 import {
   adminAccountDetail,
   adminImpersonate,
+  rememberSupportReturn,
   adminResetPassword,
   adminSetCredits,
   adminSetNotes,
@@ -11,12 +12,14 @@ import {
   adminSetStatus,
   PLAN_LABELS,
   type AdminAccountDetail as Detail,
+  type HealthLevel,
 } from '../../lib/adminApi'
 import { AdminCard, EmptyState, fmtDate, fmtDuration, Pill, PlanPill, StatusPill, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
-type Tab = 'users' | 'agents' | 'calls' | 'knowledge' | 'numbers' | 'integrations' | 'notes'
+type Tab = 'health' | 'users' | 'agents' | 'calls' | 'knowledge' | 'numbers' | 'integrations' | 'notes'
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'health', label: 'Health' },
   { id: 'users', label: 'Users' },
   { id: 'agents', label: 'Agents' },
   { id: 'calls', label: 'Calls' },
@@ -33,7 +36,7 @@ export function AdminAccountDetail() {
   const { refresh } = useAuth()
   const [d, setD] = useState<Detail | null>(null)
   const [error, setError] = useState(false)
-  const [tab, setTab] = useState<Tab>('users')
+  const [tab, setTab] = useState<Tab>('health')
   const [modal, setModal] = useState<null | 'credits' | 'plan' | 'status' | 'reset'>(null)
   const [banner, setBanner] = useState<string | null>(null)
 
@@ -52,6 +55,7 @@ export function AdminAccountDetail() {
   const suspended = a.status === 'suspended'
 
   const impersonate = async () => {
+    rememberSupportReturn(`/admin/accounts/${accountId}`)
     await adminImpersonate(accountId)
     await refresh()
     navigate('/dashboard')
@@ -130,6 +134,7 @@ export function AdminAccountDetail() {
       </div>
 
       <div className="mt-4">
+        {tab === 'health' && <HealthTab d={d} />}
         {tab === 'users' && <UsersTab d={d} />}
         {tab === 'agents' && <AgentsTab d={d} />}
         {tab === 'calls' && <CallsTab d={d} navigate={navigate} />}
@@ -234,6 +239,87 @@ function TabTable({ head, children, empty }: { head: string[]; children: React.R
         </table>
       </div>
     </AdminCard>
+  )
+}
+
+const LEVEL_STYLE: Record<HealthLevel, { icon: string; text: string; tone: 'active' | 'warning' | 'suspended'; word: string }> = {
+  ok: { icon: 'check_circle', text: 'text-success', tone: 'active', word: 'Healthy' },
+  warn: { icon: 'warning', text: 'text-amber', tone: 'warning', word: 'Needs attention' },
+  critical: { icon: 'error', text: 'text-destructive', tone: 'suspended', word: 'Blocked' },
+}
+
+function HealthTab({ d }: { d: Detail }) {
+  const h = d.health
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <AdminCard className="overflow-hidden lg:col-span-2">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <h3 className="font-display text-base font-semibold">Can this workspace take calls?</h3>
+          <Pill tone={LEVEL_STYLE[h.overall].tone}>{LEVEL_STYLE[h.overall].word}</Pill>
+        </div>
+        <ul className="divide-y divide-border/60">
+          {h.checks.map((c) => (
+            <li key={c.key} className="flex items-start gap-3 px-5 py-3">
+              <Icon name={LEVEL_STYLE[c.level].icon} className={`mt-0.5 text-[18px] ${LEVEL_STYLE[c.level].text}`} />
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">{c.label}</div>
+                <div className="text-xs text-text-muted">{c.detail}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </AdminCard>
+      <div className="flex flex-col gap-4">
+        <AdminCard className="grid grid-cols-2 gap-4 p-5 text-sm">
+          <Stat label="Calls, 7 days" value={String(h.calls7d)} />
+          <Stat label="Didn't connect" value={String(h.failed7d)} />
+          <Stat label="Last call" value={h.lastCallAt ? timeAgo(h.lastCallAt) : 'Never'} />
+          <Stat label="Last login" value={h.lastLoginAt ? timeAgo(h.lastLoginAt) : 'Never'} />
+          <Stat label="Open tickets" value={String(h.openTickets)} />
+          <Stat label="Country" value={h.country} />
+        </AdminCard>
+        {h.failureReasons.length > 0 && (
+          <AdminCard className="p-5">
+            <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">Why calls didn't connect</h3>
+            <ul className="flex flex-col gap-1.5 text-sm">
+              {h.failureReasons.map((r) => (
+                <li key={r.reason} className="flex justify-between gap-3">
+                  <span className="truncate font-mono text-xs">{r.reason}</span>
+                  <span className="tabular-nums text-text-muted">{r.count}</span>
+                </li>
+              ))}
+            </ul>
+          </AdminCard>
+        )}
+      </div>
+      {h.errors.length > 0 && (
+        <AdminCard className="overflow-hidden lg:col-span-3">
+          <h3 className="border-b border-border px-5 py-3 font-display text-base font-semibold">Errors in the last 7 days</h3>
+          <ul className="divide-y divide-border/60">
+            {h.errors.map((e, i) => (
+              <li key={i} className="px-5 py-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                  <Pill tone={e.level === 'error' ? 'suspended' : 'warning'}>{e.level}</Pill>
+                  <span>{e.source}</span>
+                  <span>{timeAgo(e.created_at)}</span>
+                </div>
+                <div className="mt-1 break-words text-sm">{e.message}</div>
+                {e.context && <div className="mt-0.5 break-words font-mono text-[11px] text-text-muted">{e.context}</div>}
+              </li>
+            ))}
+          </ul>
+        </AdminCard>
+      )}
+    </div>
+  )
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{label}</div>
+      <div className="mt-0.5 font-semibold tabular-nums">{value}</div>
+    </div>
   )
 }
 

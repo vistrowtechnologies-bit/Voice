@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useAuth } from '../../lib/auth'
 import { AdminCard, EmptyState, PageHeader } from '../../components/AdminUI'
 import { PriorityChip, StatusChip, TicketThread } from '../../components/SupportTicketParts'
 import { CATEGORY_LABELS, ticketTime, toUploads } from '../../lib/support'
@@ -7,6 +8,8 @@ import { Icon } from '../../components/Icon'
 import {
   adminAddSupportNote,
   adminAssignSupportTicket,
+  adminImpersonate,
+  rememberSupportReturn,
   adminReplySupportTicket,
   adminSupportTeam,
   adminSupportTicket,
@@ -160,6 +163,7 @@ export function AdminSupport() {
                     </Link>{' '}
                     · {selected.userEmail} · opened {ticketTime(selected.createdAt)}
                   </p>
+                  <ViewAsCustomer ticket={selected} />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <label className="flex flex-col gap-1 text-[11px] font-semibold text-text-muted">
@@ -224,5 +228,42 @@ export function AdminSupport() {
         </AdminCard>
       </div>
     </>
+  )
+}
+
+/** Opens the customer's dashboard as them (an audited support session),
+ * on the page the ticket was raised from, to reproduce and fix the issue.
+ * Exit in the red banner comes back to this ticket. */
+function ViewAsCustomer({ ticket }: { ticket: SupportTicket }) {
+  const navigate = useNavigate()
+  const { refresh } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const landOn = ticket.currentPage.startsWith('/dashboard') ? ticket.currentPage : '/dashboard'
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      <button
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true)
+          try {
+            rememberSupportReturn(`/admin/support?ticket=${ticket.id}`)
+            await adminImpersonate(ticket.accountId)
+            await refresh()
+            navigate(landOn)
+          } finally {
+            setBusy(false)
+          }
+        }}
+        className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-bg hover:opacity-90 disabled:opacity-50"
+      >
+        <Icon name="visibility" className="text-[15px]" /> {busy ? 'Opening…' : `View as customer on ${landOn}`}
+      </button>
+      <Link
+        to={`/admin/accounts/${ticket.accountId}`}
+        className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:border-primary"
+      >
+        <Icon name="monitor_heart" className="text-[15px]" /> Account health
+      </Link>
+    </div>
   )
 }

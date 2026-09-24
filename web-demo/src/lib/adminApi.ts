@@ -141,6 +141,22 @@ export interface AdminAccountDetail {
     agent_id: number | null
   }[]
   audit: { action: string; actor_email: string; detail: string; created_at: string }[]
+  health: AccountHealth
+}
+
+export type HealthLevel = 'ok' | 'warn' | 'critical'
+
+export interface AccountHealth {
+  overall: HealthLevel
+  checks: { key: string; level: HealthLevel; label: string; detail: string }[]
+  calls7d: number
+  failed7d: number
+  failureReasons: { reason: string; count: number }[]
+  errors: { source: string; level: string; message: string; context: string; created_at: string }[]
+  openTickets: number
+  lastCallAt: string | null
+  lastLoginAt: string | null
+  country: string
 }
 
 export interface AdminUserRow {
@@ -346,6 +362,26 @@ export const adminSetNotes = (id: number, notes: string) => apost<AdminAccountDe
 export const adminResetPassword = (id: number) => apost<{ ok: boolean; emailSent: boolean; resetLink: string }>(`/accounts/${id}/reset-password`)
 export const adminImpersonate = (id: number) => apost<{ ok: boolean }>(`/impersonate/${id}`)
 export const adminExitImpersonation = () => apost<{ ok: boolean }>('/impersonate/exit')
+
+// Where "Exit" in the support-session banner goes back to — the ticket or
+// account page the session was started from, not always the admin home.
+const RETURN_KEY = 'vv-support-session-return'
+export function rememberSupportReturn(path: string) {
+  try {
+    sessionStorage.setItem(RETURN_KEY, path)
+  } catch {
+    /* storage blocked — Exit falls back to /admin */
+  }
+}
+export function takeSupportReturn(): string {
+  try {
+    const path = sessionStorage.getItem(RETURN_KEY)
+    sessionStorage.removeItem(RETURN_KEY)
+    return path && path.startsWith('/admin') ? path : '/admin'
+  } catch {
+    return '/admin'
+  }
+}
 
 export const adminOutboundTrunkStatus = () => aget<AdminOutboundTrunkStatus>('/outbound-trunk')
 export const adminSyncOutboundTrunk = (address: string, callerId: string) =>

@@ -328,7 +328,9 @@ def account_detail(account_id: int) -> dict | None:
         import calls_db  # local import: avoids a cycle at module load
 
         billing = calls_db.billing_summary(account_id)
+        health = _account_health(conn, acct, billing, users, agents, numbers, integrations)
         return {
+            "health": health,
             "account": acct,
             "owner": dict(owner) if owner else None,
             "billing": billing,
@@ -343,6 +345,119 @@ def account_detail(account_id: int) -> dict | None:
         }
     finally:
         conn.close()
+
+
+def _account_health(conn, acct: dict, billing: dict, users: list, agents: list, numbers: list, integrations: list) -> dict:
+    """One support-facing summary of whether this workspace can take calls
+    right now and what has gone wrong lately. Each check is ok / warn /
+    critical with a sentence saying why, so a ticket can be triaged without
+    clicking through every tab. Call outcomes use calls_db._status — the same
+    rule the tenant's own Calls page shows — so both screens agree."""
+    import calls_db
+
+    account_id = acct["id"]
+    checks: list[dict] = []
+
+    def check(key: str, level: str, label: str, detail: str) -> None:
+        checks.append({"key": key, "level": level, "label": label, "detail": detail})
+
+    if (acct.get("status") or "active") == "suspended":
+        check("status", "critical", "Account suspended", "Every call and login is blocked until it is reactivated.")
+    else:
+        check("status", "ok", "Account active", "Not suspended.")
+
+    total = float(billing.get("creditsTotal") or 0)
+    left = total - float(billing.get("creditsUsed") or 0)
+    if left <= 0:
+        check("credits", "critical", "Out of credits", f"0 of {round(total)} credits left — calls will not connect.")
+    elif total and left < total * 0.1:
+        check("credits", "warn", "Credits running low", f"{round(left)} of {round(total)} credits left (under 10%).")
+    else:
+        check("credits", "ok", "Credits", f"{round(left)} of {round(total)} credits left.")
+
+    live = [a for a in agents if a.get("status") == "live"]
+    if not agents:
+        check("agents", "warn", "No agents", "The workspace has not created an agent yet.")
+    elif not live:
+        check("agents", "warn", "No live agent", f"{len(agents)} agent(s), none set to live.")
+    else:
+        check("agents", "ok", "Agents", f"{len(live)} of {len(agents)} agent(s) live.")
+
+    active = [n for n in numbers if n.get("status") == "active"]
+    unrouted = [n["number"] for n in active if not n.get("agent_id")]
+    if unrouted:
+        check("numbers", "warn", "Number without an agent", f"{', '.join(unrouted)} has no agent — inbound calls to it can't be answered.")
+    elif active:
+        check("numbers", "ok", "Phone numbers", f"{len(active)} active number(s), all routed to an agent.")
+    else:
+        check("numbers", "ok", "Phone numbers", "No phone number — website calls only.")
+
+    broken = [i["name"] for i in integrations if (i.get("status") or "") not in {"connected", "not_connected", ""}]
+    if broken:
+        check("integrations", "warn", "Integration needs attention", ", ".join(broken))
+    else:
+        connected = sum(1 for i in integrations if i.get("status") == "connected")
+        check("integrations", "ok", "Integrations", f"{connected} connected, none reporting a problem.")
+
+    rows = conn.execute(
+        """SELECT started_at, duration_seconds, lead_name, transcript_json,
+                  COALESCE(failure_reason, '') failure_reason, COALESCE(disconnect_reason, '') disconnect_reason
+           FROM calls WHERE account_id = ? AND started_at::timestamp >= now() - INTERVAL '7 days'
+           ORDER BY started_at DESC LIMIT 500""",
+        (account_id,),
+    ).fetchall()
+    failed_reasons: dict[str, int] = {}
+    for r in rows:
+        r = dict(r)
+        try:
+            transcript = json.loads(r["transcript_json"]) if r["transcript_json"] else []
+        except ValueError:
+            transcript = []
+        if calls_db._status(r, transcript) == "failed":
+            reason = r["failure_reason"] or r["disconnect_reason"] or "too short / no conversation"
+            failed_reasons[reason] = failed_reasons.get(reason, 0) + 1
+    failed = sum(failed_reasons.values())
+    if rows and len(rows) >= 5 and failed / len(rows) >= 0.2:
+        check("calls", "warn", "Many failed calls", f"{failed} of {len(rows)} calls failed in the last 7 days.")
+    elif rows:
+        check("calls", "ok", "Calls", f"{len(rows)} call(s) in the last 7 days, {failed} failed.")
+    else:
+        check("calls", "ok", "Calls", "No calls in the last 7 days.")
+
+    errors = [
+        dict(r)
+        for r in conn.execute(
+            """SELECT source, level, message, context, created_at FROM error_events
+               WHERE account_id = ? AND created_at::timestamp >= now() - INTERVAL '7 days'
+               ORDER BY id DESC LIMIT 10""",
+            (account_id,),
+        ).fetchall()
+    ]
+    if errors:
+        check("errors", "warn", "Errors logged", f"{len(errors)}{'+' if len(errors) == 10 else ''} error(s) in the last 7 days — see below.")
+    else:
+        check("errors", "ok", "Errors", "Nothing logged in the last 7 days.")
+
+    open_tickets = conn.execute(
+        "SELECT COUNT(*) c FROM support_tickets WHERE account_id = ? AND status IN ('open', 'in_progress')", (account_id,)
+    ).fetchone()["c"]
+    last_call = conn.execute("SELECT MAX(started_at) m FROM calls WHERE account_id = ?", (account_id,)).fetchone()["m"]
+    logins = [u["last_login_at"] for u in users if u.get("last_login_at")]
+
+    order = {"critical": 0, "warn": 1, "ok": 2}
+    overall = min((c["level"] for c in checks), key=order.__getitem__, default="ok")
+    return {
+        "overall": overall,
+        "checks": sorted(checks, key=lambda c: order[c["level"]]),
+        "calls7d": len(rows),
+        "failed7d": failed,
+        "failureReasons": sorted(({"reason": k, "count": v} for k, v in failed_reasons.items()), key=lambda x: -x["count"]),
+        "errors": errors,
+        "openTickets": open_tickets,
+        "lastCallAt": last_call,
+        "lastLoginAt": max(logins) if logins else None,
+        "country": calls_db.get_account_country(account_id),
+    }
 
 
 # ----------------------------------------------------------------- users

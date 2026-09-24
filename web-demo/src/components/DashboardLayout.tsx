@@ -7,7 +7,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { fetchBilling } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
 import { BRAND } from '../lib/brand'
-import { adminExitImpersonation } from '../lib/adminApi'
+import { adminExitImpersonation, takeSupportReturn } from '../lib/adminApi'
 import { useAuth } from '../lib/auth'
 import { helpTopicFor } from '../lib/support'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
@@ -336,7 +336,7 @@ function ImpersonationBanner({ accountName }: { accountName: string }) {
   const exit = async () => {
     await adminExitImpersonation().catch(() => {})
     await refresh()
-    navigate('/admin')
+    navigate(takeSupportReturn())
   }
   return (
     <div className="fixed inset-x-0 top-0 z-50 flex h-9 items-center justify-between bg-destructive px-4 text-white">
