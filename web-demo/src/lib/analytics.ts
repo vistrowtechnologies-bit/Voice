@@ -6,7 +6,30 @@ declare global {
   interface Window {
     dataLayer?: unknown[]
     gtag?: (...args: unknown[]) => void
+    clarity?: ((...args: unknown[]) => void) & { q?: unknown[] }
   }
+}
+
+// Microsoft Clarity (session recordings + heatmaps) runs on the public
+// website only — never on app.vistrowvoice.com, where dashboards show
+// customers' call transcripts, leads and phone numbers. The host split
+// (lib/hostBuckets.ts) makes that a hard boundary: signing in is a
+// full-page load onto the app host, so a recording can't follow a visitor
+// into the dashboard. Empty id = off.
+const CLARITY_PROJECT_ID = 'ynb20l1khj'
+const CLARITY_HOSTS = new Set(['www.vistrowvoice.com', 'vistrowvoice.com'])
+
+export function initClarity(): void {
+  if (typeof window === 'undefined' || !CLARITY_PROJECT_ID || window.clarity) return
+  if (!CLARITY_HOSTS.has(window.location.hostname)) return
+  const clarity = ((...args: unknown[]) => {
+    ;(clarity.q = clarity.q || []).push(args)
+  }) as NonNullable<Window['clarity']>
+  window.clarity = clarity
+  const tag = document.createElement('script')
+  tag.async = true
+  tag.src = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`
+  document.head.appendChild(tag)
 }
 
 type PageArea = 'marketing' | 'app' | 'auth' | 'admin'
@@ -69,7 +92,11 @@ function commonPageParams(path: string) {
 }
 
 export function trackPageView(path: string): void {
-  if (typeof window === 'undefined' || typeof window.gtag !== 'function') return
+  if (typeof window === 'undefined') return
+  // Lets Clarity recordings and heatmaps be filtered by page group (pricing,
+  // solution_detail, ...). Clarity tracks the SPA route change itself.
+  window.clarity?.('set', 'page_group', classifyPageGroup(cleanPath(path)))
+  if (typeof window.gtag !== 'function') return
   window.gtag('event', 'page_view', {
     page_path: path,
     page_location: window.location.href,

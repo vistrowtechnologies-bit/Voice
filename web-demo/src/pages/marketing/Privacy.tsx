@@ -9,7 +9,7 @@ export function Privacy() {
     <LegalLayout
       eyebrow="Legal"
       title="Privacy Policy"
-      updated="22 August 2026"
+      updated="24 September 2026"
       path="/privacy"
       description="How Vistrow Voice collects, uses, shares, retains, and protects account, call, and integration data."
       intro={`${BRAND.name} ("we", "us", "${BRAND.short}") builds AI voice agents that businesses use to answer and place phone calls. This policy explains what we collect, why, and the choices you have - whether you're a business running ${BRAND.name} or someone who spoke with an AI agent powered by it.`}
@@ -130,7 +130,8 @@ export function Privacy() {
       </LegalSection>
 
       <LegalSection title="9. Cookies & similar technologies">
-        <p>We use a single essential, httpOnly session cookie to keep you signed in - no third-party advertising or tracking cookies. Disabling this cookie will sign you out.</p>
+        <p>In the dashboard (app.vistrowvoice.com) we use a single essential, httpOnly session cookie to keep you signed in. Disabling it will sign you out.</p>
+        <p>On our public website (www.vistrowvoice.com) we use analytics cookies from Google Analytics and Microsoft Clarity to understand how visitors use the site - which pages are viewed, and how people click, scroll and move through a page, including session replays and heatmaps. Text typed into form fields and the live demo's transcript are masked and not captured. Microsoft processes Clarity data as described in the <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noopener noreferrer">Microsoft Privacy Statement</a>. We do not use advertising cookies, and neither tool runs inside the dashboard. You can block these cookies in your browser settings without affecting the website.</p>
       </LegalSection>
 
       <LegalSection title="10. Security">

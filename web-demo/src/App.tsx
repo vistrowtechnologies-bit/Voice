@@ -70,7 +70,7 @@ import { WebsiteWidget } from './pages/WebsiteWidget'
 import { Settings } from './pages/Settings'
 import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { trackPageView } from './lib/analytics'
+import { initClarity, trackPageView } from './lib/analytics'
 
 // Wrap every dashboard route in the auth gate - one helper keeps App.tsx
 // readable instead of nesting <RequireAuth> around each element.
@@ -105,6 +105,7 @@ function AnalyticsListener() {
     observer = isProductPage ? new MutationObserver(updateProductTitle) : null
     if (observer) observer.observe(document.body, { childList: true, subtree: true })
     const id = setTimeout(() => {
+      initClarity()
       trackPageView(location.pathname + location.search)
     }, 0)
     return () => {

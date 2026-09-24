@@ -386,6 +386,8 @@ export function DemoOrbCard({
   return (
     <div
       id="live-demo"
+      // Live transcript can hold what the visitor said (name, number) — keep it out of Clarity recordings.
+      data-clarity-mask="true"
       className={`demo-card-shell relative mx-auto w-full max-w-[420px] scroll-mt-20 lg:mx-0 lg:ml-auto ${spotlight ? 'demo-card-spotlight' : ''}`}
       style={accentHue ? ({ '--demo-accent-hue': accentHue } as React.CSSProperties) : undefined}
     >
