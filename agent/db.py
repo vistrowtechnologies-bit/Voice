@@ -788,12 +788,22 @@ def get_phone_number_by_number(number: str) -> dict | None:
     return result
 
 
-def get_webhook_url() -> str | None:
-    """URL of the connected CRM webhook integration, if any."""
+def get_webhook_url(account_id: int | None) -> str | None:
+    """URL of THIS account's connected CRM webhook integration, if any.
+
+    Scoped by account: integrations are per-tenant rows, and this used to
+    select any connected 'webhook' row platform-wide — so the first tenant to
+    connect one would have received every other tenant's leads and
+    appointments. No account, no URL: fail closed rather than guess.
+    """
+    if account_id is None:
+        return None
     conn = dbconn.connect()
     try:
         row = conn.execute(
-            "SELECT config_json FROM integrations WHERE key = 'webhook' AND status = 'connected'"
+            "SELECT config_json FROM integrations "
+            "WHERE account_id = ? AND key = 'webhook' AND status = 'connected'",
+            (account_id,),
         ).fetchone()
         if row is None:
             return None

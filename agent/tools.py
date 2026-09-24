@@ -62,7 +62,7 @@ def _fan_out_in_background(context: RunContext, event: dict) -> None:
     async def _run() -> None:
         try:
             await _publish_event(context, event)
-            await _post_webhook(event)
+            await _post_webhook(context, event)
             await _fan_out_integrations(context, event)
         except Exception as exc:
             # Never let a webhook failure surface as a tool error: the lead is
@@ -527,13 +527,14 @@ def _calendar_check_filler(context: RunContext) -> str:
     return options.get(gender) or options.get("default") or _TOOL_FILLER_TEXT
 
 
-async def _post_webhook(payload: dict) -> None:
-    """Push the event to the CRM webhook configured on the Integrations page.
+async def _post_webhook(context: RunContext, payload: dict) -> None:
+    """Push the event to the CRM webhook configured on the Integrations page
+    of the account this call belongs to.
 
     Best-effort with a short timeout — a slow or dead endpoint must never
     stall the live call.
     """
-    url = db.get_webhook_url()
+    url = db.get_webhook_url((context.userdata or {}).get("account_id"))
     if not url:
         return
     try:
@@ -772,7 +773,7 @@ async def _deliver_to_integrations(
 ) -> None:
     """Deliver an event to every connected integration for this tenant.
     Best-effort and heavily guarded — never lets a bad integration disturb the
-    live call. The per-agent CRM webhook (_post_webhook) still fires separately.
+    live call. The account's CRM webhook (_post_webhook) still fires separately.
 
     Takes account_id directly rather than a RunContext so it can be called
     from both mid-call function tools (via _fan_out_integrations below) and
@@ -1312,7 +1313,7 @@ async def request_callback(
         "purpose": reason,
     }
     await _publish_event(context, event)
-    await _post_webhook(event)
+    await _post_webhook(context, event)
     # Same fan-out a booking gets: this is the lead the clinic would otherwise
     # have lost, so it needs to reach Slack/Sheets/CRM, not just the database.
     await _fan_out_integrations(context, event)
@@ -1440,7 +1441,7 @@ async def book_appointment(
             "phone": phone,
         }
         await _publish_event(context, event)
-        await _post_webhook(event)
+        await _post_webhook(context, event)
         await _fan_out_integrations(context, event)
     if result is None:
         # Recorded on the lead + pushed to integrations, but the native
@@ -1783,7 +1784,7 @@ async def capture_platform_lead(
     }
     async with _tool_filler(context):
         await _publish_event(context, event)
-        await _post_webhook(event)
+        await _post_webhook(context, event)
         await _fan_out_integrations(context, event)
     return "Lead details recorded."
 
