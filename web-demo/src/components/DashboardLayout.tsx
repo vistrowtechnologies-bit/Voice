@@ -8,6 +8,7 @@ import { fetchBilling } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
 import { BRAND } from '../lib/brand'
 import { adminExitImpersonation, takeSupportReturn } from '../lib/adminApi'
+import { stopClarityForStaff, tagClarityAccount } from '../lib/analytics'
 import { useAuth } from '../lib/auth'
 import { helpTopicFor } from '../lib/support'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
@@ -184,7 +185,7 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           </button>
         )}
       </div>
-      <nav className="flex min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <nav data-clarity-unmask="true" className="flex min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {NAV_GROUPS.filter((group) => !group.pinned).map((group) => (
           <div key={group.title}>
             <div className="mb-1 flex h-6 items-center px-3">
@@ -408,6 +409,12 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     applyTheme(getStoredTheme(), false)
     return () => document.documentElement.removeAttribute('data-theme')
   }, [])
+
+  useEffect(() => {
+    if (!user) return
+    if (user.isPlatformOwner || user.impersonating) stopClarityForStaff()
+    else tagClarityAccount(user.accountId, user.plan)
+  }, [user])
 
   return (
     <SidebarContext.Provider value={{ open: sidebarOpen, toggle: toggleSidebar }}>

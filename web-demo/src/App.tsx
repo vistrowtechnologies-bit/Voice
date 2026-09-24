@@ -105,7 +105,7 @@ function AnalyticsListener() {
     observer = isProductPage ? new MutationObserver(updateProductTitle) : null
     if (observer) observer.observe(document.body, { childList: true, subtree: true })
     const id = setTimeout(() => {
-      initClarity()
+      initClarity(location.pathname)
       trackPageView(location.pathname + location.search)
     }, 0)
     return () => {

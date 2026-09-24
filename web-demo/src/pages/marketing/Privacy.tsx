@@ -83,6 +83,7 @@ export function Privacy() {
           <li><b>Hosting &amp; database</b> - Railway (application servers, Postgres database, hosted in the United States) and Vercel (web app).</li>
           <li><b>Call recording storage</b> - Backblaze B2 (audio recordings, hosted in the United States).</li>
           <li><b>Email delivery</b> - Resend, to send account and notification emails.</li>
+          <li><b>Usage analytics</b> - Google Analytics and Microsoft Clarity, to understand how the website and app are used (see section 9).</li>
           <li><b>Integrations you connect</b> - Google Calendar, Slack, WhatsApp providers, or a CRM you configure - only the data needed for that specific integration to work, and only while it's connected.</li>
         </ul>
         <p>Each of these processes data under its own privacy commitments; we choose providers that meet industry-standard security practices.</p>
@@ -130,8 +131,8 @@ export function Privacy() {
       </LegalSection>
 
       <LegalSection title="9. Cookies & similar technologies">
-        <p>In the dashboard (app.vistrowvoice.com) we use a single essential, httpOnly session cookie to keep you signed in. Disabling it will sign you out.</p>
-        <p>On our public website (www.vistrowvoice.com) we use analytics cookies from Google Analytics and Microsoft Clarity to understand how visitors use the site - which pages are viewed, and how people click, scroll and move through a page, including session replays and heatmaps. Text typed into form fields and the live demo's transcript are masked and not captured. Microsoft processes Clarity data as described in the <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noopener noreferrer">Microsoft Privacy Statement</a>. We do not use advertising cookies, and neither tool runs inside the dashboard. You can block these cookies in your browser settings without affecting the website.</p>
+        <p>We use one essential, httpOnly session cookie to keep you signed in. Disabling it will sign you out.</p>
+        <p>On our website (www.vistrowvoice.com) and in the app (app.vistrowvoice.com) we also use analytics cookies from Google Analytics and Microsoft Clarity to understand how the product is used - which pages are viewed, and how people click, scroll and move through a page, including session replays and heatmaps. Text typed into form fields and the live demo's transcript are masked and not captured. Inside the app, all on-screen text is masked, so call transcripts, contacts, leads and other workspace data are never captured - only interactions such as clicks, scrolling and which page is open, tagged with a workspace ID. Microsoft processes Clarity data as described in the <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noopener noreferrer">Microsoft Privacy Statement</a>. We do not use advertising cookies. You can block analytics cookies in your browser settings without affecting how the website or app works.</p>
       </LegalSection>
 
       <LegalSection title="10. Security">

@@ -10,18 +10,24 @@ declare global {
   }
 }
 
-// Microsoft Clarity (session recordings + heatmaps) runs on the public
-// website only — never on app.vistrowvoice.com, where dashboards show
-// customers' call transcripts, leads and phone numbers. The host split
-// (lib/hostBuckets.ts) makes that a hard boundary: signing in is a
-// full-page load onto the app host, so a recording can't follow a visitor
-// into the dashboard. Empty id = off.
+// Microsoft Clarity (session recordings + heatmaps). On the public website
+// it records normally. On the app host every piece of text is masked
+// (data-clarity-mask on <body>) because dashboards show customers' call
+// transcripts, leads and phone numbers — recordings there show clicks,
+// scrolling and navigation, with only the sidebar menu left readable
+// (data-clarity-unmask in DashboardLayout). Never on /admin, and platform
+// staff are never recorded (stopClarityForStaff). Previews/localhost: off.
 const CLARITY_PROJECT_ID = 'ynb20l1khj'
-const CLARITY_HOSTS = new Set(['www.vistrowvoice.com', 'vistrowvoice.com'])
+const MARKETING_HOSTS = new Set(['www.vistrowvoice.com', 'vistrowvoice.com'])
+const APP_HOST = 'app.vistrowvoice.com'
 
-export function initClarity(): void {
+export function initClarity(path: string): void {
   if (typeof window === 'undefined' || !CLARITY_PROJECT_ID || window.clarity) return
-  if (!CLARITY_HOSTS.has(window.location.hostname)) return
+  const host = window.location.hostname
+  if (!MARKETING_HOSTS.has(host) && host !== APP_HOST) return
+  if (cleanPath(path).startsWith('/admin')) return
+  // Masking must be in place before the recorder's first snapshot.
+  if (host === APP_HOST) document.body.setAttribute('data-clarity-mask', 'true')
   const clarity = ((...args: unknown[]) => {
     ;(clarity.q = clarity.q || []).push(args)
   }) as NonNullable<Window['clarity']>
@@ -89,6 +95,20 @@ function commonPageParams(path: string) {
     site_area: pageArea === 'marketing' ? 'marketing' : 'product_app',
     is_marketing_page: pageArea === 'marketing',
   }
+}
+
+/** Our own team's sessions (admin panel, support "View as") stay out of
+ * the recordings — they'd skew every heatmap and they show other
+ * tenants' data. */
+export function stopClarityForStaff(): void {
+  window.clarity?.('stop')
+}
+
+/** Filter dashboard recordings by workspace and plan — e.g. watch what a
+ * customer did right before raising a ticket. Ids only, never names. */
+export function tagClarityAccount(accountId: number, plan: string): void {
+  window.clarity?.('set', 'account_id', String(accountId))
+  window.clarity?.('set', 'plan', plan || 'unknown')
 }
 
 export function trackPageView(path: string): void {

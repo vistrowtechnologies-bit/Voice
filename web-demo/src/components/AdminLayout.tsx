@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { stopClarityForStaff } from '../lib/analytics'
 import type { ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import vistrowMark from '../assets/vistrow-mark.png'
@@ -115,6 +116,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
  * whatever was set before on exit. */
 export function AdminLayout({ children }: { children: ReactNode }) {
   const [mobileNav, setMobileNav] = useState(false)
+  useEffect(() => stopClarityForStaff(), [])
   const navigate = useNavigate()
 
   useEffect(() => {
