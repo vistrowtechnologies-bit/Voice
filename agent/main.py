@@ -1829,14 +1829,17 @@ def _build_llm(model: str, *, max_output_tokens: int = 220):
         api_key = os.environ.get("SARVAM_API_KEY")
         if not api_key:
             raise RuntimeError(f"{model} is selected, but SARVAM_API_KEY is not configured.")
-        # prompt_cache_key was missing here entirely - verified directly
-        # against the real API (not assumed): the same 1,120-token system
-        # prompt sent twice with no cache key came back
-        # prompt_tokens_details: null both times, but the identical request
-        # WITH this key came back cached_tokens: 1088 (97%) on the very next
-        # call. Sarvam's own rate card prices cached input at ₹10.98/1M vs
-        # ₹29.28/1M uncached - a 62% cut on our single largest cost line
-        # (54% of API spend) that every call was silently missing.
+        # prompt_cache_key is NOT a Sarvam parameter: it is absent from their
+        # chat-completions request schema, and Sarvam caching is automatic
+        # (prompt_tokens_details is null on a miss, carries cached_tokens on a
+        # hit, billed ₹10.98/1M vs ₹29.28/1M). Re-tested 2026-09-24 with the
+        # production key: sarvam-105b-conversations returned 0 cached tokens
+        # in 33 requests - with and without this key, at 1.5k and 4k tokens,
+        # and across a 7-turn call with tools - while plain sarvam-105b hit
+        # intermittently. An earlier note here credited this key with a 97%
+        # hit; that was not reproducible. Kept because it is harmless and
+        # costs nothing if Sarvam starts honouring it; raise caching on
+        # -conversations with Sarvam rather than changing code here.
         return openai.LLM(
             model=model.split("/", 1)[1],
             api_key=api_key,
