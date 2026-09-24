@@ -8,7 +8,7 @@ import { fetchBilling } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
 import { BRAND } from '../lib/brand'
 import { adminExitImpersonation, takeSupportReturn } from '../lib/adminApi'
-import { stopClarityForStaff, tagClarityAccount } from '../lib/analytics'
+import { initClarity, stopClarityForStaff, tagClarityAccount } from '../lib/analytics'
 import { useAuth } from '../lib/auth'
 import { helpTopicFor } from '../lib/support'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
@@ -412,8 +412,12 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) return
-    if (user.isPlatformOwner || user.impersonating) stopClarityForStaff()
-    else tagClarityAccount(user.accountId, user.plan)
+    if (user.isPlatformOwner || user.impersonating) {
+      stopClarityForStaff()
+    } else {
+      initClarity(window.location.pathname, true)
+      tagClarityAccount(user.accountId, user.plan)
+    }
   }, [user])
 
   return (

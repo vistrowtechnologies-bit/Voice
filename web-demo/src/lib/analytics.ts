@@ -21,11 +21,14 @@ const CLARITY_PROJECT_ID = 'ynb20l1khj'
 const MARKETING_HOSTS = new Set(['www.vistrowvoice.com', 'vistrowvoice.com'])
 const APP_HOST = 'app.vistrowvoice.com'
 
-export function initClarity(path: string): void {
+export function initClarity(path: string, signedInCustomer = false): void {
   if (typeof window === 'undefined' || !CLARITY_PROJECT_ID || window.clarity) return
   const host = window.location.hostname
   if (!MARKETING_HOSTS.has(host) && host !== APP_HOST) return
   if (cleanPath(path).startsWith('/admin')) return
+  // Dashboard pages wait until we know who is signed in — DashboardLayout
+  // calls this with signedInCustomer=true — so staff send nothing at all.
+  if (cleanPath(path).startsWith('/dashboard') && !signedInCustomer) return
   // Masking must be in place before the recorder's first snapshot.
   if (host === APP_HOST) document.body.setAttribute('data-clarity-mask', 'true')
   const clarity = ((...args: unknown[]) => {
