@@ -73,15 +73,17 @@ function NewRequest({ onCreated, onCancel }: { onCreated: (id: number) => void; 
   }
 
   return (
-    <form onSubmit={submit} onPaste={attachments.onPaste} className="mx-auto flex w-full max-w-3xl flex-col gap-5">
-      <BackLink onClick={onCancel} />
-      <div>
-        <h2 className="text-xl font-semibold">Submit a request</h2>
+    <div className="flex flex-col gap-3">
+    <BackLink onClick={onCancel} />
+    <form onSubmit={submit} onPaste={attachments.onPaste} className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="text-lg font-semibold">Submit a request</h2>
         <p className="mt-1 text-sm text-text-muted">
           Tell us what you did, what you expected, and what happened instead. A screenshot of the problem — or the
           call's time and number — lets us fix it much faster.
         </p>
       </div>
+      <div className="flex flex-col gap-5 px-5 py-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">
           What is it about?
@@ -113,13 +115,15 @@ function NewRequest({ onCreated, onCancel }: { onCreated: (id: number) => void; 
         <AttachmentPicker state={attachments} />
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
+      </div>
+      <div className="flex items-center justify-end gap-2 border-t border-border bg-surface-high/40 px-5 py-3">
         <button type="button" onClick={onCancel} className="rounded-lg px-4 py-2 text-sm font-semibold text-text-muted hover:bg-surface-high">Cancel</button>
         <button type="submit" disabled={sending || !subject.trim() || !detail.trim()} className="rounded-lg bg-primary px-5 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40">
           {sending ? 'Submitting…' : 'Submit request'}
         </button>
       </div>
     </form>
+    </div>
   )
 }
 
@@ -142,9 +146,10 @@ function RequestDetail({ id, onBack, onChanged }: { id: number; onBack: () => vo
   const solved = customerStatus(ticket) === 'solved'
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+    <div className="flex flex-col gap-3">
       <BackLink onClick={onBack} />
-      <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border bg-surface p-5">
+      <section className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
             <span className="font-mono">{ticket.ref}</span>
@@ -163,12 +168,15 @@ function RequestDetail({ id, onBack, onChanged }: { id: number; onBack: () => vo
           </button>
         )}
       </div>
-      <TicketThread
-        ticket={ticket}
-        viewer="customer"
-        replyPlaceholder="Add details, answer a question, or say what changed…"
-        onReply={async (body, files) => apply(await replySupportTicket(ticket.id, body, await toUploads(files)))}
-      />
+      <div className="bg-bg/40 p-5">
+        <TicketThread
+          ticket={ticket}
+          viewer="customer"
+          replyPlaceholder="Add details, answer a question, or say what changed…"
+          onReply={async (body, files) => apply(await replySupportTicket(ticket.id, body, await toUploads(files)))}
+        />
+      </div>
+      </section>
     </div>
   )
 }
