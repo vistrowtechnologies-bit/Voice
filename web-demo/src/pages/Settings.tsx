@@ -592,7 +592,7 @@ function PreferencesTab() {
       {saving && <p className="text-xs text-text-muted">Saving…</p>}
     </SettingsCard>
     <SettingsCard title="Notifications" subtitle="Choose the operational emails you receive personally.">
-      <div className="flex flex-col gap-2"><Toggle field="notify_leads" label="Qualified leads" description="New lead and follow-up alerts." /><Toggle field="notify_calls" label="Call issues" description="Important failed-call and delivery alerts." /><Toggle field="notify_billing" label="Billing" description="Credit, invoice, and plan notices." /><Toggle field="notify_product" label="Product updates" description="Occasional Vistrow Voice release updates." /></div>
+      <div className="flex flex-col gap-2"><Toggle field="notify_leads" label="Qualified leads" description="An email when your agents capture new leads, grouped every couple of minutes." /><Toggle field="notify_calls" label="Delivery issues" description="When a connected CRM or integration stops receiving your leads." /><Toggle field="notify_billing" label="Low credits" description="When your call credits drop below 10% of your allocation." /></div>
     </SettingsCard>
     {message && <p className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-muted">{message}</p>}
   </div>

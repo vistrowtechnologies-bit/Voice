@@ -33,6 +33,7 @@ import llm_warmer
 import project_sync
 import razorpay_client
 import retention_worker
+import notification_worker
 import widget_avatars
 import widget_chat
 import voice_catalog
@@ -71,6 +72,9 @@ db_backup.start_backup_scheduler()
 # Applies each tenant's retention window daily. Before this, retention ran
 # only while somebody had the Compliance page open (see retention_worker.py).
 retention_worker.start_retention_worker()
+# Sends the emails behind Settings → Preferences → Notifications, which were
+# saved and never sent before 2026-09-24 (see notification_worker.py).
+notification_worker.start_notification_worker()
 # Keeps OpenAI's prompt cache warm for agents actually taking calls right
 # now (see llm_warmer.py) — cuts a measured 2106ms->902ms cold-cache tax.
 llm_warmer.start_llm_warmer()
