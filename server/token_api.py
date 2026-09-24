@@ -3361,6 +3361,7 @@ def help_chat_message(req: HelpChatRequest, user: dict = Depends(current_user)) 
 
 @app.post("/help/tickets")
 def create_help_ticket(req: HelpTicketRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+    user = _ticket_author(user)
     subject = req.subject.strip()[:160]
     detail = req.detail.strip()[:5_000]
     category = req.category.strip().lower()
@@ -3441,6 +3442,20 @@ def create_help_ticket(req: HelpTicketRequest, request: Request, user: dict = De
 
 
 _SUPPORT_INBOX = "support@vistrowvoice.com"
+
+
+def _ticket_author(user: dict) -> dict:
+    """current_user only carries user_id/account_id, so user.get("email")
+    and friends were always empty here: tickets stored no email, the
+    customer never got a confirmation, and support replies had nowhere to
+    go. Load the real profile once per request instead."""
+    profile = calls_db.get_user_by_id(user["user_id"]) or {}
+    return {
+        **user,
+        "name": profile.get("name") or "",
+        "email": profile.get("email") or "",
+        "account_name": profile.get("account_name") or "",
+    }
 
 
 def _support_inbox() -> str:
@@ -3526,6 +3541,7 @@ def reply_help_ticket(
     body = req.body.strip()[:5_000]
     if not body:
         raise HTTPException(400, "Write a message first")
+    user = _ticket_author(user)
     ticket = calls_db.add_support_ticket_message(
         ticket_id, "customer", body, user.get("user_id"), user.get("name", ""), account_id=user["account_id"]
     )
