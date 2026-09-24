@@ -1,11 +1,18 @@
 """Offline contact identity regressions. Never connects to a database."""
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import calls_db
 
 
 class ContactPhoneIntegrityTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # The account's country lives in the settings table; these tests are
+        # offline, so pin it to India — what every pre-existing account is.
+        stub = patch.object(calls_db, "get_account_country", return_value="IN")
+        stub.start()
+        self.addCleanup(stub.stop)
+
     def test_indian_local_number_gets_country_code(self) -> None:
         self.assertEqual(calls_db.canonical_contact_phone("8080197945"), "+918080197945")
 
@@ -20,6 +27,19 @@ class ContactPhoneIntegrityTests(unittest.TestCase):
     def test_invalid_phone_is_rejected(self) -> None:
         for value in ("", "not provided", "+0123456789", "123"):
             self.assertEqual(calls_db.canonical_contact_phone(value), "")
+
+    def test_bare_local_number_is_read_in_the_account_country(self) -> None:
+        with patch.object(calls_db, "get_account_country", return_value="US"):
+            self.assertEqual(calls_db.canonical_contact_phone("(415) 555-2671", 9), "+14155552671")
+        with patch.object(calls_db, "get_account_country", return_value="AE"):
+            self.assertEqual(calls_db.canonical_contact_phone("050 123 4567", 9), "+971501234567")
+
+    def test_dnc_key_matches_however_a_us_number_was_typed(self) -> None:
+        # The old India-only digits key gave "14155552671" vs "4155552671",
+        # so a blocked US number would have been dialled again.
+        with patch.object(calls_db, "get_account_country", return_value="US"):
+            self.assertEqual(calls_db._normalize_phone("+1 415 555 2671", 9),
+                             calls_db._normalize_phone("415-555-2671", 9))
 
     def test_call_sync_cannot_overwrite_a_corrected_contact_name(self) -> None:
         conn = MagicMock()

@@ -28,25 +28,50 @@ class FakeContext:
         self.userdata = userdata
 
 
-class PhoneKeyMatchesTheDialerGate(unittest.TestCase):
+class _IndianAccount(unittest.TestCase):
+    """The account's country lives in the settings table; these tests are
+    offline, so pin it — India, what every pre-existing account is."""
+
+    country = "IN"
+
+    def setUp(self):
+        stub = patch.object(db, "get_account_country", return_value=self.country)
+        stub.start()
+        self.addCleanup(stub.stop)
+
+
+class PhoneKeyMatchesTheDialerGate(_IndianAccount):
     """server/calls_db.py's _normalize_phone decides what check_call_allowed
     compares against. A row stored under any other key is a number we would
-    carry on calling."""
+    carry on calling. Since 2026-09-24 the key is E.164 in the account's
+    country (phone_format.match_key), on both sides."""
 
     def test_every_way_a_number_arrives_collapses_to_one_key(self):
         for written in ("+91 98765 43210", "9876543210", "098765 43210",
                         "+919876543210", " +91-98765-43210 "):
-            self.assertEqual(db._normalize_dnc_phone(written), "9876543210", written)
+            self.assertEqual(db._normalize_dnc_phone(written, 2), "+919876543210", written)
 
     def test_non_indian_numbers_are_kept_whole_rather_than_mangled(self):
-        self.assertEqual(db._normalize_dnc_phone("+1 415 555 0123"), "14155550123")
+        self.assertEqual(db._normalize_dnc_phone("+1 415 555 2671", 2), "+14155552671")
 
     def test_junk_normalises_to_nothing(self):
         for junk in ("", None, "abc", "+++"):
-            self.assertEqual(db._normalize_dnc_phone(junk), "")
+            self.assertEqual(db._normalize_dnc_phone(junk, 2), "")
 
 
-class RecordDoNotCall(unittest.TestCase):
+class AUsAccountBlocksHoweverTheNumberWasTyped(_IndianAccount):
+    """The old India-only key gave "14155552671" for "+1 415 555 2671" but
+    "4155552671" for the same number typed locally — a US tenant's blocked
+    caller would have been dialled again."""
+
+    country = "US"
+
+    def test_local_and_international_forms_share_one_key(self):
+        self.assertEqual(db._normalize_dnc_phone("+1 415 555 2671", 9),
+                         db._normalize_dnc_phone("(415) 555-2671", 9))
+
+
+class RecordDoNotCall(_IndianAccount):
     def _record(self, account_id, phone, rowcount_row=(1,)):
         conn = MagicMock()
         conn.__enter__ = lambda s: s
@@ -63,7 +88,7 @@ class RecordDoNotCall(unittest.TestCase):
         self.assertIn("INSERT INTO dnc_list", sql)
         self.assertIn("call_opt_out", sql)
         self.assertEqual(params[1], "+919876543210")
-        self.assertEqual(params[2], "9876543210")
+        self.assertEqual(params[2], "+919876543210")
 
     def test_already_on_the_list_is_not_an_error(self):
         added, _ = self._record(2, "+919876543210", rowcount_row=None)

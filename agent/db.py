@@ -23,6 +23,7 @@ import psycopg
 from zoneinfo import ZoneInfo
 
 import dbconn
+import phone_format
 import retry_rules
 import plan_policy
 import voice_catalog
@@ -222,12 +223,13 @@ def init_db() -> None:
         conn.close()
 
 
-def get_caller_memory(agent_id: int, caller_phone: str) -> str:
+def get_caller_memory(agent_id: int, caller_phone: str, account_id: int | None = None) -> str:
     """The rolling summary of prior calls with this caller for this agent,
     or '' if none / memory table absent. Only phone calls have a stable
     caller_phone, so web calls never hit this."""
     if not caller_phone:
         return ""
+    caller_phone = account_phone(account_id, caller_phone) or caller_phone
     conn = dbconn.connect()
     try:
         row = conn.execute(
@@ -246,6 +248,7 @@ def save_caller_memory(account_id: int | None, agent_id: int, caller_phone: str,
     here must never break call teardown."""
     if not (caller_phone and summary):
         return
+    caller_phone = account_phone(account_id, caller_phone) or caller_phone
     conn = dbconn.connect()
     try:
         with conn:
@@ -731,10 +734,53 @@ def get_compliance_config(account_id: int | None) -> dict:
     return cfg
 
 
+_country_cache: dict[int, tuple[float, str]] = {}
+_COUNTRY_CACHE_TTL_S = 60.0
+
+
+def get_account_country(account_id: int | None) -> str:
+    """The account's home country (Settings → Workspace details), used to
+    read bare local phone numbers. Mirrors server/calls_db.py's
+    get_account_country, including its India default and 60s cache. A lookup
+    failure falls back to the default rather than breaking a live call."""
+    if account_id is None:
+        return phone_format.DEFAULT_COUNTRY
+    hit = _country_cache.get(account_id)
+    if hit and time.monotonic() - hit[0] < _COUNTRY_CACHE_TTL_S:
+        return hit[1]
+    value = None
+    conn = dbconn.connect()
+    try:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE account_id = ? AND key = 'account.country'",
+            (account_id,),
+        ).fetchone()
+        value = row["value"] if row else None
+    except Exception:
+        # Any failure, not just psycopg's: record_do_not_call promises never
+        # to raise, and it reads the country before its own try block.
+        logger.warning("could not read account.country for account %s", account_id, exc_info=True)
+    finally:
+        conn.close()
+    country = phone_format.normalize_country(value if isinstance(value, str) else None)
+    _country_cache[account_id] = (time.monotonic(), country)
+    return country
+
+
+def account_phone(account_id: int | None, raw: str | None) -> str:
+    """E.164 in the account's country, or "" — see phone_format.to_e164."""
+    if not raw:
+        return ""
+    return phone_format.to_e164(raw, get_account_country(account_id))
+
+
 def _normalize_sip_number(number: str) -> str:
     """Canonical phone_numbers.number shape — mirrors server/calls_db.py's
     _normalize_sip_number (and orchestrator/db.py's copy). This only has to
     match on lookup, not write."""
+    parsed = phone_format.to_e164(number)
+    if parsed:
+        return parsed
     digits = "".join(c for c in (number or "") if c.isdigit())
     if not digits:
         return (number or "").strip()
@@ -939,7 +985,8 @@ def book_native_appointment(
                 "INSERT INTO appointments (account_id, agent_id, call_id, contact_name, contact_phone, "
                 "contact_email, purpose, appt_date, start_time, duration_minutes, status, source) "
                 "VALUES (?, ?, NULL, ?, ?, '', ?, ?, ?, ?, 'confirmed', 'agent')",
-                (account_id, agent_id, name, phone, purpose, date, time, duration_minutes),
+                (account_id, agent_id, name, account_phone(account_id, phone) or phone, purpose, date, time,
+                 duration_minutes),
             )
             return {"ok": True}
     except psycopg.Error:
@@ -980,7 +1027,7 @@ def record_callback_request(
                 "contact_phone, contact_email, purpose, appt_date, start_time, duration_minutes, "
                 "status, source, notes) "
                 "VALUES (?, ?, NULL, ?, ?, '', ?, ?, ?, 0, 'callback_requested', 'agent', ?)",
-                (account_id, agent_id, name, phone, reason or "callback requested",
+                (account_id, agent_id, name, account_phone(account_id, phone) or phone, reason or "callback requested",
                  preferred_date or None, preferred_time or None,
                  f"Wanted {preferred_date or 'any day'} {preferred_time or ''}".strip()),
             )
@@ -1258,7 +1305,7 @@ def save_call(record: dict) -> int | None:
                     record.get("voice"),
                     record.get("model"),
                     record.get("name"),
-                    record.get("phone"),
+                    account_phone(record.get("account_id"), record.get("phone")) or record.get("phone"),
                     record.get("email"),
                     record.get("budget"),
                     record.get("location"),
@@ -1432,18 +1479,13 @@ def record_campaign_voicemail(contact_id: int, campaign_id: int, outcome: str = 
         conn.close()
 
 
-def _normalize_dnc_phone(phone: str) -> str:
-    """Digits-only DNC key — MUST match server/calls_db.py's _normalize_phone,
-    because that is what check_call_allowed compares against before a dial. A
-    number stored under a different key is a number we would keep calling.
+def _normalize_dnc_phone(phone: str, account_id: int | None) -> str:
+    """DNC key — MUST match server/calls_db.py's _normalize_phone, because
+    that is what check_call_allowed compares against before a dial. A number
+    stored under a different key is a number we would keep calling. Both go
+    through phone_format.match_key in the account's country.
     """
-    digits = "".join(c for c in (phone or "") if c.isdigit())
-    if len(digits) > 10:
-        if digits.startswith("91") and len(digits) == 12:
-            digits = digits[2:]
-        elif digits.startswith("0") and len(digits) == 11:
-            digits = digits[1:]
-    return digits
+    return phone_format.match_key(phone, get_account_country(account_id))
 
 
 def record_do_not_call(account_id: int | None, phone: str, reason: str = "") -> bool:
@@ -1457,7 +1499,7 @@ def record_do_not_call(account_id: int | None, phone: str, reason: str = "") -> 
     Idempotent, and never raises — the caller has already been told we will
     stop calling, and a failure here must not also break their call.
     """
-    norm = _normalize_dnc_phone(phone)
+    norm = _normalize_dnc_phone(phone, account_id)
     if not account_id or not norm:
         return False
     conn = dbconn.connect()
@@ -1467,7 +1509,8 @@ def record_do_not_call(account_id: int | None, phone: str, reason: str = "") -> 
                 "INSERT INTO dnc_list (account_id, phone, phone_norm, reason, source) "
                 "VALUES (?, ?, ?, ?, 'call_opt_out') ON CONFLICT(account_id, phone_norm) "
                 "DO NOTHING RETURNING id",
-                (account_id, (phone or "").strip(), norm, reason or "Asked not to be called again"),
+                (account_id, account_phone(account_id, phone) or (phone or "").strip(), norm,
+                 reason or "Asked not to be called again"),
             )
             added = cur.fetchone() is not None
         logger.info("do-not-call recorded for %s (new row: %s)", norm, added)

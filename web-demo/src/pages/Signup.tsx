@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon'
 import { useAuth } from '../lib/auth'
 import { trackQualifyLead } from '../lib/analytics'
 import { AuthInput, AuthShell, PasswordVisibilityToggle, SocialButtons, useShake } from './AuthShell'
-import { COMMON_DIAL_CODES } from '../lib/phone'
+import { COMMON_DIAL_CODES, dialCodeFor, guessCountry } from '../lib/phone'
 
 // Cheap client-side password strength: length + character-class variety.
 // Purely for the meter/feedback - the server enforces the 8-char minimum.
@@ -48,7 +48,8 @@ export function Signup() {
     referral_source: '',
     phoneNumber: '',
   })
-  const [dialCode, setDialCode] = useState('+91')
+  // No workspace yet, so no workspace country: start from the browser's region.
+  const [dialCode, setDialCode] = useState(() => dialCodeFor(guessCountry()))
   const [agreed, setAgreed] = useState(false)
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState<string | null>(null)

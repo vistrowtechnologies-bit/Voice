@@ -3184,7 +3184,7 @@ class RealEstateAgent(Agent):
         self._memory_enabled = bool(config.get("memory_enabled"))
         self._caller_phone = (visitor_phone or "").strip()
         if self._memory_enabled and self._caller_phone and config.get("id"):
-            prior = db.get_caller_memory(config["id"], self._caller_phone)
+            prior = db.get_caller_memory(config["id"], self._caller_phone, config.get("account_id"))
             if prior:
                 caller_tail += (
                     "\n\n# What you remember about this caller\n"

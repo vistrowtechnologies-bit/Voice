@@ -7,3 +7,4 @@ boto3
 google-cloud-texttospeech>=2.31.0
 PyJWT[crypto]>=2.9.0
 python-multipart>=0.0.9
+phonenumbers>=9.0

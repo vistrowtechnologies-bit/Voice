@@ -15,7 +15,7 @@ import {
   fetchTelephonyStatus,
   placeTestCall,
 } from '../lib/api'
-import { COMMON_DIAL_CODES, composeE164, isE164 } from '../lib/phone'
+import { COMMON_DIAL_CODES, composeE164, isE164, useAccountDialCode } from '../lib/phone'
 import type { AgentConfig, PhoneNumber, TelephonyStatus } from '../lib/types'
 
 // Every provider carries an explicit, truthful status rather than a boolean
@@ -319,7 +319,8 @@ function NumberRow({
   onChange: () => void
 }) {
   const [testTo, setTestTo] = useState('')
-  const [testDialCode, setTestDialCode] = useState('+91')
+  const accountDialCode = useAccountDialCode()
+  const [testDialCode, setTestDialCode] = useState(accountDialCode)
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [showTest, setShowTest] = useState(false)

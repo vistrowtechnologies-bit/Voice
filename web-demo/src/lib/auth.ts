@@ -9,6 +9,8 @@ export interface AuthUser {
   role: string
   accountId: number
   accountName: string
+  /** ISO alpha-2 — how bare local phone numbers are read. See server/phone_format.py. */
+  accountCountry: string
   plan: string
   isPlatformOwner: boolean
   onboarded: boolean
@@ -155,7 +157,8 @@ export const apiRequestAccountDeletion = (email: string, confirmation: string) =
   authFetch<{ ok: boolean; requestId: number; status: string }>('/profile/request-account-deletion', { email, confirmation })
 export const apiCancelAccountDeletion = (requestId: number) =>
   authFetch<{ ok: boolean; request: PrivacyRequest }>(`/profile/account-deletion-request/${requestId}`, undefined, 'DELETE')
-export const apiUpdateAccount = (name: string) => authFetch<{ user: AuthUser }>('/account', { name }, 'PATCH')
+export const apiUpdateAccount = (data: { name?: string; country?: string }) =>
+  authFetch<{ user: AuthUser }>('/account', data, 'PATCH')
 export const apiAcceptConsent = (version: string) =>
   authFetch<{ user: AuthUser }>('/onboarding/consent', { version })
 export const apiCompleteOnboarding = () => authFetch<{ user: AuthUser }>('/onboarding/complete', {})

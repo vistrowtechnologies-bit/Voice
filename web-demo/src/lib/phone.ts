@@ -1,3 +1,6 @@
+import { useAuth } from './auth'
+import { COUNTRY_DIAL_CODES, PRIMARY_REGION_FOR_DIAL } from './countries'
+
 // EnableX needs full E.164 (country code + number, e.g. +919812345678) - a
 // bare local number gets far enough to hit their infra but then fails with a
 // confusing raw 502 instead of a clean validation error, so callers should
@@ -6,15 +9,54 @@ export function isE164(value: string): boolean {
   return /^\+[1-9]\d{7,14}$/.test(value.trim())
 }
 
-export const COMMON_DIAL_CODES = [
-  { code: 'IN', dial: '+91' },
-  { code: 'US', dial: '+1' },
-  { code: 'CA', dial: '+1' },
-  { code: 'GB', dial: '+44' },
-  { code: 'AE', dial: '+971' },
-  { code: 'SG', dial: '+65' },
-  { code: 'AU', dial: '+61' },
-] as const
+const regionNames = (() => {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' })
+  } catch {
+    return null
+  }
+})()
+
+/** "India" for "IN"; falls back to the code where Intl has no name. */
+export function countryName(code: string): string {
+  return regionNames?.of(code) ?? code
+}
+
+const DIAL_BY_COUNTRY = new Map(COUNTRY_DIAL_CODES)
+
+/** "+91" for "IN" — what the dashboard pre-selects for this workspace. */
+export function dialCodeFor(country: string | undefined): string {
+  return DIAL_BY_COUNTRY.get((country || 'IN').toUpperCase()) ?? '+91'
+}
+
+/** The signed-in workspace's calling code — the default for every phone
+ * input, so a UAE workspace types local numbers without picking +971 each time. */
+export function useAccountDialCode(): string {
+  const { user } = useAuth()
+  return dialCodeFor(user?.accountCountry)
+}
+
+/** Every country, by name, for the workspace country picker. */
+export const COUNTRY_OPTIONS = COUNTRY_DIAL_CODES
+  .map(([code, dial]) => ({ code, dial, name: countryName(code) }))
+  .sort((a, b) => a.name.localeCompare(b.name))
+
+/** One entry per calling code, labelled by its main country, for the
+ * code picker beside phone inputs (a +1 list of 25 countries would be noise). */
+export const COMMON_DIAL_CODES = Object.entries(PRIMARY_REGION_FOR_DIAL)
+  .map(([dial, code]) => ({ code, dial, name: countryName(code) }))
+  .sort((a, b) => a.name.localeCompare(b.name))
+
+/** Best guess of a new visitor's country from the browser, before they have
+ * a workspace. Only a default — they can change it. */
+export function guessCountry(): string {
+  const tags = [...(navigator.languages ?? []), navigator.language]
+  for (const tag of tags) {
+    const region = tag?.split('-')[1]?.toUpperCase()
+    if (region && DIAL_BY_COUNTRY.has(region)) return region
+  }
+  return 'IN'
+}
 
 /** Build the provider-safe number while still accepting a pasted E.164 value. */
 export function composeE164(dialCode: string, localNumber: string): string {

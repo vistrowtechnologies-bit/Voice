@@ -6,7 +6,7 @@ import { OrchestratorTestCallUI } from './OrchestratorTestCallUI'
 import { Icon } from './Icon'
 import { fetchOrchestratorBrowserToken, placeTestCall } from '../lib/api'
 import { fetchLiveKitToken, randomId } from '../lib/livekit'
-import { COMMON_DIAL_CODES, composeE164, isE164 } from '../lib/phone'
+import { COMMON_DIAL_CODES, composeE164, isE164, useAccountDialCode } from '../lib/phone'
 import type { AgentConfig } from '../lib/types'
 
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -48,7 +48,8 @@ export function DialTestModal({
   onClose: () => void
 }) {
   const [to, setTo] = useState('')
-  const [dialCode, setDialCode] = useState('+91')
+  const accountDialCode = useAccountDialCode()
+  const [dialCode, setDialCode] = useState(accountDialCode)
   const [placing, setPlacing] = useState(false)
   const [result, setResult] = useState<string | null>(null)
 

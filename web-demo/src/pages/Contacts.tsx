@@ -21,7 +21,7 @@ import {
   updateContact,
 } from '../lib/api'
 import type { Contact, CsvPreview, PhoneNumber } from '../lib/types'
-import { composeE164, isE164 } from '../lib/phone'
+import { composeE164, isE164, useAccountDialCode } from '../lib/phone'
 
 const MAPPING_TARGETS = [
   { value: '', label: 'Skip this column' },
@@ -60,7 +60,8 @@ export function Contacts() {
   const [tableLayoutVersion, setTableLayoutVersion] = useState(0)
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ name: '', phone: '', email: '', tags: '' })
-  const [addDialCode, setAddDialCode] = useState('+91')
+  const accountDialCode = useAccountDialCode()
+  const [addDialCode, setAddDialCode] = useState(accountDialCode)
   const [formError, setFormError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -157,7 +158,7 @@ export function Contacts() {
     try {
       await createContact({ ...form, phone, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean) })
       setForm({ name: '', phone: '', email: '', tags: '' })
-      setAddDialCode('+91')
+      setAddDialCode(accountDialCode)
       setShowAdd(false)
       reload()
     } catch (error) {

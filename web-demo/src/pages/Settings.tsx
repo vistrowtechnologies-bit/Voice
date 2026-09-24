@@ -34,6 +34,7 @@ import {
 } from '../lib/auth'
 import { fetchAvailabilitySettings, formatDateTime, updateAvailabilitySettings } from '../lib/api'
 import type { AvailabilityConfig } from '../lib/types'
+import { COUNTRY_OPTIONS, countryName, dialCodeFor } from '../lib/phone'
 
 function SettingsCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
@@ -141,15 +142,23 @@ export function Settings() {
 function GeneralTab() {
   const { user, setUser } = useAuth()
   const [companyName, setCompanyName] = useState(user?.accountName || '')
+  const [country, setCountry] = useState(user?.accountCountry || 'IN')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+
+  const nameChanged = companyName.trim() !== user?.accountName
+  const countryChanged = country !== (user?.accountCountry || 'IN')
+  const canManageCountry = user?.role === 'owner' || user?.role === 'admin' || !!user?.impersonating
 
   const save = async () => {
     if (!companyName.trim()) return
     setSaving(true)
     setMsg(null)
     try {
-      const { user: updated } = await apiUpdateAccount(companyName.trim())
+      const { user: updated } = await apiUpdateAccount({
+        ...(nameChanged ? { name: companyName.trim() } : {}),
+        ...(countryChanged ? { country } : {}),
+      })
       setUser(updated)
       setMsg({ type: 'ok', text: 'Saved.' })
     } catch (err) {
@@ -161,21 +170,42 @@ function GeneralTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <SettingsCard title="Workspace details" subtitle="The company name shown across your dashboard, agents, and shared workspace.">
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <input
-          value={companyName}
-          onChange={(e) => setCompanyName(e.target.value)}
-          className="flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
-        />
+      <SettingsCard title="Workspace details" subtitle="The company name shown across your dashboard, agents, and shared workspace, and the country your phone numbers belong to.">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <label className="flex flex-1 flex-col gap-1 text-xs font-semibold text-text-muted">
+          Company name
+          <input
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm font-normal text-text outline-none focus:border-primary"
+          />
+        </label>
+        <label className="flex flex-1 flex-col gap-1 text-xs font-semibold text-text-muted">
+          Country
+          <select
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            disabled={!canManageCountry}
+            className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm font-normal text-text outline-none focus:border-primary disabled:opacity-60"
+          >
+            {COUNTRY_OPTIONS.map((c) => (
+              <option key={c.code} value={c.code}>{c.name} ({c.dial})</option>
+            ))}
+          </select>
+        </label>
         <button
           onClick={save}
-          disabled={saving || !companyName.trim() || companyName.trim() === user?.accountName}
+          disabled={saving || !companyName.trim() || (!nameChanged && !countryChanged)}
           className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
       </div>
+      <p className="text-xs text-text-muted">
+        Numbers typed or imported without a country code are read as {countryName(country)} ({dialCodeFor(country)})
+        {' '}— in contacts, campaigns, the Do-Not-Call list and phone fields.
+        {!canManageCountry && ' Only an owner or admin can change it.'}
+      </p>
       {msg && (
         <p className={`flex items-center gap-1.5 text-xs ${msg.type === 'ok' ? 'text-success' : 'text-destructive'}`}>
           <Icon name={msg.type === 'ok' ? 'check_circle' : 'error'} className="text-[15px]" />

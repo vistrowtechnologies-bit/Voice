@@ -30,6 +30,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import psycopg
 
 import dbconn
+import phone_format
 import voice_catalog
 import plan_policy
 import campaign_window
@@ -1537,8 +1538,102 @@ def init_tables() -> None:
                             "skipping phone_numbers normalization for id=%s (%r -> %r): collides with an existing number",
                             row["id"], row["number"], normalized,
                         )
+            _migrate_phones_to_e164(conn)
     finally:
         conn.close()
+
+
+_PHONE_E164_MIGRATION_KEY = "migration.phone_e164_v1"
+
+
+def _migrate_phones_to_e164(conn: dbconn.Conn) -> None:
+    """One-time rewrite of stored numbers into phone_format's E.164 form, and
+    of every phone_norm matching key into the new key format.
+
+    Runs at startup, in the same deploy as the code that computes the new
+    keys, so there is no window where stored DNC/campaign keys and freshly
+    computed ones disagree. Only rewrites a row when the result cannot
+    collide: a contact or caller-memory row whose E.164 form another row
+    already holds is a duplicate person, and merging those deletes data, so
+    it is left for an explicit, reviewed merge. Unparseable values ("Not
+    provided", "000000000") are left exactly as they are — never invented.
+    """
+    if conn.execute(
+        "SELECT 1 FROM settings WHERE account_id = 0 AND key = ?", (_PHONE_E164_MIGRATION_KEY,)
+    ).fetchone():
+        return
+    countries = {
+        r["account_id"]: phone_format.normalize_country(r["value"])
+        for r in conn.execute("SELECT account_id, value FROM settings WHERE key = ?", (_ACCOUNT_COUNTRY_KEY,)).fetchall()
+    }
+
+    def e164(account_id, raw):
+        return phone_format.to_e164(raw, countries.get(account_id, phone_format.DEFAULT_COUNTRY))
+
+    def key(account_id, raw):
+        return phone_format.match_key(raw, countries.get(account_id, phone_format.DEFAULT_COUNTRY))
+
+    counts: dict[str, int] = {}
+
+    def bump(name):
+        counts[name] = counts.get(name, 0) + 1
+
+    # No unique constraint on these: rewrite every parseable number.
+    for table, col in (("calls", "lead_phone"), ("appointments", "contact_phone")):
+        for r in conn.execute(f"SELECT id, account_id, {col} AS p FROM {table} WHERE COALESCE({col}, '') <> ''").fetchall():
+            new = e164(r["account_id"], r["p"])
+            if new and new != r["p"]:
+                conn.execute(f"UPDATE {table} SET {col} = ? WHERE id = ?", (new, r["id"]))
+                bump(table)
+    for r in conn.execute("SELECT id, account_id, phone FROM campaign_contacts").fetchall():
+        new = e164(r["account_id"], r["phone"]) or r["phone"]
+        conn.execute(
+            "UPDATE campaign_contacts SET phone = ?, phone_norm = ? WHERE id = ?",
+            (new, key(r["account_id"], r["phone"]), r["id"]),
+        )
+        bump("campaign_contacts")
+    # Unique per (account, phone_norm): skip a row whose new key is taken.
+    for r in conn.execute("SELECT id, account_id, phone FROM dnc_list").fetchall():
+        new_key = key(r["account_id"], r["phone"])
+        if not conn.execute(
+            "SELECT 1 FROM dnc_list WHERE account_id = ? AND phone_norm = ? AND id <> ?",
+            (r["account_id"], new_key, r["id"]),
+        ).fetchone():
+            conn.execute(
+                "UPDATE dnc_list SET phone = ?, phone_norm = ? WHERE id = ?",
+                (e164(r["account_id"], r["phone"]) or r["phone"], new_key, r["id"]),
+            )
+            bump("dnc_list")
+    # Unique per (account, phone) / (agent, phone): duplicates wait for a merge.
+    for table, col, scope in (("contacts", "phone", "account_id"), ("caller_memory", "caller_phone", "agent_id")):
+        for r in conn.execute(
+            f"SELECT id, account_id, {scope} AS scope, {col} AS p FROM {table} WHERE COALESCE({col}, '') <> ''"
+        ).fetchall():
+            new = e164(r["account_id"], r["p"])
+            if not new or new == r["p"]:
+                continue
+            if _has_e164_twin(conn, table, col, scope, r, new, e164):
+                bump(f"{table}_duplicates_left")
+                continue
+            conn.execute(f"UPDATE {table} SET {col} = ? WHERE id = ?", (new, r["id"]))
+            bump(table)
+    conn.execute(
+        "INSERT INTO settings (account_id, key, value) VALUES (0, ?, ?)",
+        (_PHONE_E164_MIGRATION_KEY, json.dumps(counts)),
+    )
+    logger.info("phone E.164 migration done: %s", counts)
+
+
+def _has_e164_twin(conn, table, col, scope, row, new, e164) -> bool:
+    """True when another row in the same scope already is, or would become,
+    `new` — i.e. this row is one of a duplicate group."""
+    for other in conn.execute(
+        f"SELECT id, account_id, {col} AS p FROM {table} WHERE {scope} = ? AND id <> ?",
+        (row["scope"], row["id"]),
+    ).fetchall():
+        if other["p"] == new or e164(other["account_id"], other["p"]) == new:
+            return True
+    return False
 
 
 # --------------------------------------------------------- accounts & users
@@ -3904,24 +3999,14 @@ def consume_password_reset(token: str) -> int | None:
 _CONTACT_PLACEHOLDERS = {"", "-", "unknown", "na", "n/a", "not applicable", "not provided", "pending"}
 
 
-def canonical_contact_phone(value: str | None) -> str:
-    """Return the only phone representation Contacts is allowed to store.
-
-    Legacy Indian 10-digit and 0-prefixed values are accepted for operator
-    convenience and expanded to +91. Explicit international E.164 values are
+def canonical_contact_phone(value: str | None, account_id: int | None = None) -> str:
+    """Return the only phone representation Contacts is allowed to store:
+    E.164, with a bare local number read in the account's country (Settings →
+    Workspace details; India by default). Explicit international numbers are
     preserved. Invalid/ambiguous values return an empty string so callers can
-    reject them before a carrier request is created.
+    reject them before a carrier request is created. See phone_format.
     """
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-    # A leading + is an explicit country code. Do not reinterpret an invalid
-    # +0… value as a ten-digit Indian local number.
-    if raw.startswith("+"):
-        canonical = "+" + "".join(char for char in raw[1:] if char.isdigit())
-    else:
-        canonical = _normalize_sip_number(raw)
-    return canonical if re.fullmatch(r"\+[1-9]\d{7,14}", canonical) else ""
+    return phone_format.to_e164(value, get_account_country(account_id))
 
 
 def _sync_contacts_from_calls(conn: dbconn.Conn, account_id: int) -> None:
@@ -3950,7 +4035,7 @@ def _sync_contacts_from_calls(conn: dbconn.Conn, account_id: int) -> None:
     ).fetchall()
     with conn:
         for row in rows:
-            phone = canonical_contact_phone(row["lead_phone"])
+            phone = canonical_contact_phone(row["lead_phone"], account_id)
             if not phone:
                 logger.warning("skipping call-derived contact with invalid phone %r", row["lead_phone"])
                 continue
@@ -4020,7 +4105,7 @@ def _safe_json_loads(raw: str | None) -> dict:
 
 def create_contact(data: dict, account_id: int) -> None:
     raw_phone = data.get("phone") or None
-    phone = canonical_contact_phone(raw_phone) if raw_phone else None
+    phone = canonical_contact_phone(raw_phone, account_id) if raw_phone else None
     if raw_phone and not phone:
         raise ValueError("Enter a valid phone number with country code")
     conn = _connect()
@@ -4082,10 +4167,10 @@ def update_contact(contact_id: int, data: dict, account_id: int) -> dict | None:
             name = str(data.get("name", current["name"]) or "").strip() or "Unknown"
 
         raw_phone = str(data.get("phone", current["phone"] or "") or "").strip()
-        phone = canonical_contact_phone(raw_phone) if raw_phone else ""
+        phone = canonical_contact_phone(raw_phone, account_id) if raw_phone else ""
         if raw_phone and not phone:
             raise ValueError("Enter a valid phone number with country code")
-        new_norm_candidate = _normalize_phone(phone)
+        new_norm_candidate = _normalize_phone(phone, account_id)
 
         # deleted_at IS NULL, like the SELECT that loaded `current` above.
         # Without it a DELETED contact still blocks the number forever: an
@@ -4107,7 +4192,7 @@ def update_contact(contact_id: int, data: dict, account_id: int) -> dict | None:
             "AND deleted_at IS NULL AND phone IS NOT NULL",
             (account_id, contact_id),
         ).fetchall():
-            if _normalize_phone(row["phone"] or "") == new_norm_candidate:
+            if _normalize_phone(row["phone"] or "", account_id) == new_norm_candidate:
                 duplicate = row
                 break
         if phone and duplicate:
@@ -4130,8 +4215,8 @@ def update_contact(contact_id: int, data: dict, account_id: int) -> dict | None:
         else:
             tags = current["tags"] or ""
 
-        old_norm = _normalize_phone(current["phone"] or "")
-        new_norm = _normalize_phone(phone)
+        old_norm = _normalize_phone(current["phone"] or "", account_id)
+        new_norm = _normalize_phone(phone, account_id)
         custom_json = json.dumps(custom_fields or {})
         with conn:
             conn.execute(
@@ -4162,7 +4247,7 @@ def delete_contact(contact_id: int, account_id: int) -> None:
             ).fetchone()
             if row is None:
                 return
-            phone_norm = _normalize_phone(row["phone"] or "")
+            phone_norm = _normalize_phone(row["phone"] or "", account_id)
             conn.execute(
                 f"UPDATE contacts SET deleted_at = {_NOW}, updated_at = {_NOW} WHERE id = ? AND account_id = ?",
                 (contact_id, account_id),
@@ -4308,7 +4393,7 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
             return None
         phone = contact["phone"] or ""
 
-        phone_key = _normalize_phone(phone)
+        phone_key = _normalize_phone(phone, account_id)
         calls = (
             conn.execute(
                 "SELECT id, started_at, duration_seconds, call_type, transcript_json, "
@@ -4376,7 +4461,7 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
                 "c.status AS campaign_status FROM campaign_contacts cc "
                 "JOIN campaigns c ON c.id = cc.campaign_id "
                 "WHERE cc.account_id = ? AND cc.phone_norm = ? ORDER BY c.id DESC",
-                (account_id, _normalize_phone(phone)),
+                (account_id, _normalize_phone(phone, account_id)),
             ).fetchall()
             if phone
             else []
@@ -4641,7 +4726,8 @@ def book_appointment_native(
                 "INSERT INTO appointments (account_id, agent_id, call_id, contact_name, contact_phone, "
                 "contact_email, purpose, appt_date, start_time, duration_minutes, status, source) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?) RETURNING id",
-                (account_id, agent_id, call_id, name, phone, email, purpose, date, time, duration_minutes, source),
+                (account_id, agent_id, call_id, name, account_phone(account_id, phone) or phone, email,
+                 purpose, date, time, duration_minutes, source),
             )
             return {"ok": True, "id": cur.lastrowid}
     finally:
@@ -5104,7 +5190,7 @@ def _contacts_for_segment(conn, account_id: int, segment: str, tag: str) -> list
                 (account_id,),
             ).fetchall()
         }
-        rows = [r for r in rows if _normalize_phone(r["phone"]) in failed_norms]
+        rows = [r for r in rows if _normalize_phone(r["phone"], account_id) in failed_norms]
     return rows
 
 
@@ -5182,15 +5268,15 @@ def create_campaign(data: dict, account_id: int) -> int:
 
             seen: set[str] = set()
             for name, phone, company, custom_fields in rows:
-                norm = _normalize_phone(phone)
+                norm = _normalize_phone(phone, account_id)
                 if not norm or norm in seen:
                     continue
                 seen.add(norm)
                 conn.execute(
                     "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, "
                     "company, custom_fields, consent_basis) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (campaign_id, account_id, name, phone.strip(), norm, company, custom_fields,
-                     consent_basis),
+                    (campaign_id, account_id, name, canonical_contact_phone(phone, account_id) or phone.strip(),
+                     norm, company, custom_fields, consent_basis),
                 )
             return campaign_id
     finally:
@@ -5352,7 +5438,7 @@ def ingest_inbound_lead(
     that already reached a terminal state (done/blocked/exhausted retries)
     gets a fresh row — a new inbound signal from that number is a new lead,
     not noise from the old one."""
-    norm = _normalize_phone(phone)
+    norm = _normalize_phone(phone, account_id)
     if not norm:
         return {"ok": False, "reason": "invalid_phone"}
     campaign_id = get_or_create_instant_campaign(account_id)
@@ -5380,7 +5466,8 @@ def ingest_inbound_lead(
             cur = conn.execute(
                 "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, "
                 "company, custom_fields, consent_basis) VALUES (?, ?, ?, ?, ?, '', ?, ?) RETURNING id",
-                (campaign_id, account_id, (name or "").strip(), phone.strip(), norm,
+                (campaign_id, account_id, (name or "").strip(),
+                 canonical_contact_phone(phone, account_id) or phone.strip(), norm,
                  json.dumps(fields), _row_get(basis_row, "consent_basis", "") or ""),
             )
             contact_id = cur.fetchone()["id"]
@@ -5522,7 +5609,7 @@ def campaign_preflight(campaign_id: int, account_id: int, channel_limit: int = 2
     # DNC gate the dialer applies (check_call_allowed) rather than a
     # re-implementation of it.
     queued = [c for c in contacts if c["status"] in ("pending", "no_answer", "failed", "voicemail")]
-    no_phone = [c for c in queued if not _normalize_phone(c.get("phone"))]
+    no_phone = [c for c in queued if not _normalize_phone(c.get("phone"), account_id)]
     on_dnc = [c for c in queued if c not in no_phone and is_dnc(account_id, c["phone"])]
     dialable = [c for c in queued if c not in no_phone and c not in on_dnc]
 
@@ -6386,7 +6473,7 @@ def upsert_widget_chat_call(
                     now.isoformat(),
                     duration_seconds,
                     lead.get("name"),
-                    lead.get("phone"),
+                    account_phone(site.get("accountId"), lead.get("phone")) or lead.get("phone"),
                     lead.get("email"),
                     transcript_json,
                     site["id"],
@@ -8057,7 +8144,7 @@ def add_phone_number(number: str, account_id: int, label: str = "", agent_id: in
     Now the conflict path only applies to rows this account already owns, and
     a number held elsewhere raises instead of quietly succeeding.
     """
-    number = _normalize_sip_number(number)
+    number = _normalize_sip_number(number, get_account_country(account_id))
     conn = _connect()
     try:
         owner = conn.execute(
@@ -8146,6 +8233,42 @@ def set_setting(key: str, value: str, account_id: int) -> None:
         conn.close()
 
 
+_ACCOUNT_COUNTRY_KEY = "account.country"
+
+
+_country_cache: dict[int, tuple[float, str]] = {}
+_COUNTRY_CACHE_TTL_S = 60.0
+
+
+def get_account_country(account_id: int | None) -> str:
+    """The account's home country (ISO alpha-2), used to read every bare
+    local phone number its users type or import. India until set — every
+    account created before this setting existed is Indian, so the default
+    reproduces exactly how their numbers were read before."""
+    if account_id is None:
+        return phone_format.DEFAULT_COUNTRY
+    hit = _country_cache.get(account_id)
+    if hit and time.monotonic() - hit[0] < _COUNTRY_CACHE_TTL_S:
+        return hit[1]
+    country = phone_format.normalize_country(get_setting(_ACCOUNT_COUNTRY_KEY, account_id))
+    _country_cache[account_id] = (time.monotonic(), country)
+    return country
+
+
+def set_account_country(account_id: int, country: str) -> str:
+    code = (country or "").strip().upper()
+    if code not in phone_format.phonenumbers.SUPPORTED_REGIONS:
+        raise ValueError(f"Unknown country code: {country!r}")
+    set_setting(_ACCOUNT_COUNTRY_KEY, code, account_id)
+    _country_cache.pop(account_id, None)
+    return code
+
+
+def account_phone(account_id: int | None, raw: str | None) -> str:
+    """to_e164 in this account's country — the one call every write path uses."""
+    return phone_format.to_e164(raw, get_account_country(account_id))
+
+
 _ORCHESTRATOR_PIPELINE_KEY = "orchestrator_pipeline"
 
 
@@ -8217,7 +8340,7 @@ def _utc_now_str() -> str:
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _normalize_sip_number(number: str) -> str:
+def _normalize_sip_number(number: str, country: str = phone_format.DEFAULT_COUNTRY) -> str:
     """Canonical form for phone_numbers.number: always a leading '+', India
     country code assumed for a bare 10-digit local number. Tolerant of
     however a virtual number was typed (with/without +91, spaces, dashes,
@@ -8226,6 +8349,9 @@ def _normalize_sip_number(number: str) -> str:
     registering both '+'- and non-'+'-prefixed variants (see
     livekit_sip._sip_variants), since providers disagree on which form
     they actually send."""
+    parsed = phone_format.to_e164(number, country)
+    if parsed:
+        return parsed
     digits = "".join(c for c in (number or "") if c.isdigit())
     if not digits:
         return (number or "").strip()
@@ -8236,20 +8362,16 @@ def _normalize_sip_number(number: str) -> str:
     return "+" + digits
 
 
-def _normalize_phone(phone: str) -> str:
-    """Digits-only form for DNC matching, tolerant of how the number was
-    entered or how the telco presents it: strips spaces, punctuation, a
-    leading + and country/trunk prefixes so "+91 98765 43210", "9876543210"
-    and "098765 43210" all collapse to the same key. India-centric (10-digit
-    subscriber numbers, 91 country code, 0 trunk) but degrades gracefully for
-    other formats — it only ever strips, never rewrites."""
-    digits = "".join(c for c in (phone or "") if c.isdigit())
-    if len(digits) > 10:
-        if digits.startswith("91") and len(digits) == 12:
-            digits = digits[2:]
-        elif digits.startswith("0") and len(digits) == 11:
-            digits = digits[1:]
-    return digits
+def _normalize_phone(phone: str, account_id: int | None) -> str:
+    """Matching key for DNC and campaign de-duplication: the number's E.164
+    form, reading a bare local number in the account's country, so
+    "+91 98765 43210", "9876543210" and "098765 43210" collapse to one key —
+    and so do "+1 415 555 2671" and "4155552671" for a US account, which the
+    old India-only digits key could not do (a blocked US number would have
+    been dialled again). MUST match agent/db.py's _normalize_dnc_phone; both
+    go through phone_format.match_key, and stored phone_norm values were
+    migrated to this form on 2026-09-24."""
+    return phone_format.match_key(phone, get_account_country(account_id))
 
 
 def get_compliance(account_id: int) -> dict:
@@ -8316,7 +8438,7 @@ def within_calling_window(account_id: int, at: datetime.datetime | None = None) 
 
 
 def is_dnc(account_id: int, phone: str) -> bool:
-    norm = _normalize_phone(phone)
+    norm = _normalize_phone(phone, account_id)
     if not norm:
         return False
     conn = _connect()
@@ -8356,7 +8478,7 @@ def list_dnc(account_id: int) -> list[dict]:
 def add_dnc(account_id: int, phone: str, reason: str = "", source: str = "manual") -> bool:
     """Idempotent add. Returns True if a new row landed, False if already
     present (or the phone normalized to nothing)."""
-    norm = _normalize_phone(phone)
+    norm = _normalize_phone(phone, account_id)
     if not norm:
         return False
     conn = _connect()

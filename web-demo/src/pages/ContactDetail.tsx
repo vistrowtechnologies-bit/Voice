@@ -17,7 +17,7 @@ import {
   updateContact,
 } from '../lib/api'
 import type { ContactDetail as ContactDetailType, PhoneNumber } from '../lib/types'
-import { composeE164, isE164, splitE164 } from '../lib/phone'
+import { composeE164, isE164, splitE164, useAccountDialCode } from '../lib/phone'
 
 const TABS = ['Activity', 'Calls', 'Campaigns', 'Notes'] as const
 type Tab = (typeof TABS)[number]
@@ -53,7 +53,8 @@ export function ContactDetail() {
   const [callError, setCallError] = useState('')
   const [numbers, setNumbers] = useState<PhoneNumber[]>([])
   const [fromNumber, setFromNumber] = useState('')
-  const [editDialCode, setEditDialCode] = useState('+91')
+  const accountDialCode = useAccountDialCode()
+  const [editDialCode, setEditDialCode] = useState(accountDialCode)
   const [formError, setFormError] = useState('')
   const [editForm, setEditForm] = useState({
     firstName: '',
@@ -114,7 +115,7 @@ export function ContactDetail() {
 
   const openEdit = () => {
     const parts = contact.name.trim().split(/\s+/)
-    const phone = splitE164(contact.phone)
+    const phone = splitE164(contact.phone, accountDialCode)
     setEditForm({
       firstName: parts[0] || '',
       lastName: parts.slice(1).join(' '),

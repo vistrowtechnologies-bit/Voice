@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchAgents } from '../lib/api'
 import { apiAcceptConsent, apiCompleteOnboarding, apiUpdateAccount, useAuth } from '../lib/auth'
+import { COUNTRY_OPTIONS, guessCountry } from '../lib/phone'
 import type { AgentConfig } from '../lib/types'
 import { BrowserTestModal } from './AgentTestCall'
 import { Icon } from './Icon'
@@ -30,6 +31,9 @@ export function OnboardingModal() {
   const [step, setStep] = useState<Step>(needsConsent ? 'consent' : 'welcome')
   const [consentChecked, setConsentChecked] = useState(false)
   const [workspaceName, setWorkspaceName] = useState(user?.accountName ?? '')
+  // A brand-new workspace has only the server's default; the browser's region
+  // is a better first guess, and the owner confirms it here.
+  const [country, setCountry] = useState(() => guessCountry())
   const [saving, setSaving] = useState(false)
   const [agent, setAgent] = useState<AgentConfig | null>(null)
   const [showTestCall, setShowTestCall] = useState(false)
@@ -63,8 +67,13 @@ export function OnboardingModal() {
     setSaving(true)
     try {
       const trimmed = workspaceName.trim()
-      if (trimmed && trimmed !== user.accountName) {
-        await apiUpdateAccount(trimmed)
+      const changes = {
+        ...(trimmed && trimmed !== user.accountName ? { name: trimmed } : {}),
+        ...(country !== user.accountCountry ? { country } : {}),
+      }
+      if (Object.keys(changes).length) {
+        const { user: updated } = await apiUpdateAccount(changes)
+        setUser(updated)
       }
       setStep('try-agent')
     } catch {
@@ -158,6 +167,19 @@ export function OnboardingModal() {
                 className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
               />
               <span className="text-[10px] text-text-muted">Shown across your dashboard - change it anytime in Settings.</span>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-semibold text-text-muted">Country</span>
+              <select
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                className="rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm outline-none focus:border-primary"
+              >
+                {COUNTRY_OPTIONS.map((c) => (
+                  <option key={c.code} value={c.code}>{c.name} ({c.dial})</option>
+                ))}
+              </select>
+              <span className="text-[10px] text-text-muted">Phone numbers you type or import without a country code are read as this country.</span>
             </label>
             <button
               onClick={finishWelcome}

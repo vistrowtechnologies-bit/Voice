@@ -659,6 +659,7 @@ def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
         "role": user["role"],
         "accountId": user["account_id"],
         "accountName": user["account_name"],
+        "accountCountry": calls_db.get_account_country(user["account_id"]),
         "plan": user["account_plan"],
         "isPlatformOwner": bool(user["is_platform_owner"]),
         "onboarded": user["onboarded_at"] is not None,
@@ -1790,15 +1791,31 @@ def delete_profile_avatar(user: dict = Depends(current_user)) -> dict:
 
 
 class UpdateAccountRequest(BaseModel):
-    name: str
+    name: str | None = None
+    # ISO 3166 alpha-2 ("IN", "US", "AE"). Decides how every bare local phone
+    # number this account types or imports is read — see phone_format.
+    country: str | None = None
 
 
 @app.patch("/account")
-def update_account(req: UpdateAccountRequest, user: dict = Depends(current_user)) -> dict:
-    name = req.name.strip()
-    if not name:
-        raise HTTPException(400, "Company name can't be empty")
-    calls_db.update_account(user["account_id"], name=name)
+def update_account(req: UpdateAccountRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+    if req.name is not None:
+        name = req.name.strip()
+        if not name:
+            raise HTTPException(400, "Company name can't be empty")
+        calls_db.update_account(user["account_id"], name=name)
+    if req.country is not None:
+        # It changes how the Do-Not-Call list matches numbers, so it is an
+        # admin decision, like the rest of the compliance settings.
+        full = calls_db.get_user_by_id(user["user_id"])
+        if not getattr(request.state, "impersonator_id", None) and (
+            full is None or calls_db.ROLE_RANK.get(full["role"], 0) < calls_db.ROLE_RANK["admin"]
+        ):
+            raise HTTPException(403, "Only an owner or admin can change the workspace country")
+        try:
+            calls_db.set_account_country(user["account_id"], req.country)
+        except ValueError:
+            raise HTTPException(400, "Choose a country from the list")
     return {"user": _me_payload(user["user_id"])}
 
 
@@ -2980,7 +2997,7 @@ def call_contact_now(contact_id: int, data: dict = Body(...), user: dict = Depen
     contact = calls_db.contact_detail(contact_id, user["account_id"])
     if contact is None:
         raise HTTPException(404, "Contact not found")
-    to_number = calls_db.canonical_contact_phone(contact.get("phone"))
+    to_number = calls_db.canonical_contact_phone(contact.get("phone"), user["account_id"])
     if not to_number:
         raise HTTPException(400, "Add a valid phone number with country code before calling this contact")
     from_number = (data.get("fromNumber") or "").strip()
