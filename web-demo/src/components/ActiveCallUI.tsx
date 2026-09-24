@@ -171,7 +171,14 @@ export function ActiveCallUI({
       text: t.text,
       isLocal: true,
     }))
-    return [...fromVoice, ...fromTyped].sort((a, b) => seqFor(a.id) - seqFor(b.id))
+    const entries = [...fromVoice, ...fromTyped]
+    // Number every entry the first time it is seen, BEFORE sorting. This
+    // used to happen lazily inside the sort comparator — but sort never
+    // calls the comparator for a one-item list, so the agent's opening line
+    // (alone on screen for its whole greeting) got no number, and the first
+    // typed message took #0 and jumped above it.
+    for (const entry of entries) seqFor(entry.id)
+    return entries.sort((a, b) => seqFor(a.id) - seqFor(b.id))
   }, [transcriptions, sentTexts, localParticipant.identity])
 
   useEffect(() => {
