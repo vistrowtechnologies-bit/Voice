@@ -26,6 +26,7 @@ import { About } from './pages/marketing/About'
 import { Contact } from './pages/marketing/Contact'
 import { ComingSoon } from './pages/marketing/ComingSoon'
 import { Docs } from './pages/marketing/Docs'
+import { HelpCenter } from './pages/marketing/HelpCenter'
 import { Security } from './pages/marketing/Security'
 import { Careers } from './pages/marketing/Careers'
 import { Changelog } from './pages/marketing/Changelog'
@@ -154,6 +155,9 @@ function App() {
         <Route path="/changelog" element={<Changelog />} />
         <Route path="/resources/blog" element={<ComingSoon title="Blog - coming soon" />} />
         <Route path="/resources/docs" element={<Docs />} />
+        <Route path="/help" element={<HelpCenter />} />
+        <Route path="/help/:topic" element={<HelpCenter />} />
+        <Route path="/help/:topic/:article" element={<HelpCenter />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
 

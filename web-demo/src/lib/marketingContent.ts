@@ -507,7 +507,8 @@ export const NAV: NavGroup[] = [
   {
     label: 'Resources',
     items: [
-      { label: 'Docs & Help', to: 'https://docs.vistrowvoice.com', icon: 'description', desc: 'Set-up guides and how everything fits together.' },
+      { label: 'Help Center', to: '/help', icon: 'support_agent', desc: 'Step-by-step guides for every part of the dashboard.' },
+      { label: 'Docs', to: 'https://docs.vistrowvoice.com', icon: 'description', desc: 'Set-up guides and how everything fits together.' },
       { label: 'Integrations', to: '/integrations', icon: 'hub', desc: 'Every tool Vistrow Voice connects to.' },
       { label: 'Best AI calling software', to: '/best-ai-voice-calling-software-india', icon: 'workspace_premium', desc: 'A practical buyer guide for India.' },
       { label: 'AI voice bot pricing', to: '/ai-voice-bot-pricing-india', icon: 'payments', desc: 'What really drives per-minute cost.' },
@@ -543,7 +544,8 @@ export const FOOTER_COLUMNS = [
   {
     title: 'Resources',
     links: [
-      { label: 'Docs & Help', to: 'https://docs.vistrowvoice.com' },
+      { label: 'Help Center', to: '/help' },
+      { label: 'Docs', to: 'https://docs.vistrowvoice.com' },
       { label: 'Integrations', to: '/integrations' },
       { label: 'Changelog', to: '/changelog' },
       { label: 'vs. traditional IVR', to: '/vs-ivr' },

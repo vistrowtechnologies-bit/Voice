@@ -28,6 +28,13 @@ class Content(unittest.TestCase):
             self.assertIn(slug, topics, f"{route} -> {slug}")
             self.assertEqual(topics[slug], route, f"{slug} explains {topics[slug]}, not {route}")
 
+    def test_public_website_copy_is_current(self):
+        import export_help_articles
+        self.assertEqual(
+            export_help_articles.OUT.read_text(encoding="utf-8"), export_help_articles.render(),
+            "web-demo/src/content/helpArticles.ts is stale — run server/export_help_articles.py",
+        )
+
     def test_no_stale_facts(self):
         text = " ".join(a["body"] for a in help_articles.all_articles())
         for stale in ("Google Calendar", "600 KB", "buy a number"):

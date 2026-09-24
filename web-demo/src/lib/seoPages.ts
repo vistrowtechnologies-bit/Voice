@@ -44,6 +44,7 @@ export interface OgCardSpec {
 }
 
 import { BUYER_GUIDES, COMPARE_VENDORS, DEMO_CALLS, LOCAL_REAL_ESTATE_PAGES } from './seoExpansionContent'
+import { HELP_TOPICS } from '../content/helpArticles'
 
 const page = (
   path: string,
@@ -328,6 +329,41 @@ export const SEO_PAGES: SeoPage[] = [
     'Protected green and cyan Vistrow Voice orb representing voice AI security controls',
     'security',
     'Security & Trust',
+  ),
+  // Public help centre — generated from server/help_articles.py, the same
+  // articles the in-app Help & Support page and the help bot use.
+  page(
+    '/help',
+    'Help Center | Vistrow Voice',
+    'Step-by-step guides for Vistrow Voice AI voice agents: phone numbers, website call widget, knowledge base, campaigns, CRM integrations, compliance and billing.',
+    'docs',
+    'Vistrow Voice help center with guides for every part of the dashboard',
+    'collection',
+    'Help Center',
+  ),
+  ...HELP_TOPICS.map((t) =>
+    page(
+      `/help/${t.slug}`,
+      `${t.title} help | Vistrow Voice`,
+      `How to use ${t.title} in Vistrow Voice: ${t.articles.map((a) => a.title.toLowerCase()).join('; ')}.`.slice(0, 158),
+      'docs',
+      `Vistrow Voice help articles for ${t.title}`,
+      'collection',
+      t.title,
+    ),
+  ),
+  ...HELP_TOPICS.flatMap((t) =>
+    t.articles.map((a) =>
+      page(
+        `/help/${t.slug}/${a.slug}`,
+        `${a.title} | Vistrow Voice Help`,
+        `${a.summary} A step-by-step Vistrow Voice guide for ${t.title.toLowerCase()} — AI voice agents for Indian businesses.`.slice(0, 158),
+        'docs',
+        `${a.title} — Vistrow Voice help article`,
+        'docs',
+        a.title,
+      ),
+    ),
   ),
   page(
     '/resources/docs',
