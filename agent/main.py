@@ -6045,6 +6045,10 @@ async def entrypoint(ctx: JobContext) -> None:
         # Which of the tenant's connected integrations THIS agent fans out
         # to (empty = all connected, unchanged default behavior).
         "crm_integration_keys": cfg.get("crm_integration_keys") or [],
+        # The agent's own "Webhook" URL (Agents → Webhook). Saved by the
+        # dashboard since the column existed and never read until 2026-09-24;
+        # _post_webhook now sends this agent's events there too.
+        "agent_webhook_url": (cfg.get("webhook_url") or "").strip(),
         # "inbound"/"outbound"/None — read by on_user_turn_completed's
         # voicemail check, which only makes sense on a call WE placed.
         "direction": call_context.get("direction"),

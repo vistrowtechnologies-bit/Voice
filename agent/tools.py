@@ -534,16 +534,24 @@ async def _post_webhook(context: RunContext, payload: dict) -> None:
     Best-effort with a short timeout — a slow or dead endpoint must never
     stall the live call.
     """
-    url = db.get_webhook_url((context.userdata or {}).get("account_id"))
-    if not url:
+    userdata = context.userdata or {}
+    urls = []
+    for url in (db.get_webhook_url(userdata.get("account_id")), userdata.get("agent_webhook_url")):
+        # The account's webhook (Integrations page) and this agent's own
+        # (Agents → Webhook); the same URL in both gets one delivery, not two.
+        if url and url.startswith(("https://", "http://")) and url not in urls:
+            urls.append(url)
+    if not urls:
         return
-    try:
-        timeout = aiohttp.ClientTimeout(total=5)
-        async with aiohttp.ClientSession(timeout=timeout) as http:
-            await http.post(url, json=payload)
-        logger.info("posted %s event to CRM webhook", payload.get("type"))
-    except Exception:
-        logger.warning("CRM webhook post failed", exc_info=True)
+    timeout = aiohttp.ClientTimeout(total=5)
+    async with aiohttp.ClientSession(timeout=timeout) as http:
+        for url in urls:
+            try:
+                await http.post(url, json=payload)
+                logger.info("posted %s event to webhook", payload.get("type"))
+            except Exception:
+                # One dead endpoint must not stop delivery to the other.
+                logger.warning("webhook post failed", exc_info=True)
 
 
 # Same Hinglish-aware word lists the dashboard's own sentiment badge uses
