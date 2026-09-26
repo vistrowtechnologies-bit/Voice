@@ -35,6 +35,8 @@ _SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY")
 _ELEVEN_V3_PREFIX = "elevenlabs-v3:"
 _ELEVEN_PREFIX = "elevenlabs:"
 _GOOGLE_31_PREFIX = "google31:"
+_GOOGLE_38_PREFIX = voice_catalog.GEMINI_38_PREFIX
+_GOOGLE_38_FLASH_PREFIX = voice_catalog.GEMINI_38_FLASH_PREFIX
 _GOOGLE_PREFIX = "google:"
 # Any of Google's 30 prebuilt Gemini personas (none collides with a locale
 # voice id like "hi-IN-Standard-A"); only kore/charon are offered on 2.5/3.1.
@@ -140,6 +142,60 @@ def _synth_google(voice_name: str, lang: str, text: str, model_name: str = "gemi
     return response.audio_content, "audio/wav"
 
 
+def _synth_gemini_api(voice_name: str, model_name: str, text: str) -> tuple[bytes, str]:
+    """Gemini 3.8 TTS is served by the Gemini API Interactions endpoint,
+    not Cloud Text-to-Speech's synthesize_speech/model_name interface.
+    Keep this route separate from Cloud TTS so 3.1 and Cloud voices are
+    unaffected. Gemini 3.8's unary response is already a complete WAV."""
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise PreviewError("Gemini 3.8 voice preview isn't configured (no Gemini API key).")
+
+    # Audition a genuine nonverbal marker as well as natural phrasing, so the
+    # preview verifies this model's expressive path rather than just timbre.
+    payload = {
+        "model": model_name,
+        "input": [{
+            "type": "user_input",
+            "content": [{
+                "type": "text",
+                "text": f"{text} <laugh>",
+                "annotations": [{
+                    "type": "speech_metadata",
+                    "style": "warm, natural, clear conversational delivery",
+                }],
+            }],
+        }],
+        "response_format": {"type": "audio"},
+        "generation_config": {"speech_config": [{"voice": voice_name}]},
+    }
+    raw = _post(
+        "https://generativelanguage.googleapis.com/v1beta/interactions",
+        {
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        payload,
+    )
+    try:
+        response = json.loads(raw)
+        # REST responses store audio in steps[].content[]. The Python SDK's
+        # interaction.output_audio convenience property maps to this same
+        # final audio block.
+        audio_data = next(
+            item["data"]
+            for step in reversed(response["steps"])
+            if step.get("type") == "model_output"
+            for item in reversed(step.get("content", []))
+            if item.get("type") == "audio" and item.get("data")
+        )
+        audio = base64.b64decode(audio_data, validate=True)
+    except (ValueError, KeyError, TypeError, StopIteration) as e:
+        raise PreviewError("Unexpected audio response from Gemini 3.8 TTS.") from e
+    return audio, "audio/wav"
+
+
 def synthesize(voice_string: str, lang: str) -> tuple[bytes, str]:
     """Synthesize the fixed audition line for `voice_string` in `lang`.
     Returns (audio_bytes, content_type). Raises PreviewError on any failure."""
@@ -167,7 +223,11 @@ def synthesize(voice_string: str, lang: str) -> tuple[bytes, str]:
             lang,
             text,
         )
-    if voice_string.startswith((voice_catalog.GEMINI_38_PREFIX, _GOOGLE_31_PREFIX)):
+    gemini38 = voice_catalog.gemini_prefix_and_model(voice_string)
+    if gemini38 and gemini38[0] in (_GOOGLE_38_FLASH_PREFIX, _GOOGLE_38_PREFIX):
+        prefix, model_name = gemini38
+        return _synth_gemini_api(voice_string[len(prefix):].capitalize(), model_name, text)
+    if voice_string.startswith(_GOOGLE_31_PREFIX):
         prefix, model_name = voice_catalog.gemini_prefix_and_model(voice_string)
         return _synth_google(voice_string[len(prefix):], lang, text, model_name)
     if voice_string.startswith(_GOOGLE_PREFIX):
