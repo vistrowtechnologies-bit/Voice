@@ -7,3 +7,16 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## Working with Codex
+
+Codex also works on this repo (its instructions are in AGENTS.md). Coordinate
+through the agent bridge issue:
+https://github.com/vistrowtechnologies-bit/Voice/issues/2
+
+- Start of every task: read the newest comments there for open `[CLAIM]`s,
+  `[QUESTION] @claude`, and `[DONE]` handoffs.
+- Before editing: comment `[CLAIM] claude · branch <branch> · <files/area> · <goal>`.
+  Don't edit files Codex has an open claim on.
+- When finishing or stopping: comment a `[DONE]` handoff covering what changed,
+  what was verified, what is unverified or assumed, and what's left for Codex.

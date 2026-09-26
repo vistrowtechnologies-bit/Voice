@@ -36,6 +36,10 @@ _B2_PREFIX = "db-backups/"
 
 _started = False
 _lock = threading.Lock()
+# Date of the last successful upload, kept in memory as well as in settings.
+# If recording it in settings fails, this still stops the scheduler from
+# re-dumping and re-uploading every 30 minutes for the rest of the day.
+_last_ok_date: str | None = None
 
 
 def _b2_client():
@@ -94,9 +98,25 @@ def run_backup_now() -> dict:
         client = _b2_client()
         client.upload_file(dump_path, bucket, key)
         deleted = _prune_old_backups(client, bucket)
-
-        calls_db.set_setting(_LAST_RUN_SETTING, today, calls_db.PLATFORM_ACCOUNT_ID)
+        global _last_ok_date
+        _last_ok_date = today
         logger.info("db backup uploaded: %s (%.1f MB), pruned %s old backup(s)", key, size_mb, deleted)
+
+        # The backup is safely in B2 by now. Failing to record that is not a
+        # failed backup - it was reported as one on 2026-09-25 (relation
+        # "settings" does not exist) - so say what actually happened.
+        try:
+            calls_db.set_setting(_LAST_RUN_SETTING, today, calls_db.PLATFORM_ACCOUNT_ID)
+        except Exception as exc:
+            logger.exception("db backup uploaded but its run date could not be recorded")
+            _notify(
+                "Vistrow Voice: backup uploaded, but its run date was not recorded",
+                f"<p>Today's database backup was uploaded to B2 as <code>{key}</code> "
+                f"({size_mb:.1f} MB).</p><p>Recording the run in the settings table "
+                f"failed: {exc}</p><p>Check that this server's DATABASE_URL points at "
+                f"the production database.</p>",
+            )
+            return {"ok": True, "key": key, "size_mb": size_mb, "pruned": deleted, "warning": str(exc)}
         # No success email — this runs daily and a mailbox does not need a
         # daily "it worked" receipt (Resend's free-plan send quota is not
         # worth spending on it). Logged above instead. Failure below still
@@ -125,8 +145,9 @@ def _loop() -> None:
         try:
             now = datetime.datetime.now(datetime.timezone.utc)
             today = now.strftime("%Y-%m-%d")
-            last_run = calls_db.get_setting(_LAST_RUN_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
-            if now.hour >= _TARGET_HOUR_UTC and last_run != today:
+            if now.hour >= _TARGET_HOUR_UTC and _last_ok_date != today and (
+                calls_db.get_setting(_LAST_RUN_SETTING, calls_db.PLATFORM_ACCOUNT_ID) != today
+            ):
                 run_backup_now()
         except Exception:
             logger.exception("db backup scheduler tick failed")
