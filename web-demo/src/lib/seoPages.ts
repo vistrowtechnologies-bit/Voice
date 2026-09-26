@@ -6,8 +6,6 @@
 // visitor sees after React hydrates.
 
 export const SEO_ORIGIN = 'https://www.vistrowvoice.com'
-export const SEO_LAST_SIGNIFICANT_UPDATE = '2026-09-01'
-
 export type SeoKind =
   | 'home'
   | 'collection'
@@ -553,7 +551,6 @@ export function baseStructuredData(entry: SeoPage): object[] {
       headline: entry.title,
       description: entry.description,
       url: pageUrl,
-      dateModified: SEO_LAST_SIGNIFICANT_UPDATE,
       publisher: { '@id': `${SEO_ORIGIN}/#organization` },
     })
   } else if (entry.kind === 'about' || entry.kind === 'contact') {

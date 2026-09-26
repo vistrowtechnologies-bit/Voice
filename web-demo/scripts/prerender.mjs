@@ -29,7 +29,6 @@ const { render } = await import('../dist-ssr/entry-server.js')
 
 const {
   SEO_ORIGIN: CANONICAL_ORIGIN,
-  SEO_LAST_SIGNIFICANT_UPDATE,
   SEO_PAGES: PAGES,
 } = await import('../src/lib/seoPages.ts')
 
@@ -76,7 +75,9 @@ function applyAppShell(template) {
 
 function sitemapXml() {
   const rows = PAGES.filter((page) => !page.noindex)
-    .map((page) => `  <url><loc>${CANONICAL_ORIGIN}${page.path}</loc><lastmod>${SEO_LAST_SIGNIFICANT_UPDATE}</lastmod></url>`)
+    // We don't currently maintain modification timestamps per route. Omitting
+    // lastmod is more accurate than publishing one stale date for every URL.
+    .map((page) => `  <url><loc>${CANONICAL_ORIGIN}${page.path}</loc></url>`)
     .join('\n')
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`
 }
