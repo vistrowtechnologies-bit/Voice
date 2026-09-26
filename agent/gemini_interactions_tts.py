@@ -23,6 +23,27 @@ _API_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 _STYLE_TAG = re.compile(r'<expression\s+value="([^"]*)"\s*/>')
 _SOUND_TAG = re.compile(r'<sound\s+value="([^"]*)"\s*/>')
 _BREAK_TAG = re.compile(r'<break\s+time="([^"]*)"\s*/>')
+# Where the first request of a turn may be cut: after a sentence or clause
+# mark, same boundary set and minimum as clause_tokenizer.py (the Chirp path).
+_CLAUSE_END = re.compile(r"[।.!?,;:—](?=\s|$)")
+_MIN_FIRST_CLAUSE_CHARS = 6
+
+
+def _first_clause_end(text: str) -> int | None:
+    """Index just past the first clause boundary in `text` that is at least
+    _MIN_FIRST_CLAUSE_CHARS in and not inside a <...> tag, else None.
+
+    A boundary at the very end of the buffer is not trusted: "3." may be
+    "3.5" once the next token arrives, so wait for the following character.
+    """
+    for match in _CLAUSE_END.finditer(text):
+        end = match.end()
+        if end >= len(text):
+            return None
+        head = text[:end]
+        if len(head.strip()) >= _MIN_FIRST_CLAUSE_CHARS and head.count("<") == head.count(">"):
+            return end
+    return None
 
 
 def _gemini_text_and_style(text: str) -> tuple[str, str | None]:
@@ -131,18 +152,48 @@ class _GeminiStream(SynthesizeStream):
             timeout = aiohttp.ClientTimeout(total=90, connect=12, sock_read=30)
             self._gemini_tts._session = aiohttp.ClientSession(timeout=timeout)
 
+        # Gemini returns audio only after a request's text is complete, so one
+        # request per turn means no audio until the LLM has finished the whole
+        # reply. Send the first clause as its own request the moment it
+        # closes, while the rest of the turn is still being written, then the
+        # remainder - what google_tts_streaming_patch does for Chirp 3 HD.
+        # Two requests, not one per clause: every cut is a prosody seam.
         pending = ""
-        async for item in self._input_ch:
-            if isinstance(item, SynthesizeStream._FlushSentinel):
-                if pending.strip():
-                    await self._synthesize_segment(pending, output_emitter)
-                pending = ""
-                continue
-            pending += item
-        if pending.strip():
-            await self._synthesize_segment(pending, output_emitter)
+        first: asyncio.Task | None = None
+        in_segment = False
+        try:
+            async for item in self._input_ch:
+                if isinstance(item, SynthesizeStream._FlushSentinel):
+                    if first is not None:
+                        await first
+                        first = None
+                    if pending.strip():
+                        if not in_segment:
+                            output_emitter.start_segment(segment_id=str(uuid.uuid4()))
+                            in_segment = True
+                        await self._synthesize_call(pending, output_emitter)
+                    if in_segment:
+                        output_emitter.end_segment()
+                        in_segment = False
+                    pending = ""
+                    continue
+                pending += item
+                if not in_segment:
+                    cut = _first_clause_end(pending)
+                    if cut is not None and _gemini_text_and_style(pending[:cut])[0]:
+                        output_emitter.start_segment(segment_id=str(uuid.uuid4()))
+                        in_segment = True
+                        first = asyncio.create_task(
+                            self._synthesize_call(pending[:cut], output_emitter)
+                        )
+                        pending = pending[cut:]
+            # end_input() always flushes first, so a clean end has nothing left.
+        finally:
+            if first is not None and not first.done():
+                first.cancel()
 
-    async def _synthesize_segment(self, raw_text: str, output_emitter: AudioEmitter) -> None:
+    async def _synthesize_call(self, raw_text: str, output_emitter: AudioEmitter) -> None:
+        """One Interactions request; pushes its audio into the open segment."""
         text, inline_style = _gemini_text_and_style(raw_text)
         if not text:
             return
@@ -157,31 +208,25 @@ class _GeminiStream(SynthesizeStream):
             "generation_config": {"speech_config": [{"voice": self._gemini_tts._voice_name}]},
             "stream": True,
         }
-        output_emitter.start_segment(segment_id=str(uuid.uuid4()))
-        try:
-            async with self._gemini_tts._session.post(
-                _API_URL,
-                headers={"x-goog-api-key": self._gemini_tts._api_key,
-                         "content-type": "application/json", "accept": "text/event-stream"},
-                json=payload,
-            ) as response:
-                if response.status >= 400:
-                    detail = (await response.text())[:300]
-                    raise RuntimeError(f"Gemini TTS returned HTTP {response.status}: {detail}")
-                async for line in response.content:
-                    line = line.decode("utf-8", "replace").strip()
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if not data or data == "[DONE]":
-                        continue
-                    event = json.loads(data)
-                    if event.get("event_type") != "step.delta":
-                        continue
-                    delta = event.get("delta") or {}
-                    if delta.get("type") == "audio" and delta.get("data"):
-                        output_emitter.push(base64.b64decode(delta["data"]))
-        except asyncio.CancelledError:
-            raise
-        finally:
-            output_emitter.end_segment()
+        async with self._gemini_tts._session.post(
+            _API_URL,
+            headers={"x-goog-api-key": self._gemini_tts._api_key,
+                     "content-type": "application/json", "accept": "text/event-stream"},
+            json=payload,
+        ) as response:
+            if response.status >= 400:
+                detail = (await response.text())[:300]
+                raise RuntimeError(f"Gemini TTS returned HTTP {response.status}: {detail}")
+            async for line in response.content:
+                line = line.decode("utf-8", "replace").strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if not data or data == "[DONE]":
+                    continue
+                event = json.loads(data)
+                if event.get("event_type") != "step.delta":
+                    continue
+                delta = event.get("delta") or {}
+                if delta.get("type") == "audio" and delta.get("data"):
+                    output_emitter.push(base64.b64decode(delta["data"]))
