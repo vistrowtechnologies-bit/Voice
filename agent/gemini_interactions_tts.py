@@ -17,30 +17,78 @@ import aiohttp
 from livekit.agents import APIConnectOptions
 from livekit.agents.types import DEFAULT_API_CONNECT_OPTIONS
 from livekit.agents.tts import AudioEmitter, MarkupInfo, SynthesizeStream, TTS, TTSCapabilities
+from livekit.agents.tts._provider_format import _GEMINI_TAGS, convert_markup, split_expr_markup
 
 
 _API_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 _STYLE_TAG = re.compile(r'<expression\s+value="([^"]*)"\s*/>')
 _SOUND_TAG = re.compile(r'<sound\s+value="([^"]*)"\s*/>')
 _BREAK_TAG = re.compile(r'<break\s+time="([^"]*)"\s*/>')
+# Where the first request of a turn may be cut: after a sentence or clause
+# mark, same boundary set and minimum as clause_tokenizer.py (the Chirp path).
+_CLAUSE_END = re.compile(r"[।.!?,;:—](?=\s|$)")
+_MIN_FIRST_CLAUSE_CHARS = 6
+
+
+def _first_clause_end(text: str) -> int | None:
+    """Index just past the first clause boundary in `text` that is at least
+    _MIN_FIRST_CLAUSE_CHARS in and not inside a <...> tag, else None.
+
+    A boundary at the very end of the buffer is not trusted: "3." may be
+    "3.5" once the next token arrives, so wait for the following character.
+    """
+    for match in _CLAUSE_END.finditer(text):
+        end = match.end()
+        if end >= len(text):
+            return None
+        head = text[:end]
+        if len(head.strip()) >= _MIN_FIRST_CLAUSE_CHARS and head.count("<") == head.count(">"):
+            return end
+    return None
+
+
+# An <expr type="expression"/> marker starts a new delivery style; it is the
+# only thing that changes it (same split LiveKit's own GeminiTTS plugin uses).
+_EXPRESSION_MARKER = re.compile(r'<expr\b(?=[^>]*type="expression")[^>]*?/\s*>')
+# Anything left that is not one of Gemini's native inline tags would be read
+# aloud, so it goes.
+_NON_NATIVE_TAG = re.compile(
+    r"<(?!/?(?:" + "|".join(re.escape(t) for t in _GEMINI_TAGS) + r")\s*/?>)[^>]*>"
+)
+
+
+def _gemini_spans(text: str) -> list[tuple[str, str | None]]:
+    """Lower the LLM's expressive markup into (words, style label) spans.
+
+    The prompt has the LLM write LiveKit's <expr .../> markers. Because this
+    adapter streams natively, the framework never lowers them for us
+    (AgentActivity._resolve_expressive_options), so it happens here, with
+    LiveKit's own Gemini lowering: sounds -> <laugh>/<sigh>/..., breaks ->
+    <short pause>, emphasis -> capitals. Each expression marker's label styles
+    the words up to the next one; a leading span has no label of its own.
+    The older <expression value/>, <sound value/> and <break time/> forms
+    are still accepted.
+    """
+    text = _STYLE_TAG.sub(lambda m: f'<expr type="expression" label="{m.group(1)}"/>', text)
+    text = _SOUND_TAG.sub(lambda m: f'<expr type="sound" label="{m.group(1)}"/>', text)
+    text = _BREAK_TAG.sub(lambda m: f'<expr type="break" label="{m.group(1)}"/>', text)
+    text = convert_markup("gemini", text)
+    bounds = [0, *(m.start() for m in _EXPRESSION_MARKER.finditer(text)), len(text)]
+    spans: list[tuple[str, str | None]] = []
+    for a, b in zip(bounds, bounds[1:]):
+        words, markers = split_expr_markup(text[a:b])
+        words = re.sub(r"\s{2,}", " ", _NON_NATIVE_TAG.sub("", words)).strip()
+        label = next((m["value"] for m in markers if m["type"] == "expression"), None)
+        if words:
+            spans.append((words, label))
+    return spans
 
 
 def _gemini_text_and_style(text: str) -> tuple[str, str | None]:
-    """Lower LiveKit expressive markers into Gemini's native text controls."""
-    styles = _STYLE_TAG.findall(text)
-    text = _STYLE_TAG.sub("", text)
-    def sound_tag(match: re.Match[str]) -> str:
-        sound = match.group(1).strip().lower()
-        sound = {"breathe": "breath", "clear throat": "cough"}.get(sound, sound)
-        return f"<{sound}>" if sound in {"laugh", "sigh", "cough", "breath"} else ""
-
-    text = _SOUND_TAG.sub(sound_tag, text)
-    text = _BREAK_TAG.sub("<short pause>", text)
-    # Gemini's native tags include laugh, sigh, cough, breath and short pause.
-    # Reject arbitrary model-generated XML rather than sending unknown markup.
-    text = re.sub(r"<(?!/?(?:laugh|sigh|cough|breath|short pause|long pause)\b)[^>]+>", "", text)
-    style = "; ".join(dict.fromkeys(s.strip() for s in styles if s.strip())) or None
-    return re.sub(r"\s{2,}", " ", text).strip(), style
+    """Spoken text and its labels joined - for callers that need one string."""
+    spans = _gemini_spans(text)
+    labels = [label for _words, label in spans if label]
+    return " ".join(words for words, _label in spans), "; ".join(dict.fromkeys(labels)) or None
 
 
 class GeminiInteractionsTTS(TTS):
@@ -48,14 +96,12 @@ class GeminiInteractionsTTS(TTS):
 
     class Markup(TTS.Markup):
         def _provider_key(self) -> str:
-            # Reuse LiveKit's safe expressive vocabulary/instructions. _run
-            # lowers its normalized markers to Gemini's native syntax.
-            return "inworld"
+            # LiveKit's Gemini dialect; _run lowers the markers itself.
+            return "gemini"
 
         def convert(self, text: str) -> str:
-            from livekit.agents.tts._provider_format import convert_markup
-
-            return convert_markup("inworld", text)
+            # _run lowers the raw markers itself (see _gemini_spans).
+            return text
 
         @property
         def info(self) -> MarkupInfo:
@@ -131,25 +177,86 @@ class _GeminiStream(SynthesizeStream):
             timeout = aiohttp.ClientTimeout(total=90, connect=12, sock_read=30)
             self._gemini_tts._session = aiohttp.ClientSession(timeout=timeout)
 
+        # Gemini returns audio only after a request's text is complete, so one
+        # request per turn means no audio until the LLM has finished the whole
+        # reply. Send the first clause as its own request the moment it
+        # closes, while the rest of the turn is still being written, then the
+        # remainder - what google_tts_streaming_patch does for Chirp 3 HD.
+        # Two requests, not one per clause: every cut is a prosody seam.
         pending = ""
-        async for item in self._input_ch:
-            if isinstance(item, SynthesizeStream._FlushSentinel):
-                if pending.strip():
-                    await self._synthesize_segment(pending, output_emitter)
-                pending = ""
-                continue
-            pending += item
-        if pending.strip():
-            await self._synthesize_segment(pending, output_emitter)
+        first: asyncio.Task | None = None
+        in_segment = False
+        # A style label applies until the next one. When the first-clause cut
+        # lands mid-sentence, the second request carries the last label on,
+        # so the rest of that sentence is not spoken flat.
+        carry: str | None = None
+        try:
+            async for item in self._input_ch:
+                if isinstance(item, SynthesizeStream._FlushSentinel):
+                    if first is not None:
+                        await first
+                        first = None
+                    spans = _gemini_spans(pending)
+                    if spans:
+                        if not in_segment:
+                            output_emitter.start_segment(segment_id=str(uuid.uuid4()))
+                            in_segment = True
+                        await self._synthesize_call(spans, carry, output_emitter)
+                    if in_segment:
+                        output_emitter.end_segment()
+                        in_segment = False
+                    pending = ""
+                    carry = None  # a style never carries into the next turn
+                    continue
+                pending += item
+                if not in_segment:
+                    cut = _first_clause_end(pending)
+                    spans = _gemini_spans(pending[:cut]) if cut is not None else []
+                    if spans:
+                        output_emitter.start_segment(segment_id=str(uuid.uuid4()))
+                        in_segment = True
+                        first = asyncio.create_task(
+                            self._synthesize_call(spans, None, output_emitter)
+                        )
+                        carry = next((label for _w, label in reversed(spans) if label), None)
+                        pending = pending[cut:]
+            # end_input() always flushes first, so a clean end has nothing left.
+        finally:
+            if first is not None and not first.done():
+                first.cancel()
 
-    async def _synthesize_segment(self, raw_text: str, output_emitter: AudioEmitter) -> None:
-        text, inline_style = _gemini_text_and_style(raw_text)
-        if not text:
-            return
-        style = "; ".join(s for s in (self._gemini_tts._style, inline_style) if s)
+    async def _synthesize_call(
+        self, spans: list[tuple[str, str | None]], carry: str | None, output_emitter: AudioEmitter
+    ) -> None:
+        """One Interactions request; pushes its audio into the open segment.
+
+        Each span's style rides a speech_metadata annotation over that span's
+        byte range of the one text item (start_index/end_index are in bytes,
+        per google-genai's SpeechAnnotation). The tone/persona/emotion
+        direction (`style` on the TTS) is part of every span's style.
+        """
+        base = self._gemini_tts._style
+        text = ""
+        annotations: list[dict] = []
+        for i, (words, label) in enumerate(spans):
+            if text:
+                text += " "
+            start = len(text.encode("utf-8"))
+            text += words
+            label = label or (carry if i == 0 else None)
+            style = ", ".join(s for s in (base, label) if s)
+            if style:
+                annotations.append({
+                    "type": "speech_metadata", "style": style,
+                    "start_index": start, "end_index": len(text.encode("utf-8")),
+                })
+        if len(annotations) == 1 and len(spans) == 1:
+            # One style over the whole text: send it unranged.
+            annotations[0].pop("start_index")
+            annotations[0].pop("end_index")
         content: dict = {"type": "text", "text": text}
-        if style:
-            content["annotations"] = [{"type": "speech_metadata", "style": style}]
+        if annotations:
+            content["annotations"] = annotations
         payload = {
             "model": self._gemini_tts._model_name,
             "input": [{"type": "user_input", "content": [content]}],
@@ -157,31 +264,25 @@ class _GeminiStream(SynthesizeStream):
             "generation_config": {"speech_config": [{"voice": self._gemini_tts._voice_name}]},
             "stream": True,
         }
-        output_emitter.start_segment(segment_id=str(uuid.uuid4()))
-        try:
-            async with self._gemini_tts._session.post(
-                _API_URL,
-                headers={"x-goog-api-key": self._gemini_tts._api_key,
-                         "content-type": "application/json", "accept": "text/event-stream"},
-                json=payload,
-            ) as response:
-                if response.status >= 400:
-                    detail = (await response.text())[:300]
-                    raise RuntimeError(f"Gemini TTS returned HTTP {response.status}: {detail}")
-                async for line in response.content:
-                    line = line.decode("utf-8", "replace").strip()
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if not data or data == "[DONE]":
-                        continue
-                    event = json.loads(data)
-                    if event.get("event_type") != "step.delta":
-                        continue
-                    delta = event.get("delta") or {}
-                    if delta.get("type") == "audio" and delta.get("data"):
-                        output_emitter.push(base64.b64decode(delta["data"]))
-        except asyncio.CancelledError:
-            raise
-        finally:
-            output_emitter.end_segment()
+        async with self._gemini_tts._session.post(
+            _API_URL,
+            headers={"x-goog-api-key": self._gemini_tts._api_key,
+                     "content-type": "application/json", "accept": "text/event-stream"},
+            json=payload,
+        ) as response:
+            if response.status >= 400:
+                detail = (await response.text())[:300]
+                raise RuntimeError(f"Gemini TTS returned HTTP {response.status}: {detail}")
+            async for line in response.content:
+                line = line.decode("utf-8", "replace").strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if not data or data == "[DONE]":
+                    continue
+                event = json.loads(data)
+                if event.get("event_type") != "step.delta":
+                    continue
+                delta = event.get("delta") or {}
+                if delta.get("type") == "audio" and delta.get("data"):
+                    output_emitter.push(base64.b64decode(delta["data"]))
