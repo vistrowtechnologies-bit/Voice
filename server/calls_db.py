@@ -7457,7 +7457,7 @@ _ECONOMY_VOICES = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 # _ELEVENLABS_V3_VOICE_PREFIX) ElevenLabs voice forms bill as premium.
 # Gemini 3.8 Flash-Lite personas ("google38:") bill premium too - Google
 # charges per audio token for them, and voice_catalog lists them at 2x.
-_PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:", "google38:")
+_PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:", "google38:", "google38flash:")
 _ECONOMY_VOICE_PREFIXES = ("google:",)
 # The two Gemini persona voices (Mira/Arin) share the "google:" prefix with
 # the cheap single-locale Google voices but are a different product: one voice

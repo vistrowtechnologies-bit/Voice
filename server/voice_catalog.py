@@ -26,6 +26,7 @@ calls_db.voice_tier() — the prefix convention there and here must agree:
   - "google:<voice>"      → Google Cloud locale voice → tier "lite"     (0.75x credits)
   - "google31:<voice>"    → next-generation TTS preview → tier "standard" (1x credits)
   - "google38:<voice>"    → Gemini 3.8 Flash-Lite TTS    → tier "premium"  (2x credits)
+  - "google38flash:<voice>" → Gemini 3.8 Flash TTS       → tier "premium"  (2x credits)
   - bare Sarvam bulbul:v2 speaker (abhilash/anushka) → tier "lite"      (0.75x credits)
   - any other bare name (Sarvam bulbul:v3)           → tier "standard"   (1x credits)
 
@@ -189,22 +190,26 @@ GEMINI_PREBUILT_VOICES = (
     ("Sadaltager", "male", "Knowledgeable"), ("Sulafat", "female", "Warm"),
 )
 GEMINI_38_PREFIX = "google38:"
+GEMINI_38_FLASH_PREFIX = "google38flash:"
 CATALOG += [
     {
-        "value": f"{GEMINI_38_PREFIX}{persona.lower()}",
-        "name": f"{persona} (2x credits)",
+        "value": f"{prefix}{persona.lower()}",
+        "name": f"{persona} 3.8 {edition}",
         "gender": gender,
         "tier": "premium",
         "multilingual": True,
         "preview": True,
-        "note": f"{style} · newest expressive model · testing only",
+        "note": f"{style} · {edition} · test before live calls",
     }
+    for prefix, edition in ((GEMINI_38_PREFIX, "Flash-Lite"),
+                            (GEMINI_38_FLASH_PREFIX, "Flash"))
     for persona, gender, style in GEMINI_PREBUILT_VOICES
 ]
 
 # Gemini-TTS model behind each Gemini persona prefix. Longest-first is not
 # needed ("google:" does not prefix "google31:"), but keep specific first.
 GEMINI_TTS_MODELS = (
+    (GEMINI_38_FLASH_PREFIX, "gemini-3.8-flash-tts"),
     (GEMINI_38_PREFIX, "gemini-3.8-flash-lite-tts"),
     ("google31:", "gemini-3.1-flash-tts-preview"),
     ("google:", "gemini-2.5-flash-tts"),
@@ -430,7 +435,7 @@ GOOGLE_TTS_TOTAL_LOCALES = len(GOOGLE_TTS_LANGUAGES)
 # locale regardless of which engine produced it.
 _ALL_LANGUAGE_LABELS = {**LANGUAGE_LABELS, **GOOGLE_TTS_LANGUAGES}
 
-_GOOGLE_PREFIXES = ("google:", "google31:", GEMINI_38_PREFIX)
+_GOOGLE_PREFIXES = ("google:", "google31:", GEMINI_38_FLASH_PREFIX, GEMINI_38_PREFIX)
 
 
 # Chirp 3 HD personas exist in exactly these Indian locales (verified against

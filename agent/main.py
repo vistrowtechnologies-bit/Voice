@@ -68,6 +68,7 @@ import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # dbconn.py is duplicated into agent/. Used here only to resolve a voice's
 # gender so the LLM self-refers with the right grammatical gender.
 from clause_tokenizer import ClauseTokenizer
+from gemini_interactions_tts import GeminiInteractionsTTS
 from google_tts_streaming_patch import PatchedGeminiTTS
 import backchannel_patch
 import preemptive_diag_patch
@@ -2255,13 +2256,14 @@ _GOOGLE_31_MODEL = "gemini-3.1-flash-tts-preview"
 # Google's prebuilt personas, not just Kore/Charon.
 _GOOGLE_38_VOICE_PREFIX = voice_catalog.GEMINI_38_PREFIX
 _GOOGLE_38_MODEL = "gemini-3.8-flash-lite-tts"
+_GOOGLE_38_FLASH_VOICE_PREFIX = voice_catalog.GEMINI_38_FLASH_PREFIX
+_GOOGLE_38_FLASH_MODEL = "gemini-3.8-flash-tts"
 _GEMINI_38_PERSONAS = {p.lower() for p, _g, _s in voice_catalog.GEMINI_PREBUILT_VOICES}
-# Same-persona backup model for each Gemini model. 3.8 falls back to 3.1,
-# which serves the same 30 personas, so a 3.8 outage keeps the voice.
+# Same-persona backup model for the older Cloud TTS path. Gemini 3.8 uses
+# the direct Interactions streaming adapter and does not silently downgrade.
 _GEMINI_FALLBACK_MODEL = {
     _GOOGLE_25_MODEL: _GOOGLE_31_MODEL,
     _GOOGLE_31_MODEL: _GOOGLE_25_MODEL,
-    _GOOGLE_38_MODEL: _GOOGLE_31_MODEL,
 }
 # _build_tts's provider label per Gemini model; the mid-call emotion and
 # language-switch paths (here and tools.py) key off these.
@@ -2269,6 +2271,7 @@ _GEMINI_PROVIDERS = {
     _GOOGLE_25_MODEL: "google-multilingual",
     _GOOGLE_31_MODEL: "google-multilingual-31",
     _GOOGLE_38_MODEL: "google-multilingual-38",
+    _GOOGLE_38_FLASH_MODEL: "google-multilingual-38-flash",
 }
 # Every google.TTS() construction in this file goes through PatchedGeminiTTS
 # (google_tts_streaming_patch.py) for real streaming — see that module's
@@ -2516,8 +2519,36 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             ),
         )
         return tts, "elevenlabs"
+    # Gemini 3.8 is only available through the Gemini Interactions API. It
+    # must not enter the Google Cloud TTS branch below (that API currently
+    # exposes the older 3.1 TTS preview instead). LiveKit forwards streaming
+    # PCM deltas directly from Interactions, retaining the persona per turn.
+    gemini38_prefix = next(
+        (prefix for prefix in (_GOOGLE_38_FLASH_VOICE_PREFIX, _GOOGLE_38_VOICE_PREFIX)
+         if speaker.startswith(prefix)),
+        None,
+    )
+    if gemini38_prefix:
+        model = voice_catalog.gemini_prefix_and_model(speaker)[1]
+        voice_name = speaker[len(gemini38_prefix):].capitalize()
+        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if api_key:
+            style = {
+                "professional": "calm, clear, concise, confident business-consultant delivery",
+                "casual": "friendly, relaxed, warm conversational delivery with natural variation",
+                "balanced": "warm, perceptive, clear conversational delivery with natural variation",
+            }.get(tone_name, "warm, clear, natural conversational delivery")
+            return GeminiInteractionsTTS(
+                model=model,
+                voice=voice_name,
+                style=style,
+                api_key=api_key,
+            ), _GEMINI_PROVIDERS[model]
+        raise RuntimeError(
+            "Gemini 3.8 voice selected but GEMINI_API_KEY is not configured on the LiveKit worker"
+        )
     google_prefix = next(
-        (prefix for prefix in (_GOOGLE_38_VOICE_PREFIX, _GOOGLE_31_VOICE_PREFIX, _GOOGLE_VOICE_PREFIX) if speaker.startswith(prefix)),
+        (prefix for prefix in (_GOOGLE_31_VOICE_PREFIX, _GOOGLE_VOICE_PREFIX) if speaker.startswith(prefix)),
         None,
     )
     if google_prefix and _GOOGLE_CREDENTIALS is not None and _GOOGLE_VOICE_ENABLED:
@@ -2670,7 +2701,11 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     # invalid Sarvam speaker name.
     sarvam_speaker = (
         "shubh"
-        if speaker.startswith((_GOOGLE_VOICE_PREFIX, _GOOGLE_31_VOICE_PREFIX, _GOOGLE_38_VOICE_PREFIX, _ELEVENLABS_VOICE_PREFIX, _ELEVENLABS_V3_VOICE_PREFIX))
+        if speaker.startswith((
+            _GOOGLE_VOICE_PREFIX, _GOOGLE_31_VOICE_PREFIX,
+            _GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX,
+            _ELEVENLABS_VOICE_PREFIX, _ELEVENLABS_V3_VOICE_PREFIX,
+        ))
         else speaker
     )
     # Sarvam's current LiveKit production recipe uses a smaller 30-character
@@ -2949,7 +2984,7 @@ class RealEstateAgent(Agent):
         # afterwards — see build_generic_assistant_prompt's docstring.
         _vc_entry = voice_catalog.get_voice(voice_value) or {}
         speaks_global = bool(_vc_entry.get("multilingual")) and voice_value.startswith(
-            ("google:", "google31:", _GOOGLE_38_VOICE_PREFIX)
+            ("google:", "google31:", _GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)
         )
         needs_human_speech_layer = bool(config.get("system_prompt"))
         if config.get("system_prompt"):
@@ -3431,6 +3466,20 @@ class RealEstateAgent(Agent):
         # built for the numbers, and caller_tail for why it is not mid-prompt.
         instructions += caller_tail
         instructions += date_instruction
+        if voice_value.startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)):
+            # These Gemini voices support native expressive TTS markup. This
+            # voice-specific exception supersedes the generic prompt warning
+            # against tags (which remains correct for other providers).
+            instructions += (
+                "\n\n# Gemini 3.8 expressive speech controls\n"
+                "The selected voice supports the following internal speech controls. Use them "
+                "sparingly and only when they naturally fit; never force laughter into routine, "
+                "serious, or factual replies. Use <expr type=\"sound\" label=\"laugh\"/> for a "
+                "genuine brief laugh, and <expr type=\"expression\" label=\"warm and reassuring\"/> "
+                "before a sentence when its delivery should change. These controls are rendered "
+                "as voice performance and are not spoken as text. This is the only exception to "
+                "the general no-formatting instruction above.\n"
+            )
         tone_name = config.get("tone") or DEFAULT_TONE
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         tts, tts_provider = _build_tts(
@@ -3520,6 +3569,7 @@ class RealEstateAgent(Agent):
         # Which update_options kwarg shape on_user_turn_completed should use
         # for mid-call prosody/language changes — see _build_tts's docstring.
         self._tts_provider = tts_provider
+        self._tone_name = tone_name
         # The exact voice string this call used — saved with the call record
         # (see log_call in the module-level entrypoint) for per-voice-tier
         # credit billing (server/calls_db.py's voice_tier()), captured here
@@ -5031,6 +5081,27 @@ class RealEstateAgent(Agent):
                     "caller tone -> %s (no-op: elevenlabs-v3 can't adapt mid-call) from turn: %r",
                     emotion or "neutral", text,
                 )
+            elif self._tts_provider in (
+                "google-multilingual-38", "google-multilingual-38-flash"
+            ):
+                base_style = {
+                    "professional": "calm, clear, concise, confident business-consultant delivery",
+                    "casual": "friendly, relaxed, warm conversational delivery with natural variation",
+                    "balanced": "warm, perceptive, clear conversational delivery with natural variation",
+                }.get(self._tone_name, "warm, clear, natural conversational delivery")
+                emotion_style = {
+                    "frustrated": "gently reassuring, calm lower pitch, natural pace",
+                    "confused": "clearer articulation, grounded and patient",
+                    "excited": "brighter pitch, warm and upbeat without rushing",
+                }.get(emotion, "") if emotion and self._emotion_intensity > 0 else ""
+                if emotion_style and self._emotion_intensity < 1:
+                    emotion_style = f"subtle {emotion_style}"
+                style = "; ".join(part for part in (base_style, emotion_style) if part)
+                try:
+                    self.tts.update_options(style=style)
+                    logger.info("Gemini 3.8 delivery style updated for caller tone=%s", emotion or "neutral")
+                except AttributeError:
+                    logger.warning("Gemini 3.8 style update failed", exc_info=True)
             elif self._tts_provider in _GEMINI_PROVIDERS.values():
                 # Gemini-TTS' real emotion lever — see GEMINI_TONE_PROMPTS/
                 # GEMINI_EMOTION_PROMPT_DELTAS in emotion.py. Composed fresh
@@ -6295,6 +6366,10 @@ async def entrypoint(ctx: JobContext) -> None:
     emergency_fallback_number = (cfg.get("emergency_fallback_number") or "").strip()
 
     session = AgentSession(
+        # LiveKit's expressive pipeline asks the LLM for provider-native
+        # emotion/nonverbal markers. Our Gemini adapter lowers those markers
+        # to 3.8 inline vocal tags (e.g. <laugh>) and speech_metadata.style.
+        expressive=(cfg.get("voice") or "").startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)),
         # Their guide calls this out for telephony specifically. Acoustic echo
         # cancellation warmup exists for an open mic and speaker in a room; a
         # phone line has no acoustic path to cancel, so the 3s default is

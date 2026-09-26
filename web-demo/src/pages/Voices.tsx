@@ -310,11 +310,10 @@ export function Voices() {
   // "show more" collapse.
   const chirp3Hd = () => stableByTier('standard').filter((v) => v.value.toLowerCase().includes('chirp3'))
   const standardSolo = () => stableByTier('standard').filter((v) => !v.value.toLowerCase().includes('chirp3'))
-  // Gemini 3.8 voices bill 2x, so they get their own section rather than the
-  // 1x "Next Preview" one.
-  const isNext38 = (v: VoiceEntry) => v.value.startsWith('google38:')
-  const previewVoices = () => (data?.voices ?? []).filter((v) => v.preview && !isNext38(v) && matchesSearch(v))
-  const next38Voices = () => (data?.voices ?? []).filter((v) => v.preview && isNext38(v) && matchesSearch(v))
+  // Replace the obsolete 3.1 preview menu with explicit 3.8 Flash and
+  // Flash-Lite auditions. Keep google31 IDs for existing agents, not new ones.
+  const gemini38Lite = () => (data?.voices ?? []).filter((v) => v.value.startsWith('google38:') && matchesSearch(v))
+  const gemini38Flash = () => (data?.voices ?? []).filter((v) => v.value.startsWith('google38flash:') && matchesSearch(v))
   const multilingualPremium = () => stableByTier('premium').filter((v) => v.multilingual)
   const premiumSolo = () => stableByTier('premium').filter((v) => !v.multilingual)
   const nativeLite = () => byTier('lite').filter((v) => v.value.startsWith('google:') && !v.multilingual)
@@ -430,18 +429,18 @@ export function Voices() {
               onRemove={onRemove}
             />
             <TierGroup
-              entries={previewVoices()}
-              label="Vistrow Next Preview"
-              note="experimental · prompt emotion/modulation · billed at 1x credits"
+              entries={gemini38Lite()}
+              label="Gemini 3.8 Flash-Lite"
+              note="2x credits · lower latency and cost · expressive speech · test before live calls"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
               onRemove={onRemove}
             />
             <TierGroup
-              entries={next38Voices()}
-              label="Vistrow Expressive Next (Testing)"
-              note="2x credits · newest expressive model · 30 voices · switches languages live · testing only"
+              entries={gemini38Flash()}
+              label="Gemini 3.8 Flash"
+              note="2x credits · richer expression and voice fidelity · test before live calls"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}
