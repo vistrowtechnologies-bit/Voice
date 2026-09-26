@@ -129,7 +129,13 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
     key: 'next-preview',
     label: 'Next Preview',
     note: '1x credits · experimental · testing only',
-    voices: voices.filter((v) => v.preview),
+    voices: voices.filter((v) => v.preview && !v.value.startsWith('google38:')),
+  },
+  {
+    key: 'expressive-next',
+    label: 'Vistrow Expressive Next (Testing)',
+    note: '2x credits · newest expressive model · testing only',
+    voices: voices.filter((v) => v.preview && v.value.startsWith('google38:')),
   },
   {
     key: 'native-lite',

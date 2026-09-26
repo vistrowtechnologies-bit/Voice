@@ -18,3 +18,4 @@ graphify-out/
 # Vercel CLI link metadata and downloaded local environment files.
 .vercel
 .env*
+tts_latency_samples/

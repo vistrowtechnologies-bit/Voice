@@ -310,7 +310,11 @@ export function Voices() {
   // "show more" collapse.
   const chirp3Hd = () => stableByTier('standard').filter((v) => v.value.toLowerCase().includes('chirp3'))
   const standardSolo = () => stableByTier('standard').filter((v) => !v.value.toLowerCase().includes('chirp3'))
-  const previewVoices = () => (data?.voices ?? []).filter((v) => v.preview && matchesSearch(v))
+  // Gemini 3.8 voices bill 2x, so they get their own section rather than the
+  // 1x "Next Preview" one.
+  const isNext38 = (v: VoiceEntry) => v.value.startsWith('google38:')
+  const previewVoices = () => (data?.voices ?? []).filter((v) => v.preview && !isNext38(v) && matchesSearch(v))
+  const next38Voices = () => (data?.voices ?? []).filter((v) => v.preview && isNext38(v) && matchesSearch(v))
   const multilingualPremium = () => stableByTier('premium').filter((v) => v.multilingual)
   const premiumSolo = () => stableByTier('premium').filter((v) => !v.multilingual)
   const nativeLite = () => byTier('lite').filter((v) => v.value.startsWith('google:') && !v.multilingual)
@@ -429,6 +433,15 @@ export function Voices() {
               entries={previewVoices()}
               label="Vistrow Next Preview"
               note="experimental · prompt emotion/modulation · billed at 1x credits"
+              lang={lang}
+              busyVoice={busyVoice}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
+            <TierGroup
+              entries={next38Voices()}
+              label="Vistrow Expressive Next (Testing)"
+              note="2x credits · newest expressive model · 30 voices · switches languages live · testing only"
               lang={lang}
               busyVoice={busyVoice}
               onAdd={onAdd}

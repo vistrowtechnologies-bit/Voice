@@ -52,7 +52,7 @@ GOOGLE_ONLY_LANGUAGE_NAMES: dict[str, str] = {
 def is_google_multilingual(provider: str | None) -> bool:
     """Whether this TTS provider is a Gemini persona voice, and therefore
     gets the full global language range rather than the native 11."""
-    return provider in ("google-multilingual", "google-multilingual-31")
+    return provider in ("google-multilingual", "google-multilingual-31", "google-multilingual-38")
 
 
 # Which of the languages above ElevenLabs' eleven_flash_v2_5 model actually

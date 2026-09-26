@@ -25,6 +25,7 @@ calls_db.voice_tier() — the prefix convention there and here must agree:
   - "elevenlabs-v3:<id>"  → ElevenLabs v3          → tier "premium_plus" (2x credits)
   - "google:<voice>"      → Google Cloud locale voice → tier "lite"     (0.75x credits)
   - "google31:<voice>"    → next-generation TTS preview → tier "standard" (1x credits)
+  - "google38:<voice>"    → Gemini 3.8 Flash-Lite TTS    → tier "premium"  (2x credits)
   - bare Sarvam bulbul:v2 speaker (abhilash/anushka) → tier "lite"      (0.75x credits)
   - any other bare name (Sarvam bulbul:v3)           → tier "standard"   (1x credits)
 
@@ -161,6 +162,62 @@ CATALOG: list[dict] = [
     # not on the live v3 roster to a gender-matched one rather than letting a
     # stale row raise at construction time and kill the call.
 ]
+
+# --- Gemini 3.8 Flash-Lite TTS (testing) ------------------------------------
+# Google's replacement for gemini-3.1-flash-tts-preview, released 2026-09-23.
+# Every one of Google's 30 prebuilt Gemini voices, each multilingual like
+# Mira/Arin. preview=True keeps them owner-only in their own picker section
+# until they are proven on real calls. Billed "premium" (2x credits) because
+# Google charges per audio token for this model, same family as the 2x
+# Gemini 2.5 personas; the credit rate is in each name so it cannot be missed.
+# (persona, gender, Google's own style descriptor)
+GEMINI_PREBUILT_VOICES = (
+    ("Zephyr", "female", "Bright"), ("Puck", "male", "Upbeat"),
+    ("Charon", "male", "Informative"), ("Kore", "female", "Firm"),
+    ("Fenrir", "male", "Excitable"), ("Leda", "female", "Youthful"),
+    ("Orus", "male", "Firm"), ("Aoede", "female", "Breezy"),
+    ("Callirrhoe", "female", "Easy-going"), ("Autonoe", "female", "Bright"),
+    ("Enceladus", "male", "Breathy"), ("Iapetus", "male", "Clear"),
+    ("Umbriel", "male", "Easy-going"), ("Algieba", "male", "Smooth"),
+    ("Despina", "female", "Smooth"), ("Erinome", "female", "Clear"),
+    ("Algenib", "male", "Gravelly"), ("Rasalgethi", "male", "Informative"),
+    ("Laomedeia", "female", "Upbeat"), ("Achernar", "female", "Soft"),
+    ("Alnilam", "male", "Firm"), ("Schedar", "male", "Even"),
+    ("Gacrux", "female", "Mature"), ("Pulcherrima", "female", "Forward"),
+    ("Achird", "male", "Friendly"), ("Zubenelgenubi", "male", "Casual"),
+    ("Vindemiatrix", "female", "Gentle"), ("Sadachbia", "male", "Lively"),
+    ("Sadaltager", "male", "Knowledgeable"), ("Sulafat", "female", "Warm"),
+)
+GEMINI_38_PREFIX = "google38:"
+CATALOG += [
+    {
+        "value": f"{GEMINI_38_PREFIX}{persona.lower()}",
+        "name": f"{persona} (2x credits)",
+        "gender": gender,
+        "tier": "premium",
+        "multilingual": True,
+        "preview": True,
+        "note": f"{style} · newest expressive model · testing only",
+    }
+    for persona, gender, style in GEMINI_PREBUILT_VOICES
+]
+
+# Gemini-TTS model behind each Gemini persona prefix. Longest-first is not
+# needed ("google:" does not prefix "google31:"), but keep specific first.
+GEMINI_TTS_MODELS = (
+    (GEMINI_38_PREFIX, "gemini-3.8-flash-lite-tts"),
+    ("google31:", "gemini-3.1-flash-tts-preview"),
+    ("google:", "gemini-2.5-flash-tts"),
+)
+
+
+def gemini_prefix_and_model(value: str) -> tuple[str, str] | None:
+    """(prefix, Gemini-TTS model) for a Gemini voice value, else None."""
+    for prefix, model in GEMINI_TTS_MODELS:
+        if value.startswith(prefix):
+            return prefix, model
+    return None
+
 
 _BY_VALUE: dict[str, dict] = {v["value"]: v for v in CATALOG}
 
@@ -373,7 +430,7 @@ GOOGLE_TTS_TOTAL_LOCALES = len(GOOGLE_TTS_LANGUAGES)
 # locale regardless of which engine produced it.
 _ALL_LANGUAGE_LABELS = {**LANGUAGE_LABELS, **GOOGLE_TTS_LANGUAGES}
 
-_GOOGLE_PREFIXES = ("google:", "google31:")
+_GOOGLE_PREFIXES = ("google:", "google31:", GEMINI_38_PREFIX)
 
 
 # Chirp 3 HD personas exist in exactly these Indian locales (verified against

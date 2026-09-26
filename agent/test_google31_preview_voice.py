@@ -26,7 +26,7 @@ class Google31PreviewVoice(unittest.TestCase):
             self.assertIn("modulation", entry.get("note", "").lower())
 
     def test_google31_branch_does_not_force_numeric_pace(self):
-        self.assertIn('google_prefix != _GOOGLE_31_VOICE_PREFIX', _MAIN_SOURCE)
+        self.assertIn('google_prefix not in (_GOOGLE_31_VOICE_PREFIX, _GOOGLE_38_VOICE_PREFIX)', _MAIN_SOURCE)
         self.assertIn('google_tts_kwargs["speaking_rate"] = tone.get("pace", 1.0)', _MAIN_SOURCE)
         self.assertNotIn(
             "if google_prefix == _GOOGLE_31_VOICE_PREFIX:\n"
