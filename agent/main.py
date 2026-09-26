@@ -306,6 +306,72 @@ TONE_PRESETS: dict[str, dict[str, float]] = {
 }
 DEFAULT_TONE = "balanced"
 
+_GEMINI38_PERSONA_TTS_HINTS = {
+    "casual": "relaxed, informal and friendly conversational delivery with natural variation",
+    "friendly": "warm, approachable and conversational delivery",
+    "warm": "warm, personable and reassuring delivery",
+    "easy-going": "relaxed, easy-going delivery while staying clear and attentive",
+    "breezy": "light, natural and conversational delivery without rushing",
+    "upbeat": "positive and lively delivery without sounding pushy",
+    "lively": "engaged and lively delivery while staying grounded",
+    "bright": "bright and energetic delivery that remains natural",
+    "gentle": "gentle and considerate delivery",
+    "soft": "soft-spoken and calm delivery with clear articulation",
+    "informative": "clear, composed and informative delivery",
+    "knowledgeable": "confident, knowledgeable delivery",
+    "firm": "clear and assured delivery without sounding harsh",
+    "even": "steady, measured and composed delivery",
+    "smooth": "smooth, fluid delivery with natural transitions",
+    "clear": "clear and articulate delivery",
+    "gravelly": "grounded and direct delivery without unnecessary flourishes",
+    "breathy": "gentle and unhurried delivery with clear articulation",
+    "youthful": "fresh and approachable delivery without forced slang",
+    "excitable": "enthusiastic delivery when appropriate, without sacrificing clarity",
+    "mature": "composed, thoughtful and reassuring delivery",
+    "forward": "confident and proactive delivery without pressuring the caller",
+}
+
+_GEMINI38_PERSONA_LLM_HINTS = {
+    "casual": "Use relaxed, informal and friendly conversational phrasing; use contractions where natural, vary sentence length, and avoid forced slang.",
+    "friendly": "Use warm, approachable phrasing without becoming overly familiar.",
+    "warm": "Use personable, reassuring phrasing without sounding sentimental.",
+    "easy-going": "Keep the wording relaxed and easy-going while staying attentive.",
+    "breezy": "Keep it light and natural, but do not rush or trivialize serious topics.",
+    "upbeat": "Sound positive and lively without becoming pushy or overexcited.",
+    "lively": "Sound engaged and lively while keeping the conversation grounded.",
+    "bright": "Use an energetic, clear and positive manner without forced excitement.",
+    "gentle": "Use considerate wording, especially when the caller sounds uncertain.",
+    "soft": "Use a calm, reassuring manner while remaining clear and confident.",
+    "informative": "Be clear and informative without overexplaining.",
+    "knowledgeable": "Sound confident, but never claim facts that are not available.",
+    "firm": "Be clear and assured without sounding harsh or impatient.",
+    "even": "Keep a steady, measured and composed manner.",
+    "smooth": "Use natural transitions between thoughts.",
+    "clear": "Prefer clear articulation and straightforward phrasing.",
+    "gravelly": "Keep wording grounded and direct, without adding verbal flourishes.",
+    "breathy": "Keep the manner gentle and unhurried while staying clear.",
+    "youthful": "Sound fresh and approachable without forced slang.",
+    "excitable": "Show enthusiasm when appropriate, never at the expense of clarity.",
+    "mature": "Use a composed, thoughtful and reassuring manner.",
+    "forward": "Be confident and proactive without pressuring the caller.",
+}
+
+_GEMINI38_TONE_LLM_HINTS = {
+    "professional": "Use polished, courteous business language; stay concise and composed.",
+    "balanced": "Use clear, naturally conversational phrasing; avoid sounding stiff or overly casual.",
+    "casual": "Use relaxed, informal and friendly conversational phrasing; contractions are fine, but do not force slang.",
+}
+
+
+def _gemini38_voice_style_hint(voice_value: str) -> tuple[str | None, str | None]:
+    """Get a safe, concise LLM/TTS hint from a Gemini 3.8 catalog persona."""
+    if not voice_value.startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)):
+        return None, None
+    entry = voice_catalog.get_voice(voice_value) or {}
+    note = str(entry.get("note") or "")
+    descriptor = note.split("·", 1)[0].strip().lower()
+    return descriptor or None, _GEMINI38_PERSONA_TTS_HINTS.get(descriptor)
+
 # ElevenLabs equivalent of TONE_PRESETS above, keyed by the same tone names
 # so an operator's Tone choice still means something on an ElevenLabs voice
 # instead of being silently ignored. stability/style/speed are
@@ -2538,6 +2604,9 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 "casual": "friendly, relaxed, warm conversational delivery with natural variation",
                 "balanced": "warm, perceptive, clear conversational delivery with natural variation",
             }.get(tone_name, "warm, clear, natural conversational delivery")
+            _persona_name, persona_hint = _gemini38_voice_style_hint(speaker)
+            if persona_hint and tone_name != "professional":
+                style = f"{style}; {persona_hint}"
             return GeminiInteractionsTTS(
                 model=model,
                 voice=voice_name,
@@ -2923,6 +2992,7 @@ class RealEstateAgent(Agent):
         config = config or {}
         agent_name = config.get("name") or "Artha"
         voice_value = config.get("voice") or "shubh"
+        tone_name = config.get("tone") or DEFAULT_TONE
         # Kept for the greeting audio cache's key — a cached clip is only ever
         # replayed for the exact voice it was synthesized with.
         self._voice_value = voice_value
@@ -3467,6 +3537,25 @@ class RealEstateAgent(Agent):
         instructions += caller_tail
         instructions += date_instruction
         if voice_value.startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)):
+            # The Gemini persona's short descriptor should shape what the
+            # LLM says as well as how TTS renders it. The agent's explicit
+            # Tone setting and business/system instructions remain primary.
+            persona_name, persona_hint = _gemini38_voice_style_hint(voice_value)
+            persona_llm_hint = _GEMINI38_PERSONA_LLM_HINTS.get(persona_name or "")
+            tone_hint = _GEMINI38_TONE_LLM_HINTS.get(tone_name)
+            if persona_llm_hint or tone_hint:
+                instructions += (
+                    "\n\n# Spoken delivery style\n"
+                    "These are wording and delivery hints only; never change facts, business rules, "
+                    "or the agent's role. Follow the agent's configured Tone and system/business "
+                    "instructions first."
+                )
+                if tone_hint:
+                    instructions += f"\nConfigured agent tone ({tone_name}): {tone_hint}"
+                if persona_llm_hint:
+                    instructions += (
+                        f"\nSelected voice persona ({persona_name}): {persona_llm_hint}"
+                    )
             # These Gemini voices support native expressive TTS markup. This
             # voice-specific exception supersedes the generic prompt warning
             # against tags (which remains correct for other providers).
@@ -3480,7 +3569,6 @@ class RealEstateAgent(Agent):
                 "as voice performance and are not spoken as text. This is the only exception to "
                 "the general no-formatting instruction above.\n"
             )
-        tone_name = config.get("tone") or DEFAULT_TONE
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         tts, tts_provider = _build_tts(
             reply_language, voice_value, base_tone, tone_name,
@@ -5089,6 +5177,9 @@ class RealEstateAgent(Agent):
                     "casual": "friendly, relaxed, warm conversational delivery with natural variation",
                     "balanced": "warm, perceptive, clear conversational delivery with natural variation",
                 }.get(self._tone_name, "warm, clear, natural conversational delivery")
+                _persona_name, persona_hint = _gemini38_voice_style_hint(self._voice)
+                if persona_hint and self._tone_name != "professional":
+                    base_style = f"{base_style}; {persona_hint}"
                 emotion_style = {
                     "frustrated": "gently reassuring, calm lower pitch, natural pace",
                     "confused": "clearer articulation, grounded and patient",
