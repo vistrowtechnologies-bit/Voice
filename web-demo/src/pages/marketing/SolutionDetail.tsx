@@ -7,6 +7,7 @@ import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
 import { ScriptMarquee } from '../../components/BharatBits'
 import { HERO_STATS, SOLUTIONS } from '../../lib/marketingContent'
+import { LOCAL_REAL_ESTATE_PAGES } from '../../lib/seoExpansionContent'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
 
 // One template renders all five industry pages, keyed by the :slug route param.
@@ -107,6 +108,31 @@ export function SolutionDetail() {
       </section>
 
       <ScriptMarquee />
+
+      {slug === 'real-estate' && (
+        <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+          <div className="mb-7 max-w-2xl">
+            <SectionEyebrow>Regional real-estate workflows</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Explore calls in your market and language.</h2>
+            <p className="mt-3 text-text-muted">See examples tailored to local buyer conversations, from enquiry qualification to site-visit follow-up.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {LOCAL_REAL_ESTATE_PAGES.map((market) => (
+              <Link
+                key={market.slug}
+                to={`/solutions/real-estate/${market.slug}`}
+                className="group flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-primary"
+              >
+                <span>
+                  <span className="block font-semibold text-text">{market.language} real estate calls</span>
+                  <span className="mt-1 block text-sm text-text-muted">{market.city}</span>
+                </span>
+                <Icon name="arrow_forward" className="shrink-0 text-primary transition-transform group-hover:translate-x-1" />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* A useful demo needs a job, not just an orb. Each choice represents a
           real call this industry's agent is configured to handle and gives

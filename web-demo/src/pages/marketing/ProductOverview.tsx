@@ -5,6 +5,7 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { PRODUCT_PAGES, HOW_IT_WORKS } from '../../lib/marketingContent'
+import { COMPARE_VENDORS } from '../../lib/seoExpansionContent'
 
 const FAQ = [
   {
@@ -76,6 +77,29 @@ export function ProductOverview() {
                 Learn more
                 <Icon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-1" />
               </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+        <div className="mb-7 max-w-2xl">
+          <SectionEyebrow>Compare your options</SectionEyebrow>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Evaluating voice AI vendors?</h2>
+          <p className="mt-3 text-text-muted">Use these practical comparisons to understand what each platform covers and what your team would still need to build.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {COMPARE_VENDORS.map((vendor) => (
+            <Link
+              key={vendor.slug}
+              to={`/compare/${vendor.slug}`}
+              className="group flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-primary"
+            >
+              <span>
+                <span className="block font-semibold text-text">Vistrow vs {vendor.name}</span>
+                <span className="mt-1 block text-xs text-text-muted">{vendor.category}</span>
+              </span>
+              <Icon name="arrow_forward" className="shrink-0 text-primary transition-transform group-hover:translate-x-1" />
             </Link>
           ))}
         </div>
