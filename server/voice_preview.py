@@ -36,7 +36,9 @@ _ELEVEN_V3_PREFIX = "elevenlabs-v3:"
 _ELEVEN_PREFIX = "elevenlabs:"
 _GOOGLE_31_PREFIX = "google31:"
 _GOOGLE_PREFIX = "google:"
-_GOOGLE_MULTILINGUAL_VOICES = {"charon", "kore"}
+# Any of Google's 30 prebuilt Gemini personas (none collides with a locale
+# voice id like "hi-IN-Standard-A"); only kore/charon are offered on 2.5/3.1.
+_GOOGLE_MULTILINGUAL_VOICES = {p.lower() for p, _g, _s in voice_catalog.GEMINI_PREBUILT_VOICES}
 
 # lang code (voice_catalog.SAMPLE_TEXTS keys) → Sarvam target_language_code.
 _SARVAM_LANG = {"hi": "hi-IN", "en": "en-IN"}
@@ -165,10 +167,9 @@ def synthesize(voice_string: str, lang: str) -> tuple[bytes, str]:
             lang,
             text,
         )
-    if voice_string.startswith(_GOOGLE_31_PREFIX):
-        return _synth_google(
-            voice_string[len(_GOOGLE_31_PREFIX):], lang, text, "gemini-3.1-flash-tts-preview"
-        )
+    if voice_string.startswith((voice_catalog.GEMINI_38_PREFIX, _GOOGLE_31_PREFIX)):
+        prefix, model_name = voice_catalog.gemini_prefix_and_model(voice_string)
+        return _synth_google(voice_string[len(prefix):], lang, text, model_name)
     if voice_string.startswith(_GOOGLE_PREFIX):
         return _synth_google(voice_string[len(_GOOGLE_PREFIX):], lang, text)
     # bulbul:v2 is retired vendor-side and its speakers are gone from the

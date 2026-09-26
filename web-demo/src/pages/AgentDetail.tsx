@@ -382,7 +382,7 @@ function AgentEditorForm({
             hint="Adaptive delivery is available on expressive multilingual voices. Other voices keep their configured delivery. This responds to conversation wording, not a measurement of vocal emotion."
           >
             <select
-              disabled={!form.voice.startsWith('google:') && !form.voice.startsWith('google31:') || form.voice.startsWith('google:chirp3:')}
+              disabled={!form.voice.startsWith('google:') && !form.voice.startsWith('google31:') && !form.voice.startsWith('google38:') || form.voice.startsWith('google:chirp3:')}
               value={form.emotionIntensity}
               onChange={(e) => set('emotionIntensity', e.target.value as AgentForm['emotionIntensity'])}
               className={inputCls}

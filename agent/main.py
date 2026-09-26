@@ -2250,6 +2250,26 @@ _GOOGLE_VOICE_PREFIX = "google:"
 _GOOGLE_31_VOICE_PREFIX = "google31:"
 _GOOGLE_25_MODEL = "gemini-2.5-flash-tts"
 _GOOGLE_31_MODEL = "gemini-3.1-flash-tts-preview"
+# Gemini 3.8 Flash-Lite — Google's replacement for the 3.1 preview. Owner-only
+# testing voices for now (voice_catalog marks them preview); all 30 of
+# Google's prebuilt personas, not just Kore/Charon.
+_GOOGLE_38_VOICE_PREFIX = voice_catalog.GEMINI_38_PREFIX
+_GOOGLE_38_MODEL = "gemini-3.8-flash-lite-tts"
+_GEMINI_38_PERSONAS = {p.lower() for p, _g, _s in voice_catalog.GEMINI_PREBUILT_VOICES}
+# Same-persona backup model for each Gemini model. 3.8 falls back to 3.1,
+# which serves the same 30 personas, so a 3.8 outage keeps the voice.
+_GEMINI_FALLBACK_MODEL = {
+    _GOOGLE_25_MODEL: _GOOGLE_31_MODEL,
+    _GOOGLE_31_MODEL: _GOOGLE_25_MODEL,
+    _GOOGLE_38_MODEL: _GOOGLE_31_MODEL,
+}
+# _build_tts's provider label per Gemini model; the mid-call emotion and
+# language-switch paths (here and tools.py) key off these.
+_GEMINI_PROVIDERS = {
+    _GOOGLE_25_MODEL: "google-multilingual",
+    _GOOGLE_31_MODEL: "google-multilingual-31",
+    _GOOGLE_38_MODEL: "google-multilingual-38",
+}
 # Every google.TTS() construction in this file goes through PatchedGeminiTTS
 # (google_tts_streaming_patch.py) for real streaming — see that module's
 # docstring for the two real bugs it works around (an aclose() race on
@@ -2324,7 +2344,7 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
         )
         tts_chain.append(safety_net)
     adapter = TtsFallbackAdapter(tts_chain, max_retry_per_tts=5)
-    fallback_model = _GOOGLE_25_MODEL if primary_model == _GOOGLE_31_MODEL else _GOOGLE_31_MODEL
+    fallback_model = _GEMINI_FALLBACK_MODEL[primary_model]
 
     def _on_availability_changed(ev):
         if ev.tts is primary_tts:
@@ -2365,10 +2385,7 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
         primary_tts.update_options(**kwargs)
         fallback_kwargs = dict(kwargs)
         if "model_name" in fallback_kwargs:
-            selected_model = fallback_kwargs["model_name"]
-            fallback_kwargs["model_name"] = (
-                _GOOGLE_25_MODEL if selected_model == _GOOGLE_31_MODEL else _GOOGLE_31_MODEL
-            )
+            fallback_kwargs["model_name"] = _GEMINI_FALLBACK_MODEL[fallback_kwargs["model_name"]]
         fallback_tts.update_options(**fallback_kwargs)
         if safety_net is not None and "language" in kwargs:
             try:
@@ -2500,12 +2517,12 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         )
         return tts, "elevenlabs"
     google_prefix = next(
-        (prefix for prefix in (_GOOGLE_31_VOICE_PREFIX, _GOOGLE_VOICE_PREFIX) if speaker.startswith(prefix)),
+        (prefix for prefix in (_GOOGLE_38_VOICE_PREFIX, _GOOGLE_31_VOICE_PREFIX, _GOOGLE_VOICE_PREFIX) if speaker.startswith(prefix)),
         None,
     )
     if google_prefix and _GOOGLE_CREDENTIALS is not None and _GOOGLE_VOICE_ENABLED:
         voice_name = speaker[len(google_prefix) :]
-        google_model = _GOOGLE_31_MODEL if google_prefix == _GOOGLE_31_VOICE_PREFIX else _GOOGLE_25_MODEL
+        google_model = voice_catalog.gemini_prefix_and_model(speaker)[1]
         # Google's non-streaming synthesize_speech (forced by _GOOGLE_TTS_KWARGS
         # to dodge the streaming crash, see its own comment) has its own
         # confirmed live failure mode: it silently drops a chunk mid-reply
@@ -2515,7 +2532,9 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         # gets it as primary; TtsFallbackAdapter catches that failure and
         # finishes the utterance on the other Gemini model instead of either
         # going silent or changing to a visibly different speaker family.
-        if voice_name.lower() in _GOOGLE_MULTILINGUAL_VOICES:
+        if voice_name.lower() in _GOOGLE_MULTILINGUAL_VOICES or (
+            google_prefix == _GOOGLE_38_VOICE_PREFIX and voice_name.lower() in _GEMINI_38_PERSONAS
+        ):
             # TEST AGENT ONLY as of 2026-08-06 — see google_tts_streaming_patch.py.
             # Real streaming (default use_streaming=True, PCM encoding — the
             # opposite of _GOOGLE_TTS_KWARGS below) restored for just these two
@@ -2533,23 +2552,24 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 # detected emotion in on_user_turn_completed.
                 "prompt": google_prompt,
             }
-            if google_prefix != _GOOGLE_31_VOICE_PREFIX:
+            if google_prefix not in (_GOOGLE_31_VOICE_PREFIX, _GOOGLE_38_VOICE_PREFIX):
                 # Stable Gemini 2.5 personas intentionally follow the agent's
                 # base Tone pace. The newer 3.1 preview voices are different:
                 # their selling point is prompt-driven emotion/modulation, and
                 # adding a numeric speed override makes them feel unnaturally
                 # pace-tuned. Leave their pace to Gemini's style prompt.
+                # 3.8 is sold on the same prompt-driven delivery.
                 google_tts_kwargs["speaking_rate"] = tone.get("pace", 1.0)
             google_tts = PatchedGeminiTTS(
                 **google_tts_kwargs,
                 model_name=google_model,
             )
-            fallback_model = _GOOGLE_25_MODEL if google_model == _GOOGLE_31_MODEL else _GOOGLE_31_MODEL
+            fallback_model = _GEMINI_FALLBACK_MODEL[google_model]
             google_model_fallback = PatchedGeminiTTS(
                 model_name=fallback_model,
                 **google_tts_kwargs,
             )
-            provider = "google-multilingual-31" if google_model == _GOOGLE_31_MODEL else "google-multilingual"
+            provider = _GEMINI_PROVIDERS[google_model]
             return _google_fallback_tts(google_tts, google_model_fallback, google_model, reply_language, tone_name), provider
         # "google:chirp3:<Persona>" is a persona, not a voice id — resolve it
         # against the language this call opens in. The persona survives a
@@ -2650,7 +2670,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     # invalid Sarvam speaker name.
     sarvam_speaker = (
         "shubh"
-        if speaker.startswith((_GOOGLE_VOICE_PREFIX, _GOOGLE_31_VOICE_PREFIX, _ELEVENLABS_VOICE_PREFIX, _ELEVENLABS_V3_VOICE_PREFIX))
+        if speaker.startswith((_GOOGLE_VOICE_PREFIX, _GOOGLE_31_VOICE_PREFIX, _GOOGLE_38_VOICE_PREFIX, _ELEVENLABS_VOICE_PREFIX, _ELEVENLABS_V3_VOICE_PREFIX))
         else speaker
     )
     # Sarvam's current LiveKit production recipe uses a smaller 30-character
@@ -2929,7 +2949,7 @@ class RealEstateAgent(Agent):
         # afterwards — see build_generic_assistant_prompt's docstring.
         _vc_entry = voice_catalog.get_voice(voice_value) or {}
         speaks_global = bool(_vc_entry.get("multilingual")) and voice_value.startswith(
-            ("google:", "google31:")
+            ("google:", "google31:", _GOOGLE_38_VOICE_PREFIX)
         )
         needs_human_speech_layer = bool(config.get("system_prompt"))
         if config.get("system_prompt"):
@@ -5011,7 +5031,7 @@ class RealEstateAgent(Agent):
                     "caller tone -> %s (no-op: elevenlabs-v3 can't adapt mid-call) from turn: %r",
                     emotion or "neutral", text,
                 )
-            elif self._tts_provider in ("google-multilingual", "google-multilingual-31"):
+            elif self._tts_provider in _GEMINI_PROVIDERS.values():
                 # Gemini-TTS' real emotion lever — see GEMINI_TONE_PROMPTS/
                 # GEMINI_EMOTION_PROMPT_DELTAS in emotion.py. Composed fresh
                 # each turn (base tone sentence + emotion sentence) rather
@@ -5148,7 +5168,7 @@ class RealEstateAgent(Agent):
                         "chirp3 persona %s does not cover %s — keeping the current voice",
                         _persona, candidate,
                     )
-            elif self._tts_provider in ("google-multilingual", "google-multilingual-31"):
+            elif self._tts_provider in _GEMINI_PROVIDERS.values():
                 # google.TTS.update_options rebuilds its VoiceSelectionParams,
                 # so resend persona + model with the new language. Otherwise
                 # a language switch would silently reset to the default voice.
@@ -5156,14 +5176,13 @@ class RealEstateAgent(Agent):
                 # Google's own confirmed mid-reply failures don't kill the
                 # call — FallbackAdapter has no update_options at all, so
                 # guard the same way tools.py's switch_reply_language does.
-                is_google_31 = self._voice.startswith(_GOOGLE_31_VOICE_PREFIX)
-                prefix = _GOOGLE_31_VOICE_PREFIX if is_google_31 else _GOOGLE_VOICE_PREFIX
+                prefix, gemini_model = voice_catalog.gemini_prefix_and_model(self._voice)
                 voice_name = self._voice[len(prefix):]
                 try:
                     self.tts.update_options(
                         language=to_google_code(candidate),
                         voice_name=voice_name.capitalize(),
-                        model_name=_GOOGLE_31_MODEL if is_google_31 else _GOOGLE_25_MODEL,
+                        model_name=gemini_model,
                     )
                 except AttributeError:
                     logger.warning("language-switch update_options failed (fallback-wrapped TTS)", exc_info=True)

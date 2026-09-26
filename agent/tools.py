@@ -2147,16 +2147,16 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
                     agent.tts.update_options(language=code.split("-")[0])
                 else:
                     voice_unsupported = True
-            elif provider in ("google-multilingual", "google-multilingual-31"):
+            elif provider in ("google-multilingual", "google-multilingual-31", "google-multilingual-38"):
                 raw_voice = getattr(agent, "_voice", "")
-                is_google_31 = raw_voice.startswith("google31:")
-                voice_name = raw_voice.removeprefix("google31:" if is_google_31 else "google:")
+                prefix, gemini_model = voice_catalog.gemini_prefix_and_model(raw_voice)
+                voice_name = raw_voice.removeprefix(prefix)
                 agent.tts.update_options(
                     # Google spells Odia or-IN and Bengali bn-BD; sending our
                     # own od-IN/bn-IN would be an unrecognised locale.
                     language=to_google_code(code),
                     voice_name=voice_name.capitalize(),
-                    model_name="gemini-3.1-flash-tts-preview" if is_google_31 else "gemini-2.5-flash-tts",
+                    model_name=gemini_model,
                 )
             elif provider == "google-native":
                 # A Chirp 3 persona follows the caller by swapping only the

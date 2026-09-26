@@ -7455,7 +7455,9 @@ def _credits_per_minute(call_type_rate: float, voice_mult: float, model_mult: fl
 _ECONOMY_VOICES = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 # Both the normal (Flash v2.5) and experimental (v3, agent/main.py's
 # _ELEVENLABS_V3_VOICE_PREFIX) ElevenLabs voice forms bill as premium.
-_PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:")
+# Gemini 3.8 Flash-Lite personas ("google38:") bill premium too - Google
+# charges per audio token for them, and voice_catalog lists them at 2x.
+_PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:", "google38:")
 _ECONOMY_VOICE_PREFIXES = ("google:",)
 # The two Gemini persona voices (Mira/Arin) share the "google:" prefix with
 # the cheap single-locale Google voices but are a different product: one voice
