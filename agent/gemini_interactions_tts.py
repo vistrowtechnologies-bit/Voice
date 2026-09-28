@@ -23,6 +23,32 @@ _API_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 _STYLE_TAG = re.compile(r'<expression\s+value="([^"]*)"\s*/>')
 _SOUND_TAG = re.compile(r'<sound\s+value="([^"]*)"\s*/>')
 _BREAK_TAG = re.compile(r'<break\s+time="([^"]*)"\s*/>')
+_EXPR_SELF_TAG = re.compile(r'<expr\s+type="(expression|sound|break)"\s+label="([^"]*)"\s*/>')
+_EXPR_WRAPPED_PROSODY = re.compile(
+    r'<expr\s+type="prosody"\s+label="([^"]*)"\s*>(.*?)</expr>', re.DOTALL
+)
+
+
+def _lower_gemini_markup(text: str) -> str:
+    """Translate LiveKit's expr dialect to the XML controls Gemini accepts.
+
+    LiveKit's standard ``inworld`` converter lowers the controls to Inworld's
+    square-bracket syntax (``[laugh]``). Gemini Interactions accepts the
+    intermediate XML tags instead, so using that generic conversion silently
+    discarded the expressive controls from Gemini requests.
+    """
+    def self_tag(match: re.Match[str]) -> str:
+        kind, label = match.groups()
+        if kind == "expression":
+            return f'<expression value="{label}"/>'
+        if kind == "sound":
+            return f'<sound value="{label}"/>'
+        return f'<break time="{label}"/>'
+
+    text = _EXPR_WRAPPED_PROSODY.sub(
+        lambda m: f'<expression value="{m.group(1)}"/>{m.group(2)}', text
+    )
+    return _EXPR_SELF_TAG.sub(self_tag, text)
 
 
 def _gemini_text_and_style(text: str) -> tuple[str, str | None]:
@@ -53,9 +79,7 @@ class GeminiInteractionsTTS(TTS):
             return "inworld"
 
         def convert(self, text: str) -> str:
-            from livekit.agents.tts._provider_format import convert_markup
-
-            return convert_markup("inworld", text)
+            return _lower_gemini_markup(text)
 
         @property
         def info(self) -> MarkupInfo:

@@ -30,6 +30,34 @@ _SAMPLE_RATE = 16000
 _AMBIENCE_TRACK_NAME = "background_audio"
 
 
+def _write_stereo_wav(caller_pcm: bytes, agent_pcm: bytes) -> str | None:
+    """Build the two-channel WAV off the asyncio event loop."""
+    try:
+        caller_pcm = caller_pcm[: len(caller_pcm) - (len(caller_pcm) % 2)]
+        agent_pcm = agent_pcm[: len(agent_pcm) - (len(agent_pcm) % 2)]
+        # audioop.add requires equal-length fragments — pad the shorter side
+        # with silence so both lines up sample-for-sample.
+        length = max(len(caller_pcm), len(agent_pcm))
+        caller_pcm = caller_pcm + b"\x00" * (length - len(caller_pcm))
+        agent_pcm = agent_pcm + b"\x00" * (length - len(agent_pcm))
+        # STEREO: caller LEFT, agent RIGHT. The ambience bed rides on the
+        # agent's own track, keeping the caller channel independently usable.
+        stereo = audioop.tostereo(caller_pcm, 2, 1, 0)
+        stereo = audioop.add(stereo, audioop.tostereo(agent_pcm, 2, 0, 1), 2)
+
+        fd, path = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        with wave.open(path, "wb") as wav_file:
+            wav_file.setnchannels(2)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(_SAMPLE_RATE)
+            wav_file.writeframes(stereo)
+        return path
+    except Exception:
+        logger.exception("failed to build recording WAV")
+        return None
+
+
 class CallRecorder:
     """Tapes both sides of one call into a single mono WAV, both sides mixed
     together rather than hard-panned to a channel — a hard L/R split sounds
@@ -153,45 +181,7 @@ class CallRecorder:
         if not caller_pcm and not agent_pcm:
             return None
 
-        try:
-            caller_pcm = caller_pcm[: len(caller_pcm) - (len(caller_pcm) % 2)]
-            agent_pcm = agent_pcm[: len(agent_pcm) - (len(agent_pcm) % 2)]
-            # audioop.add requires equal-length fragments — pad the shorter
-            # side with silence so both lines up sample-for-sample.
-            length = max(len(caller_pcm), len(agent_pcm))
-            caller_pcm = caller_pcm + b"\x00" * (length - len(caller_pcm))
-            agent_pcm = agent_pcm + b"\x00" * (length - len(agent_pcm))
-            # STEREO: caller LEFT, agent RIGHT. These were summed into one
-            # mono track before, which made a recording impossible to reason
-            # about — on widget call 954 the ambience bed, the agent and the
-            # caller were one signal, and a transcription service turned the
-            # office babble underneath into a whole invented conversation
-            # about revenue and targets that never happened. Our own STT found
-            # zero words in that clip, which is how we know it was babble.
-            #
-            # Separated, each side is independently listenable and
-            # independently transcribable, so "who actually said this" stops
-            # being a matter of opinion. It also makes the ringback question
-            # answerable: caller-channel audio alone is what distinguishes a
-            # ringing line from a live one, and that could not be measured
-            # from the mixed file.
-            #
-            # The ambience bed stays. It rides on the agent's own track, so it
-            # lands in the right channel and the caller's channel stays clean.
-            stereo = audioop.tostereo(caller_pcm, 2, 1, 0)
-            stereo = audioop.add(stereo, audioop.tostereo(agent_pcm, 2, 0, 1), 2)
-
-            fd, path = tempfile.mkstemp(suffix=".wav")
-            os.close(fd)
-            with wave.open(path, "wb") as wav_file:
-                wav_file.setnchannels(2)
-                wav_file.setsampwidth(2)
-                wav_file.setframerate(_SAMPLE_RATE)
-                wav_file.writeframes(stereo)
-            return path
-        except Exception:
-            logger.exception("failed to build recording WAV")
-            return None
+        return await asyncio.to_thread(_write_stereo_wav, caller_pcm, agent_pcm)
 
 
 def upload_recording(local_path: str, account_id: int | None, call_id: int | None) -> str | None:
