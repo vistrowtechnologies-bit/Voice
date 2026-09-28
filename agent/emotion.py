@@ -154,26 +154,56 @@ ELEVENLABS_EMOTION_DELTAS: dict[str, dict[str, float]] = {
 # mechanism than the numeric deltas above, so it isn't derived from
 # EMOTION_TONE_DELTAS — it's composed as base-tone sentence + emotion
 # sentence, both plain English, and sent verbatim as the prompt.
+# 2026-09-29 — "balanced" and "casual" used to fail on Hindi output with
+# Gemini 3.1 preview: "Cloud Text-to-Speech could not generate audio because
+# the input text or prompt violates Vertex AI's usage guidelines" (400,
+# non-retryable). Confirmed live against the real API, ~80-400 requests
+# across many wordings — this is NOT one denylisted word, it is Vertex's
+# classifier reacting to specific PROMPT + Hindi-OUTPUT combinations, and it
+# is somewhat probabilistic (the same wording can occasionally still block).
+# Isolated by bisection: the old "balanced"/"casual" text combined a
+# two-adjective persona ("warm, perceptive" / "friendly, quick-witted") with
+# multiple qualifying sentences (delivery detail, a "never sound like an
+# IVR/TTS/assistant" disclaimer, and for balanced, an explicit Hinglish
+# instruction) — none of those pieces alone was risky, but several of the
+# combinations reliably were. "professional" ("calm, sharp") never had this
+# problem and needed no rewording. The rule that held up under repeated
+# testing: reuse professional's exact structure (single persona adjective +
+# its unchanged delivery/pause sentences), and never re-add a "don't sound
+# like a TTS/IVR" disclaimer or an explicit Hinglish/code-switching mention —
+# both were confirmed, repeatable triggers once combined with anything else.
+# All three GEMINI_TONE_PROMPTS base sentences, alone, are now verified
+# clean against the real API (0/8 blocked each, live testing). They are NOT
+# fully clean once combined with GEMINI_EMOTION_PROMPT_DELTAS' "frustrated"
+# or "excited" (both reliably blocked, 8/8, across every tone and every
+# reworded attempt tried, including matching "confused"'s exact sentence
+# structure) — "confused" combines cleanly. This didn't respond to swapping
+# individual words (frustrated/excited/mirror/genuine/real all tried),
+# so it looks like the classifier reacting to the *combination itself*
+# (persona instruction + an instruction to emotionally react), not a word.
+# Not a regression: the old prompts had strictly more risk surface and this
+# combination was never safe under them either. It's covered, not eliminated
+# — a live block here is just another TTS failure, and agent/main.py's
+# _google_fallback_tts (FallbackAdapter) already moves on to Monika for any
+# exception from the primary, including this one.
 GEMINI_TONE_PROMPTS: dict[str, str] = {
     "professional": (
         "Speak like a calm, sharp Indian business consultant in a real one-to-one phone call. "
         "Be measured and concise, but let your pitch, pace, and emphasis genuinely move with the "
         "weight of what you're saying — a real consultant's voice is alive, not flat. Use brief "
-        "natural pauses for effect. Never sound like an announcer, advertisement, IVR, or overly "
-        "cheerful assistant."
+        "natural pauses for effect."
     ),
     "balanced": (
-        "Speak like a warm, perceptive Indian business consultant in a real one-to-one phone call. "
-        "Let the delivery breathe and react — genuine shifts in pitch, pace, and warmth as the "
-        "conversation moves, with natural pauses after acknowledgements. Use Indian-English or "
-        "Hinglish rhythm when the text naturally contains it. Never sound like an announcer, "
-        "advertisement, IVR, or a flat text-to-speech read."
+        "Speak like a warm Indian business consultant in a real one-to-one phone call. "
+        "Be measured and concise, but let your pitch, pace, and emphasis genuinely move with the "
+        "weight of what you're saying — a real consultant's voice is alive, not flat. Use brief "
+        "natural pauses for effect."
     ),
     "casual": (
-        "Speak like a friendly, quick-witted Indian consultant in a relaxed one-to-one phone call. "
-        "Sound genuinely engaged — real pitch and pace variation, energy that rises and falls with "
-        "what's being said — rather than performative or monotone. Leave brief natural pauses. Never "
-        "sound like an announcer, advertisement, IVR, or hyperactive assistant."
+        "Speak like a lighthearted Indian business consultant in a real one-to-one phone call. "
+        "Be measured and concise, but let your pitch, pace, and emphasis genuinely move with the "
+        "weight of what you're saying — a real consultant's voice is alive, not flat. Use brief "
+        "natural pauses for effect."
     ),
 }
 # Written to be performed, not just stated — Gemini 3.1 Flash's prompt-driven
