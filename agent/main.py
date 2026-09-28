@@ -2850,13 +2850,19 @@ def _requires_spoken_consent(config: dict) -> bool:
     """Compliance → "Require spoken consent". Until 2026-09-24 the dashboard
     saved this and nothing read it: a tenant who switched it on believed
     callers were being asked, and none were."""
-    return bool(db.get_compliance_config(config.get("account_id")).get("require_consent"))
+    compliance = config.get("_compliance_config")
+    if compliance is None:
+        compliance = db.get_compliance_config(config.get("account_id"))
+    return bool(compliance.get("require_consent"))
 
 
 def _consent_instructions(config: dict) -> str:
     if config.get("is_platform_demo") or not _requires_spoken_consent(config):
         return ""
-    records = bool(db.get_compliance_config(config.get("account_id")).get("record_calls"))
+    compliance = config.get("_compliance_config")
+    if compliance is None:
+        compliance = db.get_compliance_config(config.get("account_id"))
+    records = bool(compliance.get("record_calls"))
     what = (
         "this call is recorded and their details are used to follow up with them"
         if records else "their details are used to follow up with them"
@@ -3155,10 +3161,19 @@ class RealEstateAgent(Agent):
             )
         if config.get("kb_id"):
             _kb_t0 = time.monotonic()
-            kb = db.get_kb_content(config["kb_id"])
+            # Live calls preload blocking Postgres reads in worker threads
+            # before constructing the Agent. Keep the synchronous fallback
+            # for small direct constructor callers (tests/tools), not the
+            # audio event loop.
+            kb = config.get("_runtime_kb_content")
+            if kb is None and not config.get("_call_db_context_loaded"):
+                kb = db.get_kb_content(config["kb_id"])
             logger.info("[latency] get_kb_content(%s) took %.2fs", config["kb_id"], time.monotonic() - _kb_t0)
             if kb:
-                if db.is_kb_strict(config["kb_id"]):
+                kb_strict = config.get("_runtime_kb_strict")
+                if kb_strict is None and not config.get("_call_db_context_loaded"):
+                    kb_strict = db.is_kb_strict(config["kb_id"])
+                if kb_strict:
                     # Strict mode: the KB (especially its operator-approved
                     # Q&A pairs) is the only permitted source for concrete
                     # facts — prices, sizes, dates, distances, legal status.
@@ -3337,7 +3352,9 @@ class RealEstateAgent(Agent):
         self._memory_enabled = bool(config.get("memory_enabled"))
         self._caller_phone = (visitor_phone or "").strip()
         if self._memory_enabled and self._caller_phone and config.get("id"):
-            prior = db.get_caller_memory(config["id"], self._caller_phone, config.get("account_id"))
+            prior = config.get("_runtime_caller_memory")
+            if prior is None and not config.get("_call_db_context_loaded"):
+                prior = db.get_caller_memory(config["id"], self._caller_phone, config.get("account_id"))
             if prior:
                 caller_tail += (
                     "\n\n# What you remember about this caller\n"
@@ -3574,6 +3591,19 @@ class RealEstateAgent(Agent):
             reply_language, voice_value, base_tone, tone_name,
             is_phone=(call_type or "") == "phone",
             sarvam_latency_lab=self._sarvam_latency_lab,
+        )
+        # Make an explicit voice selection observable in LiveKit logs. This
+        # lets us distinguish "the widget loaded a different agent config"
+        # from an actual TTS-provider failure without exposing credentials or
+        # caller data. In particular, a 3.8 selection must never look like a
+        # successful Sarvam route without an explicit fallback log.
+        logger.info(
+            "TTS route selected: agent_id=%s voice=%s provider=%s model=%s expressive=%s",
+            config.get("id"),
+            voice_value,
+            tts_provider,
+            getattr(tts, "model", None) or getattr(tts, "_model_name", None) or "unknown",
+            voice_value.startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)),
         )
         agent_tools = _build_tools(config)
         _model_name = config.get("model") or "gpt-4.1-mini"
@@ -5784,6 +5814,42 @@ _POST_CALL_ANALYSIS_TIMEOUT_S = 8.0
 _CRM_ENRICH_WAIT_S = 9.0
 
 
+async def _load_runtime_call_context(config: dict, caller_phone: str | None) -> dict:
+    """Load blocking Postgres inputs off the LiveKit audio/event loop.
+
+    These reads used to run synchronously in RealEstateAgent.__init__ and
+    during call admission/recording setup. LiveKit's session logs showed
+    psycopg blocking the event loop for seconds, delaying greetings and every
+    other concurrent call in the same worker. Run independent reads together
+    in worker threads and pass the immutable results through the per-call
+    config snapshot.
+    """
+    config = dict(config or {})
+    config["_call_db_context_loaded"] = True
+    reads: list[tuple[str, asyncio.Task]] = []
+
+    def add(name: str, fn, *args):
+        reads.append((name, asyncio.create_task(asyncio.to_thread(fn, *args))))
+
+    account_id = config.get("account_id")
+    add("_compliance_config", db.get_compliance_config, account_id)
+    kb_id = config.get("kb_id")
+    if kb_id:
+        add("_runtime_kb_content", db.get_kb_content, kb_id)
+        add("_runtime_kb_strict", db.is_kb_strict, kb_id)
+    if config.get("memory_enabled") and caller_phone and config.get("id"):
+        add("_runtime_caller_memory", db.get_caller_memory, config["id"], caller_phone, account_id)
+
+    if reads:
+        values = await asyncio.gather(*(task for _, task in reads), return_exceptions=True)
+        for (name, _), value in zip(reads, values):
+            if isinstance(value, BaseException):
+                logger.warning("call context read %s failed; using safe default", name, exc_info=value)
+                value = {} if name == "_compliance_config" else (False if name == "_runtime_kb_strict" else "")
+            config[name] = value
+    return config
+
+
 async def _post_call_analysis(
     transcript: list[dict], post_call_fields: list[dict], want_summary: bool
 ) -> tuple[dict, str]:
@@ -6006,6 +6072,10 @@ async def entrypoint(ctx: JobContext) -> None:
         # Paused from the dashboard — don't take the call.
         logger.info("agent '%s' is paused; skipping room %s", config.get("name"), ctx.room.name)
         return
+    # The agent prompt needs a KB snapshot, optional caller memory, and
+    # compliance settings. Load these blocking Postgres reads in parallel on
+    # worker threads before any synchronous constructor code can run.
+    config = await _load_runtime_call_context(config or {}, call_context.get("visitor_phone"))
     # After the caller joins, not at job start — duration (and therefore
     # credit billing) shouldn't include dispatch/connect/ring time.
     started_at = datetime.now(timezone.utc)
@@ -6027,7 +6097,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # shutdown callback below. Declining here (no session ever built) is what
     # actually enforces the cap; the campaign dialer's own pre-check just
     # avoids placing outbound calls that would land here anyway.
-    if not db.try_start_call(ctx.room.name, cfg.get("account_id"), cfg):
+    if not await asyncio.to_thread(db.try_start_call, ctx.room.name, cfg.get("account_id"), cfg):
         logger.info(
             "call admission denied (plan, configuration, capacity or database) for account_id=%s — declining room %s",
             cfg.get("account_id"), ctx.room.name,
@@ -7464,7 +7534,7 @@ async def entrypoint(ctx: JobContext) -> None:
         # session or access to our private B2 bucket.
         recording_share_token = secrets.token_urlsafe(32)
         try:
-            saved_call_id = db.save_call(
+            saved_call_id = await asyncio.to_thread(db.save_call,
                 {
                     "room_name": ctx.room.name,
                     "visitor_identity": visitor_holder["identity"],
@@ -7611,8 +7681,9 @@ async def entrypoint(ctx: JobContext) -> None:
             if extracted:
                 # Re-merge: this OVERWRITES the column, so dropping the
                 # in-call facts here would silently undo the seed above.
-                db.set_call_extracted_data(
-                    saved_call_id, {**_extra_lead_facts(lead_data), **extracted}
+                await asyncio.to_thread(
+                    db.set_call_extracted_data,
+                    saved_call_id, {**_extra_lead_facts(lead_data), **extracted},
                 )
 
         # ORDER MATTERS. The recorder used to stop AFTER the ambience player
@@ -7649,7 +7720,7 @@ async def entrypoint(ctx: JobContext) -> None:
                         recording.upload_recording, local_path, cfg.get("account_id"), saved_call_id
                     )
                     if key and saved_call_id is not None:
-                        db.set_call_recording(saved_call_id, key)
+                        await asyncio.to_thread(db.set_call_recording, saved_call_id, key)
             except Exception:
                 logger.exception("failed to finalize recording for room %s", ctx.room.name)
 
@@ -7676,7 +7747,10 @@ async def entrypoint(ctx: JobContext) -> None:
             logger.exception("CRM delivery failed for room %s", ctx.room.name)
         # Persist returning-caller memory after the log (independent of it).
         if want_memory and memory_summary and resolved_agent_id:
-            db.save_caller_memory(cfg.get("account_id"), resolved_agent_id, agent._caller_phone, memory_summary)
+            await asyncio.to_thread(
+                db.save_caller_memory,
+                cfg.get("account_id"), resolved_agent_id, agent._caller_phone, memory_summary,
+            )
 
     ctx.add_shutdown_callback(log_call)
     # log_lead's webhook/integration fan-out no longer blocks the spoken reply,
@@ -7921,7 +7995,7 @@ async def entrypoint(ctx: JobContext) -> None:
     # False flag. Reads through the prewarmed cache, so this costs nothing on
     # the call path, and get_compliance_config fails closed (recording OFF) so
     # a DB problem can never become the reason a call was recorded.
-    _compliance = db.get_compliance_config(cfg.get("account_id"))
+    _compliance = cfg.get("_compliance_config") or {}
     if not _compliance.get("record_calls"):
         logger.info(
             "recording disabled by compliance settings for account %s (room=%s)",

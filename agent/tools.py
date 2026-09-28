@@ -797,7 +797,9 @@ async def _deliver_to_integrations(
     (empty/None = every connected integration, unchanged default behavior).
     """
     try:
-        integrations = db.get_delivery_integrations(account_id, allowed_keys)
+        integrations = await asyncio.to_thread(
+            db.get_delivery_integrations, account_id, allowed_keys
+        )
     except Exception:
         logger.warning("get_delivery_integrations raised for account_id=%s", account_id, exc_info=True)
         return
@@ -809,11 +811,12 @@ async def _deliver_to_integrations(
         # reason on its own dashboard row. Distinguish the plan case.
         if call_id is not None and account_id is not None:
             try:
-                status = db.get_arthaleads_plan_status(account_id)
+                status = await asyncio.to_thread(db.get_arthaleads_plan_status, account_id)
             except Exception:
                 status = {"connected": False, "plan_allows_crm": False}
             if status["connected"] and not status["plan_allows_crm"]:
-                db.set_call_arthaleads_status(
+                await asyncio.to_thread(
+                    db.set_call_arthaleads_status,
                     call_id,
                     "skipped",
                     "Automatic CRM sync needs the Growth plan or higher — use Re-send, or upgrade to enable it automatically.",
@@ -834,10 +837,12 @@ async def _deliver_to_integrations(
                         ok = False
                     if ok:
                         logger.info("delivered lead to zoho_crm integration")
-                        db.touch_integration_sync(account_id, "zoho_crm")
+                        await asyncio.to_thread(db.touch_integration_sync, account_id, "zoho_crm")
                     else:
                         logger.warning("zoho_crm delivery returned falsy — marking integration error")
-                        db.mark_integration_error(account_id, "zoho_crm", "Delivery failed — check connection")
+                        await asyncio.to_thread(
+                            db.mark_integration_error, account_id, "zoho_crm", "Delivery failed — check connection"
+                        )
                     continue
                 shaped = _integration_body(integ["key"], integ.get("config") or {}, lead)
                 if shaped is None:
@@ -851,32 +856,45 @@ async def _deliver_to_integrations(
                             missing.append("phone")
                         reason = "Automatic delivery skipped: missing " + ", ".join(missing or ["required data"])
                         logger.warning("arthaleads %s", reason.lower())
-                        db.set_call_arthaleads_status(call_id, "failed", reason)
+                        await asyncio.to_thread(db.set_call_arthaleads_status, call_id, "failed", reason)
                     continue
                 url, body = shaped
                 try:
                     async with http.post(url, json=body) as resp:
                         if 200 <= resp.status < 300:
                             logger.info("delivered lead to %s integration", integ["key"])
-                            db.touch_integration_sync(account_id, integ["key"])
+                            await asyncio.to_thread(db.touch_integration_sync, account_id, integ["key"])
                             if integ["key"] == "arthaleads":
-                                db.set_call_arthaleads_status(call_id, "sent")
+                                await asyncio.to_thread(db.set_call_arthaleads_status, call_id, "sent")
                         elif resp.status == 401:
                             logger.warning("integration %s delivery failed: invalid token", integ["key"])
-                            db.mark_integration_error(account_id, integ["key"], "Invalid token — reconnect")
+                            await asyncio.to_thread(
+                                db.mark_integration_error, account_id, integ["key"], "Invalid token — reconnect"
+                            )
                             if integ["key"] == "arthaleads":
-                                db.set_call_arthaleads_status(call_id, "failed", "Invalid token — reconnect")
+                                await asyncio.to_thread(
+                                    db.set_call_arthaleads_status, call_id, "failed", "Invalid token — reconnect"
+                                )
                         else:
                             text = (await resp.text())[:200]
                             logger.warning("integration %s delivery failed: HTTP %s", integ["key"], resp.status)
-                            db.mark_integration_error(account_id, integ["key"], f"HTTP {resp.status}: {text}")
+                            await asyncio.to_thread(
+                                db.mark_integration_error, account_id, integ["key"], f"HTTP {resp.status}: {text}"
+                            )
                             if integ["key"] == "arthaleads":
-                                db.set_call_arthaleads_status(call_id, "failed", f"HTTP {resp.status}: {text}")
+                                await asyncio.to_thread(
+                                    db.set_call_arthaleads_status,
+                                    call_id, "failed", f"HTTP {resp.status}: {text}",
+                                )
                 except Exception:
                     logger.warning("integration %s delivery failed", integ["key"], exc_info=True)
-                    db.mark_integration_error(account_id, integ["key"], "Network error — delivery failed")
+                    await asyncio.to_thread(
+                        db.mark_integration_error, account_id, integ["key"], "Network error — delivery failed"
+                    )
                     if integ["key"] == "arthaleads":
-                        db.set_call_arthaleads_status(call_id, "failed", "Network error — delivery failed")
+                        await asyncio.to_thread(
+                            db.set_call_arthaleads_status, call_id, "failed", "Network error — delivery failed"
+                        )
     except Exception:
         logger.warning("integration fan-out failed", exc_info=True)
 

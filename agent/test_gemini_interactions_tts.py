@@ -6,10 +6,29 @@ import unittest
 
 from livekit.agents.types import DEFAULT_API_CONNECT_OPTIONS
 
-from gemini_interactions_tts import GeminiInteractionsTTS, _gemini_text_and_style
+from gemini_interactions_tts import GeminiInteractionsTTS, _gemini_text_and_style, _lower_gemini_markup
 
 
 class GeminiInteractionsMarkupTests(unittest.TestCase):
+    def test_livekit_expressive_markers_reach_gemini_as_native_controls(self):
+        livekit_markup = (
+            '<expr type="expression" label="warm and reassuring"/>'
+            'That is lovely! <expr type="sound" label="laugh"/>'
+            '<expr type="break" label="300ms"/>'
+        )
+        converted = _lower_gemini_markup(livekit_markup)
+        text, style = _gemini_text_and_style(converted)
+        self.assertEqual(style, "warm and reassuring")
+        self.assertEqual(text, "That is lovely! <laugh><short pause>")
+
+    def test_wrapped_prosody_is_a_gemini_delivery_style(self):
+        converted = _lower_gemini_markup(
+            '<expr type="prosody" label="whispering">Come closer.</expr>'
+        )
+        self.assertEqual(
+            _gemini_text_and_style(converted), ("Come closer.", "whispering")
+        )
+
     def test_expression_becomes_turn_style_and_laugh_is_native_inline_tag(self):
         text, style = _gemini_text_and_style(
             '<expression value="warm and reassuring"/>That is lovely! '

@@ -15,6 +15,21 @@ import main
 
 
 class Gemini38VoicePersonalityTests(unittest.TestCase):
+    def test_flash_and_flash_lite_select_the_gemini_interactions_adapter(self):
+        cases = (
+            ("google38flash:autonoe", "gemini-3.8-flash-tts", "google-multilingual-38-flash"),
+            ("google38:autonoe", "gemini-3.8-flash-lite-tts", "google-multilingual-38"),
+        )
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "offline-test-key"}):
+            for voice, model, provider in cases:
+                with self.subTest(voice=voice):
+                    tts, selected_provider = main._build_tts(
+                        "hi-IN", voice, main.TONE_PRESETS["balanced"], "balanced"
+                    )
+                    self.assertIsInstance(tts, main.GeminiInteractionsTTS)
+                    self.assertEqual(tts.model, model)
+                    self.assertEqual(selected_provider, provider)
+
     def test_casual_persona_informs_llm_prompt_and_tts_style(self):
         config = {
             "id": 1,
