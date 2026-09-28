@@ -59,10 +59,13 @@ class Google38Voices(unittest.TestCase):
         self.assertIn("hi-IN", langs)
         self.assertGreater(len(langs), 11)
 
-    def test_uses_interactions_streaming_instead_of_cloud_tts_or_3_1_fallback(self):
+    def test_uses_interactions_streaming_with_a_3_1_backup_not_cloud_tts(self):
+        # 3.8 is synthesized by the Gemini API adapter. Cloud TTS 3.1 is only
+        # the same-persona backup for a mid-call Gemini API failure (see
+        # test_gemini38_fallback.py) - it used to have none, which was silence.
         self.assertIn("GeminiInteractionsTTS(", _MAIN_SOURCE)
         self.assertIn("_GOOGLE_38_FLASH_MODEL: \"google-multilingual-38-flash\",", _MAIN_SOURCE)
-        self.assertNotIn("_GOOGLE_38_MODEL: _GOOGLE_31_MODEL,", _MAIN_SOURCE)
+        self.assertIn("_GOOGLE_38_MODEL: _GOOGLE_31_MODEL,", _MAIN_SOURCE)
         self.assertIn('_GOOGLE_38_MODEL: "google-multilingual-38",', _MAIN_SOURCE)
 
 

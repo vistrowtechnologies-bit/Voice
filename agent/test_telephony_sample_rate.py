@@ -106,8 +106,9 @@ class EveryPathIsCovered(unittest.TestCase):
         Constructions are what must each carry the rate; credentials_info is
         just how this test used to recognise one.
         """
+        # Sixth: the Gemini 3.8 same-persona 3.1 backup (test_gemini38_fallback.py).
         sites = (_BUILD_TTS.count("PatchedGeminiTTS(") + _BUILD_TTS.count("google.TTS("))
-        self.assertEqual(sites, 5)
+        self.assertEqual(sites, 6)
 
     def test_the_fallback_adapters_get_it_too(self):
         """The one that actually decides the wire rate."""

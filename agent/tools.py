@@ -2165,7 +2165,10 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
                     agent.tts.update_options(language=code.split("-")[0])
                 else:
                     voice_unsupported = True
-            elif provider in ("google-multilingual", "google-multilingual-31", "google-multilingual-38"):
+            elif provider in (
+                "google-multilingual", "google-multilingual-31",
+                "google-multilingual-38", "google-multilingual-38-flash",
+            ):
                 raw_voice = getattr(agent, "_voice", "")
                 prefix, gemini_model = voice_catalog.gemini_prefix_and_model(raw_voice)
                 voice_name = raw_voice.removeprefix(prefix)

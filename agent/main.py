@@ -38,7 +38,8 @@ from livekit.agents import (
 from livekit.agents.tts import StreamAdapter
 from livekit.agents.stt import FallbackAdapter as SttFallbackAdapter
 from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
-from livekit.agents.types import NOT_GIVEN, APIConnectOptions
+from livekit.agents.tts import TTS as _BaseTTS, TTSCapabilities
+from livekit.agents.types import DEFAULT_API_CONNECT_OPTIONS, NOT_GIVEN, APIConnectOptions
 from livekit.agents.voice.agent_session import SessionConnectOptions
 from google.genai import types as genai_types
 from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarvam
@@ -2330,6 +2331,10 @@ _GEMINI_38_PERSONAS = {p.lower() for p, _g, _s in voice_catalog.GEMINI_PREBUILT_
 _GEMINI_FALLBACK_MODEL = {
     _GOOGLE_25_MODEL: _GOOGLE_31_MODEL,
     _GOOGLE_31_MODEL: _GOOGLE_25_MODEL,
+    # 3.8 (Gemini API) backs up to the same persona on 3.1 (Cloud TTS), so a
+    # Gemini API error or 429 mid-call is a quieter voice, not silence.
+    _GOOGLE_38_MODEL: _GOOGLE_31_MODEL,
+    _GOOGLE_38_FLASH_MODEL: _GOOGLE_31_MODEL,
 }
 # _build_tts's provider label per Gemini model; the mid-call emotion and
 # language-switch paths (here and tools.py) key off these.
@@ -2369,6 +2374,46 @@ _ELEVENLABS_API_KEY = os.environ.get("ELEVEN_API_KEY")
 # product choice for the rare full-Google-TTS-outage case, not per-tenant
 # configurable — see _google_fallback_tts.
 _GEMINI_OUTAGE_SAFETY_NET_VOICE_ID = "1qEiC6qsybMkmnNdVMbK"
+
+
+class _MarkupStrippedTTS(_BaseTTS):
+    """A backup voice that never sees expressive markup.
+
+    Declared non-streaming, so FallbackAdapter feeds it one sentence at a
+    time through synthesize() — whole sentences, so a tag is never split
+    across two calls — and each sentence is stripped of <expr/> and native
+    tags before the wrapped TTS speaks it.
+    """
+
+    def __init__(self, inner: _BaseTTS):
+        super().__init__(
+            capabilities=TTSCapabilities(streaming=False),
+            sample_rate=inner.sample_rate,
+            num_channels=inner.num_channels,
+        )
+        self._inner = inner
+
+    @property
+    def model(self) -> str:
+        return self._inner.model
+
+    @property
+    def provider(self) -> str:
+        return self._inner.provider
+
+    def synthesize(self, text: str, *, conn_options=DEFAULT_API_CONNECT_OPTIONS):
+        from livekit.agents.tts._provider_format import strip_all_markup
+
+        return self._inner.synthesize(strip_all_markup(text), conn_options=conn_options)
+
+    def update_options(self, **kwargs) -> None:
+        self._inner.update_options(**kwargs)
+
+    def prewarm(self) -> None:
+        self._inner.prewarm()
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
 
 
 def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_language: str, tone_name: str):
@@ -2412,7 +2457,17 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
             ),
         )
         tts_chain.append(safety_net)
-    adapter = TtsFallbackAdapter(tts_chain, max_retry_per_tts=5)
+    expressive = isinstance(primary_tts, GeminiInteractionsTTS)
+    if expressive:
+        # The LLM writes <expr .../> markers for 3.8; FallbackAdapter hands
+        # the backups that same text, and they would read the tags aloud.
+        tts_chain = [tts_chain[0], *(_MarkupStrippedTTS(t) for t in tts_chain[1:])]
+        fallback_tts = tts_chain[1]
+        if safety_net is not None:
+            safety_net = tts_chain[2]
+    # A 3.8 failure is usually a Gemini API 429, which retrying doesn't fix:
+    # 5 retries measured as 8.1s of silence per reply, 1 as 0.13s.
+    adapter = TtsFallbackAdapter(tts_chain, max_retry_per_tts=1 if expressive else 5)
     fallback_model = _GEMINI_FALLBACK_MODEL[primary_model]
 
     def _on_availability_changed(ev):
@@ -2453,6 +2508,10 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
     def _update_all(**kwargs):
         primary_tts.update_options(**kwargs)
         fallback_kwargs = dict(kwargs)
+        # The 3.8 adapter takes its delivery direction as `style`; the Cloud
+        # TTS backup calls the same thing `prompt`.
+        if "style" in fallback_kwargs:
+            fallback_kwargs["prompt"] = fallback_kwargs.pop("style")
         if "model_name" in fallback_kwargs:
             fallback_kwargs["model_name"] = _GEMINI_FALLBACK_MODEL[fallback_kwargs["model_name"]]
         fallback_tts.update_options(**fallback_kwargs)
@@ -2607,14 +2666,33 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             _persona_name, persona_hint = _gemini38_voice_style_hint(speaker)
             if persona_hint and tone_name != "professional":
                 style = f"{style}; {persona_hint}"
-            return GeminiInteractionsTTS(
+            gemini38_tts = GeminiInteractionsTTS(
                 model=model,
                 voice=voice_name,
                 style=style,
                 api_key=api_key,
-            ), _GEMINI_PROVIDERS[model]
-        raise RuntimeError(
-            "Gemini 3.8 voice selected but GEMINI_API_KEY is not configured on the LiveKit worker"
+            )
+            if _GOOGLE_CREDENTIALS is None or not _GOOGLE_VOICE_ENABLED:
+                return gemini38_tts, _GEMINI_PROVIDERS[model]
+            backup = PatchedGeminiTTS(
+                language=to_google_code(reply_language),
+                voice_name=voice_name,
+                credentials_info=_GOOGLE_CREDENTIALS,
+                **_rate,
+                prompt=style,
+                model_name=_GOOGLE_31_MODEL,
+            )
+            return (
+                _google_fallback_tts(gemini38_tts, backup, model, reply_language, tone_name),
+                _GEMINI_PROVIDERS[model],
+            )
+        # Raising here ran during agent construction and ended the call. Fall
+        # through instead: no Google branch below matches this prefix, so the
+        # Sarvam default voice takes the call, like any other missing key.
+        logger.error("Gemini 3.8 voice %s selected but GEMINI_API_KEY is not set — using Sarvam", speaker)
+        db.log_platform_error(
+            f"Gemini 3.8 voice {speaker} selected but GEMINI_API_KEY is not set on this worker — call used Sarvam",
+            source="agent_tts", level="error",
         )
     google_prefix = next(
         (prefix for prefix in (_GOOGLE_31_VOICE_PREFIX, _GOOGLE_VOICE_PREFIX) if speaker.startswith(prefix)),

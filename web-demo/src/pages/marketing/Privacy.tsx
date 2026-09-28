@@ -83,7 +83,7 @@ export function Privacy() {
           <li><b>Hosting &amp; database</b> - Railway (application servers, Postgres database, hosted in the United States) and Vercel (web app).</li>
           <li><b>Call recording storage</b> - Backblaze B2 (audio recordings, hosted in the United States).</li>
           <li><b>Email delivery</b> - Resend, to send account and notification emails.</li>
-          <li><b>Usage analytics</b> - Google Analytics and Microsoft Clarity, to understand how the website and app are used (see section 9).</li>
+          <li><b>Usage analytics</b> - Google Analytics, Microsoft Clarity and Vercel Web Analytics, to understand how the website and app are used (see section 9).</li>
           <li><b>Integrations you connect</b> - Google Calendar, Slack, WhatsApp providers, or a CRM you configure - only the data needed for that specific integration to work, and only while it's connected.</li>
         </ul>
         <p>Each of these processes data under its own privacy commitments; we choose providers that meet industry-standard security practices.</p>

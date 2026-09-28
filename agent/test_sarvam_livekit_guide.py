@@ -126,7 +126,12 @@ class TheAdapterIsGone(unittest.TestCase):
                                 "requirements.txt"), encoding="utf-8").read()
         # STTStreaming does not exist before 1.8.0; a >=1.6 floor would
         # resolve to a plugin without it and fail at runtime, not at build.
-        self.assertIn("livekit-agents[sarvam]>=1.8", req)
+        # Pinned exactly since 2026-09-28 (gemini_interactions_tts imports
+        # livekit internals that first exist in 1.8.3); either form must be >= 1.8.
+        import re
+        m = re.search(r"^livekit-agents\[sarvam\](?:>=|==)(\d+)\.(\d+)", req, re.M)
+        self.assertIsNotNone(m)
+        self.assertGreaterEqual((int(m.group(1)), int(m.group(2))), (1, 8))
 
 
 if __name__ == "__main__":
