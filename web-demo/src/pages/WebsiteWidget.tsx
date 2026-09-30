@@ -48,7 +48,8 @@ function fieldModeFlags(mode: FieldMode): { ask: boolean; require: boolean } {
 function snippetFor(site: Site, backendUrl: string): string {
   const avatarAttr = site.widgetAvatar && site.widgetAvatar !== 'default' ? ` data-avatar="${site.widgetAvatar}"` : ''
   const greetingAttr = site.widgetGreeting ? ` data-greeting="${escapeHtmlAttr(site.widgetGreeting)}"` : ''
-  const modeAttr = site.widgetMode === 'chat' ? ` data-mode="chat"` : ''
+  // 'voice' is the widget's own default, so only the other two modes need the attribute.
+  const modeAttr = site.widgetMode === 'chat' || site.widgetMode === 'both' ? ` data-mode="${site.widgetMode}"` : ''
   const askNameAttr = site.widgetAskName === false ? ` data-ask-name="false"` : ''
   const requireNameAttr = site.widgetAskName && site.widgetRequireName === false ? ` data-require-name="false"` : ''
   const askPhoneAttr = site.widgetAskPhone === false ? ` data-ask-phone="false"` : ''
@@ -462,15 +463,20 @@ function SiteRow({
       <div className="flex items-center gap-2 text-xs">
         <span className="shrink-0 text-text-muted">Widget type</span>
         <select
-          value={modeDraft === 'chat' ? 'chat' : 'voice'}
+          value={modeDraft}
           onChange={(e) => setModeDraft(e.target.value as Site['widgetMode'])}
           className="rounded-lg border border-border bg-surface-high px-2 py-1 text-xs outline-none focus:border-primary"
         >
           <option value="voice">Voice call (speaks, can also type)</option>
+          <option value="both">Voice + chat (visitor chooses)</option>
           <option value="chat">Chat only (text, no voice)</option>
         </select>
         <span className="text-[11px] text-text-muted">
-          {modeDraft === 'chat' ? 'Visitors type, no voice call' : 'Visitors can speak or type'}
+          {modeDraft === 'chat'
+            ? 'Visitors type, no voice call'
+            : modeDraft === 'both'
+              ? 'Visitors pick voice or chat when they open it'
+              : 'Visitors can speak or type'}
         </span>
       </div>
 
