@@ -21,6 +21,16 @@ const apiBase = scriptEl?.dataset.apiBase?.replace(/\/$/, '')
 // at init - an attribute on the host element is what a later JS write can
 // actually still affect.
 let position = scriptEl?.dataset.position === 'bottom-left' ? 'bottom-left' : 'bottom-right'
+// Some sites pin their own Call/WhatsApp/Book-a-visit bar to the bottom of
+// the screen (common on real-estate landing pages) - with no way to push
+// our launcher above it, it lands in the same strip and visually collides
+// with the site's own buttons right when a visitor might act on either.
+// data-bottom-offset lets that embed nudge our launcher up by N pixels;
+// unset (the default) keeps today's 20px/16px exactly as before.
+const bottomOffsetPx = (() => {
+  const raw = Number(scriptEl?.dataset.bottomOffset)
+  return Number.isFinite(raw) && raw > 0 ? raw : null
+})()
 const label = scriptEl?.dataset.label || 'Talk to us'
 const agentName = scriptEl?.dataset.agentName || 'Artha'
 const ctaLabel = scriptEl?.dataset.ctaLabel || ''
@@ -58,10 +68,13 @@ const DEFAULT_CHAT_OPENER = "Hi, I'm Artha! What can I help you with today?"
 // Ordered by trigger: [0] first paint, [1] scroll re-prompt, [2] exit-intent
 // re-prompt — each one leans harder into "this is a real voice, not a
 // chatbot" since that's the actual differentiator worth being curious about.
+// Short and CTA-like on purpose (mirrors DEFAULT_GREETING's own length) -
+// a full sentence reads as something to read, not something to tap, which
+// is the opposite of what a one-line nudge bubble is for.
 const CURIOSITY_GREETINGS = [
-  '🎙️ I actually talk back. Try me!',
-  '👀 Still reading? Just ask me out loud instead.',
-  'Before you go, hear this for yourself?',
+  '🎙️ I actually talk back!',
+  '👀 Ask me anything',
+  '🎧 Hear it before you go',
 ]
 // Explicit per-tenant override, if a site wants its own custom line instead
 // of the real platform-wide count fetched below. Never a fabricated
@@ -163,7 +176,7 @@ const ARROW_ICON =
 
 const CSS = `
 :host { all: initial; }
-.av-root { position: fixed; right: 20px; bottom: 20px; z-index: 2147483000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.av-root { position: fixed; right: 20px; bottom: var(--av-bottom-offset, 20px); z-index: 2147483000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
 :host([data-side="left"]) .av-root { left: 20px; right: auto; }
 
 @keyframes av-pulse-ring {
@@ -242,7 +255,19 @@ const CSS = `
    avatar) - the tail's ::after triangle then bridges right up to its edge.
    Was 80px, leaving a visible 12px empty strip between the bubble and the
    avatar it's supposedly pointing at. */
-.av-greeting { position: absolute; bottom: 6px; right: 68px; display: none; align-items: center; gap: 8px; width: min(236px, calc(100vw - 128px)); min-height:56px; background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
+/* width here is only the pre-JS fallback (same value as max-width, i.e.
+   today's fixed size) - applyGreetingText() below sets an explicit px
+   width per message so a short line like "Before you go, hear this for
+   yourself?" doesn't sit in a box sized for the longest greeting, leaving
+   a slab of empty bubble beside it. CSS fit-content/auto can't do this
+   on its own: a -webkit-line-clamp span's intrinsic width is unreliable
+   for shrink-to-fit sizing (confirmed - it was clamping to 2 lines almost
+   immediately, well short of the text's actual one-line width), so the
+   width is measured in JS instead; max-width stays as the real cap for
+   both the JS-measured and the fallback case. min-height dropped for the
+   same reason: padding + up to 2 lines already sizes it correctly, so a
+   fixed 56px only mattered (and only overshot) for a one-line message. */
+.av-greeting { position: absolute; bottom: 6px; right: 68px; display: none; align-items: center; gap: 8px; width: min(236px, calc(100vw - 128px)); max-width: min(236px, calc(100vw - 128px)); background: #17121f; border: 1px solid #2a2440; color: #f5f3ff; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35; box-shadow: 0 12px 30px rgba(0,0,0,.4); cursor: pointer; animation: av-fade-in .25s ease; box-sizing: border-box; }
 .av-greeting::after { content:'';position:absolute;right:-7px;top:50%;width:12px;height:12px;background:#17121f;border-top:1px solid #2a2440;border-right:1px solid #2a2440;transform:translateY(-50%) rotate(45deg); }
 :host([data-side="left"]) .av-greeting { left: 68px; right: auto; }
 :host([data-side="left"]) .av-greeting::after { left:-7px;right:auto;border:0;border-left:1px solid #2a2440;border-bottom:1px solid #2a2440; }
@@ -379,10 +404,10 @@ const CSS = `
 .av-branding:hover { color: #a78bda; }
 audio { display: none; }
 @media (max-width:520px) {
-  .av-root { right:16px;bottom:16px; }
+  .av-root { right:16px;bottom:var(--av-bottom-offset, 16px); }
   :host([data-side="left"]) .av-root { left:16px; }
   .av-panel,:host([data-side="left"]) .av-panel { position:fixed;left:10px;right:10px;bottom:10px;width:auto;max-height:calc(100dvh - 20px);border-radius:22px; }
-  .av-greeting,:host([data-side="left"]) .av-greeting { left:auto;right:0;bottom:78px;width:min(260px,calc(100vw - 32px)); }
+  .av-greeting,:host([data-side="left"]) .av-greeting { left:auto;right:0;bottom:78px;width:min(260px,calc(100vw - 32px));max-width:min(260px,calc(100vw - 32px)); }
   .av-greeting::after,:host([data-side="left"]) .av-greeting::after { left:auto;right:25px;top:auto;bottom:-7px;border:0;border-right:1px solid #2a2440;border-bottom:1px solid #2a2440;transform:rotate(45deg); }
   .av-proof-pill,:host([data-side="left"]) .av-proof-pill { left:auto;right:0;max-width:min(220px,calc(100vw - 32px)); }
   #av-call,#av-chat { height:min(500px,calc(100dvh - 110px)); }
@@ -614,6 +639,7 @@ function init(): void {
   const host = document.createElement('div')
   host.id = 'vistrow-voice-widget-host'
   if (position === 'bottom-left') host.dataset.side = 'left'
+  if (bottomOffsetPx !== null) host.style.setProperty('--av-bottom-offset', `${bottomOffsetPx}px`)
   document.body.appendChild(host)
   const shadow = host.attachShadow({ mode: 'open' })
   shadow.innerHTML = `<style>${CSS}</style>${widgetHtml(label)}`
@@ -690,7 +716,30 @@ function init(): void {
   // this value can come from a customer's own dashboard/WordPress settings,
   // so it must never be trusted as markup.
   const greetingText = shadow.getElementById('av-greeting-text') as HTMLSpanElement
-  greetingText.textContent = customGreeting || DEFAULT_GREETING
+  // A single reused canvas context to measure each greeting's natural
+  // (unwrapped) text width, so the bubble can be sized to the message
+  // instead of a fixed target width - see the width comment on
+  // .av-greeting above for why this can't be done with CSS alone.
+  let measureCtx: CanvasRenderingContext2D | null | undefined
+  function measureTextWidth(text: string): number {
+    if (measureCtx === undefined) {
+      measureCtx = document.createElement('canvas').getContext('2d')
+      if (measureCtx) measureCtx.font = "13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    }
+    return measureCtx ? measureCtx.measureText(text).width : 200
+  }
+  // The bubble's own box model: 12px+12px padding, 8px gap to the close
+  // button, the close button's 16px icon plus its 2px+2px padding, and the
+  // 1px+1px border (box-sizing:border-box folds the border into `width`).
+  // A long tenant-supplied greeting still gets clamped by max-width on
+  // .av-greeting - this only ever narrows the bubble below that cap, never
+  // past it, so it can't make the bubble overflow the viewport.
+  const GREETING_CHROME_PX = 12 + 12 + 8 + 16 + 2 + 2 + 1 + 1
+  function applyGreetingText(text: string): void {
+    greetingText.textContent = text
+    greeting.style.width = `${Math.ceil(measureTextWidth(text)) + GREETING_CHROME_PX}px`
+  }
+  applyGreetingText(customGreeting || DEFAULT_GREETING)
 
   // Re-applies one pre-call field's live ask/require state to its wrapper
   // div (show/hide) and label text (the "(optional)" suffix) - not mode,
@@ -743,7 +792,7 @@ function init(): void {
         }
         if (typeof data.greeting === 'string' && data.greeting !== customGreeting) {
           customGreeting = data.greeting
-          greetingText.textContent = customGreeting || DEFAULT_GREETING
+          applyGreetingText(customGreeting || DEFAULT_GREETING)
         }
         if ((data.position === 'bottom-left' || data.position === 'bottom-right') && data.position !== position) {
           position = data.position
@@ -889,7 +938,7 @@ function init(): void {
     if (greetingWasDismissed()) return
     if (greetingShowCount >= MAX_AUTO_GREETING_SHOWS) return
     if (!isWidgetClosed()) return
-    greetingText.textContent = nextGreetingText()
+    applyGreetingText(nextGreetingText())
     greeting.style.display = 'flex'
     greetingShowCount += 1
     trackEvent('greeting_shown', { reason })
@@ -950,7 +999,7 @@ function init(): void {
   }
 
   function showNotice(text: string): void {
-    greetingText.textContent = text
+    applyGreetingText(text)
     greeting.style.display = 'flex'
     syncProofPillVisibility()
   }
