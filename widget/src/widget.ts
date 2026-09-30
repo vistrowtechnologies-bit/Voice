@@ -25,8 +25,12 @@ let position = scriptEl?.dataset.position === 'bottom-left' ? 'bottom-left' : 'b
 // the screen (common on real-estate landing pages) - with no way to push
 // our launcher above it, it lands in the same strip and visually collides
 // with the site's own buttons right when a visitor might act on either.
-// data-bottom-offset lets that embed nudge our launcher up by N pixels;
-// unset (the default) keeps today's 20px/16px exactly as before.
+// This is handled automatically below (applyBottomOffset/
+// detectBottomObstructionPx) - a tenant is never going to add an
+// attribute to fix this themselves. data-bottom-offset is only an
+// explicit floor for the rare case the auto-detection misses; unset (the
+// default) relies entirely on auto-detection, falling back to today's
+// 20px/16px when nothing is actually in the way.
 const bottomOffsetPx = (() => {
   const raw = Number(scriptEl?.dataset.bottomOffset)
   return Number.isFinite(raw) && raw > 0 ? raw : null
@@ -639,8 +643,61 @@ function init(): void {
   const host = document.createElement('div')
   host.id = 'vistrow-voice-widget-host'
   if (position === 'bottom-left') host.dataset.side = 'left'
-  if (bottomOffsetPx !== null) host.style.setProperty('--av-bottom-offset', `${bottomOffsetPx}px`)
   document.body.appendChild(host)
+
+  // Auto-detect the tenant's own fixed/sticky bottom bar (Call/WhatsApp/
+  // Book-a-visit rows are common on landing pages) and push the launcher
+  // above it - a tenant embedding this widget is never going to add a
+  // data-bottom-offset attribute themselves, so this has to be automatic,
+  // not something we ask them to configure. data-bottom-offset still works
+  // as an explicit floor for a case this heuristic misses, but it's no
+  // longer required for the common case.
+  //
+  // elementsFromPoint at a few x-samples along the very bottom edge reads
+  // what's actually rendered there - cheap (a handful of calls, no DOM
+  // scan) and correct regardless of how deep the tenant's markup is.
+  const GAP_ABOVE_OBSTRUCTION_PX = 10
+  function detectBottomObstructionPx(): number {
+    if (typeof document.elementsFromPoint !== 'function') return 0
+    const probeY = Math.max(0, window.innerHeight - 4)
+    const xs = [0.08, 0.5, 0.92].map((f) => Math.round(window.innerWidth * f))
+    let tallest = 0
+    for (const x of xs) {
+      for (const el of document.elementsFromPoint(x, probeY)) {
+        if (el === host || host.contains(el)) continue
+        const cs = window.getComputedStyle(el)
+        if (cs.position !== 'fixed' && cs.position !== 'sticky') continue
+        const rect = el.getBoundingClientRect()
+        // Only a bar actually pinned to the bottom edge counts - a fixed
+        // header or a mid-page sticky element caught by the probe point
+        // isn't something our launcher needs to clear.
+        if (rect.height <= 0 || rect.bottom < window.innerHeight - 20) continue
+        tallest = Math.max(tallest, window.innerHeight - rect.top)
+      }
+    }
+    return tallest
+  }
+  let applyBottomOffsetFrame = 0
+  function applyBottomOffset(): void {
+    // rAF-debounced - resize can fire in a burst, and each call does a
+    // handful of layout-reading elementsFromPoint hits.
+    cancelAnimationFrame(applyBottomOffsetFrame)
+    applyBottomOffsetFrame = requestAnimationFrame(() => {
+      const detected = detectBottomObstructionPx()
+      const px = Math.max(bottomOffsetPx ?? 0, detected > 0 ? detected + GAP_ABOVE_OBSTRUCTION_PX : 0)
+      if (px > 0) host.style.setProperty('--av-bottom-offset', `${px}px`)
+      else host.style.removeProperty('--av-bottom-offset')
+    })
+  }
+  applyBottomOffset()
+  // Re-checked, not just run once: a chat widget, cookie banner, or sticky
+  // CTA bar from the tenant's own page can mount after this script runs
+  // (their own script tag loading later, a slow third-party embed, a
+  // banner that only appears after scroll/consent). Two delayed passes
+  // catch that without polling indefinitely.
+  window.setTimeout(applyBottomOffset, 1200)
+  window.setTimeout(applyBottomOffset, 3500)
+  window.addEventListener('resize', applyBottomOffset, { passive: true })
   const shadow = host.attachShadow({ mode: 'open' })
   shadow.innerHTML = `<style>${CSS}</style>${widgetHtml(label)}`
   playAnyVideos(shadow)
