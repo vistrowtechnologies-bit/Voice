@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -280,6 +280,10 @@ function SiteRow({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState(false)
+  // A page rule typed into the form below but not added yet. Tracked here so
+  // the Save button can treat it as an unsaved change (see saveChanges).
+  const pageRulesRef = useRef<PageRulesHandle>(null)
+  const [ruleDraftPending, setRuleDraftPending] = useState(false)
   useEffect(() => setLabelDraft(site.widgetLabel), [site.widgetLabel])
   useEffect(() => setGreetingDraft(site.widgetGreeting), [site.widgetGreeting])
   useEffect(() => setAvatarDraft(site.widgetAvatar), [site.widgetAvatar])
@@ -297,7 +301,7 @@ function SiteRow({
     [site.widgetAskEmail, site.widgetRequireEmail],
   )
 
-  const isDirty =
+  const settingsDirty =
     labelDraft.trim() !== site.widgetLabel ||
     greetingDraft.trim() !== site.widgetGreeting ||
     avatarDraft !== site.widgetAvatar ||
@@ -305,6 +309,7 @@ function SiteRow({
     nameModeDraft !== fieldModeOf(site.widgetAskName, site.widgetRequireName) ||
     phoneModeDraft !== fieldModeOf(site.widgetAskPhone, site.widgetRequirePhone) ||
     emailModeDraft !== fieldModeOf(site.widgetAskEmail, site.widgetRequireEmail)
+  const isDirty = settingsDirty || ruleDraftPending
 
   const snippet = backendUrl ? snippetFor(site, backendUrl) : null
 
@@ -344,30 +349,40 @@ function SiteRow({
       ...partial,
     }).then(onChange)
 
-  const saveChanges = () => {
+  const saveChanges = async () => {
     setSaving(true)
     setSaveError(false)
-    const nameFlags = fieldModeFlags(nameModeDraft)
-    const phoneFlags = fieldModeFlags(phoneModeDraft)
-    const emailFlags = fieldModeFlags(emailModeDraft)
-    patchSite({
-      widgetLabel: labelDraft.trim(),
-      widgetGreeting: greetingDraft.trim(),
-      widgetAvatar: avatarDraft,
-      widgetMode: modeDraft,
-      widgetAskName: nameFlags.ask,
-      widgetRequireName: nameFlags.require,
-      widgetAskPhone: phoneFlags.ask,
-      widgetRequirePhone: phoneFlags.require,
-      widgetAskEmail: emailFlags.ask,
-      widgetRequireEmail: emailFlags.require,
-    })
-      .then(() => {
-        setSaved(true)
-        setTimeout(() => setSaved(false), 2500)
-      })
-      .catch(() => setSaveError(true))
-      .finally(() => setSaving(false))
+    try {
+      // Only PATCH the site when its own settings changed - a pending page
+      // rule on its own shouldn't rewrite the site row.
+      if (settingsDirty) {
+        const nameFlags = fieldModeFlags(nameModeDraft)
+        const phoneFlags = fieldModeFlags(phoneModeDraft)
+        const emailFlags = fieldModeFlags(emailModeDraft)
+        await patchSite({
+          widgetLabel: labelDraft.trim(),
+          widgetGreeting: greetingDraft.trim(),
+          widgetAvatar: avatarDraft,
+          widgetMode: modeDraft,
+          widgetAskName: nameFlags.ask,
+          widgetRequireName: nameFlags.require,
+          widgetAskPhone: phoneFlags.ask,
+          widgetRequirePhone: phoneFlags.require,
+          widgetAskEmail: emailFlags.ask,
+          widgetRequireEmail: emailFlags.require,
+        })
+      }
+      // A rule filled in but not yet added used to need its own "Add rule"
+      // button while Save stayed greyed out, so it looked like there was
+      // nothing to save. Save now adds it too.
+      if (ruleDraftPending) await pageRulesRef.current?.commitDraft()
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      setSaveError(true)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -497,7 +512,14 @@ function SiteRow({
         </div>
       )}
 
-      <PageRoutes site={site} agents={agents} avatarCatalog={avatarCatalog} backendUrl={backendUrl} />
+      <PageRoutes
+        ref={pageRulesRef}
+        onDraftChange={setRuleDraftPending}
+        site={site}
+        agents={agents}
+        avatarCatalog={avatarCatalog}
+        backendUrl={backendUrl}
+      />
 
       <div className="flex items-center gap-3">
         <button
@@ -518,6 +540,14 @@ function SiteRow({
           <span className="flex items-center gap-1 text-[11px] font-semibold text-destructive">
             <Icon name="error" className="text-[13px]" />
             Couldn't save - please try again
+          </span>
+        )}
+        {isDirty && !saving && !saved && !saveError && (
+          <span className="flex items-center gap-1 text-[11px] font-semibold text-amber">
+            <Icon name="edit_note" className="text-[13px]" />
+            {ruleDraftPending && !settingsDirty
+              ? 'New page rule not added yet - press Save changes'
+              : 'Unsaved changes'}
           </span>
         )}
       </div>
@@ -588,16 +618,22 @@ function SiteRow({
 // rule matches when the visitor's current URL path contains the pattern;
 // unmatched pages keep using the site's own default agent above, so this
 // is purely additive and never required.
+export type PageRulesHandle = { commitDraft: () => Promise<void> }
+
 function PageRoutes({
   site,
   agents,
   avatarCatalog,
   backendUrl,
+  ref,
+  onDraftChange,
 }: {
   site: Site
   agents: AgentConfig[]
   avatarCatalog: WidgetAvatarOption[]
   backendUrl: string | null
+  ref?: Ref<PageRulesHandle>
+  onDraftChange: (pending: boolean) => void
 }) {
   const [routes, setRoutes] = useState<SitePageRoute[]>([])
   const [seenPaths, setSeenPaths] = useState<SiteSeenPath[]>([])
@@ -609,6 +645,7 @@ function PageRoutes({
   const [newAvatar, setNewAvatar] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState(false)
+  const [justAdded, setJustAdded] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
 
@@ -639,22 +676,42 @@ function PageRoutes({
     }
   }
 
-  const handleAdd = async () => {
-    if (!newPattern.trim()) return
+  // Only a filled "URL contains" makes a savable rule - the other fields
+  // alone can't be saved, so they get a hint instead (see the form below).
+  const hasDraft = newPattern.trim() !== ''
+  const draftStarted = hasDraft || newAgentId !== '' || newGreeting.trim() !== '' || newAvatar !== ''
+  useEffect(() => {
+    onDraftChange(hasDraft)
+  }, [hasDraft, onDraftChange])
+  // The panel unmounts when the site row collapses, dropping the draft with it.
+  useEffect(() => () => onDraftChange(false), [onDraftChange])
+
+  // Throws on failure so the Save button can report it; "Add rule" ignores
+  // the throw because addError already shows it here.
+  const commitDraft = async (): Promise<void> => {
+    const pattern = newPattern.trim()
+    if (!pattern) return
     setAdding(true)
     setAddError(false)
     try {
-      await createSitePageRoute(site.id, newPattern.trim(), newAgentId ? Number(newAgentId) : null, newGreeting.trim(), newAvatar)
+      await createSitePageRoute(site.id, pattern, newAgentId ? Number(newAgentId) : null, newGreeting.trim(), newAvatar)
       setNewPattern('')
       setNewAgentId('')
       setNewGreeting('')
       setNewAvatar('')
+      setJustAdded(true)
+      window.setTimeout(() => setJustAdded(false), 2500)
       await reload()
-    } catch {
+    } catch (err) {
       setAddError(true)
+      throw err
     } finally {
       setAdding(false)
     }
+  }
+  useImperativeHandle(ref, () => ({ commitDraft }))
+  const handleAdd = () => {
+    commitDraft().catch(() => {})
   }
 
   const handleDelete = (routeId: number) => {
@@ -730,8 +787,7 @@ function PageRoutes({
 
           <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
             <span className="w-full text-[10px] text-text-muted">
-              "Add rule" below saves this rule right away - it's separate from the "Save changes" button
-              at the bottom of the panel, which only saves the site's main settings.
+              Fill this in, then press "Add rule" or "Save changes" at the bottom - either one saves the rule.
             </span>
             <Field label="URL contains">
               <input
@@ -799,7 +855,18 @@ function PageRoutes({
               <Icon name="add" className="text-[15px]" />
               Add rule
             </button>
+            {draftStarted && !hasDraft && (
+              <span className="w-full text-[11px] font-semibold text-amber">
+                Enter a "URL contains" value to save this rule
+              </span>
+            )}
           </div>
+          {justAdded && (
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-green-500">
+              <Icon name="check" className="text-[13px]" />
+              Rule added
+            </span>
+          )}
           {addError && (
             <span className="flex items-center gap-1 text-[11px] font-semibold text-destructive">
               <Icon name="error" className="text-[13px]" />
@@ -837,39 +904,55 @@ function AvatarPicker({
 }) {
   return (
     <div className="flex flex-wrap gap-2">
-      {catalog.map((opt) => (
-        <button
-          key={opt.key}
-          type="button"
-          onClick={() => onChange(opt.key)}
-          title={opt.label}
-          aria-label={opt.label}
-          aria-pressed={value === opt.key}
-          className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 transition-colors ${
-            value === opt.key ? 'border-primary' : 'border-transparent hover:border-border'
-          }`}
-        >
-          {backendUrl ? (
-            // An avatar with a video is shown moving, because that is what
-            // the call button will do - a still swatch for Artha sold the
-            // one thing that distinguishes her as a stock photo.
-            opt.hasVideo ? (
-              <video
-                src={`${backendUrl}/widget-avatars/${opt.key}.mp4`}
-                className="h-full w-full object-cover"
-                autoPlay
-                loop
-                muted
-                playsInline
-              />
-            ) : (
-              <img src={`${backendUrl}/widget-avatars/${opt.key}.png`} alt={opt.label} className="h-full w-full object-cover" />
-            )
-          ) : (
-            <span className="h-full w-full bg-surface-high" />
-          )}
-        </button>
-      ))}
+      {catalog.map((opt) => {
+        const selected = value === opt.key
+        return (
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => onChange(opt.key)}
+            title={selected ? `${opt.label} (selected)` : opt.label}
+            aria-label={opt.label}
+            aria-pressed={selected}
+            // The avatar artwork itself has a purple ring painted in, so a
+            // border on the swatch was invisible against it - nobody could
+            // tell which one was picked. Selection is shown by a ring held
+            // off the image, a check badge, and the others dimmed instead.
+            className={`relative h-9 w-9 rounded-full transition ${
+              selected
+                ? 'ring-2 ring-primary ring-offset-2 ring-offset-surface'
+                : 'opacity-50 hover:opacity-100'
+            }`}
+          >
+            <span className="block h-full w-full overflow-hidden rounded-full">
+              {backendUrl ? (
+                // An avatar with a video is shown moving, because that is what
+                // the call button will do - a still swatch for Artha sold the
+                // one thing that distinguishes her as a stock photo.
+                opt.hasVideo ? (
+                  <video
+                    src={`${backendUrl}/widget-avatars/${opt.key}.mp4`}
+                    className="h-full w-full object-cover"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <img src={`${backendUrl}/widget-avatars/${opt.key}.png`} alt={opt.label} className="h-full w-full object-cover" />
+                )
+              ) : (
+                <span className="block h-full w-full bg-surface-high" />
+              )}
+            </span>
+            {selected && (
+              <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-bg ring-2 ring-surface">
+                <Icon name="check" className="text-[11px]" />
+              </span>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }
