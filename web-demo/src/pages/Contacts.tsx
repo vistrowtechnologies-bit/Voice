@@ -671,7 +671,7 @@ export function Contacts() {
                   <Icon name="close" />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto pr-1">
+              <div className="-mx-2 flex-1 overflow-y-auto px-2 py-1">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {(
                     [
