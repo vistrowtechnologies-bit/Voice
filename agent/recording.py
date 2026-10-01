@@ -31,7 +31,7 @@ _AMBIENCE_TRACK_NAME = "background_audio"
 
 
 def _write_stereo_wav(caller_pcm: bytes, agent_pcm: bytes) -> str | None:
-    """Build the two-channel WAV off the asyncio event loop."""
+    """Build the mono WAV off the asyncio event loop."""
     try:
         caller_pcm = caller_pcm[: len(caller_pcm) - (len(caller_pcm) % 2)]
         agent_pcm = agent_pcm[: len(agent_pcm) - (len(agent_pcm) % 2)]
@@ -40,18 +40,18 @@ def _write_stereo_wav(caller_pcm: bytes, agent_pcm: bytes) -> str | None:
         length = max(len(caller_pcm), len(agent_pcm))
         caller_pcm = caller_pcm + b"\x00" * (length - len(caller_pcm))
         agent_pcm = agent_pcm + b"\x00" * (length - len(agent_pcm))
-        # STEREO: caller LEFT, agent RIGHT. The ambience bed rides on the
-        # agent's own track, keeping the caller channel independently usable.
-        stereo = audioop.tostereo(caller_pcm, 2, 1, 0)
-        stereo = audioop.add(stereo, audioop.tostereo(agent_pcm, 2, 0, 1), 2)
+        # MONO, both sides centred. A hard caller-left / agent-right split
+        # (ed11c60) sounded like one party per ear on headphones and laptop
+        # speakers, which is how people actually play these back.
+        mixed = audioop.add(caller_pcm, agent_pcm, 2)
 
         fd, path = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
         with wave.open(path, "wb") as wav_file:
-            wav_file.setnchannels(2)
+            wav_file.setnchannels(1)
             wav_file.setsampwidth(2)
             wav_file.setframerate(_SAMPLE_RATE)
-            wav_file.writeframes(stereo)
+            wav_file.writeframes(mixed)
         return path
     except Exception:
         logger.exception("failed to build recording WAV")

@@ -1,4 +1,10 @@
-"""Caller and agent must land on separate channels.
+"""The recording is one centred mono track with both sides mixed.
+
+History: it was mono, then split caller-left/agent-right (ed11c60) so the
+caller alone could be extracted; playback in one ear each was worse for the
+people actually listening, so it is mono again.
+
+The reason for the split, kept for context:
 
 They were summed into one mono track. On widget call 954 that made the
 recording impossible to reason about: the agent, the caller and the ambience
@@ -42,7 +48,7 @@ def _write(caller, agent):
     return asyncio.run(r.stop())
 
 
-class ChannelsAreSeparate(unittest.TestCase):
+class RecordingIsCentredMono(unittest.TestCase):
     def setUp(self):
         self.path = _write(_tone(300, 1.0), _tone(900, 1.0))
 
@@ -50,24 +56,18 @@ class ChannelsAreSeparate(unittest.TestCase):
         if self.path and os.path.exists(self.path):
             os.unlink(self.path)
 
-    def test_the_file_is_stereo(self):
+    def test_the_file_is_mono(self):
+        """Stereo put the agent in one ear and the caller in the other."""
         with wave.open(self.path) as w:
-            self.assertEqual(w.getnchannels(), 2)
+            self.assertEqual(w.getnchannels(), 1)
             self.assertEqual(w.getsampwidth(), 2)
 
-    def test_caller_is_left_and_agent_is_right(self):
+    def test_both_sides_are_audible(self):
         with wave.open(self.path) as w:
             data = w.readframes(w.getnframes())
-        self.assertAlmostEqual(_approx_freq(audioop.tomono(data, 2, 1, 0)), 300, delta=20)
-        self.assertAlmostEqual(_approx_freq(audioop.tomono(data, 2, 0, 1)), 900, delta=20)
-
-    def test_neither_channel_leaks_into_the_other(self):
-        """A mono sum would put both tones in both channels."""
-        with wave.open(self.path) as w:
-            data = w.readframes(w.getnframes())
-        for chan, expected in ((audioop.tomono(data, 2, 1, 0), 300),
-                               (audioop.tomono(data, 2, 0, 1), 900)):
-            self.assertAlmostEqual(_approx_freq(chan), expected, delta=20)
+        peak = audioop.max(data, 2)
+        self.assertGreater(peak, 8000)
+        self.assertLess(peak, 32767)
 
     def test_lengths_are_padded_not_truncated(self):
         """A caller who talks longer than the agent must not be cut off."""
