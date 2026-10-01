@@ -661,17 +661,27 @@ function init(): void {
     if (typeof document.elementsFromPoint !== 'function') return 0
     const probeY = Math.max(0, window.innerHeight - 4)
     const xs = [0.08, 0.5, 0.92].map((f) => Math.round(window.innerWidth * f))
+    // A bottom bar is short. Without this cap a full-screen fixed layer (a
+    // modal/lightbox overlay, a cookie wall, a fixed page wrapper) is
+    // measured as a viewport-tall "bar" and pushes the launcher off the top
+    // of the screen - shipped once: shaporjipallonji.com's Elementor popup
+    // (fixed, 0-900px) set --av-bottom-offset to 910px and the widget
+    // vanished for every visitor who saw that popup.
+    const maxBarPx = Math.min(260, window.innerHeight * 0.3)
     let tallest = 0
     for (const x of xs) {
       for (const el of document.elementsFromPoint(x, probeY)) {
         if (el === host || host.contains(el)) continue
         const cs = window.getComputedStyle(el)
         if (cs.position !== 'fixed' && cs.position !== 'sticky') continue
+        // Click-through layers (decorative full-bleed overlays) block
+        // nothing, so there is nothing for the launcher to clear.
+        if (cs.pointerEvents === 'none') continue
         const rect = el.getBoundingClientRect()
         // Only a bar actually pinned to the bottom edge counts - a fixed
         // header or a mid-page sticky element caught by the probe point
         // isn't something our launcher needs to clear.
-        if (rect.height <= 0 || rect.bottom < window.innerHeight - 20) continue
+        if (rect.height <= 0 || rect.height > maxBarPx || rect.bottom < window.innerHeight - 20) continue
         tallest = Math.max(tallest, window.innerHeight - rect.top)
       }
     }
@@ -698,6 +708,17 @@ function init(): void {
   window.setTimeout(applyBottomOffset, 1200)
   window.setTimeout(applyBottomOffset, 3500)
   window.addEventListener('resize', applyBottomOffset, { passive: true })
+  // A bar can also go away (a cookie banner accepted, a popup closed), and
+  // the launcher should drop back down instead of floating where it was.
+  // Clicks and scrolls are what dismiss or reveal those, so re-check shortly
+  // after either - debounced, since both can fire in bursts.
+  let recheckTimer = 0
+  const scheduleRecheck = (): void => {
+    window.clearTimeout(recheckTimer)
+    recheckTimer = window.setTimeout(applyBottomOffset, 400)
+  }
+  document.addEventListener('click', scheduleRecheck, { passive: true, capture: true })
+  window.addEventListener('scroll', scheduleRecheck, { passive: true })
   const shadow = host.attachShadow({ mode: 'open' })
   shadow.innerHTML = `<style>${CSS}</style>${widgetHtml(label)}`
   playAnyVideos(shadow)
