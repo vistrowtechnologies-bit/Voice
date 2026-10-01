@@ -151,6 +151,24 @@ export function Contacts() {
     setShowMoreActions(false)
   }
 
+  const closeAdd = () => {
+    setShowAdd(false)
+    setForm({ name: '', phone: '', email: '', company: '', tags: '' })
+    setAddCustomFields({})
+    setAddFieldsKey((k) => k + 1)
+    setAddDialCode(accountDialCode)
+    setFormError('')
+  }
+
+  useEffect(() => {
+    if (!showAdd) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeAdd() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // closeAdd only touches setters and the stable dial code
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAdd])
+
   const handleAdd = async () => {
     if (!form.name && !form.phone) return
     const phone = form.phone.trim() ? composeE164(addDialCode, form.phone) : ''
@@ -642,45 +660,75 @@ export function Contacts() {
         </Card>
 
         {showAdd && (
-          <Card variant="flat" padding="sm" className="grid grid-cols-1 gap-3 !border-primary/40 sm:grid-cols-2 lg:grid-cols-6">
-            {(
-              [
-                ['name', 'Name'],
-                ['email', 'Email'],
-                ['company', 'Company'],
-                ['tags', 'Tags (comma separated)'],
-              ] as const
-            ).map(([key, label]) => (
-              <input
-                key={key}
-                value={form[key]}
-                onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                placeholder={label}
-                className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
-              />
-            ))}
-            <PhoneNumberField
-              label=""
-              dialCode={addDialCode}
-              number={form.phone}
-              onDialCodeChange={setAddDialCode}
-              onNumberChange={(phone) => { setForm({ ...form, phone }); setFormError('') }}
-              error={formError}
-            />
-            <button onClick={handleAdd} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90">
-              Save contact
-            </button>
-            <div className="flex flex-col gap-2 border-t border-border pt-3 sm:col-span-2 lg:col-span-6">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-text-muted">Lead details (optional)</p>
-                <p className="text-[11px] text-text-muted">
-                  Lead source, budget, what they asked for and so on. An agent can use each one on the call as{' '}
-                  <code className="rounded bg-surface-high px-1 py-0.5">{'{{custom.field_name}}'}</code>.
-                </p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Add contact">
+            <Card padding="sm" className="flex max-h-[92vh] w-full max-w-2xl flex-col bg-surface shadow-2xl">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold">Add contact</h2>
+                  <p className="text-xs text-text-muted">Add one person you want an agent to call. Name or phone is enough to start.</p>
+                </div>
+                <button onClick={closeAdd} aria-label="Close add contact" className="rounded p-2 text-text-muted hover:bg-surface-high hover:text-text">
+                  <Icon name="close" />
+                </button>
               </div>
-              <CustomFieldsEditor key={addFieldsKey} initial={{}} onChange={setAddCustomFields} />
-            </div>
-          </Card>
+              <div className="flex-1 overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {(
+                    [
+                      ['name', 'Name', 'text', 'Full name'],
+                      ['company', 'Company', 'text', 'Business name'],
+                      ['email', 'Email', 'email', 'name@example.com'],
+                    ] as const
+                  ).map(([key, label, type, placeholder]) => (
+                    <label key={key} className="flex flex-col gap-1 text-xs font-semibold text-text-muted">
+                      {label}
+                      <input
+                        autoFocus={key === 'name'}
+                        type={type}
+                        value={form[key]}
+                        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                        placeholder={placeholder}
+                        className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm font-normal text-text outline-none focus:border-primary"
+                      />
+                    </label>
+                  ))}
+                  <PhoneNumberField
+                    dialCode={addDialCode}
+                    number={form.phone}
+                    onDialCodeChange={setAddDialCode}
+                    onNumberChange={(phone) => { setForm({ ...form, phone }); setFormError('') }}
+                    error={formError}
+                  />
+                  <label className="flex flex-col gap-1 text-xs font-semibold text-text-muted sm:col-span-2">
+                    Tags
+                    <input
+                      value={form.tags}
+                      onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                      placeholder="meta-lead, vistrow-outbound-ready"
+                      className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm font-normal text-text outline-none focus:border-primary"
+                    />
+                    <span className="text-[11px] font-normal">Comma-separated. Routing tags are used when a campaign queue is created.</span>
+                  </label>
+                </div>
+                <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-text-muted">Lead details (optional)</p>
+                    <p className="text-[11px] text-text-muted">
+                      Lead source, budget, what they asked for and so on. An agent can use each one on the call as{' '}
+                      <code className="rounded bg-surface-high px-1 py-0.5">{'{{custom.field_name}}'}</code>.
+                    </p>
+                  </div>
+                  <CustomFieldsEditor key={addFieldsKey} initial={{}} onChange={setAddCustomFields} />
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
+                <button onClick={closeAdd} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">Cancel</button>
+                <button onClick={handleAdd} disabled={!form.name.trim() && !form.phone.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50">
+                  Save contact
+                </button>
+              </div>
+            </Card>
+          </div>
         )}
 
         {importPreview && (
