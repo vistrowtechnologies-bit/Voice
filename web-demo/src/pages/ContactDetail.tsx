@@ -18,6 +18,7 @@ import {
 } from '../lib/api'
 import type { ContactDetail as ContactDetailType, PhoneNumber } from '../lib/types'
 import { composeE164, isE164, splitE164, useAccountDialCode } from '../lib/phone'
+import { CustomFieldsEditor } from '../components/CustomFieldsEditor'
 
 const TABS = ['Activity', 'Calls', 'Campaigns', 'Notes'] as const
 type Tab = (typeof TABS)[number]
@@ -56,6 +57,8 @@ export function ContactDetail() {
   const accountDialCode = useAccountDialCode()
   const [editDialCode, setEditDialCode] = useState(accountDialCode)
   const [formError, setFormError] = useState('')
+  const [editCustomFields, setEditCustomFields] = useState<Record<string, string>>({})
+  const [editFieldsKey, setEditFieldsKey] = useState(0)
   const [editForm, setEditForm] = useState({
     firstName: '',
     lastName: '',
@@ -126,6 +129,8 @@ export function ContactDetail() {
       tags: contact.tags.join(', '),
     })
     setEditDialCode(phone.dialCode)
+    setEditCustomFields(contact.customFields || {})
+    setEditFieldsKey((k) => k + 1)
     setFormError('')
     setShowEdit(true)
   }
@@ -147,6 +152,7 @@ export function ContactDetail() {
         company: editForm.company.trim(),
         status: editForm.status,
         tags: editForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+        customFields: editCustomFields,
       })
       setContact(updated)
       setShowEdit(false)
@@ -301,6 +307,13 @@ export function ContactDetail() {
                   <EditField label="Tags" value={editForm.tags} onChange={(value) => setEditForm({ ...editForm, tags: value })} placeholder="meta-lead, vistrow-outbound-ready" />
                   <p className="mt-1 text-[11px] text-text-muted">Comma-separated. Routing tags are used when a campaign queue is created.</p>
                 </div>
+                <div className="flex flex-col gap-2 border-t border-border pt-3 sm:col-span-2">
+                  <div>
+                    <p className="text-xs font-semibold text-text-muted">Lead details</p>
+                    <p className="text-[11px] text-text-muted">Lead source, budget, what they asked for and so on. An agent reads each one as {'{{custom.field_name}}'}.</p>
+                  </div>
+                  <CustomFieldsEditor key={editFieldsKey} initial={editCustomFields} onChange={setEditCustomFields} />
+                </div>
               </div>
               <div className="mt-5 flex justify-end gap-2">
                 <button onClick={() => setShowEdit(false)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">Cancel</button>
@@ -362,14 +375,24 @@ export function ContactDetail() {
               <SnapshotBox label="Created" value={formatDateTime(contact.createdAt)} />
               <SnapshotBox label="Updated" value={formatDateTime(contact.updatedAt)} />
               <SnapshotBox label="Last called" value={contact.lastCalledAt ? formatDateTime(contact.lastCalledAt) : 'Never'} />
-              <SnapshotBox
-                label="Custom variables"
-                value={
-                  Object.keys(contact.customFields).length === 0
-                    ? '-'
-                    : Object.entries(contact.customFields).map(([k, v]) => `${k}: ${v}`).join(', ')
-                }
-              />
+            </div>
+            <div className="rounded-lg bg-surface-high p-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-text-muted">Lead details</p>
+                <button onClick={openEdit} className="text-[11px] font-semibold text-primary hover:underline">Edit</button>
+              </div>
+              {Object.keys(contact.customFields).length === 0 ? (
+                <p className="text-sm text-text-muted">None yet. Add lead source, budget and more with Edit.</p>
+              ) : (
+                <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-sm">
+                  {Object.entries(contact.customFields).map(([k, v]) => (
+                    <div key={k} className="contents">
+                      <dt className="text-text-muted">{k.replace(/_/g, ' ')}</dt>
+                      <dd className="break-words font-medium">{String(v)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
             </div>
             <div className="flex flex-wrap gap-1">
               {contact.tags.length === 0 ? (

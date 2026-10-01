@@ -22,6 +22,7 @@ import {
 } from '../lib/api'
 import type { Contact, CsvPreview, PhoneNumber } from '../lib/types'
 import { composeE164, isE164, useAccountDialCode } from '../lib/phone'
+import { CustomFieldsEditor } from '../components/CustomFieldsEditor'
 
 const MAPPING_TARGETS = [
   { value: '', label: 'Skip this column' },
@@ -59,7 +60,10 @@ export function Contacts() {
   const [reviewOnly, setReviewOnly] = useState(false)
   const [tableLayoutVersion, setTableLayoutVersion] = useState(0)
   const [showAdd, setShowAdd] = useState(false)
-  const [form, setForm] = useState({ name: '', phone: '', email: '', tags: '' })
+  const [form, setForm] = useState({ name: '', phone: '', email: '', company: '', tags: '' })
+  const [addCustomFields, setAddCustomFields] = useState<Record<string, string>>({})
+  // Remount the editor after a save so its rows reset.
+  const [addFieldsKey, setAddFieldsKey] = useState(0)
   const accountDialCode = useAccountDialCode()
   const [addDialCode, setAddDialCode] = useState(accountDialCode)
   const [formError, setFormError] = useState('')
@@ -156,8 +160,10 @@ export function Contacts() {
     }
     setFormError('')
     try {
-      await createContact({ ...form, phone, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean) })
-      setForm({ name: '', phone: '', email: '', tags: '' })
+      await createContact({ ...form, phone, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean), customFields: addCustomFields })
+      setForm({ name: '', phone: '', email: '', company: '', tags: '' })
+      setAddCustomFields({})
+      setAddFieldsKey((k) => k + 1)
       setAddDialCode(accountDialCode)
       setShowAdd(false)
       reload()
@@ -636,11 +642,12 @@ export function Contacts() {
         </Card>
 
         {showAdd && (
-          <Card variant="flat" padding="sm" className="grid grid-cols-1 gap-3 !border-primary/40 sm:grid-cols-2 lg:grid-cols-5">
+          <Card variant="flat" padding="sm" className="grid grid-cols-1 gap-3 !border-primary/40 sm:grid-cols-2 lg:grid-cols-6">
             {(
               [
                 ['name', 'Name'],
                 ['email', 'Email'],
+                ['company', 'Company'],
                 ['tags', 'Tags (comma separated)'],
               ] as const
             ).map(([key, label]) => (
@@ -663,6 +670,16 @@ export function Contacts() {
             <button onClick={handleAdd} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90">
               Save contact
             </button>
+            <div className="flex flex-col gap-2 border-t border-border pt-3 sm:col-span-2 lg:col-span-6">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-text-muted">Lead details (optional)</p>
+                <p className="text-[11px] text-text-muted">
+                  Lead source, budget, what they asked for and so on. An agent can use each one on the call as{' '}
+                  <code className="rounded bg-surface-high px-1 py-0.5">{'{{custom.field_name}}'}</code>.
+                </p>
+              </div>
+              <CustomFieldsEditor key={addFieldsKey} initial={{}} onChange={setAddCustomFields} />
+            </div>
           </Card>
         )}
 
