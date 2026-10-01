@@ -42,7 +42,13 @@ def _post_json(url: str, payload: dict, timeout: int = 8) -> tuple[bool, str]:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return (200 <= resp.status < 300), f"HTTP {resp.status}"
     except urllib.error.HTTPError as e:
-        return False, f"HTTP {e.code}"
+        # Keep the receiver's own error text: "HTTP 500" alone told us nothing
+        # about why ArthaLeads rejected call 1090.
+        try:
+            body = e.read(300).decode("utf-8", "replace").strip()
+        except Exception:
+            body = ""
+        return False, f"HTTP {e.code}: {body}" if body else f"HTTP {e.code}"
     except (urllib.error.URLError, TimeoutError, ValueError) as e:
         return False, str(e)
 
