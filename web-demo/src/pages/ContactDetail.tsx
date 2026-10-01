@@ -57,6 +57,12 @@ export function ContactDetail() {
   const accountDialCode = useAccountDialCode()
   const [editDialCode, setEditDialCode] = useState(accountDialCode)
   const [formError, setFormError] = useState('')
+  // Inline editing of the Lead details box (the Edit dialog can still change them too).
+  const [leadEditing, setLeadEditing] = useState(false)
+  const [leadDraft, setLeadDraft] = useState<Record<string, string>>({})
+  const [leadKey, setLeadKey] = useState(0)
+  const [leadSaving, setLeadSaving] = useState(false)
+  const [leadError, setLeadError] = useState('')
   const [editCustomFields, setEditCustomFields] = useState<Record<string, string>>({})
   const [editFieldsKey, setEditFieldsKey] = useState(0)
   const [editForm, setEditForm] = useState({
@@ -113,6 +119,29 @@ export function ContactDetail() {
       reload()
     } finally {
       setSavingNote(false)
+    }
+  }
+
+  const startLeadEdit = () => {
+    if (!contact) return
+    setLeadDraft(contact.customFields || {})
+    setLeadKey((k) => k + 1)
+    setLeadError('')
+    setLeadEditing(true)
+  }
+
+  const saveLeadDetails = async () => {
+    if (!contact) return
+    setLeadSaving(true)
+    setLeadError('')
+    try {
+      const updated = await updateContact(contact.id, { customFields: leadDraft })
+      setContact(updated)
+      setLeadEditing(false)
+    } catch (error) {
+      setLeadError(error instanceof Error ? error.message : 'Could not save lead details.')
+    } finally {
+      setLeadSaving(false)
     }
   }
 
@@ -379,9 +408,22 @@ export function ContactDetail() {
             <div className="rounded-lg bg-surface-high p-2">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-text-muted">Lead details</p>
-                <button onClick={openEdit} className="text-[11px] font-semibold text-primary hover:underline">Edit</button>
+                {!leadEditing && (
+                  <button onClick={startLeadEdit} className="text-[11px] font-semibold text-primary hover:underline">Edit</button>
+                )}
               </div>
-              {Object.keys(contact.customFields).length === 0 ? (
+              {leadEditing ? (
+                <div className="mt-2 flex flex-col gap-3">
+                  <CustomFieldsEditor key={leadKey} initial={leadDraft} onChange={setLeadDraft} />
+                  {leadError && <p className="text-xs text-destructive">{leadError}</p>}
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setLeadEditing(false)} disabled={leadSaving} className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-text">Cancel</button>
+                    <button onClick={saveLeadDetails} disabled={leadSaving} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-bg hover:opacity-90 disabled:opacity-50">
+                      {leadSaving ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              ) : Object.keys(contact.customFields).length === 0 ? (
                 <p className="text-sm text-text-muted">None yet. Add lead source, budget and more with Edit.</p>
               ) : (
                 <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-sm">
