@@ -92,6 +92,9 @@ export function CommandPalette() {
   const listRef = useRef<HTMLUListElement>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
   const pending = useRef<{ key: string; at: number } | null>(null)
+  const heldTimer = useRef<number | undefined>(undefined)
+  const queryRef = useRef('')
+  queryRef.current = query
 
   const close = useCallback(() => setOpen(false), [])
   const goTo = useCallback((to: string) => navigate(to), [navigate])
@@ -183,7 +186,41 @@ export function CommandPalette() {
         if (open) close(); else show('search')
         return
       }
-      if (open || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
+      // Menu open with an empty search box: G or C waits for a second key, so
+      // the chord chips shown in the list work here too. Anything that is not
+      // a chord is typed into the box as usual, nothing is lost.
+      if (open) {
+        if (mode !== 'search' || queryRef.current !== '' || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
+        const held = pending.current
+        const printable = e.key.length === 1
+        if (held && Date.now() - held.at <= CHORD_WINDOW_MS) {
+          pending.current = null
+          window.clearTimeout(heldTimer.current)
+          const hit = printable ? chordTarget(held.key, k) : null
+          if (hit) {
+            e.preventDefault()
+            e.stopPropagation()
+            close()
+            navigate(hit.to)
+          } else if (printable) {
+            e.preventDefault()
+            setQuery(held.key + e.key)
+          } else {
+            setQuery(held.key)
+          }
+          return
+        }
+        if (printable && (k === 'g' || k === 'c')) {
+          e.preventDefault()
+          pending.current = { key: k, at: Date.now() }
+          window.clearTimeout(heldTimer.current)
+          heldTimer.current = window.setTimeout(() => {
+            if (pending.current?.key === k) { pending.current = null; setQuery(k) }
+          }, CHORD_WINDOW_MS)
+        }
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
       if (isTypingTarget(e.target) || document.querySelector('[aria-modal="true"]')) { pending.current = null; return }
 
       if (e.key === '?') {
@@ -206,7 +243,7 @@ export function CommandPalette() {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [open, close, show, navigate])
+  }, [open, mode, close, show, navigate])
 
   useEffect(() => {
     const onOpen = () => show('search')
