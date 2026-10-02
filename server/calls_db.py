@@ -4149,6 +4149,14 @@ def _safe_json_loads(raw: str | None) -> dict:
         return {}
 
 
+def _clean_tags(raw) -> str:
+    """Comma-joined tags with surrounding spaces trimmed and duplicates dropped.
+    An import cell like "meta-lead, doctors" used to be stored with a leading
+    space on the second tag, so a campaign filtering on "doctors" never matched."""
+    items = raw if isinstance(raw, list) else str(raw or "").split(",")
+    return ",".join(dict.fromkeys(str(t).strip() for t in items if str(t).strip()))
+
+
 def create_contact(data: dict, account_id: int) -> None:
     raw_phone = data.get("phone") or None
     phone = canonical_contact_phone(raw_phone, account_id) if raw_phone else None
@@ -4176,7 +4184,7 @@ def create_contact(data: dict, account_id: int) -> None:
                     data.get("company", ""),
                     json.dumps(data.get("customFields") or {}),
                     data.get("status", "new"),
-                    ",".join(data.get("tags", [])) if isinstance(data.get("tags"), list) else data.get("tags", ""),
+                    _clean_tags(data.get("tags")),
                     data.get("source", "manual"),
                 ),
             )
