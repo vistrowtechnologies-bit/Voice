@@ -118,12 +118,22 @@ export function TimeGrid({
                           left: `calc(${(p.col / p.cols) * 100}% + 2px)`,
                           width: `calc(${100 / p.cols}% - 4px)`,
                         }}
-                        className={`absolute z-[1] flex flex-col overflow-hidden rounded-lg border px-2 py-1 text-left ${meta.block} ${selectedId === p.appt.id ? 'ring-2 ring-primary' : ''} hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
+                        className={`absolute z-[1] flex flex-col justify-center overflow-hidden rounded-lg border px-2 py-1 text-left ${meta.block} ${selectedId === p.appt.id ? 'ring-2 ring-primary' : ''} hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
                       >
-                        <span className="truncate text-xs font-bold">{p.appt.name || p.appt.phone || 'Appointment'}</span>
-                        <span className="truncate text-[11px] font-medium opacity-80">
-                          {formatTime12h(p.appt.time)} – {formatTime12h(hhmm(minutesOf(p.appt.time) + (p.appt.durationMinutes || 30)))}
-                        </span>
+                        {tall ? (
+                          <>
+                            <span className="truncate text-xs font-bold">{p.appt.name || p.appt.phone || 'Appointment'}</span>
+                            <span className="truncate text-[11px] font-medium opacity-80">
+                              {formatTime12h(p.appt.time)} – {formatTime12h(hhmm(minutesOf(p.appt.time) + (p.appt.durationMinutes || 30)))}
+                            </span>
+                          </>
+                        ) : (
+                          /* A short block has room for one line only: name, then the start time. */
+                          <span className="flex min-w-0 items-center gap-1.5 text-xs">
+                            <span className="min-w-0 flex-1 truncate font-bold">{p.appt.name || p.appt.phone || 'Appointment'}</span>
+                            <span className="shrink-0 font-medium opacity-80">{formatTime12h(p.appt.time)}</span>
+                          </span>
+                        )}
                         {tall && p.appt.purpose && <span className="mt-0.5 line-clamp-2 text-[11px] opacity-80">{p.appt.purpose}</span>}
                       </button>
                     )

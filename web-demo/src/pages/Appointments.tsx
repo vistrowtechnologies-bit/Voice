@@ -80,7 +80,13 @@ export function Appointments() {
     () => (sourceFilter === 'all' ? appointments : appointments.filter((a) => a.source === sourceFilter)),
     [appointments, sourceFilter],
   )
-  const datesWithAppointments = useMemo(() => new Set(filtered.map((a) => a.date)), [filtered])
+  // Rescheduling keeps the old booking as "Rescheduled" and creates a new one. The calendar shows
+  // only the live one; the old ones stay in List view and under the Rescheduled filter.
+  const onCalendar = useMemo(
+    () => (statusFilter === 'rescheduled' ? filtered : filtered.filter((a) => a.status !== 'rescheduled')),
+    [filtered, statusFilter],
+  )
+  const datesWithAppointments = useMemo(() => new Set(onCalendar.map((a) => a.date)), [onCalendar])
   const kpis = useMemo(() => ({
     total: appointments.length,
     confirmed: appointments.filter((a) => a.status === 'confirmed').length,
@@ -120,7 +126,7 @@ export function Appointments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modal, dialogAppt, view, anchor, changeView, go, stepView])
 
-  const dayList = useMemo(() => groupByDate(filtered).get(toDateStr(anchor)) ?? [], [filtered, anchor])
+  const dayList = useMemo(() => groupByDate(onCalendar).get(toDateStr(anchor)) ?? [], [onCalendar, anchor])
 
   const columns: DataTableColumn<Appointment>[] = [
     { key: 'name', header: 'Contact', primary: true, render: (a) => (<div><p className="text-sm font-semibold">{a.name || a.phone}</p><p className="text-[11px] text-text-muted">{a.phone}</p></div>) },
@@ -178,14 +184,14 @@ export function Appointments() {
           )}
 
           {view === 'month' && (
-            <MonthView anchor={anchor} appointments={filtered} onOpenDay={openDay} onSelect={select} onNewOnDate={(d) => newOn(d)} />
+            <MonthView anchor={anchor} appointments={onCalendar} onOpenDay={openDay} onSelect={select} onNewOnDate={(d) => newOn(d)} />
           )}
           {view === 'week' && (
-            <TimeGrid days={weekDays(anchor)} appointments={filtered} selectedId={null} onSelect={select} onSlotClick={(d, t) => newOn(d, t)} />
+            <TimeGrid days={weekDays(anchor)} appointments={onCalendar} selectedId={null} onSelect={select} onSlotClick={(d, t) => newOn(d, t)} />
           )}
           {view === 'day' && (
             <div className="grid lg:grid-cols-[minmax(0,1fr)_21rem]">
-              <TimeGrid days={[anchor]} appointments={filtered} selectedId={selected?.id ?? null} onSelect={select} onSlotClick={(d, t) => newOn(d, t)} />
+              <TimeGrid days={[anchor]} appointments={onCalendar} selectedId={selected?.id ?? null} onSelect={select} onSlotClick={(d, t) => newOn(d, t)} />
               <aside className="flex flex-col gap-5 border-t border-border p-4 lg:border-l lg:border-t-0">
                 <MiniCalendar selected={anchor} datesWithAppointments={datesWithAppointments} onSelect={go} />
                 <div className="border-t border-border pt-4">
