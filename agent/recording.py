@@ -189,6 +189,20 @@ class CallRecorder:
 _UPLOAD_RETRY_DELAYS_S = (2.0, 4.0, None)
 
 
+def b2_configured() -> bool:
+    """True when every B2 setting needed to store a recording is present."""
+    return all(os.environ.get(k) for k in (
+        "B2_ENDPOINT_URL", "B2_KEY_ID", "B2_APPLICATION_KEY", "B2_BUCKET_NAME", "B2_REGION",
+    ))
+
+
+def outcome_status(key: str | None, configured: bool) -> str:
+    """The recording_status for a finished upload attempt."""
+    if key:
+        return "saved"
+    return "failed" if configured else "not_configured"
+
+
 def upload_recording(local_path: str, account_id: int | None, call_id: int | None) -> str | None:
     """Uploads a local WAV to Backblaze B2 (via its S3-compatible API) and
     returns its object key, or None if B2 isn't configured (a supported,

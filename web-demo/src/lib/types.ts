@@ -93,6 +93,9 @@ export interface CallRecord {
   // Never the raw storage key - just whether a recording exists. Fetch a
   // playback URL on demand via fetchCallRecordingUrl.
   hasRecording: boolean
+  // What became of the audio: only 'failed' needs attention (the audio was lost);
+  // 'discarded' = spoken consent declined, 'not_configured' = no storage set up.
+  recordingStatus?: '' | 'saved' | 'failed' | 'discarded' | 'not_configured'
   feedback: 'helpful' | 'not_helpful' | null
   feedbackComment: string | null
   connectLatencyMs: number | null

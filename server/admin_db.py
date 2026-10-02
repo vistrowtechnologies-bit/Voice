@@ -406,6 +406,21 @@ def _account_health(conn, acct: dict, billing: dict, users: list, agents: list, 
            ORDER BY started_at DESC LIMIT 500""",
         (account_id,),
     ).fetchall()
+    lost = conn.execute(
+        "SELECT COUNT(*) AS n FROM calls WHERE account_id = ? AND recording_status = 'failed' "
+        "AND started_at::timestamp >= now() - INTERVAL '7 days'",
+        (account_id,),
+    ).fetchone()
+    lost_n = int((lost["n"] if lost else 0) or 0)
+    if lost_n:
+        check(
+            "recordings", "critical" if lost_n >= 3 else "warn", "Call recordings lost",
+            f"{lost_n} call(s) in the last 7 days ended without a saved recording. The audio cannot be recovered; "
+            "check the agent worker logs for 'RECORDING FAILED'.",
+        )
+    else:
+        check("recordings", "ok", "Call recordings", "No lost recordings in the last 7 days.")
+
     failed_reasons: dict[str, int] = {}
     for r in rows:
         r = dict(r)

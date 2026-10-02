@@ -219,6 +219,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS tool_calls_json TEXT DEFAULT ''")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS page_path TEXT DEFAULT ''")
             conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS consent_json TEXT DEFAULT ''")
+            # Mirrors server/calls_db.py: what became of this call's recording.
+            conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS recording_status TEXT DEFAULT ''")
     finally:
         conn.close()
 
@@ -1617,6 +1619,31 @@ def finish_campaign_contact(
         conn.close()
 
 
+# Calls shorter than this are not flagged when no recording exists: a caller
+# who never really connected produces no audio worth keeping.
+RECORDING_FLAG_MIN_SECONDS = 15
+
+
+def set_call_recording_status(call_id: int | None, status: str) -> None:
+    """Records what became of this call's recording ('failed', 'discarded',
+    'not_configured'). 'failed' is only stamped on calls that lasted at least
+    RECORDING_FLAG_MIN_SECONDS. Best-effort, like set_call_recording."""
+    if call_id is None or not status:
+        return
+    conn = dbconn.connect()
+    try:
+        with conn:
+            if status == "failed":
+                conn.execute(
+                    "UPDATE calls SET recording_status = ? WHERE id = ? AND COALESCE(duration_seconds, 0) >= ?",
+                    (status, call_id, RECORDING_FLAG_MIN_SECONDS),
+                )
+            else:
+                conn.execute("UPDATE calls SET recording_status = ? WHERE id = ?", (status, call_id))
+    except Exception:
+        logger.exception("could not persist recording status")
+
+
 def set_call_recording(call_id: int | None, recording_key: str) -> None:
     """Attaches this call's R2 recording key after upload finishes — same
     save-now-update-later shape as set_call_arthaleads_status above, since
@@ -1628,7 +1655,7 @@ def set_call_recording(call_id: int | None, recording_key: str) -> None:
     try:
         with conn:
             conn.execute(
-                "UPDATE calls SET recording_key = ? WHERE id = ?",
+                "UPDATE calls SET recording_key = ?, recording_status = 'saved' WHERE id = ?",
                 (recording_key, call_id),
             )
     except Exception:

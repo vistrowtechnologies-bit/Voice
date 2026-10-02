@@ -1128,6 +1128,12 @@ def init_tables() -> None:
                 # says they did, and when the server received it. '' when
                 # none was sent (phone calls; stale cached widget bundles).
                 ("consent_json", "TEXT DEFAULT ''"),
+                # What became of this call's recording, set by the agent when
+                # the call ends: 'saved', 'failed' (audio lost: the upload
+                # failed or nothing was captured), 'discarded' (spoken consent
+                # was declined, deliberately not kept), 'not_configured'
+                # (storage not set up). '' = unknown / calls before this column.
+                ("recording_status", "TEXT DEFAULT ''"),
                 # Conversation Testing Lab correlation. A unique run id ties
                 # the browser test to the durable call row; scenario fields
                 # make old results understandable even if the saved scenario
@@ -2716,6 +2722,9 @@ def _call_dict(
         # Never the raw R2 key — just whether one exists, so the frontend
         # knows to show a player and fetch a presigned URL on demand.
         "hasRecording": bool(_row_get(row, "recording_key")),
+        # '' | 'saved' | 'failed' | 'discarded' | 'not_configured' - see the
+        # recording_status migration. Only 'failed' is a problem to show.
+        "recordingStatus": _row_get(row, "recording_status") or "",
         "feedback": _row_get(row, "feedback"),
         "connectLatencyMs": _row_get(row, "connect_latency_ms"),
         "agentJoinLatencyMs": _row_get(row, "agent_join_latency_ms"),

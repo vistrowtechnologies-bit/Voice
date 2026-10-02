@@ -621,6 +621,27 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
             </Card>
           )}
 
+          {!call.hasRecording && !call.isTextChat && call.recordingStatus === 'failed' && (
+            <Card className="!border-destructive/40">
+              <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-destructive">
+                <Icon name="error" className="text-[16px]" /> Recording failed
+              </h2>
+              <p className="text-xs text-text-muted">
+                The audio for this call was not saved, and it cannot be recovered. The transcript is complete.
+                If this keeps happening, tell support so the agent worker logs can be checked.
+              </p>
+            </Card>
+          )}
+
+          {!call.hasRecording && !call.isTextChat && call.recordingStatus === 'discarded' && (
+            <Card>
+              <h2 className="mb-2 text-sm font-semibold text-text-muted">Recording</h2>
+              <p className="text-xs text-text-muted">
+                Not kept: the caller did not agree to be recorded.
+              </p>
+            </Card>
+          )}
+
           {!call.hasRecording && call.isTextChat && (
             <Card>
               <h2 className="mb-2 text-sm font-semibold text-text-muted">Recording</h2>

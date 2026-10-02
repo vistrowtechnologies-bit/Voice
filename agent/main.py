@@ -7773,9 +7773,14 @@ async def entrypoint(ctx: JobContext) -> None:
         # fact from the other side. The recording is the durable artifact, so
         # it is finalised first and the ambience player is torn down after.
         recorder = recorder_holder["recorder"]
+        # What became of the audio, stamped on the call so a loss is visible in
+        # the dashboard instead of being a log line nobody reads.
+        rec_status = ""
         if recorder is not None:
             try:
                 local_path = await recorder.stop()
+                if not local_path:
+                    rec_status = "failed"  # nothing was captured at all
                 spoken = userdata.get("spoken_consent") or {}
                 if local_path and _requires_spoken_consent(cfg) and not spoken.get("granted"):
                     # Consent is required and was not given — declined, or
@@ -7790,6 +7795,7 @@ async def entrypoint(ctx: JobContext) -> None:
                     except OSError:
                         pass
                     local_path = None
+                    rec_status = "discarded"
                 if local_path:
                     # boto3's upload is blocking network I/O — run it off the
                     # event loop so it doesn't stall every other concurrent
@@ -7799,8 +7805,14 @@ async def entrypoint(ctx: JobContext) -> None:
                     )
                     if key and saved_call_id is not None:
                         await asyncio.to_thread(db.set_call_recording, saved_call_id, key)
+                    rec_status = recording.outcome_status(key, recording.b2_configured())
             except Exception:
                 logger.exception("failed to finalize recording for room %s", ctx.room.name)
+                rec_status = "failed"
+            if rec_status and rec_status != "saved":
+                await asyncio.to_thread(db.set_call_recording_status, saved_call_id, rec_status)
+                if rec_status == "failed":
+                    logger.error("RECORDING FAILED for call %s (room %s)", saved_call_id, ctx.room.name)
 
         background_audio = background_audio_holder["player"]
         if background_audio is not None:

@@ -481,6 +481,13 @@ export function CallsHistory() {
               className={`text-[19px] ${recordingCallId === call.id && recordingState === 'loading' ? 'animate-spin' : ''}`}
             />
           </button>
+        ) : call.recordingStatus === 'failed' ? (
+          <span
+            className="inline-flex items-center gap-1 text-xs font-semibold text-destructive"
+            title="The audio for this call was not saved"
+          >
+            <Icon name="error" className="text-[15px]" /> Failed
+          </span>
         ) : call.isTextChat ? (
           <span className="text-xs text-text-muted" title="Typed chat, no audio to record">Text chat</span>
         ) : (
