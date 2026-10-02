@@ -76,6 +76,7 @@ export function Contacts() {
   const [importRows, setImportRows] = useState<string[][]>([])
   const [autoMapped, setAutoMapped] = useState<Set<string>>(new Set())
   const [importError, setImportError] = useState('')
+  const [importSheetNote, setImportSheetNote] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [importResult, setImportResult] = useState<{ imported: number; skippedMissingPhone: number; skippedInvalidPhone: number } | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
@@ -116,6 +117,12 @@ export function Contacts() {
     const buf = await file.arrayBuffer()
     const workbook = XLSX.read(buf, { type: 'array' })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    // Only the first sheet is imported; say so when there are others.
+    setImportSheetNote(
+      workbook.SheetNames.length > 1
+        ? `Only the first sheet, "${workbook.SheetNames[0]}", is imported. This file has ${workbook.SheetNames.length - 1} more; upload them separately.`
+        : '',
+    )
     return XLSX.utils.sheet_to_csv(sheet)
   }
 
@@ -200,6 +207,7 @@ export function Contacts() {
         setImportError('Choose a CSV or Excel file (.csv, .xlsx or .xls).')
         return
       }
+      if (!isSpreadsheet) setImportSheetNote('')
       const text = isSpreadsheet ? await spreadsheetToCsv(file) : await file.text()
       const preview = await previewContactsImport(text)
       if (!preview.headers.length) {
@@ -239,6 +247,7 @@ export function Contacts() {
     setMapping({})
     setCustomLabels({})
     setImportError('')
+    setImportSheetNote('')
     setImportResult(null)
     setShowImport(false)
     if (fileRef.current) fileRef.current.value = ''
@@ -947,6 +956,7 @@ export function Contacts() {
                         </tbody>
                       </table>
                     </div>
+                    {importSheetNote && <p className="text-sm text-amber">{importSheetNote}</p>}
                     {!phoneHeader && (
                       <p className="text-sm font-semibold text-destructive">Choose which column is the Phone number. It is required.</p>
                     )}

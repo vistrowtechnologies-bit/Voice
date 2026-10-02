@@ -43,6 +43,18 @@ const SYNONYMS: Record<string, string[]> = {
   campaign_name: ['campaign', 'campaign name', 'adset name', 'ad set name', 'form name', 'form'],
 }
 
+// Facebook lead forms use the question as the column name ("what_type_of_website_do_you_need?",
+// "approximate_budget?"). Matched by keywords after the exact names above, so a precise name
+// always wins over a keyword guess.
+const KEYWORD_RULES: [RegExp, string][] = [
+  [/\bbudget\b/, 'budget'],
+  [/\b(already|currently)?\s*have\b.*\bwebsite\b|\bexisting website\b/, 'has_website'],
+  [/\bwebsite\b.*\b(need|want|looking|require|type|kind)\b|\b(type|kind) of website\b/, 'website_requirement'],
+  [/\b(timeline|how soon|when do you|start)\b/, 'start_timeline'],
+  [/\b(type|kind) of business\b|\bbusiness (type|category)\b/, 'business_type'],
+  [/\bsource\b/, 'lead_source'],
+]
+
 export function normHeader(h: string): string {
   return h.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
@@ -51,6 +63,11 @@ export function normHeader(h: string): string {
 const LOOKUP: Record<string, [string, number]> = {}
 for (const [target, names] of Object.entries(SYNONYMS)) {
   names.forEach((n, rank) => { LOOKUP[normHeader(n)] = [target, rank] })
+}
+
+function keywordTarget(h: string): string | undefined {
+  const n = normHeader(h)
+  return KEYWORD_RULES.find(([re]) => re.test(n))?.[1]
 }
 
 const looksLikePhone = (v: string) => /^\+?[\d\s\-().]{10,16}$/.test(v.trim()) && v.replace(/\D/g, '').length >= 10
@@ -72,7 +89,7 @@ export function guessMapping(headers: string[], sampleRows: string[][]): Guessed
   // "campaign_name" must beat "ad_name" for Campaign wherever it sits in the file.
   const best: Record<string, { h: string; rank: number }> = {}
   headers.forEach((h) => {
-    const hit = LOOKUP[normHeader(h)]
+    const hit = LOOKUP[normHeader(h)] ?? (keywordTarget(h) ? ([keywordTarget(h)!, 100] as [string, number]) : undefined)
     if (!hit) return
     const [target, rank] = hit
     if (!best[target] || rank < best[target].rank) best[target] = { h, rank }
