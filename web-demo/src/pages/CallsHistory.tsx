@@ -481,6 +481,8 @@ export function CallsHistory() {
               className={`text-[19px] ${recordingCallId === call.id && recordingState === 'loading' ? 'animate-spin' : ''}`}
             />
           </button>
+        ) : call.isTextChat ? (
+          <span className="text-xs text-text-muted" title="Typed chat, no audio to record">Text chat</span>
         ) : (
           <span className="text-sm text-text-muted">-</span>
         ),

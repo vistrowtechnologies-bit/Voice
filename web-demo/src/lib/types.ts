@@ -63,6 +63,8 @@ export interface CallRecord {
   // A call the operator placed themselves from the dashboard's Test Call
   // buttons. Listed like any other call, but labelled, and never billed.
   isDashboardTest?: boolean
+  // Typed widget chat: no audio exists, so there is never a recording.
+  isTextChat?: boolean
   direction: 'inbound' | 'outbound' | null
   website: string
   agent: string

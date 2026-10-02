@@ -2697,6 +2697,10 @@ def _call_dict(
         "isDashboardTest": str(_row_get(row, "room_name") or "").startswith(
             ("test-agent-", "test-phone-")
         ),
+        # A typed widget chat: served by the web server with no LiveKit room, so
+        # there is no audio and never a recording. Derived from room_name like
+        # isDashboardTest above, so it is right for every call already on disk.
+        "isTextChat": str(_row_get(row, "room_name") or "").startswith("widget-chat-"),
         "direction": _row_get(row, "direction"),
         "siteId": site_id,
         "website": website,

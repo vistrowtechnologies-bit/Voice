@@ -590,6 +590,15 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
             </Card>
           )}
 
+          {!call.hasRecording && call.isTextChat && (
+            <Card>
+              <h2 className="mb-2 text-sm font-semibold text-text-muted">Recording</h2>
+              <p className="text-xs text-text-muted">
+                This was a typed chat, so there is no audio to record. The full conversation is in the transcript.
+              </p>
+            </Card>
+          )}
+
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-text-muted">Call details</h2>
 

@@ -18,6 +18,7 @@ import audioop
 import logging
 import os
 import tempfile
+import time
 import wave
 
 from livekit import rtc
@@ -184,6 +185,10 @@ class CallRecorder:
         return await asyncio.to_thread(_write_stereo_wav, caller_pcm, agent_pcm)
 
 
+# Seconds to wait after each failed upload attempt; None marks the last attempt.
+_UPLOAD_RETRY_DELAYS_S = (2.0, 4.0, None)
+
+
 def upload_recording(local_path: str, account_id: int | None, call_id: int | None) -> str | None:
     """Uploads a local WAV to Backblaze B2 (via its S3-compatible API) and
     returns its object key, or None if B2 isn't configured (a supported,
@@ -210,11 +215,26 @@ def upload_recording(local_path: str, account_id: int | None, call_id: int | Non
             region_name=region,
         )
         key = f"recordings/{account_id or 0}/{call_id}.wav"
-        client.upload_file(local_path, bucket, key, ExtraArgs={"ContentType": "audio/wav"})
-        logger.info("recording: uploaded to B2 key=%s", key)
-        return key
+        # A recording is the one artifact that cannot be recreated, and the
+        # upload is a single network call at the very end of a call. A brief
+        # storage or network hiccup must not cost the audio, so retry a few
+        # times (about 10 s in total, well inside the worker's shutdown budget).
+        for attempt, delay in enumerate(_UPLOAD_RETRY_DELAYS_S, start=1):
+            try:
+                client.upload_file(local_path, bucket, key, ExtraArgs={"ContentType": "audio/wav"})
+                logger.info("recording: uploaded to B2 key=%s (attempt %d)", key, attempt)
+                return key
+            except Exception:
+                if delay is None:
+                    raise
+                logger.warning(
+                    "recording: upload attempt %d for call %s failed, retrying in %.0fs",
+                    attempt, call_id, delay, exc_info=True,
+                )
+                time.sleep(delay)
+        return None
     except Exception:
-        logger.exception("recording upload to B2 failed for call %s", call_id)
+        logger.error("recording upload to B2 FAILED for call %s, the audio is lost", call_id, exc_info=True)
         return None
     finally:
         try:
