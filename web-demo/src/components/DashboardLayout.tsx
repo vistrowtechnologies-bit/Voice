@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { NAV_GROUPS } from './navGroups'
-import { CommandPalette } from './CommandPalette'
+import { CommandMenuButton, CommandPalette } from './CommandPalette'
 import { NotificationBell } from './NotificationBell'
 import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
@@ -47,6 +47,117 @@ export function ThemeSwitcher() {
   )
 }
 
+
+/** The avatar at the right of the header. Opens a menu with who you are,
+ * quick links, the dark-mode switch and Sign out. */
+function HeaderAvatarMenu() {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const theme = useTheme()
+  const workspace = user?.accountName || BRAND.defaultWorkspace
+  const name = user?.name || workspace
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const go = (to: string) => { setOpen(false); navigate(to) }
+  const avatar = (size: string, text: string) =>
+    user?.avatarUrl ? (
+      <img src={user.avatarUrl} alt="" className={`${size} shrink-0 rounded-full object-cover`} />
+    ) : (
+      <span className={`${size} flex shrink-0 items-center justify-center rounded-full bg-primary/20 font-bold text-primary ${text}`}>{initials(name)}</span>
+    )
+  const row = 'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-text transition-colors hover:bg-surface-high'
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Account menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-transparent p-0.5 sm:h-9 sm:w-9 ${open ? 'ring-2 ring-primary' : 'hover:ring-2 hover:ring-border'}`}
+      >
+        {avatar('h-full w-full', 'text-xs')}
+      </button>
+      {open && (
+        <div role="menu" aria-label="Account" className="fixed inset-x-3 top-16 z-50 overflow-hidden rounded-xl border border-border bg-surface shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72">
+          <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+            {avatar('h-11 w-11', 'text-sm')}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{name}</p>
+              <p className="truncate text-xs text-text-muted">{user?.email || workspace}</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-0.5 p-1.5">
+            <button role="menuitem" onClick={() => go('/dashboard/settings?tab=profile')} className={row}>
+              <Icon name="person" className="text-[19px] text-text-muted" />
+              <span className="flex-1">My profile</span>
+            </button>
+            <button role="menuitem" onClick={() => go('/dashboard/settings?tab=general')} className={row}>
+              <Icon name="business" className="text-[19px] text-text-muted" />
+              <span className="flex-1">Workspace settings</span>
+            </button>
+            <button role="menuitem" onClick={() => go('/dashboard/settings?tab=team')} className={row}>
+              <Icon name="group" className="text-[19px] text-text-muted" />
+              <span className="flex-1">Team &amp; access</span>
+            </button>
+          </div>
+          <div className="border-t border-border p-1.5">
+            <div className={`${row} cursor-default hover:bg-transparent`}>
+              <Icon name="dark_mode" className="text-[19px] text-text-muted" />
+              <span className="flex-1" id="vv-dark-label">Dark mode</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={theme === 'dark'}
+                aria-labelledby="vv-dark-label"
+                onClick={() => applyTheme(theme === 'dark' ? 'light' : 'dark')}
+                className={`relative h-5 w-9 shrink-0 rounded-full p-0 transition-colors ${theme === 'dark' ? 'bg-primary' : 'bg-border'}`}
+              >
+                <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${theme === 'dark' ? 'translate-x-4' : ''}`} />
+              </button>
+            </div>
+            <button role="menuitem" onClick={() => go('/dashboard/support')} className={row}>
+              <Icon name="support_agent" className="text-[19px] text-text-muted" />
+              <span className="flex-1">Help &amp; Support</span>
+            </button>
+            {user?.isPlatformOwner && !user?.impersonating && (
+              <button role="menuitem" onClick={() => go('/admin')} className={row}>
+                <Icon name="shield_person" className="text-[19px] text-text-muted" />
+                <span className="flex-1">Admin panel</span>
+              </button>
+            )}
+          </div>
+          <div className="border-t border-border p-2">
+            <button
+              role="menuitem"
+              onClick={async () => { setOpen(false); await logout(); navigate('/login', { replace: true }) }}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-semibold text-text shadow-sm transition-colors hover:bg-surface-high"
+            >
+              <Icon name="logout" className="text-[18px] text-text-muted" />
+              Sign out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth()
@@ -294,6 +405,7 @@ export function PageHeader({
         {subtitle && <p className="mt-0.5 text-xs leading-snug text-text-muted sm:truncate">{subtitle}</p>}
       </div>
       <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
+        <CommandMenuButton />
         {credits !== null && (
           <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted">
             <Icon name="toll" className="text-[15px] text-cyan" />
@@ -309,8 +421,15 @@ export function PageHeader({
             <Icon name="help" className="text-[17px]" /> Help
           </Link></Tooltip>
         )}
+        <Tooltip content="Settings"><Link
+          to="/dashboard/settings"
+          aria-label="Settings"
+          className="flex h-10 w-10 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-high hover:text-text sm:h-9 sm:w-9"
+        >
+          <Icon name="settings" className="text-[22px]" />
+        </Link></Tooltip>
         <NotificationBell />
-        <ThemeSwitcher />
+        <HeaderAvatarMenu />
         {children}
         {showNewAgent && (
           <Link

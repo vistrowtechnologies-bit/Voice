@@ -11,6 +11,21 @@ import { applyTheme, getStoredTheme } from './lib/theme.ts'
 // being restored, without changing the public-site visual system.
 applyTheme(getStoredTheme(), false)
 
+// Show icons only once their font is loaded; until then index.css keeps the
+// ligature names (e.g. "search") invisible instead of drawn as plain text.
+// The stylesheet in index.html is render-blocking, so the font face is known
+// by the time this runs. If it is not (stylesheet blocked), icons stay blank.
+function revealIconsWhenReady() {
+  const root = document.documentElement
+  if (!document.fonts) {
+    root.classList.add('vv-icons-ready')
+    return
+  }
+  const face = [...document.fonts].find((f) => f.family.replace(/["']/g, '') === 'Material Symbols Outlined')
+  face?.load().then(() => root.classList.add('vv-icons-ready')).catch(() => {})
+}
+revealIconsWhenReady()
+
 // Vercel Web Analytics gets the full page URL, and some of ours carry secrets:
 // ?token= on /reset-password and /confirm-email-change, ?email= on
 // /verify-email, and the invite token in /invite/:token. Keep only utm_*

@@ -9,7 +9,8 @@
     "generate:og": "tsx scripts/generate-og-images.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:seo": "node scripts/test-language-seo.mjs"
+    "test:seo": "node scripts/test-language-seo.mjs",
+    "test:menu": "tsx scripts/test-command-menu.mts"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.21",

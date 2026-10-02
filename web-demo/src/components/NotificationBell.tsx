@@ -101,11 +101,11 @@ export function NotificationBell() {
         onClick={() => setOpen((v) => !v)}
         aria-label={visible.length ? `Notifications (${visible.length} needing attention)` : 'Notifications'}
         aria-expanded={open}
-        className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-muted transition-colors hover:border-primary hover:text-text sm:h-9 sm:w-9"
+        className="relative flex h-10 w-10 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-high hover:text-text sm:h-9 sm:w-9"
       >
-        <Icon name="notifications" className="text-[18px]" />
+        <Icon name="notifications" className="text-[22px]" />
         {visible.length > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+          <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
             {visible.length}
           </span>
         )}

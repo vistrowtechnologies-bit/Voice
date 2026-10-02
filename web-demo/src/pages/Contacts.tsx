@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -51,6 +51,7 @@ function needsContactReview(contact: Contact) {
 
 export function Contacts() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [search, setSearch] = useState('')
   const [reviewOnly, setReviewOnly] = useState(false)
@@ -126,6 +127,17 @@ export function Contacts() {
     )
     return XLSX.utils.sheet_to_csv(sheet)
   }
+
+  // The command menu links here with ?add=1 or ?import=1. Open the matching
+  // dialog once, then drop the parameter so a refresh does not reopen it.
+  useEffect(() => {
+    const add = searchParams.get('add') === '1'
+    const imp = searchParams.get('import') === '1'
+    if (!add && !imp) return
+    if (add) setShowAdd(true)
+    if (imp) { setImportError(''); setShowImport(true) }
+    setSearchParams({}, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const reload = () => fetchContacts().then(setContacts).catch(() => setContacts([]))
 

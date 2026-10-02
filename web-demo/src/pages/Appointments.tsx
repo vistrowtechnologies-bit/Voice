@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { AppointmentDetails } from '../components/calendar/AppointmentDetails'
@@ -55,6 +56,8 @@ export function Appointments() {
   const [busy, setBusy] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [focusId, setFocusId] = useState<number | null>(null)
 
   const monthKey = `${anchor.getFullYear()}-${anchor.getMonth()}`
   const reload = useCallback(() => {
@@ -66,6 +69,27 @@ export function Appointments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthKey, statusFilter, search])
   useEffect(() => { void reload() }, [reload])
+
+  // The command menu links here with ?new=1 (open the booking form) or
+  // ?date=YYYY-MM-DD&id=N (jump to that day and open that booking).
+  useEffect(() => {
+    const wantsNew = searchParams.get('new') === '1'
+    const date = searchParams.get('date')
+    const id = Number(searchParams.get('id'))
+    if (!wantsNew && !date) return
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) setAnchor(parseDateStr(date))
+    if (id) setFocusId(id)
+    if (wantsNew) setModal({ mode: 'create', date: date ?? toDateStr(new Date()) })
+    setSearchParams({}, { replace: true })
+  }, [searchParams, setSearchParams])
+  useEffect(() => {
+    if (focusId === null) return
+    const hit = appointments.find((a) => a.id === focusId)
+    if (!hit) return
+    setFocusId(null)
+    if (hit.status === 'rescheduled') setStatusFilter('rescheduled')
+    if (view === 'day') setSelected(hit); else setDialogAppt(hit)
+  }, [focusId, appointments, view])
 
   const changeView = useCallback((v: PageView) => {
     setView(v)

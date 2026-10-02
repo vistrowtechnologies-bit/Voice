@@ -528,6 +528,18 @@ html.theme-transition * {
   white-space: nowrap;
   word-wrap: normal;
   display: inline-block;
+  /* An icon is a one-em square. Until the icon font arrives the span holds
+     its ligature NAME ("search", "left_panel_open"); a fixed box that clips
+     keeps that text from spilling over the layout. */
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+}
+
+/* ...and the name itself stays invisible until the font is ready (main.tsx
+   adds vv-icons-ready). A slow or blocked font shows blank icons, never words. */
+html:not(.vv-icons-ready) .material-symbols-outlined {
+  color: transparent !important;
 }
 
 ::-webkit-scrollbar {
