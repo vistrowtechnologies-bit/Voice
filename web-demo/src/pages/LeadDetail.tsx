@@ -103,6 +103,13 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
   const { user } = useAuth()
   const [call, setCall] = useState<CallRecord | null | undefined>(undefined)
   const [notes, setNotes] = useState('')
+  // Which header value was just copied, for a brief check-mark.
+  const [copied, setCopied] = useState<'id' | 'phone' | null>(null)
+  const copyText = (kind: 'id' | 'phone', text: string) => {
+    void navigator.clipboard?.writeText(text)
+    setCopied(kind)
+    window.setTimeout(() => setCopied(null), 1500)
+  }
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
   const [pushing, setPushing] = useState(false)
@@ -241,16 +248,40 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
             <Icon name="call" className="text-[20px]" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold">{call.name}</p>
-            <button
-              type="button"
-              onClick={() => navigator.clipboard?.writeText(call.id)}
-              title="Copy call ID"
-              className="flex items-center gap-1.5 font-mono text-[11px] text-text-muted hover:text-primary"
-            >
-              #{call.id} · {call.phone || 'no phone'}
-              <Icon name="content_copy" className="text-[12px]" />
-            </button>
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="truncate text-sm font-bold">{call.name}</p>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                  call.isTextChat ? 'bg-cyan/15 text-cyan' : 'bg-primary/10 text-primary'
+                }`}
+              >
+                {call.isTextChat ? 'Chatbot' : 'Voice AI'}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[11px] text-text-muted">
+              <button
+                type="button"
+                onClick={() => copyText('id', call.id)}
+                title="Copy call ID"
+                className="flex items-center gap-1 hover:text-primary"
+              >
+                #{call.id}
+                <Icon name={copied === 'id' ? 'check' : 'content_copy'} className="text-[12px]" />
+              </button>
+              {call.phone ? (
+                <button
+                  type="button"
+                  onClick={() => copyText('phone', call.phone)}
+                  title="Copy phone number"
+                  className="flex items-center gap-1 hover:text-primary"
+                >
+                  {call.phone}
+                  <Icon name={copied === 'phone' ? 'check' : 'content_copy'} className="text-[12px]" />
+                </button>
+              ) : (
+                <span>no phone</span>
+              )}
+            </div>
           </div>
           <span
             className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
@@ -620,6 +651,11 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
               />
               <MiniStat icon="flag" label="Lead stage" value={call.status} />
               <MiniStat icon="call_split" label="Channel" value={call.channel} />
+              <MiniStat
+                icon={call.isTextChat ? 'forum' : 'record_voice_over'}
+                label="Lead type"
+                value={call.isTextChat ? 'Chatbot (typed chat)' : 'Voice AI call'}
+              />
               <MiniStat icon="support_agent" label="Agent" value={call.agent} />
               {call.voiceTier && <MiniStat icon="graphic_eq" label="Voice tier" value={call.voiceTier} />}
               {call.modelTier && <MiniStat icon="memory" label="Model tier" value={call.modelTier.replace('_', ' ')} />}
