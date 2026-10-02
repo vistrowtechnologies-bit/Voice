@@ -217,7 +217,9 @@ a[class*="border-cyan"]:not([class*=" bg-"]):not([class^="bg-"]) * {
 
 /* A text field that sits inside a bordered composer box: the box shows focus
    (focus-within), so the field itself must not draw a second ring inside it. */
-[data-dashboard-root] .vv-bare-field:focus-visible {
+/* input.vv-bare-field, not just .vv-bare-field: the rule above lists a[href], whose
+   element+attribute weight makes it one point heavier than a bare class. */
+[data-dashboard-root] :is(input, textarea, select).vv-bare-field:focus-visible {
   outline: none;
   box-shadow: none;
 }
