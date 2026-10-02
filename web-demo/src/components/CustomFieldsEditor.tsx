@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Icon } from './Icon'
+import { Tooltip } from './ui/Tooltip'
 
 // Fields an agent prompt can read as {{custom.<key>}}. Keys match what Meta
 // lead imports already write, so a hand-added contact looks like an imported one.
@@ -68,7 +69,9 @@ export function CustomFieldsEditor({
         const preset = labelFor(row.key)
         const key = normaliseFieldKey(row.key)
         return (
-          <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] items-start gap-2">
+          // Phone: name and remove button on one line, the value on its own line below
+          // so neither is cut off. From sm up: name | value | remove in a single row.
+          <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto]">
             <div className="flex flex-col gap-0.5">
               <input
                 value={row.key}
@@ -78,26 +81,26 @@ export function CustomFieldsEditor({
                 className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
               />
               {key && (
-                <code className="px-1 text-[10px] text-text-muted" title="Use this in an agent prompt">
-                  {`{{custom.${key}}}`}
-                </code>
+                <Tooltip content="Use this in an agent prompt">
+                  <code className="break-all px-1 text-[10px] text-text-muted">{`{{custom.${key}}}`}</code>
+                </Tooltip>
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => commit(rows.filter((r) => r.id !== row.id))}
+              aria-label="Remove field"
+              className="rounded p-2 text-text-muted hover:bg-surface-high hover:text-text sm:order-3"
+            >
+              <Icon name="close" className="text-[18px]" />
+            </button>
             <input
               value={row.value}
               onChange={(e) => commit(rows.map((r) => (r.id === row.id ? { ...r, value: e.target.value } : r)))}
               placeholder={preset?.placeholder || 'value'}
               aria-label={`${preset?.label || row.key || 'Field'} value`}
-              className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
+              className="col-span-2 rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary sm:order-2 sm:col-span-1"
             />
-            <button
-              type="button"
-              onClick={() => commit(rows.filter((r) => r.id !== row.id))}
-              aria-label="Remove field"
-              className="rounded p-2 text-text-muted hover:bg-surface-high hover:text-text"
-            >
-              <Icon name="close" className="text-[18px]" />
-            </button>
           </div>
         )
       })}

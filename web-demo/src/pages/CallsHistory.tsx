@@ -16,6 +16,7 @@ import {
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { ActiveCallInfo, CallRecord, Sentiment } from '../lib/types'
+import { Tooltip } from '../components/ui/Tooltip'
 
 // Must match the exact channel labels calls_db.py's _CHANNEL_LABELS produces
 // ("Web" for dashboard browser calls/demo, "Website Widget" for embedded
@@ -269,15 +270,14 @@ export function CallsHistory() {
     {
       key: 'select',
       header: (
-        <input
+        <Tooltip content="Select all calls on this page"><input
           type="checkbox"
           checked={allVisibleSelected}
           onChange={toggleAllVisible}
           onClick={(event) => event.stopPropagation()}
           aria-label="Select all calls on this page"
-          title="Select all calls on this page"
           className="h-4 w-4 accent-primary"
-        />
+        /></Tooltip>
       ),
       headerLabel: 'selection',
       hideOnCard: true,
@@ -365,12 +365,11 @@ export function CallsHistory() {
         <div className="flex flex-col gap-1">
           <span className="text-sm text-text-muted">{call.channel}</span>
           {call.isDashboardTest && (
-            <span
+            <Tooltip content="You placed this call yourself from the dashboard's Test Call button. It is not billed."><span
               className="w-fit rounded border border-border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-muted"
-              title="You placed this call yourself from the dashboard's Test Call button. It is not billed."
             >
               Dashboard test
-            </span>
+            </span></Tooltip>
           )}
         </div>
       ),
@@ -404,10 +403,10 @@ export function CallsHistory() {
       resizable: true,
       sortValue: (call) => `${call.website}${call.pagePath}`,
       render: (call) => (
-        <div className="min-w-0 overflow-hidden" title={[call.website, call.pagePath].filter(Boolean).join('')}>
+        <Tooltip content={[call.website, call.pagePath].filter(Boolean).join('')}><div className="min-w-0 overflow-hidden">
           <span className="block truncate text-sm text-text-muted">{call.website || '-'}</span>
           {call.pagePath && <span className="block truncate font-mono text-[11px] text-primary">{call.pagePath}</span>}
-        </div>
+        </div></Tooltip>
       ),
     },
     {
@@ -449,17 +448,14 @@ export function CallsHistory() {
       resizable: true,
       render: (call) =>
         call.hasRecording ? (
-          <button
-            type="button"
-            onClick={() => void toggleRecording(call.id)}
-            aria-label={`${recordingCallId === call.id && recordingState === 'playing' ? 'Pause' : 'Play'} recording for ${call.name}`}
-            title={
-              recordingCallId === call.id && recordingState === 'error'
+          <Tooltip content={recordingCallId === call.id && recordingState === 'error'
                 ? 'Recording could not be loaded. Click to retry.'
                 : recordingCallId === call.id && recordingState === 'playing'
                   ? 'Pause recording'
-                  : 'Play recording'
-            }
+                  : 'Play recording'}><button
+            type="button"
+            onClick={() => void toggleRecording(call.id)}
+            aria-label={`${recordingCallId === call.id && recordingState === 'playing' ? 'Pause' : 'Play'} recording for ${call.name}`}
             className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
               recordingCallId === call.id && recordingState === 'error'
                 ? 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20'
@@ -480,16 +476,15 @@ export function CallsHistory() {
               }
               className={`text-[19px] ${recordingCallId === call.id && recordingState === 'loading' ? 'animate-spin' : ''}`}
             />
-          </button>
+          </button></Tooltip>
         ) : call.recordingStatus === 'failed' ? (
-          <span
+          <Tooltip content="The audio for this call was not saved"><span
             className="inline-flex items-center gap-1 text-xs font-semibold text-destructive"
-            title="The audio for this call was not saved"
           >
             <Icon name="error" className="text-[15px]" /> Failed
-          </span>
+          </span></Tooltip>
         ) : call.isTextChat ? (
-          <span className="text-xs text-text-muted" title="Typed chat, no audio to record">Text chat</span>
+          <Tooltip content="Typed chat, no audio to record"><span className="text-xs text-text-muted">Text chat</span></Tooltip>
         ) : (
           <span className="text-sm text-text-muted">-</span>
         ),
@@ -544,16 +539,15 @@ export function CallsHistory() {
         subtitle={`${calls.length} calls total`}
         refreshSignal={headerRefreshSignal}
       >
-        <button
+        <Tooltip content={refreshing ? 'Refreshing call history' : 'Refresh call history'}><button
           type="button"
           onClick={refreshCalls}
           disabled={refreshing}
           aria-label={refreshing ? 'Refreshing call history' : 'Refresh call history'}
-          title={refreshing ? 'Refreshing call history' : 'Refresh call history'}
           className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-text disabled:cursor-wait disabled:opacity-60"
         >
           <Icon name="refresh" className={`text-[18px] ${refreshing ? 'animate-spin' : ''}`} />
-        </button>
+        </button></Tooltip>
         <a
           href={callsExportUrl}
           download
@@ -692,15 +686,14 @@ export function CallsHistory() {
             <Icon name="swap_vert" className="text-[16px]" />
             {sortDesc ? 'Newest first' : 'Oldest first'}
           </button>
-          <button
+          <Tooltip content="Reset column widths"><button
             type="button"
             onClick={resetColumnLayout}
             aria-label="Reset call history column widths"
-            title="Reset column widths"
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted hover:border-primary hover:text-primary"
           >
             <Icon name="view_column" className="text-[18px]" />
-          </button>
+          </button></Tooltip>
         </div>
 
         {loading ? (

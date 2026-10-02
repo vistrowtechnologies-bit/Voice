@@ -826,3 +826,45 @@ html.theme-transition * {
 .demo-card-shell .demo-accent {
   filter: hue-rotate(var(--demo-accent-hue, 0deg));
 }
+
+
+/* ---- Tooltip (components/ui/Tooltip.tsx) -------------------------------
+   One look everywhere: a near-black rounded pill with white text, in both
+   themes. In the dark theme it gets a faint ring so it still reads against
+   the dark page. */
+:root {
+  --tooltip-bg: #0b0b10;
+  --tooltip-fg: #ffffff;
+  --tooltip-ring: transparent;
+}
+:root:not([data-theme="light"]) {
+  --tooltip-ring: rgba(255, 255, 255, 0.16);
+}
+.vv-tooltip { max-width: min(300px, calc(100vw - 16px)); animation: vv-tooltip-in 120ms ease-out; }
+.vv-tooltip-body {
+  background: var(--tooltip-bg);
+  color: var(--tooltip-fg);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  overflow-wrap: anywhere;
+  box-shadow: 0 0 0 1px var(--tooltip-ring), 0 10px 28px -6px rgba(0, 0, 0, 0.35);
+}
+.vv-tooltip-body a { color: #c4b5fd; text-decoration: underline; }
+.vv-tooltip-arrow {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--tooltip-bg);
+  transform: translate(-50%, 0) rotate(45deg);
+  box-shadow: 1px 1px 0 var(--tooltip-ring);
+}
+.vv-tooltip[data-side="left"] .vv-tooltip-arrow,
+.vv-tooltip[data-side="right"] .vv-tooltip-arrow { transform: translate(0, -50%) rotate(45deg); }
+@keyframes vv-tooltip-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .vv-tooltip { animation: none; } }

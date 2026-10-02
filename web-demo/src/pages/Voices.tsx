@@ -6,6 +6,7 @@ import { Card } from '../components/ui/Card'
 import { VoicePreviewButton } from '../components/VoicePreviewButton'
 import { addVoice, fetchVoiceCatalog, removeVoice } from '../lib/api'
 import type { VoiceCatalog, VoiceEntry, VoiceTier } from '../lib/types'
+import { Tooltip } from '../components/ui/Tooltip'
 
 const PREVIEW_LANGS = [
   { code: 'hi', label: 'Hindi' },
@@ -187,21 +188,19 @@ function VoiceCard({
                 the thing this product is sold on - so say it on the card
                 rather than letting it be discovered on a live call. */}
             {entry.canSwitchLanguage ? (
-              <span
+              <Tooltip content={`Speaks ${entry.languageCount} languages including ${entry.languageLabels.join(', ')} — and switches between them mid-call`}><span
                 className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full bg-cyan/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan"
-                title={`Speaks ${entry.languageCount} languages including ${entry.languageLabels.join(', ')} — and switches between them mid-call`}
               >
                 <Icon name="translate" className="text-[11px]" />
                 {entry.languageCount} languages · switches
-              </span>
+              </span></Tooltip>
             ) : (
-              <span
+              <Tooltip content={`Speaks only ${entry.languageLabels.join(', ')}. It cannot follow a caller who switches language mid-call.`}><span
                 className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-500"
-                title={`Speaks only ${entry.languageLabels.join(', ')}. It cannot follow a caller who switches language mid-call.`}
               >
                 <Icon name="info" className="text-[11px]" />
                 {entry.languageLabels[0] ?? 'Single'} only
-              </span>
+              </span></Tooltip>
             )}
           </div>
         </div>
@@ -228,24 +227,22 @@ function VoiceCard({
           Remove
         </button>
       ) : !entry.addable ? (
-        <Link
+        <Tooltip content={entry.lockedReason}><Link
           to="/dashboard/billing"
-          title={entry.lockedReason}
           className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs font-bold text-text-muted transition-colors hover:border-primary hover:text-primary"
         >
           <Icon name="lock" className="text-[15px]" />
           Upgrade to add
-        </Link>
+        </Link></Tooltip>
       ) : (
-        <button
+        <Tooltip content="Add to your voices"><button
           onClick={() => onAdd(entry.value)}
           disabled={busy}
-          title="Add to your voices"
           className="mt-auto flex items-center justify-center gap-1.5 rounded-lg bg-primary py-2 text-xs font-bold text-bg transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-40"
         >
           <Icon name="add" className="text-[15px]" />
           Add to my voices
-        </button>
+        </button></Tooltip>
       )}
     </Card>
   )

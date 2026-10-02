@@ -5,6 +5,7 @@ import { BharatBackdrop, BharatOrbit } from '../components/BharatBits'
 import { BRAND } from '../lib/brand'
 import { apiAuthConfig } from '../lib/auth'
 import vistrowMark from '../assets/vistrow-mark.png'
+import { Tooltip } from '../components/ui/Tooltip'
 
 /** Shared frame for the Login / Signup screens - a two-column dark-neon
  * layout: a brand/pitch panel on the left (headline, feature checklist, and a
@@ -195,15 +196,14 @@ export function AuthInput({
  * consistent thing to hold. */
 export function PasswordVisibilityToggle({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
   return (
-    <button
+    <Tooltip content={shown ? 'Hide password' : 'Show password'}><button
       type="button"
       onClick={onToggle}
       aria-label={shown ? 'Hide password' : 'Show password'}
-      title={shown ? 'Hide password' : 'Show password'}
       className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:text-text"
     >
       <Icon name={shown ? 'visibility_off' : 'visibility'} className="text-[18px]" />
-    </button>
+    </button></Tooltip>
   )
 }
 

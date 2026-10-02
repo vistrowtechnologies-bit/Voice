@@ -19,6 +19,7 @@ import {
 import type { ContactDetail as ContactDetailType, PhoneNumber } from '../lib/types'
 import { composeE164, isE164, splitE164, useAccountDialCode } from '../lib/phone'
 import { CustomFieldsEditor } from '../components/CustomFieldsEditor'
+import { Tooltip } from '../components/ui/Tooltip'
 
 const TABS = ['Activity', 'Calls', 'Campaigns', 'Notes'] as const
 type Tab = (typeof TABS)[number]
@@ -259,15 +260,14 @@ export function ContactDetail() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-bold">{contact.name}</h2>
-              <button
+              <Tooltip content="Edit contact"><button
                 type="button"
                 onClick={openEdit}
                 aria-label={`Edit ${contact.name}`}
-                title="Edit contact"
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-primary/10 hover:text-primary"
               >
                 <Icon name="edit" className="text-[17px]" />
-              </button>
+              </button></Tooltip>
               <span className={`rounded border px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLES[contact.status] ?? STATUS_STYLES.new}`}>
                 {contact.status.replace('_', ' ')}
               </span>
@@ -669,9 +669,9 @@ function SnapshotBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-surface-high p-2">
       <p className="text-[10px] font-bold uppercase tracking-wide text-text-muted">{label}</p>
-      <p className="truncate text-sm font-medium" title={value}>
+      <Tooltip content={value}><p className="truncate text-sm font-medium">
         {value}
-      </p>
+      </p></Tooltip>
     </div>
   )
 }

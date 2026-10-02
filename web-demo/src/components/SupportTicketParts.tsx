@@ -12,6 +12,7 @@ import {
 import type { SupportTicket, SupportTicketFile, TicketPriority, TicketStatus } from '../lib/types'
 import { Icon } from './Icon'
 import { useAttachments } from '../lib/useAttachments'
+import { Tooltip } from './ui/Tooltip'
 
 // Shared by the workspace's Help & Support page and the platform team's
 // support inbox, so both sides read the same conversation the same way.
@@ -155,9 +156,9 @@ function FileGallery({ files, ticketId, viewer, onOpenImage }: {
         const url = f.downloadable ? ticketFileUrl(viewer, ticketId, f.id) : ''
         if (url && isInlineImage(f.contentType)) {
           return (
-            <button key={f.id} type="button" onClick={() => onOpenImage(url, f.filename)} className="group overflow-hidden rounded-lg border border-border bg-surface" title={f.filename}>
+            <Tooltip content={f.filename}><button key={f.id} type="button" onClick={() => onOpenImage(url, f.filename)} className="group overflow-hidden rounded-lg border border-border bg-surface">
               <img src={url} alt={f.filename} loading="lazy" className="h-24 w-36 object-cover transition-transform group-hover:scale-[1.03]" />
-            </button>
+            </button></Tooltip>
           )
         }
         const inner = (
@@ -170,7 +171,7 @@ function FileGallery({ files, ticketId, viewer, onOpenImage }: {
         return url ? (
           <a key={f.id} href={url} className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-medium hover:border-primary">{inner}</a>
         ) : (
-          <span key={f.id} title="Sent to the support inbox by email" className="flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1.5 text-xs text-text-muted">{inner}</span>
+          <Tooltip content="Sent to the support inbox by email"><span key={f.id} className="flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1.5 text-xs text-text-muted">{inner}</span></Tooltip>
         )
       })}
     </div>

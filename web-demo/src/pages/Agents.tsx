@@ -17,6 +17,7 @@ import {
 } from '../lib/api'
 import type { AgentConfig, KnowledgeBase, PhoneNumber, LaunchReadiness } from '../lib/types'
 import { modelLabel, voiceLabel } from '../lib/agentOptions'
+import { Tooltip } from '../components/ui/Tooltip'
 
 type AgentFilter = 'all' | 'live' | 'needs-setup' | 'paused' | 'draft'
 
@@ -274,38 +275,34 @@ export function Agents() {
                   <Icon name={primaryAction.icon} className="text-[16px]" />
                   {primaryAction.label}
                 </button>
-                <button
+                <Tooltip content="Edit agent"><button
                   onClick={() => navigate(`/dashboard/agents/${agent.id}`)}
                   className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 text-xs font-bold hover:border-primary"
                   aria-label={`Edit ${agent.name}`}
-                  title="Edit agent"
                 >
                   <Icon name="edit" className="text-[16px]" />
-                </button>
-                <button
+                </button></Tooltip>
+                <Tooltip content={agent.status === 'live' ? 'Pause agent' : 'Resume agent'}><button
                   onClick={() => togglePause(agent)}
                   className="flex items-center justify-center rounded-lg border border-border px-3 hover:border-primary"
                   aria-label={`${agent.status === 'live' ? 'Pause' : 'Resume'} ${agent.name}`}
-                  title={agent.status === 'live' ? 'Pause agent' : 'Resume agent'}
                 >
                   <Icon name={agent.status === 'live' ? 'pause' : 'play_arrow'} className="text-[16px]" />
-                </button>
-                <button
+                </button></Tooltip>
+                <Tooltip content="Place a real phone call to test this agent"><button
                   onClick={() => setDialTestAgent(agent)}
                   className="flex items-center justify-center rounded-lg border border-cyan/40 px-3 text-cyan hover:bg-cyan/10"
                   aria-label={`Call test - ${agent.name}`}
-                  title="Place a real phone call to test this agent"
                 >
                   <Icon name="call" className="text-[16px]" />
-                </button>
-                <button
+                </button></Tooltip>
+                <Tooltip content="Test this agent in-browser with your mic"><button
                   onClick={() => setBrowserTestAgent(agent)}
                   className="flex items-center justify-center rounded-lg border border-primary/40 px-3 text-primary hover:bg-primary/10"
                   aria-label={`Browser test - ${agent.name}`}
-                  title="Test this agent in-browser with your mic"
                 >
                   <Icon name="mic" className="text-[16px]" />
-                </button>
+                </button></Tooltip>
               </div>
             </Card>
             )

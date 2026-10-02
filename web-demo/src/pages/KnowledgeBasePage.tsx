@@ -25,6 +25,7 @@ import {
 } from '../lib/api'
 import { extractTextFromFile } from '../lib/fileExtract'
 import type { KbQaPair, KnowledgeBase, ProjectListing, QaDraft } from '../lib/types'
+import { Tooltip } from '../components/ui/Tooltip'
 
 // Must match agent/db.py get_kb_content's max_chars - everything past this
 // is silently trimmed from the agent's prompt, so the budget bar warns the
@@ -629,13 +630,12 @@ export function KnowledgeBasePage() {
                           name={s.type === 'url' ? 'language' : 'description'}
                           className="text-[17px] text-text-muted"
                         />
-                        <button
+                        <Tooltip content="Open and edit this source"><button
                           onClick={() => startEditSource(s.id, s.name)}
                           className="min-w-0 flex-1 truncate text-left text-sm hover:underline"
-                          title="Open and edit this source"
                         >
                           {s.name}
-                        </button>
+                        </button></Tooltip>
                         {s.type === 'url' && (
                           <span className="hidden rounded-full border border-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-text-muted sm:block">
                             URL

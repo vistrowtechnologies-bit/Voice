@@ -31,6 +31,7 @@ import {
 import { apiProfilePreferences, apiUpdateProfilePreferences, useAuth } from '../lib/auth'
 import { useTheme } from '../lib/theme'
 import type { ActiveCallInfo, Analytics, AppNotification, Appointment, BillingSummary, CallRecord, Contact, DashboardPeriodComparison, DashboardSummary, FeedbackSummary, Integration, LaunchReadiness, UsageTrends } from '../lib/types'
+import { Tooltip } from '../components/ui/Tooltip'
 
 const AGENT_STATE_STYLES: Record<string, string> = {
   listening: 'bg-cyan/20 text-cyan border-cyan/30',
@@ -253,16 +254,15 @@ export function Dashboard() {
                 action={(
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-bold text-primary">{readiness.completed}/{readiness.total} complete</span>
-                    <button
+                    <Tooltip content="Don't show again"><button
                       type="button"
                       onClick={dismissChecklist}
                       disabled={dismissingChecklist}
                       aria-label="Dismiss launch checklist and do not show it again"
-                      title="Don't show again"
                       className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-high/50 hover:text-text disabled:opacity-50"
                     >
                       <Icon name="close" className="text-[18px]" />
-                    </button>
+                    </button></Tooltip>
                   </div>
                 )}
               >

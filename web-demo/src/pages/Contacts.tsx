@@ -30,6 +30,7 @@ import {
   guessMapping,
   parseRows,
 } from '../lib/contactImport'
+import { Tooltip } from '../components/ui/Tooltip'
 
 const STATUS_STYLES: Record<string, string> = {
   new: 'bg-muted/20 text-text-muted border-muted/30',
@@ -446,15 +447,14 @@ export function Contacts() {
     {
       key: 'select',
       header: (
-        <input
+        <Tooltip content="Select all visible contacts"><input
           type="checkbox"
           checked={allFilteredSelected}
           onChange={toggleAllFiltered}
           onClick={(event) => event.stopPropagation()}
           aria-label="Select all visible contacts"
-          title="Select all visible contacts"
           className="h-4 w-4 accent-primary"
-        />
+        /></Tooltip>
       ),
       headerLabel: 'selection',
       hideOnCard: true,
@@ -531,7 +531,7 @@ export function Contacts() {
       maxWidth: 480,
       resizable: true,
       render: (c) => (
-        <div className="flex min-w-0 flex-nowrap gap-1 overflow-hidden" title={c.tags.join(', ')}>
+        <Tooltip content={c.tags.join(', ')}><div className="flex min-w-0 flex-nowrap gap-1 overflow-hidden">
           {c.tags.length === 0 && <span className="text-sm text-text-muted">-</span>}
           {c.tags.slice(0, 2).map((t) => (
             <span key={t} className="shrink-0 rounded bg-surface-high px-1.5 py-0.5 text-[11px] text-text-muted">
@@ -539,7 +539,7 @@ export function Contacts() {
             </span>
           ))}
           {c.tags.length > 2 && <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">+{c.tags.length - 2} more</span>}
-        </div>
+        </div></Tooltip>
       ),
     },
     { key: 'source', header: 'Source', width: 125, minWidth: 78, maxWidth: 240, resizable: true, sortValue: (c) => c.source, render: (c) => <span className="block truncate text-sm capitalize text-text-muted">{c.source}</span> },
@@ -563,16 +563,15 @@ export function Contacts() {
       className: 'text-center',
       render: (c) => (
         <div className="flex justify-center gap-1">
-          <button
+          <Tooltip content={c.phone ? 'Call now' : 'No phone number'}><button
             type="button"
             onClick={() => openCall(c)}
             disabled={!c.phone}
             aria-label={`Call ${c.name}`}
-            title={c.phone ? 'Call now' : 'No phone number'}
             className="flex h-8 w-8 items-center justify-center rounded-md border border-primary/30 text-primary transition-colors hover:bg-primary hover:text-bg disabled:cursor-not-allowed disabled:opacity-35"
           >
             <Icon name="call" className="text-[17px]" />
-          </button>
+          </button></Tooltip>
           <button
             onClick={() => window.confirm(`Delete ${c.name}?`) && deleteContact(c.id).then(reload)}
             aria-label={`Delete ${c.name}`}
@@ -872,7 +871,7 @@ export function Contacts() {
                         const f = e.dataTransfer.files?.[0]
                         if (f) void handlePickFile(f)
                       }}
-                      className={`flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-10 text-center transition-colors ${dragOver ? 'border-primary bg-primary/5' : 'border-border'}`}
+                      className={`flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors sm:py-10 ${dragOver ? 'border-primary bg-primary/5' : 'border-border'}`}
                     >
                       <Icon name="upload_file" className="text-[36px] text-text-muted" />
                       <p className="text-sm font-semibold">Drop your file here</p>
@@ -897,25 +896,27 @@ export function Contacts() {
                         Matched {autoMapped.size} of {importPreview.headers.length} columns automatically
                       </span>
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse text-sm">
-                        <thead>
+                    <div className="sm:overflow-x-auto">
+                      {/* Phone: each column is its own block (name, example, then the dropdown).
+                          From sm up it is a normal three-column table. */}
+                      <table className="block w-full border-collapse text-sm sm:table">
+                        <thead className="hidden sm:table-header-group">
                           <tr className="border-b border-border text-left text-[11px] font-bold uppercase tracking-wide text-text-muted">
                             <th className="py-2 pr-3">Your column</th>
                             <th className="py-2 pr-3">Example data</th>
                             <th className="py-2">Imports as</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="block sm:table-row-group">
                           {importPreview.headers.map((header, i) => {
                             const target = mapping[header] ?? ''
                             return (
-                              <tr key={`${header}-${i}`} className="border-b border-border/60 align-top">
-                                <td className="py-2 pr-3 font-semibold">{header || <span className="text-text-muted">(no name)</span>}</td>
-                                <td className="max-w-[16rem] py-2 pr-3 text-text-muted">
+                              <tr key={`${header}-${i}`} className="block border-b border-border/60 py-3 align-top sm:table-row sm:py-0">
+                                <td className="block break-all pb-1 font-semibold sm:table-cell sm:py-2 sm:pr-3 sm:pb-2">{header || <span className="text-text-muted">(no name)</span>}</td>
+                                <td className="block pb-2 text-text-muted sm:table-cell sm:max-w-[16rem] sm:py-2 sm:pr-3">
                                   <span className="block truncate">{importPreview.sampleRows.map((r) => r[i]).filter(Boolean).slice(0, 2).join(', ') || '-'}</span>
                                 </td>
-                                <td className="py-2">
+                                <td className="block sm:table-cell sm:py-2">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <select
                                       value={target}

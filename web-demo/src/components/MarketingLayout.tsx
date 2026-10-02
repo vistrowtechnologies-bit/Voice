@@ -8,6 +8,7 @@ import { NAV, FOOTER_COLUMNS, CONTACT_EMAIL, CONTACT_PHONE } from '../lib/market
 import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import vistrowMark from '../assets/vistrow-mark.png'
+import { Tooltip } from './ui/Tooltip'
 
 // The official logo mark - used everywhere the brand appears (marketing
 // site, dashboard, auth pages) for one consistent visual identity.
@@ -268,10 +269,9 @@ function MarketingThemeSwitcher({ className }: { className?: string }) {
   const theme = useTheme()
   const next = theme === 'dark' ? 'light' : 'dark'
   return (
-    <button
+    <Tooltip content={`Switch to ${next} mode`}><button
       onClick={() => applyTheme(next)}
       aria-label={`Switch to ${next} mode`}
-      title={`Switch to ${next} mode`}
       className={
         className ??
         'flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-primary'
@@ -279,7 +279,7 @@ function MarketingThemeSwitcher({ className }: { className?: string }) {
     >
       {/* key remount replays the spin-in animation on every toggle. */}
       <Icon key={theme} name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="theme-icon-pop text-[18px]" />
-    </button>
+    </button></Tooltip>
   )
 }
 

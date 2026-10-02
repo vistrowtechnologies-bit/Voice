@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
 import { voicePreviewUrl } from '../lib/api'
+import { Tooltip } from './ui/Tooltip'
 
 type State = 'idle' | 'loading' | 'playing' | 'error'
 
@@ -96,17 +97,16 @@ export function VoicePreviewButton({
           : 'play_arrow'
 
   return (
-    <button
+    <Tooltip content={state === 'error' ? 'Preview unavailable - try again' : 'Listen to this voice'}><button
       type="button"
       onClick={toggle}
       disabled={state === 'loading'}
       aria-label={state === 'playing' ? 'Stop preview' : 'Play preview'}
-      title={state === 'error' ? 'Preview unavailable - try again' : 'Listen to this voice'}
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface-high text-text transition-colors hover:border-primary hover:text-primary disabled:opacity-60 ${
         state === 'error' ? 'text-destructive' : ''
       } ${className}`}
     >
       <Icon name={icon} className={`text-[18px] ${state === 'loading' ? 'animate-spin' : ''}`} />
-    </button>
+    </button></Tooltip>
   )
 }

@@ -17,6 +17,7 @@ import { HelpChatWidget } from './HelpChatWidget'
 import { Icon } from './Icon'
 import { OnboardingModal } from './OnboardingModal'
 import vistrowMark from '../assets/vistrow-mark.png'
+import { Tooltip } from './ui/Tooltip'
 
 /** Desktop sidebar state, shared with PageHeader so the "open sidebar"
  * button can sit in the top bar while the sidebar is slid away — the way the
@@ -35,15 +36,14 @@ export function ThemeSwitcher() {
   const theme = useTheme()
   const next = theme === 'dark' ? 'light' : 'dark'
   return (
-    <button
+    <Tooltip content={`Switch to ${next} mode`}><button
       onClick={() => applyTheme(next)}
       aria-label={`Switch to ${next} mode`}
-      title={`Switch to ${next} mode`}
       className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-primary sm:h-8 sm:w-8"
     >
       {/* key remount replays the spin-in animation every toggle, not just once. */}
       <Icon key={theme} name={theme === 'dark' ? 'light_mode' : 'dark_mode'} className="theme-icon-pop text-[17px]" />
-    </button>
+    </button></Tooltip>
   )
 }
 
@@ -175,14 +175,13 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           <span className="block text-[10px] uppercase tracking-widest text-text-muted">Enterprise</span>
         </div>
         {onClose && (
-          <button
+          <Tooltip content={`Close sidebar (${TOGGLE_SHORTCUT})`}><button
             onClick={onClose}
             aria-label="Close sidebar"
-            title={`Close sidebar (${TOGGLE_SHORTCUT})`}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-high hover:text-primary"
           >
             <Icon name="left_panel_close" className="text-[20px]" />
-          </button>
+          </button></Tooltip>
         )}
       </div>
       <nav data-clarity-unmask="true" className="flex min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -282,14 +281,13 @@ export function PageHeader({
   return (
     <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/90 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:px-6">
       {!sidebar.open && (
-        <button
+        <Tooltip content={`Open sidebar (${TOGGLE_SHORTCUT})`}><button
           onClick={sidebar.toggle}
           aria-label="Open sidebar"
-          title={`Open sidebar (${TOGGLE_SHORTCUT})`}
           className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-primary lg:flex"
         >
           <Icon name="left_panel_open" className="text-[20px]" />
-        </button>
+        </button></Tooltip>
       )}
       <div className="min-w-0 flex-1">
         <h1 className="text-lg font-semibold leading-tight">{title}</h1>
@@ -303,14 +301,13 @@ export function PageHeader({
           </span>
         )}
         {helpTopic && (
-          <Link
+          <Tooltip content="Help for this page"><Link
             to={`/dashboard/support?topic=${helpTopic}`}
             aria-label="Help for this page"
-            title="Help for this page"
             className="flex h-10 items-center gap-1 rounded-full border border-border bg-surface px-3 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary sm:h-8"
           >
             <Icon name="help" className="text-[17px]" /> Help
-          </Link>
+          </Link></Tooltip>
         )}
         <NotificationBell />
         <ThemeSwitcher />

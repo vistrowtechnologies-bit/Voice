@@ -5,6 +5,7 @@ import { fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { HelpChatMessage, HelpFaq } from '../lib/types'
 import { Icon } from './Icon'
+import { Tooltip } from './ui/Tooltip'
 
 // Page-specific quick questions backed either by current help documentation
 // or a read-only server/help_tools.py function when live account data is
@@ -290,27 +291,25 @@ export function HelpChatWidget() {
             </div>
             <div className="flex items-center gap-1">
               {location.pathname !== '/dashboard' && (
-                <button
+                <Tooltip content="Open dashboard"><button
                   onClick={() => navigate('/dashboard')}
                   className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text"
                   aria-label="Open dashboard"
-                  title="Open dashboard"
                 >
                   <Icon name="home" className="text-[18px]" />
-                </button>
+                </button></Tooltip>
               )}
               {messages.length > 0 && (
-                <button
+                <Tooltip content="Back to FAQs"><button
                   onClick={() => {
                     setMessages([])
                     setError('')
                   }}
                   className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text"
                   aria-label="Back to FAQs"
-                  title="Back to FAQs"
                 >
                   <Icon name="refresh" className="text-[18px]" />
-                </button>
+                </button></Tooltip>
               )}
               <button
                 onClick={closeChat}
@@ -398,16 +397,15 @@ export function HelpChatWidget() {
                           )
                         })()}
                         <div className="mt-1 flex items-center gap-1 text-text-muted">
-                          <button
+                          <Tooltip content="Helpful"><button
                             type="button"
                             onClick={() => setRatings((current) => ({ ...current, [i]: 'up' }))}
                             className={`flex h-6 w-6 items-center justify-center rounded-full hover:bg-surface-high ${ratings[i] === 'up' ? 'text-success' : ''}`}
                             aria-label="Helpful answer"
-                            title="Helpful"
                           >
                             <Icon name="thumb_up" className="text-[14px]" />
-                          </button>
-                          <button
+                          </button></Tooltip>
+                          <Tooltip content="Not helpful - submit a request"><button
                             type="button"
                             onClick={() => {
                               setRatings((current) => ({ ...current, [i]: 'down' }))
@@ -415,10 +413,9 @@ export function HelpChatWidget() {
                             }}
                             className={`flex h-6 w-6 items-center justify-center rounded-full hover:bg-surface-high ${ratings[i] === 'down' ? 'text-destructive' : ''}`}
                             aria-label="Unhelpful answer"
-                            title="Not helpful - submit a request"
                           >
                             <Icon name="thumb_down" className="text-[14px]" />
-                          </button>
+                          </button></Tooltip>
                           <button type="button" onClick={() => openTicket()} className="ml-1 text-[10px] hover:text-primary">
                             Report
                           </button>

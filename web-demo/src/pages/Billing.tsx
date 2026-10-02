@@ -9,6 +9,7 @@ import { useAuth } from '../lib/auth'
 import { CONTACT_EMAIL } from '../lib/marketingContent'
 import { ANNUAL_MONTHS_CHARGED, PLANS, PRICING_FINALIZED, SHARED_PLAN_FEATURES, planHighlights } from '../lib/plans'
 import type { BillingSummary, Invoice } from '../lib/types'
+import { Tooltip } from '../components/ui/Tooltip'
 
 // Razorpay's Checkout.js attaches itself to window - loaded on demand (only
 // once) rather than globally, so a user who never touches Billing never
@@ -168,14 +169,13 @@ export function Billing() {
                   </p>
                 </div>
               </div>
-              <button
+              <Tooltip content={!razorpayConfigured ? 'Online payments are unavailable. Contact us for billing assistance.' : undefined}><button
                 onClick={() => setTopupOpen(true)}
                 disabled={!razorpayConfigured || !PRICING_FINALIZED}
-                title={!razorpayConfigured ? 'Online payments are unavailable. Contact us for billing assistance.' : undefined}
                 className="rounded-lg border border-cyan/40 px-3 py-1.5 text-xs font-bold text-cyan hover:bg-cyan/10 disabled:opacity-40"
               >
                 + Buy credits
-              </button>
+              </button></Tooltip>
             </div>
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-high">
               <div

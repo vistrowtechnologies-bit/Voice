@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react'
 import { Card } from './Card'
+import { Tooltip } from './Tooltip'
 
 export interface DataTableColumn<T> {
   key: string
@@ -287,14 +288,13 @@ export function DataTable<T>({
                     >
                       {col.header}
                       {col.resizable && (
-                        <span
+                        <Tooltip content={`Drag to resize ${headerLabel(col).toLowerCase()}`}><span
                           role="separator"
                           aria-orientation="vertical"
                           aria-label={`Resize ${headerLabel(col)}`}
                           onPointerDown={(event) => startResize(event, col)}
-                          title={`Drag to resize ${headerLabel(col).toLowerCase()}`}
                           className="absolute inset-y-0 -right-1.5 z-40 w-3 cursor-col-resize touch-none bg-transparent after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border after:content-[''] hover:after:w-0.5 hover:after:bg-primary"
-                        />
+                        /></Tooltip>
                       )}
                     </th>
                   ))}

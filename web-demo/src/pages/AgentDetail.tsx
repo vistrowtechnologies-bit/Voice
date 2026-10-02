@@ -28,6 +28,7 @@ import {
   voicePickerGroups,
 } from '../lib/agentOptions'
 import type { AgentConfig, AgentVariable, CustomFunction, Integration, KnowledgeBase, PostCallField, VoiceEntry } from '../lib/types'
+import { InfoTip } from '../components/ui/Tooltip'
 
 // Must match agent/main.py's template_vars keys exactly (the substitution
 // call site, not calls_db.py) - these are the only names that are always
@@ -1107,14 +1108,7 @@ function Field({
     <label className="flex flex-col gap-1.5">
       <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-text-muted">
         {label}
-        {hint && (
-          <span className="group relative inline-flex">
-            <Icon name="info" className="!text-sm cursor-help normal-case text-text-muted/70 hover:text-text-muted" label={`More info about ${label}`} />
-            <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 w-56 -translate-x-1/2 rounded-md border border-border bg-surface-high px-2.5 py-1.5 text-[11px] font-normal normal-case leading-snug tracking-normal text-text opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 [&_a]:pointer-events-auto">
-              {hint}
-            </span>
-          </span>
-        )}
+        {hint && <InfoTip label={`More info about ${label}`}>{hint}</InfoTip>}
       </span>
       {children}
     </label>

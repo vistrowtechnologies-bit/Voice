@@ -16,6 +16,7 @@ import {
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { CallRecord } from '../lib/types'
+import { Tooltip } from '../components/ui/Tooltip'
 
 const SENTIMENT_STYLE: Record<string, string> = {
   positive: 'text-success',
@@ -248,8 +249,8 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
             <Icon name="call" className="text-[20px]" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-2">
-              <p className="truncate text-sm font-bold">{call.name}</p>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+              <p className="min-w-0 max-w-full truncate text-sm font-bold">{call.name}</p>
               <span
                 className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                   call.isTextChat ? 'bg-cyan/15 text-cyan' : 'bg-primary/10 text-primary'
@@ -259,25 +260,23 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[11px] text-text-muted">
-              <button
+              <Tooltip content="Copy call ID"><button
                 type="button"
                 onClick={() => copyText('id', call.id)}
-                title="Copy call ID"
                 className="flex items-center gap-1 hover:text-primary"
               >
                 #{call.id}
                 <Icon name={copied === 'id' ? 'check' : 'content_copy'} className="text-[12px]" />
-              </button>
+              </button></Tooltip>
               {call.phone ? (
-                <button
+                <Tooltip content="Copy phone number"><button
                   type="button"
                   onClick={() => copyText('phone', call.phone)}
-                  title="Copy phone number"
                   className="flex items-center gap-1 hover:text-primary"
                 >
                   {call.phone}
                   <Icon name={copied === 'phone' ? 'check' : 'content_copy'} className="text-[12px]" />
-                </button>
+                </button></Tooltip>
               ) : (
                 <span>no phone</span>
               )}
@@ -292,15 +291,14 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
           >
             {call.callStatus === 'failed' ? 'Failed' : 'Completed'}
           </span>
-          <button
+          <Tooltip content="Close call details"><button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            title="Close call details"
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-text-muted shadow-sm transition-colors hover:border-primary/40 hover:bg-surface-high hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:h-10 sm:w-10"
           >
             <Icon name="close" className="text-[18px] leading-none sm:text-[20px]" />
-          </button>
+          </button></Tooltip>
         </div>
       {/* Small screens keep one scrolling column (the layout is stacked, so
           the transcript has nothing to scroll beside). From lg up the two

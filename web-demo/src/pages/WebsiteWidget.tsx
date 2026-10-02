@@ -21,6 +21,7 @@ import {
   wordpressPluginUrl,
 } from '../lib/api'
 import type { AgentConfig, Site, SitePageRoute, SiteSeenPath, WidgetAvatarOption } from '../lib/types'
+import { Tooltip } from '../components/ui/Tooltip'
 
 // The greeting can contain quotes/ampersands - this is copy-pasted verbatim
 // into a customer's own HTML, so it must be a well-formed attribute value,
@@ -739,15 +740,14 @@ function PageRoutes({
       {expanded && (
         <div className="mt-3 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <button
+            <Tooltip content={site.allowedDomain ? undefined : 'Set this site\'s domain above first'}><button
               onClick={handleSync}
               disabled={syncing || !site.allowedDomain}
               className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-bold text-text-muted hover:bg-surface disabled:cursor-default disabled:opacity-40"
-              title={site.allowedDomain ? undefined : 'Set this site\'s domain above first'}
             >
               <Icon name={syncing ? 'progress_activity' : 'sync'} className={`text-[14px] ${syncing ? 'animate-spin' : ''}`} />
               {syncing ? 'Fetching pages…' : 'Fetch pages from this domain'}
-            </button>
+            </button></Tooltip>
             {syncResult && <span className="text-[11px] text-text-muted">{syncResult}</span>}
           </div>
 
@@ -765,12 +765,11 @@ function PageRoutes({
                 {agents.find((a) => a.id === route.agentId)?.name ?? 'Unassigned'}
               </span>
               {route.avatarOverride && backendUrl && (
-                <img
+                <Tooltip content="Custom avatar for this page"><img
                   src={`${backendUrl}/widget-avatars/${route.avatarOverride}.png`}
                   alt=""
-                  title="Custom avatar for this page"
                   className="h-5 w-5 rounded-full border border-border object-cover"
-                />
+                /></Tooltip>
               )}
               {route.greetingOverride && (
                 <span className="text-[11px] text-text-muted">"{route.greetingOverride}"</span>
@@ -907,11 +906,10 @@ function AvatarPicker({
       {catalog.map((opt) => {
         const selected = value === opt.key
         return (
-          <button
+          <Tooltip content={selected ? `${opt.label} (selected)` : opt.label}><button
             key={opt.key}
             type="button"
             onClick={() => onChange(opt.key)}
-            title={selected ? `${opt.label} (selected)` : opt.label}
             aria-label={opt.label}
             aria-pressed={selected}
             // The avatar artwork itself has a purple ring painted in, so a
@@ -950,7 +948,7 @@ function AvatarPicker({
                 <Icon name="check" className="text-[11px]" />
               </span>
             )}
-          </button>
+          </button></Tooltip>
         )
       })}
     </div>

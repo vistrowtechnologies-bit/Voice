@@ -6,6 +6,7 @@ import { facebookIntegrationStartUrl, fetchIntegrations, fetchLeadWebhook, forma
 import type { Integration } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import arthaleadsIcon from '../assets/arthaleads-logo.png'
+import { Tooltip } from '../components/ui/Tooltip'
 
 const ICONS: Record<string, string> = {
   webhook: 'webhook',
@@ -315,7 +316,7 @@ export function Integrations() {
                     </button>
                   )}
                   {CONNECTABLE.has(integration.key) && (
-                    <button
+                    <Tooltip content="Edit URL / token"><button
                       onClick={() => {
                         setUrl(integration.config.url || '')
                         setToken(integration.config.token || '')
@@ -324,10 +325,9 @@ export function Integrations() {
                       }}
                       className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-bold text-text-muted hover:border-primary"
                       aria-label={`Edit ${integration.name}`}
-                      title="Edit URL / token"
                     >
                       <Icon name="edit" className="text-[15px]" />
-                    </button>
+                    </button></Tooltip>
                   )}
                   <button
                     onClick={() => handleDisconnect(integration.key)}
