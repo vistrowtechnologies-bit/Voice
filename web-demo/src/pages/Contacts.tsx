@@ -23,18 +23,13 @@ import {
 import type { Contact, CsvPreview, PhoneNumber } from '../lib/types'
 import { composeE164, isE164, useAccountDialCode } from '../lib/phone'
 import { CustomFieldsEditor } from '../components/CustomFieldsEditor'
-
-const MAPPING_TARGETS = [
-  { value: '', label: 'Skip this column' },
-  { value: 'first_name', label: 'First Name' },
-  { value: 'last_name', label: 'Last Name' },
-  { value: 'name', label: 'Full Name' },
-  { value: 'phone', label: 'Phone' },
-  { value: 'email', label: 'Email' },
-  { value: 'company', label: 'Company' },
-  { value: 'tags', label: 'Tags' },
-  { value: '__custom__', label: 'Custom field…' },
-] as const
+import {
+  CONTACT_TARGETS,
+  LEAD_DETAIL_TARGETS,
+  downloadSampleSheet,
+  guessMapping,
+  parseRows,
+} from '../lib/contactImport'
 
 const STATUS_STYLES: Record<string, string> = {
   new: 'bg-muted/20 text-text-muted border-muted/30',
@@ -76,6 +71,13 @@ export function Contacts() {
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [customLabels, setCustomLabels] = useState<Record<string, string>>({})
   const [importing, setImporting] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [importFileName, setImportFileName] = useState('')
+  const [importRows, setImportRows] = useState<string[][]>([])
+  const [autoMapped, setAutoMapped] = useState<Set<string>>(new Set())
+  const [importError, setImportError] = useState('')
+  const [dragOver, setDragOver] = useState(false)
+  const [importResult, setImportResult] = useState<{ imported: number; skippedMissingPhone: number; skippedInvalidPhone: number } | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [showBulkUpdate, setShowBulkUpdate] = useState(false)
@@ -191,42 +193,73 @@ export function Contacts() {
   }
 
   const handlePickFile = async (file: File) => {
-    const isSpreadsheet = /\.xlsx?$/i.test(file.name)
-    const text = isSpreadsheet ? await spreadsheetToCsv(file) : await file.text()
-    const preview = await previewContactsImport(text)
-    // Best-effort auto-guess so the operator usually just confirms rather
-    // than mapping every column by hand - exact matches on common header
-    // spellings only; anything unrecognized defaults to "Skip".
-    const guesses: Record<string, string> = {
-      name: 'name', 'full name': 'name', fullname: 'name',
-      'first name': 'first_name', first: 'first_name', firstname: 'first_name',
-      'last name': 'last_name', last: 'last_name', lastname: 'last_name',
-      phone: 'phone', 'phone number': 'phone', mobile: 'phone', cell: 'phone', number: 'phone',
-      email: 'email', 'email address': 'email',
-      company: 'company', organization: 'company', org: 'company',
-      tags: 'tags', tag: 'tags',
+    setImportError('')
+    try {
+      const isSpreadsheet = /\.xlsx?$/i.test(file.name)
+      if (!isSpreadsheet && !/\.csv$/i.test(file.name)) {
+        setImportError('Choose a CSV or Excel file (.csv, .xlsx or .xls).')
+        return
+      }
+      const text = isSpreadsheet ? await spreadsheetToCsv(file) : await file.text()
+      const preview = await previewContactsImport(text)
+      if (!preview.headers.length) {
+        setImportError('That file looks empty. Add a header row and at least one contact.')
+        return
+      }
+      // Auto-match columns by name (and phone/email by what the values look like);
+      // the person reviews and can change any of them before importing.
+      const guessed = guessMapping(preview.headers, preview.sampleRows)
+      const initialMapping: Record<string, string> = {}
+      const auto = new Set<string>()
+      for (const header of preview.headers) {
+        initialMapping[header] = guessed[header].target
+        if (guessed[header].auto) auto.add(header)
+      }
+      setImportCsv(text)
+      setImportPreview(preview)
+      setImportRows(parseRows(text))
+      setImportFileName(file.name)
+      setAutoMapped(auto)
+      setMapping(initialMapping)
+      setCustomLabels({})
+      setImportResult(null)
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Could not read that file.')
+    } finally {
+      if (fileRef.current) fileRef.current.value = ''
     }
-    const initialMapping: Record<string, string> = {}
-    for (const header of preview.headers) {
-      initialMapping[header] = guesses[header.trim().toLowerCase()] || ''
-    }
-    setImportCsv(text)
-    setImportPreview(preview)
-    setMapping(initialMapping)
-    setCustomLabels({})
   }
 
   const cancelImport = () => {
     setImportCsv(null)
     setImportPreview(null)
+    setImportRows([])
+    setImportFileName('')
+    setAutoMapped(new Set())
     setMapping({})
     setCustomLabels({})
+    setImportError('')
+    setImportResult(null)
+    setShowImport(false)
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  // Back from the mapping screen to the file chooser, keeping the dialog open.
+  const chooseAnotherFile = () => {
+    setImportCsv(null)
+    setImportPreview(null)
+    setImportRows([])
+    setImportFileName('')
+    setAutoMapped(new Set())
+    setMapping({})
+    setCustomLabels({})
+    setImportError('')
   }
 
   const confirmImport = async () => {
     if (!importCsv) return
     setImporting(true)
+    setImportError('')
     try {
       const finalMapping: Record<string, string> = {}
       for (const [header, target] of Object.entries(mapping)) {
@@ -238,14 +271,40 @@ export function Contacts() {
         }
       }
       const result = await importContactsMapped(importCsv, finalMapping)
-      const skipped = result.skippedMissingPhone + result.skippedInvalidPhone
-      alert(`Imported ${result.imported} contacts${skipped ? ` · skipped ${skipped} (${result.skippedMissingPhone} missing phone, ${result.skippedInvalidPhone} invalid phone)` : ''}`)
-      cancelImport()
+      setImportResult(result)
       reload()
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'The import failed. Nothing was imported.')
     } finally {
       setImporting(false)
     }
   }
+
+  useEffect(() => {
+    if (!showImport) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') cancelImport() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // cancelImport only calls setters and clears the file input
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showImport])
+
+  // Which column feeds Phone, and how many rows have a value there: the one
+  // thing an import cannot do without.
+  const phoneHeader = importPreview?.headers.find((h) => mapping[h] === 'phone')
+  const phoneIndex = phoneHeader && importPreview ? importPreview.headers.indexOf(phoneHeader) : -1
+  const rowsMissingPhone = phoneIndex >= 0 ? importRows.filter((r) => !(r[phoneIndex] || '').trim()).length : 0
+  const importableRows = phoneIndex >= 0 ? importRows.length - rowsMissingPhone : 0
+  const duplicateTargets = (() => {
+    const seen: Record<string, number> = {}
+    for (const h of importPreview?.headers ?? []) {
+      const t = mapping[h]
+      if (t && t !== '__custom__') seen[t] = (seen[t] || 0) + 1
+    }
+    return Object.entries(seen).filter(([, n]) => n > 1).map(([t]) => t)
+  })()
+  const targetLabel = (t: string) =>
+    [...CONTACT_TARGETS, ...LEAD_DETAIL_TARGETS].find((x) => x.value === t)?.label ?? t
 
   const handleDeleteAll = async () => {
     if (!confirm('Delete ALL contacts? Pending campaign calls for these contacts will be blocked. Call records remain available in All Calls History.')) return
@@ -577,7 +636,7 @@ export function Contacts() {
             onChange={(e) => e.target.files?.[0] && handlePickFile(e.target.files[0])}
           />
           <button
-            onClick={() => fileRef.current?.click()}
+            onClick={() => { setImportError(''); setShowImport(true) }}
             className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-bold hover:border-primary"
           >
             <Icon name="upload" className="text-[18px]" />
@@ -731,76 +790,202 @@ export function Contacts() {
           </div>
         )}
 
-        {importPreview && (
-          <Card variant="flat" padding="sm" className="flex flex-col gap-3 !border-primary/40">
-            <div>
-              <p className="text-sm font-bold">Map your columns</p>
-              <p className="text-xs text-text-muted">
-                Tell us what each column in your file means - anything not mapped to a field below is saved as a
-                custom field, so a campaign call can reference it (e.g. an "appointment_date" column becomes{' '}
-                <code className="rounded bg-surface-high px-1 py-0.5">{'{{custom.appointment_date}}'}</code>).
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-[11px] font-bold uppercase tracking-wide text-text-muted">
-                    <th className="py-2 pr-3">Your column</th>
-                    <th className="py-2 pr-3">Sample data</th>
-                    <th className="py-2">Maps to</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {importPreview.headers.map((header, i) => (
-                    <tr key={header} className="border-b border-border/60">
-                      <td className="py-2 pr-3 font-semibold">{header}</td>
-                      <td className="py-2 pr-3 text-text-muted">
-                        {importPreview.sampleRows.map((r) => r[i]).filter(Boolean).slice(0, 2).join(', ') || '-'}
-                      </td>
-                      <td className="py-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <select
-                            value={mapping[header] ?? ''}
-                            onChange={(e) => setMapping({ ...mapping, [header]: e.target.value })}
-                            className="rounded-lg border border-border bg-surface-high px-2 py-1.5 text-sm outline-none focus:border-primary"
-                          >
-                            {MAPPING_TARGETS.map((t) => (
-                              <option key={t.value} value={t.value}>
-                                {t.label}
-                              </option>
-                            ))}
-                          </select>
-                          {mapping[header] === '__custom__' && (
-                            <input
-                              value={customLabels[header] || ''}
-                              onChange={(e) => setCustomLabels({ ...customLabels, [header]: e.target.value })}
-                              placeholder="field_name"
-                              className="w-36 rounded-lg border border-border bg-surface-high px-2 py-1.5 text-sm outline-none focus:border-primary"
-                            />
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={confirmImport}
-                disabled={importing}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50"
-              >
-                {importing ? 'Importing…' : 'Import contacts'}
-              </button>
-              <button
-                onClick={cancelImport}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text"
-              >
-                Cancel
-              </button>
-            </div>
-          </Card>
+        {showImport && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Import contacts">
+            <Card padding="sm" className="flex max-h-[92vh] w-full max-w-4xl flex-col bg-surface shadow-2xl">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold">Import contacts</h2>
+                  <p className="text-xs text-text-muted">
+                    {importResult
+                      ? 'Import finished.'
+                      : importPreview
+                        ? 'Check how your columns were matched, fix anything that looks wrong, then import.'
+                        : 'Upload a sheet of contacts. We match your columns for you, and you can change any match before importing.'}
+                  </p>
+                </div>
+                <button onClick={cancelImport} aria-label="Close import" className="rounded p-2 text-text-muted hover:bg-surface-high hover:text-text">
+                  <Icon name="close" />
+                </button>
+              </div>
+
+              <div className="-mx-2 flex-1 overflow-y-auto px-2 py-1">
+                {importResult ? (
+                  <div className="flex flex-col items-center gap-2 py-8 text-center">
+                    <Icon name="check_circle" className="text-[44px] text-success" />
+                    <p className="text-lg font-bold">Imported {importResult.imported} contact{importResult.imported === 1 ? '' : 's'}</p>
+                    {importResult.skippedMissingPhone + importResult.skippedInvalidPhone > 0 && (
+                      <p className="text-sm text-text-muted">
+                        Skipped {importResult.skippedMissingPhone + importResult.skippedInvalidPhone}:{' '}
+                        {importResult.skippedMissingPhone} with no phone number, {importResult.skippedInvalidPhone} with an invalid number.
+                      </p>
+                    )}
+                  </div>
+                ) : !importPreview ? (
+                  <div className="flex flex-col gap-5">
+                    <ol className="grid gap-3 text-sm sm:grid-cols-3">
+                      {[
+                        ['Download the sample sheet', 'It has the columns we recognise, with three example rows.'],
+                        ['Fill in your contacts', 'One row per person. Only Phone is required. Delete the example rows.'],
+                        ['Upload it here', 'We match the columns for you, and you check them before anything is imported.'],
+                      ].map(([title, body], i) => (
+                        <li key={title} className="flex gap-3 rounded-xl border border-border bg-surface-high p-3">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">{i + 1}</span>
+                          <span>
+                            <span className="block font-semibold">{title}</span>
+                            <span className="text-xs text-text-muted">{body}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => downloadSampleSheet('xlsx')}
+                        className="flex items-center gap-2 rounded-lg border border-border bg-surface-high px-4 py-2 text-sm font-semibold hover:border-primary"
+                      >
+                        <Icon name="download" className="text-[18px]" /> Sample sheet (Excel)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadSampleSheet('csv')}
+                        className="flex items-center gap-2 rounded-lg border border-border bg-surface-high px-4 py-2 text-sm font-semibold hover:border-primary"
+                      >
+                        <Icon name="download" className="text-[18px]" /> Sample sheet (CSV)
+                      </button>
+                    </div>
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                      onDragLeave={() => setDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        setDragOver(false)
+                        const f = e.dataTransfer.files?.[0]
+                        if (f) void handlePickFile(f)
+                      }}
+                      className={`flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-10 text-center transition-colors ${dragOver ? 'border-primary bg-primary/5' : 'border-border'}`}
+                    >
+                      <Icon name="upload_file" className="text-[36px] text-text-muted" />
+                      <p className="text-sm font-semibold">Drop your file here</p>
+                      <p className="text-xs text-text-muted">CSV or Excel, up to 5,000 contacts</p>
+                      <button
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
+                        className="mt-1 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90"
+                      >
+                        Choose file
+                      </button>
+                    </div>
+                    {importError && <p className="text-sm text-destructive">{importError}</p>}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-high px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate font-semibold">
+                        {importFileName} <span className="font-normal text-text-muted">· {importRows.length} row{importRows.length === 1 ? '' : 's'}</span>
+                      </span>
+                      <span className="text-xs text-text-muted">
+                        Matched {autoMapped.size} of {importPreview.headers.length} columns automatically
+                      </span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-left text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                            <th className="py-2 pr-3">Your column</th>
+                            <th className="py-2 pr-3">Example data</th>
+                            <th className="py-2">Imports as</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importPreview.headers.map((header, i) => {
+                            const target = mapping[header] ?? ''
+                            return (
+                              <tr key={`${header}-${i}`} className="border-b border-border/60 align-top">
+                                <td className="py-2 pr-3 font-semibold">{header || <span className="text-text-muted">(no name)</span>}</td>
+                                <td className="max-w-[16rem] py-2 pr-3 text-text-muted">
+                                  <span className="block truncate">{importPreview.sampleRows.map((r) => r[i]).filter(Boolean).slice(0, 2).join(', ') || '-'}</span>
+                                </td>
+                                <td className="py-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <select
+                                      value={target}
+                                      onChange={(e) => setMapping({ ...mapping, [header]: e.target.value })}
+                                      aria-label={`Import ${header} as`}
+                                      className="rounded-lg border border-border bg-surface-high px-2 py-1.5 text-sm outline-none focus:border-primary"
+                                    >
+                                      <option value="">Skip this column</option>
+                                      <optgroup label="Contact">
+                                        {CONTACT_TARGETS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                      </optgroup>
+                                      <optgroup label="Lead details">
+                                        {LEAD_DETAIL_TARGETS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                      </optgroup>
+                                      <optgroup label="Other">
+                                        <option value="__custom__">Custom field…</option>
+                                      </optgroup>
+                                    </select>
+                                    {target === '__custom__' && (
+                                      <input
+                                        value={customLabels[header] || ''}
+                                        onChange={(e) => setCustomLabels({ ...customLabels, [header]: e.target.value })}
+                                        placeholder="field_name"
+                                        aria-label={`Custom field name for ${header}`}
+                                        className="w-36 rounded-lg border border-border bg-surface-high px-2 py-1.5 text-sm outline-none focus:border-primary"
+                                      />
+                                    )}
+                                    {autoMapped.has(header) && target === (mapping[header] ?? '') && target ? (
+                                      <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-success">Auto-matched</span>
+                                    ) : !target ? (
+                                      <span className="rounded-full bg-amber/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber">Not imported</span>
+                                    ) : null}
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {!phoneHeader && (
+                      <p className="text-sm font-semibold text-destructive">Choose which column is the Phone number. It is required.</p>
+                    )}
+                    {duplicateTargets.length > 0 && (
+                      <p className="text-sm text-amber">
+                        More than one column is set to {duplicateTargets.map(targetLabel).join(', ')}. Only the last one is kept.
+                      </p>
+                    )}
+                    {phoneHeader && rowsMissingPhone > 0 && (
+                      <p className="text-sm text-amber">{rowsMissingPhone} row{rowsMissingPhone === 1 ? ' has' : 's have'} no phone number and will be skipped.</p>
+                    )}
+                    {importRows.length > 5000 && (
+                      <p className="text-sm font-semibold text-destructive">This file has {importRows.length} rows. Imports are limited to 5,000 contacts at a time, so split the file.</p>
+                    )}
+                    {importError && <p className="text-sm text-destructive">{importError}</p>}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+                {importResult ? (
+                  <button onClick={cancelImport} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90">Done</button>
+                ) : importPreview ? (
+                  <>
+                    <button onClick={chooseAnotherFile} className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">Choose another file</button>
+                    <button
+                      onClick={confirmImport}
+                      disabled={importing || !phoneHeader || importableRows === 0 || importRows.length > 5000}
+                      className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50"
+                    >
+                      {importing ? 'Importing…' : phoneHeader ? `Import ${importableRows} contact${importableRows === 1 ? '' : 's'}` : 'Import contacts'}
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={cancelImport} className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">Cancel</button>
+                )}
+              </div>
+            </Card>
+          </div>
         )}
 
         {showBulkUpdate && (
