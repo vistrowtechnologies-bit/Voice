@@ -224,6 +224,20 @@ a[class*="border-cyan"]:not([class*=" bg-"]):not([class^="bg-"]) * {
   box-shadow: none;
 }
 
+/* Text fields that declare outline-none already draw their own focus (a purple
+   border, or their wrapper's border via focus-within). The generic ring above
+   would add a second square outline on top, so they get one soft glow instead,
+   and borderless fields inside a wrapper get nothing (the wrapper shows focus).
+   Matched on the class so every search box and form field behaves the same;
+   fields WITHOUT outline-none keep the full keyboard ring. */
+[data-dashboard-root] :is(input, textarea, select)[class*="outline-none"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 16%, transparent);
+}
+[data-dashboard-root] :is(input, textarea, select)[class*="bg-transparent"][class*="outline-none"]:focus-visible {
+  box-shadow: none;
+}
+
 /* Solid actions should feel raised on hover and physically respond on press.
    The shadow is token-built, so it remains subtle in both light and dark. */
 [data-dashboard-root] :is(button, a[href])[class*="bg-primary"]:not(:disabled):hover {
