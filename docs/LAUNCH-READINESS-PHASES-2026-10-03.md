@@ -11,7 +11,10 @@ Status key: DONE = verified against real state, OPEN = not done, NEEDS = waiting
 
 Still true: deploys are manual per service. A push to main deploys Voice and the web app only. The orchestrator and both LiveKit agent workers need their own deploy. This is how the orchestrator fell behind. Staging (phase 2) must make "what is deployed where" visible.
 
-## Phase 2: staging environment: OPEN
+## Phase 2: staging environment: PARTLY DONE (3 Oct 2026). Runbook: docs/STAGING.md
+Done and verified: separate Railway env with own Postgres, backend and web; login works in staging and the same credentials are rejected by production; dial lock + STAGING badge shipped. Still needed for voice/payments/OAuth: the NEEDS items below.
+
+Original plan:
 Goal: nothing in staging can dial a real phone, charge a real card, or touch production data.
 - Separate Railway environment `staging`: own Postgres (+pgbouncer), Voice, orchestrator. Do NOT duplicate production, because that copies live keys.
 - Web: Vercel preview of a `staging` branch, with `/api` rewritten to the staging Voice URL.
