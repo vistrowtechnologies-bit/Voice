@@ -1,4 +1,9 @@
 # STAGING_API_UPSTREAM is the staging backend, e.g. http://voice-staging.railway.internal:8000
+# Railway's private network DNS. The backend gets a new private address every
+# time it restarts; resolving per request (variable proxy_pass + resolver)
+# stops nginx from calling the address it saw at startup forever.
+resolver [fd12::10] valid=10s ipv6=on;
+
 server {
     listen ${PORT};
     root /usr/share/nginx/html;
@@ -7,7 +12,9 @@ server {
     add_header X-Robots-Tag "noindex, nofollow" always;
 
     location /api/ {
-        proxy_pass ${STAGING_API_UPSTREAM}/;
+        set $api_upstream ${STAGING_API_UPSTREAM};
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass $api_upstream;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
