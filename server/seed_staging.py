@@ -14,7 +14,7 @@ Add --dry-run to run only the checks.
 
   APP_ENV=staging STAGING_DATABASE_URL=postgresql://... \\
   STAGING_SEED_EMAIL=qa@example.test STAGING_SEED_PASSWORD=... \\
-  server/.venv/bin/python scripts/seed_staging.py
+  python server/seed_staging.py   # run inside the staging container
 """
 from __future__ import annotations
 
@@ -22,8 +22,7 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "server"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def staging_proof_error(url: str) -> str | None:
