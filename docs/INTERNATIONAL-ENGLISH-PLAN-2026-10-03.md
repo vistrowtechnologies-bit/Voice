@@ -14,5 +14,10 @@ Caller-stop to first audio, median: 1.53 s for Sarvam model + Google voice (LLM 
 ## Phase I1: English latency benchmark (in progress)
 `scripts/bench_english_latency.py` joins a STAGING room as a synthetic caller, speaks fixed English questions and times caller-stop to first agent audio, across model / STT / voice combinations. It refuses any non-staging address. Absolute numbers include the laptop-to-worker network path; compare variants, not absolutes.
 
+### I1 result, run 2 (3 Oct 2026, 5 questions per stack, staging us-east worker, caller on a laptop in India)
+Caller-stop to first agent audio, median ms: B gpt-4.1-mini + Sarvam STT + ElevenLabs 1829 (range 1497-1989); A same model + Google Chirp 3 STT (us) 2317; C gemini-3.5-flash-lite + Chirp 3 + ElevenLabs 2400; E gemini-lite + Chirp 3 + Google voice 2532; D gpt-4o-mini + Chirp 3 + ElevenLabs 2940; F sarvam-105b + Chirp 3 + ElevenLabs 3010.
+Read with care: n=5 per stack, one run; the India-to-US network path adds a roughly constant amount to every stack, so compare stacks, not absolutes; A vs C vs E are within noise. Not yet checked: answer quality, cost per minute, and agent behaviour in en-US (the agent text still says "11 Indian languages").
+Run 1 was invalid: Chirp 3 for en-IN in asia-southeast1 returned PERMISSION_DENIED ("no longer generally available in region"). The code pins that region (`GOOGLE_SPEECH_LOCATION` default). No production agent uses Chirp 3 (all 19 are Sarvam, hi-IN), but a new English agent that picked it would fail. The staging worker now sets `GOOGLE_SPEECH_LOCATION=us`.
+
 ## Next
 I2 region: put workers where the callers are; I3 add en-US/en-GB; I4 add a low-latency English STT; I5 USD billing; I6 carrier for the first target market; I7 that market's calling/consent rules. Waiting on the owner: first target market.

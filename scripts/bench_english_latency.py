@@ -50,8 +50,11 @@ class Caller:
         async for ev in rtc.AudioStream(track):
             if rms(ev.frame) > SPEAK_RMS:
                 now = time.monotonic()
+                gap = now - self.last_agent_audio if self.last_agent_audio else 99.0
                 self.last_agent_audio = now
-                if self.watch_after is not None and self.first_audio_after is None and now >= self.watch_after:
+                # A reply starts after a silent gap; audible frames that merely
+                # continue the previous answer must not count as the reply.
+                if self.watch_after is not None and self.first_audio_after is None and now >= self.watch_after and gap > 0.4:
                     self.first_audio_after = now
 
     async def join(self, url: str, token: str) -> rtc.AudioSource:
