@@ -1,4 +1,7 @@
 # Staging web app (Railway service "web-staging", staging environment only).
+# Selected with the service variable RAILWAY_DOCKERFILE_PATH=Dockerfile.web-staging
+# so a push to the `staging` branch builds it; the repo-root Dockerfile is the
+# backend's.
 #
 # Production's web app is on Vercel, and its vercel.json hard-codes the
 # production API address plus middleware that bounces other hosts to the
@@ -7,15 +10,15 @@
 # staging backend inside the staging environment's private network.
 FROM node:22-slim AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY web-demo/package.json web-demo/package-lock.json ./
 RUN npm ci
-COPY . .
+COPY web-demo/ .
 # Only the client bundle: staging does not need the SEO prerender step.
 ARG VITE_APP_ENV=staging
 ENV VITE_APP_ENV=$VITE_APP_ENV
 RUN npx tsc -b && npx vite build
 
 FROM nginx:1.27-alpine
-# nginx substitutes ${STAGING_API_UPSTREAM} etc. into this template at start.
-COPY nginx.staging.conf.template /etc/nginx/templates/default.conf.template
+# nginx substitutes ${PORT} and ${STAGING_API_UPSTREAM} into this template at start.
+COPY web-demo/nginx.staging.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
