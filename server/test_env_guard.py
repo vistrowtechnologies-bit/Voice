@@ -34,5 +34,20 @@ class EnvGuardTests(unittest.TestCase):
             self.assertTrue(env_guard.dial_block_reason("+919000000000"))
 
 
+class EmailGuardTests(unittest.TestCase):
+    def test_production_sends_to_anyone(self):
+        with _env():
+            self.assertIsNone(env_guard.email_block_reason("someone@gmail.com"))
+
+    def test_staging_blocks_unless_listed_by_address_or_domain(self):
+        with _env(APP_ENV="staging"):
+            self.assertTrue(env_guard.email_block_reason("someone@gmail.com"))
+        with _env(APP_ENV="staging", STAGING_EMAIL_ALLOWLIST="qa@example.com, @vistrow.com"):
+            self.assertIsNone(env_guard.email_block_reason("QA@example.com"))
+            self.assertIsNone(env_guard.email_block_reason("a.b@vistrow.com"))
+            self.assertTrue(env_guard.email_block_reason("a.b@notvistrow.com.evil.io"))
+            self.assertTrue(env_guard.email_block_reason("other@example.com"))
+
+
 if __name__ == "__main__":
     unittest.main()

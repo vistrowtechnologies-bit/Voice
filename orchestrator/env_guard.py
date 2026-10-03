@@ -3,8 +3,10 @@
 APP_ENV=staging marks a deployment that must never reach a real person. In
 that mode every outbound dial is refused unless the number is on
 STAGING_DIAL_ALLOWLIST (comma-separated; matched on the last 10 digits, so
-"+91 90670 97779" and "9067097779" are the same number). Unset or any other
-APP_ENV (including production, the default) leaves dialling untouched.
+"+91 90670 97779" and "9067097779" are the same number). Outbound email works
+the same way with STAGING_EMAIL_ALLOWLIST (full addresses or "@domain.com").
+Unset or any other APP_ENV (including production, the default) leaves dialling
+and email untouched.
 
 orchestrator/env_guard.py is a copy: that service is built from its own
 folder and cannot import from server/. Keep the two files identical.
@@ -40,3 +42,17 @@ def dial_block_reason(to_number: str) -> str | None:
         "Blocked: this is the staging environment, which only dials numbers on "
         "STAGING_DIAL_ALLOWLIST."
     )
+
+
+def email_block_reason(to_address: str) -> str | None:
+    """None when the email may be sent; otherwise why staging refuses it."""
+    if not is_staging():
+        return None
+    to = (to_address or "").strip().lower()
+    for entry in os.environ.get("STAGING_EMAIL_ALLOWLIST", "").split(","):
+        entry = entry.strip().lower()
+        if not entry:
+            continue
+        if entry == to or (entry.startswith("@") and to.endswith(entry)):
+            return None
+    return "Blocked: this is the staging environment, which only emails addresses on STAGING_EMAIL_ALLOWLIST."

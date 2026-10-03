@@ -22,6 +22,8 @@ import urllib.error
 import urllib.request
 from email.message import EmailMessage
 
+import env_guard
+
 logger = logging.getLogger("vistrow-email")
 
 _DEFAULT_FROM = "Vistrow Voice <noreply@vistrowvoice.com>"
@@ -154,6 +156,10 @@ def send_email(
     `from_address` picks the category-specific identity (see FROM_* constants
     above) — e.g. password resets come from security@, invites from
     invites@. Still overridden globally by EMAIL_FROM if that's set."""
+    blocked = env_guard.email_block_reason(to)
+    if blocked:
+        logger.warning("%s (subject %r to %s)", blocked, subject, to)
+        return False
     resend_key = os.environ.get("RESEND_API_KEY")
     if resend_key:
         return _send_resend(resend_key, to, subject, html, from_address, attachments, reply_to)
