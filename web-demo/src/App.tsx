@@ -69,6 +69,7 @@ import { LeadDetail } from './pages/LeadDetail'
 import { WebsiteWidget } from './pages/WebsiteWidget'
 import { Settings } from './pages/Settings'
 import { useEffect } from 'react'
+import { StagingBadge } from './components/StagingBadge'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { initClarity, trackPageView } from './lib/analytics'
 
@@ -133,6 +134,7 @@ function App() {
   return (
     <AuthProvider>
       <AnalyticsListener />
+      <StagingBadge />
       <Routes location={backgroundLocation ?? location}>
         {/* Public - marketing site */}
         <Route path="/" element={<Home />} />

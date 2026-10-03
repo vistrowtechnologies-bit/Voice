@@ -22,6 +22,7 @@ import os
 import httpx
 
 import db
+import env_guard
 
 ENABLEX_API_BASE = "https://api.enablex.io/voice/v1"
 _TIMEOUT_S = 15.0
@@ -124,6 +125,9 @@ async def place_outbound_call(from_number: str, to_number: str, account_id: int,
     answered. (EnableX's action_on_connect.stream auto-start is deliberately
     NOT used here — it has no way to carry our signed WS token, and our
     /stream endpoint rejects unsigned connections.)"""
+    staging_reason = env_guard.dial_block_reason(to_number)
+    if staging_reason:
+        return {"ok": False, "blocked": True, "error": staging_reason}
     body: dict = {
         "name": "Vistrow Voice orchestrator call",
         "owner_ref": "vistrow-orchestrator",

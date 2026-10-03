@@ -45,6 +45,7 @@ from livekit.protocol.sip import (
 )
 
 import calls_db
+import env_guard
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +165,10 @@ async def place_outbound_call(
 
     Returns {"ok": True, "room": str} or {"ok": False, "error"/"blocked": ...}.
     """
+    staging_reason = env_guard.dial_block_reason(to_number)
+    if staging_reason:
+        return {"ok": False, "blocked": True, "error": staging_reason}
+
     allowed, reason = calls_db.check_call_allowed(account_id, to_number)
     if not allowed:
         return {"ok": False, "blocked": True, "error": reason}
