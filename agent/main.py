@@ -57,6 +57,7 @@ from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarv
 # construct EarlyFlushTTS until that completeness test passes reliably.
 
 import db
+from contact_notes import build_contact_notes
 import numpy as np
 import recording
 import inbound_rules
@@ -6221,6 +6222,16 @@ async def entrypoint(ctx: JobContext) -> None:
         await asyncio.to_thread(db.end_call_room, ctx.room.name)
 
     ctx.add_shutdown_callback(_release_call_slot)
+    # Lead details imported with the contact (city, budget, their own words...)
+    # become a "what we already know" block at the END of the prompt, so the
+    # agent uses them without the operator hand-placing {{custom.key}} tokens.
+    # Built from the prompt BEFORE token substitution so a field the operator
+    # already placed is not repeated.
+    contact_notes = ""
+    if config and call_context["custom_fields"]:
+        contact_notes = build_contact_notes(
+            call_context["custom_fields"], config.get("system_prompt") or "", call_context["company"]
+        )
     if config and (
         ("{{" in (config.get("system_prompt") or ""))
         or ("{{" in (config.get("welcome_message") or ""))
@@ -6258,6 +6269,12 @@ async def entrypoint(ctx: JobContext) -> None:
             ),
         }
         cfg = config
+    if config and contact_notes:
+        config = {**config, "system_prompt": (config.get("system_prompt") or "").rstrip() + "\n\n" + contact_notes}
+        cfg = config
+        logger.info(
+            "contact notes appended to prompt: %d line(s) (room=%s)", contact_notes.count("\n"), ctx.room.name
+        )
     # "Try it in your language" on the marketing site: the visitor picks a
     # language before the call, so the agent has to OPEN in it rather than
     # opening in Hindi and waiting to be corrected. Restricted to the demo
