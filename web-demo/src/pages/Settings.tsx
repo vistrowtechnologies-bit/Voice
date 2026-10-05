@@ -97,7 +97,7 @@ export function Settings() {
         <div
           role="tablist"
           aria-label="Settings sections"
-          className="flex w-full min-w-0 gap-1 overflow-x-auto rounded-xl border border-border bg-surface-high/60 p-1"
+          className="flex w-full min-w-0 gap-1 overflow-x-auto rounded-xl border border-border bg-surface-high/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {TABS.map((item) => (
             <button
