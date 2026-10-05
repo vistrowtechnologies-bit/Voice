@@ -390,7 +390,7 @@ export function PageHeader({
   }, [refreshSignal])
 
   return (
-    <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/90 px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:px-6">
+    <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/90 px-4 py-4 backdrop-blur-xl sm:px-6 xl:flex-row xl:items-center">
       {!sidebar.open && (
         <Tooltip content={`Open sidebar (${TOGGLE_SHORTCUT})`}><button
           onClick={sidebar.toggle}
@@ -404,7 +404,7 @@ export function PageHeader({
         <h1 className="text-lg font-semibold leading-tight">{title}</h1>
         {subtitle && <p className="mt-0.5 text-xs leading-snug text-text-muted sm:truncate">{subtitle}</p>}
       </div>
-      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
+      <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 xl:w-auto">
         <CommandMenuButton />
         {credits !== null && (
           <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted">
