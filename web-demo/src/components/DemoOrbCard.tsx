@@ -22,6 +22,9 @@ type Phase = 'idle' | 'consent' | 'connecting' | 'active' | 'active-orchestrator
 // unavailable (restarting/crashed/no capacity), so we surface a clean retry
 // instead of leaving the visitor staring at a ticking timer over dead air.
 const AGENT_JOIN_TIMEOUT_MS = 20_000
+// The agent can join the room and still never start (its job crashed loading
+// its configuration). It reports lk.agent.state once it is really running.
+const AGENT_READY_TIMEOUT_MS = 25_000
 
 // Same hard cap the embeddable widget enforces (widget/src/widget.ts) - every
 // minute of every call costs real STT/LLM/TTS spend. The marketing demo cuts
@@ -667,6 +670,18 @@ const WAITING_LABEL = 'Connecting…'
 // swapped from the idle "Tap to talk" content to live call state: a running
 // timer and mute/end-call controls. No "Listening…/Thinking…/Speaking…"
 // status text - it read as distracting chatter rather than useful signal.
+// Joined-but-never-ready watchdog: without it a call whose agent crashed after
+// joining sat on "Connecting..." until the visitor gave up (5 Oct 2026).
+function AgentReadyWatchdog({ agentParticipant, onUnavailable }: { agentParticipant: RemoteParticipant; onUnavailable: () => void }) {
+  const agentState = useParticipantAttribute('lk.agent.state', { participant: agentParticipant })
+  useEffect(() => {
+    if (agentState) return
+    const timer = setTimeout(onUnavailable, AGENT_READY_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [agentState, onUnavailable])
+  return null
+}
+
 function InlineCallBody({ onAgentUnavailable, onConnected }: { onAgentUnavailable: () => void; onConnected: () => void }) {
   const room = useRoomContext()
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant()
@@ -724,6 +739,7 @@ function InlineCallBody({ onAgentUnavailable, onConnected }: { onAgentUnavailabl
         )}
       </div>
 
+      {agentJoined && <AgentReadyWatchdog agentParticipant={agentParticipant} onUnavailable={onAgentUnavailable} />}
       {agentJoined ? (
         <AgentStateLabel agentParticipant={agentParticipant} />
       ) : (

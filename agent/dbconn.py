@@ -23,12 +23,31 @@ open costs a full handshake, and connections pile up under concurrent
 calls). Pooling reuses a small set of warm connections instead.
 """
 
+import logging
 import os
 import threading
 
 import psycopg
 from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
+from psycopg_pool import ConnectionPool, PoolTimeout
+
+logger = logging.getLogger("vistrow-dbconn")
+
+# The worker runs on LiveKit's cloud and reaches Postgres through Railway's
+# public TCP proxy, a link that drops idle connections and sometimes stalls a
+# new one. With no connect timeout the pool waited its whole 30 s default and
+# the job died with PoolTimeout, leaving the caller on "Connecting..." (seen
+# on a live demo call, 5 Oct 2026). Detect dead sockets quickly, give up on a
+# stalled attempt quickly, and retry on a fresh pool instead.
+_CONNECT_KWARGS = {
+    "connect_timeout": 5,
+    "keepalives": 1,
+    "keepalives_idle": 20,
+    "keepalives_interval": 5,
+    "keepalives_count": 3,
+}
+_GETCONN_TIMEOUT_S = 6.0
+_CONNECT_ATTEMPTS = 3
 
 
 def _database_url() -> str:
@@ -70,7 +89,7 @@ def _get_pool() -> ConnectionPool:
                     _database_url(),
                     min_size=0,
                     max_size=2,
-                    kwargs={"row_factory": dict_row},
+                    kwargs={"row_factory": dict_row, **_CONNECT_KWARGS},
                     open=True,
                     # A worker subprocess can sit idle for many minutes
                     # between calls (each LiveKit job gets its own OS
@@ -150,8 +169,29 @@ class Conn:
         _get_pool().putconn(self._raw)
 
 
+def _reset_pool() -> None:
+    """Drop the pool so the next attempt builds a fresh one (and fresh sockets)."""
+    global _pool
+    with _pool_lock:
+        old, _pool = _pool, None
+    if old is not None:
+        try:
+            old.close(timeout=1)
+        except Exception:  # noqa: BLE001 - best effort; the pool is being discarded anyway
+            pass
+
+
 def connect() -> Conn:
-    return Conn(_get_pool().getconn())
+    last: PoolTimeout | None = None
+    for attempt in range(1, _CONNECT_ATTEMPTS + 1):
+        try:
+            return Conn(_get_pool().getconn(timeout=_GETCONN_TIMEOUT_S))
+        except PoolTimeout as exc:
+            last = exc
+            logger.warning("database connection attempt %d/%d timed out; retrying on a fresh pool", attempt, _CONNECT_ATTEMPTS)
+            _reset_pool()
+    assert last is not None
+    raise last
 
 
 def listen_connection() -> psycopg.Connection:
@@ -165,4 +205,5 @@ def listen_connection() -> psycopg.Connection:
         _database_url(),
         autocommit=True,
         row_factory=dict_row,
+        **_CONNECT_KWARGS,
     )
