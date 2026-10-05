@@ -6154,7 +6154,25 @@ async def entrypoint(ctx: JobContext) -> None:
     # The agent prompt needs a KB snapshot, optional caller memory, and
     # compliance settings. Load these blocking Postgres reads in parallel on
     # worker threads before any synchronous constructor code can run.
-    config = await _load_runtime_call_context(config or {}, call_context.get("visitor_phone"))
+    # Admission (a plan/credit/concurrency check of ~10 sequential queries over a
+    # long database link) used to run AFTER the context reads, one after the
+    # other: ~2 s on a demo call's critical path. Start it now, beside the
+    # reads, and require its answer just before anything is built or spoken.
+    _admission_base = config or {}
+    _admission_task = asyncio.create_task(
+        asyncio.to_thread(db.try_start_call, ctx.room.name, _admission_base.get("account_id"), _admission_base)
+    )
+    try:
+        config = await _load_runtime_call_context(config or {}, call_context.get("visitor_phone"))
+    except BaseException:
+        # The slot may still be claimed by the in-flight check; never leak it.
+        try:
+            if await asyncio.shield(_admission_task):
+                await asyncio.to_thread(db.end_call_room, ctx.room.name)
+        except BaseException:  # noqa: BLE001 - cleanup only
+            pass
+        raise
+    logger.info("[latency] call context loaded at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # After the caller joins, not at job start — duration (and therefore
     # credit billing) shouldn't include dispatch/connect/ring time.
     started_at = datetime.now(timezone.utc)
@@ -6176,7 +6194,9 @@ async def entrypoint(ctx: JobContext) -> None:
     # shutdown callback below. Declining here (no session ever built) is what
     # actually enforces the cap; the campaign dialer's own pre-check just
     # avoids placing outbound calls that would land here anyway.
-    if not await asyncio.to_thread(db.try_start_call, ctx.room.name, cfg.get("account_id"), cfg):
+    _admitted = await _admission_task
+    logger.info("[latency] call admission answered at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
+    if not _admitted:
         logger.info(
             "call admission denied (plan, configuration, capacity or database) for account_id=%s — declining room %s",
             cfg.get("account_id"), ctx.room.name,

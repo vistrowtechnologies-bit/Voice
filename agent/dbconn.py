@@ -106,8 +106,11 @@ def _get_pool() -> ConnectionPool:
                     # (~2.5 s from India), so pay it at process start, not at
                     # the caller's expense.
                     min_size=1,
-                    max_size=2,
-                    max_idle=1800,
+                    # 4 so a call's admission check and its three parallel context
+                    # reads really run side by side at start. Extras close after
+                    # 60 s idle, so a busy fleet does not sit on 4 each.
+                    max_size=4,
+                    max_idle=60,
                     kwargs={"row_factory": dict_row, **_CONNECT_KWARGS},
                     open=True,
                     # A worker subprocess can sit idle for many minutes
