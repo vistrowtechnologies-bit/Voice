@@ -24,3 +24,20 @@ Margin at the Scale price: cascaded ~31%, realtime-mini and Gemini Live ~46-54%,
 
 ## Not known
 Latency and answer quality of any realtime model on our prompts; Hindi/Indic accuracy (the code says Sarvam is the measured-accurate one); whether cached-input discounts hold on real calls; long-call growth (context is re-billed every turn). Gemini Live is already wired (admin-only, `gemini-live` prefix; 3.1 is deliberately not the default because it ignores mid-session instruction updates that our per-turn guards rely on). OpenAI realtime is not wired; the plugin is installed.
+
+## Rupee view (added 5 Oct 2026, after the first benchmark runs)
+Rate used: Rs95.16 per USD (single web-search result, 5 Oct 2026; the table above assumed Rs88, which understated every dollar-priced line by about 8%). LiveKit session is a rupee price (Rs0.957/min), so it does not move with the rate.
+
+| Setup | Provider Rs/min | Total with LiveKit | Margin at Scale (Rs5.20/min) |
+|---|---|---|---|
+| gpt-realtime-2.1 flagship, cached | 5.0 | 6.0 | -15% |
+| gpt-realtime-2.1 flagship, prompt not cached | 8.2 | 9.1 | -75% |
+| gpt-realtime-mini | 1.5 - 2.0 | 2.5 - 3.0 | 42 - 52% |
+| Gemini 3.8 Live | 1.7 | 2.7 | ~48% |
+| Gemini 2.5 native audio | 1.8 | 2.8 | ~46% |
+| Our stack (gpt-4.1-mini + Sarvam STT + ElevenLabs Flash) | 2.7 | 3.7 | 29% |
+| Our stack with Google Chirp 3 STT | 3.8 | 4.8 | 8% |
+At the Starter price (Rs10/min) the flagship earns about 40% cached, 9% uncached.
+
+## Latency benchmark (staging, us-east worker, caller on a laptop in India, 5 questions per stack)
+Gemini Live 3.1 preview: median 2,368 ms (range 1,068-4,084). Cascaded reference in the same run (gpt-4.1-mini + Sarvam STT + ElevenLabs): 2,052 ms. Gemini Live 2.5 native audio: no replies at all; the agent log says "turn_detection is set to 'stt', but no STT model is provided" and "server cancelled tool calls", so our Gemini Live wiring has a fault on 2.5 and this is NOT a verdict on the model. OpenAI realtime: not wired in, not measured. n=5 and one run, so treat as indicative only.
