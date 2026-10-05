@@ -26,6 +26,7 @@ calls). Pooling reuses a small set of warm connections instead.
 import logging
 import os
 import threading
+import time
 
 import psycopg
 from psycopg.rows import dict_row
@@ -48,6 +49,19 @@ _CONNECT_KWARGS = {
 }
 _GETCONN_TIMEOUT_S = 6.0
 _CONNECT_ATTEMPTS = 3
+# A pooled connection used this recently is certainly alive, so skip the
+# health-check round trip. Each check costs a full network round trip to the
+# proxy (~0.9 s from India), and one call's config load makes several
+# back-to-back DB calls.
+_FRESH_S = 15.0
+
+
+def _check_if_stale(conn: psycopg.Connection) -> None:
+    """Pool `check` hook: only round-trip a connection that has sat idle."""
+    last = getattr(conn, "_vv_last_used", 0.0)
+    if time.monotonic() - last < _FRESH_S:
+        return
+    ConnectionPool.check_connection(conn)
 
 
 def _database_url() -> str:
@@ -87,8 +101,13 @@ def _get_pool() -> ConnectionPool:
                 # needs one.
                 _pool = ConnectionPool(
                     _database_url(),
-                    min_size=0,
+                    # One warm connection per process: the TCP+TLS handshake to
+                    # the proxy is the slowest part of a call's first query
+                    # (~2.5 s from India), so pay it at process start, not at
+                    # the caller's expense.
+                    min_size=1,
                     max_size=2,
+                    max_idle=1800,
                     kwargs={"row_factory": dict_row, **_CONNECT_KWARGS},
                     open=True,
                     # A worker subprocess can sit idle for many minutes
@@ -102,7 +121,7 @@ def _get_pool() -> ConnectionPool:
                     # cheap query before handing a pooled connection back
                     # out, so a dead one gets discarded and replaced instead
                     # of reaching call code.
-                    check=ConnectionPool.check_connection,
+                    check=_check_if_stale,
                 )
     return _pool
 
@@ -166,7 +185,17 @@ class Conn:
         # this, that warning fires on nearly every read-only request.
         if self._raw.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
             self._raw.rollback()
+        self._raw._vv_last_used = time.monotonic()
         _get_pool().putconn(self._raw)
+
+
+def warm() -> None:
+    """Open the pool now (best effort) so the first call's query finds a live
+    connection instead of dialling the proxy."""
+    try:
+        _get_pool()
+    except Exception:  # noqa: BLE001 - warming must never break process start
+        logger.warning("could not warm the database pool", exc_info=True)
 
 
 def _reset_pool() -> None:

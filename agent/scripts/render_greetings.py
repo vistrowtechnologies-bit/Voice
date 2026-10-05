@@ -43,7 +43,47 @@ def _write_wav(path: Path, frames) -> None:
         wf.writeframes(data)
 
 
+SANA_VOICE = "google:chirp3:Callirrhoe"  # "Sana HD" in the voice picker
+
+
+async def render_sana() -> None:
+    """Add Sana HD (Chirp 3 HD Callirrhoe) clips next to the existing ones.
+
+    Merges into the current manifest instead of re-rendering the Kore clips,
+    so run `render_greetings.py --sana` after changing the demo voice.
+    """
+    if not _GOOGLE_CREDENTIALS:
+        print("GOOGLE_APPLICATION_CREDENTIALS_JSON is not set — nothing to render.")
+        return
+    from voice_catalog import chirp3_voice_name
+
+    OUT_DIR.mkdir(exist_ok=True)
+    manifest_path = OUT_DIR / "manifest.json"
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else []
+    manifest = [e for e in manifest if e["voice"] != SANA_VOICE]
+    for language, opener_set in (("hi-IN", _PLATFORM_DEMO_OPENERS), ("en-IN", _PLATFORM_DEMO_OPENERS_EN)):
+        tts = PatchedGeminiTTS(
+            language=language,
+            voice_name=chirp3_voice_name("Callirrhoe", language),
+            credentials_info=_GOOGLE_CREDENTIALS,
+        )
+        for i, text in enumerate((opener_set.get("female") or [])[:_GREETING_CACHE_PER_SET]):
+            print(f"rendering Sana {language} #{i}: {text[:50]}...")
+            frames = await _synthesize_frames(tts, text)
+            if not frames:
+                print("  -> got no audio, skipping")
+                continue
+            filename = f"sana_{language}_{i}.wav"
+            _write_wav(OUT_DIR / filename, frames)
+            manifest.append({"voice": SANA_VOICE, "language": language, "gender": "female", "text": text, "file": filename})
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
+    print(f"manifest now has {len(manifest)} clip(s)")
+
+
 async def main() -> None:
+    if "--sana" in sys.argv:
+        await render_sana()
+        return
     if not _GOOGLE_CREDENTIALS:
         print("GOOGLE_APPLICATION_CREDENTIALS_JSON is not set — nothing to render.")
         return

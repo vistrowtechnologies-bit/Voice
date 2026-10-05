@@ -8221,6 +8221,11 @@ def _prewarm(proc: JobProcess) -> None:
         target=_run_google_tts_prewarm, name="tts-prewarm", args=(proc.pid,), daemon=True
     ).start()
     logger.info("prewarm: Google TTS warm-up started in background (pid=%s)", proc.pid)
+    # Open the Postgres connection now, off the call's clock. Reaching the
+    # database through Railway's public proxy from India costs ~2.5 s for the
+    # first connection; a caller's config lookup used to pay it (demo call,
+    # 5 Oct 2026: config ready at +3.0 s).
+    threading.Thread(target=db.dbconn.warm, name="db-prewarm", daemon=True).start()
 
 
 # Confirmed live (2026-09-01): with num_idle_processes=4, a fresh deploy
