@@ -54,6 +54,15 @@ _CONNECT_ATTEMPTS = 3
 # proxy (~0.9 s from India), and one call's config load makes several
 # back-to-back DB calls.
 _FRESH_S = 15.0
+# Connections opened ahead of any call. A call's start runs its admission check
+# and its context reads side by side, and every connection that is not already
+# open costs a full TCP+TLS+auth handshake to the far-away proxy (~2 s from
+# India). Three covers admission + compliance + knowledge base.
+_WARM_CONNECTIONS = 3
+
+
+def _stamp_fresh(conn: psycopg.Connection) -> None:
+    conn._vv_last_used = time.monotonic()
 
 
 def _check_if_stale(conn: psycopg.Connection) -> None:
@@ -105,7 +114,7 @@ def _get_pool() -> ConnectionPool:
                     # the proxy is the slowest part of a call's first query
                     # (~2.5 s from India), so pay it at process start, not at
                     # the caller's expense.
-                    min_size=1,
+                    min_size=_WARM_CONNECTIONS,
                     # 4 so a call's admission check and its three parallel context
                     # reads really run side by side at start. Extras close after
                     # 60 s idle, so a busy fleet does not sit on 4 each.
@@ -125,6 +134,10 @@ def _get_pool() -> ConnectionPool:
                     # out, so a dead one gets discarded and replaced instead
                     # of reaching call code.
                     check=_check_if_stale,
+                    # A connection that has never been used is as fresh as one
+                    # just used; without this the first call after warm-up pays
+                    # a check round trip on each of them.
+                    configure=_stamp_fresh,
                 )
     return _pool
 
