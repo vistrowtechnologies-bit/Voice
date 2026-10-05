@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { NAV_GROUPS } from './navGroups'
 import { CommandMenuButton, CommandPalette } from './CommandPalette'
 import { NotificationBell } from './NotificationBell'
@@ -18,11 +18,6 @@ import { Icon } from './Icon'
 import { OnboardingModal } from './OnboardingModal'
 import vistrowMark from '../assets/vistrow-mark.png'
 import { Tooltip } from './ui/Tooltip'
-
-/** Desktop sidebar state, shared with PageHeader so the "open sidebar"
- * button can sit in the top bar while the sidebar is slid away — the way the
- * Claude desktop app does it. */
-const SidebarContext = createContext<{ open: boolean; toggle: () => void }>({ open: true, toggle: () => {} })
 
 const SIDEBAR_KEY = 'vistrow.sidebar.collapsed'
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
@@ -388,6 +383,65 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
   )
 }
 
+/** The collapsed desktop sidebar: the same destinations as icons, each named
+ * by a tooltip, so collapsing saves width without hiding navigation. */
+function SidebarRail({ onExpand }: { onExpand: () => void }) {
+  const { user } = useAuth()
+  const workspace = user?.accountName || BRAND.defaultWorkspace
+  const railLink = ({ isActive }: { isActive: boolean }) =>
+    `flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+      isActive ? 'bg-primary/10 text-primary' : 'text-text-muted hover:bg-surface-high hover:text-text'
+    }`
+
+  return (
+    <>
+      <img src={vistrowMark} alt="" className="mx-auto mb-2 h-9 w-9 shrink-0 rounded-xl shadow-sm" />
+      <Tooltip side="right" content={`Open sidebar (${TOGGLE_SHORTCUT})`}><button
+        onClick={onExpand}
+        aria-label="Open sidebar"
+        className="mx-auto mb-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-high hover:text-primary"
+      >
+        <Icon name="left_panel_open" className="text-[20px]" />
+      </button></Tooltip>
+      <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 flex-1 flex-col items-center gap-0.5 overflow-y-auto border-t border-border pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {NAV_GROUPS.filter((group) => !group.pinned).map((group, index) => (
+          <div key={group.title} className={`flex flex-col items-center gap-0.5 ${index ? 'mt-1.5 border-t border-border pt-1.5' : ''}`}>
+            {group.items.map((item) => (
+              <Tooltip key={item.to} side="right" content={item.label}><NavLink
+                to={item.to}
+                end={item.to === '/dashboard'}
+                aria-label={item.label}
+                data-tour={item.tour}
+                className={railLink}
+              >
+                <Icon name={item.icon} className="text-[19px]" />
+              </NavLink></Tooltip>
+            ))}
+          </div>
+        ))}
+      </nav>
+      <div className="flex shrink-0 flex-col items-center gap-2 border-t border-border pt-2">
+        {user?.isPlatformOwner && !user?.impersonating && (
+          <Tooltip side="right" content="Admin panel"><NavLink
+            to="/admin"
+            aria-label="Admin panel"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-destructive/40 bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
+          >
+            <Icon name="shield_person" className="text-[19px]" />
+          </NavLink></Tooltip>
+        )}
+        <Tooltip side="right" content={workspace}><Link to="/dashboard/settings?tab=profile" aria-label="My profile" className="rounded-full">
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt="" className="h-9 w-9 rounded-full border border-primary/30 object-cover" />
+          ) : (
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">{initials(workspace)}</span>
+          )}
+        </Link></Tooltip>
+      </div>
+    </>
+  )
+}
+
 export function PageHeader({
   title,
   subtitle,
@@ -401,7 +455,6 @@ export function PageHeader({
 }) {
   const [credits, setCredits] = useState<number | null>(null)
   const { pathname } = useLocation()
-  const sidebar = useContext(SidebarContext)
   // Each page links to the help-centre topic that explains it.
   const helpTopic = helpTopicFor(pathname)
   // Agent creation belongs to the Agents page. Showing it on the overview
@@ -416,15 +469,6 @@ export function PageHeader({
 
   return (
     <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/90 px-4 py-4 backdrop-blur-xl sm:px-6 xl:flex-row xl:items-center">
-      {!sidebar.open && (
-        <Tooltip content={`Open sidebar (${TOGGLE_SHORTCUT})`}><button
-          onClick={sidebar.toggle}
-          aria-label="Open sidebar"
-          className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-primary hover:text-primary lg:flex"
-        >
-          <Icon name="left_panel_open" className="text-[20px]" />
-        </button></Tooltip>
-      )}
       <div className="min-w-0 flex-1">
         <h1 className="text-lg font-semibold leading-tight">{title}</h1>
         {subtitle && <p className="mt-0.5 text-xs leading-snug text-text-muted sm:truncate">{subtitle}</p>}
@@ -562,7 +606,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   }, [user])
 
   return (
-    <SidebarContext.Provider value={{ open: sidebarOpen, toggle: toggleSidebar }}>
     <div data-dashboard-root className="min-h-screen bg-bg text-text">
       {/* Mounted once for the whole dashboard - it is keyboard-summoned, so
           it has no trigger in the layout and renders nothing until opened. */}
@@ -570,13 +613,11 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {user?.impersonating && <ImpersonationBanner accountName={user.accountName} />}
       <aside
         data-dashboard-sidebar
-        aria-hidden={!sidebarOpen || undefined}
-        inert={!sidebarOpen || undefined}
-        className={`fixed left-0 z-30 hidden w-[248px] flex-col overflow-x-hidden border-r border-border bg-surface px-2 py-3 transition-transform duration-200 ease-out motion-reduce:transition-none lg:flex ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed left-0 z-30 hidden flex-col overflow-x-hidden border-r border-border bg-surface py-3 transition-[width] duration-200 ease-out motion-reduce:transition-none lg:flex ${
+          sidebarOpen ? 'w-[248px] px-2' : 'w-16 px-1'
         } ${user?.impersonating ? 'top-9 h-[calc(100%-2.25rem)]' : 'top-0 h-full'}`}
       >
-        <SidebarContent onClose={tourActive ? undefined : toggleSidebar} />
+        {sidebarOpen ? <SidebarContent onClose={tourActive ? undefined : toggleSidebar} /> : <SidebarRail onExpand={toggleSidebar} />}
       </aside>
 
       {mobileNavOpen && (
@@ -592,7 +633,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className={`min-w-0 transition-[margin] duration-200 ease-out motion-reduce:transition-none ${sidebarOpen ? 'lg:ml-[248px]' : 'lg:ml-0'} ${user?.impersonating ? 'pt-9' : ''}`}>
+      <div className={`min-w-0 transition-[margin] duration-200 ease-out motion-reduce:transition-none ${sidebarOpen ? 'lg:ml-[248px]' : 'lg:ml-16'} ${user?.impersonating ? 'pt-9' : ''}`}>
         <div className="flex items-center gap-3 border-b border-border px-4 py-3 lg:hidden">
           <button
             aria-label="Open navigation"
@@ -616,6 +657,5 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {user && user.onboarded && !user.tourCompleted && <DashboardTour />}
       {user && <HelpChatWidget />}
     </div>
-    </SidebarContext.Provider>
   )
 }
