@@ -495,7 +495,7 @@ export function Contacts() {
       key: 'name',
       header: 'Contact Name',
       primary: true,
-      width: 250,
+      width: 230,
       minWidth: 120,
       maxWidth: 460,
       sticky: 'left',
@@ -517,7 +517,7 @@ export function Contacts() {
     {
       key: 'info',
       header: 'Contact Info',
-      width: 210,
+      width: 175,
       minWidth: 115,
       maxWidth: 380,
       resizable: true,
@@ -531,7 +531,7 @@ export function Contacts() {
     {
       key: 'status',
       header: 'Status',
-      width: 115,
+      width: 100,
       minWidth: 82,
       maxWidth: 180,
       resizable: true,
@@ -543,28 +543,9 @@ export function Contacts() {
       ),
     },
     {
-      key: 'tags',
-      header: 'Tags',
-      width: 220,
-      minWidth: 110,
-      maxWidth: 480,
-      resizable: true,
-      render: (c) => (
-        <Tooltip content={c.tags.join(', ')}><div className="flex min-w-0 flex-nowrap gap-1 overflow-hidden">
-          {c.tags.length === 0 && <span className="text-sm text-text-muted">-</span>}
-          {c.tags.slice(0, 2).map((t) => (
-            <span key={t} className="shrink-0 rounded bg-surface-high px-1.5 py-0.5 text-[11px] text-text-muted">
-              {t}
-            </span>
-          ))}
-          {c.tags.length > 2 && <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">+{c.tags.length - 2} more</span>}
-        </div></Tooltip>
-      ),
-    },
-    {
       key: 'lead',
       header: 'Lead details',
-      width: 380,
+      width: 360,
       minWidth: 220,
       maxWidth: 640,
       resizable: true,
@@ -596,12 +577,31 @@ export function Contacts() {
     {
       key: 'source',
       header: 'Lead source',
-      width: 150,
+      width: 130,
       minWidth: 90,
       maxWidth: 260,
       resizable: true,
       sortValue: (c) => leadSummary(c.customFields).source || c.source,
       render: (c) => <span className="block truncate text-sm text-text-muted">{leadSummary(c.customFields).source || c.source || '-'}</span>,
+    },
+    {
+      key: 'tags',
+      header: 'Tags',
+      width: 220,
+      minWidth: 110,
+      maxWidth: 480,
+      resizable: true,
+      render: (c) => (
+        <Tooltip content={c.tags.join(', ')}><div className="flex min-w-0 flex-nowrap gap-1 overflow-hidden">
+          {c.tags.length === 0 && <span className="text-sm text-text-muted">-</span>}
+          {c.tags.slice(0, 2).map((t) => (
+            <span key={t} className="shrink-0 rounded bg-surface-high px-1.5 py-0.5 text-[11px] text-text-muted">
+              {t}
+            </span>
+          ))}
+          {c.tags.length > 2 && <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">+{c.tags.length - 2} more</span>}
+        </div></Tooltip>
+      ),
     },
     {
       key: 'lastCalled',
