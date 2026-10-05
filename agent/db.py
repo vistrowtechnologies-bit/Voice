@@ -14,12 +14,14 @@ without closing).
 
 import datetime
 import json
+from concurrent.futures import ThreadPoolExecutor
 import re
 import logging
 import threading
 import time
 
 import psycopg
+from psycopg import sql as psycopg_sql
 from zoneinfo import ZoneInfo
 
 import dbconn
@@ -1108,8 +1110,11 @@ def get_arthaleads_plan_status(account_id: int | None) -> dict:
         conn.close()
 
 
-def try_start_call(room_name: str, account_id: int | None, config: dict | None = None) -> bool:
-    """Claims a concurrent-call slot for this account, if one is free.
+def _try_start_call_sequential(room_name: str, account_id: int | None, config: dict | None = None) -> bool:
+    """The original admission check, one query after another. Kept as the reference
+    the fast path is tested against and as its automatic fallback.
+
+    Claims a concurrent-call slot for this account, if one is free.
     Returns False (call the entrypoint must decline) once the account is at
     its plan's CONCURRENT_CALL_LIMITS cap. account_id is None for demo/
     platform calls with no owning tenant. Account row locking serializes
@@ -1168,6 +1173,108 @@ def try_start_call(room_name: str, account_id: int | None, config: dict | None =
     finally:
         if conn is not None:
             conn.close()
+
+
+_ADMISSION_THREADS = ThreadPoolExecutor(max_workers=4, thread_name_prefix="admission")
+
+
+def _policy_check(account_id: int, config: dict | None) -> bool:
+    """The plan / voice / knowledge-base entitlement check, on its own
+    connection so it runs while the slot is being taken. False = refuse."""
+    if config is None:
+        return True
+    conn = dbconn.connect()
+    try:
+        plan_policy.validate_agent(conn, account_id, config, voice_catalog)
+        return True
+    except plan_policy.EntitlementError:
+        logger.warning("try_start_call: policy denied account_id=%s", account_id, exc_info=True)
+        return False
+    finally:
+        conn.close()
+
+
+# Expired rows (a worker that died before releasing) must not lock a tenant out.
+_STALE_AND_COUNT = (
+    "WITH stale AS (DELETE FROM active_calls WHERE account_id = ? AND started_at::timestamp <= "
+    "(now() AT TIME ZONE 'UTC') - interval '4 hours' RETURNING 1) "
+    "SELECT (SELECT COUNT(*) FROM active_calls WHERE account_id = ?) - (SELECT COUNT(*) FROM stale) AS c"
+)
+
+
+def _try_start_call_fast(room_name: str, account_id: int, config: dict | None) -> bool:
+    """Same decisions as _try_start_call_sequential in fewer round trips.
+
+    The database is a long network hop from the worker (about 250 ms per query
+    from India) and admission used to be 5-14 queries in a row at the start of
+    every call. Here: the entitlement check runs on a second connection while
+    this one locks the account row (and reads "already admitted?" in the same
+    query), runs the credit check, and counts active calls (expired-row cleanup
+    and count are one statement); the insert and commit leave as one statement.
+    """
+    policy = _ADMISSION_THREADS.submit(_policy_check, account_id, config)
+    conn = None
+    try:
+        conn = dbconn.connect()
+        row = conn.execute(
+            "SELECT a.plan, a.is_platform_owner, a.status, "
+            "(SELECT ac.account_id FROM active_calls ac WHERE ac.room_name = ?) AS existing_account "
+            "FROM accounts a WHERE a.id = ? FOR UPDATE",
+            (room_name, account_id),
+        ).fetchone()
+        if not row:
+            return False
+        if (row.get("status") or "active") != "active":
+            return False
+        owner = bool(row["is_platform_owner"])
+        existing = row["existing_account"]
+        credits_exhausted = False
+        limit = None
+        current = 0
+        if existing is None and not owner:
+            credits_exhausted = _trial_credits_exhausted(conn, account_id)
+            limit = CONCURRENT_CALL_LIMITS.get(row["plan"] or "", 0)
+            if not credits_exhausted:
+                current = conn.execute(_STALE_AND_COUNT, (account_id, account_id)).fetchone()["c"]
+        # Decisions in the original order; the policy answer is needed before anything is written.
+        if not policy.result(timeout=30):
+            return False
+        if existing is not None:
+            return existing == account_id
+        if credits_exhausted:
+            return False
+        if limit is not None and current >= limit:
+            return False
+        raw = conn._raw
+        # One statement, one round trip: insert and commit together (no params,
+        # so the simple protocol allows two statements).
+        raw.execute(
+            psycopg_sql.SQL(
+                "INSERT INTO active_calls (room_name, account_id) VALUES ({}, {}) ON CONFLICT (room_name) DO NOTHING; COMMIT"
+            ).format(psycopg_sql.Literal(room_name), psycopg_sql.Literal(int(account_id)))
+        )
+        return True
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def try_start_call(room_name: str, account_id: int | None, config: dict | None = None) -> bool:
+    """Claims a concurrent-call slot for this account, if one is free.
+    Returns False (call the entrypoint must decline) once the account is at
+    its plan's CONCURRENT_CALL_LIMITS cap. account_id is None for demo/
+    platform calls with no owning tenant. Account row locking serializes
+    admission across workers; database failures decline new admissions."""
+    if account_id is None:
+        return True
+    try:
+        return _try_start_call_fast(room_name, account_id, config)
+    except (psycopg.Error, plan_policy.EntitlementError):
+        logger.warning("try_start_call: admission denied for account_id=%s", account_id, exc_info=True)
+        return False
+    except Exception:  # noqa: BLE001 - a bug in the fast path must not stop calls
+        logger.exception("try_start_call: fast path failed unexpectedly; using the sequential check")
+        return _try_start_call_sequential(room_name, account_id, config)
 
 
 def end_call_room(room_name: str) -> None:
