@@ -68,6 +68,7 @@ import { Support } from './pages/Support'
 import { LeadDetail } from './pages/LeadDetail'
 import { WebsiteWidget } from './pages/WebsiteWidget'
 import { Settings } from './pages/Settings'
+import { SidebarPreview } from './pages/SidebarPreview'
 import { useEffect } from 'react'
 import { StagingBadge } from './components/StagingBadge'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -136,6 +137,7 @@ function App() {
       <AnalyticsListener />
       <StagingBadge />
       <Routes location={backgroundLocation ?? location}>
+        {import.meta.env.DEV && <Route path="/__preview/sidebar" element={<SidebarPreview />} />}
         {/* Public - marketing site */}
         <Route path="/" element={<Home />} />
         <Route path="/product" element={<ProductOverview />} />

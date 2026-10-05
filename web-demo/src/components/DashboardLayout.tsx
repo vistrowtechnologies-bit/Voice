@@ -277,14 +277,34 @@ function AccountMenu({ onNavigate }: { onNavigate?: () => void }) {
 
 function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onClose?: () => void }) {
   const { user } = useAuth()
+  const location = useLocation()
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set())
+  const groupIcons: Record<string, string> = {
+    'Workspace tools': 'settings_suggest',
+  }
+  const workspace = user?.accountName || BRAND.defaultWorkspace
+
+  useEffect(() => {
+    const activeGroup = NAV_GROUPS.find((group) => !group.pinned && !group.standalone && group.items.some((item) => location.pathname === item.to || (item.to !== '/dashboard' && location.pathname.startsWith(`${item.to}/`))))
+    if (activeGroup) setExpandedGroups(new Set([activeGroup.title]))
+  }, [location.pathname])
+
+  const toggleGroup = (title: string) => setExpandedGroups((current) => {
+    const next = new Set(current)
+    if (next.has(title)) next.delete(title)
+    else next.add(title)
+    return next
+  })
+
   return (
     <>
-      <div className="mb-5 flex h-10 items-center gap-2 pl-2">
-        <img src={vistrowMark} alt="" className="h-8 w-8 rounded-lg" />
+      <div className="mb-4 flex min-h-[62px] items-center gap-3 rounded-xl border border-border bg-bg/70 px-2.5 py-2">
+        <img src={vistrowMark} alt="" className="h-9 w-9 shrink-0 rounded-xl shadow-sm" />
         <div className="min-w-0 flex-1">
-          <span className="block truncate text-base font-semibold leading-tight tracking-tight">{BRAND.name}</span>
-          <span className="block text-[10px] uppercase tracking-widest text-text-muted">Enterprise</span>
+          <span className="block truncate text-sm font-bold leading-tight tracking-tight">{workspace}</span>
+          <span className="mt-1 flex items-center gap-1 truncate text-[10px] font-medium text-text-muted"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {BRAND.name} workspace</span>
         </div>
+        <Icon name="unfold_more" className="shrink-0 text-[18px] text-text-muted" />
         {onClose && (
           <Tooltip content={`Close sidebar (${TOGGLE_SHORTCUT})`}><button
             onClick={onClose}
@@ -295,13 +315,31 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           </button></Tooltip>
         )}
       </div>
-      <nav data-clarity-unmask="true" className="flex min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {NAV_GROUPS.filter((group) => !group.pinned).map((group) => (
-          <div key={group.title}>
-            <div className="mb-1 flex h-6 items-center px-3">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{group.title}</span>
-            </div>
-            <div className="flex flex-col gap-0.5">
+      <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 min-w-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto pb-3 [scrollbar-color:var(--color-border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
+        {NAV_GROUPS.filter((group) => !group.pinned).map((group) => group.standalone ? (
+          <div key={group.title} className={group.showHeading ? 'mb-0.5' : 'mb-1.5 border-b border-border pb-2'}>
+            {group.showHeading && <p className="mb-0.5 px-3 pt-1.5 text-[10px] font-bold tracking-[0.13em] text-text-muted">{group.title}</p>}
+            {group.items.map((item) => <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/dashboard'}
+              onClick={onNavigate}
+              data-tour={item.tour}
+              className={({ isActive }) => `flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${isActive ? 'bg-primary/10 font-semibold text-primary shadow-[inset_3px_0_0_var(--color-primary)]' : 'text-text-muted hover:bg-surface-high hover:text-text'}`}
+            >
+              <Icon name={item.icon} className={`shrink-0 text-[18px] ${location.pathname === item.to ? 'text-primary' : 'text-text-muted'}`} />
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {location.pathname === item.to && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+            </NavLink>)}
+          </div>
+        ) : (
+          <div key={group.title} className="rounded-xl">
+            <button type="button" aria-expanded={expandedGroups.has(group.title)} onClick={() => toggleGroup(group.title)} className="group flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-1.5 text-left text-[13px] font-semibold text-text transition-colors hover:bg-surface-high">
+              <Icon name={groupIcons[group.title] || 'apps'} className="shrink-0 text-[18px] text-text-muted transition-colors group-hover:text-primary" />
+              <span className="min-w-0 flex-1 truncate">{group.title}</span>
+              <Icon name={expandedGroups.has(group.title) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'} className="shrink-0 text-[19px] text-text-muted" />
+            </button>
+            {expandedGroups.has(group.title) && <div className="ml-[26px] flex flex-col gap-0.5 border-l border-border pb-1.5 pl-2.5">
               {group.items.map((item) => (
                 <NavLink
                   key={item.to}
@@ -310,43 +348,31 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
                   onClick={onNavigate}
                   data-tour={item.tour}
                   className={({ isActive }) =>
-                    `flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    `flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${
                       isActive
-                        ? 'bg-surface-high font-medium text-text shadow-[inset_3px_0_0_var(--color-primary)]'
+                        ? 'bg-primary/10 font-semibold text-primary shadow-[inset_2px_0_0_var(--color-primary)]'
                         : 'text-text-muted hover:bg-surface-high hover:text-text'
                     }`
                   }
                 >
-                  <Icon name={item.icon} className="shrink-0 text-[19px]" />
+                  <Icon name={item.icon} className="shrink-0 text-[17px]" />
                   <span className="min-w-0 truncate">{item.label}</span>
                 </NavLink>
               ))}
-            </div>
+            </div>}
           </div>
         ))}
       </nav>
-      {/* Help sits outside the scrolling list (like Claude's and Linear's
-          sidebars), so it is always visible however short the window is.
-          The menu scrolls with a hidden scrollbar, and it used to be the one
-          item that fell below the fold with nothing hinting it was there. */}
-      <div className="mb-2 flex flex-col gap-0.5 border-t border-border pt-2">
-        {NAV_GROUPS.filter((group) => group.pinned).flatMap((group) => group.items).map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              `flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                isActive
-                  ? 'bg-surface-high font-medium text-text shadow-[inset_3px_0_0_var(--color-primary)]'
-                  : 'text-text-muted hover:bg-surface-high hover:text-text'
-              }`
-            }
-          >
-            <Icon name={item.icon} className="shrink-0 text-[19px]" />
-            <span className="min-w-0 truncate">{item.label}</span>
-          </NavLink>
-        ))}
+      <div className="mb-2 shrink-0 border-t border-border pt-2">
+        <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 via-surface to-fuchsia-500/5 p-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon name="graphic_eq" className="text-[17px]" /></span>
+            <p className="min-w-0 flex-1 truncate text-xs font-semibold">Try Artha live</p>
+            <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-emerald-700">LIVE DEMO</span>
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-text-muted">Talk with our voice agent in your browser—no setup needed.</p>
+          <a href="https://www.vistrowvoice.com/#live-demo" target="_blank" rel="noreferrer" className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-2.5 py-2 text-[11px] font-bold text-white shadow-sm transition hover:brightness-105">Start live demo <Icon name="north_east" className="text-[14px]" /></a>
+        </div>
       </div>
       {user?.isPlatformOwner && !user?.impersonating && (
         <NavLink
