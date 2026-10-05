@@ -22,6 +22,7 @@ import {
 } from '../lib/api'
 import type { Contact, CsvPreview, PhoneNumber } from '../lib/types'
 import { composeE164, isE164, useAccountDialCode } from '../lib/phone'
+import { leadSearchText, leadSummary } from '../lib/leadDetails'
 import { CustomFieldsEditor } from '../components/CustomFieldsEditor'
 import {
   CONTACT_TARGETS,
@@ -150,7 +151,13 @@ export function Contacts() {
     return contacts.filter((contact) => {
       if (reviewOnly && !needsContactReview(contact)) return false
       if (!s) return true
-      return contact.name.toLowerCase().includes(s) || contact.phone.includes(s) || contact.email.toLowerCase().includes(s)
+      return (
+        contact.name.toLowerCase().includes(s) ||
+        contact.phone.includes(s) ||
+        contact.email.toLowerCase().includes(s) ||
+        contact.company.toLowerCase().includes(s) ||
+        leadSearchText(contact.customFields).includes(s)
+      )
     })
   }, [contacts, reviewOnly, search])
 
@@ -554,7 +561,48 @@ export function Contacts() {
         </div></Tooltip>
       ),
     },
-    { key: 'source', header: 'Source', width: 125, minWidth: 78, maxWidth: 240, resizable: true, sortValue: (c) => c.source, render: (c) => <span className="block truncate text-sm capitalize text-text-muted">{c.source}</span> },
+    {
+      key: 'lead',
+      header: 'Lead details',
+      width: 380,
+      minWidth: 220,
+      maxWidth: 640,
+      resizable: true,
+      sortValue: (c) => leadSummary(c.customFields).headline,
+      render: (c) => {
+        const l = leadSummary(c.customFields)
+        if (!l.hasAny) return <span className="text-sm text-text-muted">-</span>
+        return (
+          <div className="min-w-0 space-y-1 py-0.5">
+            {l.headline && <p className="truncate text-sm font-semibold text-text">{l.headline}</p>}
+            {l.chips.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {l.chips.map((chip) => (
+                  <Tooltip key={chip.label} content={chip.label}>
+                    <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-text-muted">{chip.value}</span>
+                  </Tooltip>
+                ))}
+              </div>
+            )}
+            {l.words && (
+              <Tooltip content={l.words}>
+                <p className="line-clamp-2 text-[12px] italic leading-snug text-text-muted">“{l.words}”</p>
+              </Tooltip>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      key: 'source',
+      header: 'Lead source',
+      width: 150,
+      minWidth: 90,
+      maxWidth: 260,
+      resizable: true,
+      sortValue: (c) => leadSummary(c.customFields).source || c.source,
+      render: (c) => <span className="block truncate text-sm text-text-muted">{leadSummary(c.customFields).source || c.source || '-'}</span>,
+    },
     {
       key: 'lastCalled',
       header: 'Last Called',
@@ -601,7 +649,7 @@ export function Contacts() {
       <PageHeader title="Contacts" subtitle="Global contact list - auto-synced from every qualified call" />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
-        <Card padding="sm" className={`relative flex min-h-[66px] flex-wrap items-center gap-3 ${showMoreActions ? 'z-50' : 'z-20'}`}>
+        <Card padding="sm" className={`relative flex min-h-[66px] flex-wrap items-center gap-3 ${showMoreActions ? 'z-[19]' : 'z-10'}`}>
           {selected.size > 0 ? (
             <>
               <span className="text-sm font-bold">{selected.size} selected</span>
@@ -644,7 +692,7 @@ export function Contacts() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, phone, or email..."
+              placeholder="Search name, phone, email, city, business, what they asked for..."
               className="w-full rounded-lg border border-border bg-surface-high py-2 pl-10 pr-3 text-sm outline-none focus:border-primary"
             />
           </div>

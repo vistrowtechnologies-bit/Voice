@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test:seo": "node scripts/test-language-seo.mjs",
     "test:menu": "tsx scripts/test-command-menu.mts",
-    "test:import": "tsx scripts/test-contact-import.mts"
+    "test:import": "tsx scripts/test-contact-import.mts",
+    "test:leads": "tsx scripts/test-lead-details.mts"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.21",

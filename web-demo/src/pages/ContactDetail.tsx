@@ -19,6 +19,7 @@ import {
 import type { ContactDetail as ContactDetailType, PhoneNumber } from '../lib/types'
 import { composeE164, isE164, splitE164, useAccountDialCode } from '../lib/phone'
 import { CustomFieldsEditor } from '../components/CustomFieldsEditor'
+import { leadEntries } from '../lib/leadDetails'
 import { Tooltip } from '../components/ui/Tooltip'
 
 const TABS = ['Activity', 'Calls', 'Campaigns', 'Notes'] as const
@@ -423,17 +424,31 @@ export function ContactDetail() {
                     </button>
                   </div>
                 </div>
-              ) : Object.keys(contact.customFields).length === 0 ? (
+              ) : leadEntries(contact.customFields).length === 0 ? (
                 <p className="text-sm text-text-muted">None yet. Add lead source, budget and more with Edit.</p>
               ) : (
-                <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-sm">
-                  {Object.entries(contact.customFields).map(([k, v]) => (
-                    <div key={k} className="contents">
-                      <dt className="text-text-muted">{k.replace(/_/g, ' ')}</dt>
-                      <dd className="break-words font-medium">{String(v)}</dd>
-                    </div>
+                <div className="mt-2 flex flex-col gap-2">
+                  {leadEntries(contact.customFields).filter((e) => e.key === 'enquiry_details').map((e) => (
+                    <blockquote key={e.key} className="rounded-lg border-l-4 border-primary/50 bg-surface px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-text-muted">{e.label}</p>
+                      <p className="mt-0.5 text-sm italic leading-snug">“{e.value}”</p>
+                    </blockquote>
                   ))}
-                </dl>
+                  <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {leadEntries(contact.customFields).filter((e) => e.key !== 'enquiry_details').map((e) => (
+                      <div key={e.key} className="min-w-0 rounded-lg bg-surface px-3 py-2">
+                        <dt className="text-[10px] font-bold uppercase tracking-wide text-text-muted">{e.label}</dt>
+                        <dd className="mt-0.5 break-words text-sm font-medium">
+                          {e.key === 'website_url' && /^https?:\/\//i.test(e.value) ? (
+                            <a href={e.value} target="_blank" rel="noreferrer" className="text-primary hover:underline">{e.value}</a>
+                          ) : (
+                            e.value
+                          )}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
               )}
             </div>
             <div className="flex flex-wrap gap-1">
