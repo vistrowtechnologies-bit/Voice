@@ -10,7 +10,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test:seo": "node scripts/test-language-seo.mjs",
-    "test:menu": "tsx scripts/test-command-menu.mts"
+    "test:menu": "tsx scripts/test-command-menu.mts",
+    "test:import": "tsx scripts/test-contact-import.mts"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.21",

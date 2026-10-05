@@ -21,6 +21,15 @@ export const LEAD_DETAIL_TARGETS = [
   { value: 'start_timeline', label: 'Wants it within' },
   { value: 'platform', label: 'Platform (fb / ig)' },
   { value: 'campaign_name', label: 'Campaign' },
+  { value: 'city', label: 'City' },
+  { value: 'job_title', label: 'Role' },
+  { value: 'preferred_language', label: 'Preferred language' },
+  { value: 'best_time_to_call', label: 'Best time to call' },
+  { value: 'enquiry_details', label: 'What they said (their words)' },
+  { value: 'website_url', label: 'Current website link' },
+  { value: 'main_goal', label: 'Main goal or problem' },
+  { value: 'enquiry_date', label: 'Enquiry date' },
+  { value: 'referred_by', label: 'Referred by' },
 ] as const
 
 // Header spellings people (and Facebook / Google lead exports) actually use.
@@ -41,6 +50,15 @@ const SYNONYMS: Record<string, string[]> = {
   start_timeline: ['wants it within', 'timeline', 'start timeline', 'when to start', 'when', 'urgency', 'start date', 'by when'],
   platform: ['platform', 'fb or ig', 'network', 'social platform'],
   campaign_name: ['campaign', 'campaign name', 'adset name', 'ad set name', 'form name', 'form'],
+  city: ['city', 'town', 'location', 'area', 'locality'],
+  job_title: ['role', 'job title', 'designation', 'title', 'position'],
+  preferred_language: ['preferred language', 'language preference', 'language', 'speaks', 'talk in'],
+  best_time_to_call: ['best time to call', 'best time', 'call time', 'preferred time', 'when to call', 'availability'],
+  enquiry_details: ['what they said (their words)', 'what they said', 'their words', 'enquiry details', 'inquiry details', 'requirement details', 'message', 'comments', 'remarks'],
+  website_url: ['current website link', 'website url', 'current website', 'current website url', 'site url', 'website link', 'url', 'web address'],
+  main_goal: ['main goal or problem', 'main goal', 'goal', 'problem', 'pain point', 'challenge', 'biggest problem', 'objective'],
+  enquiry_date: ['enquiry date', 'inquiry date', 'lead date', 'date', 'created time', 'submitted on', 'created at'],
+  referred_by: ['referred by', 'referrer', 'reference', 'referral name'],
 }
 
 // Facebook lead forms use the question as the column name ("what_type_of_website_do_you_need?",
@@ -121,24 +139,82 @@ export function guessMapping(headers: string[], sampleRows: string[][]): Guessed
 export const SAMPLE_HEADERS = [
   'Name', 'Phone', 'Email', 'Company', 'Tags', 'Lead source', 'What they asked for',
   'Business type', 'Has a website', 'Budget', 'Wants it within', 'Platform', 'Campaign',
+  'City', 'Role', 'Preferred language', 'Best time to call', 'What they said (their words)',
+  'Current website link', 'Main goal or problem', 'Enquiry date', 'Referred by',
 ]
 
 // Obviously fake numbers, so nobody imports the sample rows by accident.
+// Values are written the way an agent should say them aloud: plain words, not
+// codes ("Within 30 days", not "30d"; "After 6 pm", not "18:00+").
 export const SAMPLE_ROWS: string[][] = [
-  ['Asha Verma', '+919000000001', 'asha@example.com', 'Verma Traders', 'meta-lead', 'Facebook ad', 'New business website', 'Clothing store', 'No', '₹10,000–₹20,000', 'Within 30 days', 'fb', 'Website offer'],
-  ['Rohit Patil', '+919000000002', 'rohit@example.com', 'Patil Clinic', 'meta-lead, doctors', 'Instagram ad', 'Website redesign', 'Dental clinic', 'Yes', '₹20,000+', 'Within 60 days', 'ig', 'Doctors campaign'],
-  ['Neha Singh', '+919000000003', '', '', 'referral', 'Referral', 'Landing page', 'Real estate', 'No', '', '', '', ''],
+  ['Asha Verma', '+919000000001', 'asha@example.com', 'Verma Traders', 'meta-lead', 'Facebook ad', 'New business website', 'Clothing store', 'No',
+    '₹10,000–₹20,000', 'Within 30 days', 'fb', 'Website offer', 'Pune', 'Owner', 'Hinglish', 'After 6 pm',
+    'Sells sarees and kurtis from a shop in Camp. Wants customers to see the catalogue and order on WhatsApp.',
+    '', 'Get online orders', '2026-10-01', ''],
+  ['Rohit Patil', '+919000000002', 'rohit@example.com', 'Patil Clinic', 'meta-lead, doctors', 'Instagram ad', 'Website redesign', 'Dental clinic', 'Yes',
+    '₹20,000+', 'Within 60 days', 'ig', 'Doctors campaign', 'Nagpur', 'Dentist and owner', 'Marathi', 'Mornings, 10 to 12',
+    'The current site is slow and does not open well on phones. Wants patients to book appointments online.',
+    'https://patilclinic.example.com', 'More appointment bookings', '2026-09-29', ''],
+  ['Neha Singh', '+919000000003', '', '', 'referral', 'Referral', 'Landing page', 'Real estate', 'No',
+    '', 'Within 30 days', '', '', 'Mumbai', 'Real estate agent', 'English', 'Weekends',
+    'Launching a 2 BHK project in Thane in November. Needs one page that captures site-visit enquiries.',
+    '', 'More site-visit enquiries', '2026-10-02', 'Rohit Patil'],
+  ['Imran Sheikh', '+919000000004', 'imran@example.com', 'Sheikh Coaching Classes', 'website-visitor', 'Website chat', 'Mobile app', 'Education', 'Yes',
+    '₹50,000+', 'Within 90 days', '', '', 'Hyderabad', 'Founder', 'Hindi', 'Evenings',
+    'Wants a student app for recorded lectures and test series, with a parent login.',
+    'https://sheikhclasses.example.com', 'Fewer students dropping out', '2026-09-30', ''],
 ]
 
-const README_ROWS = [
+// One line per column: what it is, the prompt token it becomes, how to use it.
+// This is what makes a column reach the agent: it only sees a contact's extra
+// fields where the agent's prompt contains the matching {{custom.<key>}} token.
+export const COLUMN_GUIDE: [string, string, string][] = [
+  ['Name, Phone, Email, Company', '{{name}} {{first_name}} {{phone}} {{company}}', 'Phone is the only required column. Names are used to greet; a blank name is skipped cleanly.'],
+  ['Lead source', '{{custom.lead_source}}', 'Where they came from ("Facebook ad", "Referral"). Lets the agent say "you enquired through our ad".'],
+  ['What they asked for', '{{custom.website_requirement}}', 'The service they want, in a few words ("Website redesign").'],
+  ['What they said (their words)', '{{custom.enquiry_details}}', 'One or two plain sentences, as they said or typed it. The agent can echo these words back, which is what makes the call feel informed.'],
+  ['Business type', '{{custom.business_type}}', '"Dental clinic", "Clothing store". Keep it to what you would say aloud.'],
+  ['Has a website / Current website link', '{{custom.has_website}} {{custom.website_url}}', 'Yes or No, and the address if they have one.'],
+  ['Main goal or problem', '{{custom.main_goal}}', 'What they want to achieve ("More appointment bookings"). Best single field for a relevant opening.'],
+  ['Budget', '{{custom.budget}}', 'Write it as a spoken range ("₹10,000 to ₹20,000"). Leave blank if unknown; the agent should not guess.'],
+  ['Wants it within', '{{custom.start_timeline}}', '"Within 30 days". Use words, not dates.'],
+  ['City, Role', '{{custom.city}} {{custom.job_title}}', 'Helps the agent sound local and address them correctly ("Dentist and owner").'],
+  ['Preferred language', '{{custom.preferred_language}}', '"Hindi", "Marathi", "English", "Hinglish". The agent can open in it.'],
+  ['Best time to call', '{{custom.best_time_to_call}}', '"After 6 pm". Useful for callbacks.'],
+  ['Enquiry date', '{{custom.enquiry_date}}', 'Day they enquired (YYYY-MM-DD). Lets the agent say "you enquired on Monday".'],
+  ['Referred by', '{{custom.referred_by}}', 'Name of the person who referred them. Only fill when true.'],
+  ['Platform, Campaign, Tags', '{{custom.platform}} {{custom.campaign_name}}', 'For your own tracking; rarely worth saying aloud.'],
+]
+
+// Pasted at the END of an agent prompt (per-call details last keeps the
+// provider's prompt cache working for the long, unchanging part above them).
+export const PROMPT_SNIPPET = [
+  'About this contact (use only what is filled in; never guess a blank):',
+  'Name: {{first_name}} {{last_name}}   Company: {{company}}',
+  'City: {{custom.city}}   Role: {{custom.job_title}}   Language: {{custom.preferred_language}}   Best time: {{custom.best_time_to_call}}',
+  'Came from: {{custom.lead_source}}   Asked for: {{custom.website_requirement}}   Business: {{custom.business_type}}',
+  'Their words: {{custom.enquiry_details}}',
+  'Goal: {{custom.main_goal}}   Budget: {{custom.budget}}   Wants it within: {{custom.start_timeline}}',
+  'Has a website: {{custom.has_website}}   Website: {{custom.website_url}}   Referred by: {{custom.referred_by}}',
+]
+
+const README_ROWS: string[][] = [
   ['How to fill this sheet'],
   [''],
   ['1. Keep the column names in row 1, or rename them: we match common names automatically and you can fix any match before importing.'],
-  ['2. One row per person. Only Phone is required; every other column is optional.'],
+  ['2. One row per person. Only Phone is required; every other column is optional. Leave a cell blank when you do not know it: the agent skips blanks and never guesses.'],
   ['3. Phone numbers: include the country code (+91...) or enter a 10-digit Indian number.'],
-  ['4. Delete the three example rows before you upload. Their numbers are fake.'],
-  ['5. Any extra column you add (city, notes...) can be imported as a custom field the agent can use.'],
-  ['6. Up to 5,000 contacts per upload.'],
+  ['4. Delete the four example rows before you upload. Their numbers are fake.'],
+  ['5. Write values the way the agent should SAY them: "Within 30 days", "After 6 pm", "₹10,000 to ₹20,000".'],
+  ['6. A column reaches the agent only through its prompt token (table below). Add the tokens to the agent prompt, or paste the snippet at the bottom.'],
+  ['7. Any extra column you add (notes, pincode...) can be imported as a custom field and used as {{custom.<name>}}.'],
+  ['8. Up to 5,000 contacts per upload.'],
+  [''],
+  ['Column', 'Prompt token', 'What to put there'],
+  ...COLUMN_GUIDE.map((r) => [...r]),
+  [''],
+  ['Paste at the END of the agent prompt:'],
+  ...PROMPT_SNIPPET.map((l) => [l]),
 ]
 
 function save(blob: Blob, name: string) {
@@ -165,7 +241,7 @@ export function downloadSampleSheet(kind: 'xlsx' | 'csv') {
   sheet['!cols'] = SAMPLE_HEADERS.map((h) => ({ wch: Math.max(14, h.length + 2) }))
   XLSX.utils.book_append_sheet(wb, sheet, 'Contacts')
   const help = XLSX.utils.aoa_to_sheet(README_ROWS)
-  help['!cols'] = [{ wch: 110 }]
+  help['!cols'] = [{ wch: 44 }, { wch: 52 }, { wch: 100 }]
   XLSX.utils.book_append_sheet(wb, help, 'How to fill')
   XLSX.writeFile(wb, 'vistrow-contacts-sample.xlsx')
 }
