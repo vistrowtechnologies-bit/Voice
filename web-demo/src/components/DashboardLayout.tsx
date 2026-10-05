@@ -304,7 +304,6 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           <span className="block truncate text-sm font-bold leading-tight tracking-tight">{workspace}</span>
           <span className="mt-1 flex items-center gap-1 truncate text-[10px] font-medium text-text-muted"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {BRAND.name} workspace</span>
         </div>
-        <Icon name="unfold_more" className="shrink-0 text-[18px] text-text-muted" />
         {onClose && (
           <Tooltip content={`Close sidebar (${TOGGLE_SHORTCUT})`}><button
             onClick={onClose}
