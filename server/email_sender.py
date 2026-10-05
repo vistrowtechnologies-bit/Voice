@@ -160,6 +160,10 @@ def send_email(
     if blocked:
         logger.warning("%s (subject %r to %s)", blocked, subject, to)
         return False
+    if env_guard.is_staging() and not subject.startswith("[STAGING]"):
+        # Staging mail comes from the production sender address; the subject
+        # is the only thing that tells a person which environment sent it.
+        subject = f"[STAGING] {subject}"
     resend_key = os.environ.get("RESEND_API_KEY")
     if resend_key:
         return _send_resend(resend_key, to, subject, html, from_address, attachments, reply_to)
