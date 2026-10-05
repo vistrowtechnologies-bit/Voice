@@ -93,37 +93,27 @@ export function Settings() {
     <DashboardLayout>
       <PageHeader title="Settings" subtitle="Manage your account, team, security, and workspace controls." />
 
-      <section className="grid w-full min-w-0 max-w-6xl gap-5 overflow-hidden p-4 sm:p-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-surface p-2 lg:self-start">
-          <div className="border-b border-border px-2 pb-3 pt-1">
-            <p className="text-sm font-bold">Settings centre</p>
-            <p className="mt-0.5 text-xs text-text-muted">Everything for your workspace and account.</p>
-          </div>
-          <div className="flex w-full min-w-0 gap-1 overflow-x-auto py-2 lg:flex-col lg:overflow-visible">
-            {TAB_GROUPS.map((group) => (
-              <div key={group.label} className="shrink-0 lg:mt-2">
-                <p className="hidden px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-text-muted lg:block">{group.label}</p>
-                <div className="flex gap-1 lg:flex-col">
-                  {group.tabs.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => chooseTab(item.id)}
-                      className={`flex min-w-max items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors lg:min-w-0 ${
-                        tab === item.id ? 'bg-primary/10 text-primary' : 'text-text-muted hover:bg-surface-high hover:text-text'
-                      }`}
-                    >
-                      <Icon name={item.icon} className="shrink-0 text-[18px]" />
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold">{item.label}</span>
-                        <span className="hidden truncate text-[11px] text-text-muted lg:block">{item.description}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </aside>
+      <section className="flex w-full min-w-0 max-w-6xl flex-col gap-5 p-4 sm:p-6">
+        <div
+          role="tablist"
+          aria-label="Settings sections"
+          className="flex w-full min-w-0 gap-1 overflow-x-auto rounded-xl border border-border bg-surface-high/60 p-1"
+        >
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              role="tab"
+              aria-selected={tab === item.id}
+              title={item.description}
+              onClick={() => chooseTab(item.id)}
+              className={`shrink-0 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors ${
+                tab === item.id ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
 
         <div className="min-w-0">
           {tab === 'general' && <GeneralTab />}
