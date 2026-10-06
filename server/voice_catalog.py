@@ -333,7 +333,10 @@ def sample_text(lang: str, gender: str | None = None) -> str | None:
 # sold. The Flash v2.5 voices under "elevenlabs:" work and are back in the
 # picker — ElevenLabs is the vendor behind Razorpay's own Hinglish outbound
 # agent, which makes them a credibility argument as much as a quality one.
-_HIDDEN_VOICE_PREFIXES = ("elevenlabs-v3:",)
+# 2026-10-06: ElevenLabs is hidden entirely (menu, catalogue and agent picker).
+# The Voices page was 13,000 px tall and no live agent uses one; agents that
+# already point at an "elevenlabs:" voice still resolve it for calls and billing.
+_HIDDEN_VOICE_PREFIXES = ("elevenlabs-v3:", "elevenlabs:")
 
 
 # Which languages a voice can actually SPEAK, and whether it can switch

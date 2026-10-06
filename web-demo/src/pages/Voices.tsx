@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
-import { Card } from '../components/ui/Card'
 import { VoicePreviewButton } from '../components/VoicePreviewButton'
 import { addVoice, fetchVoiceCatalog, removeVoice } from '../lib/api'
-import type { VoiceCatalog, VoiceEntry, VoiceTier } from '../lib/types'
+import type { VoiceCatalog, VoiceEntry } from '../lib/types'
 import { Tooltip } from '../components/ui/Tooltip'
 
 const PREVIEW_LANGS = [
@@ -13,33 +12,16 @@ const PREVIEW_LANGS = [
   { code: 'en', label: 'English' },
 ] as const
 
-const GENDER_ICON: Record<string, string> = { male: 'man', female: 'woman', neutral: 'graphic_eq' }
+// Voices shown per category before "Show more". Keeps the page about one
+// screen tall instead of listing the whole catalogue (it used to be ~13,000 px).
+const PAGE_SIZE = 10
 
-// Generated per-voice avatars - a soft two-tone gradient orb (same idea as
-// ElevenLabs' own voice-library avatars) so each voice reads as a distinct
-// character at a glance instead of every card in a tier sharing one identical
-// icon. Colors are the app's existing CSS custom properties (not Tailwind
-// utility classes, since a gradient string needs raw color refs) - using
-// var(--color-*) rather than hardcoded hex means the orb stays correct in
-// both themes automatically. Which two colors and where they sit is a
-// deterministic hash of the voice's own value, not its tier, so orbs stay
-// visually varied within a tier group; tier is still legible from the pill.
+// A soft two-tone orb per voice, derived from the voice's own value so each one
+// reads as a distinct character. Static on purpose: the old cards each ran an
+// infinite spin animation, 86 of them at once.
 const AVATAR_HUES = ['--color-primary', '--color-cyan', '--color-magenta', '--color-amber', '--color-success'] as const
 
-// 4 distinct 3-blob layouts to combine with the hue picks below.
-const AVATAR_LAYOUTS = [
-  ['20% 20%', '85% 30%', '50% 90%'],
-  ['80% 15%', '15% 45%', '65% 90%'],
-  ['50% 10%', '90% 60%', '10% 75%'],
-  ['25% 80%', '85% 70%', '55% 15%'],
-] as const
-
-// djb2 - spreads short strings (voice names/ids are only a few characters)
-// far more evenly than a plain multiply-add hash, which visibly clustered
-// several voices onto the same hue pair/position (reported as "identical
-// avatars"). Two independent hashes (name and value) feed different parts
-// of the pick below so hue choice and layout choice aren't correlated with
-// each other the way they were when both came from bits of one hash.
+// djb2: spreads short strings far more evenly than a multiply-add hash.
 function hash(value: string): number {
   let h = 5381
   for (let i = 0; i < value.length; i++) h = ((h << 5) + h + value.charCodeAt(i)) | 0
@@ -47,45 +29,31 @@ function hash(value: string): number {
 }
 
 function avatarGradient(value: string, name: string): string {
-  const hv = hash(value)
-  const hn = hash(name)
-  const first = hv % AVATAR_HUES.length
-  const second = (first + 1 + (hn % (AVATAR_HUES.length - 1))) % AVATAR_HUES.length
-  let third = (first + 2 + (hv % (AVATAR_HUES.length - 1))) % AVATAR_HUES.length
-  if (third === second) third = (third + 1) % AVATAR_HUES.length
-  const [posA, posB, posC] = AVATAR_LAYOUTS[hn % AVATAR_LAYOUTS.length]
+  const first = hash(value) % AVATAR_HUES.length
+  const second = (first + 1 + (hash(name) % (AVATAR_HUES.length - 1))) % AVATAR_HUES.length
   return (
-    `radial-gradient(circle at ${posA}, var(${AVATAR_HUES[first]}) 0%, transparent 65%), ` +
-    `radial-gradient(circle at ${posB}, var(${AVATAR_HUES[second]}) 0%, transparent 65%), ` +
-    `radial-gradient(circle at ${posC}, var(${AVATAR_HUES[third]}) 0%, transparent 65%), ` +
-    `var(--color-surface-high)`
+    `radial-gradient(circle at 25% 25%, var(${AVATAR_HUES[first]}) 0%, transparent 70%), ` +
+    `radial-gradient(circle at 80% 75%, var(${AVATAR_HUES[second]}) 0%, transparent 70%), ` +
+    'var(--color-surface-high)'
   )
 }
 
-// Mirrors the loaded layout (summary card, search field, then two tier grids
-// on the same responsive column counts) so the catalogue does not paint as an
-// empty page during the fetch, which was long enough to read as "no voices".
+type TabKey = 'expressive' | 'hd' | 'standard' | 'native' | 'gemini' | 'premium'
+
+interface Tab {
+  key: TabKey
+  label: string
+  note: string
+  voices: VoiceEntry[]
+}
+
 function VoicesSkeleton() {
-  const cards = Array.from({ length: 6 }, (_, i) => i)
   return (
-    <div className="flex flex-col gap-6 animate-pulse" aria-hidden="true">
-      <Card padding="sm" className="flex items-center gap-3">
-        <div className="h-10 w-10 shrink-0 rounded-lg bg-surface-high" />
-        <div className="flex flex-1 flex-col gap-2">
-          <span className="block h-3 w-32 rounded bg-surface-high" />
-          <span className="block h-3 w-56 max-w-full rounded bg-surface-high" />
-        </div>
-      </Card>
+    <div className="flex flex-col gap-3 animate-pulse" aria-hidden="true">
       <div className="h-9 rounded-lg border border-border bg-surface" />
-      {[0, 1].map((group) => (
-        <section key={group} className="flex flex-col gap-3">
-          <span className="block h-3 w-28 rounded bg-surface-high" />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-            {cards.map((c) => (
-              <div key={c} className="h-[104px] rounded-xl border border-border bg-surface" />
-            ))}
-          </div>
-        </section>
+      <div className="h-9 w-2/3 rounded-lg bg-surface-high" />
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="h-[60px] rounded-lg border border-border bg-surface" />
       ))}
       <span className="sr-only" aria-live="polite">
         Loading voices
@@ -94,157 +62,88 @@ function VoicesSkeleton() {
   )
 }
 
-function TierGroup({
-  entries,
-  label,
-  note,
-  lang,
-  busyVoice,
-  onAdd,
-  onRemove,
-}: {
-  entries: VoiceEntry[]
-  label?: string
-  note?: string
-  lang: string
-  busyVoice: string | null
-  onAdd: (v: string) => void
-  onRemove: (v: string) => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  if (entries.length === 0) return null
-  const { tierLabel, tierNote } = entries[0]
-  const visibleEntries = expanded ? entries : entries.slice(0, 6)
-  return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-baseline gap-2">
-        <h2 className="text-sm font-bold">{label ?? tierLabel}</h2>
-        <span className="text-[11px] text-text-muted">{note ?? tierNote}</span>
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-        {visibleEntries.map((entry) => (
-          <VoiceCard
-            key={entry.value}
-            entry={entry}
-            lang={lang}
-            busy={busyVoice === entry.value}
-            onAdd={onAdd}
-            onRemove={onRemove}
-          />
-        ))}
-      </div>
-      {entries.length > 6 && (
-        <button
-          type="button"
-          onClick={() => setExpanded((current) => !current)}
-          className="self-center rounded-lg border border-border px-4 py-2 text-xs font-bold text-text-muted hover:border-primary hover:text-primary"
-        >
-          {expanded ? 'Show fewer voices' : `Show ${entries.length - 6} more voices`}
-        </button>
-      )}
-    </section>
-  )
-}
-
-function VoiceCard({
+function VoiceRow({
   entry,
   lang,
   busy,
+  showTier,
   onAdd,
   onRemove,
 }: {
   entry: VoiceEntry
   lang: string
   busy: boolean
+  showTier: boolean
   onAdd: (v: string) => void
   onRemove: (v: string) => void
 }) {
   return (
-    <Card padding="sm" className={`flex flex-col ${entry.selected ? '!border-primary/50' : ''}`}>
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="relative shrink-0">
-            <div className="relative h-11 w-11 overflow-hidden rounded-full">
-              {/* Inner layer is oversized and slowly spinning inside the
-                  clipped circle - the off-center blobs sweep past each other,
-                  giving the orb the same "alive" look as ElevenLabs' voice
-                  avatars instead of a static gradient. -inset-1/4 keeps the
-                  square's corners always covering the circle at every
-                  rotation angle. Disabled for prefers-reduced-motion. */}
-              <div
-                className="absolute -inset-1/4 animate-[spin_9s_linear_infinite] motion-reduce:animate-none"
-                style={{ background: avatarGradient(entry.value, entry.name) }}
-              />
-            </div>
-            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-surface bg-surface-high text-text-muted">
-              <Icon name={GENDER_ICON[entry.gender] ?? 'graphic_eq'} className="text-[10px]" />
+    <div
+      className={`flex items-center gap-3 rounded-lg border bg-surface px-3 py-2 ${
+        entry.selected ? 'border-primary/40' : 'border-border'
+      }`}
+    >
+      <div
+        className="h-9 w-9 shrink-0 rounded-full"
+        style={{ background: avatarGradient(entry.value, entry.name) }}
+        aria-hidden="true"
+      />
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-semibold">{entry.name}</p>
+          {showTier && (
+            <span className="shrink-0 rounded-full bg-surface-high px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-text-muted">
+              {entry.tierLabel}
             </span>
-          </div>
-          <div className="min-w-0">
-            <p className="truncate font-semibold">{entry.name}</p>
-            {entry.note && <p className="truncate text-[11px] text-text-muted">{entry.note}</p>}
-            {/* What this voice can actually speak. A single-language voice
-                cannot follow a caller who switches mid-sentence, which is
-                the thing this product is sold on - so say it on the card
-                rather than letting it be discovered on a live call. */}
-            {entry.canSwitchLanguage ? (
-              <Tooltip content={`Speaks ${entry.languageCount} languages including ${entry.languageLabels.join(', ')} — and switches between them mid-call`}><span
-                className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full bg-cyan/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan"
-              >
-                <Icon name="translate" className="text-[11px]" />
-                {entry.languageCount} languages · switches
-              </span></Tooltip>
-            ) : (
-              <Tooltip content={`Speaks only ${entry.languageLabels.join(', ')}. It cannot follow a caller who switches language mid-call.`}><span
-                className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-500"
-              >
-                <Icon name="info" className="text-[11px]" />
-                {entry.languageLabels[0] ?? 'Single'} only
-              </span></Tooltip>
-            )}
-          </div>
+          )}
         </div>
-        {entry.selected && (
-          <span className="flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-            <Icon name="check" className="text-[12px]" />
-            Added
-          </span>
+        {/* What the voice can speak, in words: a single-language voice cannot
+            follow a caller who switches language, and that is what this
+            product is sold on, so it is said here rather than found on a call. */}
+        {entry.canSwitchLanguage ? (
+          <Tooltip content={`Speaks ${entry.languageCount} languages including ${entry.languageLabels.join(', ')}, and switches between them mid-call`}>
+            <p className="truncate text-[11px] text-cyan">{entry.languageCount} languages · switches live</p>
+          </Tooltip>
+        ) : (
+          <Tooltip content={`Speaks only ${entry.languageLabels.join(', ')}. It cannot follow a caller who switches language mid-call.`}>
+            <p className="truncate text-[11px] text-amber-500">{entry.languageLabels[0] ?? 'Single'} only</p>
+          </Tooltip>
         )}
       </div>
 
-      <div className="mb-3 flex items-center justify-center rounded-lg border border-border bg-surface-high/40 py-3">
-        <VoicePreviewButton voice={entry.value} lang={entry.forceLang || lang} className="border-0 bg-transparent" />
-        <span className="text-xs text-text-muted">Listen to {entry.name}</span>
-      </div>
+      <VoicePreviewButton voice={entry.value} lang={entry.forceLang || lang} />
 
       {entry.selected ? (
         <button
           onClick={() => onRemove(entry.value)}
           disabled={busy}
-          className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs font-bold text-text-muted transition-colors hover:border-destructive hover:text-destructive disabled:opacity-50"
+          className="flex w-24 shrink-0 items-center justify-center gap-1 rounded-lg border border-border py-1.5 text-xs font-bold text-text-muted transition-colors hover:border-destructive hover:text-destructive disabled:opacity-50"
         >
-          <Icon name="remove_circle_outline" className="text-[15px]" />
-          Remove
+          <Icon name="check" className="text-[14px] text-primary" />
+          Added
         </button>
       ) : !entry.addable ? (
-        <Tooltip content={entry.lockedReason}><Link
-          to="/dashboard/billing"
-          className="mt-auto flex items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs font-bold text-text-muted transition-colors hover:border-primary hover:text-primary"
-        >
-          <Icon name="lock" className="text-[15px]" />
-          Upgrade to add
-        </Link></Tooltip>
+        <Tooltip content={entry.lockedReason}>
+          <Link
+            to="/dashboard/billing"
+            className="flex w-24 shrink-0 items-center justify-center gap-1 rounded-lg border border-border py-1.5 text-xs font-bold text-text-muted transition-colors hover:border-primary hover:text-primary"
+          >
+            <Icon name="lock" className="text-[14px]" />
+            Upgrade
+          </Link>
+        </Tooltip>
       ) : (
-        <Tooltip content="Add to your voices"><button
+        <button
           onClick={() => onAdd(entry.value)}
           disabled={busy}
-          className="mt-auto flex items-center justify-center gap-1.5 rounded-lg bg-primary py-2 text-xs font-bold text-bg transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-40"
+          className="flex w-24 shrink-0 items-center justify-center gap-1 rounded-lg bg-primary py-1.5 text-xs font-bold text-bg transition-opacity hover:opacity-90 disabled:opacity-40"
         >
-          <Icon name="add" className="text-[15px]" />
-          Add to my voices
-        </button></Tooltip>
+          <Icon name="add" className="text-[14px]" />
+          Add
+        </button>
       )}
-    </Card>
+    </div>
   )
 }
 
@@ -254,6 +153,8 @@ export function Voices() {
   const [busyVoice, setBusyVoice] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [tab, setTab] = useState<TabKey>('expressive')
+  const [expanded, setExpanded] = useState(false)
 
   async function load() {
     try {
@@ -274,9 +175,7 @@ export function Voices() {
       await load()
     } catch (e) {
       setError(
-        e instanceof Error && e.message.includes('400')
-          ? 'That voice needs a plan upgrade.'
-          : 'Could not add that voice.'
+        e instanceof Error && e.message.includes('400') ? 'That voice needs a plan upgrade.' : 'Could not add that voice.'
       )
     } finally {
       setBusyVoice(null)
@@ -296,28 +195,81 @@ export function Voices() {
     }
   }
 
+  const tabs: Tab[] = useMemo(() => {
+    const all = (data?.voices ?? []).filter((v) => !v.preview)
+    const stable = (tier: string) => all.filter((v) => v.tier === tier)
+    const isChirp = (v: VoiceEntry) => v.value.toLowerCase().includes('chirp3')
+    const list: Tab[] = [
+      {
+        key: 'expressive',
+        label: 'Expressive',
+        note: '2x credits · most expressive · switches language live',
+        voices: stable('premium').filter((v) => v.multilingual),
+      },
+      {
+        key: 'hd',
+        label: 'HD',
+        note: '1x credits · fastest Google voices · ten Indian languages, switches mid-call',
+        voices: stable('standard').filter(isChirp),
+      },
+      {
+        key: 'standard',
+        label: 'Standard',
+        note: '1x credits · natural conversational voices',
+        voices: stable('standard').filter((v) => !isChirp(v)),
+      },
+      {
+        key: 'native',
+        label: 'Native',
+        note: '0.75x credits · native Indian languages',
+        voices: stable('lite').filter((v) => v.value.startsWith('google:') && !v.multilingual),
+      },
+      {
+        key: 'gemini',
+        label: 'Gemini 3.8',
+        note: '2x credits · expressive speech · try on a test call before using live',
+        // These are flagged "preview" (owner-only), so they come from the full list
+        // rather than from `all`, which drops previews.
+        voices: (data?.voices ?? []).filter((v) => v.value.startsWith('google38:') || v.value.startsWith('google38flash:')),
+      },
+      {
+        key: 'premium',
+        label: 'Premium',
+        note: '2x credits · natural conversational voices',
+        voices: stable('premium').filter((v) => !v.multilingual),
+      },
+    ]
+    return list.filter((t) => t.voices.length > 0)
+  }, [data])
+
   const query = search.trim().toLowerCase()
-  const matchesSearch = (voice: VoiceEntry) => !query || [voice.name, voice.note, voice.tierLabel, ...voice.languageLabels]
-    .filter(Boolean)
-    .some((value) => value.toLowerCase().includes(query))
-  const byTier = (tier: VoiceTier) => (data?.voices ?? []).filter((v) => v.tier === tier && matchesSearch(v))
-  const stableByTier = (tier: VoiceTier) => byTier(tier).filter((v) => !v.preview)
-  // Chirp 3 HD gets its own group below — without splitting it out, 20 voices
-  // land inside the generic Standard group and disappear behind its
-  // "show more" collapse.
-  const chirp3Hd = () => stableByTier('standard').filter((v) => v.value.toLowerCase().includes('chirp3'))
-  const standardSolo = () => stableByTier('standard').filter((v) => !v.value.toLowerCase().includes('chirp3'))
-  // Replace the obsolete 3.1 preview menu with explicit 3.8 Flash and
-  // Flash-Lite auditions. Keep google31 IDs for existing agents, not new ones.
-  const gemini38Lite = () => (data?.voices ?? []).filter((v) => v.value.startsWith('google38:') && matchesSearch(v))
-  const gemini38Flash = () => (data?.voices ?? []).filter((v) => v.value.startsWith('google38flash:') && matchesSearch(v))
-  const multilingualPremium = () => stableByTier('premium').filter((v) => v.multilingual)
-  const premiumSolo = () => stableByTier('premium').filter((v) => !v.multilingual)
-  const nativeLite = () => byTier('lite').filter((v) => v.value.startsWith('google:') && !v.multilingual)
+  const matches = (voice: VoiceEntry) =>
+    [voice.name, voice.note, voice.tierLabel, ...voice.languageLabels].filter(Boolean).some((value) => value.toLowerCase().includes(query))
+  const searchResults = useMemo(
+    () => (query ? tabs.flatMap((t) => t.voices).filter(matches) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tabs, query],
+  )
+
+  const activeTab = tabs.find((t) => t.key === tab) ?? tabs[0]
+  const shown = query ? searchResults : (activeTab?.voices ?? [])
+  const visible = query || expanded ? shown : shown.slice(0, PAGE_SIZE)
+
+  const row = (entry: VoiceEntry) => (
+    <VoiceRow
+      key={entry.value}
+      entry={entry}
+      lang={lang}
+      busy={busyVoice === entry.value}
+      showTier={Boolean(query)}
+      onAdd={onAdd}
+      onRemove={onRemove}
+    />
+  )
 
   return (
     <DashboardLayout>
-      <PageHeader title="Voices" subtitle="Preview any voice, then add it to your agents' picker">
+      <PageHeader title="Voices" subtitle="Preview a voice, then add it to your agents' picker">
         <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
           {PREVIEW_LANGS.map((l) => (
             <button
@@ -333,32 +285,17 @@ export function Voices() {
         </div>
       </PageHeader>
 
-      <div className="flex w-full flex-col gap-6 p-4 sm:p-6">
+      <div className="flex w-full max-w-4xl flex-col gap-4 p-4 sm:p-6">
         {!data ? (
           <VoicesSkeleton />
         ) : (
           <>
-            <Card padding="sm" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan/20 text-cyan">
-                  <Icon name="graphic_eq" className="text-[20px]" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold">Your voice menu</p>
-                  <p className="text-xs text-text-muted">Only added voices show up in the agent voice picker.</p>
-                </div>
-              </div>
-              <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-text-muted">
-                {data.selectedCount} added
-              </span>
-            </Card>
-
             <label className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 focus-within:border-primary">
               <Icon name="search" className="text-[18px] text-text-muted" />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search voices by name, language, or tier"
+                placeholder="Search all voices by name or language"
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-text-muted"
               />
               {search && (
@@ -368,86 +305,55 @@ export function Voices() {
               )}
             </label>
 
-            {error && (
-              <div className="rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">
-                {error}
+            {!query && (
+              <div className="flex flex-col gap-1">
+                <div role="tablist" aria-label="Voice categories" className="flex gap-1 overflow-x-auto rounded-xl border border-border bg-surface-high/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {tabs.map((t) => (
+                    <button
+                      key={t.key}
+                      role="tab"
+                      aria-selected={activeTab?.key === t.key}
+                      onClick={() => {
+                        setTab(t.key)
+                        setExpanded(false)
+                      }}
+                      className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                        activeTab?.key === t.key ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'
+                      }`}
+                    >
+                      {t.label} <span className="text-[11px] font-medium text-text-muted">{t.voices.length}</span>
+                    </button>
+                  ))}
+                </div>
+                {activeTab && <p className="px-1 text-[11px] text-text-muted">{activeTab.note}</p>}
               </div>
             )}
 
-            {/* Ordered by what a voice COSTS, most expensive first, so the
-                credit multiplier only ever goes down as you scroll. It used to
-                run 2x, 1x, preview, 2x, 1x, 0.75x — Multilingual sat between
-                two cheaper groups and the pricing read as random. Experimental
-                voices go last regardless of price: they are not something to
-                pick by cost. */}
-            <TierGroup
-              entries={multilingualPremium()}
-              label="Vistrow Expressive"
-              // Derived from the entries themselves — a hardcoded count here
-              // drifted out of sync with the badge the moment the catalog grew.
-              note={`2x credits · most expressive · ${multilingualPremium()[0]?.languageCount ?? 0} languages, switches live`}
-              lang={lang}
-              busyVoice={busyVoice}
-              onAdd={onAdd}
-              onRemove={onRemove}
-            />
-            <TierGroup
-              entries={premiumSolo()}
-              label="Premium"
-              note="2x credits · natural conversational voices"
-              lang={lang}
-              busyVoice={busyVoice}
-              onAdd={onAdd}
-              onRemove={onRemove}
-            />
-            <TierGroup
-              entries={standardSolo()}
-              lang={lang}
-              busyVoice={busyVoice}
-              onAdd={onAdd}
-              onRemove={onRemove}
-            />
-            <TierGroup
-              entries={chirp3Hd()}
-              label="Vistrow HD"
-              note="1x credits · fastest Google voices · ten Indian languages, switches mid-call"
-              lang={lang}
-              busyVoice={busyVoice}
-              onAdd={onAdd}
-              onRemove={onRemove}
-            />
-            <TierGroup
-              entries={nativeLite()}
-              label="Vistrow Native"
-              note="0.75x credits · native Indian languages"
-              lang={lang}
-              busyVoice={busyVoice}
-              onAdd={onAdd}
-              onRemove={onRemove}
-            />
-            <TierGroup
-              entries={gemini38Lite()}
-              label="Gemini 3.8 Flash-Lite"
-              note="2x credits · lower latency and cost · expressive speech · test before live calls"
-              lang={lang}
-              busyVoice={busyVoice}
-              onAdd={onAdd}
-              onRemove={onRemove}
-            />
-            <TierGroup
-              entries={gemini38Flash()}
-              label="Gemini 3.8 Flash"
-              note="2x credits · richer expression and voice fidelity · test before live calls"
-              lang={lang}
-              busyVoice={busyVoice}
-              onAdd={onAdd}
-              onRemove={onRemove}
-            />
-            {query && (data?.voices ?? []).filter(matchesSearch).length === 0 && (
+            {error && (
+              <div className="rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">{error}</div>
+            )}
+
+            <div className="flex flex-col gap-2">{visible.map(row)}</div>
+
+            {!query && shown.length > PAGE_SIZE && (
+              <button
+                type="button"
+                onClick={() => setExpanded((current) => !current)}
+                className="self-center rounded-lg border border-border px-4 py-2 text-xs font-bold text-text-muted hover:border-primary hover:text-primary"
+              >
+                {expanded ? 'Show fewer voices' : `Show ${shown.length - PAGE_SIZE} more voices`}
+              </button>
+            )}
+
+            {query && searchResults.length === 0 && (
               <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center text-sm text-text-muted">
                 No voices match “{search}”.
               </div>
             )}
+
+            <p className="px-1 text-[11px] text-text-muted">
+              {data.selectedCount} added · only added voices appear in the agent voice picker.
+            </p>
           </>
         )}
       </div>

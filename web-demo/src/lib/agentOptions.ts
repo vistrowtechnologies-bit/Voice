@@ -222,7 +222,15 @@ export const MODEL_OPTIONS = [
 // If a paid Groq tier is ever bought, re-list them — but benchmark against
 // this platform's own Hindi/Marathi checks first, the way gpt-4.1-nano was
 // disqualified at 2/12 for being fast and wrong.
-// Gemini Live is PARKED, not removed. Three admin test calls on 2026-09-07:
+// 2026-10-06: RE-LISTED for the platform owner only (see ADMIN_ONLY_MODELS) so
+// speech-to-speech can be measured on real calls against the pipeline. What
+// changed since the park below: every call type now records the perceived
+// caller-stop -> first-audio time (latency_metrics.callerStopToFirstAudioMs),
+// which is the like-for-like instrument the notes below said was missing.
+// Tenants still cannot select these - the server refuses gemini-live* models
+// for anyone but the platform owner.
+//
+// Gemini Live was PARKED, not removed. Three admin test calls on 2026-09-07:
 // audio worked once and was silent twice, the working one opened with "Sorry,
 // I didn't catch that" before the caller had spoken, and it felt slower than
 // the pipeline it was meant to beat.
@@ -274,8 +282,8 @@ export const MODEL_OPTIONS = [
 // (5/5 vs Google STT's 0/5 on बानेर, ट्रिटोपिया, हिंजवडी). There is now no
 // latency win to trade that against, so the test was not worth running.
 //
-// Reviving needs a reason beyond latency. PARKED_MODELS below only exists so
-// agent 26 ("Artha · Gemini Live test", account 2) still renders a label.
+// Reviving needs a reason beyond latency; agent 26 ("Artha · Gemini Live test",
+// account 2) is the existing test agent for it.
 // Keep an explicit item type even while the selectable admin-only list is
 // empty. `[] as const` becomes readonly never[], which makes modelLabel's
 // compatibility lookup fail the TypeScript production build.
@@ -285,12 +293,12 @@ export const MODEL_OPTIONS = [
 // reproduce - that difference shipped a broken Vercel build once already).
 export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: string }[] = [
   { value: 'gpt-5-nano', label: 'Vistrow Nano Lab', tag: 'Experimental · lowest OpenAI cost; measure quality before rollout' },
+  { value: 'gemini-live', label: 'Gemini Live 2.5 · realtime', tag: 'Speech-to-speech test · replaces speech recognition, the AI model and the voice' },
+  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Gemini Live 3.1 · realtime', tag: 'Speech-to-speech test · newer, preview' },
 ]
 
-const PARKED_MODELS = [
-  { value: 'gemini-live', label: 'Gemini Live 2.5 (Preview)' },
-  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Gemini Live 3.1 (Preview)' },
-] as const
+/** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */
+export const isRealtimeModel = (value: string) => value.startsWith('gemini-live')
 
 // Kept out of the dropdown but still resolvable, so calls 853 and 854 render
 // under a name instead of leaking the raw vendor string at a tenant.
@@ -318,7 +326,6 @@ const RETIRED_MODELS = [
 export const modelLabel = (value: string) =>
   MODEL_OPTIONS.find((m) => m.value === value)?.label ??
   ADMIN_ONLY_MODELS.find((m) => m.value === value)?.label ??
-  PARKED_MODELS.find((m) => m.value === value)?.label ??
   RETIRED_ADMIN_MODELS.find((m) => m.value === value)?.label ??
   RETIRED_MODELS.find((m) => m.value === value)?.label ??
   value

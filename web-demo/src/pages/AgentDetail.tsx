@@ -21,6 +21,7 @@ import {
   AMBIENT_NOISE_OPTIONS,
   EMOTION_INTENSITIES,
   LANGUAGES,
+  isRealtimeModel,
   modelOptionsFor,
   NOISE_CANCELLATION_OPTIONS,
   TONES,
@@ -288,7 +289,14 @@ function AgentEditorForm({
               className={inputCls}
             />
           </Field>
-          <Field label="Model">
+          <Field
+            label="Model"
+            hint={
+              isRealtimeModel(form.model)
+                ? 'Speech-to-speech: the model listens and speaks directly, so speech recognition, the AI model and the voice below are bypassed. It speaks with the Gemini voice that has the same name as the voice you pick (for example Aoede). Compare "Reply audio reached caller" in the call diagnostics.'
+                : undefined
+            }
+          >
             <select value={form.model} onChange={(e) => set('model', e.target.value)} className={inputCls}>
               {modelOptionsFor(isPlatformOwner).map((m) => (
                 <option key={m.value} value={m.value}>
