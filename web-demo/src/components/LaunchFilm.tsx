@@ -1,9 +1,43 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /** The launch film. Nothing but the poster image loads until the visitor
- * presses play, so a 2:43 video costs the homepage no bandwidth by default. */
+ * reaches it; then it plays, and it pauses again when they scroll away.
+ * A visitor who pauses it themselves is left alone. */
 export function LaunchFilm() {
-  const [playing, setPlaying] = useState(false)
+  const [started, setStarted] = useState(false)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const userPaused = useRef(false)
+  const inView = useRef(false)
+
+  useEffect(() => {
+    const box = boxRef.current
+    if (!box || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        inView.current = entry.isIntersecting
+        const v = videoRef.current
+        if (entry.isIntersecting) {
+          if (!started) { setStarted(true); return }
+          if (v && v.paused && !userPaused.current) void tryPlay(v)
+        } else if (v && !v.paused) {
+          v.pause()
+        }
+      },
+      { threshold: 0.6 },
+    )
+    io.observe(box)
+    return () => io.disconnect()
+  }, [started])
+
+  // Browsers allow sound-on autoplay only after the visitor has interacted
+  // with the page; otherwise fall back to muted (the controls unmute).
+  async function tryPlay(v: HTMLVideoElement) {
+    try { await v.play() } catch {
+      v.muted = true
+      try { await v.play() } catch { /* leave it for the controls */ }
+    }
+  }
 
   return (
     <section id="launch-film" className="mx-auto max-w-7xl px-5 py-16 md:px-8">
@@ -14,20 +48,28 @@ export function LaunchFilm() {
           How she answers, switches language mid-call, books the appointment and writes up every conversation.
         </p>
       </div>
-      <div className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_40px_100px_-40px_rgba(124,58,237,0.45)]">
-        {playing ? (
+      <div ref={boxRef} className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_40px_100px_-40px_rgba(124,58,237,0.45)]">
+        {started ? (
           <video
             src="/media/vistrow-voice-launch.mp4"
             poster="/media/vistrow-voice-launch-poster.jpg"
+            ref={(v) => {
+              videoRef.current = v
+              if (v && inView.current && v.paused && !userPaused.current && v.readyState === 0) void tryPlay(v)
+            }}
             controls
-            autoPlay
             playsInline
+            onPause={(e) => {
+              // A pause while the film is still on screen came from the visitor.
+              if (inView.current && !e.currentTarget.ended) userPaused.current = true
+            }}
+            onPlay={() => { userPaused.current = false }}
             className="h-full w-full"
           />
         ) : (
           <button
             type="button"
-            onClick={() => setPlaying(true)}
+            onClick={() => setStarted(true)}
             aria-label="Play the Vistrow Voice launch film (2 minutes 43 seconds, with sound)"
             className="group absolute inset-0 h-full w-full"
           >
