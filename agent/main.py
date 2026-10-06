@@ -73,6 +73,7 @@ from clause_tokenizer import ClauseTokenizer
 from gemini_interactions_tts import GeminiInteractionsTTS
 from google_tts_streaming_patch import PatchedGeminiTTS
 import backchannel_patch
+import call_limit
 import preemptive_diag_patch
 
 backchannel_patch.apply()
@@ -6908,6 +6909,8 @@ async def entrypoint(ctx: JobContext) -> None:
         async def _watch() -> None:
             try:
                 await asyncio.sleep(_POST_CHECKIN_TIMEOUT_S)
+                if userdata.get("ending_call"):
+                    return  # a goodbye is already being spoken (e.g. the time-limit wrap-up); don't talk over it
                 logger.info("hanging up room %s — silent after check-in", ctx.room.name)
                 userdata["ending_call"] = True
                 session.generate_reply(
@@ -7886,17 +7889,24 @@ async def entrypoint(ctx: JobContext) -> None:
     ctx.add_shutdown_callback(drain_background_fanout)
 
     # Hard call-length ceiling: tear the room down after max_call_duration_s.
+    # A short spoken wrap-up starts shortly before the ceiling (call_limit.py);
+    # the hard hang-up at the ceiling remains as the backstop.
     if max_call_duration_s > 0:
-
-        async def _max_duration_guard() -> None:
-            try:
-                await asyncio.sleep(max_call_duration_s)
-                logger.info("hanging up room %s after max duration %ds", ctx.room.name, max_call_duration_s)
-                await _hang_up(ctx.room.name)
-            except asyncio.CancelledError:
-                pass
-
-        asyncio.create_task(_max_duration_guard())
+        asyncio.create_task(
+            call_limit.run_guard(
+                max_call_duration_s,
+                userdata=userdata,
+                speak=lambda instructions: session.generate_reply(instructions=instructions),
+                hang_up=lambda: _hang_up(ctx.room.name),
+                is_platform_demo=bool(cfg.get("is_platform_demo")),
+                before_speak=lambda: (
+                    _cancel_silence_hangup(),
+                    _cancel_post_checkin_timeout(),
+                    _cancel_deferred_checkin(),
+                ),
+                log=logger,
+            )
+        )
     # The silence watchdog is armed by state transitions after the greeting,
     # so setup, thinking and greeting playback never consume caller time.
 
