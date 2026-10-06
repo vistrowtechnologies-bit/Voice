@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Icon } from './Icon'
 
 /** The launch film. Nothing but the poster image loads until the visitor
  * presses play, so a 2:43 video costs the homepage no bandwidth by default. */
@@ -39,12 +38,13 @@ export function LaunchFilm() {
               decoding="async"
               className="h-full w-full object-cover"
             />
-            <span className="absolute inset-0 flex items-center justify-center bg-black/10 transition-colors group-hover:bg-black/20">
-              <span className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-white shadow-xl transition-transform group-hover:scale-110 md:h-24 md:w-24">
-                <Icon name="play_arrow" className="text-[44px] md:text-[52px]" />
+            {/* Bottom-left, not centred: the poster's own headline sits in the middle. */}
+            <span className="absolute bottom-4 left-4 flex items-center gap-3 rounded-full bg-primary py-2 pl-2 pr-5 text-sm font-bold text-white shadow-xl transition-transform group-hover:scale-105 md:bottom-6 md:left-6 md:text-base">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 md:h-12 md:w-12">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 md:h-6 md:w-6" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
               </span>
+              Play film · 2:43
             </span>
-            <span className="absolute bottom-4 left-4 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">2:43 · with sound</span>
           </button>
         )}
       </div>
