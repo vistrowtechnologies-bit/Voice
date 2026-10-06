@@ -4,8 +4,21 @@ import { useEffect, useRef, useState } from 'react'
 /** The launch film. Nothing but the poster image loads until the visitor
  * reaches it; then it plays, and it pauses again when they scroll away.
  * A visitor who pauses it themselves is left alone. */
+const FILM_HD = '/media/vistrow-voice-launch.mp4'
+const FILM_SD = '/media/vistrow-voice-launch-720.mp4'
+
+/** Phones and Save-Data visitors get the 720p file (5 MB instead of 12 MB). */
+function pickFilm(): string {
+  try {
+    const nav = navigator as Navigator & { connection?: { saveData?: boolean } }
+    if (nav.connection?.saveData || window.matchMedia('(max-width: 768px)').matches) return FILM_SD
+  } catch { /* fall through to HD */ }
+  return FILM_HD
+}
+
 export function LaunchFilm() {
   const [started, setStarted] = useState(false)
+  const [src] = useState(pickFilm) // fixed once, so a resize can't restart the film
   const boxRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const userPaused = useRef(false)
@@ -61,7 +74,7 @@ export function LaunchFilm() {
         <div ref={boxRef} className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_40px_100px_-40px_rgba(124,58,237,0.45)]">
           {started ? (
             <video
-              src="/media/vistrow-voice-launch.mp4"
+              src={src}
               poster="/media/vistrow-voice-launch-poster.jpg"
               ref={(v) => {
                 videoRef.current = v
