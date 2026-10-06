@@ -4,6 +4,7 @@ import { Icon } from '../../components/Icon'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
+import { LaunchFilm } from '../../components/LaunchFilm'
 import { Seo } from '../../components/Seo'
 import { CTABand, TalkToArthaButton } from '../../components/MarketingBits'
 import { RotatingGreeting, ScriptMarquee } from '../../components/BharatBits'
@@ -200,6 +201,8 @@ export function Home() {
           behind it; this says something true instead - every script shown is
           a language the product genuinely speaks. */}
       <ScriptMarquee />
+
+      <LaunchFilm />
 
       <section className="mx-auto max-w-7xl px-5 py-16 md:px-8">
         <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
