@@ -4,6 +4,8 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { VoicePreviewButton } from '../components/VoicePreviewButton'
 import { addVoice, fetchVoiceCatalog, removeVoice } from '../lib/api'
+import { ADMIN_ONLY_MODELS } from '../lib/agentOptions'
+import { useAuth } from '../lib/auth'
 import type { VoiceCatalog, VoiceEntry } from '../lib/types'
 import { Tooltip } from '../components/ui/Tooltip'
 
@@ -38,7 +40,11 @@ function avatarGradient(value: string, name: string): string {
   )
 }
 
-type TabKey = 'expressive' | 'hd' | 'standard' | 'native' | 'gemini' | 'premium'
+type TabKey = 'expressive' | 'hd' | 'standard' | 'native' | 'gemini' | 'premium' | 'realtime'
+
+// Realtime (speech-to-speech) is a model, not a voice: it is chosen on the agent.
+// The tab exists so someone looking for it among the voices is sent to the right place.
+const REALTIME_MODELS = ADMIN_ONLY_MODELS.filter((m) => m.value.startsWith('gemini-live'))
 
 interface Tab {
   key: TabKey
@@ -148,6 +154,9 @@ function VoiceRow({
 }
 
 export function Voices() {
+  const { user } = useAuth()
+  // Same audience as the model dropdown: the server refuses these models for everyone else.
+  const showRealtime = !!user?.isPlatformOwner && !user?.impersonating && REALTIME_MODELS.length > 0
   const [data, setData] = useState<VoiceCatalog | null>(null)
   const [lang, setLang] = useState<string>('hi')
   const [busyVoice, setBusyVoice] = useState<string | null>(null)
@@ -251,7 +260,8 @@ export function Voices() {
     [tabs, query],
   )
 
-  const activeTab = tabs.find((t) => t.key === tab) ?? tabs[0]
+  const realtimeActive = showRealtime && tab === 'realtime' && !query
+  const activeTab = realtimeActive ? undefined : (tabs.find((t) => t.key === tab) ?? tabs[0])
   const shown = query ? searchResults : (activeTab?.voices ?? [])
   const visible = query || expanded ? shown : shown.slice(0, PAGE_SIZE)
 
@@ -324,13 +334,56 @@ export function Voices() {
                       {t.label} <span className="text-[11px] font-medium text-text-muted">{t.voices.length}</span>
                     </button>
                   ))}
+                  {showRealtime && (
+                    <button
+                      role="tab"
+                      aria-selected={realtimeActive}
+                      onClick={() => {
+                        setTab('realtime')
+                        setExpanded(false)
+                      }}
+                      className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                        realtimeActive ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'
+                      }`}
+                    >
+                      Realtime <span className="text-[11px] font-medium text-text-muted">{REALTIME_MODELS.length}</span>
+                    </button>
+                  )}
                 </div>
                 {activeTab && <p className="px-1 text-[11px] text-text-muted">{activeTab.note}</p>}
+                {realtimeActive && <p className="px-1 text-[11px] text-text-muted">Speech-to-speech test models · owner only · chosen per agent, not added here</p>}
               </div>
             )}
 
             {error && (
               <div className="rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">{error}</div>
+            )}
+
+            {realtimeActive && (
+              <div className="flex flex-col gap-2">
+                <div className="rounded-xl border border-border bg-surface px-4 py-3 text-sm leading-relaxed text-text-muted">
+                  Realtime is a <span className="font-semibold text-text">model</span>, not a voice. It listens and speaks directly, so it replaces
+                  speech recognition, the AI model and the voice on that agent. It speaks with the Gemini voice that has the same name as the
+                  agent's selected voice. To use it, open an agent and pick it under <span className="font-semibold text-text">Model</span>.
+                </div>
+                {REALTIME_MODELS.map((model) => (
+                  <div key={model.value} className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Icon name="bolt" className="text-[20px]" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{model.label}</p>
+                      {model.tag && <p className="truncate text-xs text-text-muted">{model.tag}</p>}
+                    </div>
+                    <Link
+                      to="/dashboard/agents"
+                      className="shrink-0 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white transition hover:brightness-105"
+                    >
+                      Choose on an agent
+                    </Link>
+                  </div>
+                ))}
+              </div>
             )}
 
             <div className="flex flex-col gap-2">{visible.map(row)}</div>
