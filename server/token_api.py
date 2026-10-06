@@ -2987,7 +2987,10 @@ def create_contact_note(contact_id: int, data: dict = Body(...), user: dict = De
     body = (data.get("body") or "").strip()
     if not body:
         raise HTTPException(400, "Note body is required")
-    return calls_db.add_contact_note(contact_id, user["account_id"], body, user.get("email", ""))
+    note = calls_db.add_contact_note(contact_id, user["account_id"], body, user.get("email", ""))
+    if note is None:
+        raise HTTPException(404, "Contact not found")
+    return note
 
 
 @app.delete("/contacts/{contact_id}/notes/{note_id}")

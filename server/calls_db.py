@@ -4573,10 +4573,16 @@ def contact_detail(contact_id: int, account_id: int) -> dict | None:
         conn.close()
 
 
-def add_contact_note(contact_id: int, account_id: int, body: str, created_by: str) -> dict:
+def add_contact_note(contact_id: int, account_id: int, body: str, created_by: str) -> dict | None:
+    """Returns None when the contact is not in this account (the route answers 404)."""
     conn = _connect()
     try:
         with conn:
+            owned = conn.execute(
+                "SELECT 1 FROM contacts WHERE id = ? AND account_id = ?", (contact_id, account_id)
+            ).fetchone()
+            if owned is None:
+                return None
             cur = conn.execute(
                 "INSERT INTO contact_notes (account_id, contact_id, body, created_by) "
                 "VALUES (?, ?, ?, ?) RETURNING id, body, created_by, created_at",

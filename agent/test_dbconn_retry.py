@@ -23,6 +23,11 @@ class ConnectRetryTests(unittest.TestCase):
     def setUp(self):
         dbconn._pool = None
 
+    def tearDown(self):
+        # These tests install fake pools on the module. Leaving one behind
+        # broke every later test that touches dbconn (the fake has no putconn).
+        dbconn._pool = None
+
     def test_retries_on_a_fresh_pool_after_a_timeout(self):
         pools = [_FakePool(True), _FakePool(True), _FakePool(False)]
         made = []
