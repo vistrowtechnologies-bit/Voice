@@ -7777,6 +7777,50 @@ def save_voice_sample(voice_string: str, lang: str, audio: bytes, content_type: 
         conn.close()
 
 
+# Dashboard test calls ("Test agent" in the browser, the phone-icon button) are
+# free up to this many minutes per billing period per account; minutes past it
+# are charged at the normal rate so a workspace cannot run unlimited free calls
+# on our vendor bill. Testing Lab runs are not part of the allowance (they are
+# billed from the first second). Mirrored in agent/db.py for call admission.
+FREE_TEST_MINUTES = float(os.getenv("FREE_TEST_MINUTES_PER_MONTH", "30"))
+
+
+def _test_call_usage(conn, account_id: int, rates: dict, period_start, period_end=None) -> tuple[float, float]:
+    """(minutes, credits at normal rates) of dashboard test calls in the period."""
+    query = (
+        "SELECT COALESCE(call_type, 'browser') call_type, voice, model, "
+        "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls "
+        "WHERE account_id = ? AND (room_name LIKE ? OR room_name LIKE ?)"
+    )
+    params: list = [account_id, "test-phone-%", "test-agent-%"]
+    if period_start:
+        query += " AND started_at::timestamp >= ?::timestamp"
+        params.append(period_start)
+    if period_end:
+        query += " AND started_at::timestamp < ?::timestamp"
+        params.append(period_end)
+    query += " GROUP BY call_type, voice, model"
+    minutes = credits = 0.0
+    for row in conn.execute(query, params).fetchall():
+        call_type = row["call_type"] if row["call_type"] in rates else "browser"
+        m = float(row["m"] or 0)
+        minutes += m
+        credits += m * _credits_per_minute(
+            rates.get(call_type, 1.0),
+            _VOICE_TIER_MULTIPLIERS[voice_tier(row["voice"])],
+            _MODEL_TIER_MULTIPLIERS[model_tier(_row_get(row, "model"))],
+        )
+    return minutes, credits
+
+
+def _test_overage_credits(conn, account_id: int, rates: dict, period_start, period_end=None) -> float:
+    """Credits to charge for test minutes beyond the free allowance (pro rata)."""
+    minutes, credits = _test_call_usage(conn, account_id, rates, period_start, period_end)
+    if minutes <= FREE_TEST_MINUTES or minutes <= 0:
+        return 0.0
+    return credits * (minutes - FREE_TEST_MINUTES) / minutes
+
+
 def _credits_used_in_period(conn, account_id: int, rates: dict, period_start: str | None) -> tuple[float, dict, dict]:
     """Shared by billing_summary (current period) and the overage webhook
     handler (a just-closed period) — credits burned by calls started at or
@@ -7821,6 +7865,7 @@ def _credits_used_in_period(conn, account_id: int, rates: dict, period_start: st
         by_type[call_type] = round(by_type.get(call_type, 0.0) + minutes, 1)
         by_voice_tier[tier] = round(by_voice_tier.get(tier, 0.0) + minutes, 1)
         used += credits
+    used += _test_overage_credits(conn, account_id, rates, period_start)
     return round(used, 1), by_type, by_voice_tier
 
 
@@ -7876,6 +7921,10 @@ def billing_summary(account_id: int) -> dict:
 
         return {
             "creditsTotal": credits_total,
+            "freeTestMinutes": {
+                "allowance": FREE_TEST_MINUTES,
+                "used": round(_test_call_usage(conn, account_id, rates, period_start)[0], 1),
+            },
             "creditsUsed": used,
             "creditsRemaining": max(0, round(credits_total - used, 1)),
             "minutesUsed": round(sum(by_type.values()), 1),
@@ -8216,7 +8265,7 @@ def overage_for_account_period(account_id: int, plan: str, period_start: str, pe
             used += row["m"] * _credits_per_minute(
                 rates.get(call_type, 1.0), _VOICE_TIER_MULTIPLIERS[tier], _MODEL_TIER_MULTIPLIERS[mtier]
             )
-        used = round(used, 1)
+        used = round(used + _test_overage_credits(conn, account_id, rates, period_start, period_end), 1)
         plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
         allowance_row = conn.execute(
             "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total'",

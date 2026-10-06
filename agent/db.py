@@ -13,6 +13,7 @@ without closing).
 """
 
 import datetime
+import os
 import json
 from concurrent.futures import ThreadPoolExecutor
 import re
@@ -94,6 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_active_calls_account ON active_calls(account_id);
 # separate deployables with separate venvs (see module docstring above).
 CONCURRENT_CALL_LIMITS = {key: value["concurrency"] for key, value in plan_policy.PLANS.items()}
 
+_FREE_TEST_MINUTES = float(os.getenv("FREE_TEST_MINUTES_PER_MONTH", "30"))
 _VOICE_TIER_MULTIPLIERS = {"economy": 0.75, "standard": 1.0, "premium": 2.0}
 _MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0}
 _PREMIUM_MODELS = {"gpt-4.1-mini", "gemini-3.5-flash-lite", "gemini-3.6-flash"}
@@ -168,6 +170,19 @@ def _trial_credits_exhausted(conn, account_id: int) -> bool:
         "GROUP BY call_type, voice, model",
         (account_id, period_start, "test-phone-%", "test-agent-%"),
     ).fetchall()
+    # Dashboard test calls beyond the monthly free allowance count too —
+    # same rule as server/calls_db._test_overage_credits.
+    test_rows = conn.execute(
+        "SELECT COALESCE(call_type, 'browser') call_type, voice, model, "
+        "COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls "
+        "WHERE account_id = ? AND started_at >= ? "
+        "AND (room_name LIKE ? OR room_name LIKE ?) "
+        "GROUP BY call_type, voice, model",
+        (account_id, period_start, "test-phone-%", "test-agent-%"),
+    ).fetchall()
+    test_minutes = sum(float(r["m"] or 0) for r in test_rows)
+    test_share = max(0.0, test_minutes - _FREE_TEST_MINUTES) / test_minutes if test_minutes else 0.0
+    rows = list(rows) + [dict(r, m=float(r["m"] or 0) * test_share) for r in test_rows]
     used = 0.0
     for usage in rows:
         call_type = usage["call_type"] if usage["call_type"] in rates else "browser"

@@ -135,7 +135,7 @@ export function BrowserTestModal({
 }: {
   agent: AgentConfig
   onClose: () => void
-  testContext?: { runId: string; scenarioId?: number; scenarioKey?: string; scenarioName: string }
+  testContext?: { runId: string; scenarioId?: number; scenarioKey?: string; scenarioName: string; callerBrief?: string; expectedBehaviors?: string[] }
 }) {
   const [phase, setPhase] = useState<'checking' | 'connecting' | 'active' | 'error'>('checking')
   const [error, setError] = useState<string | null>(null)
@@ -288,6 +288,19 @@ export function BrowserTestModal({
           onLeadUpdate={() => {}}
           onTranscriptUpdate={() => {}}
         />
+        {testContext?.callerBrief && (
+          // The call screen is full-screen, so without this the tester loses the
+          // scenario they are meant to act out the moment the call connects.
+          <aside className="pointer-events-auto fixed bottom-4 left-4 z-[60] max-h-[45vh] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-cyan/30 bg-surface/95 p-3 shadow-xl backdrop-blur">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan">You are the caller · {testContext.scenarioName}</p>
+            <p className="mt-1 text-sm leading-relaxed text-text">{testContext.callerBrief}</p>
+            {testContext.expectedBehaviors && testContext.expectedBehaviors.length > 0 && (
+              <ul className="mt-2 space-y-1 border-t border-border pt-2">
+                {testContext.expectedBehaviors.map((item) => <li key={item} className="text-[11px] text-text-muted">• {item}</li>)}
+              </ul>
+            )}
+          </aside>
+        )}
       </LiveKitRoom>
     </div>
   )

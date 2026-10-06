@@ -34,6 +34,8 @@ class _Connection:
         self.queries.append((query, params))
         if "UPDATE invoices" in query:
             return _Result(one=self.paid_row)
+        if "room_name LIKE ? OR room_name LIKE ?" in query:
+            return _Result()  # dashboard test calls: none in this fixture
         if "GROUP BY call_type, voice, model" in query:
             return _Result(many=[{"call_type": "phone", "voice": None, "model": None, "m": 1300.0}])
         if "key = 'credits_total'" in query:
@@ -53,7 +55,7 @@ class BillingIntegrityTests(unittest.TestCase):
 
         self.assertEqual(result["creditsUsed"], 1300.0)
         self.assertEqual(result["overageCredits"], 100.0)
-        grouped_query = next(query for query, _params in conn.queries if "GROUP BY" in query)
+        grouped_query = next(query for query, _params in conn.queries if "GROUP BY" in query and "NOT LIKE" in query)
         self.assertIn("room_name NOT LIKE", grouped_query)
 
     def test_paid_invoice_returns_only_on_first_state_transition(self):

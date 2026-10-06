@@ -144,6 +144,7 @@ export function TestingLab() {
   const [runs, setRuns] = useState<CallRecord[]>([])
   const [selected, setSelected] = useState<SelectedScenario>({ source: 'builtin', ...BUILTIN_SCENARIOS[0] })
   const [agentId, setAgentId] = useState<number | null>(null)
+  const [resultScenario, setResultScenario] = useState<SelectedScenario | null>(null)
   const [activeRun, setActiveRun] = useState<{ runId: string; scenario: SelectedScenario; agent: AgentConfig } | null>(null)
   const [waitingForRun, setWaitingForRun] = useState<string | null>(null)
   const [resultRunId, setResultRunId] = useState<string | null>(null)
@@ -351,6 +352,15 @@ export function TestingLab() {
                 <span>·</span><span>{latestResult.agent}</span><span>·</span><span>{formatDateTime(latestResult.callDate)}</span><span>·</span>
                 <span className="rounded-full bg-primary/10 px-2 py-1 font-semibold text-primary">{latestResult.channel} test</span>
               </div>
+              {resultScenario && resultScenario.name === latestResult.testScenarioName && (
+                <div className="mb-4 rounded-xl border border-cyan/25 bg-cyan/5 p-3">
+                  <p className="text-xs font-semibold text-cyan">Check this scenario against the transcript and recording</p>
+                  <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+                    {resultScenario.expectedBehaviors.map((item) => <li key={item} className="flex gap-2 text-xs text-text"><Icon name="visibility" className="text-[15px] text-cyan" />{item}</li>)}
+                  </ul>
+                  <p className="mt-2 text-[11px] text-text-muted">These are judged by you, not automatically. The measured checks below are the same for every scenario.</p>
+                </div>
+              )}
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 {checks.map((check) => (
                   <div key={check.label} className="rounded-xl border border-border bg-surface-high/40 p-3">
@@ -381,8 +391,11 @@ export function TestingLab() {
             scenarioName: activeRun.scenario.name,
             scenarioId: activeRun.scenario.source === 'saved' ? activeRun.scenario.id : undefined,
             scenarioKey: activeRun.scenario.source === 'builtin' ? activeRun.scenario.key : undefined,
+            callerBrief: activeRun.scenario.callerBrief,
+            expectedBehaviors: activeRun.scenario.expectedBehaviors,
           }}
           onClose={() => {
+            setResultScenario(activeRun.scenario)
             setResultRunId(activeRun.runId)
             setWaitingForRun(activeRun.runId)
             setActiveRun(null)
