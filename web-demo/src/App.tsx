@@ -1,21 +1,10 @@
 import { Route, Routes } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import type { ReactNode } from 'react'
+import { AppLoadingScreen } from './components/AppLoadingScreen'
 import { AuthProvider } from './components/AuthProvider'
 import { RequireAuth } from './components/RequireAuth'
 import { RequireOwner } from './components/RequireOwner'
-import { AdminDashboard } from './pages/admin/AdminDashboard'
-import { AdminAccounts } from './pages/admin/AdminAccounts'
-import { AdminAccountDetail } from './pages/admin/AdminAccountDetail'
-import { AdminUsers } from './pages/admin/AdminUsers'
-import { AdminCalls, AdminCallDetailPage } from './pages/admin/AdminCalls'
-import { AdminAnalytics } from './pages/admin/AdminAnalytics'
-import { AdminBilling } from './pages/admin/AdminBilling'
-import { AdminAudit } from './pages/admin/AdminAudit'
-import { AdminHealth } from './pages/admin/AdminHealth'
-import { AdminVendorCredits } from './pages/admin/AdminVendorCredits'
-import { AdminPrivacyRequests } from './pages/admin/AdminPrivacyRequests'
-import { AdminSupport } from './pages/admin/AdminSupport'
-import { AdminSettings } from './pages/admin/AdminSettings'
 import { Home } from './pages/marketing/Home'
 import { ProductOverview } from './pages/marketing/ProductOverview'
 import { ProductDetail } from './pages/marketing/ProductDetail'
@@ -48,31 +37,47 @@ import { ResetPassword } from './pages/ResetPassword'
 import { ConfirmEmailChange } from './pages/ConfirmEmailChange'
 import { VerifyEmail } from './pages/VerifyEmail'
 import { InviteAccept } from './pages/InviteAccept'
-import { Dashboard } from './pages/Dashboard'
-import { Agents } from './pages/Agents'
-import { TestingLab } from './pages/TestingLab'
-import { AgentDetail } from './pages/AgentDetail'
-import { Voices } from './pages/Voices'
-import { KnowledgeBasePage } from './pages/KnowledgeBasePage'
-import { Inbound } from './pages/Inbound'
-import { Outbound } from './pages/Outbound'
-import { CallsHistory } from './pages/CallsHistory'
-import { Contacts } from './pages/Contacts'
-import { ContactDetail } from './pages/ContactDetail'
-import { Appointments } from './pages/Appointments'
-import { Integrations } from './pages/Integrations'
-import { PhoneNumbers } from './pages/PhoneNumbers'
-import { Billing } from './pages/Billing'
-import { Compliance } from './pages/Compliance'
-import { Support } from './pages/Support'
-import { LeadDetail } from './pages/LeadDetail'
-import { WebsiteWidget } from './pages/WebsiteWidget'
-import { Settings } from './pages/Settings'
 import { SidebarPreview } from './pages/SidebarPreview'
 import { useEffect } from 'react'
 import { StagingBadge } from './components/StagingBadge'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { initClarity, trackPageView } from './lib/analytics'
+
+// Dashboard and admin screens load on demand: the marketing pages must not ship them.
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard })))
+const AdminAccounts = lazy(() => import('./pages/admin/AdminAccounts').then((m) => ({ default: m.AdminAccounts })))
+const AdminAccountDetail = lazy(() => import('./pages/admin/AdminAccountDetail').then((m) => ({ default: m.AdminAccountDetail })))
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers').then((m) => ({ default: m.AdminUsers })))
+const AdminCalls = lazy(() => import('./pages/admin/AdminCalls').then((m) => ({ default: m.AdminCalls })))
+const AdminCallDetailPage = lazy(() => import('./pages/admin/AdminCalls').then((m) => ({ default: m.AdminCallDetailPage })))
+const AdminAnalytics = lazy(() => import('./pages/admin/AdminAnalytics').then((m) => ({ default: m.AdminAnalytics })))
+const AdminBilling = lazy(() => import('./pages/admin/AdminBilling').then((m) => ({ default: m.AdminBilling })))
+const AdminAudit = lazy(() => import('./pages/admin/AdminAudit').then((m) => ({ default: m.AdminAudit })))
+const AdminHealth = lazy(() => import('./pages/admin/AdminHealth').then((m) => ({ default: m.AdminHealth })))
+const AdminVendorCredits = lazy(() => import('./pages/admin/AdminVendorCredits').then((m) => ({ default: m.AdminVendorCredits })))
+const AdminPrivacyRequests = lazy(() => import('./pages/admin/AdminPrivacyRequests').then((m) => ({ default: m.AdminPrivacyRequests })))
+const AdminSupport = lazy(() => import('./pages/admin/AdminSupport').then((m) => ({ default: m.AdminSupport })))
+const AdminSettings = lazy(() => import('./pages/admin/AdminSettings').then((m) => ({ default: m.AdminSettings })))
+const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })))
+const Agents = lazy(() => import('./pages/Agents').then((m) => ({ default: m.Agents })))
+const TestingLab = lazy(() => import('./pages/TestingLab').then((m) => ({ default: m.TestingLab })))
+const AgentDetail = lazy(() => import('./pages/AgentDetail').then((m) => ({ default: m.AgentDetail })))
+const Voices = lazy(() => import('./pages/Voices').then((m) => ({ default: m.Voices })))
+const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage').then((m) => ({ default: m.KnowledgeBasePage })))
+const Inbound = lazy(() => import('./pages/Inbound').then((m) => ({ default: m.Inbound })))
+const Outbound = lazy(() => import('./pages/Outbound').then((m) => ({ default: m.Outbound })))
+const CallsHistory = lazy(() => import('./pages/CallsHistory').then((m) => ({ default: m.CallsHistory })))
+const Contacts = lazy(() => import('./pages/Contacts').then((m) => ({ default: m.Contacts })))
+const ContactDetail = lazy(() => import('./pages/ContactDetail').then((m) => ({ default: m.ContactDetail })))
+const Appointments = lazy(() => import('./pages/Appointments').then((m) => ({ default: m.Appointments })))
+const Integrations = lazy(() => import('./pages/Integrations').then((m) => ({ default: m.Integrations })))
+const PhoneNumbers = lazy(() => import('./pages/PhoneNumbers').then((m) => ({ default: m.PhoneNumbers })))
+const Billing = lazy(() => import('./pages/Billing').then((m) => ({ default: m.Billing })))
+const Compliance = lazy(() => import('./pages/Compliance').then((m) => ({ default: m.Compliance })))
+const Support = lazy(() => import('./pages/Support').then((m) => ({ default: m.Support })))
+const LeadDetail = lazy(() => import('./pages/LeadDetail').then((m) => ({ default: m.LeadDetail })))
+const WebsiteWidget = lazy(() => import('./pages/WebsiteWidget').then((m) => ({ default: m.WebsiteWidget })))
+const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
 
 // Wrap every dashboard route in the auth gate - one helper keeps App.tsx
 // readable instead of nesting <RequireAuth> around each element.
@@ -136,6 +141,7 @@ function App() {
     <AuthProvider>
       <AnalyticsListener />
       <StagingBadge />
+      <Suspense fallback={<AppLoadingScreen />}>
       <Routes location={backgroundLocation ?? location}>
         {import.meta.env.DEV && <Route path="/__preview/sidebar" element={<SidebarPreview />} />}
         {/* Public - marketing site */}
@@ -219,10 +225,12 @@ function App() {
         <Route path="/admin/settings" element={<RequireOwner><AdminSettings /></RequireOwner>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </Suspense>
 
       {/* Rendered ON TOP of the routes above whenever the URL names a call -
           whether it was opened from the list or hit directly. Unconditional
           so both entry points look identical. */}
+      <Suspense fallback={null}>
       <Routes>
         <Route
           path="/dashboard/calls/:id"
@@ -234,6 +242,7 @@ function App() {
         />
         <Route path="*" element={null} />
       </Routes>
+      </Suspense>
     </AuthProvider>
   )
 }

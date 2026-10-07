@@ -9,7 +9,7 @@ import { Seo } from '../../components/Seo'
 import { CTABand, TalkToArthaButton } from '../../components/MarketingBits'
 import { RotatingGreeting, ScriptMarquee } from '../../components/BharatBits'
 import { Reveal } from '../../components/Reveal'
-import arthaAvatar from '../../assets/artha-avatar.png'
+import arthaAvatar from '../../assets/artha-avatar.webp'
 import { trackMarketingCta } from '../../lib/analytics'
 import {
   HOME_FEATURES,
@@ -138,7 +138,7 @@ export function Home() {
         className="independence-ribbon flex w-full items-center justify-center gap-2 px-4 py-2.5 text-center text-xs font-semibold text-text sm:text-sm"
       >
         <span className="ribbon-tricolour" aria-hidden="true"><i /><i /><i /></span>
-        <span>We're open for your feedback — try Artha and help us build voice AI for Bharat</span>
+        <span>Hear Artha switch language mid-call — talk to her live, no signup needed</span>
         <Icon name="arrow_forward" className="text-[16px]" />
       </button>
       {/* ---------- Hero ---------- */}
@@ -162,14 +162,15 @@ export function Home() {
               entirely below the fold. */}
           <h1 className="mt-5 font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl lg:text-6xl">
             <RotatingGreeting className="block min-h-[1.1em]" />
-            <span className="mt-1 block">Voice AI built for</span>
+            <span className="mt-1 block">Answer every customer</span>
             <span className="block bg-gradient-to-r from-primary to-magenta bg-clip-text text-transparent">
-              how India actually speaks.
+              in their own language.
             </span>
           </h1>
           <p className="mt-5 max-w-lg text-base leading-7 text-text-muted sm:mt-6 sm:text-lg sm:leading-relaxed">
-            Answer, qualify, and book customers across phone and web in 10 Indian languages plus English—and 76 more worldwide—with
-            natural Hinglish and mid-sentence language switching.
+            Vistrow Voice is voice AI built for how India actually speaks. Answer, qualify, and book customers across phone and
+            web in 87+ languages (10 Indian languages plus English, and 76 more worldwide) with natural Hinglish and
+            mid-sentence language switching.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <TalkToArthaButton />
@@ -474,15 +475,15 @@ export function Home() {
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
         <Reveal>
           <div className="mb-12 text-center">
-            <SectionEyebrow>Public beta</SectionEyebrow>
-            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Try the product before pricing is finalized.</h2>
-            <p className="mx-auto mt-4 max-w-2xl text-text-muted">Public testers get access to the complete multilingual voice platform and help shape the introductory plans.</p>
+            <SectionEyebrow>Get started</SectionEyebrow>
+            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Build your first agent in minutes.</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-text-muted">Describe the job in plain English, test it with real calls, and put it on your website or phone line when it is ready.</p>
           </div>
         </Reveal>
         <div className="grid gap-5 md:grid-cols-3">
           {[
             ['mic', 'Live voice and chat', 'Test real conversations in the browser, by phone, or through your website.'],
-            ['translate', '10 Indian languages + 76 global', 'One agent handles natural code-switching without separate language deployments.'],
+            ['translate', '87+ languages, one agent', 'One agent handles natural code-switching without separate language deployments.'],
             ['analytics', 'Calls, transcripts and feedback', 'Review outcomes, recordings, ratings, and operational analytics in one dashboard.'],
           ].map(([icon, title, body], i) => (
             <Reveal key={title} delayMs={i * 70} className="h-full">
@@ -500,7 +501,7 @@ export function Home() {
             onClick={() => trackMarketingCta('join_beta', 'home_bottom')}
             className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-white hover:opacity-90"
           >
-            Join public beta
+            Create your account
           </Link>
           <Link
             to="/contact"

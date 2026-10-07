@@ -592,7 +592,7 @@ export const GLOBAL_GREETINGS: { greeting: string; name: string }[] = [
 ]
 
 export const HERO_STATS = [
-  { value: '87', label: '11 native + 76 global' },
+  { value: '87+', label: '10 Indian + English + 76 global' },
   { value: '24/7', label: 'Always answering' },
   { value: '3', label: 'Inbound · outbound · web' },
 ]
