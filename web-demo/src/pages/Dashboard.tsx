@@ -315,7 +315,7 @@ export function Dashboard() {
             {isVisible('quick_actions') && (
               <div>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-1"><h3 className="text-sm font-semibold">Quick actions</h3><span className="text-[11px] text-text-muted">Based on your {user?.role ?? 'member'} access</span></div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
                   <QuickAction to="/dashboard/agents" icon="mic" label="Test an agent" />
                   <QuickAction to="/dashboard/outbound" icon="campaign" label="Start campaign" />
                   <QuickAction to="/dashboard/contacts" icon="person_add" label="Add contact" />
@@ -439,7 +439,7 @@ export function Dashboard() {
             </SectionCard>
 
             {/* Secondary KPI strip - compact, not the page's hero. */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
               <StatTile compact label="Minutes" value={String(summary?.totalMinutes ?? 0)} icon="timer" tone="cyan" />
               <StatTile compact label="Active Agents" value={String(summary?.activeAgents ?? 0)} icon="smart_toy" tone="primary" />
               <StatTile compact label="Live Calls" value={String(activeCalls.length)} icon="sensors" pulse={activeCalls.length > 0} tone="magenta" />
@@ -456,7 +456,7 @@ export function Dashboard() {
 
             {isVisible('funnel') && analytics && (
               <SectionCard title="Conversion funnel" subtitle="See where conversations turn into business outcomes">
-                <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
                   <FunnelStage label="Answered" value={analytics.funnel.answered} base={analytics.funnel.answered} icon="call" />
                   <FunnelStage label="Engaged" value={analytics.funnel.engaged} base={analytics.funnel.answered} icon="forum" />
                   <FunnelStage label="Qualified" value={analytics.funnel.qualified} base={analytics.funnel.answered} icon="verified" />
@@ -845,7 +845,7 @@ function IntelStat({ label, value, tone = 'text-text' }: { label: string; value:
 }
 
 function QuickAction({ to, icon, label }: { to: string; icon: string; label: string }) {
-  return <Link to={to} className="group flex min-h-24 flex-col justify-between rounded-xl border border-border bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-primary"><Icon name={icon} className="text-[22px] text-primary" /><span className="mt-4 text-sm font-semibold group-hover:text-primary">{label} →</span></Link>
+  return <Link to={to} className="group flex min-h-24 min-w-0 flex-col justify-between rounded-xl border border-border bg-surface p-3 transition-all hover:-translate-y-0.5 hover:border-primary sm:p-4"><Icon name={icon} className="text-[22px] text-primary" /><span className="mt-4 flex items-end justify-between gap-1 text-sm font-semibold group-hover:text-primary"><span className="min-w-0">{label}</span><Icon name="arrow_forward" className="shrink-0 text-[16px]" /></span></Link>
 }
 
 // Keyed by the id prefix each /notifications item is generated with (see
