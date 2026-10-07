@@ -8,6 +8,18 @@
   src: url("/fonts/manrope-latin.woff2") format("woff2");
 }
 
+/* Icon font: only the glyphs the app uses, self-hosted (about 27 KB; the full
+   Material Symbols file is over 1 MB). Weight 300, outline, as the
+   .material-symbols-outlined rule below expects. A new icon name must be added to
+   scripts/icon-names.txt and the file regenerated: see scripts/check-icons.mjs. */
+@font-face {
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: 300;
+  font-display: block;
+  src: url("/fonts/material-symbols-subset.woff2") format("woff2");
+}
+
 @font-face {
   font-family: "Sora";
   font-style: normal;
