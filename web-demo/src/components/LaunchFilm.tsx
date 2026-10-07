@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 /** The launch film. Nothing but the poster image loads until the visitor
  * reaches it; then it plays, and it pauses again when they scroll away.
  * A visitor who pauses it themselves is left alone. */
-const FILM_HD = '/media/launch-film-v2.mp4'
-const FILM_SD = '/media/launch-film-v2-720.mp4'
+const FILM_HD = '/media/launch-film-v3.mp4'
+const FILM_SD = '/media/launch-film-v3-720.mp4'
 
 /** Phones and Save-Data visitors get the 720p file (5 MB instead of 12 MB). */
 function pickFilm(): string {
