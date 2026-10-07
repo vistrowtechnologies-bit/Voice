@@ -468,35 +468,28 @@ export function PageHeader({
   }, [refreshSignal])
 
   return (
-    <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/90 px-4 py-4 backdrop-blur-xl sm:px-6 xl:flex-row xl:items-center">
+    <header className="sticky top-0 z-20 flex flex-col gap-2 border-b border-border bg-bg/90 px-4 py-3 backdrop-blur-xl sm:gap-3 sm:px-6 sm:py-4 xl:flex-row xl:items-center">
       <div className="min-w-0 flex-1">
         <h1 className="text-lg font-semibold leading-tight">{title}</h1>
         {subtitle && <p className="mt-0.5 text-xs leading-snug text-text-muted sm:truncate">{subtitle}</p>}
       </div>
-      <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 xl:w-auto">
+      <div className="flex w-full flex-wrap items-center gap-1.5 sm:gap-3 xl:w-auto">
         <CommandMenuButton />
         {credits !== null && (
-          <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted">
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-text-muted sm:px-3" title={`${credits} credits`}>
             <Icon name="toll" className="text-[15px] text-cyan" />
-            {credits} credits
+            {credits}<span className="sr-only sm:not-sr-only"> credits</span>
           </span>
         )}
         {helpTopic && (
           <Tooltip content="Help for this page"><Link
             to={`/dashboard/support?topic=${helpTopic}`}
             aria-label="Help for this page"
-            className="flex h-10 items-center gap-1 rounded-full border border-border bg-surface px-3 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary sm:h-8"
+            className="flex h-10 w-10 items-center justify-center gap-1 rounded-full border border-border bg-surface text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary sm:h-8 sm:w-auto sm:px-3"
           >
-            <Icon name="help" className="text-[17px]" /> Help
+            <Icon name="help" className="text-[17px]" /><span className="hidden sm:inline">Help</span>
           </Link></Tooltip>
         )}
-        <Tooltip content="Settings"><Link
-          to="/dashboard/settings"
-          aria-label="Settings"
-          className="flex h-10 w-10 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-high hover:text-text sm:h-9 sm:w-9"
-        >
-          <Icon name="settings" className="text-[22px]" />
-        </Link></Tooltip>
         <NotificationBell />
         <HeaderAvatarMenu />
         {children}
