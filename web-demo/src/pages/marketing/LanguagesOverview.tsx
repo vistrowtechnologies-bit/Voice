@@ -152,15 +152,15 @@ function TryALanguage() {
 
   return (
     <section className="mx-auto max-w-7xl px-5 pb-12 md:px-8">
-      <div className="grid items-center gap-8 rounded-3xl border border-border bg-surface p-6 sm:p-10 lg:grid-cols-2">
+      <div className="grid items-center gap-8 rounded-3xl border border-border bg-surface p-6 sm:p-10 lg:grid-cols-2 lg:gap-12">
         <div>
           <SectionEyebrow>Try it</SectionEyebrow>
           <h2 className="mt-4 font-display text-2xl font-bold sm:text-3xl">
             Pick a language. Then actually talk to it.
           </h2>
           <p className="mt-3 text-text-muted">
-            Choose any language below and start the call — Artha will open in it, not default to Hindi
-            and wait to be corrected. Switch language mid-call too: just say so, and it follows you.
+            Choose a language below and start the call. Switch language mid-call too: just say so, and
+            Artha follows you.
           </p>
 
           <label
@@ -194,6 +194,10 @@ function TryALanguage() {
           <p className="mt-3 text-xs text-text-muted">
             {nativeOptions.length + globalOptions.length} languages available on this demo.
           </p>
+          <p className="mt-5 max-w-sm rounded-xl border border-border bg-bg px-4 py-3 text-sm leading-relaxed text-text-muted">
+            Selected: <span className="font-semibold text-text">{selected?.label ?? 'Hindi'}</span>. Ask Artha
+            anything, or switch language halfway and watch her keep up.
+          </p>
         </div>
 
         <div className="lg:pl-4">
@@ -201,11 +205,6 @@ function TryALanguage() {
             language={code}
             badgeLabel={selected ? `${selected.label} demo` : 'Live demo'}
           />
-          <p className="mx-auto mt-3 max-w-[420px] text-center text-xs text-text-muted">
-            Artha will greet you in{' '}
-            <span className="font-semibold text-text">{selected?.label ?? 'Hindi'}</span>. Ask it
-            anything — or switch language halfway and watch it keep up.
-          </p>
         </div>
       </div>
     </section>
