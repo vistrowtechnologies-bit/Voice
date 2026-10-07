@@ -18,6 +18,7 @@ export type SeoKind =
   | 'contact'
   | 'security'
   | 'legal'
+  | 'article'
   | 'page'
 
 export interface SeoPage {
@@ -43,6 +44,7 @@ export interface OgCardSpec {
 
 import { BUYER_GUIDES, COMPARE_VENDORS, DEMO_CALLS, LOCAL_REAL_ESTATE_PAGES } from './seoExpansionContent'
 import { HELP_TOPICS } from '../content/helpArticles'
+import { VOICE_BLOG_POSTS } from '../content/voiceBlog'
 
 const page = (
   path: string,
@@ -426,16 +428,24 @@ export const SEO_PAGES: SeoPage[] = [
     'legal',
     'Terms of Service',
   ),
-  page(
+  { ...page(
     '/resources/blog',
-    'Vistrow Voice Blog',
-    'Practical guides and product insights from Vistrow Voice are coming soon.',
+    'Voice AI Guides, Product Insights & Playbooks | Vistrow Voice',
+    'Practical guides to AI voice agents, multilingual customer conversations, latency, website voice widgets, and CRM integrations from the Vistrow Voice team.',
     'blog',
-    'Vistrow Voice blog',
-    'page',
+    'Vistrow Voice journal featuring practical guides to voice AI and customer conversations',
+    'collection',
     'Blog',
-    true,
-  ),
+  ), image: `${SEO_ORIGIN}/blog/what-is-an-ai-voice-agent.jpg`, imageAlt: 'Business owner listening on a phone and taking notes beside a laptop' },
+  ...VOICE_BLOG_POSTS.map((post) => ({ ...page(
+    `/resources/blog/${post.slug}`,
+    `${post.title} | Vistrow Voice`,
+    post.excerpt,
+    'blog',
+    `Vistrow Voice guide: ${post.title}`,
+    'article',
+    post.title,
+  ), image: `${SEO_ORIGIN}${post.image}`, imageAlt: post.imageAlt })),
 ]
 
 export const SEO_BY_PATH = new Map(SEO_PAGES.map((entry) => [entry.path, entry]))
@@ -631,5 +641,5 @@ export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
   changelog: { eyebrow: 'PRODUCT CHANGELOG', headline: 'What\u2019s new in Vistrow Voice.', proof: 'Voices  \u00b7  Latency  \u00b7  Calling  \u00b7  Integrations  \u00b7  Controls', accent: '#0e7490', hue: '-91deg' },
   privacy: { eyebrow: 'PRIVACY', headline: 'Your data. Your control.', proof: 'Clear collection  \u00b7  Retention  \u00b7  Export  \u00b7  Deletion', accent: '#047857', hue: '-126deg' },
   terms: { eyebrow: 'TERMS OF SERVICE', headline: 'Clear terms for using Vistrow Voice.', proof: 'Accounts  \u00b7  Billing  \u00b7  Data  \u00b7  Compliance', accent: '#5d5776', hue: '-30deg' },
-  blog: { eyebrow: 'VISTROW VOICE BLOG', headline: 'Practical voice AI guides are coming soon.', proof: 'Product  \u00b7  Implementation  \u00b7  Conversations', accent: '#9333ea', hue: '0deg' },
+  blog: { eyebrow: 'VISTROW VOICE JOURNAL', headline: 'Better conversations start with better systems.', proof: 'Voice AI  ·  Languages  ·  Customer experience', accent: '#9333ea', hue: '0deg' },
 }
