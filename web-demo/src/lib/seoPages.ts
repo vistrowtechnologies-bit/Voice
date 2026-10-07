@@ -106,9 +106,9 @@ export const SEO_PAGES: SeoPage[] = [
   page(
     '/',
     'Multilingual AI Voice Agents for Phone & Web | Vistrow Voice',
-    'Build AI voice agents that answer, qualify, support, and book customers across phone and web in 87 languages, with real-time language switching.',
+    'Build AI voice agents that answer, qualify, support, and book customers across phone and web in 99 languages, with real-time language switching.',
     'home',
-    'Vistrow Voice multilingual AI voice agent orb with support for 87 languages across phone and web',
+    'Vistrow Voice multilingual AI voice agent orb with support for 99 languages across phone and web',
     'home',
     'Home',
   ),
@@ -231,8 +231,8 @@ export const SEO_PAGES: SeoPage[] = [
   ),
   page(
     '/languages',
-    'Multilingual AI Voice Agents in 87 Languages | Vistrow Voice',
-    'Talk to Artha in 10 Indian languages plus English and 76 additional global languages, with natural code-switching during customer calls.',
+    'Multilingual AI Voice Agents in 99 Languages | Vistrow Voice',
+    'Talk to Artha in 10 Indian languages plus English and 88 additional global languages, with natural code-switching during customer calls.',
     'languages',
     'Vistrow Voice multilingual AI orb surrounded by Indian and global language scripts',
     'collection',
@@ -582,7 +582,7 @@ export function baseStructuredData(entry: SeoPage): object[] {
 // renders these definitions with the real Vistrow mark and a frame from the
 // real production orb video.
 export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
-  home: { eyebrow: 'MULTILINGUAL VOICE AI', headline: 'Voice AI that speaks your customer\u2019s language.', proof: '87 languages  \u00b7  Phone + Web  \u00b7  24/7', accent: '#9333ea', hue: '0deg' },
+  home: { eyebrow: 'MULTILINGUAL VOICE AI', headline: 'Voice AI that speaks your customer\u2019s language.', proof: '99 languages  \u00b7  Phone + Web  \u00b7  24/7', accent: '#9333ea', hue: '0deg' },
   product: { eyebrow: 'VISTROW VOICE PLATFORM', headline: 'Everything you need to run voice AI.', proof: 'Build  \u00b7  Call  \u00b7  Learn  \u00b7  Integrate', accent: '#9333ea', hue: '0deg' },
   'product-agents': { eyebrow: 'VOICE AGENTS', headline: 'Build a voice agent in minutes.', proof: 'Persona  \u00b7  Knowledge  \u00b7  Voice  \u00b7  Tools', accent: '#9333ea', hue: '0deg' },
   'product-inbound': { eyebrow: 'INBOUND CALLING', headline: 'Answer every call. Day or night.', proof: 'Qualify  \u00b7  Answer  \u00b7  Book  \u00b7  Route', accent: '#0e7490', hue: '-91deg' },
@@ -596,7 +596,7 @@ export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
   'solution-ecommerce': { eyebrow: 'E-COMMERCE & D2C', headline: 'Support that scales with every sale.', proof: 'Orders  \u00b7  Delivery  \u00b7  Returns  \u00b7  Follow-up', accent: '#db2777', hue: '57deg' },
   'solution-finance': { eyebrow: 'FINANCE & COLLECTIONS', headline: 'Collections conversations, handled with care.', proof: 'Respectful reminders  \u00b7  Logged outcomes  \u00b7  Controls', accent: '#047857', hue: '-126deg' },
   'solution-support': { eyebrow: 'SUPPORT & HELPDESK', headline: 'Resolve tier-one issues on the first call.', proof: 'Troubleshoot  \u00b7  Resolve  \u00b7  Escalate with context', accent: '#0e7490', hue: '-91deg' },
-  languages: { eyebrow: 'MULTILINGUAL BY DESIGN', headline: 'One agent. 87 languages.', proof: 'Natural code-switching  \u00b7  Phone + Web  \u00b7  24/7', accent: '#9333ea', hue: '0deg', native: 'हिं  ·  தமிழ்  ·  বাংলা  ·  മലയാളം' },
+  languages: { eyebrow: 'MULTILINGUAL BY DESIGN', headline: 'One agent. 99 languages.', proof: 'Natural code-switching  \u00b7  Phone + Web  \u00b7  24/7', accent: '#9333ea', hue: '0deg', native: 'हिं  ·  தமிழ்  ·  বাংলা  ·  മലയാളം' },
   'language-hindi': { eyebrow: 'HINDI AI VOICE AGENT', headline: 'हिन्दी calls, handled naturally.', proof: 'Hindi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'हिन्दी' },
   'language-marathi': { eyebrow: 'MARATHI AI VOICE AGENT', headline: 'मराठी calls, handled naturally.', proof: 'Marathi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'मराठी' },
   'language-tamil': { eyebrow: 'TAMIL AI VOICE AGENT', headline: 'தமிழ் calls, handled naturally.', proof: 'Tamil + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'தமிழ்' },

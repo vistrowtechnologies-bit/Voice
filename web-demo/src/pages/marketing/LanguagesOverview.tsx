@@ -6,14 +6,16 @@ import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { Reveal } from '../../components/Reveal'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
-import { GLOBAL_LANGUAGES, LANGUAGES } from '../../lib/marketingContent'
+import { DEMO_GLOBAL_LOCALES, GLOBAL_LANGUAGES, LANGUAGES } from '../../lib/marketingContent'
 
 export function LanguagesOverview() {
+  // Languages, not locales: the demo's regional variants (en-GB/en-US, es-ES/es-MX) count once.
+  const demoLanguages = demoLanguageCount()
   return (
     <MarketingLayout>
       <Seo
-        title="AI Voice Agents in 10 Indian Languages + 76 More | Vistrow Voice"
-        description="Artha answers in Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, Odia and English - plus French, German, Spanish, Japanese, Arabic and 70 more. Pick a language and try it live."
+        title="AI Voice Agents in 99 Languages, 10 of them Indian | Vistrow Voice"
+        description="Artha answers in Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, Odia and English - plus French, German, Spanish, Japanese, Arabic and 82 more, 99 languages in all. Pick a language and try it live."
         path="/languages"
       />
 
@@ -24,8 +26,8 @@ export function LanguagesOverview() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
           Artha speaks 10 Indian languages plus English, and switches mid-call when the caller does - including
-          the everyday mixed speech most people actually use on the phone. On the global voices, that same
-          agent also handles {GLOBAL_LANGUAGES.length} more, from French to Japanese.
+          the everyday mixed speech most people actually use on the phone. That same agent also handles
+          {GLOBAL_LANGUAGES.length} more, from French to Japanese: 99 languages in all.
         </p>
       </section>
 
@@ -66,8 +68,9 @@ export function LanguagesOverview() {
           And {GLOBAL_LANGUAGES.length} more, on the same agent.
         </h2>
         <p className="mt-3 max-w-2xl text-text-muted">
-          The Indian languages above are the ones we build for. These come with the global voices — the
-          same agent, the same call, no separate setup. Pick any of them in the demo above.
+          The Indian languages above are the ones we build for. These are the languages Google’s realtime
+          voice models cover — the same agent, the same call, no separate setup. The live demo above can
+          run {demoLanguages} of the 99 today.
         </p>
         {/* Chips, not cards: there are too many to give each one a tile, and
             unlike the Indian languages these do not each have a page behind
@@ -77,7 +80,7 @@ export function LanguagesOverview() {
             <li
               key={l.code}
               className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm"
-              title={`${l.name} · ${l.code}${l.ga ? '' : ' · preview'}`}
+              title={`${l.name} · ${l.code}`}
             >
               <span className="font-medium">{l.native || l.name}</span>
               {l.native && l.native !== l.name ? (
@@ -132,14 +135,14 @@ export function LanguagesOverview() {
 function TryALanguage() {
   // The native 10 first (that is the product's centre of gravity), then
   // everything the global voices add, grouped so the list is navigable
-  // rather than one 86-item dropdown.
+  // rather than one long dropdown.
   const nativeOptions = useMemo(
     () => LANGUAGES.map((l) => ({ code: l.code, label: l.name, native: l.native })),
     [],
   )
   const globalOptions = useMemo(
     () =>
-      GLOBAL_LANGUAGES.map((l) => ({
+      DEMO_GLOBAL_LOCALES.map((l) => ({
         code: l.code,
         label: l.name,
         native: l.native || l.name,
@@ -192,7 +195,7 @@ function TryALanguage() {
             </optgroup>
           </select>
           <p className="mt-3 text-xs text-text-muted">
-            {nativeOptions.length + globalOptions.length} languages available on this demo.
+            {nativeOptions.length + globalOptions.length} languages available in this demo.
           </p>
           <p className="mt-5 max-w-sm rounded-xl border border-border bg-bg px-4 py-3 text-sm leading-relaxed text-text-muted">
             Selected: <span className="font-semibold text-text">{selected?.label ?? 'Hindi'}</span>. Ask Artha
@@ -209,4 +212,15 @@ function TryALanguage() {
       </div>
     </section>
   )
+}
+
+function demoLanguageCount(): number {
+  const base = (code: string) => {
+    if (code === 'cmn-CN') return 'zh-Hans'
+    if (code === 'cmn-tw') return 'zh-Hant'
+    if (code === 'nn-NO' || code === 'nb-NO') return 'no'
+    if (code === 'pt-BR' || code === 'pt-PT') return code
+    return code.split('-')[0]
+  }
+  return new Set([...LANGUAGES, ...DEMO_GLOBAL_LOCALES].map((l) => base(l.code === 'od-IN' ? 'or-IN' : l.code))).size
 }

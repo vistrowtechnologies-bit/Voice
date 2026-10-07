@@ -1,6 +1,6 @@
 # Vistrow Voice
 
-> Vistrow Voice is a multilingual AI voice-agent platform for phone and web conversations. Businesses use it to answer inbound calls, run outbound campaigns, qualify leads, support customers, and book next steps in 87 languages.
+> Vistrow Voice is a multilingual AI voice-agent platform for phone and web conversations. Businesses use it to answer inbound calls, run outbound campaigns, qualify leads, support customers, and book next steps in 99 languages.
 
 Canonical website: https://www.vistrowvoice.com/
 Product owner: Vistrow
@@ -17,7 +17,7 @@ Last materially reviewed: 2026-09-01
 
 ## Language support
 
-Vistrow Voice supports 87 languages across its voice stack. Its dedicated Indian-language experiences cover Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, and Odia, alongside English. Calls can include natural code-switching when the configured model and voice support it.
+Vistrow Voice supports 99 languages (the Gemini Live API language list) across its voice stack. Its dedicated Indian-language experiences cover Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, and Odia, alongside English. Calls can include natural code-switching when the configured model and voice support it.
 
 - Language overview: https://www.vistrowvoice.com/languages
 - Hindi: https://www.vistrowvoice.com/languages/hindi

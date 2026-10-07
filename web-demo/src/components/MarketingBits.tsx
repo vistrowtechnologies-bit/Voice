@@ -102,7 +102,7 @@ export function CTABand({
                 voice demo: having to sign up, not knowing what it costs, and
                 not expecting it to handle their language. */}
             <ul className="mt-6 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-text-muted lg:justify-start">
-              {['No signup needed', '5 free calls', '87 languages'].map((item) => (
+              {['No signup needed', '5 free calls', '99 languages'].map((item) => (
                 <li key={item} className="flex items-center gap-1.5">
                   <Icon name="check_circle" className="text-[16px] text-primary" />
                   {item}
