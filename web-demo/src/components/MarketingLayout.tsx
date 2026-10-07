@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Icon } from './Icon'
@@ -121,7 +121,7 @@ function DesktopNav() {
                 className={`absolute left-1/2 top-full z-40 -translate-x-1/2 pt-2 ${wide ? 'w-[34rem]' : 'w-80'}`}
               >
                 <div
-                  className={`grid gap-1 rounded-2xl border border-border bg-surface p-2 shadow-2xl ${
+                  className={`grid gap-1 whitespace-normal rounded-2xl border border-border bg-surface p-2 shadow-2xl ${
                     wide ? 'grid-cols-2' : 'grid-cols-1'
                   }`}
                 >
@@ -133,12 +133,12 @@ function DesktopNav() {
                       // just navigated to when opened by click/keyboard,
                       // since no mouseleave ever fires.
                       onClick={() => setOpen(null)}
-                      className="flex items-start gap-3 rounded-xl p-3 transition-colors hover:bg-surface-high"
+                      className="flex min-w-0 items-start gap-3 rounded-xl p-3 transition-colors hover:bg-surface-high"
                     >
                       <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-surface-high text-primary">
                         <Icon name={item.icon ?? 'circle'} className="text-[18px]" />
                       </span>
-                      <span>
+                      <span className="min-w-0 flex-1 break-words">
                         <span className="block text-sm font-semibold text-text">{item.label}</span>
                         {item.desc && (
                           <span className="mt-0.5 block text-xs leading-snug text-text-muted">{item.desc}</span>
@@ -285,9 +285,19 @@ function MarketingThemeSwitcher({ className }: { className?: string }) {
 
 function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const headerRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const header = headerRef.current
+    if (!header) return
+    const syncHeight = () => document.documentElement.style.setProperty('--marketing-header-height', `${header.getBoundingClientRect().height}px`)
+    syncHeight()
+    const observer = new ResizeObserver(syncHeight)
+    observer.observe(header)
+    return () => { observer.disconnect(); document.documentElement.style.removeProperty('--marketing-header-height') }
+  }, [])
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-xl">
+      <header ref={headerRef} className="sticky top-0 z-40 border-b border-border bg-bg backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3.5 md:px-8">
           <NavLink to="/" className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             <OrbMark />

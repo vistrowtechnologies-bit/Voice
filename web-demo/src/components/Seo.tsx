@@ -62,7 +62,7 @@ export function Seo({ title, description, path, image, imageAlt, noindex, jsonLd
     upsertMeta('name', 'robots', resolvedNoindex ? 'noindex, follow' : 'index, follow')
     upsertLink('canonical', url)
 
-    upsertMeta('property', 'og:type', 'website')
+    upsertMeta('property', 'og:type', registered?.kind === 'article' ? 'article' : 'website')
     upsertMeta('property', 'og:locale', 'en_US')
     upsertMeta('property', 'og:locale:alternate', 'en_IN')
     upsertMeta('property', 'og:site_name', 'Vistrow Voice')
@@ -71,9 +71,9 @@ export function Seo({ title, description, path, image, imageAlt, noindex, jsonLd
     upsertMeta('property', 'og:url', url)
     upsertMeta('property', 'og:image', resolvedImage)
     upsertMeta('property', 'og:image:secure_url', resolvedImage)
-    upsertMeta('property', 'og:image:type', 'image/png')
+    upsertMeta('property', 'og:image:type', resolvedImage.endsWith('.jpg') ? 'image/jpeg' : 'image/png')
     upsertMeta('property', 'og:image:width', '1200')
-    upsertMeta('property', 'og:image:height', '630')
+    upsertMeta('property', 'og:image:height', resolvedImage.includes('/blog/') ? '675' : '630')
     upsertMeta('property', 'og:image:alt', resolvedImageAlt)
 
     upsertMeta('name', 'twitter:card', 'summary_large_image')

@@ -59,7 +59,8 @@ mkdirSync(OUTPUT, { recursive: true })
 const temp = mkdtempSync(path.join(os.tmpdir(), 'vistrow-og-'))
 
 try {
-  const imageNames = [...new Set(SEO_PAGES.map((entry) => path.basename(entry.image, '.png')))]
+  // Article covers are supplied JPEG assets, not generated OG template cards.
+  const imageNames = [...new Set(SEO_PAGES.filter((entry) => entry.image.includes('/og/')).map((entry) => path.basename(entry.image, '.png')))]
   imageNames.forEach((name) => {
     const spec = OG_CARD_BY_IMAGE[name]
     if (!spec) throw new Error(`Missing OG card spec for ${name}`)

@@ -13,7 +13,8 @@ import { SolutionDetail } from './pages/marketing/SolutionDetail'
 import { Pricing } from './pages/marketing/Pricing'
 import { About } from './pages/marketing/About'
 import { Contact } from './pages/marketing/Contact'
-import { ComingSoon } from './pages/marketing/ComingSoon'
+import { Blog } from './pages/marketing/Blog'
+import { BlogPost } from './pages/marketing/BlogPost'
 import { Docs } from './pages/marketing/Docs'
 import { HelpCenter } from './pages/marketing/HelpCenter'
 import { Security } from './pages/marketing/Security'
@@ -164,7 +165,8 @@ function App() {
         <Route path="/security" element={<Security />} />
         <Route path="/careers" element={<Careers />} />
         <Route path="/changelog" element={<Changelog />} />
-        <Route path="/resources/blog" element={<ComingSoon title="Blog - coming soon" />} />
+        <Route path="/resources/blog" element={<Blog />} />
+        <Route path="/resources/blog/:slug" element={<BlogPost />} />
         <Route path="/resources/docs" element={<Docs />} />
         <Route path="/help" element={<HelpCenter />} />
         <Route path="/help/:topic" element={<HelpCenter />} />
