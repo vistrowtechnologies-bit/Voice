@@ -269,7 +269,7 @@ export function HelpChatWidget() {
     // App.tsx) covered and blurred the help launcher. Help has to stay
     // reachable from on top of a dialog - that is often exactly when someone
     // needs it.
-    <div className="fixed bottom-3 right-3 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+    <div className="fixed bottom-2 right-2 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
       {open && (
         <div className="help-chat-panel-in flex h-[min(640px,calc(100dvh-6rem))] w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl sm:w-[420px]">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -510,7 +510,7 @@ export function HelpChatWidget() {
         {!open && (
           <span
             aria-hidden="true"
-            className="glow-pulse pointer-events-none absolute -inset-1 -z-10 rounded-full bg-primary blur-xl"
+            className="glow-pulse pointer-events-none absolute -inset-1 -z-10 hidden rounded-full bg-primary blur-xl sm:block"
           />
         )}
         <button
@@ -522,7 +522,7 @@ export function HelpChatWidget() {
           }}
           onPointerMove={tiltAvatar}
           onPointerLeave={resetAvatarTilt}
-          className={`help-avatar-button group relative flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-[0_0_24px_-4px_rgba(168,85,247,0.8)] transition-all duration-200 hover:shadow-[0_0_34px_-2px_rgba(168,85,247,0.95)] active:scale-95 sm:h-16 sm:w-16 ${open ? 'help-avatar-button-open' : ''}`}
+          className={`help-avatar-button group relative flex h-11 w-11 items-center justify-center rounded-full bg-primary shadow-[0_0_24px_-4px_rgba(168,85,247,0.8)] transition-all duration-200 hover:shadow-[0_0_34px_-2px_rgba(168,85,247,0.95)] active:scale-95 sm:h-16 sm:w-16 ${open ? 'help-avatar-button-open' : ''}`}
           aria-label={open ? 'Close help chat' : 'Open help chat'}
         >
           {open ? (

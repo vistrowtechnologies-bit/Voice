@@ -32,14 +32,15 @@ const previewAuth: AuthState = {
   setUser: () => {},
 }
 
-/** Isolated, development-only route so the navigation can be reviewed locally
- * without logging in or calling production account APIs. */
+/** Isolated, development-only route for responsive dashboard review without
+ * logging in or calling production account APIs. All figures are sample data. */
 export function SidebarPreview() {
   return (
     <AuthContext.Provider value={previewAuth}>
       <DashboardLayout>
-        <PageHeader title="Workspace overview" subtitle="A clear view of your voice operations" />
+        <PageHeader title="Dashboard" subtitle="Overview of your voice AI platform" />
         <main className="mx-auto w-full max-w-[1500px] p-5 sm:p-7 xl:p-9">
+          <div className="mb-6 flex gap-6 border-b border-border text-sm font-medium"><span className="border-b-2 border-primary pb-3 text-text">Overview</span><span className="pb-3 text-text-muted">Analytics</span></div>
           <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[11px] font-semibold text-primary"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> SAMPLE DASHBOARD</div>
@@ -48,6 +49,20 @@ export function SidebarPreview() {
             </div>
             <button type="button" className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3.5 py-2 text-sm font-medium text-text shadow-sm"><Icon name="calendar_today" className="text-[17px] text-text-muted" /> Last 7 days <Icon name="keyboard_arrow_down" className="text-[18px] text-text-muted" /></button>
           </div>
+
+          <section aria-label="Sample quick actions" className="mb-6">
+            <h3 className="mb-2 text-sm font-semibold">Quick actions</h3>
+            <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
+              {[
+                { icon: 'mic', label: 'Test an agent' },
+                { icon: 'campaign', label: 'Start campaign' },
+                { icon: 'person_add', label: 'Add contact' },
+                { icon: 'event', label: 'New appointment' },
+                { icon: 'extension', label: 'Connect app' },
+                { icon: 'widgets', label: 'Install widget' },
+              ].map((action) => <div key={action.label} className="flex min-h-24 min-w-0 flex-col justify-between rounded-xl border border-border bg-surface p-3 text-sm font-semibold sm:p-4"><Icon name={action.icon} className="text-[22px] text-primary" /><span className="mt-4 flex items-end justify-between gap-1"><span className="min-w-0">{action.label}</span><Icon name="arrow_forward" className="shrink-0 text-[16px]" /></span></div>)}
+            </div>
+          </section>
 
           <section aria-label="Sample workspace metrics" className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
             {[
@@ -65,7 +80,7 @@ export function SidebarPreview() {
           </section>
 
           <section className="mt-5 grid gap-5 2xl:grid-cols-[1.5fr_1fr]">
-            <article className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
+            <article className="min-w-0 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">Conversation activity</h3><p className="mt-1 text-xs text-text-muted">Volume across your channels</p></div><button type="button" className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/5">View analytics <Icon name="arrow_forward" className="ml-1 align-middle text-[15px]" /></button></div>
               <div className="mt-7 flex h-48 items-end gap-2 border-b border-border px-1 sm:gap-4">
                 {[42, 61, 50, 76, 58, 88, 69, 100, 73, 84, 63, 92, 70, 81].map((height, index) => <div key={index} className="group relative flex h-full flex-1 items-end"><div className="w-full rounded-t-md bg-primary/20 transition-colors group-hover:bg-primary/50" style={{ height: `${height}%` }} /></div>)}
@@ -73,7 +88,7 @@ export function SidebarPreview() {
               <div className="mt-3 flex justify-between text-[11px] text-text-muted"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
             </article>
 
-            <article className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
+            <article className="min-w-0 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
               <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">Recent activity</h3><p className="mt-1 text-xs text-text-muted">Latest updates from your workspace</p></div><button type="button" aria-label="More activity options" className="rounded-lg p-1.5 text-text-muted hover:bg-surface-high"><Icon name="more_horiz" className="text-[20px]" /></button></div>
               <div className="mt-5 space-y-5">
                 {[
