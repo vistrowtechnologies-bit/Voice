@@ -29,5 +29,14 @@ for (const post of VOICE_BLOG_POSTS) {
   assert.ok(html.includes('AI-generated editorial illustration; not a customer photograph.'))
   assert.equal((html.match(/<h1\b/g) ?? []).length, 1)
   assert.ok(sitemap.includes(SEO_ORIGIN + path))
+  const firstSection = html.match(/<section id="section-1"[\s\S]*?<\/section>/)?.[0]
+  assert.ok(firstSection, `Article body section: ${post.slug}`)
+  const contextualLinks = [...firstSection.matchAll(/<a\b[^>]*href="(\/[^"#]+)"[^>]*>([^<]+)<\/a>/g)]
+  assert.ok(contextualLinks.length >= 2, `Visible in-paragraph links: ${post.slug}`)
+  for (const [, target, anchor] of contextualLinks) {
+    assert.ok(seoForPath(target), `Internal target exists: ${post.slug} → ${target}`)
+    assert.notEqual(target, path, `No self-link: ${post.slug}`)
+    assert.ok(anchor.trim().length >= 12, `Descriptive anchor: ${post.slug}`)
+  }
 }
-console.log('PASS: 10 unique articles, covers, responsive assets, readable content, BlogPosting schema, JPEG social metadata, and sitemap entries.')
+console.log('PASS: 10 articles with rendered contextual links to valid internal pages, covers, BlogPosting schema, social metadata, and sitemap entries.')
