@@ -555,6 +555,14 @@ html.theme-transition * {
   line-height: 1;
   white-space: nowrap;
   word-wrap: normal;
+  /* The icon is a ligature of its lowercase name. Google's stylesheet used to set
+     these; without them an icon inside an uppercase or letter-spaced parent (a pill
+     label, a badge) stops forming the ligature and shows as clipped text. */
+  text-transform: none;
+  letter-spacing: normal;
+  direction: ltr;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
   display: inline-block;
   /* An icon is a one-em square. Until the icon font arrives the span holds
      its ligature NAME ("search", "left_panel_open"); a fixed box that clips
