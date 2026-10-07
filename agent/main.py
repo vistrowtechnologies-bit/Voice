@@ -64,6 +64,7 @@ import inbound_rules
 import transfer_intent
 import jev_intent
 import ringback
+import turn_latency
 import sarvam_realtime_stt
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
@@ -1779,6 +1780,11 @@ def _gemini_live_voice(voice_value: str) -> str:
     return persona.capitalize() if (persona or "").lower() in _GEMINI_LIVE_VOICES else "Kore"
 
 
+# End-of-speech window for Gemini Live, added to every reply. Env override so it
+# can be measured on a call without a code change; 700 is the shipped value.
+_REALTIME_SILENCE_MS = int(os.environ.get("REALTIME_SILENCE_MS", "700"))
+
+
 def _build_realtime_llm(model: str, instructions: str, voice_value: str, language: str):
     """Gemini Live RealtimeModel — replaces llm+stt+tts, not just the llm."""
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -1834,7 +1840,7 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
                 start_of_speech_sensitivity=genai_types.StartSensitivity.START_SENSITIVITY_HIGH,
                 end_of_speech_sensitivity=genai_types.EndSensitivity.END_SENSITIVITY_LOW,
                 prefix_padding_ms=200,
-                silence_duration_ms=700,
+                silence_duration_ms=_REALTIME_SILENCE_MS,
             )
         ),
     )
@@ -7228,7 +7234,7 @@ async def entrypoint(ctx: JobContext) -> None:
         userdata["agent_state"] = str(ev.new_state)
         if str(ev.new_state) == "speaking" and str(ev.old_state) != "speaking":
             stopped_at = userdata.pop("pending_caller_stop_at", None)
-            if stopped_at is not None:
+            if stopped_at is not None and userdata.get("turn_meter") is None:
                 perceived_ms = round(max(0.0, time.monotonic() - stopped_at) * 1000)
                 userdata["latency_metrics"]["callerStopToFirstAudioMs"].append(perceived_ms)
                 _record_diagnostic(
@@ -8078,6 +8084,26 @@ async def entrypoint(ctx: JobContext) -> None:
     )
     logger.info("[latency] session.start() returned at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
 
+    def _on_reply_audio_started(ev) -> None:
+        # Speech-to-speech: the first frame of a reply actually leaving for the
+        # caller. The framework's agent "speaking" state is raised by model
+        # events and can run ahead of or behind the audio, so it is not used.
+        meter = userdata.get("turn_meter")
+        if meter is None:
+            return
+        started = time.monotonic() - max(0.0, time.time() - float(ev.created_at))
+        perceived_ms = meter.agent_started(started)
+        if perceived_ms is None:
+            return
+        userdata["latency_metrics"]["callerStopToFirstAudioMs"].append(perceived_ms)
+        _record_diagnostic(
+            "metric", "turn", "Reply audio reached caller",
+            "warning" if perceived_ms >= 1500 else "ok", durationMs=perceived_ms,
+        )
+
+    if getattr(agent, "_is_realtime", False) and session.output.audio is not None:
+        session.output.audio.on("playback_started", _on_reply_audio_started)
+
     # Does the caller's audio ever actually reach us?
     #
     # Calls 865, 867 and 868 each ran ~50s and recorded ZERO user turns: the
@@ -8106,9 +8132,15 @@ async def entrypoint(ctx: JobContext) -> None:
             stream = rtc.AudioStream(track)
             frames = 0
             first_at = None
+            meter = turn_latency.TurnLatencyMeter() if getattr(agent, "_is_realtime", False) else None
+            userdata["turn_meter"] = meter
             try:
                 async for _ev in stream:
                     frames += 1
+                    if meter is not None:
+                        pcm = np.frombuffer(bytes(_ev.frame.data), dtype=np.int16)
+                        if pcm.size:
+                            meter.feed(float(np.sqrt(np.mean((pcm.astype(np.float64) / 32768.0) ** 2))), time.monotonic())
                     if first_at is None:
                         first_at = time.monotonic() - _t0
                         logger.info("[audio-in] first caller audio frame at +%.2fs", first_at)
@@ -8121,7 +8153,9 @@ async def entrypoint(ctx: JobContext) -> None:
         except Exception:
             logger.warning("[audio-in] watcher failed", exc_info=True)
 
-    if call_context.get("call_type") == "phone":
+    if call_context.get("call_type") == "phone" or getattr(agent, "_is_realtime", False):
+        # Realtime calls need the caller-audio tap on every channel: it feeds
+        # the reply-latency meter (turn_latency.py), not just the phone diagnostics.
         asyncio.create_task(_watch_inbound_audio())
     # Started only after the session (and therefore both the caller's and
     # the agent's audio tracks) is actually up — see recording.py for why
