@@ -58,13 +58,11 @@ export function ProductOverview() {
       {/* Bento grid of products */}
       <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {PRODUCT_PAGES.map((p, i) => (
+          {PRODUCT_PAGES.map((p) => (
             <Link
               key={p.to}
               to={p.to}
-              className={`group flex flex-col justify-between rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-primary ${
-                i === 0 ? 'sm:col-span-2' : ''
-              }`}
+              className="group flex flex-col justify-between rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-primary"
             >
               <div>
                 <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">

@@ -56,11 +56,12 @@ export function SolutionsOverview() {
 
       <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {SOLUTIONS.map((s) => (
+          {/* Five cards: the first spans two columns so the rows fill exactly (2+1, then 3). */}
+          {SOLUTIONS.map((s, i) => (
             <Link
               key={s.to}
               to={s.to}
-              className="group flex flex-col justify-between rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-primary"
+              className={`group flex flex-col justify-between rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-primary ${i === 0 ? 'sm:col-span-2' : ''}`}
             >
               <div>
                 <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface-high text-cyan">

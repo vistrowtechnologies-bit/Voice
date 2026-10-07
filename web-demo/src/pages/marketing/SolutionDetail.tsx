@@ -117,11 +117,11 @@ export function SolutionDetail() {
             <p className="mt-3 text-text-muted">See examples tailored to local buyer conversations, from enquiry qualification to site-visit follow-up.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {LOCAL_REAL_ESTATE_PAGES.map((market) => (
+            {LOCAL_REAL_ESTATE_PAGES.map((market, i) => (
               <Link
                 key={market.slug}
                 to={`/solutions/real-estate/${market.slug}`}
-                className="group flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-primary"
+                className={`group flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-primary ${i === 0 ? 'sm:col-span-2' : ''}`}
               >
                 <span>
                   <span className="block font-semibold text-text">{market.language} real estate calls</span>

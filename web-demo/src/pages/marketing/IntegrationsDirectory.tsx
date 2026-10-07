@@ -10,7 +10,6 @@ import { INTEGRATION_DIRECTORY } from '../../lib/marketingContent'
 // question a buyer has. Entries marked viaWebhook are honestly labelled
 // rather than dressed up as native connectors.
 export function IntegrationsDirectory() {
-  const categories = [...new Set(INTEGRATION_DIRECTORY.map((i) => i.category))]
   const slackInstallUrl =
     'https://slack.com/oauth/v2/authorize?client_id=11837090508608.11806860695974&scope=incoming-webhook&user_scope='
 
@@ -70,34 +69,31 @@ export function IntegrationsDirectory() {
           </div>
         </Reveal>
 
-        {categories.map((category) => (
-          <div key={category} className="mb-10">
-            <h2 className="mb-4 text-xs font-bold uppercase tracking-widest text-text-muted">
-              {category}
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {INTEGRATION_DIRECTORY.filter((i) => i.category === category).map((entry, i) => (
-                <Reveal key={entry.name} delayMs={(i % 3) * 70} className="h-full">
-                <div className="h-full rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary/60">
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-display text-base font-semibold">{entry.name}</h3>
-                    <span
-                      className={`flex-shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                        entry.viaWebhook
-                          ? 'border-border text-text-muted'
-                          : 'border-success/30 bg-success/15 text-success'
-                      }`}
-                    >
-                      {entry.viaWebhook ? 'Via webhook' : 'Native'}
-                    </span>
-                  </div>
-                  <p className="mt-2.5 text-sm leading-relaxed text-text-muted">{entry.desc}</p>
+        {/* One grid for every entry, with the category on the card. Grouping them under
+            separate headings left one or two cards per row and a large empty area to
+            their right. */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {INTEGRATION_DIRECTORY.map((entry, i) => (
+            <Reveal key={entry.name} delayMs={(i % 3) * 70} className="h-full">
+              <div className="flex h-full flex-col rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary/60">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{entry.category}</p>
+                <div className="mt-2 flex items-start justify-between gap-3">
+                  <h3 className="font-display text-base font-semibold">{entry.name}</h3>
+                  <span
+                    className={`flex-shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                      entry.viaWebhook
+                        ? 'border-border text-text-muted'
+                        : 'border-success/30 bg-success/15 text-success'
+                    }`}
+                  >
+                    {entry.viaWebhook ? 'Via webhook' : 'Native'}
+                  </span>
                 </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        ))}
+                <p className="mt-2.5 text-sm leading-relaxed text-text-muted">{entry.desc}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">

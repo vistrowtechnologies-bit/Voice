@@ -163,11 +163,11 @@ export function LanguageDetail() {
           </h2>
         </div>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {SOLUTIONS.map((s) => (
+          {SOLUTIONS.map((s, i) => (
             <Link
               key={s.to}
               to={s.to}
-              className="group rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary"
+              className={`group rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary ${i === 0 ? 'sm:col-span-2' : ''}`}
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
                 <Icon name={s.icon ?? 'circle'} className="text-[22px]" />

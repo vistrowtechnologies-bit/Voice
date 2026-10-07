@@ -32,7 +32,7 @@ export function LanguagesOverview() {
       <TryALanguage />
 
       <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {LANGUAGES.map((lang, i) => (
             <Reveal key={lang.slug} delayMs={(i % 3) * 70} className="h-full">
               <Link
