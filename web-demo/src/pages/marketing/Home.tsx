@@ -142,7 +142,7 @@ export function Home() {
         <Icon name="arrow_forward" className="text-[16px]" />
       </button>
       {/* ---------- Hero ---------- */}
-      <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-5 py-14 md:px-8 lg:grid-cols-2 lg:py-24">
+      <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-5 py-12 md:px-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)] lg:items-start lg:gap-12 lg:py-12">
         <div>
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold uppercase tracking-[0.28em]">
             <span className="font-sans normal-case tracking-normal text-sm text-text-muted">
@@ -160,19 +160,19 @@ export function Home() {
           {/* Steps down to 4xl on the smallest screens - at 5xl this headline
               wrapped to five lines on a 375px viewport and pushed the CTAs
               entirely below the fold. */}
-          <h1 className="mt-5 font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl lg:text-6xl">
+          <h1 className="mt-4 font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl lg:text-[3.4rem]">
             <RotatingGreeting className="block min-h-[1.1em]" />
             <span className="mt-1 block">Answer every customer</span>
             <span className="block bg-gradient-to-r from-primary to-magenta bg-clip-text text-transparent">
               in their own language.
             </span>
           </h1>
-          <p className="mt-5 max-w-lg text-base leading-7 text-text-muted sm:mt-6 sm:text-lg sm:leading-relaxed">
+          <p className="mt-4 max-w-xl text-base leading-7 text-text-muted sm:mt-5 sm:text-lg sm:leading-relaxed">
             Vistrow Voice is voice AI built for how India actually speaks. Answer, qualify, and book customers across phone and
             web in 87+ languages (10 Indian languages plus English, and 76 more worldwide) with natural Hinglish and
             mid-sentence language switching.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-wrap gap-3">
             <TalkToArthaButton />
             <Link
               to="/contact"
@@ -182,7 +182,7 @@ export function Home() {
               Book a demo
             </Link>
           </div>
-          <div className="mt-10 grid grid-cols-3 gap-4 border-t border-border pt-6 sm:gap-8">
+          <div className="mt-8 grid grid-cols-3 gap-4 border-t border-border pt-5 sm:gap-8">
             {HERO_STATS.map((stat) => (
               <div key={stat.label}>
                 <p className="font-display text-2xl font-bold text-text">{stat.value}</p>
