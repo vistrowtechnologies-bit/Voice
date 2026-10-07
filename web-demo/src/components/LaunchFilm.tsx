@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 /** The launch film. Nothing but the poster image loads until the visitor
  * reaches it; then it plays, and it pauses again when they scroll away.
  * A visitor who pauses it themselves is left alone. */
-const FILM_HD = '/media/vistrow-voice-launch.mp4'
-const FILM_SD = '/media/vistrow-voice-launch-720.mp4'
+const FILM_HD = '/media/launch-film-v2.mp4'
+const FILM_SD = '/media/launch-film-v2-720.mp4'
 
 /** Phones and Save-Data visitors get the 720p file (5 MB instead of 12 MB). */
 function pickFilm(): string {
@@ -75,7 +75,7 @@ export function LaunchFilm() {
           {started ? (
             <video
               src={src}
-              poster="/media/vistrow-voice-launch-poster.jpg"
+              poster="/media/launch-film-v2-poster.jpg"
               ref={(v) => {
                 videoRef.current = v
                 if (v && inView.current && v.paused && !userPaused.current && v.readyState === 0) void tryPlay(v)
@@ -93,12 +93,12 @@ export function LaunchFilm() {
             <button
               type="button"
               onClick={() => setStarted(true)}
-              aria-label="Play the Vistrow Voice launch film (2 minutes 43 seconds, with sound)"
+              aria-label="Play the Vistrow Voice launch film (2 minutes 38 seconds, with sound)"
               className="group absolute inset-0 h-full w-full"
             >
               <img
-                src="/media/vistrow-voice-launch-poster.jpg"
-                alt="Artha, the Vistrow Voice agent, introducing herself"
+                src="/media/launch-film-v2-poster.jpg"
+                alt="A map of India at night with a phone ringing in Pune"
                 loading="lazy"
                 decoding="async"
                 className="h-full w-full object-cover"
@@ -107,7 +107,7 @@ export function LaunchFilm() {
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 md:h-12 md:w-12">
                   <svg viewBox="0 0 24 24" className="h-5 w-5 md:h-6 md:w-6" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
                 </span>
-                Play film · 2:43
+                Play film · 2:38
               </span>
             </button>
           )}
