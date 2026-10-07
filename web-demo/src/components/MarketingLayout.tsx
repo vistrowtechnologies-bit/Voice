@@ -325,7 +325,7 @@ function Header() {
               Book a demo
             </NavLink>
             <button
-              className="text-text-muted hover:text-text xl:hidden"
+              className="-mr-2 flex h-11 w-11 items-center justify-center text-text-muted hover:text-text xl:hidden"
               onClick={() => setMobileOpen(true)}
               aria-label="Open menu"
             >
@@ -350,9 +350,9 @@ function Footer() {
               <span className="font-display text-lg font-semibold">{BRAND.name}</span>
             </NavLink>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-text-muted">{BRAND.tagline}</p>
-            <div className="mt-5 flex gap-3 text-text-muted">
-              <a href={`mailto:${CONTACT_EMAIL}`} aria-label={`Email us at ${CONTACT_EMAIL}`} className="hover:text-text"><Icon name="mail" className="text-[20px]" /></a>
-              <a href={`tel:${CONTACT_PHONE.replace(/\s/g, '')}`} aria-label={`Call us on ${CONTACT_PHONE}`} className="hover:text-text"><Icon name="call" className="text-[20px]" /></a>
+            <div className="mt-3 flex text-text-muted">
+              <a href={`mailto:${CONTACT_EMAIL}`} aria-label={`Email us at ${CONTACT_EMAIL}`} className="-ml-2 flex h-11 w-11 items-center justify-center hover:text-text"><Icon name="mail" className="text-[20px]" /></a>
+              <a href={`tel:${CONTACT_PHONE.replace(/\s/g, '')}`} aria-label={`Call us on ${CONTACT_PHONE}`} className="flex h-11 w-11 items-center justify-center hover:text-text"><Icon name="call" className="text-[20px]" /></a>
             </div>
           </div>
           {FOOTER_COLUMNS.map((col) => (

@@ -208,9 +208,9 @@ export function SolutionDetail() {
           <SectionEyebrow>Why teams switch</SectionEyebrow>
           <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Where the current workflow breaks.</h2>
         </div>
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="vv-rail -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:snap-none md:overflow-visible md:px-0 md:pb-0 md:grid md:grid-cols-3 md:gap-5">
           {solution.pains.map((p) => (
-            <div key={p.title} className="rounded-2xl border border-border bg-surface p-7">
+            <div key={p.title} className="w-[82%] shrink-0 snap-start md:w-auto md:shrink rounded-2xl border border-border bg-surface p-7">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan">
                 <Icon name={p.icon} className="text-[22px]" />
               </span>
@@ -230,9 +230,9 @@ export function SolutionDetail() {
           <SectionEyebrow>During every call</SectionEyebrow>
           <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">How the conversation becomes an outcome.</h2>
         </div>
-        <div className="relative mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="relative mt-10 vv-rail -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:snap-none md:overflow-visible md:px-0 md:pb-0 md:grid md:grid-cols-2 lg:grid-cols-4">
           {solution.workflow.map((step, index) => (
-            <article key={step.title} className="relative rounded-2xl border border-border bg-surface p-6">
+            <article key={step.title} className="w-[82%] shrink-0 snap-start md:w-auto md:shrink relative rounded-2xl border border-border bg-surface p-6">
               <div className="flex items-center justify-between">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <Icon name={step.icon} className="text-[22px]" />
@@ -287,9 +287,9 @@ export function SolutionDetail() {
           <SectionEyebrow>Connected workflow</SectionEyebrow>
           <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">The call should update the tools your team already uses.</h2>
         </div>
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="vv-rail -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 md:mx-0 md:snap-none md:overflow-visible md:px-0 md:pb-0 md:grid md:grid-cols-3 md:gap-5">
           {solution.integrations.map((item) => (
-            <article key={item.title} className="group rounded-2xl border border-border bg-surface p-7 transition-all hover:-translate-y-1 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
+            <article key={item.title} className="w-[82%] shrink-0 snap-start md:w-auto md:shrink group rounded-2xl border border-border bg-surface p-7 transition-all hover:-translate-y-1 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-cyan transition-colors group-hover:bg-primary/10 group-hover:text-primary">
                 <Icon name={item.icon} className="text-[22px]" />
               </span>

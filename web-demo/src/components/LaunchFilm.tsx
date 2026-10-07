@@ -71,7 +71,7 @@ export function LaunchFilm() {
             Try Vistrow Voice
           </Link>
         </div>
-        <div ref={boxRef} className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_40px_100px_-40px_rgba(124,58,237,0.45)]">
+        <div ref={boxRef} className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-[#07040d] shadow-[0_40px_100px_-40px_rgba(124,58,237,0.45)]">
           {started ? (
             <video
               src={src}
