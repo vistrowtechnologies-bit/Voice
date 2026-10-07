@@ -26,6 +26,25 @@ function revealIconsWhenReady() {
 }
 revealIconsWhenReady()
 
+// Dashboard and admin screens are loaded on demand. A tab left open across a
+// deploy still points at the old chunk file names, which no longer exist, so the
+// next navigation would fail. Reload once to pick up the new build; the
+// sessionStorage flag stops a genuine outage from reloading in a loop.
+window.addEventListener('vite:preloadError', () => {
+  try {
+    if (sessionStorage.getItem('vv-chunk-reload')) return
+    sessionStorage.setItem('vv-chunk-reload', '1')
+    window.location.reload()
+  } catch {
+    /* storage blocked: leave the error visible rather than loop */
+  }
+})
+window.addEventListener('load', () => {
+  window.setTimeout(() => {
+    try { sessionStorage.removeItem('vv-chunk-reload') } catch { /* ignore */ }
+  }, 10000)
+})
+
 // Vercel Web Analytics gets the full page URL, and some of ours carry secrets:
 // ?token= on /reset-password and /confirm-email-change, ?email= on
 // /verify-email, and the invite token in /invite/:token. Keep only utm_*
