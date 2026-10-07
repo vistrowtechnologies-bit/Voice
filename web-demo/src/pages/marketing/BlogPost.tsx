@@ -11,6 +11,15 @@ function prettyDate(value: string) {
   return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`))
 }
 
+function paragraphWithLinks(paragraph: string) {
+  return paragraph.split(/(\[[^\]]+\]\(\/[^)\s]+\))/g).map((part, index) => {
+    const link = /^\[([^\]]+)\]\((\/[^)\s]+)\)$/.exec(part)
+    return link
+      ? <Link key={index} to={link[2]} className="font-semibold text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-primary focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">{link[1]}</Link>
+      : part
+  })
+}
+
 export function BlogPost() {
   const { slug = '' } = useParams()
   const post = VOICE_BLOG_POSTS.find((candidate) => candidate.slug === slug)
@@ -53,7 +62,7 @@ export function BlogPost() {
           <div className="min-w-0">
             <figure className="mb-8 overflow-hidden rounded-3xl border border-border bg-surface"><img src={post.image} srcSet={`${post.image.replace('.jpg', '-640.jpg')} 640w, ${post.image} 1200w`} sizes="(min-width:1024px) 800px, 100vw" alt={post.imageAlt} width={1200} height={675} decoding="async" className="aspect-[16/9] w-full object-cover" /><figcaption className="px-5 py-3 text-xs text-text-muted">AI-generated editorial illustration; not a customer photograph.</figcaption></figure>
             <div className="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-surface to-surface-high p-6 sm:p-8"><SectionEyebrow>In this guide</SectionEyebrow><ol className="mt-4 grid gap-2 sm:grid-cols-2">{post.sections.map((section, index) => <li key={section.heading}><a href={`#section-${index + 1}`} className="group flex items-start gap-3 rounded-xl px-3 py-2 text-sm text-text-muted transition-colors hover:bg-bg/70 hover:text-text"><span className="font-display font-bold text-primary">{String(index + 1).padStart(2, '0')}</span><span>{section.heading}</span></a></li>)}</ol></div>
-            <div className="mt-10 space-y-10 sm:mt-12 sm:space-y-12">{post.sections.map((section, index) => <section key={section.heading} id={`section-${index + 1}`} className="scroll-mt-28"><h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">{section.heading}</h2><div className="mt-4 space-y-4 text-base leading-[1.85] text-text-muted">{section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>{section.points && <ul className="mt-5 space-y-3">{section.points.map((point) => <li key={point} className="flex gap-3 rounded-2xl border border-border bg-surface p-4 text-sm leading-relaxed text-text-muted sm:text-base"><Icon name="check_circle" className="mt-0.5 shrink-0 text-[19px] text-primary" /><span>{point}</span></li>)}</ul>}</section>)}</div>
+            <div className="mt-10 space-y-10 sm:mt-12 sm:space-y-12">{post.sections.map((section, index) => <section key={section.heading} id={`section-${index + 1}`} className="scroll-mt-28"><h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">{section.heading}</h2><div className="mt-4 space-y-4 text-base leading-[1.85] text-text-muted">{section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraphWithLinks(paragraph)}</p>)}</div>{section.points && <ul className="mt-5 space-y-3">{section.points.map((point) => <li key={point} className="flex gap-3 rounded-2xl border border-border bg-surface p-4 text-sm leading-relaxed text-text-muted sm:text-base"><Icon name="check_circle" className="mt-0.5 shrink-0 text-[19px] text-primary" /><span>{point}</span></li>)}</ul>}</section>)}</div>
             {post.sources.length > 0 && <section className="mt-12 rounded-2xl border border-border bg-surface p-6"><h2 className="font-display text-xl font-bold">Technical references</h2><p className="mt-2 text-sm text-text-muted">Documentation behind the technical details. The examples and checklists above are our implementation guidance.</p><ul className="mt-4 space-y-2">{post.sources.map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline underline-offset-4">{source.title}</a></li>)}</ul></section>}
             <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6"><div className="flex items-center gap-2 text-sm text-text-muted"><Icon name="article" className="text-[18px] text-primary" />{post.category}</div><Link to="/resources/blog" className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">All articles <Icon name="arrow_forward" className="text-[17px]" /></Link></div>
           </div>

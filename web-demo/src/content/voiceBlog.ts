@@ -255,8 +255,25 @@ const SOURCES: Record<string, VoiceBlogPost['sources']> = {
   'website-voice-widget-for-lead-generation': [{ title: 'MDN: microphone permissions and secure contexts', url: 'https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia' }],
 }
 
+// These sentences sit inside the article body, where a reader encounters the
+// related idea. The bracket syntax is rendered as real links by BlogPost.
+const CONTEXTUAL_LINK_PARAGRAPHS: Record<string, string> = {
+  'what-is-an-ai-voice-agent': 'If your current calls mostly ask people to choose a department, start with our [AI voice agent versus IVR comparison](/resources/blog/when-to-use-voice-ai-instead-of-ivr). When the task calls for a conversation, the [voice agents product overview](/product/agents) shows where an agent fits in the wider calling workflow.',
+  'how-to-choose-a-multilingual-voice-agent': 'Language quality also depends on how quickly the system recognises when a caller has finished. Use the [voice AI latency testing guide](/resources/blog/voice-ai-latency-how-to-measure-it) alongside your language tests, and review the [languages available for voice agents](/languages) before choosing your pilot scope.',
+  'voice-ai-latency-how-to-measure-it': 'A language switch can change recognition and synthesis time, so use the [multilingual voice agent evaluation checklist](/resources/blog/how-to-choose-a-multilingual-voice-agent) for mixed-language calls. For visitors speaking from a browser, the [website voice widget guide](/resources/blog/website-voice-widget-for-lead-generation) covers permission and connection steps that a phone-only test misses.',
+  'website-voice-widget-for-lead-generation': 'Before placing the microphone on a high-intent page, review what the [website call widget](/product/widget) can offer visitors. The conversation becomes useful to a sales team only when it has a reliable next step; our [CRM handoff guide](/resources/blog/connecting-voice-calls-to-your-crm) covers what that record should contain.',
+  'connecting-voice-calls-to-your-crm': 'If the transcript appears but the audio does not, trace the [recording and transcript delivery steps](/resources/blog/ai-call-recordings-and-transcripts) before retrying the lead. The [integrations overview](/product/integrations) explains where the CRM connection sits in the product.',
+  'when-to-use-voice-ai-instead-of-ivr': 'For a broader explanation of the conversational option, read [what an AI voice agent does](/resources/blog/what-is-an-ai-voice-agent). The [voice AI versus traditional IVR page](/vs-ivr) is a useful companion when mapping your existing phone menu to a new call flow.',
+  'ai-voice-agents-for-real-estate-leads': 'A property script should be based on the actual buyer journey, which our [real estate voice AI overview](/solutions/real-estate) describes. After the call, follow the [CRM handoff checklist](/resources/blog/connecting-voice-calls-to-your-crm) so the requirement reaches the person arranging the visit.',
+  'ai-voice-agent-pricing-india': 'Once you have a cost per useful call, compare it with the current [Vistrow Voice pricing page](/pricing) using the same traffic assumptions. The [latency measurement guide](/resources/blog/voice-ai-latency-how-to-measure-it) helps you check whether a lower-cost configuration still gives callers a responsive experience.',
+  'write-ai-voice-agent-prompts': 'The prompt works best when it has reliable facts to draw from; the [knowledge base overview](/product/knowledge-base) describes that source of approved answers. If you are designing your first flow, begin with the [practical guide to AI voice agents](/resources/blog/what-is-an-ai-voice-agent) before writing provider-specific speaking instructions.',
+  'ai-call-recordings-and-transcripts': 'For the receiving side of the workflow, use the [CRM handoff checklist](/resources/blog/connecting-voice-calls-to-your-crm). If a site visitor began the call in a browser, the [website voice widget guide](/resources/blog/website-voice-widget-for-lead-generation) explains why channel and microphone permissions belong in the investigation.',
+}
+
 export const VOICE_BLOG_POSTS: VoiceBlogPost[] = [...ORIGINAL_POSTS, ...NEW_POSTS].map((post) => {
-  const sections = [...post.sections, ...(EXTRA_SECTIONS[post.slug] ?? [])]
-  const words = sections.flatMap(section => [section.heading, ...section.paragraphs, ...(section.points ?? [])]).join(' ').trim().split(/\s+/).length
+  const sections = [...post.sections, ...(EXTRA_SECTIONS[post.slug] ?? [])].map((section, index) => index === 0
+    ? { ...section, paragraphs: [...section.paragraphs, CONTEXTUAL_LINK_PARAGRAPHS[post.slug]] }
+    : section)
+  const words = sections.flatMap(section => [section.heading, ...section.paragraphs, ...(section.points ?? [])]).join(' ').replace(/\[([^\]]+)\]\(\/[^)]+\)/g, '$1').trim().split(/\s+/).length
   return { ...post, sections, readTime: `${Math.max(1, Math.ceil(words / 200))} min read`, updatedAt: '2026-10-07', image: `/blog/${post.slug}.jpg`, imageAlt: IMAGE_ALTS[post.slug], sources: SOURCES[post.slug] ?? [] }
 })
