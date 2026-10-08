@@ -570,6 +570,8 @@ html.theme-transition * {
   width: 1em;
   height: 1em;
   overflow: hidden;
+  /* In a flex row next to long text the icon used to be squeezed to nothing. */
+  flex-shrink: 0;
 }
 
 /* ...and the name itself stays invisible until the font is ready (main.tsx

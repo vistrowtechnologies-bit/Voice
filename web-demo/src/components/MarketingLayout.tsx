@@ -358,10 +358,11 @@ function Footer() {
           {FOOTER_COLUMNS.map((col) => (
             <div key={col.title}>
               <p className="mb-3 text-xs font-bold uppercase tracking-widest text-text-muted">{col.title}</p>
-              <ul className="flex flex-col gap-2">
+              <ul className="flex flex-col">
                 {col.links.map((link) => (
                   <li key={link.to}>
-                    <NavLink to={link.to} className="text-sm text-text-muted transition-colors hover:text-text">
+                    {/* py-2 makes each link a 36px tap target on a phone without changing how the list looks */}
+                    <NavLink to={link.to} className="block py-2 text-sm text-text-muted transition-colors hover:text-text">
                       {link.label}
                     </NavLink>
                   </li>
