@@ -15,6 +15,7 @@ import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { DashboardTour } from './DashboardTour'
 import { HelpChatWidget } from './HelpChatWidget'
 import { Icon } from './Icon'
+import { StorageWarning } from './StorageWarning'
 import { OnboardingModal } from './OnboardingModal'
 import vistrowMark from '../assets/vistrow-mark.png'
 import { Tooltip } from './ui/Tooltip'
@@ -357,17 +358,7 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           </div>
         ))}
       </nav>
-      <div className="mb-2 shrink-0 border-t border-border pt-2">
-        <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 via-surface to-fuchsia-500/5 p-3">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon name="graphic_eq" className="text-[17px]" /></span>
-            <p className="min-w-0 flex-1 truncate text-xs font-semibold">Try Artha live</p>
-            <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-emerald-700">LIVE DEMO</span>
-          </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-text-muted">Talk with our voice agent in your browser—no setup needed.</p>
-          <a href="https://www.vistrowvoice.com/#live-demo" target="_blank" rel="noreferrer" className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-2.5 py-2 text-[11px] font-bold text-white shadow-sm transition hover:brightness-105">Start live demo <Icon name="north_east" className="text-[14px]" /></a>
-        </div>
-      </div>
+      <StorageWarning />
       {user?.isPlatformOwner && !user?.impersonating && (
         <NavLink
           to="/admin"
