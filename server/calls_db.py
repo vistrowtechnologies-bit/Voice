@@ -33,6 +33,7 @@ import dbconn
 import phone_format
 import voice_catalog
 import plan_policy
+import billing_documents
 import storage_usage
 from storage import b2_client
 import campaign_window
@@ -639,6 +640,25 @@ CREATE TABLE IF NOT EXISTS invoices (
     notes TEXT DEFAULT '',
     created_at TEXT DEFAULT {_NOW},
     paid_at TEXT
+);
+
+-- The customer's own details for the GST invoice (company name, GSTIN, address).
+CREATE TABLE IF NOT EXISTS billing_profiles (
+    account_id INTEGER PRIMARY KEY,
+    legal_name TEXT DEFAULT '',
+    gstin TEXT DEFAULT '',
+    address TEXT DEFAULT '',
+    city TEXT DEFAULT '',
+    state TEXT DEFAULT '',
+    pincode TEXT DEFAULT '',
+    billing_email TEXT DEFAULT '',
+    updated_at TEXT DEFAULT {_NOW}
+);
+
+-- Gapless invoice numbering per Indian financial year (VV/2026-27/00001).
+CREATE TABLE IF NOT EXISTS invoice_counters (
+    fy TEXT PRIMARY KEY,
+    last_number INTEGER NOT NULL DEFAULT 0
 );
 
 -- Per-account settings (billing rates, EnableX credentials, credit totals) —
@@ -1271,6 +1291,12 @@ def init_tables() -> None:
             # total. amount_inr stays the TOTAL actually charged (unchanged
             # meaning for every existing row/caller) - this is purely additive.
             conn.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS gst_inr NUMERIC DEFAULT 0")
+            conn.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_number TEXT")
+            # A cancellation is scheduled for the end of the paid period: access continues until
+            # then, and Razorpay's own subscription.cancelled webhook flips the status after.
+            conn.execute("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end INTEGER DEFAULT 0")
+            conn.execute("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_requested_at TEXT")
+            conn.execute("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_reason TEXT DEFAULT ''")
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_platform_owner INTEGER DEFAULT 0")
             # NULL until the first-run onboarding modal is dismissed. Every
             # pre-existing account (created before onboarding existed) should
@@ -7886,7 +7912,7 @@ def billing_summary(account_id: int) -> dict:
         rates = credit_rates(account_id, conn=conn)
 
         sub = conn.execute(
-            "SELECT plan, billing_cycle, status, current_period_start, current_period_end "
+            "SELECT plan, billing_cycle, status, current_period_start, current_period_end, cancel_at_period_end "
             "FROM subscriptions WHERE account_id = ?",
             (account_id,),
         ).fetchone()
@@ -7943,6 +7969,7 @@ def billing_summary(account_id: int) -> dict:
             "plan": plan,
             "planPriceInr": plan_pricing["price_inr"],
             "subscriptionStatus": sub["status"] if sub else "inactive",
+            "cancelAtPeriodEnd": bool(sub and sub["cancel_at_period_end"]),
             "billingCycle": sub["billing_cycle"] if sub else "monthly",
             "currentPeriodStart": sub["current_period_start"] if sub else None,
             "currentPeriodEnd": sub["current_period_end"] if sub else None,
@@ -8384,9 +8411,15 @@ def record_invoice(
                     razorpay_payment_id, period_start, period_end, credits, notes, gst_inr,
                 ),
             )
-            return cur.lastrowid
+            new_id = cur.lastrowid
     finally:
         conn.close()
+    if status == "paid":
+        try:
+            ensure_invoice_number(new_id)
+        except Exception:
+            logger.exception("could not number invoice %s; it will be numbered when first opened", new_id)
+    return new_id
 
 
 def mark_invoice_paid(razorpay_order_id: str | None = None, razorpay_payment_id: str | None = None) -> dict | None:
@@ -8404,9 +8437,15 @@ def mark_invoice_paid(razorpay_order_id: str | None = None, razorpay_payment_id:
                 "WHERE razorpay_order_id = ? AND status != 'paid' RETURNING *",
                 (razorpay_payment_id, razorpay_order_id),
             ).fetchone()
-            return dict(row) if row else None
+            result = dict(row) if row else None
     finally:
         conn.close()
+    if result:
+        try:
+            ensure_invoice_number(result["id"])
+        except Exception:
+            logger.exception("could not number invoice %s; it will be numbered when first opened", result.get("id"))
+    return result
 
 
 def mark_invoice_failed(razorpay_order_id: str) -> bool:
@@ -8431,6 +8470,86 @@ def list_invoices(account_id: int, limit: int = 50) -> list[dict]:
             "SELECT * FROM invoices WHERE account_id = ? ORDER BY id DESC LIMIT ?", (account_id, limit)
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_billing_profile(account_id: int) -> dict:
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM billing_profiles WHERE account_id = ?", (account_id,)).fetchone()
+        r = dict(row) if row else {}
+        return {
+            "legalName": r.get("legal_name", ""), "gstin": r.get("gstin", ""), "address": r.get("address", ""),
+            "city": r.get("city", ""), "state": r.get("state", ""), "pincode": r.get("pincode", ""),
+            "billingEmail": r.get("billing_email", ""),
+        }
+    finally:
+        conn.close()
+
+
+def set_billing_profile(account_id: int, data: dict) -> dict:
+    """Validates and saves the customer's invoice details. Raises ValueError with a user-facing message."""
+    p = billing_documents.normalize_profile(data)
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO billing_profiles (account_id, legal_name, gstin, address, city, state, pincode, billing_email, updated_at) "
+                f"VALUES (?, ?, ?, ?, ?, ?, ?, ?, {_NOW}) "
+                "ON CONFLICT (account_id) DO UPDATE SET legal_name = EXCLUDED.legal_name, gstin = EXCLUDED.gstin, "
+                "address = EXCLUDED.address, city = EXCLUDED.city, state = EXCLUDED.state, pincode = EXCLUDED.pincode, "
+                f"billing_email = EXCLUDED.billing_email, updated_at = {_NOW}",
+                (account_id, p["legal_name"], p["gstin"], p["address"], p["city"], p["state"], p["pincode"], p["billing_email"]),
+            )
+    finally:
+        conn.close()
+    return get_billing_profile(account_id)
+
+
+def get_invoice(account_id: int, invoice_id: int) -> dict | None:
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM invoices WHERE id = ? AND account_id = ?", (invoice_id, account_id)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def ensure_invoice_number(invoice_id: int) -> str | None:
+    """Gives a PAID invoice its number the first time it is needed, and never changes it after.
+    Numbers are drawn from a per-financial-year counter inside one transaction, so they stay
+    consecutive. Returns None for an invoice that is not paid (a tax invoice exists only for money received)."""
+    conn = _connect()
+    try:
+        with conn:
+            row = conn.execute("SELECT status, paid_at, created_at, invoice_number FROM invoices WHERE id = ? FOR UPDATE", (invoice_id,)).fetchone()
+            if not row or row["status"] != "paid":
+                return None
+            if row["invoice_number"]:
+                return row["invoice_number"]
+            fy = billing_documents.financial_year(billing_documents.parse_when(row["paid_at"] or row["created_at"]))
+            n = conn.execute(
+                "INSERT INTO invoice_counters (fy, last_number) VALUES (?, 1) "
+                "ON CONFLICT (fy) DO UPDATE SET last_number = invoice_counters.last_number + 1 RETURNING last_number",
+                (fy,),
+            ).fetchone()["last_number"]
+            number = billing_documents.invoice_number(fy, n)
+            conn.execute("UPDATE invoices SET invoice_number = ? WHERE id = ?", (number, invoice_id))
+            return number
+    finally:
+        conn.close()
+
+
+def mark_subscription_cancel_requested(account_id: int, reason: str = "") -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE subscriptions SET cancel_at_period_end = 1, cancel_requested_at = {_NOW}, cancel_reason = ?, "
+                f"updated_at = {_NOW} WHERE account_id = ?",
+                ((reason or "")[:500], account_id),
+            )
     finally:
         conn.close()
 

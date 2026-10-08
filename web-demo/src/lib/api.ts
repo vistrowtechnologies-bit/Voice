@@ -444,6 +444,23 @@ export const fetchLeadWebhook = () =>
 
 export const fetchBilling = () => get<BillingSummary>('/billing/summary')
 
+export interface BillingProfile {
+  legalName: string
+  gstin: string
+  address: string
+  city: string
+  state: string
+  pincode: string
+  billingEmail: string
+}
+
+export const fetchBillingProfile = () => get<BillingProfile>('/billing/profile')
+export const saveBillingProfile = (profile: BillingProfile) => send<BillingProfile>('PUT', '/billing/profile', profile)
+export const cancelSubscription = (reason: string) =>
+  send<{ ok: boolean; alreadyScheduled: boolean; endsOn: string | null }>('POST', '/billing/subscription/cancel', { reason })
+/** The GST tax invoice for a paid charge. print=true opens the browser's print / save-as-PDF dialog. */
+export const invoiceDocumentUrl = (invoiceId: number, print = false) => `/api/billing/invoices/${invoiceId}/document${print ? '?print=1' : ''}`
+
 export const fetchSubscription = () =>
   get<{ subscription: Subscription | null; invoices: Invoice[]; razorpayConfigured: boolean }>('/billing/subscription')
 

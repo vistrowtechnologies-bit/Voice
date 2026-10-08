@@ -538,6 +538,8 @@ export interface BillingSummary {
   plan: string
   planPriceInr: number
   subscriptionStatus: 'inactive' | 'created' | 'active' | 'cancelled' | string
+  /** A cancellation is scheduled: the plan runs to currentPeriodEnd and then does not renew. */
+  cancelAtPeriodEnd?: boolean
   billingCycle: 'monthly' | 'annual'
   currentPeriodStart: string | null
   currentPeriodEnd: string | null
@@ -573,6 +575,8 @@ export interface Invoice {
   notes: string
   created_at: string
   paid_at: string | null
+  /** GST invoice number, given to a paid invoice (VV/2026-27/00001). */
+  invoice_number?: string | null
 }
 
 export interface TelephonyStatus {

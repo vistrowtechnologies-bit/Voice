@@ -31,6 +31,7 @@ import livekit_sip
 import llm_warmer
 import project_sync
 import razorpay_client
+import billing_documents
 import retention_worker
 import storage
 import storage_usage
@@ -45,7 +46,7 @@ from help_content import FAQS
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from livekit import api
 from livekit.api import (
     CreateRoomRequest,
@@ -4487,6 +4488,89 @@ def billing_subscription(user: dict = Depends(current_user)) -> dict:
         "invoices": calls_db.list_invoices(user["account_id"]),
         "razorpayConfigured": razorpay_client.checkout_ready(),
     }
+
+
+class BillingProfileRequest(BaseModel):
+    legalName: str = ""
+    gstin: str = ""
+    address: str = ""
+    city: str = ""
+    state: str = ""
+    pincode: str = ""
+    billingEmail: str = ""
+
+
+@app.get("/billing/profile")
+def get_billing_profile(user: dict = Depends(require_role("admin"))) -> dict:
+    return calls_db.get_billing_profile(user["account_id"])
+
+
+@app.put("/billing/profile")
+def put_billing_profile(req: BillingProfileRequest, user: dict = Depends(require_role("admin"))) -> dict:
+    """The company details that appear on this workspace's GST invoices."""
+    try:
+        return calls_db.set_billing_profile(user["account_id"], req.model_dump())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/billing/invoices/{invoice_id}/document", response_class=HTMLResponse)
+def invoice_document(invoice_id: int, print: bool = False, user: dict = Depends(require_role("admin"))) -> HTMLResponse:
+    """The GST tax invoice for a paid charge, as a page the browser can print or save as PDF."""
+    invoice = calls_db.get_invoice(user["account_id"], invoice_id)
+    if invoice is None or invoice.get("status") != "paid":
+        raise HTTPException(404, "No paid invoice found")
+    number = calls_db.ensure_invoice_number(invoice_id)
+    if number:
+        invoice["invoice_number"] = number
+    saved = calls_db.get_billing_profile(user["account_id"])
+    profile = {
+        "legal_name": saved["legalName"], "gstin": saved["gstin"], "address": saved["address"],
+        "city": saved["city"], "state": saved["state"], "pincode": saved["pincode"],
+    }
+    account = calls_db.get_user_by_id(user["user_id"]) or {}
+    page = billing_documents.render_invoice_html(
+        invoice, profile, billing_documents.supplier_from_env(),
+        account.get("account_name") or "Your workspace", auto_print=print,
+    )
+    return HTMLResponse(page, headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
+class CancelSubscriptionRequest(BaseModel):
+    reason: str = ""
+
+
+@app.post("/billing/subscription/cancel")
+def cancel_subscription(req: CancelSubscriptionRequest, user: dict = Depends(require_role("admin"))) -> dict:
+    """Stops the plan renewing. The plan, credits and everything built stay available until the end
+    of the period already paid for; nothing is deleted. Razorpay is asked to cancel at the cycle end,
+    so there is no further charge."""
+    account_id = user["account_id"]
+    sub = calls_db.get_subscription(account_id)
+    if not sub or sub.get("status") != "active" or not sub.get("razorpay_subscription_id"):
+        raise HTTPException(400, "There is no active subscription to cancel.")
+    if sub.get("cancel_at_period_end"):
+        return {"ok": True, "alreadyScheduled": True, "endsOn": sub.get("current_period_end")}
+    try:
+        razorpay_client.cancel_subscription(sub["razorpay_subscription_id"], cancel_at_cycle_end=True)
+    except Exception as exc:
+        logger.exception("razorpay cancel failed for account %s", account_id)
+        raise HTTPException(502, "We could not reach the payment provider to cancel. Nothing was changed; please try again.") from exc
+    calls_db.mark_subscription_cancel_requested(account_id, req.reason)
+    logger.info("billing: account %s user %s scheduled cancellation at period end (reason: %s)", account_id, user.get("user_id"), (req.reason or "")[:80])
+    try:
+        person = calls_db.get_user_by_id(user["user_id"]) or {}
+        ends = (sub.get("current_period_end") or "")[:10]
+        email_sender.send_email(
+            person["email"],
+            "Your Vistrow Voice subscription is set to cancel",
+            f"<p>Hi {html.escape(person.get('name') or 'there')},</p>"
+            f"<p>Your Vistrow Voice subscription will not renew. Everything stays available until <b>{html.escape(ends or 'the end of your current period')}</b>, and nothing is deleted.</p>"
+            "<p>Changed your mind? Choose a plan again from Settings &rarr; Plan &amp; billing at any time.</p>",
+        )
+    except Exception:
+        logger.warning("cancellation confirmation email failed for account %s", account_id, exc_info=True)
+    return {"ok": True, "alreadyScheduled": False, "endsOn": sub.get("current_period_end")}
 
 
 class CheckoutRequest(BaseModel):

@@ -4,8 +4,10 @@ import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
-import { fetchBilling, fetchSubscription, startCheckout, startTopup, verifyTopupPayment } from '../lib/api'
-import { useAuth } from '../lib/auth'
+import { fetchBilling, fetchSubscription, invoiceDocumentUrl, startCheckout, startTopup, verifyTopupPayment } from '../lib/api'
+import { hasRole, useAuth } from '../lib/auth'
+import { BillingDetailsCard } from '../components/BillingDetailsCard'
+import { CancelSubscriptionModal } from '../components/CancelSubscriptionModal'
 import { CONTACT_EMAIL } from '../lib/marketingContent'
 import { ANNUAL_MONTHS_CHARGED, PLANS, PRICING_FINALIZED, SHARED_PLAN_FEATURES, planHighlights } from '../lib/plans'
 import type { BillingSummary, Invoice } from '../lib/types'
@@ -64,6 +66,8 @@ export function Billing() {
   const [topupCredits, setTopupCredits] = useState(100)
   const [topupBusy, setTopupBusy] = useState(false)
   const [error, setError] = useState('')
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const canManage = hasRole(user, 'admin')
 
   function refetch() {
     fetchBilling().then(setBilling).catch(() => setBilling(null))
@@ -220,11 +224,21 @@ export function Billing() {
                 className={`text-[14px] ${billing?.subscriptionStatus === 'active' ? 'text-cyan' : 'text-text-muted'}`}
               />
               {billing?.subscriptionStatus === 'active'
-                ? 'Subscription active'
+                ? billing.cancelAtPeriodEnd ? 'Cancellation scheduled' : 'Subscription active'
                 : billing?.subscriptionStatus === 'cancelled'
                   ? 'Subscription cancelled'
                   : 'No recurring subscription connected'}
             </p>
+            {billing?.subscriptionStatus === 'active' && billing.cancelAtPeriodEnd && (
+              <p className="mt-2 rounded-lg bg-amber/10 px-2.5 py-2 text-xs text-text">
+                Your plan ends on {billing.currentPeriodEnd ? new Date(billing.currentPeriodEnd).toLocaleDateString() : 'the end of this period'} and will not renew. You keep full access until then.
+              </p>
+            )}
+            {billing?.subscriptionStatus === 'active' && !billing.cancelAtPeriodEnd && canManage && (
+              <button type="button" onClick={() => setCancelOpen(true)} className="mt-3 text-xs font-semibold text-text-muted underline-offset-2 hover:text-destructive hover:underline">
+                Cancel subscription
+              </button>
+            )}
           </Card>
         </div>
 
@@ -542,9 +556,14 @@ export function Billing() {
                 <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm sm:px-5">
                   <div>
                     <p>{INVOICE_KIND_LABELS[inv.kind] || inv.kind}</p>
-                    <p className="text-xs text-text-muted">{new Date(inv.created_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-text-muted">{new Date(inv.created_at).toLocaleDateString()}{inv.invoice_number ? ` · ${inv.invoice_number}` : ''}</p>
                   </div>
                   <div className="flex items-center gap-3">
+                    {inv.status === 'paid' && canManage && (
+                      <a href={invoiceDocumentUrl(inv.id, true)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                        <Icon name="receipt_long" className="text-[15px]" /> Invoice
+                      </a>
+                    )}
                     {PRICING_FINALIZED && (
                       <span className="text-text-muted">
                         ₹{inv.amount_inr}
@@ -570,7 +589,18 @@ export function Billing() {
             </div>
           )}
         </SectionCard>
+
+        {canManage && <BillingDetailsCard />}
       </section>
+
+      {cancelOpen && (
+        <CancelSubscriptionModal
+          planName={currentPlanName}
+          endsOn={billing?.currentPeriodEnd ?? null}
+          onClose={() => setCancelOpen(false)}
+          onDone={refetch}
+        />
+      )}
     </DashboardLayout>
   )
 }
