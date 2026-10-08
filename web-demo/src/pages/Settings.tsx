@@ -7,7 +7,6 @@ import { StorageSettings } from '../components/StorageSettings'
 import { Embedded } from '../components/embedded'
 import { Billing } from './Billing'
 import { Compliance } from './Compliance'
-import { Integrations } from './Integrations'
 import {
   apiInviteMember,
   apiRemoveMember,
@@ -53,7 +52,7 @@ function SettingsCard({ title, subtitle, children }: { title: string; subtitle: 
   )
 }
 
-type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'privacy' | 'team' | 'availability' | 'storage' | 'billing' | 'integrations' | 'compliance'
+type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'privacy' | 'team' | 'availability' | 'storage' | 'billing' | 'compliance'
 type TabGroup = { label: string; tabs: { id: Tab; label: string; description: string; icon: string }[] }
 
 const TAB_GROUPS: TabGroup[] = [
@@ -75,7 +74,6 @@ const TAB_GROUPS: TabGroup[] = [
   {
     label: 'Connections',
     tabs: [
-      { id: 'integrations', label: 'Integrations', description: 'Connect the tools your agents use', icon: 'extension' },
       { id: 'compliance', label: 'Calling rules', description: 'Calling hours, consent and Do-Not-Call', icon: 'verified_user' },
     ],
   },
@@ -169,7 +167,6 @@ export function Settings() {
           {tab === 'availability' && <AvailabilityTab canManage={hasRole(user, 'admin')} />}
           {tab === 'storage' && <StorageSettings canManage={hasRole(user, 'admin')} />}
           {tab === 'billing' && <Embedded><Billing /></Embedded>}
-          {tab === 'integrations' && <Embedded><Integrations /></Embedded>}
           {tab === 'compliance' && <Embedded><Compliance /></Embedded>}
         </div>
       </section>

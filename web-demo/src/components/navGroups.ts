@@ -49,7 +49,9 @@ export const NAV_GROUPS: NavGroup[] = [
     showHeading: true,
     items: [
       { to: '/dashboard/agents', label: 'Agents', icon: 'smart_toy', tour: 'nav-agents' },
+      { to: '/dashboard/voices', label: 'Voices', icon: 'graphic_eq' },
       { to: '/dashboard/knowledge', label: 'Knowledge Base', icon: 'menu_book', tour: 'nav-knowledge' },
+      { to: '/dashboard/testing', label: 'Testing Lab', icon: 'science' },
     ],
   },
   {
@@ -57,12 +59,17 @@ export const NAV_GROUPS: NavGroup[] = [
     standalone: true,
     showHeading: true,
     items: [
-      {
-        to: '/dashboard/channels',
-        label: 'Channels',
-        icon: 'dialpad',
-        match: ['/dashboard/channels', '/dashboard/numbers', '/dashboard/inbound', '/dashboard/outbound', '/dashboard/website-widget'],
-      },
+      { to: '/dashboard/numbers', label: 'Phone Numbers', icon: 'dialpad' },
+      { to: '/dashboard/website-widget', label: 'Website Widget', icon: 'widgets' },
+      { to: '/dashboard/integrations', label: 'Integrations', icon: 'extension' },
+    ],
+  },
+  {
+    // An accordion (not standalone): Inbound and Outbound sit under one Campaigns entry.
+    title: 'Campaigns',
+    items: [
+      { to: '/dashboard/inbound', label: 'Inbound', icon: 'phone_callback' },
+      { to: '/dashboard/outbound', label: 'Outbound', icon: 'campaign' },
     ],
   },
   {
@@ -71,7 +78,8 @@ export const NAV_GROUPS: NavGroup[] = [
     showHeading: true,
     items: [
       { to: '/dashboard/calls', label: 'Calls', icon: 'history' },
-      { to: '/dashboard/contacts', label: 'Contacts', icon: 'contacts', match: ['/dashboard/contacts', '/dashboard/appointments'] },
+      { to: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
+      { to: '/dashboard/appointments', label: 'Appointments', icon: 'event' },
     ],
   },
   {
@@ -83,7 +91,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Settings',
         icon: 'settings',
         tour: 'nav-settings',
-        match: ['/dashboard/settings', '/dashboard/billing', '/dashboard/integrations', '/dashboard/compliance'],
+        match: ['/dashboard/settings', '/dashboard/billing', '/dashboard/compliance'],
       },
     ],
   },
@@ -94,20 +102,11 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [{ to: '/dashboard/support', label: 'Help & Support', icon: 'support_agent' }],
   },
   {
-    // Still one search or keyboard shortcut away, but no longer competing for sidebar space:
-    // these live inside Agents, Channels, Contacts and Settings now.
+    // Billing and Calling rules live inside Settings; the palette still jumps straight to them.
     title: 'More pages',
     standalone: true,
     paletteOnly: true,
     items: [
-      { to: '/dashboard/voices', label: 'Voices', icon: 'graphic_eq' },
-      { to: '/dashboard/testing', label: 'Testing Lab', icon: 'science' },
-      { to: '/dashboard/numbers', label: 'Phone Numbers', icon: 'dialpad' },
-      { to: '/dashboard/inbound', label: 'Inbound routing', icon: 'phone_callback' },
-      { to: '/dashboard/outbound', label: 'Outbound campaigns', icon: 'campaign' },
-      { to: '/dashboard/website-widget', label: 'Website widget', icon: 'widgets' },
-      { to: '/dashboard/appointments', label: 'Appointments', icon: 'event' },
-      { to: '/dashboard/integrations', label: 'Integrations', icon: 'extension' },
       { to: '/dashboard/compliance', label: 'Compliance', icon: 'verified_user' },
       { to: '/dashboard/billing', label: 'Billing', icon: 'credit_card' },
     ],

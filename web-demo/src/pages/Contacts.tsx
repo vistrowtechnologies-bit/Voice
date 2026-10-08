@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import * as XLSX from 'xlsx'
-import { ContactTabs } from '../components/RouteTabs'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { PhoneNumberField } from '../components/PhoneNumberField'
@@ -648,7 +647,6 @@ export function Contacts() {
   return (
     <DashboardLayout>
       <PageHeader title="Contacts" subtitle="Global contact list - auto-synced from every qualified call" />
-      <ContactTabs />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <Card padding="sm" className={`relative flex min-h-[66px] flex-wrap items-center gap-3 ${showMoreActions ? 'z-[19]' : 'z-10'}`}>

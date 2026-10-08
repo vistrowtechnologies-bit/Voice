@@ -278,6 +278,7 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set())
   const groupIcons: Record<string, string> = {
     'Workspace tools': 'settings_suggest',
+    Campaigns: 'campaign',
   }
   const workspace = user?.accountName || BRAND.defaultWorkspace
 
@@ -314,16 +315,16 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
       <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 min-w-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto pb-3 [scrollbar-color:var(--color-border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
         {NAV_GROUPS.filter((group) => !group.pinned && !group.paletteOnly).map((group) => group.standalone ? (
           <div key={group.title} className={group.showHeading ? 'mb-0.5' : 'mb-1.5 border-b border-border pb-2'}>
-            {group.showHeading && <p className="mb-0.5 px-3 pt-1.5 text-[10px] font-bold tracking-[0.13em] text-text-muted">{group.title}</p>}
+            {group.showHeading && <p className="mb-0.5 px-3 pt-1.5 text-[11px] font-bold tracking-[0.12em] text-text-muted">{group.title}</p>}
             {group.items.map((item) => <NavLink
               key={item.to}
               to={item.to}
               end={item.to === '/dashboard'}
               onClick={onNavigate}
               data-tour={item.tour}
-              className={() => `flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${navItemActive(item, location.pathname) ? 'bg-primary/10 font-semibold text-primary shadow-[inset_3px_0_0_var(--color-primary)]' : 'text-text-muted hover:bg-surface-high hover:text-text'}`}
+              className={() => `flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2 text-[15px] transition-colors ${navItemActive(item, location.pathname) ? 'bg-primary/10 font-semibold text-primary shadow-[inset_3px_0_0_var(--color-primary)]' : 'text-text-muted hover:bg-surface-high hover:text-text'}`}
             >
-              <Icon name={item.icon} className={`shrink-0 text-[18px] ${navItemActive(item, location.pathname) ? 'text-primary' : 'text-text-muted'}`} />
+              <Icon name={item.icon} className={`shrink-0 text-[21px] ${navItemActive(item, location.pathname) ? 'text-primary' : 'text-text-muted'}`} />
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
               {navItemActive(item, location.pathname) && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
             </NavLink>)}
@@ -331,7 +332,7 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
         ) : (
           <div key={group.title} className="rounded-xl">
             <button type="button" aria-expanded={expandedGroups.has(group.title)} onClick={() => toggleGroup(group.title)} className="group flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-1.5 text-left text-[13px] font-semibold text-text transition-colors hover:bg-surface-high">
-              <Icon name={groupIcons[group.title] || 'apps'} className="shrink-0 text-[18px] text-text-muted transition-colors group-hover:text-primary" />
+              <Icon name={groupIcons[group.title] || 'apps'} className="shrink-0 text-[21px] text-text-muted transition-colors group-hover:text-primary" />
               <span className="min-w-0 flex-1 truncate">{group.title}</span>
               <Icon name={expandedGroups.has(group.title) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'} className="shrink-0 text-[19px] text-text-muted" />
             </button>
@@ -344,14 +345,14 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
                   onClick={onNavigate}
                   data-tour={item.tour}
                   className={({ isActive }) =>
-                    `flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${
+                    `flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-2 text-[15px] transition-colors ${
                       isActive
                         ? 'bg-primary/10 font-semibold text-primary shadow-[inset_2px_0_0_var(--color-primary)]'
                         : 'text-text-muted hover:bg-surface-high hover:text-text'
                     }`
                   }
                 >
-                  <Icon name={item.icon} className="shrink-0 text-[17px]" />
+                  <Icon name={item.icon} className="shrink-0 text-[19px]" />
                   <span className="min-w-0 truncate">{item.label}</span>
                 </NavLink>
               ))}

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ContactTabs } from '../components/RouteTabs'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { AppointmentDetails } from '../components/calendar/AppointmentDetails'
@@ -165,8 +164,7 @@ export function Appointments() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Contacts" subtitle="Meetings your AI agent - or your team - has booked" />
-      <ContactTabs />
+      <PageHeader title="Appointments" subtitle="Meetings your AI agent - or your team - has booked" />
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile compact label="Total" value={String(kpis.total)} icon="event" tone="primary" />

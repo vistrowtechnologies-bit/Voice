@@ -75,6 +75,7 @@ const PhoneNumbers = lazy(() => import('./pages/PhoneNumbers').then((m) => ({ de
 const Support = lazy(() => import('./pages/Support').then((m) => ({ default: m.Support })))
 const LeadDetail = lazy(() => import('./pages/LeadDetail').then((m) => ({ default: m.LeadDetail })))
 const WebsiteWidget = lazy(() => import('./pages/WebsiteWidget').then((m) => ({ default: m.WebsiteWidget })))
+const Integrations = lazy(() => import('./pages/Integrations').then((m) => ({ default: m.Integrations })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
 
 // Wrap every dashboard route in the auth gate - one helper keeps App.tsx
@@ -121,7 +122,7 @@ function AnalyticsListener() {
   return null
 }
 
-/** Billing, Integrations and Calling rules now live under Settings. The old addresses keep working
+/** Billing and Calling rules now live under Settings. The old addresses keep working
  * (bookmarks, emails, payment and OAuth return links) and carry any query string along. */
 function SettingsRedirect({ tab }: { tab: string }) {
   const { search } = useLocation()
@@ -205,7 +206,7 @@ function App() {
         <Route path="/dashboard/contacts" element={guard(<Contacts />)} />
         <Route path="/dashboard/contacts/:id" element={guard(<ContactDetail />)} />
         <Route path="/dashboard/appointments" element={guard(<Appointments />)} />
-        <Route path="/dashboard/integrations" element={guard(<SettingsRedirect tab="integrations" />)} />
+        <Route path="/dashboard/integrations" element={guard(<Integrations />)} />
         <Route path="/dashboard/channels" element={guard(<Navigate to="/dashboard/numbers" replace />)} />
         <Route path="/dashboard/numbers" element={guard(<PhoneNumbers />)} />
         <Route path="/dashboard/compliance" element={guard(<SettingsRedirect tab="compliance" />)} />

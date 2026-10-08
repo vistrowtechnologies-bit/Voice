@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChannelTabs } from '../components/RouteTabs'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -124,8 +123,7 @@ export function Inbound() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Channels" subtitle="Manage inbound call routing and dispatch rules" />
-      <ChannelTabs />
+      <PageHeader title="Inbound Calls" subtitle="Manage inbound call routing and dispatch rules" />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <Card>
