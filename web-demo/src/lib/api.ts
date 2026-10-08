@@ -92,6 +92,23 @@ export interface AccountEntitlements {
   storage?: { usedBytes: number | null; limitBytes: number | null } | null
 }
 
+export interface StorageSummary {
+  plan: string | null
+  limitBytes: number | null
+  usedBytes: number | null
+  files: number | null
+  /** Recordings at least N days old, keyed by N ("30", "90", "180", "365"). */
+  olderThan: Record<string, { bytes: number; files: number }>
+}
+
+export function fetchStorage() {
+  return get<StorageSummary>('/storage')
+}
+
+export function deleteOldRecordings(olderThanDays: number) {
+  return send<{ deleted: number; failed: number; freedBytes: number | null }>('POST', '/storage/recordings/delete', { olderThanDays })
+}
+
 export function fetchEntitlements() {
   return get<AccountEntitlements>('/entitlements')
 }

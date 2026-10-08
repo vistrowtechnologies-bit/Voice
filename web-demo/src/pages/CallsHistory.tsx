@@ -483,6 +483,12 @@ export function CallsHistory() {
           >
             <Icon name="error" className="text-[15px]" /> Failed
           </span></Tooltip>
+        ) : call.recordingStatus === 'skipped_storage_full' ? (
+          <Tooltip content="Storage was full, so this call's audio was not stored"><span className="inline-flex items-center gap-1 text-xs font-semibold text-amber">
+            <Icon name="warning" className="text-[15px]" /> Not stored
+          </span></Tooltip>
+        ) : call.recordingStatus === 'deleted' ? (
+          <Tooltip content="The audio was deleted to free storage"><span className="text-xs text-text-muted">Deleted</span></Tooltip>
         ) : call.isTextChat ? (
           <Tooltip content="Typed chat, no audio to record"><span className="text-xs text-text-muted">Text chat</span></Tooltip>
         ) : (

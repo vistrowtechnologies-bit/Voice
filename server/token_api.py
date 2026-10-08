@@ -33,6 +33,7 @@ import project_sync
 import razorpay_client
 import retention_worker
 import storage
+import storage_usage
 import support_files
 import support_inbound
 import help_articles
@@ -2530,6 +2531,55 @@ def get_call(call_id: int, user: dict = Depends(current_user)) -> dict:
 
 # Moved to storage.py so background jobs (support_files) can use it too.
 _b2_client = storage.b2_client
+
+
+@app.get("/storage")
+def get_storage(user: dict = Depends(current_user)) -> dict:
+    """What this workspace's recordings use, against its plan's allowance, with how much
+    is older than 30/90/180/365 days (what someone freeing space can reclaim)."""
+    entitlements = calls_db.account_entitlements(user["account_id"])
+    limit = (entitlements.get("storage") or {}).get("limitBytes")
+    summary = storage_usage.account_storage_summary(user["account_id"], fresh=True)
+    return {
+        "plan": entitlements.get("plan"),
+        "limitBytes": limit,
+        "usedBytes": summary["usedBytes"] if summary else None,
+        "files": summary["files"] if summary else None,
+        "olderThan": summary["olderThan"] if summary else {},
+    }
+
+
+class DeleteOldRecordingsRequest(BaseModel):
+    olderThanDays: int = PydanticField(ge=1, le=3650)
+
+
+def _delete_recordings_or_http_error(account_id: int, **kwargs) -> dict:
+    try:
+        return calls_db.delete_call_recordings(account_id, **kwargs)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except calls_db.StorageNotConfigured as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@app.post("/storage/recordings/delete")
+def delete_old_recordings(req: DeleteOldRecordingsRequest, user: dict = Depends(require_role("admin"))) -> dict:
+    """Delete the audio of every call older than N days. Transcripts and summaries stay."""
+    result = _delete_recordings_or_http_error(user["account_id"], older_than_days=req.olderThanDays)
+    logger.info("storage: account %s user %s deleted %s recordings older than %s days (freed %s bytes)",
+                user["account_id"], user.get("user_id"), result["deleted"], req.olderThanDays, result["freedBytes"])
+    return result
+
+
+@app.delete("/calls/{call_id}/recording")
+def delete_call_recording(call_id: int, user: dict = Depends(require_role("admin"))) -> dict:
+    """Delete one call's audio. The transcript and summary stay."""
+    result = _delete_recordings_or_http_error(user["account_id"], call_id=call_id)
+    if result["deleted"] == 0 and result["failed"] == 0:
+        raise HTTPException(404, "No recording for this call")
+    logger.info("storage: account %s user %s deleted the recording of call %s",
+                user["account_id"], user.get("user_id"), call_id)
+    return result
 
 
 @app.get("/calls/{call_id}/recording")

@@ -60,6 +60,7 @@ import db
 from contact_notes import build_contact_notes
 import numpy as np
 import recording
+import storage_gate
 import inbound_rules
 import transfer_intent
 import jev_intent
@@ -7842,6 +7843,22 @@ async def entrypoint(ctx: JobContext) -> None:
                         pass
                     local_path = None
                     rec_status = "discarded"
+                if local_path:
+                    # Plan storage: a workspace that has used its allowance keeps taking
+                    # calls, but this call's audio is not stored. Fails open (storage_gate).
+                    _account_id = cfg.get("account_id")
+                    _limit = await asyncio.to_thread(db.account_storage_limit_bytes, _account_id)
+                    if not await asyncio.to_thread(storage_gate.recording_allowed, _account_id, _limit):
+                        logger.info(
+                            "recording not stored for room %s: account %s is over its plan's storage",
+                            ctx.room.name, _account_id,
+                        )
+                        try:
+                            os.remove(local_path)
+                        except OSError:
+                            pass
+                        local_path = None
+                        rec_status = "skipped_storage_full"
                 if local_path:
                     # boto3's upload is blocking network I/O — run it off the
                     # event loop so it doesn't stall every other concurrent

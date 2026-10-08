@@ -34,6 +34,7 @@ import phone_format
 import voice_catalog
 import plan_policy
 import storage_usage
+from storage import b2_client
 import campaign_window
 import retry_rules
 from industry_demos import INDUSTRY_DEMOS
@@ -8989,6 +8990,91 @@ def purge_expired_calls(account_id: int) -> int:
     if keys:
         _delete_recording_objects(keys)
     return len(rows)
+
+
+class StorageNotConfigured(RuntimeError):
+    """Recording storage is not set up on this server."""
+
+
+def _remove_recording_objects(keys: list[str]) -> set[str]:
+    """Delete these objects from B2 and return the keys that are now gone.
+
+    Unlike _delete_recording_objects (retention's best-effort sweep) the caller needs to
+    know which deletions worked, because only those calls may lose their pointer to the
+    audio. Deleting an object that is already absent counts as gone."""
+    client, bucket = b2_client()
+    if client is None:
+        raise StorageNotConfigured("Recording storage is not configured")
+    gone: set[str] = set()
+    for start in range(0, len(keys), 1000):
+        chunk = keys[start:start + 1000]
+        try:
+            result = client.delete_objects(
+                Bucket=bucket, Delete={"Objects": [{"Key": k} for k in chunk], "Quiet": False}
+            )
+        except Exception:
+            logger.exception("recording delete: batch of %d failed", len(chunk))
+            continue
+        failed = {e.get("Key") for e in result.get("Errors", []) if e.get("Code") != "NoSuchKey"}
+        gone.update(k for k in chunk if k not in failed)
+    return gone
+
+
+def delete_call_recordings(account_id: int, *, call_id: "int | None" = None, older_than_days: "int | None" = None) -> dict:
+    """Delete the audio of this tenant's calls to free storage, keeping everything else
+    (transcript, summary, lead details). Exactly one of call_id / older_than_days.
+
+    The audio is deleted first and a call only loses its pointer to it once its object is
+    really gone, so a storage failure never leaves a call claiming a recording that no longer
+    exists, nor an orphaned file nothing points at. Returns
+    {deleted, failed, freedBytes (None if unknown)}."""
+    if (call_id is None) == (older_than_days is None):
+        raise ValueError("Choose either one call or an age")
+    if older_than_days is not None and int(older_than_days) < 1:
+        raise ValueError("The age must be at least 1 day")
+    conn = _connect()
+    try:
+        if call_id is not None:
+            rows = conn.execute(
+                "SELECT id, recording_key FROM calls WHERE id = ? AND account_id = ? "
+                "AND COALESCE(recording_key, '') <> ''",
+                (call_id, account_id),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, recording_key FROM calls WHERE account_id = ? "
+                "AND COALESCE(recording_key, '') <> '' "
+                "AND started_at::timestamptz < now() - (? || ' days')::interval",
+                (account_id, int(older_than_days)),
+            ).fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        return {"deleted": 0, "failed": 0, "freedBytes": 0}
+    # Never touch an object outside this tenant's own prefix, whatever the row says.
+    prefix = f"recordings/{int(account_id)}/"
+    owned = [r for r in rows if str(r["recording_key"]).startswith(prefix)]
+    before = storage_usage.account_storage_bytes(account_id, fresh=True)
+    gone = _remove_recording_objects([r["recording_key"] for r in owned])
+    done_ids = [r["id"] for r in owned if r["recording_key"] in gone]
+    if done_ids:
+        conn = _connect()
+        try:
+            with conn:
+                for start in range(0, len(done_ids), 500):
+                    chunk = done_ids[start:start + 500]
+                    marks = ",".join("?" for _ in chunk)
+                    conn.execute(
+                        f"UPDATE calls SET recording_key = NULL, recording_status = 'deleted' "
+                        f"WHERE account_id = ? AND id IN ({marks})",
+                        (account_id, *chunk),
+                    )
+        finally:
+            conn.close()
+    storage_usage.forget(account_id)
+    after = storage_usage.account_storage_bytes(account_id, fresh=True)
+    freed = max(0, before - after) if before is not None and after is not None else None
+    return {"deleted": len(done_ids), "failed": len(rows) - len(done_ids), "freedBytes": freed}
 
 
 def _delete_recording_objects(keys: list[str]) -> None:

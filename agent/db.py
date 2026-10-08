@@ -1746,6 +1746,27 @@ def finish_campaign_contact(
 RECORDING_FLAG_MIN_SECONDS = 15
 
 
+def account_storage_limit_bytes(account_id: int | None) -> int | None:
+    """The recording storage this account's plan includes, in bytes. None means no limit,
+    including when the account or its plan cannot be read: the recording gate must fail open."""
+    if not account_id:
+        return None
+    conn = dbconn.connect()
+    try:
+        row = conn.execute("SELECT plan, is_platform_owner FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        if not row:
+            return None
+        return plan_policy.storage_limit_bytes(row["plan"], bool(row["is_platform_owner"]))
+    except Exception:
+        logger.exception("could not read the storage limit for account %s", account_id)
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def set_call_recording_status(call_id: int | None, status: str) -> None:
     """Records what became of this call's recording ('failed', 'discarded',
     'not_configured'). 'failed' is only stamped on calls that lasted at least

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
+import { StorageSettings } from '../components/StorageSettings'
 import {
   apiInviteMember,
   apiRemoveMember,
@@ -48,7 +49,7 @@ function SettingsCard({ title, subtitle, children }: { title: string; subtitle: 
   )
 }
 
-type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'privacy' | 'team' | 'availability'
+type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'privacy' | 'team' | 'availability' | 'storage'
 type TabGroup = { label: string; tabs: { id: Tab; label: string; description: string; icon: string }[] }
 
 const TAB_GROUPS: TabGroup[] = [
@@ -58,6 +59,7 @@ const TAB_GROUPS: TabGroup[] = [
       { id: 'general', label: 'Workspace details', description: 'Company name and linked workspace controls', icon: 'business' },
       { id: 'team', label: 'Team & roles', description: 'Invite people and manage access', icon: 'group' },
       { id: 'availability', label: 'Scheduling', description: 'Business hours, timezone and booking rules', icon: 'event_available' },
+      { id: 'storage', label: 'Storage', description: 'Recording storage, cleanup and plan limits', icon: 'inventory_2' },
     ],
   },
   {
@@ -123,6 +125,7 @@ export function Settings() {
           {tab === 'privacy' && <DataPrivacyTab />}
           {tab === 'team' && <TeamTab canManage={hasRole(user, 'admin')} />}
           {tab === 'availability' && <AvailabilityTab canManage={hasRole(user, 'admin')} />}
+          {tab === 'storage' && <StorageSettings canManage={hasRole(user, 'admin')} />}
         </div>
       </section>
     </DashboardLayout>

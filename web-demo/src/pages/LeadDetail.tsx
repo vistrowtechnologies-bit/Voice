@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -637,6 +637,25 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
               <p className="text-xs text-text-muted">
                 Not kept: the caller did not agree to be recorded.
               </p>
+            </Card>
+          )}
+
+          {!call.hasRecording && !call.isTextChat && call.recordingStatus === 'skipped_storage_full' && (
+            <Card className="!border-amber/40">
+              <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+                <Icon name="warning" className="text-[16px] text-amber" /> Recording not stored
+              </h2>
+              <p className="text-xs text-text-muted">
+                Your workspace had used all of its recording storage when this call ended, so the audio was not kept. The
+                transcript is complete. <Link to="/dashboard/settings?tab=storage" className="font-semibold text-primary hover:underline">Free up space or upgrade</Link>.
+              </p>
+            </Card>
+          )}
+
+          {!call.hasRecording && !call.isTextChat && call.recordingStatus === 'deleted' && (
+            <Card>
+              <h2 className="mb-2 text-sm font-semibold text-text-muted">Recording</h2>
+              <p className="text-xs text-text-muted">The audio was deleted to free storage. The transcript is still here.</p>
             </Card>
           )}
 

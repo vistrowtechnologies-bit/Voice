@@ -95,7 +95,7 @@ export interface CallRecord {
   hasRecording: boolean
   // What became of the audio: only 'failed' needs attention (the audio was lost);
   // 'discarded' = spoken consent declined, 'not_configured' = no storage set up.
-  recordingStatus?: '' | 'saved' | 'failed' | 'discarded' | 'not_configured'
+  recordingStatus?: '' | 'saved' | 'failed' | 'discarded' | 'not_configured' | 'skipped_storage_full' | 'deleted'
   feedback: 'helpful' | 'not_helpful' | null
   feedbackComment: string | null
   connectLatencyMs: number | null

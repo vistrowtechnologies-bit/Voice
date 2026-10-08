@@ -1,16 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchEntitlements } from '../lib/api'
+import { formatBytes } from '../lib/format'
 import { Icon } from './Icon'
 
 const WARN_AT = 0.8
 const CRITICAL_AT = 0.95
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(bytes >= 10 * 1024 ** 3 ? 0 : 1)} GB`
-  if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`
-}
 
 /** Sidebar warning shown only when the workspace has used 80% or more of its plan's
  * storage. Below that it renders nothing. It reads `storage` from /entitlements; a
@@ -40,7 +35,7 @@ export function StorageWarning({ compact = false }: { compact?: boolean }) {
 
   if (compact) {
     return (
-      <Link to="/dashboard/billing" className={`flex min-h-10 items-center gap-2 rounded-lg border px-3 text-xs font-semibold ${tone.box} ${tone.text}`}>
+      <Link to="/dashboard/settings?tab=storage" className={`flex min-h-10 items-center gap-2 rounded-lg border px-3 text-xs font-semibold ${tone.box} ${tone.text}`}>
         <Icon name="warning" className="text-[18px]" />
         <span className="min-w-0 flex-1 truncate">{title}</span>
         <Icon name="arrow_forward" className="text-[15px]" />
@@ -49,7 +44,7 @@ export function StorageWarning({ compact = false }: { compact?: boolean }) {
   }
   return (
     <div className="mb-2 shrink-0 border-t border-border pt-2">
-    <Link to="/dashboard/billing" className={`block rounded-xl border p-3 [@media(max-height:800px)]:p-2 ${tone.box}`}>
+    <Link to="/dashboard/settings?tab=storage" className={`block rounded-xl border p-3 [@media(max-height:800px)]:p-2 ${tone.box}`}>
       <div className="flex items-center gap-2">
         <Icon name="warning" className={`shrink-0 text-[18px] ${tone.text}`} />
         <p className="min-w-0 flex-1 truncate text-xs font-semibold text-text">{title}</p>
