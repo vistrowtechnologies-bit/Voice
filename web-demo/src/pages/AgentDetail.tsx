@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AmbiencePreviewButton } from '../components/AmbiencePreviewButton'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
@@ -102,6 +103,13 @@ export function AgentDetail() {
           <Icon name="arrow_back" className="text-[15px]" />
           Back to agents
         </Link>
+        <Link
+          to="/dashboard/testing"
+          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
+        >
+          <Icon name="science" className="text-[15px]" />
+          Test agent
+        </Link>
       </PageHeader>
       <section className="p-4 sm:p-6">
         <AgentEditorForm
@@ -129,6 +137,7 @@ function AgentEditorForm({
   onCancel: () => void
   onDeleted: () => void
 }) {
+  const [tab, setTab] = useState<AgentTab>('instructions')
   const [catalogAccess, setCatalogAccess] = useState<boolean | null>(null)
   useEffect(() => { fetchEntitlements().then((e) => setCatalogAccess(!!e.features.live_catalog)).catch(() => setCatalogAccess(false)) }, [])
   const [form, setForm] = useState<AgentForm>({
@@ -275,13 +284,17 @@ function AgentEditorForm({
 
   return (
     <div className="flex flex-col gap-4">
+      <AgentTabBar tab={tab} onChange={setTab} />
       <div className="flex flex-col gap-4">
         {/* Identity */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Name">
+          <TabPane tab="instructions" active={tab}>
+<Field label="Name">
             <input value={form.name} onChange={(e) => set('name', e.target.value)} className={inputCls} />
           </Field>
-          <Field label="Description">
+</TabPane>
+          <TabPane tab="instructions" active={tab}>
+<Field label="Description">
             <input
               value={form.description}
               onChange={(e) => set('description', e.target.value)}
@@ -289,7 +302,9 @@ function AgentEditorForm({
               className={inputCls}
             />
           </Field>
-          <Field
+</TabPane>
+          <TabPane tab="tools" active={tab}>
+<Field
             label="Model"
             hint={
               isRealtimeModel(form.model)
@@ -305,7 +320,9 @@ function AgentEditorForm({
               ))}
             </select>
           </Field>
-          <Field
+</TabPane>
+          <TabPane tab="voice" active={tab}>
+<Field
             label="Voice"
             hint={
               myVoices.length === 0 ? (
@@ -355,7 +372,9 @@ function AgentEditorForm({
               })()}
             </div>
           </Field>
-          <Field label="Default language">
+</TabPane>
+          <TabPane tab="voice" active={tab}>
+<Field label="Default language">
             <select value={form.language} onChange={(e) => set('language', e.target.value)} className={inputCls}>
               {LANGUAGES.map(([code, label]) => (
                 <option key={code} value={code}>
@@ -364,7 +383,9 @@ function AgentEditorForm({
               ))}
             </select>
           </Field>
-          <Field
+</TabPane>
+          <TabPane tab="voice" active={tab}>
+<Field
             label="Speech recognition"
             hint="Recognition, reasoning, and voice are tested separately. Google Chirp 3 recognition is pinned to the default language; Vistrow Indic is better suited to Indian names and code-mixed speech."
           >
@@ -377,7 +398,9 @@ function AgentEditorForm({
               <option value="google-chirp3">Google Chirp 3 — comparison / fixed language</option>
             </select>
           </Field>
-          <Field label="Voice delivery">
+</TabPane>
+          <TabPane tab="voice" active={tab}>
+<Field label="Voice delivery">
             <select value={form.tone} onChange={(e) => set('tone', e.target.value as AgentForm['tone'])} className={inputCls}>
               {TONES.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -386,7 +409,9 @@ function AgentEditorForm({
               ))}
             </select>
           </Field>
-          <Field
+</TabPane>
+          <TabPane tab="voice" active={tab}>
+<Field
             label="Emotion intensity"
             hint="Adaptive delivery is available on expressive multilingual voices. Other voices keep their configured delivery. This responds to conversation wording, not a measurement of vocal emotion."
           >
@@ -403,7 +428,9 @@ function AgentEditorForm({
               ))}
             </select>
           </Field>
-          <Field
+</TabPane>
+          <TabPane tab="conversation" active={tab}>
+<Field
             label="Caller noise suppression"
             hint="Filters background noise out of the caller's audio before transcription. If callers say they spoke but the transcript is empty, set this to Off."
           >
@@ -419,7 +446,9 @@ function AgentEditorForm({
               ))}
             </select>
           </Field>
-          <Field label="Who speaks first">
+</TabPane>
+          <TabPane tab="instructions" active={tab}>
+<Field label="Who speaks first">
             <select
               value={form.firstSpeaker}
               onChange={(e) => set('firstSpeaker', e.target.value as AgentForm['firstSpeaker'])}
@@ -429,12 +458,14 @@ function AgentEditorForm({
               <option value="user">Caller speaks first (agent waits)</option>
             </select>
           </Field>
+</TabPane>
           {/* Full-width rather than one grid cell: the sound picker, its
               preview button, and the volume slider need more room than the
               half-width column gives, and a row this much taller than its
               neighbor would throw off the two-column grid's alignment the
               same way the paragraph hints used to (see Field's hint prop). */}
-          <div className="flex flex-col gap-3 sm:col-span-2">
+          <TabPane tab="voice" active={tab}>
+<div className="flex flex-col gap-3 sm:col-span-2">
             <Field label="Background ambience">
               <div className="flex items-center gap-2">
                 <select
@@ -468,13 +499,15 @@ function AgentEditorForm({
               </Field>
             )}
           </div>
+</TabPane>
         </div>
 
         {/* Conversation start - the "Who speaks first" select itself now
             lives up in the settings grid (see the comment by "Background
             ambience"), paired with Caller noise suppression instead of
             dangling here alone; this block just holds what it controls. */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <TabPane tab="instructions" active={tab}>
+<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {form.firstSpeaker === 'agent' && (
             <>
               <Field label="Welcome message — inbound (blank = auto-generated)">
@@ -498,9 +531,11 @@ function AgentEditorForm({
             </>
           )}
         </div>
+</TabPane>
 
         {/* System prompt */}
-        <Field label="System prompt (blank = built-in generic assistant prompt)">
+        <TabPane tab="instructions" active={tab}>
+<Field label="System prompt (blank = built-in generic assistant prompt)">
           <textarea
             value={form.systemPrompt}
             onChange={(e) => set('systemPrompt', e.target.value)}
@@ -515,6 +550,7 @@ function AgentEditorForm({
             <span>~{promptTokens} tokens</span>
           </div>
         </Field>
+</TabPane>
 
         {isPlatformOwner && (
           <label className="flex items-start gap-2 rounded-lg border border-border bg-surface-high/40 p-3">
@@ -533,7 +569,8 @@ function AgentEditorForm({
         )}
 
         {/* Collapsible advanced panels */}
-        <Panel icon="build" title="Functions" subtitle="What the agent can do during a call">
+        <TabPane tab="tools" active={tab}>
+<Panel icon="build" title="Functions" subtitle="What the agent can do during a call">
           <div className="flex flex-col gap-4">
             <Toggle
               checked={endCallEnabled}
@@ -584,8 +621,10 @@ function AgentEditorForm({
             />
           </div>
         </Panel>
+</TabPane>
 
-        <Panel icon="menu_book" title="Knowledge base" subtitle="Ground answers in your own documents">
+        <TabPane tab="tools" active={tab}>
+<Panel icon="menu_book" title="Knowledge base" subtitle="Ground answers in your own documents">
           <Field label="Attached knowledge base">
             <select
               value={form.kbId ?? ''}
@@ -601,8 +640,10 @@ function AgentEditorForm({
             </select>
           </Field>
         </Panel>
+</TabPane>
 
-        <Panel
+        <TabPane tab="tools" active={tab}>
+<Panel
           icon="inventory_2"
           title="Live catalog"
           subtitle="Optional products, services, inventory, menus, plans, or listings"
@@ -631,8 +672,10 @@ function AgentEditorForm({
             </div>
           </div>
         </Panel>
+</TabPane>
 
-        <Panel icon="graphic_eq" title="Speech settings" subtitle="Turn-taking and silence handling">
+        <TabPane tab="conversation" active={tab}>
+<Panel icon="graphic_eq" title="Speech settings" subtitle="Turn-taking and silence handling">
           <div className="flex flex-col gap-4">
             <Field label={`Interruption sensitivity - ${Math.round(form.interruptionSensitivity * 100)}%`}>
               <input
@@ -673,8 +716,10 @@ function AgentEditorForm({
             </div>
           </div>
         </Panel>
+</TabPane>
 
-        <Panel icon="call" title="Call settings" subtitle="Duration limits">
+        <TabPane tab="conversation" active={tab}>
+<Panel icon="call" title="Call settings" subtitle="Duration limits">
           <NumberField
             label="Max call duration (sec)"
             value={form.maxCallDurationS}
@@ -683,24 +728,30 @@ function AgentEditorForm({
             inputCls={inputCls}
           />
         </Panel>
+</TabPane>
 
-        <Panel icon="data_object" title="Variables" subtitle="Custom {{variable}} names this agent can use, with a fallback value">
+        <TabPane tab="instructions" active={tab}>
+<Panel icon="data_object" title="Variables" subtitle="Custom {{variable}} names this agent can use, with a fallback value">
           <VariablesEditor
             value={form.variables}
             onChange={(v) => set('variables', v)}
             inputCls={inputCls}
           />
         </Panel>
+</TabPane>
 
-        <Panel icon="fact_check" title="Post-call data extraction" subtitle="Pull structured fields from each transcript">
+        <TabPane tab="after" active={tab}>
+<Panel icon="fact_check" title="Post-call data extraction" subtitle="Pull structured fields from each transcript">
           <PostCallFieldsEditor
             value={form.postCallFields}
             onChange={(v) => set('postCallFields', v)}
             inputCls={inputCls}
           />
         </Panel>
+</TabPane>
 
-        <Panel icon="webhook" title="Webhook" subtitle="Send call results to your systems">
+        <TabPane tab="after" active={tab}>
+<Panel icon="webhook" title="Webhook" subtitle="Send call results to your systems">
           <Field label="Webhook URL (blank = none)">
             <input
               value={form.webhookUrl}
@@ -710,8 +761,10 @@ function AgentEditorForm({
             />
           </Field>
         </Panel>
+</TabPane>
 
-        <Panel icon="hub" title="CRM routing" subtitle="Which connected integrations this agent delivers leads to">
+        <TabPane tab="after" active={tab}>
+<Panel icon="hub" title="CRM routing" subtitle="Which connected integrations this agent delivers leads to">
           {connectedIntegrations.length === 0 ? (
             <p className="text-xs text-text-muted">
               No connected integrations yet.{' '}
@@ -750,8 +803,10 @@ function AgentEditorForm({
             </div>
           )}
         </Panel>
+</TabPane>
 
-        <Panel icon="psychology" title="Memory" subtitle="Recognize returning callers">
+        <TabPane tab="tools" active={tab}>
+<Panel icon="psychology" title="Memory" subtitle="Recognize returning callers">
           <Toggle
             checked={form.memoryEnabled}
             onChange={(v) => set('memoryEnabled', v)}
@@ -759,9 +814,10 @@ function AgentEditorForm({
             hint="The agent recalls past conversations with the same caller (matched by phone). Phone and widget calls only - not the anonymous web demo."
           />
         </Panel>
+</TabPane>
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
+      <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t border-border bg-bg/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <button
           onClick={handleDelete}
           className="flex items-center gap-1.5 rounded-lg border border-destructive/40 px-4 py-2 text-sm font-bold text-destructive hover:bg-destructive/10"
@@ -788,6 +844,43 @@ function AgentEditorForm({
       {upgradeMessage && (
         <UpgradeRequiredModal message={upgradeMessage} onClose={() => setUpgradeMessage(null)} />
       )}
+    </div>
+  )
+}
+
+type AgentTab = 'instructions' | 'voice' | 'tools' | 'conversation' | 'after'
+
+const AGENT_TABS: { id: AgentTab; label: string }[] = [
+  { id: 'instructions', label: 'Instructions' },
+  { id: 'voice', label: 'Voice & language' },
+  { id: 'tools', label: 'Knowledge & tools' },
+  { id: 'conversation', label: 'Conversation' },
+  { id: 'after', label: 'After the call' },
+]
+
+/** One section of the editor. Every section stays mounted and only the active one is shown,
+ * so a half-edited field on another tab is never lost and Save always saves the whole agent.
+ * `contents` keeps a field a direct child of its grid. */
+function TabPane({ tab, active, children }: { tab: AgentTab; active: AgentTab; children: ReactNode }) {
+  return <div className={active === tab ? 'contents' : 'hidden'}>{children}</div>
+}
+
+function AgentTabBar({ tab, onChange }: { tab: AgentTab; onChange: (next: AgentTab) => void }) {
+  return (
+    <div role="tablist" aria-label="Agent settings" className="flex w-full min-w-0 gap-1 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {AGENT_TABS.map((item) => (
+        <button
+          key={item.id}
+          role="tab"
+          aria-selected={tab === item.id}
+          onClick={() => onChange(item.id)}
+          className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3.5 py-2.5 text-sm font-semibold transition-colors ${
+            tab === item.id ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text'
+          }`}
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   )
 }
