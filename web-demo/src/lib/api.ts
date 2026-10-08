@@ -89,7 +89,7 @@ export interface AccountEntitlements {
   features: Record<string, boolean>
   /** Recording storage used against the plan's allowance. Absent until the server reports it;
    * limitBytes null means the plan has no limit. */
-  storage?: { usedBytes: number; limitBytes: number | null } | null
+  storage?: { usedBytes: number | null; limitBytes: number | null } | null
 }
 
 export function fetchEntitlements() {

@@ -12,3 +12,4 @@ allowed = _policy.allowed
 account_policy = _policy.account_policy
 require = _policy.require
 validate_agent = _policy.validate_agent
+storage_limit_bytes = _policy.storage_limit_bytes

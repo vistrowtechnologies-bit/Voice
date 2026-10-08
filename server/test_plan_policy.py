@@ -164,3 +164,101 @@ class PolicyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StorageLimitTests(unittest.TestCase):
+    GB = 1024 ** 3
+
+    def test_each_plan_has_a_storage_limit_and_bigger_plans_get_more(self):
+        sizes = [plan_policy.storage_limit_bytes(p) for p in ("starter", "growth", "scale")]
+        self.assertTrue(all(isinstance(s, int) and s > 0 for s in sizes))
+        self.assertEqual(sizes, sorted(sizes))
+        self.assertEqual(sizes[0], 5 * self.GB)
+
+    def test_owner_and_unknown_plans_have_no_limit(self):
+        self.assertIsNone(plan_policy.storage_limit_bytes("starter", owner=True))
+        self.assertIsNone(plan_policy.storage_limit_bytes("mystery"))
+        self.assertIsNone(plan_policy.storage_limit_bytes(""))
+
+    def test_account_policy_reports_the_limit(self):
+        for plan, owner, expected in (("growth", 0, 25 * self.GB), ("starter", 1, None)):
+            conn = MagicMock()
+            conn.execute.return_value.fetchone.return_value = {"plan": plan, "is_platform_owner": owner}
+            self.assertEqual(plan_policy.account_policy(conn, 1)["storageLimitBytes"], expected)
+
+
+class StorageUsageTests(unittest.TestCase):
+    def setUp(self):
+        import storage_usage
+        self.mod = storage_usage
+        self.mod._cache.clear()
+
+    def _client(self, pages):
+        client = MagicMock()
+        client.list_objects_v2.side_effect = pages
+        return client
+
+    def test_sums_every_page_of_the_accounts_prefix(self):
+        client = self._client([
+            {"Contents": [{"Size": 100}, {"Size": 50}], "IsTruncated": True, "NextContinuationToken": "t"},
+            {"Contents": [{"Size": 25}], "IsTruncated": False},
+        ])
+        from unittest.mock import patch
+        with patch.object(self.mod, "b2_client", return_value=(client, "bucket")):
+            self.assertEqual(self.mod.account_storage_bytes(7), 175)
+        first, second = client.list_objects_v2.call_args_list
+        self.assertEqual(first.kwargs["Prefix"], "recordings/7/")
+        self.assertEqual(second.kwargs["ContinuationToken"], "t")
+
+    def test_second_lookup_is_served_from_cache_and_fresh_bypasses_it(self):
+        client = self._client([{"Contents": [{"Size": 10}], "IsTruncated": False}] * 3)
+        from unittest.mock import patch
+        with patch.object(self.mod, "b2_client", return_value=(client, "bucket")):
+            self.mod.account_storage_bytes(7)
+            self.mod.account_storage_bytes(7)
+            self.assertEqual(client.list_objects_v2.call_count, 1)
+            self.mod.account_storage_bytes(7, fresh=True)
+            self.assertEqual(client.list_objects_v2.call_count, 2)
+
+    def test_empty_prefix_is_zero_and_other_accounts_are_separate(self):
+        client = self._client([{"IsTruncated": False}])
+        from unittest.mock import patch
+        with patch.object(self.mod, "b2_client", return_value=(client, "bucket")):
+            self.assertEqual(self.mod.account_storage_bytes(9), 0)
+
+    def test_storage_not_configured_or_failing_returns_none_not_an_error(self):
+        from unittest.mock import patch
+        with patch.object(self.mod, "b2_client", return_value=(None, None)):
+            self.assertIsNone(self.mod.account_storage_bytes(7))
+        client = MagicMock()
+        client.list_objects_v2.side_effect = RuntimeError("b2 down")
+        with patch.object(self.mod, "b2_client", return_value=(client, "bucket")):
+            self.assertIsNone(self.mod.account_storage_bytes(8))
+
+
+class EntitlementsStorageTests(unittest.TestCase):
+    GB = 1024 ** 3
+
+    def _entitlements(self, plan, owner, used):
+        import calls_db
+        from unittest.mock import patch
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = {"plan": plan, "is_platform_owner": owner}
+        with patch.object(calls_db, "_connect", return_value=conn), \
+                patch.object(calls_db.storage_usage, "account_storage_bytes", return_value=used) as reader:
+            return calls_db.account_entitlements(5), reader
+
+    def test_entitlements_carry_usage_and_the_plan_limit(self):
+        result, reader = self._entitlements("starter", 0, 4 * self.GB)
+        self.assertEqual(result["storage"], {"usedBytes": 4 * self.GB, "limitBytes": 5 * self.GB})
+        self.assertNotIn("storageLimitBytes", result)
+        reader.assert_called_once_with(5)
+
+    def test_owner_has_no_limit_and_no_bucket_listing(self):
+        result, reader = self._entitlements("starter", 1, 99)
+        self.assertEqual(result["storage"], {"usedBytes": None, "limitBytes": None})
+        reader.assert_not_called()
+
+    def test_unreadable_usage_is_reported_as_unknown(self):
+        result, _ = self._entitlements("growth", 0, None)
+        self.assertEqual(result["storage"], {"usedBytes": None, "limitBytes": 25 * self.GB})

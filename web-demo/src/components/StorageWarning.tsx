@@ -17,7 +17,7 @@ function formatBytes(bytes: number): string {
  * plan with no storage limit (limitBytes null) or an API that does not report storage
  * yet never shows it. */
 export function StorageWarning({ compact = false }: { compact?: boolean }) {
-  const [storage, setStorage] = useState<{ usedBytes: number; limitBytes: number | null } | null>(null)
+  const [storage, setStorage] = useState<{ usedBytes: number | null; limitBytes: number | null } | null>(null)
 
   useEffect(() => {
     let live = true
@@ -27,7 +27,7 @@ export function StorageWarning({ compact = false }: { compact?: boolean }) {
     return () => { live = false }
   }, [])
 
-  if (!storage || !storage.limitBytes || storage.limitBytes <= 0) return null
+  if (!storage || storage.usedBytes == null || !storage.limitBytes || storage.limitBytes <= 0) return null
   const ratio = storage.usedBytes / storage.limitBytes
   if (ratio < WARN_AT) return null
 

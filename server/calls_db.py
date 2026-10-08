@@ -33,6 +33,7 @@ import dbconn
 import phone_format
 import voice_catalog
 import plan_policy
+import storage_usage
 import campaign_window
 import retry_rules
 from industry_demos import INDUSTRY_DEMOS
@@ -3607,9 +3608,14 @@ def get_account_plan(account_id: int) -> str:
 def account_entitlements(account_id: int) -> dict:
     conn = _connect()
     try:
-        return plan_policy.account_policy(conn, account_id)
+        policy = plan_policy.account_policy(conn, account_id)
     finally:
         conn.close()
+    # Storage is read outside the DB connection: it is a bucket listing, not a query.
+    limit = policy.pop("storageLimitBytes", None)
+    used = storage_usage.account_storage_bytes(account_id) if limit else None
+    policy["storage"] = {"usedBytes": used, "limitBytes": limit}
+    return policy
 
 
 def require_feature(account_id: int, feature: str) -> dict:

@@ -5,10 +5,14 @@ the LiveKit image ships it alongside db.py. Unknown plans fail closed.
 """
 
 PLANS = {
-    "starter": {"price_inr": 2999, "credits": 300, "agents": 1, "concurrency": 5, "knowledge_bases": 1},
-    "growth": {"price_inr": 5999, "credits": 1000, "agents": 5, "concurrency": 15, "knowledge_bases": 5},
-    "scale": {"price_inr": 12999, "credits": 2500, "agents": 20, "concurrency": 30, "knowledge_bases": 15},
+    "starter": {"price_inr": 2999, "credits": 300, "agents": 1, "concurrency": 5, "knowledge_bases": 1, "storage_gb": 5},
+    "growth": {"price_inr": 5999, "credits": 1000, "agents": 5, "concurrency": 15, "knowledge_bases": 5, "storage_gb": 25},
+    "scale": {"price_inr": 12999, "credits": 2500, "agents": 20, "concurrency": 30, "knowledge_bases": 15, "storage_gb": 100},
 }
+# Call-recording storage included in each plan, in GB. PLACEHOLDER amounts: a recording
+# averages about 4 MB (measured on 734 live recordings, Oct 2026), so 5 GB is roughly
+# 1,200 calls. Change the numbers here; the API, the sidebar warning and any gate read
+# them from this one place.
 FEATURE_MIN_PLAN = {
     "campaigns": "growth", "inbound_routing": "growth", "crm": "growth",
     "api": "scale", "premium_voice": "scale", "knowledge": "starter",
@@ -35,6 +39,16 @@ def allowed(plan: str, feature: str, owner: bool = False) -> bool:
     return plan in order and order[plan] >= order[minimum]
 
 
+def storage_limit_bytes(plan: str, owner: bool = False) -> "int | None":
+    """Recording storage a plan includes, in bytes. None means no limit: the platform
+    owner, and any plan name we do not recognise (an unknown plan is not shown a
+    storage warning it could not act on)."""
+    if owner:
+        return None
+    gb = PLANS.get(str(plan or "").lower(), {}).get("storage_gb")
+    return int(gb) * 1024 ** 3 if gb else None
+
+
 def account_policy(conn, account_id: int) -> dict:
     row = conn.execute(
         "SELECT plan, is_platform_owner FROM accounts WHERE id = ?", (account_id,)
@@ -49,6 +63,7 @@ def account_policy(conn, account_id: int) -> dict:
         "agentLimit": None if owner else limits["agents"],
         "concurrentCallLimit": None if owner else limits["concurrency"],
         "knowledgeBaseLimit": None if owner else limits.get("knowledge_bases", 0),
+        "storageLimitBytes": storage_limit_bytes(plan, owner),
         "features": {key: allowed(plan, key, owner) for key in FEATURE_MIN_PLAN},
     }
 
