@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ChannelTabs } from '../components/RouteTabs'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -423,7 +424,7 @@ export function Outbound() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Outbound Campaigns" subtitle={`${campaigns.length} campaign${campaigns.length === 1 ? '' : 's'}`}>
+      <PageHeader title="Channels" subtitle={`${campaigns.length} campaign${campaigns.length === 1 ? '' : 's'}`}>
         {canManage && (
           <button
             onClick={() => {
@@ -442,6 +443,7 @@ export function Outbound() {
           </button>
         )}
       </PageHeader>
+      <ChannelTabs />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="rounded-lg border border-cyan/30 bg-cyan/5 px-4 py-3 text-xs text-cyan">

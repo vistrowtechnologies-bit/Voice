@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ChannelTabs } from '../components/RouteTabs'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -59,7 +60,8 @@ export function PhoneNumbers() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Phone Numbers" subtitle="Connect a provider, add numbers, and route calls to AI agents" />
+      <PageHeader title="Channels" subtitle="Connect a provider, add numbers, and route calls to AI agents" />
+      <ChannelTabs />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row">
         <aside className="flex w-full min-w-0 shrink-0 flex-row gap-2 overflow-x-auto pb-1 lg:w-56 lg:flex-col lg:pb-0">

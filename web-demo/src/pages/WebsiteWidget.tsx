@@ -1,4 +1,5 @@
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
+import { ChannelTabs } from '../components/RouteTabs'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -141,9 +142,10 @@ export function WebsiteWidget() {
   return (
     <DashboardLayout>
       <PageHeader
-        title="Website Widget"
+        title="Channels"
         subtitle="Embed a real-time AI call button on your website"
       />
+      <ChannelTabs />
 
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         {loaded && !backendUrl && (

@@ -4,6 +4,10 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { StorageSettings } from '../components/StorageSettings'
+import { Embedded } from '../components/embedded'
+import { Billing } from './Billing'
+import { Compliance } from './Compliance'
+import { Integrations } from './Integrations'
 import {
   apiInviteMember,
   apiRemoveMember,
@@ -49,7 +53,7 @@ function SettingsCard({ title, subtitle, children }: { title: string; subtitle: 
   )
 }
 
-type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'privacy' | 'team' | 'availability' | 'storage'
+type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'privacy' | 'team' | 'availability' | 'storage' | 'billing' | 'integrations' | 'compliance'
 type TabGroup = { label: string; tabs: { id: Tab; label: string; description: string; icon: string }[] }
 
 const TAB_GROUPS: TabGroup[] = [
@@ -59,7 +63,20 @@ const TAB_GROUPS: TabGroup[] = [
       { id: 'general', label: 'Workspace details', description: 'Company name and linked workspace controls', icon: 'business' },
       { id: 'team', label: 'Team & roles', description: 'Invite people and manage access', icon: 'group' },
       { id: 'availability', label: 'Scheduling', description: 'Business hours, timezone and booking rules', icon: 'event_available' },
+    ],
+  },
+  {
+    label: 'Billing & usage',
+    tabs: [
+      { id: 'billing', label: 'Plan & billing', description: 'Your plan, credits, payments and invoices', icon: 'credit_card' },
       { id: 'storage', label: 'Storage', description: 'Recording storage, cleanup and plan limits', icon: 'inventory_2' },
+    ],
+  },
+  {
+    label: 'Connections',
+    tabs: [
+      { id: 'integrations', label: 'Integrations', description: 'Connect the tools your agents use', icon: 'extension' },
+      { id: 'compliance', label: 'Calling rules', description: 'Calling hours, consent and Do-Not-Call', icon: 'verified_user' },
     ],
   },
   {
@@ -95,11 +112,36 @@ export function Settings() {
     <DashboardLayout>
       <PageHeader title="Settings" subtitle="Manage your account, team, security, and workspace controls." />
 
-      <section className="flex w-full min-w-0 max-w-6xl flex-col gap-5 p-4 sm:p-6">
+      <section className="flex w-full min-w-0 max-w-7xl flex-col gap-5 p-4 sm:p-6 lg:flex-row lg:gap-8">
+        {/* Wide screens: the sections as a grouped list down the left, so the whole map of Settings is visible. */}
+        <nav aria-label="Settings sections" className="hidden w-56 shrink-0 flex-col gap-5 lg:flex">
+          {TAB_GROUPS.map((group) => (
+            <div key={group.label}>
+              <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.13em] text-text-muted">{group.label}</p>
+              <div className="flex flex-col gap-0.5">
+                {group.tabs.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => chooseTab(item.id)}
+                    aria-current={tab === item.id ? 'page' : undefined}
+                    title={item.description}
+                    className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] transition-colors ${
+                      tab === item.id ? 'bg-primary/10 font-semibold text-primary' : 'text-text-muted hover:bg-surface-high hover:text-text'
+                    }`}
+                  >
+                    <Icon name={item.icon} className="shrink-0 text-[17px]" />
+                    <span className="min-w-0 truncate">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+        {/* Phones and tablets: one scrolling row. */}
         <div
           role="tablist"
           aria-label="Settings sections"
-          className="flex w-full min-w-0 gap-1 overflow-x-auto rounded-xl border border-border bg-surface-high/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex w-full min-w-0 gap-1 overflow-x-auto rounded-xl border border-border bg-surface-high/60 p-1 [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden"
         >
           {TABS.map((item) => (
             <button
@@ -117,7 +159,7 @@ export function Settings() {
           ))}
         </div>
 
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           {tab === 'general' && <GeneralTab />}
           {tab === 'profile' && <ProfileTab />}
           {tab === 'security' && <SecurityTab />}
@@ -126,6 +168,9 @@ export function Settings() {
           {tab === 'team' && <TeamTab canManage={hasRole(user, 'admin')} />}
           {tab === 'availability' && <AvailabilityTab canManage={hasRole(user, 'admin')} />}
           {tab === 'storage' && <StorageSettings canManage={hasRole(user, 'admin')} />}
+          {tab === 'billing' && <Embedded><Billing /></Embedded>}
+          {tab === 'integrations' && <Embedded><Integrations /></Embedded>}
+          {tab === 'compliance' && <Embedded><Compliance /></Embedded>}
         </div>
       </section>
     </DashboardLayout>

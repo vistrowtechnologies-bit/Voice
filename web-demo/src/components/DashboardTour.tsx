@@ -28,14 +28,9 @@ const STEPS: TourStep[] = [
     body: 'Upload PDFs or FAQs so agents answer from your own material, not guesses.',
   },
   {
-    selector: '[data-tour="nav-integrations"]',
-    title: 'Connect your tools',
-    body: 'Google Calendar, Slack, WhatsApp, and more - all from here.',
-  },
-  {
     selector: '[data-tour="nav-settings"]',
     title: 'Manage your workspace',
-    body: 'Invite teammates, set roles, configure security, and manage workspace preferences.',
+    body: 'Your plan and invoices, integrations, teammates, calling rules and security all live here.',
   },
   {
     selector: '[data-tour="help-chat"]',

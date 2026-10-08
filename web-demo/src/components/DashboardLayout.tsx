@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { NAV_GROUPS } from './navGroups'
+import { NAV_GROUPS, navItemActive } from './navGroups'
+import { useEmbedded } from './embedded'
 import { CommandMenuButton, CommandPalette } from './CommandPalette'
 import { NotificationBell } from './NotificationBell'
 import type { ReactNode } from 'react'
@@ -311,7 +312,7 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
         )}
       </div>
       <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 min-w-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto pb-3 [scrollbar-color:var(--color-border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
-        {NAV_GROUPS.filter((group) => !group.pinned).map((group) => group.standalone ? (
+        {NAV_GROUPS.filter((group) => !group.pinned && !group.paletteOnly).map((group) => group.standalone ? (
           <div key={group.title} className={group.showHeading ? 'mb-0.5' : 'mb-1.5 border-b border-border pb-2'}>
             {group.showHeading && <p className="mb-0.5 px-3 pt-1.5 text-[10px] font-bold tracking-[0.13em] text-text-muted">{group.title}</p>}
             {group.items.map((item) => <NavLink
@@ -320,11 +321,11 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
               end={item.to === '/dashboard'}
               onClick={onNavigate}
               data-tour={item.tour}
-              className={({ isActive }) => `flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${isActive ? 'bg-primary/10 font-semibold text-primary shadow-[inset_3px_0_0_var(--color-primary)]' : 'text-text-muted hover:bg-surface-high hover:text-text'}`}
+              className={() => `flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${navItemActive(item, location.pathname) ? 'bg-primary/10 font-semibold text-primary shadow-[inset_3px_0_0_var(--color-primary)]' : 'text-text-muted hover:bg-surface-high hover:text-text'}`}
             >
-              <Icon name={item.icon} className={`shrink-0 text-[18px] ${location.pathname === item.to ? 'text-primary' : 'text-text-muted'}`} />
+              <Icon name={item.icon} className={`shrink-0 text-[18px] ${navItemActive(item, location.pathname) ? 'text-primary' : 'text-text-muted'}`} />
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {location.pathname === item.to && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+              {navItemActive(item, location.pathname) && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
             </NavLink>)}
           </div>
         ) : (
@@ -379,9 +380,10 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
 function SidebarRail({ onExpand }: { onExpand: () => void }) {
   const { user } = useAuth()
   const workspace = user?.accountName || BRAND.defaultWorkspace
-  const railLink = ({ isActive }: { isActive: boolean }) =>
+  const location = useLocation()
+  const railLink = (active: boolean) =>
     `flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
-      isActive ? 'bg-primary/10 text-primary' : 'text-text-muted hover:bg-surface-high hover:text-text'
+      active ? 'bg-primary/10 text-primary' : 'text-text-muted hover:bg-surface-high hover:text-text'
     }`
 
   return (
@@ -395,7 +397,7 @@ function SidebarRail({ onExpand }: { onExpand: () => void }) {
         <Icon name="left_panel_open" className="text-[20px]" />
       </button></Tooltip>
       <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 flex-1 flex-col items-center gap-0.5 overflow-y-auto border-t border-border pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {NAV_GROUPS.filter((group) => !group.pinned).map((group, index) => (
+        {NAV_GROUPS.filter((group) => !group.pinned && !group.paletteOnly).map((group, index) => (
           <div key={group.title} className={`flex flex-col items-center gap-0.5 ${index ? 'mt-1.5 border-t border-border pt-1.5' : ''}`}>
             {group.items.map((item) => (
               <Tooltip key={item.to} side="right" content={item.label}><NavLink
@@ -403,7 +405,7 @@ function SidebarRail({ onExpand }: { onExpand: () => void }) {
                 end={item.to === '/dashboard'}
                 aria-label={item.label}
                 data-tour={item.tour}
-                className={railLink}
+                className={railLink(navItemActive(item, location.pathname))}
               >
                 <Icon name={item.icon} className="text-[19px]" />
               </NavLink></Tooltip>
@@ -433,7 +435,7 @@ function SidebarRail({ onExpand }: { onExpand: () => void }) {
   )
 }
 
-export function PageHeader({
+function FullPageHeader({
   title,
   subtitle,
   children,
@@ -505,6 +507,22 @@ export function PageHeader({
   )
 }
 
+type PageHeaderProps = { title: string; subtitle?: string; children?: ReactNode; refreshSignal?: number }
+
+/** The page title bar. Inside a Settings tab the tab itself is the title, so only the page's own
+ * action buttons and its one-line description are kept. */
+export function PageHeader(props: PageHeaderProps) {
+  const embedded = useEmbedded()
+  if (!embedded) return <FullPageHeader {...props} />
+  if (!props.subtitle && !props.children) return null
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      {props.subtitle && <p className="min-w-0 flex-1 text-sm text-text-muted">{props.subtitle}</p>}
+      {props.children && <div className="flex flex-wrap items-center gap-2">{props.children}</div>}
+    </div>
+  )
+}
+
 /** Sticky red bar shown to the platform owner while inside a tenant's account
  * via "View as". Exiting restores the owner's own session and returns to /admin. */
 function ImpersonationBanner({ accountName }: { accountName: string }) {
@@ -528,7 +546,7 @@ function ImpersonationBanner({ accountName }: { accountName: string }) {
   )
 }
 
-export function DashboardLayout({ children }: { children: ReactNode }) {
+function FullDashboardLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -649,4 +667,11 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {user && <HelpChatWidget />}
     </div>
   )
+}
+
+/** The dashboard shell: sidebar, header, content. Inside a Settings tab (see Embedded) the page
+ * is drawn without it, because Settings already provides the shell. */
+export function DashboardLayout({ children }: { children: ReactNode }) {
+  const embedded = useEmbedded()
+  return embedded ? <>{children}</> : <FullDashboardLayout>{children}</FullDashboardLayout>
 }
