@@ -11,7 +11,6 @@ import { BRAND } from '../lib/brand'
 import { adminExitImpersonation, takeSupportReturn } from '../lib/adminApi'
 import { initClarity, stopClarityForStaff, tagClarityAccount } from '../lib/analytics'
 import { useAuth } from '../lib/auth'
-import { helpTopicFor } from '../lib/support'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { DashboardTour } from './DashboardTour'
 import { HelpChatWidget } from './HelpChatWidget'
@@ -449,8 +448,6 @@ function FullPageHeader({
 }) {
   const [credits, setCredits] = useState<number | null>(null)
   const { pathname } = useLocation()
-  // Each page links to the help-centre topic that explains it.
-  const helpTopic = helpTopicFor(pathname)
   // Agent creation belongs to the Agents page. Showing it on the overview
   // duplicated Quick actions and displaced dashboard-specific controls.
   const showNewAgent = pathname === '/dashboard/agents'
@@ -470,27 +467,15 @@ function FullPageHeader({
       <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 xl:w-auto">
         <CommandMenuButton />
         {credits !== null && (
-          <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted">
+          <Tooltip content="Plan, credits and invoices"><Link
+            to="/dashboard/settings?tab=billing"
+            aria-label={`${credits} credits remaining. Open plan and billing`}
+            className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
+          >
             <Icon name="toll" className="text-[15px] text-cyan" />
             {credits} credits
-          </span>
-        )}
-        {helpTopic && (
-          <Tooltip content="Help for this page"><Link
-            to={`/dashboard/support?topic=${helpTopic}`}
-            aria-label="Help for this page"
-            className="flex h-10 items-center gap-1 rounded-full border border-border bg-surface px-3 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary sm:h-8"
-          >
-            <Icon name="help" className="text-[17px]" /> Help
           </Link></Tooltip>
         )}
-        <Tooltip content="Settings"><Link
-          to="/dashboard/settings"
-          aria-label="Settings"
-          className="flex h-10 w-10 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-high hover:text-text sm:h-9 sm:w-9"
-        >
-          <Icon name="settings" className="text-[22px]" />
-        </Link></Tooltip>
         <NotificationBell />
         <HeaderAvatarMenu />
         {children}
