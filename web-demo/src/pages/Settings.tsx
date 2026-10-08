@@ -39,6 +39,7 @@ import {
 import { fetchAvailabilitySettings, formatDateTime, updateAvailabilitySettings } from '../lib/api'
 import type { AvailabilityConfig } from '../lib/types'
 import { COUNTRY_OPTIONS, countryName, dialCodeFor } from '../lib/phone'
+import { PREFS_CHANGED_EVENT, desktopAlertsSupported, playChime, requestDesktopPermission, showDesktopAlert } from '../lib/alerts'
 
 function SettingsCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
@@ -602,6 +603,7 @@ function PreferencesTab() {
     try {
       const updated = await apiUpdateProfilePreferences(next)
       setPrefs(updated)
+      window.dispatchEvent(new Event(PREFS_CHANGED_EVENT))
       window.localStorage.setItem('vv-timezone', updated.timezone || 'UTC')
       setMessage('Preferences saved.')
     }
@@ -611,8 +613,19 @@ function PreferencesTab() {
     }
     finally { setSaving(false) }
   }
+  const [desktopPermission, setDesktopPermission] = useState<NotificationPermission>(desktopAlertsSupported() ? Notification.permission : 'denied')
+  // Turning pop-ups on asks the browser first; if the person says no, the switch stays off.
+  const togglePopups = async (on: boolean) => {
+    if (!prefs) return
+    if (on) {
+      const result = await requestDesktopPermission()
+      setDesktopPermission(result)
+      if (result !== 'granted') { setMessage('Pop-ups need your browser’s permission. Nothing was changed.'); return }
+    }
+    void save({ ...prefs, desktop_popups: on })
+  }
   if (!prefs) return <SettingsCard title="Preferences" subtitle="Personal dashboard settings."><p className="text-xs text-text-muted">Loading…</p></SettingsCard>
-  const Toggle = ({ field, label, description }: { field: 'notify_leads' | 'notify_calls' | 'notify_billing' | 'notify_product'; label: string; description: string }) => (
+  const Toggle = ({ field, label, description }: { field: 'notify_leads' | 'notify_calls' | 'notify_billing' | 'notify_product' | 'bell_calls' | 'bell_appointments' | 'notify_sound'; label: string; description: string }) => (
     <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border px-3 py-2.5">
       <span><span className="block text-sm font-semibold">{label}</span><span className="block text-xs text-text-muted">{description}</span></span>
       <input type="checkbox" checked={prefs[field]} disabled={saving} onChange={(e) => save({ ...prefs, [field]: e.target.checked })} className="h-4 w-4 accent-primary disabled:opacity-50" />
@@ -628,6 +641,27 @@ function PreferencesTab() {
     </SettingsCard>
     <SettingsCard title="Notifications" subtitle="Choose the operational emails you receive personally.">
       <div className="flex flex-col gap-2"><Toggle field="notify_leads" label="Qualified leads" description="An email when your agents capture new leads, grouped every couple of minutes." /><Toggle field="notify_calls" label="Delivery issues" description="When a connected CRM or integration stops receiving your leads." /><Toggle field="notify_billing" label="Low credits" description="When your call credits drop below 10% of your allocation." /></div>
+    </SettingsCard>
+    <SettingsCard title="In the dashboard" subtitle="What the bell at the top shows you, and how it gets your attention. Alerts about credits, payments, storage and failures always show.">
+      <div className="flex flex-col gap-2">
+        <Toggle field="bell_calls" label="New calls" description="Website widget, web and inbound phone calls as they come in." />
+        <Toggle field="bell_appointments" label="New bookings" description="When your agent books an appointment." />
+        <Toggle field="notify_sound" label="Play a sound" description="A soft chime when something new arrives while the dashboard is open." />
+        <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border px-3 py-2.5">
+          <span>
+            <span className="block text-sm font-semibold">Pop-up on this computer</span>
+            <span className="block text-xs text-text-muted">
+              {!desktopAlertsSupported()
+                ? 'This browser does not support pop-up notifications.'
+                : desktopPermission === 'denied'
+                  ? 'Blocked in your browser settings for this site. Allow notifications there, then switch this on.'
+                  : 'A system notification when something arrives while you are in another tab or app.'}
+            </span>
+          </span>
+          <input type="checkbox" checked={prefs.desktop_popups} disabled={saving || !desktopAlertsSupported() || desktopPermission === 'denied'} onChange={(e) => togglePopups(e.target.checked)} className="h-4 w-4 accent-primary disabled:opacity-50" />
+        </label>
+        <button type="button" onClick={() => { if (prefs.notify_sound) playChime(); showDesktopAlert('Vistrow Voice', 'This is how a new call will look.', 'vv-test') }} className="self-start rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted hover:border-primary hover:text-primary">Send a test</button>
+      </div>
     </SettingsCard>
     {message && <p className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text-muted">{message}</p>}
   </div>

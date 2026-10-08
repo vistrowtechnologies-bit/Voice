@@ -110,6 +110,10 @@ export interface UserPreferences {
   notify_product: boolean
   dashboard_checklist_dismissed: boolean
   dashboard_hidden_cards: string
+  bell_calls: boolean
+  bell_appointments: boolean
+  desktop_popups: boolean
+  notify_sound: boolean
 }
 export const apiProfilePreferences = () => authFetch<UserPreferences>('/profile/preferences')
 export const apiUpdateProfilePreferences = (data: Partial<UserPreferences>) => authFetch<UserPreferences>('/profile/preferences', data, 'PATCH')

@@ -134,11 +134,21 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
   // each time - search already matches on phone (see calls_db.list_calls).
   useEffect(() => {
     setHistory(null)
-    if (!call?.phone) return
-    fetchCalls({ search: call.phone })
-      .then((calls) => setHistory(calls.filter((c) => c.id !== call.id)))
+    if (!call) return
+    // Web and dashboard-test calls have no phone number; the call list groups those by the
+    // caller's name, so this tab does too. With neither, there is nothing to match on - show
+    // the empty state rather than a spinner that never ends.
+    const key = call.phone || call.name
+    if (!key || !key.trim()) {
+      setHistory([])
+      return
+    }
+    fetchCalls({ search: key })
+      .then((calls) =>
+        setHistory(calls.filter((c) => c.id !== call.id && (call.phone ? true : c.name === call.name && !c.phone))),
+      )
       .catch(() => setHistory([]))
-  }, [call?.phone, call?.id])
+  }, [call?.phone, call?.name, call?.id])
 
   const filteredHistory = useMemo(() => {
     if (!history) return []
@@ -376,7 +386,7 @@ export function LeadDetail({ callId, onClose }: { callId?: string; onClose: () =
                 <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
               </div>
             ) : history.length === 0 ? (
-              <EmptyState icon="history" text="No other calls from this phone number yet." compact />
+              <EmptyState icon="history" text="No other calls from this caller yet." compact />
             ) : filteredHistory.length === 0 ? (
               <EmptyState icon="search_off" text={`No calls match "${historySearch}".`} compact />
             ) : (

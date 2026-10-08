@@ -427,9 +427,10 @@ export const fetchOrchestratorBrowserToken = (agentId: number) =>
 export const fetchIntegrations = () => get<Integration[]>('/integrations')
 
 // Derived server-side from live data on every read, so a notification can
-// never disagree with the page it links to. There is no mark-read endpoint
-// by design - dismissals are per-browser, see NotificationBell.
+// never disagree with the page it links to. What a person has read is stored per user.
 export const fetchNotifications = () => get<AppNotification[]>('/notifications')
+/** Mark notifications read for this person; it follows them across browsers. */
+export const dismissNotifications = (ids: string[]) => send<{ dismissed: number }>('POST', '/notifications/dismiss', { ids })
 export const updateIntegration = (key: string, status: string, config: Record<string, string>, name?: string) =>
   send('PATCH', `/integrations/${key}`, { status, config, name })
 export const testIntegration = (key: string) =>

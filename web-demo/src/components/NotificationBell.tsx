@@ -1,34 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Icon } from './Icon'
-import { fetchNotifications } from '../lib/api'
+import { dismissNotifications, fetchNotifications } from '../lib/api'
+import { PREFS_CHANGED_EVENT, playChime, showDesktopAlert } from '../lib/alerts'
+import { apiProfilePreferences } from '../lib/auth'
+import type { UserPreferences } from '../lib/auth'
 import type { AppNotification } from '../lib/types'
-
-// The feed itself is derived server-side and never stored, so "I dismissed
-// this" has nowhere on the server to live. Keeping it here is a deliberate
-// trade: dismissal is per-browser, but the VALUES in a notification can
-// never drift from the page they link to - which is the failure mode a
-// stored feed invites (Agni's header and dashboard disagree on credits).
-const DISMISSED_KEY = 'vistrow.notifications.dismissed'
-
-function readDismissed(): string[] {
-  try {
-    const raw = localStorage.getItem(DISMISSED_KEY)
-    return raw ? (JSON.parse(raw) as string[]) : []
-  } catch {
-    return []
-  }
-}
-
-function writeDismissed(ids: string[]): void {
-  try {
-    // Bounded so a long-lived browser cannot grow this without limit; ids
-    // are content-derived, so an evicted one simply reappears once.
-    localStorage.setItem(DISMISSED_KEY, JSON.stringify(ids.slice(-200)))
-  } catch {
-    /* private mode / quota - dismissal just won't persist */
-  }
-}
 
 const SEVERITY_STYLE: Record<AppNotification['severity'], { dot: string; icon: string }> = {
   critical: { dot: 'bg-destructive', icon: 'error' },
@@ -60,15 +37,53 @@ export function NotificationBell() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<AppNotification[]>([])
-  const [dismissed, setDismissed] = useState<string[]>(readDismissed)
+  // Read on the server per person; this only bridges the gap until the next refresh.
+  const [dismissed, setDismissed] = useState<string[]>([])
   const wrapRef = useRef<HTMLDivElement>(null)
+  const prefsRef = useRef<Pick<UserPreferences, 'desktop_popups' | 'notify_sound'> | null>(null)
+  // Ids already announced. null until the first load so opening the dashboard never chimes
+  // for things that were already waiting.
+  const announced = useRef<Set<string> | null>(null)
+
+  useEffect(() => {
+    const loadPrefs = () =>
+      apiProfilePreferences()
+        .then((p) => {
+          prefsRef.current = p
+        })
+        .catch(() => {})
+    loadPrefs()
+    window.addEventListener(PREFS_CHANGED_EVENT, loadPrefs)
+    return () => window.removeEventListener(PREFS_CHANGED_EVENT, loadPrefs)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
+    const announce = (fresh: AppNotification[]) => {
+      const seen = announced.current
+      announced.current = new Set(fresh.map((n) => n.id))
+      if (!seen) return
+      const added = fresh.filter((n) => !seen.has(n.id))
+      if (!added.length) return
+      const prefs = prefsRef.current
+      if (prefs?.notify_sound) playChime()
+      // A pop-up is for when you are looking at something else; in the foreground the bell is enough.
+      if (prefs?.desktop_popups && document.visibilityState === 'hidden') {
+        const first = added[0]
+        showDesktopAlert(
+          added.length > 1 ? `${added.length} new notifications` : first.title,
+          added.length > 1 ? added.map((n) => n.title).slice(0, 3).join('\n') : first.body,
+          first.id,
+          () => navigate(first.to),
+        )
+      }
+    }
     const load = () =>
       fetchNotifications()
         .then((n) => {
-          if (!cancelled) setItems(n)
+          if (cancelled) return
+          announce(n)
+          setItems(n)
         })
         .catch(() => {
           /* the bell is ambient - a failed poll must never surface an error */
@@ -103,17 +118,15 @@ export function NotificationBell() {
 
   const visible = items.filter((i) => !dismissed.includes(i.id))
 
-  const dismiss = (id: string) => {
-    const next = [...dismissed, id]
-    setDismissed(next)
-    writeDismissed(next)
+  const markRead = (ids: string[]) => {
+    setDismissed((d) => [...d, ...ids])
+    dismissNotifications(ids).catch(() => {
+      // Saving failed: show them again rather than pretend they were read.
+      setDismissed((d) => d.filter((x) => !ids.includes(x)))
+    })
   }
-
-  const dismissAll = () => {
-    const next = [...dismissed, ...visible.map((i) => i.id)]
-    setDismissed(next)
-    writeDismissed(next)
-  }
+  const dismiss = (id: string) => markRead([id])
+  const dismissAll = () => markRead(visible.map((i) => i.id))
 
   return (
     <div ref={wrapRef} className="relative">
@@ -158,7 +171,9 @@ export function NotificationBell() {
                     <button
                       type="button"
                       onClick={() => {
+                        // Opening it is reading it; land on the exact call, booking or setting.
                         setOpen(false)
+                        markRead([n.id])
                         navigate(n.to)
                       }}
                       className="min-w-0 flex-1 text-left"

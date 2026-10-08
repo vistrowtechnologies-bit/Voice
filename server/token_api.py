@@ -1788,6 +1788,10 @@ class PreferencesRequest(BaseModel):
     notify_product: bool | None = None
     dashboard_checklist_dismissed: bool | None = None
     dashboard_hidden_cards: str | None = None
+    bell_calls: bool | None = None
+    bell_appointments: bool | None = None
+    desktop_popups: bool | None = None
+    notify_sound: bool | None = None
 
 
 @app.get("/profile/preferences")
@@ -4470,10 +4474,18 @@ def enablex_outbound_test_event(request: Request, event: dict = Body(...)) -> di
 
 @app.get("/notifications")
 def notifications(user: dict = Depends(current_user)) -> list[dict]:
-    """Derived on every read, never stored - see calls_db.notifications for
-    why. Read-only, so there is no matching mark-read/dismiss route: the
-    frontend remembers dismissals locally."""
-    return calls_db.notifications(user["account_id"])
+    """Derived on every read - see calls_db.notifications for why. What a person has
+    already read is stored per user, so it follows them across browsers and devices."""
+    return calls_db.notifications(user["account_id"], user["user_id"])
+
+
+class DismissNotificationsRequest(BaseModel):
+    ids: list[str] = PydanticField(max_length=100)
+
+
+@app.post("/notifications/dismiss")
+def dismiss_notifications(req: DismissNotificationsRequest, user: dict = Depends(current_user)) -> dict:
+    return {"dismissed": calls_db.dismiss_notifications(user["user_id"], req.ids)}
 
 
 @app.get("/billing/summary")

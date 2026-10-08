@@ -352,7 +352,21 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     notify_product INTEGER DEFAULT 0,
     dashboard_checklist_dismissed INTEGER DEFAULT 0,
     dashboard_hidden_cards TEXT DEFAULT '[]',
+    -- What the notification bell shows this person, and whether it also pops up / pings.
+    bell_calls INTEGER DEFAULT 1,
+    bell_appointments INTEGER DEFAULT 1,
+    desktop_popups INTEGER DEFAULT 0,
+    notify_sound INTEGER DEFAULT 0,
     updated_at TEXT DEFAULT {_NOW}
+);
+
+-- "I have read this" for the notification bell, per person (not per browser).
+-- Notification ids are content-derived, so a new occurrence is a new id.
+CREATE TABLE IF NOT EXISTS notification_dismissals (
+    user_id INTEGER NOT NULL,
+    notif_id TEXT NOT NULL,
+    created_at TEXT DEFAULT {_NOW},
+    PRIMARY KEY (user_id, notif_id)
 );
 
 -- Security/audit events shown to the user in Settings. We log coarse device
@@ -1423,6 +1437,8 @@ def init_tables() -> None:
             conn.execute(
                 "ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS dashboard_hidden_cards TEXT DEFAULT '[]'"
             )
+            for _col, _default in (("bell_calls", 1), ("bell_appointments", 1), ("desktop_popups", 0), ("notify_sound", 0)):
+                conn.execute(f"ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS {_col} INTEGER DEFAULT {_default}")
             # Surfaces *why* a live-call delivery to an integration failed
             # (e.g. "invalid token — reconnect") without flipping status away
             # from 'connected' — the operator's saved config is still good,
@@ -2037,6 +2053,10 @@ def get_user_preferences(user_id: int) -> dict:
             "notify_billing",
             "notify_product",
             "dashboard_checklist_dismissed",
+            "bell_calls",
+            "bell_appointments",
+            "desktop_popups",
+            "notify_sound",
         ):
             if key in result:
                 result[key] = bool(result[key])
@@ -2055,6 +2075,10 @@ def update_user_preferences(user_id: int, values: dict) -> dict:
         "notify_product",
         "dashboard_checklist_dismissed",
         "dashboard_hidden_cards",
+        "bell_calls",
+        "bell_appointments",
+        "desktop_popups",
+        "notify_sound",
     }
     updates = {key: value for key, value in values.items() if key in allowed and value is not None}
     # These columns predate Postgres and intentionally remain INTEGER 0/1.
@@ -2067,6 +2091,10 @@ def update_user_preferences(user_id: int, values: dict) -> dict:
         "notify_billing",
         "notify_product",
         "dashboard_checklist_dismissed",
+        "bell_calls",
+        "bell_appointments",
+        "desktop_popups",
+        "notify_sound",
     ):
         if key in updates:
             updates[key] = int(bool(updates[key]))
@@ -7984,7 +8012,7 @@ def billing_summary(account_id: int) -> dict:
         conn.close()
 
 
-def notifications(account_id: int) -> list[dict]:
+def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
     """The account's current attention list, DERIVED on every read from the
     same tables the rest of the dashboard renders - never stored.
 
@@ -8051,6 +8079,35 @@ def notifications(account_id: int) -> list[dict]:
                 })
     except Exception:
         logger.warning("notifications: credits section failed for account %s", account_id, exc_info=True)
+
+    # --- recording storage ---------------------------------------------
+    # Same cached bucket total the sidebar warning uses, so this never scans on its own cadence.
+    try:
+        import storage_usage
+
+        limit = (account_entitlements(account_id).get("storage") or {}).get("limitBytes")
+        used = storage_usage.account_storage_bytes(account_id) if limit else None
+        if limit and used is not None:
+            pct = used / limit * 100
+            if pct >= 100:
+                key, sev, title = "full", "critical", "Recording storage is full"
+                body = "New recordings may not be saved. Free up space or move to a larger plan."
+            elif pct >= 80:
+                key, sev, title = "80", "warning", "Recording storage is almost full"
+                body = f"{pct:.0f}% of your plan's storage is used."
+            else:
+                key = None
+            if key:
+                items.append({
+                    "id": f"storage:{key}",
+                    "severity": sev,
+                    "title": title,
+                    "body": body,
+                    "to": "/dashboard/settings?tab=storage",
+                    "at": None,
+                })
+    except Exception:
+        logger.warning("notifications: storage section failed for account %s", account_id, exc_info=True)
 
     conn = _connect()
     try:
@@ -8223,6 +8280,37 @@ def notifications(account_id: int) -> list[dict]:
         except psycopg.Error:
             logger.warning("notifications: campaigns section failed", exc_info=True)
 
+        # --- failed payments -----------------------------------------------
+        try:
+            sub_row = conn.execute(
+                "SELECT status, current_period_end FROM subscriptions WHERE account_id = ?", (account_id,)
+            ).fetchone()
+            if sub_row and sub_row["status"] == "halted":
+                items.append({
+                    "id": f"payment-halted:{(sub_row['current_period_end'] or '')[:10]}",
+                    "severity": "critical",
+                    "title": "Subscription payment failed",
+                    "body": "Your plan was paused after repeated failed charges. Update your payment method to restore it.",
+                    "to": "/dashboard/settings?tab=billing",
+                    "at": None,
+                })
+            for r in conn.execute(
+                "SELECT id, amount_inr, created_at FROM invoices WHERE account_id = ? AND status = 'failed' "
+                "AND created_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '3 days' "
+                "ORDER BY id DESC LIMIT 3",
+                (account_id,),
+            ).fetchall():
+                items.append({
+                    "id": f"payment-failed:{r['id']}",
+                    "severity": "warning",
+                    "title": f"Payment of ₹{float(r['amount_inr']):,.0f} failed",
+                    "body": "The charge did not go through. Nothing was added to your account; you can try again.",
+                    "to": "/dashboard/settings?tab=billing",
+                    "at": r["created_at"],
+                })
+        except psycopg.Error:
+            logger.warning("notifications: payments section failed", exc_info=True)
+
         # --- what just happened: calls and bookings in the last 48h ------
         # The "someone used our widget" signal. Real calls only (no test
         # runs), and not outbound ones: a campaign dials hundreds and would
@@ -8249,7 +8337,7 @@ def notifications(account_id: int) -> list[dict]:
                     "severity": "info",
                     "title": f"New {kind} call" + (f" from {who}" if who else ""),
                     "body": f"{took} conversation" + (" - lead captured" if r["lead_name"] else ""),
-                    "to": "/dashboard/calls",
+                    "to": f"/dashboard/calls/{r['id']}",
                     "at": r["started_at"],
                     "kind": "call",
                 })
@@ -8269,7 +8357,7 @@ def notifications(account_id: int) -> list[dict]:
                     "severity": "info",
                     "title": f"Appointment booked: {r['contact_name']}",
                     "body": f"{r['appt_date']} at {r['start_time']}",
-                    "to": "/dashboard/appointments",
+                    "to": f"/dashboard/appointments?date={r['appt_date']}&id={r['id']}",
                     "at": r["created_at"],
                     "kind": "appointment",
                 })
@@ -8278,11 +8366,62 @@ def notifications(account_id: int) -> list[dict]:
     finally:
         conn.close()
 
+    if user_id is not None:
+        items = _filter_notifications_for_user(items, user_id)
+
     # Newest first within each severity (sort is stable).
     items.sort(key=lambda i: i.get("at") or "", reverse=True)
     order = {"critical": 0, "warning": 1, "info": 2}
     items.sort(key=lambda i: order.get(i["severity"], 3))
     return items
+
+
+def _filter_notifications_for_user(items: list[dict], user_id: int) -> list[dict]:
+    """Drop what this person already read, and the activity kinds they switched off in
+    Settings -> Preferences. System alerts (credits, payments, storage, failures) cannot be
+    switched off."""
+    conn = _connect()
+    try:
+        read = {r["notif_id"] for r in conn.execute(
+            "SELECT notif_id FROM notification_dismissals WHERE user_id = ?", (user_id,)
+        ).fetchall()}
+        prefs = conn.execute(
+            "SELECT bell_calls, bell_appointments FROM user_preferences WHERE user_id = ?", (user_id,)
+        ).fetchone()
+    except psycopg.Error:
+        logger.warning("notifications: could not read per-user state", exc_info=True)
+        return items
+    finally:
+        conn.close()
+    hidden_kinds = set()
+    if prefs:
+        if prefs["bell_calls"] == 0:
+            hidden_kinds.add("call")
+        if prefs["bell_appointments"] == 0:
+            hidden_kinds.add("appointment")
+    return [i for i in items if i["id"] not in read and i.get("kind") not in hidden_kinds]
+
+
+def dismiss_notifications(user_id: int, ids: list[str]) -> int:
+    ids = [i[:200] for i in ids if isinstance(i, str) and i][:100]
+    if not ids:
+        return 0
+    conn = _connect()
+    try:
+        with conn:
+            for i in ids:
+                conn.execute(
+                    "INSERT INTO notification_dismissals (user_id, notif_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                    (user_id, i),
+                )
+            # Old ids stop being derivable (the problem is gone), so keep the table small.
+            conn.execute(
+                f"DELETE FROM notification_dismissals WHERE user_id = ? AND created_at::timestamp < now() - INTERVAL '30 days'",
+                (user_id,),
+            )
+        return len(ids)
+    finally:
+        conn.close()
 
 
 def add_topup_credits(account_id: int, credits: int) -> None:
