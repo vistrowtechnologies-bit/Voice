@@ -20,7 +20,6 @@ import {
 } from '../lib/api'
 import {
   AMBIENT_NOISE_OPTIONS,
-  EMOTION_INTENSITIES,
   LANGUAGES,
   isRealtimeModel,
   modelOptionsFor,
@@ -304,7 +303,7 @@ function AgentEditorForm({
             />
           </Field>
 </TabPane>
-          <TabPane tab="tools" active={tab}>
+          <TabPane tab="instructions" active={tab}>
 <Field
             label="Model"
             hint={
@@ -388,22 +387,7 @@ function AgentEditorForm({
             </select>
           </Field>
 </TabPane>
-          <TabPane tab="voice" active={tab}>
-<Field
-            label="Speech recognition"
-            hint="Recognition, reasoning, and voice are tested separately. Google Chirp 3 recognition is pinned to the default language; Vistrow Indic is better suited to Indian names and code-mixed speech."
-          >
-            <select
-              value={form.sttProvider}
-              onChange={(e) => set('sttProvider', e.target.value as AgentForm['sttProvider'])}
-              className={inputCls}
-            >
-              <option value="sarvam">Vistrow Indic — recommended for Indian languages</option>
-              <option value="google-chirp3">Google Chirp 3 — comparison / fixed language</option>
-            </select>
-          </Field>
-</TabPane>
-          <TabPane tab="voice" active={tab}>
+                    <TabPane tab="voice" active={tab}>
 <Field label="Voice delivery">
             <select value={form.tone} onChange={(e) => set('tone', e.target.value as AgentForm['tone'])} className={inputCls}>
               {TONES.map((t) => (
@@ -414,26 +398,7 @@ function AgentEditorForm({
             </select>
           </Field>
 </TabPane>
-          <TabPane tab="voice" active={tab}>
-<Field
-            label="Emotion intensity"
-            hint="Adaptive delivery is available on expressive multilingual voices. Other voices keep their configured delivery. This responds to conversation wording, not a measurement of vocal emotion."
-          >
-            <select
-              disabled={!form.voice.startsWith('google:') && !form.voice.startsWith('google31:') && !form.voice.startsWith('google38:') && !form.voice.startsWith('google38flash:') || form.voice.startsWith('google:chirp3:')}
-              value={form.emotionIntensity}
-              onChange={(e) => set('emotionIntensity', e.target.value as AgentForm['emotionIntensity'])}
-              className={inputCls}
-            >
-              {EMOTION_INTENSITIES.map((i) => (
-                <option key={i.value} value={i.value}>
-                  {i.label} - {i.description}
-                </option>
-              ))}
-            </select>
-          </Field>
-</TabPane>
-          <TabPane tab="conversation" active={tab}>
+                    <TabPane tab="conversation" active={tab}>
 <Field
             label="Caller noise suppression"
             hint="Filters background noise out of the caller's audio before transcription. If callers say they spoke but the transcript is empty, set this to Off."
@@ -463,23 +428,27 @@ function AgentEditorForm({
             </select>
           </Field>
 </TabPane>
-          {/* Full-width rather than one grid cell: the sound picker, its
-              preview button, and the volume slider need more room than the
-              half-width column gives, and a row this much taller than its
-              neighbor would throw off the two-column grid's alignment the
-              same way the paragraph hints used to (see Field's hint prop). */}
+          {/* One control instead of two stacked fields: the sound, its preview button
+              and the volume sit on one row, so what you pick and how loud it is are
+              read together. Volume stays visible but disabled when the sound is Off, so
+              the layout does not jump. */}
           <TabPane tab="voice" active={tab}>
-<div className="flex flex-col gap-3 sm:col-span-2">
-            <Field label="Background ambience">
+<div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-high/40 p-3 sm:col-span-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Background sound</span>
+              <span className="text-[11px] text-text-muted">What the caller hears behind the agent</span>
+            </div>
+            <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
               <div className="flex items-center gap-2">
                 <select
+                  aria-label="Background sound"
                   value={form.ambientNoise}
                   onChange={(e) => set('ambientNoise', e.target.value as AgentForm['ambientNoise'])}
                   className={inputCls}
                 >
                   {AMBIENT_NOISE_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
-                      {o.label} - {o.description}
+                      {o.label}
                     </option>
                   ))}
                 </select>
@@ -488,20 +457,25 @@ function AgentEditorForm({
                   volume={form.ambientVolume}
                 />
               </div>
-            </Field>
-            {form.ambientNoise !== 'off' && (
-              <Field label={`Background volume - ${Math.round(form.ambientVolume * 100)}%`}>
+              <label className={`flex items-center gap-3 ${form.ambientNoise === 'off' ? 'opacity-40' : ''}`}>
+                <span className="text-xs font-semibold text-text-muted">Volume</span>
                 <input
                   type="range"
+                  aria-label="Background volume"
                   min={0}
                   max={1}
                   step={0.05}
+                  disabled={form.ambientNoise === 'off'}
                   value={form.ambientVolume}
                   onChange={(e) => set('ambientVolume', Number(e.target.value))}
                   className="w-full accent-primary"
                 />
-              </Field>
-            )}
+                <span className="w-10 text-right text-xs tabular-nums text-text-muted">{Math.round(form.ambientVolume * 100)}%</span>
+              </label>
+            </div>
+            <p className="text-[11px] leading-snug text-text-muted">
+              {AMBIENT_NOISE_OPTIONS.find((o) => o.value === form.ambientNoise)?.description ?? ''}
+            </p>
           </div>
 </TabPane>
         </div>
