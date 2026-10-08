@@ -66,6 +66,7 @@ import transfer_intent
 import jev_intent
 import ringback
 import turn_latency
+import realtime_prompt
 import sarvam_realtime_stt
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
@@ -3696,6 +3697,14 @@ class RealEstateAgent(Agent):
         _model_name = config.get("model") or "gpt-4.1-mini"
         self._is_realtime = _model_name.startswith(_GEMINI_LIVE_PREFIX)
         if self._is_realtime:
+            # The assembled instruction is written for a separate TTS voice and runs to
+            # ~35,000 characters that Google re-bills every turn. Reshape it for a
+            # speech-to-speech model (see realtime_prompt.py) and drop the language tool
+            # the dropped sections told the agent to call.
+            instructions = realtime_prompt.compact(
+                instructions, language_name=LANGUAGE_NAMES.get(reply_language, "Hindi")
+            )
+            agent_tools = [t for t in agent_tools if t is not switch_reply_language]
             # A RealtimeModel IS the whole pipeline, so stt and tts are
             # passed as None — handing them over would have the framework
             # build a Sarvam stream and a Chirp 3 stream that never receive
@@ -4225,7 +4234,9 @@ class RealEstateAgent(Agent):
             # can work around instead of text it must utter.
             _opener = (self._welcome_message or "").strip()
             _greet = (
-                "Greet the caller now, in one short warm line, then stop and let them reply."
+                f"Greet the caller now in {LANGUAGE_NAMES.get(getattr(self, '_reply_language', '') or '', 'Hindi')}, "
+                "in one short warm line, then stop and let them reply. The caller has not spoken yet, "
+                "so do not apologise and do not ask them to repeat anything."
             )
             if _opener:
                 _greet += f" Open with this line, or as close to it as reads naturally: {_opener}"
