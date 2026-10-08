@@ -36,9 +36,25 @@ const SEVERITY_STYLE: Record<AppNotification['severity'], { dot: string; icon: s
   info: { dot: 'bg-primary', icon: 'info' },
 }
 
-// Long enough that it is never a load concern, short enough that a credit
-// warning appears within a working session without a manual refresh.
-const POLL_MS = 120_000
+// A call or booking should show up while someone is watching the dashboard, so poll every
+// 30s while the tab is visible (hidden tabs skip the request) and refetch the moment the
+// person comes back to the tab.
+const POLL_MS = 30_000
+
+function ago(iso: string | null): string {
+  if (!iso) return ''
+  // Server timestamps are UTC; some carry no zone suffix.
+  const t = Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso.replace(' ', 'T')}Z`)
+  if (Number.isNaN(t)) return ''
+  const mins = Math.max(0, Math.round((Date.now() - t) / 60000))
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins} min ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs} h ago`
+  return `${Math.round(hrs / 24)} d ago`
+}
+
+const KIND_ICON: Record<string, string> = { call: 'call', appointment: 'event' }
 
 export function NotificationBell() {
   const navigate = useNavigate()
@@ -57,11 +73,16 @@ export function NotificationBell() {
         .catch(() => {
           /* the bell is ambient - a failed poll must never surface an error */
         })
+    const loadIfVisible = () => {
+      if (document.visibilityState === 'visible') load()
+    }
     load()
-    const t = setInterval(load, POLL_MS)
+    const t = setInterval(loadIfVisible, POLL_MS)
+    document.addEventListener('visibilitychange', loadIfVisible)
     return () => {
       cancelled = true
       clearInterval(t)
+      document.removeEventListener('visibilitychange', loadIfVisible)
     }
   }, [])
 
@@ -112,24 +133,28 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="fixed inset-x-4 top-28 z-40 overflow-hidden rounded-xl border border-border bg-surface shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[min(22rem,calc(100vw-2rem))]">
+        <div className="fixed inset-x-4 top-28 z-40 overflow-hidden rounded-xl border border-border bg-surface shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[min(24rem,calc(100vw-2rem))]">
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-            <p className="text-xs font-bold uppercase tracking-widest text-text-muted">Attention</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-text-muted">Notifications</p>
             {visible.length > 0 && (
               <button type="button" onClick={dismissAll} className="text-[11px] text-text-muted hover:text-text">
-                Dismiss all
+                Mark all read
               </button>
             )}
           </div>
 
           {visible.length === 0 ? (
-            <p className="px-3 py-8 text-center text-sm text-text-muted">Nothing needs your attention.</p>
+            <p className="px-3 py-8 text-center text-sm text-text-muted">You're all caught up. New calls, bookings and alerts show up here.</p>
           ) : (
             <ul className="max-h-[60vh] overflow-y-auto">
               {visible.map((n) => (
                 <li key={n.id} className="border-b border-border last:border-0">
                   <div className="flex items-start gap-2.5 px-3 py-2.5">
-                    <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${SEVERITY_STYLE[n.severity].dot}`} />
+                    {n.kind ? (
+                      <Icon name={KIND_ICON[n.kind]} className="mt-0.5 shrink-0 text-[17px] text-primary" />
+                    ) : (
+                      <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${SEVERITY_STYLE[n.severity].dot}`} />
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -139,7 +164,8 @@ export function NotificationBell() {
                       className="min-w-0 flex-1 text-left"
                     >
                       <p className="text-sm font-medium text-text">{n.title}</p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-text-muted">{n.body}</p>
+                      <p className="mt-0.5 text-[12px] leading-relaxed text-text-muted">{n.body}</p>
+                      {n.at && <p className="mt-0.5 text-[11px] text-text-muted/80">{ago(n.at)}</p>}
                     </button>
                     <button
                       type="button"

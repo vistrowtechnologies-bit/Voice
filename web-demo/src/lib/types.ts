@@ -717,6 +717,8 @@ export interface AppNotification {
   body: string
   to: string
   at: string | null
+  /** Activity items ('call', 'appointment') get their own icon; attention items leave it unset. */
+  kind?: 'call' | 'appointment'
 }
 
 export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed'

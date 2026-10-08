@@ -8222,9 +8222,64 @@ def notifications(account_id: int) -> list[dict]:
                 })
         except psycopg.Error:
             logger.warning("notifications: campaigns section failed", exc_info=True)
+
+        # --- what just happened: calls and bookings in the last 48h ------
+        # The "someone used our widget" signal. Real calls only (no test
+        # runs), and not outbound ones: a campaign dials hundreds and would
+        # bury everything else, while the person who just called in is the
+        # one worth a nudge. Keyed by call id, so each is its own item and
+        # dismissing one never hides the next.
+        try:
+            labels = {"widget": "website widget", "browser": "web", "phone": "phone"}
+            for r in conn.execute(
+                "SELECT id, started_at, duration_seconds, call_type, lead_name, lead_phone, visitor_identity "
+                "FROM calls WHERE account_id = ? AND COALESCE(test_run_id, '') = '' "
+                "AND COALESCE(direction, '') <> 'outbound' "
+                "AND COALESCE(duration_seconds, 0) >= 10 "
+                "AND started_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '48 hours' "
+                "ORDER BY started_at DESC LIMIT 8",
+                (account_id,),
+            ).fetchall():
+                who = r["lead_name"] or r["lead_phone"] or ""
+                secs = int(r["duration_seconds"] or 0)
+                took = f"{secs // 60}m {secs % 60:02d}s" if secs >= 60 else f"{secs}s"
+                kind = labels.get(r["call_type"] or "browser", "web")
+                items.append({
+                    "id": f"call:{r['id']}",
+                    "severity": "info",
+                    "title": f"New {kind} call" + (f" from {who}" if who else ""),
+                    "body": f"{took} conversation" + (" - lead captured" if r["lead_name"] else ""),
+                    "to": "/dashboard/calls",
+                    "at": r["started_at"],
+                    "kind": "call",
+                })
+        except psycopg.Error:
+            logger.warning("notifications: recent-calls section failed", exc_info=True)
+
+        try:
+            for r in conn.execute(
+                "SELECT id, contact_name, appt_date, start_time, created_at FROM appointments "
+                "WHERE account_id = ? AND source = 'agent' AND status = 'confirmed' "
+                "AND created_at::timestamp >= (now() AT TIME ZONE 'UTC') - INTERVAL '48 hours' "
+                "ORDER BY id DESC LIMIT 5",
+                (account_id,),
+            ).fetchall():
+                items.append({
+                    "id": f"appointment:{r['id']}",
+                    "severity": "info",
+                    "title": f"Appointment booked: {r['contact_name']}",
+                    "body": f"{r['appt_date']} at {r['start_time']}",
+                    "to": "/dashboard/appointments",
+                    "at": r["created_at"],
+                    "kind": "appointment",
+                })
+        except psycopg.Error:
+            logger.warning("notifications: appointments section failed", exc_info=True)
     finally:
         conn.close()
 
+    # Newest first within each severity (sort is stable).
+    items.sort(key=lambda i: i.get("at") or "", reverse=True)
     order = {"critical": 0, "warning": 1, "info": 2}
     items.sort(key=lambda i: order.get(i["severity"], 3))
     return items
