@@ -314,8 +314,8 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
       </div>
       <nav aria-label="Main navigation" data-clarity-unmask="true" className="flex min-h-0 min-w-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto pb-3 [scrollbar-color:var(--color-border)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
         {NAV_GROUPS.filter((group) => !group.pinned && !group.paletteOnly).map((group) => group.standalone ? (
-          <div key={group.title} className={group.showHeading ? 'mb-0.5' : 'mb-1.5 border-b border-border pb-2'}>
-            {group.showHeading && <p className="mb-0.5 px-3 pt-1.5 text-[11px] font-bold tracking-[0.12em] text-text-muted">{group.title}</p>}
+          <div key={group.title} className={group.showHeading ? 'mb-3' : 'mb-3 border-b border-border pb-3'}>
+            {group.showHeading && <p className="mb-1.5 px-3 pt-2 text-[11px] font-bold tracking-[0.12em] text-text-muted">{group.title}</p>}
             {group.items.map((item) => <NavLink
               key={item.to}
               to={item.to}
@@ -330,7 +330,7 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
             </NavLink>)}
           </div>
         ) : (
-          <div key={group.title} className="rounded-xl">
+          <div key={group.title} className="mb-3 rounded-xl">
             <button type="button" aria-expanded={expandedGroups.has(group.title)} onClick={() => toggleGroup(group.title)} className="group flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-1.5 text-left text-[13px] font-semibold text-text transition-colors hover:bg-surface-high">
               <Icon name={groupIcons[group.title] || 'apps'} className="shrink-0 text-[21px] text-text-muted transition-colors group-hover:text-primary" />
               <span className="min-w-0 flex-1 truncate">{group.title}</span>
