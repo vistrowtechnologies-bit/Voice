@@ -193,10 +193,16 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
 // backwards.
 export const MODEL_OPTIONS = [
   { value: 'sarvam/sarvam-105b-conversations', label: 'Vistrow Bharat', tag: 'Recommended · fastest, built for Indian languages' },
-  { value: 'gpt-4.1-mini', label: 'Vistrow Swift', tag: 'Most accurate in testing' },
-  { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite', tag: 'Same accuracy as Swift, a touch faster' },
-  { value: 'gpt-4o-mini', label: 'Vistrow Standard', tag: 'Half the credits · slightly less accurate' },
+  { value: 'gpt-4.1-mini', label: 'Vistrow Swift', tag: 'Most accurate in testing · best for English' },
 ] as const
+// 2026-10-08: only the models that pass the speed and accuracy bar are offered.
+// Measured on production calls (docs/INTERNATIONAL-EXPANSION-PLAN-2026-10-07.md
+// section 8.1): Sarvam 105B answers in about 0.5 s, gpt-4.1-mini in about 1.1 s.
+// gpt-4o-mini is slower and less accurate than 4.1-mini, and gemini-3.5-flash-lite
+// has no measured production calls and depends on the Gemini API balance. They
+// stay in RETIRED_MODELS below so existing agents keep their label and keep
+// working; the editor shows them as the current value until the operator picks
+// one of the offered models.
 // Groq was listed here on its published time-to-first-token — 120-180ms
 // against gpt-4.1-mini's ~1,000ms — and removed on 2026-09-07 when the two
 // production calls that had actually run it were finally looked at:
@@ -321,6 +327,8 @@ const RETIRED_MODELS = [
   { value: 'gpt-4.1', label: 'Vistrow Prime' },
   { value: 'gpt-4o', label: 'Vistrow Pro' },
   { value: 'gemini-3.6-flash', label: 'Vistrow Flash' },
+  { value: 'gpt-4o-mini', label: 'Vistrow Standard' },
+  { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite' },
 ] as const
 
 export const modelLabel = (value: string) =>

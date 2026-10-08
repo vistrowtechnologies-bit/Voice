@@ -24,6 +24,7 @@ import {
   LANGUAGES,
   isRealtimeModel,
   modelOptionsFor,
+  modelLabel,
   NOISE_CANCELLATION_OPTIONS,
   TONES,
   voiceLabel,
@@ -318,6 +319,9 @@ function AgentEditorForm({
                   {m.label} - {m.tag}
                 </option>
               ))}
+              {!modelOptionsFor(isPlatformOwner).some((m) => m.value === form.model) && form.model && (
+                <option value={form.model}>{modelLabel(form.model)} - no longer offered, pick a model above</option>
+              )}
             </select>
           </Field>
 </TabPane>

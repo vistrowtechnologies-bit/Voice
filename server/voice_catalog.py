@@ -336,7 +336,16 @@ def sample_text(lang: str, gender: str | None = None) -> str | None:
 # 2026-10-06: ElevenLabs is hidden entirely (menu, catalogue and agent picker).
 # The Voices page was 13,000 px tall and no live agent uses one; agents that
 # already point at an "elevenlabs:" voice still resolve it for calls and billing.
-_HIDDEN_VOICE_PREFIXES = ("elevenlabs-v3:", "elevenlabs:")
+_HIDDEN_VOICE_PREFIXES = ("elevenlabs-v3:", "elevenlabs:", "google31:")
+
+# 2026-10-08: voices that failed the speed or quality bar on real calls are not
+# offered either (docs/INTERNATIONAL-EXPANSION-PLAN-2026-10-07.md section 8.1):
+#   - the two multilingual "google:kore" / "google:charon" voices: about 0.93 s to
+#     the first sound, five times Chirp 3 HD;
+#   - the locale "Standard" family (e.g. google:hi-IN-Standard-A): audible distortion
+#     and no transcription on call 885 (see web-demo agentOptions).
+# Agents already using one keep working: get_voice() and billing still resolve them.
+_HIDDEN_VOICES_EXACT = frozenset({"google:kore", "google:charon"})
 
 
 # Which languages a voice can actually SPEAK, and whether it can switch
@@ -490,7 +499,13 @@ def languages_for(entry: dict) -> tuple[list[str], bool]:
 
 def is_hidden(value: str) -> bool:
     """Whether this voice should be withheld from voice pickers."""
-    return bool(value) and value.startswith(_HIDDEN_VOICE_PREFIXES)
+    if not value:
+        return False
+    return (
+        value.startswith(_HIDDEN_VOICE_PREFIXES)
+        or value in _HIDDEN_VOICES_EXACT
+        or (value.startswith("google:") and "-Standard-" in value)
+    )
 
 
 def get_voice(value: str) -> dict | None:
