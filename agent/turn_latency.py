@@ -48,6 +48,10 @@ class TurnLatencyMeter:
             self._speaking = True
             self._pending_stop = None  # the caller resumed: only the last stop counts
 
+    def voice_age(self, now: float):
+        """Seconds since the caller's audio was last above the speech gate, or None if never."""
+        return None if self._last_loud is None else max(0.0, now - self._last_loud)
+
     def agent_started(self, now: float):
         """Latency in ms for the reply that just started, or None if no clean turn."""
         if self._speaking:

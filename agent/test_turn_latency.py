@@ -57,3 +57,17 @@ class TurnLatency(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VoiceAge(unittest.TestCase):
+    def test_none_before_any_voice(self):
+        m = TurnLatencyMeter()
+        run(m, 0.0, 1.0, 0.003)
+        self.assertIsNone(m.voice_age(1.0))
+
+    def test_age_counts_from_the_last_loud_frame(self):
+        m = TurnLatencyMeter()
+        run(m, 0.0, 2.0, 0.1)
+        run(m, 2.0, 6.0, 0.003)
+        age = m.voice_age(6.0)
+        self.assertTrue(4.0 <= age <= 4.1, age)

@@ -6883,6 +6883,11 @@ async def entrypoint(ctx: JobContext) -> None:
         async def _watch() -> None:
             try:
                 await asyncio.sleep(end_call_on_silence_ms / 1000)
+                _m = userdata.get("turn_meter")
+                _age = _m.voice_age(time.monotonic()) if _m is not None else None
+                if _age is not None and _age < end_call_on_silence_ms / 1000:
+                    logger.info("caller audio heard %.1fs ago — silence hang-up skipped", _age)
+                    return
                 logger.info("hanging up room %s after %dms of silence", ctx.room.name, end_call_on_silence_ms)
                 await _hang_up(ctx.room.name)
             except asyncio.CancelledError:
@@ -6918,6 +6923,16 @@ async def entrypoint(ctx: JobContext) -> None:
                 await asyncio.sleep(_POST_CHECKIN_TIMEOUT_S)
                 if userdata.get("ending_call"):
                     return  # a goodbye is already being spoken (e.g. the time-limit wrap-up); don't talk over it
+                # Speech-to-speech: "the caller spoke" normally comes from the model's own
+                # detector, and Gemini Live can miss a phone caller entirely (calls 1129 and
+                # 1135 ended with "I can't hear you" while the caller was talking). Our own
+                # audio meter hears the line directly, so it has the last word.
+                _m = userdata.get("turn_meter")
+                _age = _m.voice_age(time.monotonic()) if _m is not None else None
+                if _age is not None and _age < _POST_CHECKIN_TIMEOUT_S:
+                    logger.info("caller audio heard %.1fs ago — not ending the call as silent", _age)
+                    userdata["post_checkin_pending"] = False
+                    return
                 logger.info("hanging up room %s — silent after check-in", ctx.room.name)
                 userdata["ending_call"] = True
                 session.generate_reply(
@@ -7191,6 +7206,11 @@ async def entrypoint(ctx: JobContext) -> None:
         elif ev.new_state != "away":
             _reset_silence_hangup()
         elif ev.new_state == "away":
+            _m = userdata.get("turn_meter")
+            _age = _m.voice_age(time.monotonic()) if _m is not None else None
+            if _age is not None and _age < 8.0:
+                logger.info("model reported the caller away but audio was heard %.1fs ago — ignoring", _age)
+                return
             if not userdata.get("greeting_played", False):
                 # Away fired before the opening line finished playing (slow
                 # cold start / TTS) — not real caller silence, ignore it.
