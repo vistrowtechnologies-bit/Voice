@@ -49,6 +49,31 @@ class ItConstructs(unittest.TestCase):
         main.RealEstateAgent(dict(BASE))
 
 
+class RealtimeIgnoresThePipeline(unittest.TestCase):
+    """A speech-to-speech model must not build or touch any STT/TTS leg."""
+
+    def setUp(self):
+        os.environ["GEMINI_API_KEY"] = os.environ.get("GEMINI_API_KEY") or "test-key-not-used-offline"
+
+    def _agent(self, model):
+        cfg = dict(BASE, model=model, voice="google:chirp3:Aoede")
+        return main.RealEstateAgent(cfg, call_type="widget")
+
+    def test_no_tts_is_built(self):
+        for model in ("gemini-live", "gemini-live:gemini-3.1-flash-live-preview"):
+            a = self._agent(model)
+            self.assertTrue(a._is_realtime)
+            self.assertIsNone(a.tts)
+            self.assertIsNone(a.stt)
+            self.assertEqual(a._tts_provider, "realtime")
+
+    def test_pipeline_agent_is_unchanged(self):
+        a = main.RealEstateAgent(dict(BASE), call_type="widget")
+        self.assertFalse(a._is_realtime)
+        self.assertIsNotNone(a.tts)
+        self.assertNotEqual(a._tts_provider, "realtime")
+
+
 class TheChannelReachesTheStt(unittest.TestCase):
     """Sarvam's per-channel VAD silence: 500ms telephony, 300ms browser."""
 

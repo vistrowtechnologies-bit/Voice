@@ -3641,7 +3641,10 @@ class RealEstateAgent(Agent):
         # built for the numbers, and caller_tail for why it is not mid-prompt.
         instructions += caller_tail
         instructions += date_instruction
-        if voice_value.startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)):
+        # A speech-to-speech model has no TTS, so everything below that shapes
+        # a TTS voice (3.8 style hints, the TTS client itself) is skipped.
+        _rt_selected = (config.get("model") or "").startswith(_GEMINI_LIVE_PREFIX)
+        if not _rt_selected and voice_value.startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)):
             # The Gemini persona's short descriptor should shape what the
             # LLM says as well as how TTS renders it. The agent's explicit
             # Tone setting and business/system instructions remain primary.
@@ -3675,11 +3678,14 @@ class RealEstateAgent(Agent):
                 "the general no-formatting instruction above.\n"
             )
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
-        tts, tts_provider = _build_tts(
-            reply_language, voice_value, base_tone, tone_name,
-            is_phone=(call_type or "") == "phone",
-            sarvam_latency_lab=self._sarvam_latency_lab,
-        )
+        if _rt_selected:
+            tts, tts_provider = None, "realtime"
+        else:
+            tts, tts_provider = _build_tts(
+                reply_language, voice_value, base_tone, tone_name,
+                is_phone=(call_type or "") == "phone",
+                sarvam_latency_lab=self._sarvam_latency_lab,
+            )
         # Make an explicit voice selection observable in LiveKit logs. This
         # lets us distinguish "the widget loaded a different agent config"
         # from an actual TTS-provider failure without exposing credentials or
@@ -4525,6 +4531,13 @@ class RealEstateAgent(Agent):
             _userdata["ending_call"] = False
             _userdata["ending_call_from_tool"] = False
             logger.info("caller kept talking after end_call — cancelling the pending hang-up: %r", (text or "")[:80])
+        if self._is_realtime:
+            # Everything below steers the STT -> LLM -> TTS pipeline: per-turn
+            # system directives, the garbled-turn guard, emotion/tone pushed
+            # into the TTS, and language-switch detection that rewrites TTS
+            # options. A speech-to-speech model has none of those legs (self.tts
+            # is None) and takes its language and tone from its own prompt.
+            return
         # Close out the turn's end-of-turn predictions (see
         # _record_eot_probability). The last prediction of a turn is the one
         # the framework acted on; if it escalated, nobody spoke again and the
@@ -6660,11 +6673,16 @@ async def entrypoint(ctx: JobContext) -> None:
     # fallback attempt, same as today.
     emergency_fallback_number = (cfg.get("emergency_fallback_number") or "").strip()
 
+    # Gemini Live decides end-of-speech, barge-in and speech itself, so the
+    # pipeline's endpointing, interruption, preemptive-generation and TTS
+    # text-transform settings below are not given to it at all - a realtime
+    # call gets the framework defaults for those and nothing tuned for STT/LLM/TTS.
+    _rt_call = bool(getattr(agent, "_is_realtime", False))
     session = AgentSession(
         # LiveKit's expressive pipeline asks the LLM for provider-native
         # emotion/nonverbal markers. Our Gemini adapter lowers those markers
         # to 3.8 inline vocal tags (e.g. <laugh>) and speech_metadata.style.
-        expressive=(cfg.get("voice") or "").startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)),
+        expressive=(not _rt_call) and (cfg.get("voice") or "").startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)),
         # Their guide calls this out for telephony specifically. Acoustic echo
         # cancellation warmup exists for an open mic and speaker in a room; a
         # phone line has no acoustic path to cancel, so the 3s default is
@@ -6686,12 +6704,12 @@ async def entrypoint(ctx: JobContext) -> None:
         # LiveKit's own built-in transform (livekit.agents.voice.
         # transcription.filters.filter_markdown), not hand-rolled - already
         # buffers correctly across split ** markers mid-stream.
-        tts_text_transforms=[
+        tts_text_transforms=[] if _rt_call else [
             "filter_markdown",
             _make_repeated_opener_transform(agent),
             _make_caller_gender_guard_transform(agent),
         ],
-        turn_handling=TurnHandlingOptions(
+        turn_handling=TurnHandlingOptions() if _rt_call else TurnHandlingOptions(
             interruption={
                 "min_words": min_words,
                 # min_words alone is language-asymmetric and cut real callers
