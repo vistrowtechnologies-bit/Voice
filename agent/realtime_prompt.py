@@ -33,10 +33,14 @@ _DROP = (
 
 _TURN_STYLE = (
     "# How to talk\n"
-    "You are on a live phone call, so listen more than you talk. One sentence per turn by default, "
+    "You are in a live voice conversation, so listen more than you talk. One sentence per turn by default, "
     "two at most, under about 35 spoken words. Ask one question at a time, then stop and let them answer. "
     "React briefly to what they actually said, then answer directly. If they start speaking, stop at once. "
     "Never repeat their words back to them, and never end every answer with \"anything else?\".\n"
+    "Background sounds, echo, silence, and <noise> are not caller requests. Wait quietly for clear speech; "
+    "do not apologise, ask for a repeat, or invent an answer because of noise alone. "
+    "Greet once when asked to open the conversation. Do not repeat the greeting later. "
+    "If interrupted, answer the caller's new request rather than restarting the previous reply.\n"
 )
 
 _LANGUAGE_TOOL_LINE = (
@@ -82,13 +86,13 @@ def compact(instructions: str, *, language_name: str, kb_limit: int = 6000) -> s
             rest.append(_trim_kb(p, kb_limit))
         else:
             rest.append(p)
-    if rules:
-        # Nobody has spoken on the opening turn, so there is nothing to "not catch".
-        rules = rules.replace(
-            "If a message is garbled",
-            "Once the caller has spoken, if a message is garbled",
-            1,
-        )
     ordered = [x for x in (identity, language_directive(language_name), rules) if x] + rest + [_TURN_STYLE]
     out = "\n".join(p.rstrip("\n") + "\n" for p in ordered)
+    # This rule exists in BOTH Platform rules and Only state back what they
+    # actually said. Qualifying just the first copy leaves an unconditional
+    # apology instruction in the model's system prompt on the opening turn.
+    out = out.replace(
+        "If a message is garbled",
+        "Only after a genuine spoken caller request (never noise or silence), if a message is garbled",
+    )
     return out.strip() + "\n"

@@ -41,7 +41,18 @@ class Compact(unittest.TestCase):
         self.assertIn("RESPOND IN HINDI. YOU MUST RESPOND UNMISTAKABLY IN HINDI", self.out)
 
     def test_first_turn_is_exempt_from_the_did_not_catch_rule(self):
-        self.assertIn("Once the caller has spoken, if a message is garbled", self.out)
+        self.assertIn("Only after a genuine spoken caller request (never noise or silence), if a message is garbled", self.out)
+
+    def test_duplicate_garbled_rule_is_also_qualified(self):
+        instructions = SAMPLE + "\n# Only state back what they actually said\nIf a message is garbled, ask for a repeat.\n"
+        out = rp.compact(instructions, language_name="Hindi")
+        self.assertEqual(out.count("Only after a genuine spoken caller request"), 2)
+        self.assertNotIn("If a message is garbled", out)
+
+    def test_noise_is_not_a_request_and_opening_is_once(self):
+        self.assertIn("<noise> are not caller requests", self.out)
+        self.assertIn("Greet once", self.out)
+        self.assertIn("rather than restarting the previous reply", self.out)
 
     def test_knowledge_base_is_cut_on_a_whole_answer(self):
         self.assertIn("Q: one", self.out)
