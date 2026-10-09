@@ -388,7 +388,7 @@ function AgentEditorForm({
           </Field>
 </TabPane>
                     <TabPane tab="voice" active={tab}>
-<Field label="Voice delivery">
+{isRealtimeModel(form.model) ? null : <Field label="Voice delivery">
             <select value={form.tone} onChange={(e) => set('tone', e.target.value as AgentForm['tone'])} className={inputCls}>
               {TONES.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -396,7 +396,7 @@ function AgentEditorForm({
                 </option>
               ))}
             </select>
-          </Field>
+          </Field>}
 </TabPane>
                     <TabPane tab="conversation" active={tab}>
 <Field
@@ -655,6 +655,7 @@ function AgentEditorForm({
         <TabPane tab="conversation" active={tab}>
 <Panel icon="graphic_eq" title="Speech settings" subtitle="Turn-taking and silence handling">
           <div className="flex flex-col gap-4">
+{!isRealtimeModel(form.model) && (
             <Field label={`Interruption sensitivity - ${Math.round(form.interruptionSensitivity * 100)}%`}>
               <input
                 type="range"
@@ -670,6 +671,13 @@ function AgentEditorForm({
                 brief noise and finishes its sentence.
               </span>
             </Field>
+)}
+{isRealtimeModel(form.model) && (
+            <p className="text-xs text-text-muted">
+              This agent uses a realtime model, which decides on its own when the caller has finished speaking and
+              handles interruptions itself, so interruption sensitivity does not apply.
+            </p>
+)}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <NumberField
                 label="Silence check-in after (sec)"
