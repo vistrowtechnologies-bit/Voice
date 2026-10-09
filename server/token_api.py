@@ -4304,6 +4304,9 @@ def _verify_enablex_webhook(request: Request) -> bool:
     return secrets.compare_digest(got_user, expected_user) and secrets.compare_digest(got_pass, expected_pass)
 
 
+_ENABLEX_BRIDGED_VOICE_IDS: set = set()
+
+
 @app.post("/telephony/enablex/inbound-event")
 async def enablex_inbound_event(request: Request, background_tasks: BackgroundTasks) -> dict:
     """Webhook EnableX calls for inbound-call lifecycle events.
@@ -4398,8 +4401,26 @@ async def enablex_inbound_event(request: Request, background_tasks: BackgroundTa
         logger.info("EnableX inbound call %s ended: state=%s", voice_id, state)
         return {"ok": True}
 
-    if state != "incomingcall" or not voice_id or not dialed_number:
+    # Fallback: EnableX has been seen answering an inbound call itself and
+    # sending only initiated/connected (no 'incomingcall') — nobody then
+    # bridges it and it drops after ~25 s. A connected event whose `to` is
+    # one of our DIDs is an inbound leg, so bridge it once per voice_id.
+    is_inbound_connected = (
+        state == "connected"
+        and voice_id
+        and dialed_number
+        and voice_id not in _ENABLEX_BRIDGED_VOICE_IDS
+        and calls_db.get_phone_number_by_number(dialed_number) is not None
+    )
+    if is_inbound_connected:
+        _ENABLEX_BRIDGED_VOICE_IDS.add(voice_id)
+        if len(_ENABLEX_BRIDGED_VOICE_IDS) > 500:
+            _ENABLEX_BRIDGED_VOICE_IDS.clear()
+        logger.warning("EnableX inbound %s: 'connected' with no 'incomingcall' — bridging as a fallback", voice_id)
+    elif state != "incomingcall" or not voice_id or not dialed_number:
         return {"ok": True}
+    else:
+        _ENABLEX_BRIDGED_VOICE_IDS.add(voice_id)
 
     number_row = calls_db.get_phone_number_by_number(dialed_number)
     if number_row is None:
