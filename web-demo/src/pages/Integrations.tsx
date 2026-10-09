@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
-import { facebookIntegrationStartUrl, fetchAgents, fetchArthaleadsInboundConfig, fetchIntegrations, fetchKnowledgeBases, fetchLeadWebhook, fetchPhoneNumbers, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateArthaleadsInboundConfig, updateIntegration, zohoIntegrationStartUrl } from '../lib/api'
-import type { ArthaleadsInboundConfig } from '../lib/api'
+import { facebookIntegrationStartUrl, fetchAgents, fetchArthaleadsInboundConfig, fetchArthaleadsPickerOptions, fetchIntegrations, fetchKnowledgeBases, fetchLeadWebhook, fetchPhoneNumbers, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateArthaleadsInboundConfig, updateIntegration, zohoIntegrationStartUrl } from '../lib/api'
+import type { ArthaleadsInboundConfig, ArthaleadsPickerOptions } from '../lib/api'
 import type { AgentConfig, Integration, KnowledgeBase, PhoneNumber } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import arthaleadsIcon from '../assets/arthaleads-logo.png'
@@ -50,6 +50,13 @@ const CONNECT_HINT: Record<string, string> = {
   sheets: 'Paste a Google Apps Script web-app URL that appends the lead JSON as a row.',
 }
 
+type ArthaleadsRouteOption = {
+  kind: 'project' | 'facebook_campaign' | 'whatsapp_ad'
+  id: string
+  name: string
+  detail?: string
+}
+
 export function Integrations() {
   const { user } = useAuth()
   const canManage = hasRole(user, 'admin')
@@ -69,6 +76,9 @@ export function Integrations() {
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([])
   const [inboundSaving, setInboundSaving] = useState(false)
   const [inboundMessage, setInboundMessage] = useState('')
+  const [arthaleadsPickerOptions, setArthaleadsPickerOptions] = useState<ArthaleadsPickerOptions | null>(null)
+  const [arthaleadsPickerLoading, setArthaleadsPickerLoading] = useState(false)
+  const [arthaleadsPickerError, setArthaleadsPickerError] = useState('')
 
   const reload = () => fetchIntegrations().then((list) => setIntegrations(sortIntegrations(list))).catch(() => setIntegrations([]))
 
@@ -81,12 +91,62 @@ export function Integrations() {
     fetchPhoneNumbers().then(setPhoneNumbers).catch(() => setPhoneNumbers([]))
   }, [])
 
+  useEffect(() => {
+    const isConnected = integrations.some((integration) => integration.key === 'arthaleads' && integration.status === 'connected')
+    if (!canManage || !isConnected) {
+      setArthaleadsPickerOptions(null)
+      setArthaleadsPickerError('')
+      setArthaleadsPickerLoading(false)
+      return
+    }
+    setArthaleadsPickerLoading(true)
+    setArthaleadsPickerError('')
+    fetchArthaleadsPickerOptions()
+      .then(setArthaleadsPickerOptions)
+      .catch((error) => setArthaleadsPickerError(error instanceof Error ? error.message : 'Could not load ArthaLeads projects.'))
+      .finally(() => setArthaleadsPickerLoading(false))
+  }, [canManage, integrations])
+
+  const refreshArthaleadsOptions = async () => {
+    setArthaleadsPickerLoading(true)
+    setArthaleadsPickerError('')
+    try {
+      setArthaleadsPickerOptions(await fetchArthaleadsPickerOptions())
+    } catch (error) {
+      setArthaleadsPickerError(error instanceof Error ? error.message : 'Could not load ArthaLeads projects.')
+    } finally {
+      setArthaleadsPickerLoading(false)
+    }
+  }
+
+  const optionsForRoute = (source: 'website' | 'facebook' | 'whatsapp'): ArthaleadsRouteOption[] => {
+    if (!arthaleadsPickerOptions || source === 'website') return []
+    const projects: ArthaleadsRouteOption[] = arthaleadsPickerOptions.projects.map((project) => ({
+      kind: 'project', id: project.id, name: project.name, detail: project.location,
+    }))
+    const campaignSource = source === 'facebook' ? 'facebook_campaign' : 'whatsapp_ad'
+    const campaigns: ArthaleadsRouteOption[] = arthaleadsPickerOptions.campaigns
+      .filter((campaign) => campaign.source === campaignSource)
+      .map((campaign) => ({ kind: campaignSource, id: campaign.id, name: campaign.name, detail: `${campaign.leads} leads` }))
+    return [...projects, ...campaigns]
+  }
+
   const saveArthaleadsInbound = async (config = arthaleadsInbound) => {
     if (!config || !canManage) return
     setInboundSaving(true)
     setInboundMessage('')
     try {
-      const next = await updateArthaleadsInboundConfig({ sources: config.sources, routes: config.routes })
+      const routes = config.routes.map((route) => {
+        if (route.source === 'website' || !arthaleadsPickerOptions) return route
+        const options = optionsForRoute(route.source)
+        const option = route.matchId
+          ? options.find((candidate) => candidate.id === route.matchId && candidate.kind === route.matchKind)
+          : options.find((candidate) => candidate.name === route.match)
+        return option
+          ? { ...route, match: option.name, matchId: option.id, matchKind: option.kind, matchLabel: option.name }
+          : route
+      })
+      const next = await updateArthaleadsInboundConfig({ sources: config.sources, routes })
       setArthaleadsInbound(next)
       setInboundMessage('ArthaLeads routing saved. Only enabled sources with a matching page or project rule will queue calls.')
     } catch (error) {
@@ -233,20 +293,51 @@ export function Integrations() {
                 </label>
               ))}
             </div>
+            {canManage && <div className="mb-3 flex flex-wrap items-center gap-3">
+              <button type="button" onClick={refreshArthaleadsOptions} disabled={arthaleadsPickerLoading || !integrations.some((integration) => integration.key === 'arthaleads' && integration.status === 'connected')} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-text-muted disabled:opacity-50">
+                {arthaleadsPickerLoading ? 'Loading active projects…' : 'Refresh project list'}
+              </button>
+              {!integrations.some((integration) => integration.key === 'arthaleads' && integration.status === 'connected') && <span className="text-xs text-text-muted">Connect ArthaLeads CRM below to load active projects.</span>}
+              {arthaleadsPickerError && <span role="status" className="text-xs text-destructive">{arthaleadsPickerError}</span>}
+              {arthaleadsPickerOptions && <span className="text-xs text-text-muted">{arthaleadsPickerOptions.projects.length} active projects loaded</span>}
+            </div>}
             <div className="space-y-3">
-              {arthaleadsInbound.routes.map((route, index) => (
+              {arthaleadsInbound.routes.map((route, index) => {
+                const options = optionsForRoute(route.source)
+                const selectedOption = route.matchId
+                  ? options.find((option) => option.id === route.matchId && option.kind === route.matchKind)
+                  : options.find((option) => option.name === route.match)
+                const selectedKey = selectedOption ? `${selectedOption.kind}::${selectedOption.id}` : ''
+                const staleKey = !selectedOption && route.matchId && route.matchKind ? `${route.matchKind}::${route.matchId}` : ''
+                return (
                 <div key={`${route.source}-${index}`} className="grid gap-2 rounded-xl border border-border p-3 md:grid-cols-[140px_minmax(160px,1fr)_minmax(170px,1fr)_minmax(160px,1fr)_auto]">
                   <label className="text-xs text-text-muted">Lead type
                     <select value={route.source} disabled={!canManage || inboundSaving} onChange={(event) => {
-                      const routes = [...arthaleadsInbound.routes]; routes[index] = { ...route, source: event.target.value as typeof route.source }; setArthaleadsInbound({ ...arthaleadsInbound, routes })
+                      const routes = [...arthaleadsInbound.routes]; routes[index] = { ...route, source: event.target.value as typeof route.source, match: '', matchId: '', matchKind: '', matchLabel: '' }; setArthaleadsInbound({ ...arthaleadsInbound, routes })
                     }} className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text">
                       <option value="website">Website</option><option value="facebook">Facebook</option><option value="whatsapp">WhatsApp</option>
                     </select>
                   </label>
                   <label className="text-xs text-text-muted">{route.source === 'website' ? 'Website page' : route.source === 'facebook' ? 'Facebook project or campaign' : 'WhatsApp project or campaign'}
-                    <input value={route.match} disabled={!canManage || inboundSaving} placeholder={route.source === 'website' ? 'Paste a page address or part of it' : 'Choose the project or campaign name'} onChange={(event) => {
-                      const routes = [...arthaleadsInbound.routes]; routes[index] = { ...route, match: event.target.value }; setArthaleadsInbound({ ...arthaleadsInbound, routes })
-                    }} className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text" />
+                    {route.source === 'website' ? <input value={route.match} disabled={!canManage || inboundSaving} placeholder="Paste a page address or part of it" onChange={(event) => {
+                      const routes = [...arthaleadsInbound.routes]; routes[index] = { ...route, match: event.target.value, matchId: '', matchKind: 'website', matchLabel: event.target.value }; setArthaleadsInbound({ ...arthaleadsInbound, routes })
+                    }} className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text" /> : <select value={selectedKey || staleKey} disabled={!canManage || inboundSaving || arthaleadsPickerLoading || !arthaleadsPickerOptions} onChange={(event) => {
+                      const option = options.find((candidate) => `${candidate.kind}::${candidate.id}` === event.target.value)
+                      const routes = [...arthaleadsInbound.routes]
+                      routes[index] = option
+                        ? { ...route, match: option.name, matchId: option.id, matchKind: option.kind, matchLabel: option.name }
+                        : { ...route, match: '', matchId: '', matchKind: '', matchLabel: '' }
+                      setArthaleadsInbound({ ...arthaleadsInbound, routes })
+                    }} className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text">
+                      <option value="">{arthaleadsPickerLoading ? 'Loading active projects…' : arthaleadsPickerOptions ? 'Choose an active project or campaign' : 'Connect ArthaLeads CRM to load projects'}</option>
+                      {staleKey && <option value={staleKey}>Saved: {route.matchLabel || route.match} (no longer active)</option>}
+                      {options.filter((option) => option.kind === 'project').length > 0 && <optgroup label="Active projects">
+                        {options.filter((option) => option.kind === 'project').map((option) => <option key={`${option.kind}:${option.id}`} value={`${option.kind}::${option.id}`}>{option.name}{option.detail ? ` · ${option.detail}` : ''}</option>)}
+                      </optgroup>}
+                      {options.filter((option) => option.kind !== 'project').length > 0 && <optgroup label={route.source === 'facebook' ? 'Facebook campaigns' : 'WhatsApp ads'}>
+                        {options.filter((option) => option.kind !== 'project').map((option) => <option key={`${option.kind}:${option.id}`} value={`${option.kind}::${option.id}`}>{option.name}{option.detail ? ` · ${option.detail}` : ''}</option>)}
+                      </optgroup>}
+                    </select>}
                   </label>
                   <label className="text-xs text-text-muted">Who should call these leads?
                     <select value={route.agentId ?? ''} disabled={!canManage || inboundSaving} onChange={(event) => {
@@ -265,7 +356,8 @@ export function Integrations() {
                   {canManage && <button aria-label={`Remove ${route.source} route`} onClick={() => setArthaleadsInbound({ ...arthaleadsInbound, routes: arthaleadsInbound.routes.filter((_, i) => i !== index) })} className="self-end rounded-lg border border-border px-3 py-2 text-sm text-text-muted">Remove</button>}
                   {route.ready && <p className="md:col-span-5 text-xs text-success">New leads for “{route.match}” will be called by {route.agentName}, using {route.knowledgeBaseName} and phone number {route.fromNumber}.</p>}
                 </div>
-              ))}
+                )
+              })}
             </div>
             {canManage && <div className="mt-3 flex flex-wrap gap-2">
               <button onClick={() => setArthaleadsInbound({ ...arthaleadsInbound, routes: [...arthaleadsInbound.routes, { source: 'facebook', match: '', agentId: null, agentName: '', knowledgeBaseName: '', fromNumber: '', ready: false }] })} className="rounded-lg border border-border px-3 py-2 text-sm text-text">Choose another page or campaign</button>

@@ -5510,6 +5510,14 @@ def _arthaleads_source(value: object) -> str:
 
 def _arthaleads_route_match(route: dict, fields: dict) -> bool:
     source = route.get("source")
+    match_kind = str(route.get("matchKind") or "")
+    match_id = str(route.get("matchId") or "").strip()
+    if match_id and match_kind == "project":
+        return str(fields.get("project_id") or "").strip() == match_id
+    if match_id and match_kind == "facebook_campaign":
+        return source == "facebook" and str(fields.get("campaign_id") or "").strip() == match_id
+    if match_id and match_kind == "whatsapp_ad":
+        return source == "whatsapp" and str(fields.get("ad_id") or "").strip() == match_id
     match = str(route.get("match") or "").strip().casefold().rstrip("/")
     if not source or not match:
         return False
@@ -5526,8 +5534,13 @@ def _arthaleads_route_match(route: dict, fields: dict) -> bool:
 
 
 def _arthaleads_campaign_setting_key(route: dict) -> str:
+    if route.get("matchId") or route.get("matchKind"):
+        raw_key = f"{route.get('source')}|{route.get('matchKind') or ''}|{route.get('matchId') or route.get('match')}|{route.get('agentId')}|{route.get('fromNumber')}"
+    else:
+        # Keep existing route campaign IDs stable across this schema extension.
+        raw_key = f"{route.get('source')}|{route.get('match')}|{route.get('agentId')}|{route.get('fromNumber')}"
     digest = hashlib.sha256(
-        f"{route.get('source')}|{route.get('match')}|{route.get('agentId')}|{route.get('fromNumber')}".encode()
+        raw_key.encode()
     ).hexdigest()[:20]
     return f"arthaleads_instant_campaign_{digest}"
 
@@ -5598,12 +5611,23 @@ def configure_arthaleads_inbound(account_id: int, sources: dict, routes: list[di
                 raise ValueError("Each route must be an object")
             source = str(route.get("source") or "")
             match = str(route.get("match") or "").strip()[:300]
+            match_id = str(route.get("matchId") or "").strip()[:200]
+            match_kind = str(route.get("matchKind") or "").strip()
+            match_label = str(route.get("matchLabel") or match).strip()[:300]
             agent_id = int(route.get("agentId") or 0)
             from_number = str(route.get("fromNumber") or "").strip()
             if source not in allowed_sources:
                 raise ValueError("Route source must be Website, Facebook, or WhatsApp")
             if not match:
                 raise ValueError("Each route needs a page path, project, or campaign match")
+            if match_kind and match_kind not in {"website", "project", "facebook_campaign", "whatsapp_ad"}:
+                raise ValueError("Route must use an active project or campaign")
+            if match_kind == "facebook_campaign" and source != "facebook":
+                raise ValueError("Facebook campaigns can only route Facebook leads")
+            if match_kind == "whatsapp_ad" and source != "whatsapp":
+                raise ValueError("WhatsApp ads can only route WhatsApp leads")
+            if match_kind in {"project", "facebook_campaign", "whatsapp_ad"} and not match_id:
+                raise ValueError("Choose an active ArthaLeads project or campaign")
             if allowed_sources[source]:
                 agent = conn.execute(
                     "SELECT 1 FROM agents WHERE id = ? AND account_id = ? AND status = 'live' AND kb_id IS NOT NULL "
@@ -5619,8 +5643,12 @@ def configure_arthaleads_inbound(account_id: int, sources: dict, routes: list[di
                 if not (_get_setting(conn, account_id, "enablex_app_id")
                         and _get_setting(conn, account_id, "enablex_app_key")):
                     raise ValueError("Connect EnableX before enabling automatic calls")
-            clean_routes.append({"source": source, "match": match, "agentId": agent_id,
-                                 "fromNumber": from_number})
+            clean_route = {"source": source, "match": match, "agentId": agent_id,
+                           "fromNumber": from_number}
+            if match_kind:
+                clean_route.update({"matchKind": match_kind, "matchId": match_id,
+                                    "matchLabel": match_label})
+            clean_routes.append(clean_route)
         try:
             previous = json.loads(_get_setting(conn, account_id, _ARTHALEADS_INBOUND_ROUTING) or "{}")
         except (TypeError, ValueError):
@@ -5632,7 +5660,9 @@ def configure_arthaleads_inbound(account_id: int, sources: dict, routes: list[di
                     continue
                 still_configured = any(
                     str(current.get("source") or "") == str(old_route.get("source") or "")
-                    and str(current.get("match") or "").strip() == str(old_route.get("match") or "").strip()
+                    and (str(current.get("matchId") or "").strip() == str(old_route.get("matchId") or "").strip()
+                         if old_route.get("matchId") or current.get("matchId")
+                         else str(current.get("match") or "").strip() == str(old_route.get("match") or "").strip())
                     and int(current.get("agentId") or 0) == int(old_route.get("agentId") or 0)
                     and str(current.get("fromNumber") or "") == str(old_route.get("fromNumber") or "")
                     for current in clean_routes
@@ -6927,6 +6957,29 @@ def list_integrations(account_id: int) -> list[dict]:
             }
             for r in conn.execute("SELECT * FROM integrations WHERE account_id = ?", (account_id,)).fetchall()
         ]
+    finally:
+        conn.close()
+
+
+def get_integration_config(account_id: int, key: str) -> dict | None:
+    """Read one integration's saved config for a server-side operation.
+
+    Credentials returned here stay inside the API process; do not serialize
+    this result to the dashboard.
+    """
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT status, config_json FROM integrations WHERE key = ? AND account_id = ?",
+            (key, account_id),
+        ).fetchone()
+        if not row or row["status"] != "connected":
+            return None
+        try:
+            config = json.loads(row["config_json"] or "{}")
+        except (TypeError, ValueError):
+            return None
+        return config if isinstance(config, dict) else None
     finally:
         conn.close()
 

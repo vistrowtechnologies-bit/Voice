@@ -35,6 +35,28 @@ class ArthaleadsRouteTests(unittest.TestCase):
             {"source": "whatsapp", "match": "shapoorji pallonji"}, fields
         ))
 
+    def test_active_project_and_campaign_rules_match_stable_ids(self):
+        self.assertTrue(calls_db._arthaleads_route_match(
+            {"source": "facebook", "matchKind": "project", "matchId": "project-7", "match": "Khopoli"},
+            {"project_id": "project-7", "project": "Khopoli"},
+        ))
+        self.assertFalse(calls_db._arthaleads_route_match(
+            {"source": "facebook", "matchKind": "project", "matchId": "project-7", "match": "Khopoli"},
+            {"project_id": "project-8", "project": "Khopoli"},
+        ))
+        self.assertTrue(calls_db._arthaleads_route_match(
+            {"source": "facebook", "matchKind": "facebook_campaign", "matchId": "campaign-2"},
+            {"campaign_id": "campaign-2"},
+        ))
+        self.assertTrue(calls_db._arthaleads_route_match(
+            {"source": "whatsapp", "matchKind": "whatsapp_ad", "matchId": "ad-3"},
+            {"ad_id": "ad-3"},
+        ))
+        self.assertFalse(calls_db._arthaleads_route_match(
+            {"source": "facebook", "matchKind": "whatsapp_ad", "matchId": "ad-3"},
+            {"ad_id": "ad-3"},
+        ))
+
     def test_route_match_is_source_scoped_and_never_matches_blank_rules(self):
         self.assertFalse(calls_db._arthaleads_route_match(
             {"source": "facebook", "match": "Shapoorji"},

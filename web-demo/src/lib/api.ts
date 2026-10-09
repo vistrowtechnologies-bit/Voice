@@ -442,12 +442,18 @@ export const fetchLeadWebhook = () =>
   get<{ url: string | null; accountId: number; token: string }>('/integrations/lead-webhook')
 export interface ArthaleadsInboundConfig {
   sources: { website: boolean; facebook: boolean; whatsapp: boolean }
-  routes: Array<{ source: 'website' | 'facebook' | 'whatsapp'; match: string; agentId: number | null; agentName: string; knowledgeBaseName: string; fromNumber: string; ready: boolean }>
+  routes: Array<{ source: 'website' | 'facebook' | 'whatsapp'; match: string; matchKind?: string; matchId?: string; matchLabel?: string; agentId: number | null; agentName: string; knowledgeBaseName: string; fromNumber: string; ready: boolean }>
   telephonyConnected: boolean
+}
+export interface ArthaleadsPickerOptions {
+  projects: Array<{ id: string; name: string; location: string }>
+  campaigns: Array<{ id: string; name: string; source: 'facebook_campaign' | 'whatsapp_ad'; leads: number }>
 }
 export const fetchArthaleadsInboundConfig = () =>
   get<ArthaleadsInboundConfig>('/integrations/arthaleads-inbound')
-export const updateArthaleadsInboundConfig = (config: { sources: ArthaleadsInboundConfig['sources']; routes: Array<{ source: 'website' | 'facebook' | 'whatsapp'; match: string; agentId: number | null; fromNumber: string }> }) =>
+export const fetchArthaleadsPickerOptions = () =>
+  get<ArthaleadsPickerOptions>('/integrations/arthaleads/picker-options')
+export const updateArthaleadsInboundConfig = (config: { sources: ArthaleadsInboundConfig['sources']; routes: Array<{ source: 'website' | 'facebook' | 'whatsapp'; match: string; matchKind?: string; matchId?: string; matchLabel?: string; agentId: number | null; fromNumber: string }> }) =>
   send<ArthaleadsInboundConfig>('PUT', '/integrations/arthaleads-inbound', config)
 
 // --------------------------------------------------------------- billing

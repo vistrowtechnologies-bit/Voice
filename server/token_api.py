@@ -16,6 +16,7 @@ from pathlib import Path
 
 import admin_db
 import auth
+import arthaleads_picker
 import call_intelligence
 import calls_db
 import plan_policy
@@ -5182,6 +5183,21 @@ def integrations_lead_webhook(user: dict = Depends(current_user)) -> dict:
 @app.get("/integrations/arthaleads-inbound")
 def arthaleads_inbound_config(user: dict = Depends(current_user)) -> dict:
     return calls_db.arthaleads_inbound_config(user["account_id"])
+
+
+@app.get("/integrations/arthaleads/picker-options")
+def arthaleads_picker_options(user: dict = Depends(require_role("admin"))) -> dict:
+    """Fetch the connected ArthaLeads account's active project/campaign names.
+
+    The CRM connection token stays server-side and is never returned to the
+    browser. This read-only request cannot create a lead or queue a call.
+    """
+    config = calls_db.get_integration_config(user["account_id"], "arthaleads")
+    token = (config or {}).get("token") if isinstance(config, dict) else None
+    try:
+        return arthaleads_picker.fetch_picker_options(token or "")
+    except arthaleads_picker.ArthaLeadsPickerError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
 
 
 @app.put("/integrations/arthaleads-inbound")
