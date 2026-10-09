@@ -20,6 +20,43 @@ class ContactNotesTests(unittest.TestCase):
         self.assertEqual(order, ["- Business", "- In their own words", "- Budget", "- City", "- Came from"])
         self.assertIn("- Budget: ₹10,000–₹20,000", out)
 
+    def test_arthaleads_lead_fields_reach_the_agent_and_tracking_ids_do_not(self):
+        out = build_contact_notes({
+            "project": "Treetopia Khopoli",
+            "property_type": "Apartment",
+            "bhk": "2 BHK",
+            "requirements": "Looking for a quiet apartment near work",
+            "website_requirement": "Looking for a quiet apartment near work",
+            "purpose": "Investment",
+            "priority": "High",
+            "preferred_location": "Khopoli",
+            "street_address": "Near station",
+            "remarks": "Needs possession this year",
+            "enquiry_details": "Needs possession this year",
+            "arthaleads_lead_id": "internal-123",
+            "ad_id": "internal-ad",
+            "source_detail": "Facebook",
+            "lead_source": "Facebook",
+            "assigned_to": "Sheetal Powar",
+            "follow_up_date": "2026-10-10",
+            "lead_outcome": "new",
+        })
+        self.assertIn("- Project: Treetopia Khopoli", out)
+        self.assertIn("- Property type: Apartment", out)
+        self.assertIn("- BHK: 2 BHK", out)
+        self.assertIn("- What they need: Looking for a quiet apartment near work", out)
+        self.assertNotIn("- What they asked for: Looking for a quiet apartment near work", out)
+        self.assertIn("- Buying purpose: Investment", out)
+        self.assertIn("- Lead priority: High", out)
+        self.assertIn("- Preferred location: Khopoli", out)
+        self.assertIn("- Street address: Near station", out)
+        self.assertIn("- In their own words: Needs possession this year", out)
+        self.assertNotIn("internal-123", out)
+        self.assertNotIn("internal-ad", out)
+        self.assertNotIn("Remarks:", out)
+        self.assertNotIn("Sheetal Powar", out)
+        self.assertNotIn("2026-10-10", out)
+
     def test_a_field_the_prompt_already_uses_is_not_repeated(self):
         out = build_contact_notes({"city": "Pune", "budget": "10k"}, prompt_text="Say hi. Their city is {{ custom.city }}.")
         self.assertNotIn("City", out)
