@@ -299,6 +299,9 @@ export const MODEL_OPTIONS = [
 // reproduce - that difference shipped a broken Vercel build once already).
 export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: string }[] = [
   { value: 'gpt-5-nano', label: 'Vistrow Nano Lab', tag: 'Experimental · lowest OpenAI cost; measure quality before rollout' },
+  // Re-listed at the platform owner's request for a controlled retest. Keep
+  // this owner-only: prior calls showed slower audio and turn-handling errors.
+  { value: 'gemini-live', label: 'Gemini Live 2.5 · realtime', tag: 'Owner-only retest · earlier calls had slower audio and turn errors' },
   { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Gemini Live 3.1 · realtime', tag: 'Speech-to-speech test · newer, preview' },
 ]
 
@@ -328,10 +331,10 @@ const RETIRED_MODELS = [
   { value: 'gemini-3.6-flash', label: 'Vistrow Flash' },
   { value: 'gpt-4o-mini', label: 'Vistrow Standard' },
   { value: 'gemini-3.5-flash-lite', label: 'Vistrow Lite' },
-  // 2026-10-08: Gemini Live 2.5 is no longer offered. On phone-quality audio it was about
-  // 1.7 s slower than clean audio (median 4.2 s vs 2.5 s), opened two real calls with
-  // "sorry, I couldn't hear" instead of the greeting, repeated its answers after the
-  // lead tool, and hung up on callers it had not registered. Gemini Live 3.1 held up.
+  // 2026-10-08: Gemini Live 2.5 was retired after tests showed slower phone audio
+  // (median 4.2 s vs 2.5 s on clean audio), missed greetings, repeated answers after
+  // the lead tool, and premature hangups. It is now exposed only to the platform owner
+  // for a controlled retest; tenant accounts cannot select it.
   { value: 'gemini-live', label: 'Gemini Live 2.5 (retired)' },
 ] as const
 
