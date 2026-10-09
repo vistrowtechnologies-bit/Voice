@@ -75,6 +75,7 @@ export function Agents() {
   const [browserTestAgent, setBrowserTestAgent] = useState<AgentConfig | null>(null)
   const [readiness, setReadiness] = useState<LaunchReadiness | null>(null)
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null)
+  const [copiedAgentId, setCopiedAgentId] = useState<number | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<AgentFilter>('all')
@@ -119,6 +120,16 @@ export function Agents() {
   const togglePause = async (agent: AgentConfig) => {
     await updateAgent(agent.id, { status: agent.status === 'live' ? 'paused' : 'live' })
     reload()
+  }
+
+  const copyAgentId = async (agent: AgentConfig) => {
+    try {
+      await navigator.clipboard.writeText(String(agent.id))
+      setCopiedAgentId(agent.id)
+      window.setTimeout(() => setCopiedAgentId((current) => current === agent.id ? null : current), 1600)
+    } catch {
+      alert('Could not copy the agent ID. Check clipboard permission and try again.')
+    }
   }
 
   const handleDelete = async (agent: AgentConfig) => {
@@ -231,6 +242,22 @@ export function Agents() {
                   className="text-text-muted hover:text-destructive"
                 >
                   <Icon name="delete" className="text-[18px]" />
+                </button>
+              </div>
+
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-high/30 px-3 py-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="shrink-0 text-[11px] text-text-muted">Agent ID</span>
+                  <code className="truncate rounded bg-surface px-2 py-1 font-mono text-xs font-semibold text-text">{agent.id}</code>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void copyAgentId(agent)}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-primary/30 px-2.5 py-1.5 text-[11px] font-semibold text-primary transition-colors hover:border-primary hover:bg-primary/10"
+                  aria-label={`${copiedAgentId === agent.id ? 'Copied' : 'Copy'} agent ID for ${agent.name}`}
+                >
+                  <Icon name={copiedAgentId === agent.id ? 'check' : 'content_copy'} className="text-[14px]" />
+                  {copiedAgentId === agent.id ? 'Copied' : 'Copy ID'}
                 </button>
               </div>
 
