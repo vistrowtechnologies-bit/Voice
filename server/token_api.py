@@ -23,6 +23,7 @@ import campaign_dialer
 import db_backup
 import email_sender
 import disposable_email
+import enablex_inbound
 import help_chat
 import integrations_dispatch
 import kb_crawl
@@ -4428,11 +4429,17 @@ async def enablex_inbound_event(request: Request, background_tasks: BackgroundTa
         return {"ok": False, "error": "number not registered"}
     account_id = number_row["accountId"]
 
-    accept = calls_db.enablex_accept_call(voice_id, account_id)
-    if not accept.get("ok"):
-        logger.error("failed to accept EnableX call %s: %s", voice_id, accept.get("error"))
-        return accept
-    logger.info("accepted EnableX call %s: %s", voice_id, accept.get("response"))
+    accept = enablex_inbound.accept_if_ringing(
+        voice_id,
+        account_id,
+        already_connected=is_inbound_connected,
+        accept_call=calls_db.enablex_accept_call,
+    )
+    if accept is not None:
+        if not accept.get("ok"):
+            logger.error("failed to accept EnableX call %s: %s", voice_id, accept.get("error"))
+            return accept
+        logger.info("accepted EnableX call %s: %s", voice_id, accept.get("response"))
 
     # See enablex_test_call_connected in calls_db.py for why the "+" is
     # stripped here — EnableX's gateway appears to reject a "+"-prefixed SIP
