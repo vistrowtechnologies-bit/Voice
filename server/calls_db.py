@@ -558,6 +558,17 @@ CREATE TABLE IF NOT EXISTS campaigns (
     created_at TEXT DEFAULT {_NOW}
 );
 
+-- Stable source IDs make external webhook retries safe even after a campaign
+-- contact reaches a terminal state. A unique lead is queued at most once.
+CREATE TABLE IF NOT EXISTS inbound_lead_events (
+    account_id INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    campaign_contact_id INTEGER,
+    created_at TEXT DEFAULT {_NOW},
+    PRIMARY KEY (account_id, source, external_id)
+);
+
 -- Native appointment/booking system (replaces Google Calendar/Cal.com
 -- entirely). One row per booked/cancelled/rescheduled/completed
 -- appointment. call_id links back to the call that created it (voice-agent
@@ -5482,56 +5493,156 @@ def facebook_page_connection(page_id: str) -> dict | None:
 
 _INSTANT_LEAD_CAMPAIGN_ID_SETTING = "instant_lead_campaign_id"
 _INSTANT_LEAD_CAMPAIGN_NAME = "Instant Lead Follow-up"
+_ARTHALEADS_INBOUND_ENABLED = "arthaleads_inbound_enabled"
+_ARTHALEADS_INBOUND_AGENT = "arthaleads_inbound_agent_id"
+_ARTHALEADS_INBOUND_NUMBER = "arthaleads_inbound_from_number"
 
 
-def get_or_create_instant_campaign(account_id: int) -> int | None:
-    """The always-on destination for leads arriving from an external source
-    (Facebook Lead Ads, WhatsApp, or any other inbound webhook) — a single
-    campaign per account, kept permanently 'running' so a freshly-inserted
-    'pending' contact is picked up by campaign_dialer.py's next 15s tick
-    rather than waiting for someone to open the dashboard and press Run.
-    Idempotent: returns the existing campaign if the setting still points at
-    a live one, otherwise creates it. Returns None if the account has no
-    live agent yet — an instant-followup campaign with nothing to answer the
-    call would be worse than no campaign at all, so this refuses rather than
-    silently creating one aimed at nothing."""
+def arthaleads_inbound_config(account_id: int) -> dict:
+    """Readiness and the explicitly selected outbound identity; no secrets."""
     conn = _connect()
     try:
-        existing_id = _get_setting(conn, account_id, _INSTANT_LEAD_CAMPAIGN_ID_SETTING)
+        agent_id = _get_setting(conn, account_id, _ARTHALEADS_INBOUND_AGENT)
+        number = _get_setting(conn, account_id, _ARTHALEADS_INBOUND_NUMBER) or ""
+        agent = conn.execute(
+            "SELECT id, name FROM agents WHERE id = ? AND account_id = ? AND status = 'live' "
+            "AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
+            (int(agent_id or 0), account_id),
+        ).fetchone()
+        phone = conn.execute(
+            "SELECT number FROM phone_numbers WHERE account_id = ? AND number = ? AND status = 'active'",
+            (account_id, number),
+        ).fetchone()
+        enabled = _get_setting(conn, account_id, _ARTHALEADS_INBOUND_ENABLED) == "1"
+        return {
+            "enabled": enabled,
+            "agentId": agent["id"] if agent else None,
+            "agentName": agent["name"] if agent else "",
+            "fromNumber": phone["number"] if phone else "",
+            "ready": bool(agent and phone),
+            "telephonyConnected": bool(_get_setting(conn, account_id, "enablex_app_id")
+                                       and _get_setting(conn, account_id, "enablex_app_key")),
+        }
+    finally:
+        conn.close()
+
+
+def configure_arthaleads_inbound(account_id: int, enabled: bool, agent_id: int | None, from_number: str) -> dict:
+    """Operator-controlled opt-in; never guess the voice or caller ID."""
+    conn = _connect()
+    try:
+        if enabled:
+            agent = conn.execute(
+                "SELECT 1 FROM agents WHERE id = ? AND account_id = ? AND status = 'live' "
+                "AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
+                (agent_id, account_id),
+            ).fetchone()
+            number = conn.execute(
+                "SELECT 1 FROM phone_numbers WHERE account_id = ? AND number = ? AND status = 'active'",
+                (account_id, from_number),
+            ).fetchone()
+            if not agent or not number:
+                raise ValueError("Choose a live non-demo agent and an active phone number in this workspace")
+            if not (_get_setting(conn, account_id, "enablex_app_id")
+                    and _get_setting(conn, account_id, "enablex_app_key")):
+                raise ValueError("Connect EnableX before enabling automatic calls")
+        with conn:
+            for key, value in (
+                (_ARTHALEADS_INBOUND_ENABLED, "1" if enabled else "0"),
+                (_ARTHALEADS_INBOUND_AGENT, str(agent_id or "")),
+                (_ARTHALEADS_INBOUND_NUMBER, from_number or ""),
+            ):
+                conn.execute(
+                    "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
+                    "ON CONFLICT(account_id, key) DO UPDATE SET value = excluded.value",
+                    (account_id, key, value),
+                )
+            if not enabled:
+                campaign_id = _get_setting(conn, account_id, "arthaleads_instant_campaign_id")
+                if campaign_id:
+                    conn.execute(
+                        "UPDATE campaigns SET status = 'paused', pause_reason = 'ArthaLeads auto calling disabled' "
+                        "WHERE id = ? AND account_id = ? AND status = 'running'",
+                        (int(campaign_id), account_id),
+                    )
+        return arthaleads_inbound_config(account_id)
+    finally:
+        conn.close()
+
+
+def get_or_create_instant_campaign(account_id: int, source: str = "") -> int | None:
+    """The destination for new leads from an external source.
+
+    ArthaLeads has an explicit, disabled-by-default agent/number selection and
+    its own campaign. Other sources keep their existing shared campaign and
+    use a caller ID already assigned to a live agent. A freshly inserted
+    pending contact is picked up by campaign_dialer.py's next 15s tick.
+    Idempotent: returns the existing campaign if the setting still points at
+    a usable one, otherwise creates it. A paused/cancelled campaign stays
+    paused until an operator intervenes."""
+    conn = _connect()
+    try:
+        arthaleads = source == "arthaleads"
+        setting_key = "arthaleads_instant_campaign_id" if arthaleads else _INSTANT_LEAD_CAMPAIGN_ID_SETTING
+        if arthaleads:
+            if _get_setting(conn, account_id, _ARTHALEADS_INBOUND_ENABLED) != "1":
+                return None
+            agent_id = int(_get_setting(conn, account_id, _ARTHALEADS_INBOUND_AGENT) or 0)
+            from_number = _get_setting(conn, account_id, _ARTHALEADS_INBOUND_NUMBER) or ""
+            agent_row = conn.execute(
+                "SELECT id FROM agents WHERE id = ? AND account_id = ? AND status = 'live' "
+                "AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
+                (agent_id, account_id),
+            ).fetchone()
+            number_row = conn.execute(
+                "SELECT number FROM phone_numbers WHERE account_id = ? AND number = ? AND status = 'active'",
+                (account_id, from_number),
+            ).fetchone()
+        else:
+            # For generic sources, use an already assigned active caller number.
+            number_row = conn.execute(
+                "SELECT p.number, a.id agent_id FROM phone_numbers p JOIN agents a "
+                "ON a.id = p.agent_id AND a.account_id = p.account_id "
+                "WHERE p.account_id = ? AND p.status = 'active' AND a.status = 'live' "
+                "AND a.is_platform_demo = 0 AND (a.public_demo_slug = '' OR a.public_demo_slug IS NULL) "
+                "ORDER BY p.id LIMIT 1",
+                (account_id,),
+            ).fetchone()
+            agent_row = {"id": number_row["agent_id"]} if number_row else None
+            from_number = number_row["number"] if number_row else ""
+        if not agent_row or not number_row:
+            return None
+        existing_id = _get_setting(conn, account_id, setting_key)
         if existing_id:
             row = conn.execute(
                 "SELECT id, status FROM campaigns WHERE id = ? AND account_id = ?",
                 (int(existing_id), account_id),
             ).fetchone()
             if row:
-                if row["status"] != "running":
-                    with conn:
-                        conn.execute(
-                            "UPDATE campaigns SET status = 'running', "
-                            f"started_at = COALESCE(started_at, {_NOW}) WHERE id = ?",
-                            (row["id"],),
-                        )
+                # A human pause or carrier circuit breaker must remain paused.
+                if row["status"] in ("paused", "cancelled"):
+                    return None
+                with conn:
+                    conn.execute(
+                        "UPDATE campaigns SET agent_id = ?, from_number = ?, "
+                        "status = 'running', "
+                        f"started_at = COALESCE(started_at, {_NOW}) WHERE id = ?",
+                        (agent_row["id"], from_number, row["id"]),
+                    )
                 return row["id"]
-        agent_row = conn.execute(
-            "SELECT id FROM agents WHERE account_id = ? AND status = 'live' "
-            "AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL) "
-            "ORDER BY id LIMIT 1",
-            (account_id,),
-        ).fetchone()
-        if not agent_row:
-            return None
         with conn:
             cur = conn.execute(
                 "INSERT INTO campaigns (account_id, name, agent_id, from_number, status, "
                 f"started_at, max_attempts, retry_minutes, concurrency) "
-                f"VALUES (?, ?, ?, '', 'running', {_NOW}, ?, ?, ?) RETURNING id",
-                (account_id, _INSTANT_LEAD_CAMPAIGN_NAME, agent_row["id"], 3, 30, 2),
+                f"VALUES (?, ?, ?, ?, 'running', {_NOW}, ?, ?, ?) RETURNING id",
+                (account_id, "ArthaLeads Instant Follow-up" if arthaleads else _INSTANT_LEAD_CAMPAIGN_NAME,
+                 agent_row["id"], from_number, 3, 30, 2),
             )
             campaign_id = cur.fetchone()["id"]
             conn.execute(
                 "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
                 "ON CONFLICT(account_id, key) DO UPDATE SET value = excluded.value",
-                (account_id, _INSTANT_LEAD_CAMPAIGN_ID_SETTING, str(campaign_id)),
+                (account_id, setting_key, str(campaign_id)),
             )
         return campaign_id
     finally:
@@ -5562,9 +5673,11 @@ def ingest_inbound_lead(
     norm = _normalize_phone(phone, account_id)
     if not norm:
         return {"ok": False, "reason": "invalid_phone"}
-    campaign_id = get_or_create_instant_campaign(account_id)
-    if campaign_id is None:
-        return {"ok": False, "reason": "no_live_agent"}
+    if source == "arthaleads" and not external_id:
+        return {"ok": False, "reason": "missing_lead_id"}
+    campaign_id = get_or_create_instant_campaign(account_id, source)
+    if campaign_id is None and source != "arthaleads":
+        return {"ok": False, "reason": "auto_call_not_ready_or_paused"}
     fields = dict(custom_fields or {})
     fields["source"] = source
     if external_id:
@@ -5572,27 +5685,115 @@ def ingest_inbound_lead(
     conn = _connect()
     try:
         with conn:
-            dup = conn.execute(
-                "SELECT id FROM campaign_contacts WHERE campaign_id = ? AND phone_norm = ? "
-                "AND status IN ('pending', 'calling') LIMIT 1",
-                (campaign_id, norm),
-            ).fetchone()
-            if dup:
-                return {"ok": True, "campaign_id": campaign_id, "contact_id": dup["id"], "deduped": True}
-            # Inherit the campaign's declared basis, so a contact added after
-            # launch is as answerable as one queued at creation.
-            basis_row = conn.execute(
-                "SELECT consent_basis FROM campaigns WHERE id = ?", (campaign_id,)
-            ).fetchone()
-            cur = conn.execute(
-                "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, "
-                "company, custom_fields, consent_basis) VALUES (?, ?, ?, ?, ?, '', ?, ?) RETURNING id",
-                (campaign_id, account_id, (name or "").strip(),
-                 canonical_contact_phone(phone, account_id) or phone.strip(), norm,
-                 json.dumps(fields), _row_get(basis_row, "consent_basis", "") or ""),
-            )
-            contact_id = cur.fetchone()["id"]
-        return {"ok": True, "campaign_id": campaign_id, "contact_id": contact_id, "deduped": False}
+            if external_id:
+                reserved = conn.execute(
+                    "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id) "
+                    "VALUES (?, ?, ?, NULL) ON CONFLICT (account_id, source, external_id) DO NOTHING "
+                    "RETURNING external_id",
+                    (account_id, source, external_id),
+                ).fetchone()
+                if not reserved:
+                    prior = conn.execute(
+                        "SELECT campaign_contact_id FROM inbound_lead_events "
+                        "WHERE account_id = ? AND source = ? AND external_id = ?",
+                        (account_id, source, external_id),
+                    ).fetchone()
+                    if prior and prior["campaign_contact_id"]:
+                        return {"ok": True, "campaign_id": campaign_id,
+                                "contact_id": prior["campaign_contact_id"], "queued": True, "deduped": True}
+            contact_id = None
+            deduped = False
+            if campaign_id:
+                dup = conn.execute(
+                    "SELECT id, status, name, custom_fields FROM campaign_contacts WHERE campaign_id = ? AND phone_norm = ? "
+                    "AND status IN ('pending', 'calling') LIMIT 1",
+                    (campaign_id, norm),
+                ).fetchone()
+                if dup:
+                    contact_id = dup["id"]
+                    deduped = True
+                    # A later CRM update may add context while this lead waits in
+                    # the queue. Refresh pending snapshots, but never mutate a call
+                    # that has already been claimed by the dialer.
+                    if source == "arthaleads" and dup["status"] == "pending":
+                        try:
+                            queued_fields = json.loads(dup["custom_fields"] or "{}")
+                        except (TypeError, ValueError):
+                            queued_fields = {}
+                        conn.execute(
+                            "UPDATE campaign_contacts SET name = ?, custom_fields = ? WHERE id = ?",
+                            ((name or "").strip() or dup["name"] or "", json.dumps({
+                                **queued_fields, **{k: v for k, v in fields.items() if v not in (None, "")},
+                            }), contact_id),
+                        )
+                else:
+                    # Inherit the campaign's declared basis, so a contact added after
+                    # launch is as answerable as one queued at creation.
+                    basis_row = conn.execute(
+                        "SELECT consent_basis FROM campaigns WHERE id = ?", (campaign_id,)
+                    ).fetchone()
+                    cur = conn.execute(
+                        "INSERT INTO campaign_contacts (campaign_id, account_id, name, phone, phone_norm, "
+                        "company, custom_fields, consent_basis) VALUES (?, ?, ?, ?, ?, '', ?, ?) RETURNING id",
+                        (campaign_id, account_id, (name or "").strip(),
+                         canonical_contact_phone(phone, account_id) or phone.strip(), norm,
+                         json.dumps(fields), _row_get(basis_row, "consent_basis", "") or ""),
+                    )
+                    contact_id = cur.fetchone()["id"]
+            if external_id and contact_id:
+                conn.execute(
+                    "UPDATE inbound_lead_events SET campaign_contact_id = ? "
+                    "WHERE account_id = ? AND source = ? AND external_id = ?",
+                    (contact_id, account_id, source, external_id),
+                )
+            if source == "arthaleads":
+                contact_phone = canonical_contact_phone(phone, account_id)
+                if not contact_phone:
+                    raise ValueError("invalid_phone")
+                current = conn.execute(
+                    "SELECT name, custom_fields, email, tags FROM contacts "
+                    "WHERE account_id = ? AND phone = ?",
+                    (account_id, contact_phone),
+                ).fetchone()
+                try:
+                    old_fields = json.loads(current["custom_fields"] or "{}") if current else {}
+                except (TypeError, ValueError):
+                    old_fields = {}
+                merged = {**old_fields, **{k: v for k, v in fields.items() if v not in (None, "")}}
+                email = str(fields.get("email") or (current["email"] if current else "") or "")
+                tags = _clean_tags([
+                    *(str(current["tags"] or "").split(",") if current else []),
+                    "arthaleads",
+                    *(
+                        f"{label}:{str(fields[key]).strip()[:60]}"
+                        for key, label in (
+                            ("source_detail" if fields.get("source_detail") else "lead_source", "source"),
+                            ("project", "project"),
+                            ("campaign_name", "campaign"),
+                            ("priority", "priority"),
+                            ("property_type", "property"),
+                            ("purpose", "purpose"),
+                        )
+                        if fields.get(key)
+                    ),
+                ])
+                contact_row = conn.execute(
+                    f"INSERT INTO contacts (account_id, name, phone, email, custom_fields, status, tags, source) "
+                    f"VALUES (?, ?, ?, ?, ?, 'new', ?, 'arthaleads') "
+                    f"ON CONFLICT(account_id, phone) DO UPDATE SET "
+                    f"name = excluded.name, email = excluded.email, "
+                    f"custom_fields = excluded.custom_fields, tags = excluded.tags, "
+                    f"deleted_at = NULL, updated_at = {_NOW} RETURNING id",
+                    (account_id, (name or "").strip() or (current["name"] if current else "") or "Unknown", contact_phone,
+                     email, json.dumps(merged), tags),
+                ).fetchone()
+        queued = bool(campaign_id and contact_id)
+        if source == "arthaleads" and not queued:
+            return {"ok": False, "reason": "auto_call_not_ready_or_paused", "imported": True,
+                    "contactId": contact_row["id"], "queued": False}
+        return {"ok": True, "campaign_id": campaign_id, "contact_id": contact_id,
+                "contactId": contact_row["id"] if source == "arthaleads" else None,
+                "queued": queued, "deduped": deduped}
     finally:
         conn.close()
 

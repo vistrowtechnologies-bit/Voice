@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
-import { facebookIntegrationStartUrl, fetchIntegrations, fetchLeadWebhook, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateIntegration, zohoIntegrationStartUrl } from '../lib/api'
-import type { Integration } from '../lib/types'
+import { facebookIntegrationStartUrl, fetchAgents, fetchArthaleadsInboundConfig, fetchIntegrations, fetchLeadWebhook, fetchPhoneNumbers, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateArthaleadsInboundConfig, updateIntegration, zohoIntegrationStartUrl } from '../lib/api'
+import type { AgentConfig, Integration, PhoneNumber } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import arthaleadsIcon from '../assets/arthaleads-logo.png'
 import { Tooltip } from '../components/ui/Tooltip'
@@ -62,13 +62,40 @@ export function Integrations() {
   const [leadWebhookUrl, setLeadWebhookUrl] = useState<string | null | undefined>(undefined)
   const [leadWebhookShown, setLeadWebhookShown] = useState(false)
   const [leadWebhookCopied, setLeadWebhookCopied] = useState(false)
+  const [arthaleadsInbound, setArthaleadsInbound] = useState<{ enabled: boolean; ready: boolean; telephonyConnected: boolean; agentId: number | null; agentName: string; fromNumber: string } | null>(null)
+  const [agents, setAgents] = useState<AgentConfig[]>([])
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([])
+  const [inboundSaving, setInboundSaving] = useState(false)
+  const [inboundMessage, setInboundMessage] = useState('')
 
   const reload = () => fetchIntegrations().then((list) => setIntegrations(sortIntegrations(list))).catch(() => setIntegrations([]))
 
   useEffect(() => {
     reload()
     fetchLeadWebhook().then((r) => setLeadWebhookUrl(r.url)).catch(() => setLeadWebhookUrl(null))
+    fetchArthaleadsInboundConfig().then(setArthaleadsInbound).catch(() => setArthaleadsInbound(null))
+    fetchAgents().then(setAgents).catch(() => setAgents([]))
+    fetchPhoneNumbers().then(setPhoneNumbers).catch(() => setPhoneNumbers([]))
   }, [])
+
+  const saveArthaleadsInbound = async (enabled: boolean) => {
+    if (!arthaleadsInbound || !canManage) return
+    setInboundSaving(true)
+    setInboundMessage('')
+    try {
+      const next = await updateArthaleadsInboundConfig({
+        enabled,
+        agentId: arthaleadsInbound.agentId,
+        fromNumber: arthaleadsInbound.fromNumber,
+      })
+      setArthaleadsInbound(next)
+      setInboundMessage(enabled ? 'New Arthaleads leads will be queued for AI calls.' : 'Automatic calls are paused.')
+    } catch (error) {
+      setInboundMessage(error instanceof Error ? error.message : 'Could not save the ArthaLeads call setup.')
+    } finally {
+      setInboundSaving(false)
+    }
+  }
 
   const copyLeadWebhook = async () => {
     if (!leadWebhookUrl) return
@@ -180,6 +207,75 @@ export function Integrations() {
               <button onClick={copyLeadWebhook} className="shrink-0 text-text-muted hover:text-text" aria-label="Copy webhook URL">
                 <Icon name={leadWebhookCopied ? 'check' : 'content_copy'} className="text-[15px]" />
               </button>
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold">ArthaLeads → Vistrow Voice</p>
+              <p className="text-xs text-text-muted">Import new CRM leads as tagged Contacts and queue them for an AI call.</p>
+            </div>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${arthaleadsInbound?.enabled ? 'bg-success/15 text-success' : 'bg-surface-high text-text-muted'}`}>
+              {arthaleadsInbound?.enabled ? 'Enabled' : 'Paused'}
+            </span>
+          </div>
+          <p className="mb-4 text-xs text-text-muted">
+            Only new leads are accepted. Existing Arthaleads records are not imported. Calling starts after the next dialer check (up to 15 seconds when the line, calling window, and capacity are available); opt-outs, DNC, and account calling hours still apply.
+          </p>
+          {arthaleadsInbound === null ? (
+            <p className="text-xs text-text-muted">Loading setup…</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs text-text-muted">
+                Calling agent
+                <select
+                  value={arthaleadsInbound.agentId ?? ''}
+                  disabled={!canManage || inboundSaving}
+                  onChange={(event) => setArthaleadsInbound({ ...arthaleadsInbound, agentId: event.target.value ? Number(event.target.value) : null })}
+                  className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
+                >
+                  <option value="">Choose an active agent</option>
+                  {agents.filter((agent) => agent.status === 'live' && !agent.isPlatformDemo).map((agent) => (
+                    <option key={agent.id} value={agent.id}>{agent.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs text-text-muted">
+                Caller number
+                <select
+                  value={arthaleadsInbound.fromNumber}
+                  disabled={!canManage || inboundSaving}
+                  onChange={(event) => setArthaleadsInbound({ ...arthaleadsInbound, fromNumber: event.target.value })}
+                  className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
+                >
+                  <option value="">Choose an active number</option>
+                  {phoneNumbers.filter((number) => number.status === 'active').map((number) => (
+                    <option key={number.id} value={number.number}>{number.label || number.number} · {number.number}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+          {!arthaleadsInbound?.telephonyConnected && (
+            <p className="mt-3 rounded-lg bg-warning/10 p-3 text-xs text-text-muted">
+              Connect EnableX and add an active phone number before automatic calls can be enabled.
+            </p>
+          )}
+          {inboundMessage && <p className="mt-3 text-xs text-text-muted">{inboundMessage}</p>}
+          {canManage && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                disabled={inboundSaving || !arthaleadsInbound?.agentId || !arthaleadsInbound?.fromNumber || !arthaleadsInbound?.telephonyConnected}
+                onClick={() => saveArthaleadsInbound(true)}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >{inboundSaving ? 'Saving…' : 'Enable auto-calling'}</button>
+              {arthaleadsInbound?.enabled && (
+                <button disabled={inboundSaving} onClick={() => saveArthaleadsInbound(false)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text">
+                  Pause auto-calling
+                </button>
+              )}
             </div>
           )}
         </Card>

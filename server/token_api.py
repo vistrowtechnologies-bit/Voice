@@ -4933,7 +4933,7 @@ def _parse_facebook_field_data(field_data: list) -> tuple[str, str]:
 
 
 @app.post("/leads/inbound/{account_id}")
-async def leads_inbound(account_id: int, token: str, request: Request) -> dict:
+async def leads_inbound(account_id: int, request: Request, token: str | None = None) -> dict:
     """Generic entry point for any external lead source that can POST JSON —
     a Zapier 'Webhooks by Zapier' step bridging Facebook Lead Ads' native
     'New Lead' trigger is the first one wired up, and it needs no Meta App
@@ -4954,12 +4954,72 @@ async def leads_inbound(account_id: int, token: str, request: Request) -> dict:
     no usable phone number — the caller is a webhook sender that will retry
     on anything else, and a malformed one-off payload isn't worth a retry
     storm."""
-    if calls_db.account_id_for_lead_webhook_token(token) != account_id:
+    header_token = request.headers.get("x-vistrow-webhook-token", "").strip()
+    authorization = request.headers.get("authorization", "")
+    if not header_token and authorization.lower().startswith("bearer "):
+        header_token = authorization[7:].strip()
+    if calls_db.account_id_for_lead_webhook_token(header_token or token or "") != account_id:
         raise HTTPException(404, "Not found")
     try:
         body = await request.json()
     except Exception:
         body = {}
+    if not isinstance(body, dict):
+        return {"ok": False, "reason": "invalid_payload"}
+    if body.get("source") == "arthaleads" or body.get("event") == "lead.created":
+        if body.get("source") != "arthaleads" or body.get("event") != "lead.created":
+            return {"ok": False, "reason": "invalid_event"}
+        lead_id = str(body.get("lead_id") or "").strip()
+        org_id = str(body.get("org_id") or "").strip()
+        if not lead_id or not org_id or len(lead_id) > 128 or len(org_id) > 128:
+            return {"ok": False, "reason": "missing_or_invalid_lead_identity"}
+        if body.get("opt_out") is True or body.get("do_not_call") is True:
+            return {"ok": False, "reason": "lead_opted_out"}
+        fields = {}
+        for key in (
+            "project", "property_type", "bhk", "purpose", "requirements", "budget",
+            "priority", "preferred_location", "street_address", "city", "timeline",
+            "remarks", "remark", "remark_1", "remark_2", "language",
+            "preferred_callback_time", "source_detail", "lead_source", "subsource",
+            "campaign_name", "ad_name", "form_name", "status", "assigned_to",
+            "follow_up_date", "lead_outcome",
+            "email", "whatsapp", "campaign_id", "ad_id", "form_id",
+            "created_at", "consent_basis",
+        ):
+            value = body.get(key)
+            if value is not None and not isinstance(value, (dict, list)):
+                fields[key] = str(value)[:2000]
+        extra = body.get("custom_fields")
+        if isinstance(extra, dict):
+            for key, value in list(extra.items())[:60]:
+                if (isinstance(key, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", key)
+                        and value is not None and not isinstance(value, (dict, list))):
+                    fields[key] = str(value)[:2000]
+        # The agent's contact-notes builder recognises these established keys.
+        for source_key, target_key in (
+            ("source_detail", "lead_source"),
+            ("requirements", "website_requirement"),
+            ("remarks", "enquiry_details"),
+            ("remark", "enquiry_details"),
+            ("remark_1", "enquiry_details"),
+            ("remark_2", "enquiry_details"),
+            ("language", "preferred_language"),
+            ("preferred_callback_time", "best_time_to_call"),
+            ("timeline", "start_timeline"),
+        ):
+            if fields.get(source_key) and not fields.get(target_key):
+                fields[target_key] = fields[source_key]
+        fields["arthaleads_org_id"] = org_id
+        fields["arthaleads_lead_id"] = lead_id
+        result = calls_db.ingest_inbound_lead(
+            account_id, str(body.get("name") or ""), str(body.get("phone") or ""),
+            source="arthaleads", external_id=f"{org_id}:{lead_id}",
+            custom_fields=fields,
+        )
+        if not result.get("ok"):
+            logger.warning("leads_inbound: ArthaLeads lead not queued for account %s: %s",
+                           account_id, result.get("reason"))
+        return result
     name = str(body.get("name") or body.get("full_name") or "").strip()
     phone = str(body.get("phone") or body.get("phone_number") or "").strip()
     if not phone:
@@ -5083,6 +5143,26 @@ def integrations_lead_webhook(user: dict = Depends(current_user)) -> dict:
     base = calls_db.public_base_url()
     url = f"{base}/leads/inbound/{account_id}?token={token}" if base else None
     return {"url": url, "accountId": account_id, "token": token}
+
+
+@app.get("/integrations/arthaleads-inbound")
+def arthaleads_inbound_config(user: dict = Depends(current_user)) -> dict:
+    return calls_db.arthaleads_inbound_config(user["account_id"])
+
+
+@app.put("/integrations/arthaleads-inbound")
+def update_arthaleads_inbound(
+    data: dict = Body(...), user: dict = Depends(require_role("admin")),
+) -> dict:
+    try:
+        raw_agent_id = data.get("agentId")
+        agent_id = int(raw_agent_id) if raw_agent_id else None
+        return calls_db.configure_arthaleads_inbound(
+            user["account_id"], data.get("enabled") is True,
+            agent_id, str(data.get("fromNumber") or "").strip(),
+        )
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 def _epoch_to_iso(epoch: int | None) -> str | None:

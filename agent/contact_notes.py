@@ -18,6 +18,14 @@ import re
 # (key, label) in the order a person would say them. Tracking-only fields
 # (platform, campaign_name) are left out on purpose: nobody says them aloud.
 _KNOWN: list[tuple[str, str]] = [
+    ("project", "Project"),
+    ("property_type", "Property type"),
+    ("bhk", "BHK"),
+    ("requirements", "What they need"),
+    ("purpose", "Buying purpose"),
+    ("priority", "Lead priority"),
+    ("preferred_location", "Preferred location"),
+    ("street_address", "Street address"),
     ("business_type", "Business"),
     ("website_requirement", "What they asked for"),
     ("enquiry_details", "In their own words"),
@@ -34,7 +42,14 @@ _KNOWN: list[tuple[str, str]] = [
     ("enquiry_date", "Enquired on"),
     ("referred_by", "Referred by"),
 ]
-_SKIP_KEYS = {"platform", "campaign_name"}
+_SKIP_KEYS = {
+    "platform", "campaign_name", "campaign_id", "ad_id", "ad_name",
+    "form_id", "form_name", "external_id", "arthaleads_org_id",
+    "arthaleads_lead_id", "subsource", "status", "email", "whatsapp",
+    "source_detail", "remarks", "language", "preferred_callback_time",
+    "requirements", "assigned_to", "follow_up_date", "lead_outcome",
+    "timeline", "remark", "remark_1", "remark_2", "campaign_contact_id",
+}
 _EMPTY = {"", "nan", "n/a", "na", "none", "null", "-", "--", "unknown", "undefined", "not provided", "nil"}
 _MAX_VALUE = 300
 _MAX_EXTRA = 8
@@ -65,11 +80,14 @@ def build_contact_notes(custom_fields: dict | None, prompt_text: str = "", compa
     used = set(re.findall(r"\{\{\s*custom\.([A-Za-z0-9_]+)\s*\}\}", prompt_text or ""))
     lines: list[str] = []
     seen: set[str] = set()
+    seen_values: set[str] = set()
     for key, label in _KNOWN:
         seen.add(key)
         value = _clean(custom_fields.get(key))
-        if value and key not in used:
+        normalized_value = value.casefold()
+        if value and key not in used and normalized_value not in seen_values:
             lines.append(f"- {label}: {value}")
+            seen_values.add(normalized_value)
     extra = 0
     for key, raw in custom_fields.items():
         if key in seen or key in _SKIP_KEYS or key in used or not isinstance(key, str):
