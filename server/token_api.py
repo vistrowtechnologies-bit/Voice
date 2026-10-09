@@ -4984,7 +4984,8 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
             "campaign_name", "ad_name", "form_name", "status", "assigned_to",
             "follow_up_date", "lead_outcome",
             "email", "whatsapp", "campaign_id", "ad_id", "form_id",
-            "created_at", "consent_basis",
+            "created_at", "consent_basis", "page_url", "page_path", "landing_page",
+            "project_name", "channel", "source",
         ):
             value = body.get(key)
             if value is not None and not isinstance(value, (dict, list)):
@@ -5014,7 +5015,7 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
         result = calls_db.ingest_inbound_lead(
             account_id, str(body.get("name") or ""), str(body.get("phone") or ""),
             source="arthaleads", external_id=f"{org_id}:{lead_id}",
-            custom_fields=fields,
+            custom_fields=fields, allow_call=body.get("auto_call") is not False,
         )
         if not result.get("ok"):
             logger.warning("leads_inbound: ArthaLeads lead not queued for account %s: %s",
@@ -5155,11 +5156,8 @@ def update_arthaleads_inbound(
     data: dict = Body(...), user: dict = Depends(require_role("admin")),
 ) -> dict:
     try:
-        raw_agent_id = data.get("agentId")
-        agent_id = int(raw_agent_id) if raw_agent_id else None
         return calls_db.configure_arthaleads_inbound(
-            user["account_id"], data.get("enabled") is True,
-            agent_id, str(data.get("fromNumber") or "").strip(),
+            user["account_id"], data.get("sources") or {}, data.get("routes") or [],
         )
     except (TypeError, ValueError) as exc:
         raise HTTPException(400, str(exc)) from exc

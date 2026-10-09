@@ -441,16 +441,13 @@ export const zohoIntegrationStartUrl = '/api/integrations/zoho_crm/start'
 export const fetchLeadWebhook = () =>
   get<{ url: string | null; accountId: number; token: string }>('/integrations/lead-webhook')
 export interface ArthaleadsInboundConfig {
-  enabled: boolean
-  ready: boolean
+  sources: { website: boolean; facebook: boolean; whatsapp: boolean }
+  routes: Array<{ source: 'website' | 'facebook' | 'whatsapp'; match: string; agentId: number | null; agentName: string; knowledgeBaseName: string; fromNumber: string; ready: boolean }>
   telephonyConnected: boolean
-  agentId: number | null
-  agentName: string
-  fromNumber: string
 }
 export const fetchArthaleadsInboundConfig = () =>
   get<ArthaleadsInboundConfig>('/integrations/arthaleads-inbound')
-export const updateArthaleadsInboundConfig = (config: { enabled: boolean; agentId: number | null; fromNumber: string }) =>
+export const updateArthaleadsInboundConfig = (config: { sources: ArthaleadsInboundConfig['sources']; routes: Array<{ source: 'website' | 'facebook' | 'whatsapp'; match: string; agentId: number | null; fromNumber: string }> }) =>
   send<ArthaleadsInboundConfig>('PUT', '/integrations/arthaleads-inbound', config)
 
 // --------------------------------------------------------------- billing

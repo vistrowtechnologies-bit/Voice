@@ -5493,33 +5493,91 @@ def facebook_page_connection(page_id: str) -> dict | None:
 
 _INSTANT_LEAD_CAMPAIGN_ID_SETTING = "instant_lead_campaign_id"
 _INSTANT_LEAD_CAMPAIGN_NAME = "Instant Lead Follow-up"
-_ARTHALEADS_INBOUND_ENABLED = "arthaleads_inbound_enabled"
-_ARTHALEADS_INBOUND_AGENT = "arthaleads_inbound_agent_id"
-_ARTHALEADS_INBOUND_NUMBER = "arthaleads_inbound_from_number"
+_ARTHALEADS_INBOUND_ROUTING = "arthaleads_inbound_routing_v2"
+
+
+def _arthaleads_source(value: object) -> str:
+    """Normalize CRM channel labels to the three explicitly routable sources."""
+    raw = str(value or "").strip().casefold()
+    if "facebook" in raw or raw in {"meta", "instagram", "lead ads", "fb", "fb lead ads"}:
+        return "facebook"
+    if "whatsapp" in raw or "whats app" in raw or raw in {"wa", "wa lead", "ctwa"}:
+        return "whatsapp"
+    if raw.startswith("web") or any(word in raw for word in ("website", "web site", "web form", "wordpress", "site")):
+        return "website"
+    return ""
+
+
+def _arthaleads_route_match(route: dict, fields: dict) -> bool:
+    source = route.get("source")
+    match = str(route.get("match") or "").strip().casefold().rstrip("/")
+    if not source or not match:
+        return False
+    if source == "website":
+        value = str(fields.get("page_url") or fields.get("page_path") or fields.get("landing_page") or "")
+    elif source == "facebook":
+        value = str(fields.get("project") or fields.get("project_name") or fields.get("campaign_name") or "")
+    elif source == "whatsapp":
+        value = str(fields.get("project") or fields.get("project_name") or fields.get("campaign_name") or "")
+    else:
+        return False
+    value = value.strip().casefold().rstrip("/")
+    return value == match or (source == "website" and match in value)
+
+
+def _arthaleads_campaign_setting_key(route: dict) -> str:
+    digest = hashlib.sha256(
+        f"{route.get('source')}|{route.get('match')}|{route.get('agentId')}|{route.get('fromNumber')}".encode()
+    ).hexdigest()[:20]
+    return f"arthaleads_instant_campaign_{digest}"
+
+
+def _resolve_arthaleads_route(config: dict, source: str, fields: dict) -> dict | None:
+    """Resolve only an enabled source's most-specific explicit rule."""
+    sources = config.get("sources") if isinstance(config.get("sources"), dict) else {}
+    if sources.get(source) is not True:
+        return None
+    routes = config.get("routes") if isinstance(config.get("routes"), list) else []
+    candidates = [route for route in routes if isinstance(route, dict)
+                  and route.get("source") == source and _arthaleads_route_match(route, fields)]
+    return max(candidates, key=lambda route: len(str(route.get("match") or ""))) if candidates else None
 
 
 def arthaleads_inbound_config(account_id: int) -> dict:
-    """Readiness and the explicitly selected outbound identity; no secrets."""
+    """Readiness for source toggles and page/project-to-agent routes."""
     conn = _connect()
     try:
-        agent_id = _get_setting(conn, account_id, _ARTHALEADS_INBOUND_AGENT)
-        number = _get_setting(conn, account_id, _ARTHALEADS_INBOUND_NUMBER) or ""
-        agent = conn.execute(
-            "SELECT id, name FROM agents WHERE id = ? AND account_id = ? AND status = 'live' "
-            "AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
-            (int(agent_id or 0), account_id),
-        ).fetchone()
-        phone = conn.execute(
-            "SELECT number FROM phone_numbers WHERE account_id = ? AND number = ? AND status = 'active'",
-            (account_id, number),
-        ).fetchone()
-        enabled = _get_setting(conn, account_id, _ARTHALEADS_INBOUND_ENABLED) == "1"
+        try:
+            config = json.loads(_get_setting(conn, account_id, _ARTHALEADS_INBOUND_ROUTING) or "{}")
+        except (TypeError, ValueError):
+            config = {}
+        sources = config.get("sources") if isinstance(config.get("sources"), dict) else {}
+        raw_routes = config.get("routes") if isinstance(config.get("routes"), list) else []
+        routes = []
+        for item in raw_routes:
+            if not isinstance(item, dict):
+                continue
+            source = str(item.get("source") or "")
+            agent_id = int(item.get("agentId") or 0)
+            number = str(item.get("fromNumber") or "")
+            agent = conn.execute(
+                "SELECT a.id, a.name, k.name kb_name FROM agents a LEFT JOIN knowledge_bases k ON k.id = a.kb_id "
+                "WHERE a.id = ? AND a.account_id = ? AND a.status = 'live' "
+                "AND a.kb_id IS NOT NULL AND a.is_platform_demo = 0 AND (a.public_demo_slug = '' OR a.public_demo_slug IS NULL)",
+                (agent_id, account_id),
+            ).fetchone()
+            phone = conn.execute(
+                "SELECT number FROM phone_numbers WHERE account_id = ? AND number = ? AND status = 'active'",
+                (account_id, number),
+            ).fetchone()
+            routes.append({**item, "agentId": agent["id"] if agent else None,
+                           "agentName": agent["name"] if agent else "",
+                           "knowledgeBaseName": agent["kb_name"] if agent else "",
+                           "fromNumber": phone["number"] if phone else "",
+                           "ready": bool(agent and phone)})
         return {
-            "enabled": enabled,
-            "agentId": agent["id"] if agent else None,
-            "agentName": agent["name"] if agent else "",
-            "fromNumber": phone["number"] if phone else "",
-            "ready": bool(agent and phone),
+            "sources": {key: sources.get(key) is True for key in ("website", "facebook", "whatsapp")},
+            "routes": routes,
             "telephonyConnected": bool(_get_setting(conn, account_id, "enablex_app_id")
                                        and _get_setting(conn, account_id, "enablex_app_key")),
         }
@@ -5527,55 +5585,85 @@ def arthaleads_inbound_config(account_id: int) -> dict:
         conn.close()
 
 
-def configure_arthaleads_inbound(account_id: int, enabled: bool, agent_id: int | None, from_number: str) -> dict:
-    """Operator-controlled opt-in; never guess the voice or caller ID."""
+def configure_arthaleads_inbound(account_id: int, sources: dict, routes: list[dict]) -> dict:
+    """Save explicit channel opt-ins and route-specific agents/caller IDs."""
     conn = _connect()
     try:
-        if enabled:
-            agent = conn.execute(
-                "SELECT 1 FROM agents WHERE id = ? AND account_id = ? AND status = 'live' "
-                "AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
-                (agent_id, account_id),
-            ).fetchone()
-            number = conn.execute(
-                "SELECT 1 FROM phone_numbers WHERE account_id = ? AND number = ? AND status = 'active'",
-                (account_id, from_number),
-            ).fetchone()
-            if not agent or not number:
-                raise ValueError("Choose a live non-demo agent and an active phone number in this workspace")
-            if not (_get_setting(conn, account_id, "enablex_app_id")
-                    and _get_setting(conn, account_id, "enablex_app_key")):
-                raise ValueError("Connect EnableX before enabling automatic calls")
+        if not isinstance(sources, dict) or not isinstance(routes, list):
+            raise ValueError("Sources must be a toggle map and routes must be a list")
+        allowed_sources = {key: sources.get(key) is True for key in ("website", "facebook", "whatsapp")}
+        clean_routes = []
+        for route in routes:
+            if not isinstance(route, dict):
+                raise ValueError("Each route must be an object")
+            source = str(route.get("source") or "")
+            match = str(route.get("match") or "").strip()[:300]
+            agent_id = int(route.get("agentId") or 0)
+            from_number = str(route.get("fromNumber") or "").strip()
+            if source not in allowed_sources:
+                raise ValueError("Route source must be Website, Facebook, or WhatsApp")
+            if not match:
+                raise ValueError("Each route needs a page path, project, or campaign match")
+            if allowed_sources[source]:
+                agent = conn.execute(
+                    "SELECT 1 FROM agents WHERE id = ? AND account_id = ? AND status = 'live' AND kb_id IS NOT NULL "
+                    "AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
+                    (agent_id, account_id),
+                ).fetchone()
+                number = conn.execute(
+                    "SELECT 1 FROM phone_numbers WHERE account_id = ? AND number = ? AND status = 'active'",
+                    (account_id, from_number),
+                ).fetchone()
+                if not agent or not number:
+                    raise ValueError("Enabled routes need a live non-demo agent and an active caller number")
+                if not (_get_setting(conn, account_id, "enablex_app_id")
+                        and _get_setting(conn, account_id, "enablex_app_key")):
+                    raise ValueError("Connect EnableX before enabling automatic calls")
+            clean_routes.append({"source": source, "match": match, "agentId": agent_id,
+                                 "fromNumber": from_number})
+        try:
+            previous = json.loads(_get_setting(conn, account_id, _ARTHALEADS_INBOUND_ROUTING) or "{}")
+        except (TypeError, ValueError):
+            previous = {}
+        previous_routes = previous.get("routes", []) if isinstance(previous.get("routes"), list) else []
         with conn:
-            for key, value in (
-                (_ARTHALEADS_INBOUND_ENABLED, "1" if enabled else "0"),
-                (_ARTHALEADS_INBOUND_AGENT, str(agent_id or "")),
-                (_ARTHALEADS_INBOUND_NUMBER, from_number or ""),
-            ):
-                conn.execute(
-                    "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
-                    "ON CONFLICT(account_id, key) DO UPDATE SET value = excluded.value",
-                    (account_id, key, value),
+            for old_route in previous_routes:
+                if not isinstance(old_route, dict):
+                    continue
+                still_configured = any(
+                    str(current.get("source") or "") == str(old_route.get("source") or "")
+                    and str(current.get("match") or "").strip() == str(old_route.get("match") or "").strip()
+                    and int(current.get("agentId") or 0) == int(old_route.get("agentId") or 0)
+                    and str(current.get("fromNumber") or "") == str(old_route.get("fromNumber") or "")
+                    for current in clean_routes
                 )
-            if not enabled:
-                campaign_id = _get_setting(conn, account_id, "arthaleads_instant_campaign_id")
+                if allowed_sources.get(str(old_route.get("source") or ""), False) and still_configured:
+                    continue
+                campaign_id = _get_setting(conn, account_id, _arthaleads_campaign_setting_key(old_route))
                 if campaign_id:
                     conn.execute(
-                        "UPDATE campaigns SET status = 'paused', pause_reason = 'ArthaLeads auto calling disabled' "
+                        "UPDATE campaigns SET status = 'paused', pause_reason = 'ArthaLeads route disabled' "
                         "WHERE id = ? AND account_id = ? AND status = 'running'",
                         (int(campaign_id), account_id),
                     )
+            conn.execute(
+                "INSERT INTO settings (account_id, key, value) VALUES (?, ?, ?) "
+                "ON CONFLICT(account_id, key) DO UPDATE SET value = excluded.value",
+                (account_id, _ARTHALEADS_INBOUND_ROUTING,
+                 json.dumps({"sources": allowed_sources, "routes": clean_routes})),
+            )
         return arthaleads_inbound_config(account_id)
     finally:
         conn.close()
 
 
-def get_or_create_instant_campaign(account_id: int, source: str = "") -> int | None:
+def get_or_create_instant_campaign(account_id: int, source: str = "", route: dict | None = None) -> int | None:
     """The destination for new leads from an external source.
 
-    ArthaLeads has an explicit, disabled-by-default agent/number selection and
-    its own campaign. Other sources keep their existing shared campaign and
-    use a caller ID already assigned to a live agent. A freshly inserted
+    ArthaLeads uses an explicit, disabled-by-default source toggle and a
+    page/project-specific agent and caller-number route. Other sources keep
+    their existing shared campaign and use a caller ID already assigned to a
+    live agent. A freshly inserted
     pending contact is picked up by campaign_dialer.py's next 15s tick.
     Idempotent: returns the existing campaign if the setting still points at
     a usable one, otherwise creates it. A paused/cancelled campaign stays
@@ -5585,13 +5673,14 @@ def get_or_create_instant_campaign(account_id: int, source: str = "") -> int | N
         arthaleads = source == "arthaleads"
         setting_key = "arthaleads_instant_campaign_id" if arthaleads else _INSTANT_LEAD_CAMPAIGN_ID_SETTING
         if arthaleads:
-            if _get_setting(conn, account_id, _ARTHALEADS_INBOUND_ENABLED) != "1":
+            if not route:
                 return None
-            agent_id = int(_get_setting(conn, account_id, _ARTHALEADS_INBOUND_AGENT) or 0)
-            from_number = _get_setting(conn, account_id, _ARTHALEADS_INBOUND_NUMBER) or ""
+            agent_id = int(route.get("agentId") or 0)
+            from_number = str(route.get("fromNumber") or "")
+            setting_key = _arthaleads_campaign_setting_key(route)
             agent_row = conn.execute(
                 "SELECT id FROM agents WHERE id = ? AND account_id = ? AND status = 'live' "
-                "AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
+                "AND kb_id IS NOT NULL AND is_platform_demo = 0 AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
                 (agent_id, account_id),
             ).fetchone()
             number_row = conn.execute(
@@ -5615,12 +5704,16 @@ def get_or_create_instant_campaign(account_id: int, source: str = "") -> int | N
         existing_id = _get_setting(conn, account_id, setting_key)
         if existing_id:
             row = conn.execute(
-                "SELECT id, status FROM campaigns WHERE id = ? AND account_id = ?",
+                "SELECT id, status, pause_reason FROM campaigns WHERE id = ? AND account_id = ?",
                 (int(existing_id), account_id),
             ).fetchone()
             if row:
                 # A human pause or carrier circuit breaker must remain paused.
-                if row["status"] in ("paused", "cancelled"):
+                if row["status"] == "cancelled":
+                    return None
+                if row["status"] == "paused" and row["pause_reason"] not in (
+                    "ArthaLeads route disabled", "ArthaLeads source disabled"
+                ):
                     return None
                 with conn:
                     conn.execute(
@@ -5651,17 +5744,16 @@ def get_or_create_instant_campaign(account_id: int, source: str = "") -> int | N
 
 def ingest_inbound_lead(
     account_id: int, name: str, phone: str, source: str,
-    external_id: str = "", custom_fields: dict | None = None,
+    external_id: str = "", custom_fields: dict | None = None, allow_call: bool = True,
 ) -> dict:
     """Entry point for every external lead source (Facebook Lead Ads via
     Zapier or a native Meta webhook, WhatsApp Cloud API, or any other
     inbound integration) — deliberately source-agnostic so a new channel is
-    a new adapter calling this, not a new dialing path. Queues the lead on
-    the account's instant-followup campaign as a 'pending' contact, which
-    campaign_dialer.py's next tick (<=15s) picks up ahead of any retry —
-    compliance (DNC/calling-window) and concurrency are enforced there, not
-    here, so this function only ever decides WHETHER to queue, never whether
-    it's safe to call.
+    a new adapter calling this, not a new dialing path. ArthaLeads leads are
+    queued only when the source opt-in and a page/project route both resolve;
+    other sources keep their existing campaign behavior. A queued contact is
+    picked up by campaign_dialer.py's next tick (<=15s); DNC, calling-window,
+    and concurrency checks remain in the dialer.
 
     Deduped against the SAME campaign's still-open contacts (pending or
     currently calling) by normalized phone, so a webhook retry (Meta retries
@@ -5675,10 +5767,22 @@ def ingest_inbound_lead(
         return {"ok": False, "reason": "invalid_phone"}
     if source == "arthaleads" and not external_id:
         return {"ok": False, "reason": "missing_lead_id"}
-    campaign_id = get_or_create_instant_campaign(account_id, source)
+    fields = dict(custom_fields or {})
+    arthaleads_source = next((category for value in (
+        fields.get("source_detail"), fields.get("lead_source"), fields.get("source"), fields.get("channel")
+    ) if (category := _arthaleads_source(value))), "") if source == "arthaleads" else ""
+    route = None
+    if source == "arthaleads" and allow_call and arthaleads_source:
+        try:
+            routing = json.loads(get_setting(_ARTHALEADS_INBOUND_ROUTING, account_id) or "{}")
+        except (TypeError, ValueError):
+            routing = {}
+        route = _resolve_arthaleads_route(routing, arthaleads_source, fields)
+    if source == "arthaleads":
+        fields["channel_source"] = arthaleads_source or "unknown"
+    campaign_id = get_or_create_instant_campaign(account_id, source, route)
     if campaign_id is None and source != "arthaleads":
         return {"ok": False, "reason": "auto_call_not_ready_or_paused"}
-    fields = dict(custom_fields or {})
     fields["source"] = source
     if external_id:
         fields["external_id"] = external_id
@@ -5701,6 +5805,10 @@ def ingest_inbound_lead(
                     if prior and prior["campaign_contact_id"]:
                         return {"ok": True, "campaign_id": campaign_id,
                                 "contact_id": prior["campaign_contact_id"], "queued": True, "deduped": True}
+                    # This event was already imported without a route. A later
+                    # retry must not turn yesterday's deliberately uncalled lead
+                    # into a fresh call after an operator changes routing.
+                    campaign_id = None
             contact_id = None
             deduped = False
             if campaign_id:
@@ -5776,6 +5884,7 @@ def ingest_inbound_lead(
                         )
                         if fields.get(key)
                     ),
+                    *( [f"channel:{fields['channel_source']}"] if fields.get("channel_source") else [] ),
                 ])
                 contact_row = conn.execute(
                     f"INSERT INTO contacts (account_id, name, phone, email, custom_fields, status, tags, source) "
@@ -5789,7 +5898,7 @@ def ingest_inbound_lead(
                 ).fetchone()
         queued = bool(campaign_id and contact_id)
         if source == "arthaleads" and not queued:
-            return {"ok": False, "reason": "auto_call_not_ready_or_paused", "imported": True,
+            return {"ok": True, "reason": "no_matching_enabled_route", "imported": True,
                     "contactId": contact_row["id"], "queued": False}
         return {"ok": True, "campaign_id": campaign_id, "contact_id": contact_id,
                 "contactId": contact_row["id"] if source == "arthaleads" else None,

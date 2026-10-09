@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
-import { facebookIntegrationStartUrl, fetchAgents, fetchArthaleadsInboundConfig, fetchIntegrations, fetchLeadWebhook, fetchPhoneNumbers, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateArthaleadsInboundConfig, updateIntegration, zohoIntegrationStartUrl } from '../lib/api'
-import type { AgentConfig, Integration, PhoneNumber } from '../lib/types'
+import { facebookIntegrationStartUrl, fetchAgents, fetchArthaleadsInboundConfig, fetchIntegrations, fetchKnowledgeBases, fetchLeadWebhook, fetchPhoneNumbers, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateArthaleadsInboundConfig, updateIntegration, zohoIntegrationStartUrl } from '../lib/api'
+import type { ArthaleadsInboundConfig } from '../lib/api'
+import type { AgentConfig, Integration, KnowledgeBase, PhoneNumber } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
 import arthaleadsIcon from '../assets/arthaleads-logo.png'
 import { Tooltip } from '../components/ui/Tooltip'
@@ -62,8 +63,9 @@ export function Integrations() {
   const [leadWebhookUrl, setLeadWebhookUrl] = useState<string | null | undefined>(undefined)
   const [leadWebhookShown, setLeadWebhookShown] = useState(false)
   const [leadWebhookCopied, setLeadWebhookCopied] = useState(false)
-  const [arthaleadsInbound, setArthaleadsInbound] = useState<{ enabled: boolean; ready: boolean; telephonyConnected: boolean; agentId: number | null; agentName: string; fromNumber: string } | null>(null)
+  const [arthaleadsInbound, setArthaleadsInbound] = useState<ArthaleadsInboundConfig | null>(null)
   const [agents, setAgents] = useState<AgentConfig[]>([])
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([])
   const [inboundSaving, setInboundSaving] = useState(false)
   const [inboundMessage, setInboundMessage] = useState('')
@@ -75,21 +77,18 @@ export function Integrations() {
     fetchLeadWebhook().then((r) => setLeadWebhookUrl(r.url)).catch(() => setLeadWebhookUrl(null))
     fetchArthaleadsInboundConfig().then(setArthaleadsInbound).catch(() => setArthaleadsInbound(null))
     fetchAgents().then(setAgents).catch(() => setAgents([]))
+    fetchKnowledgeBases().then(setKnowledgeBases).catch(() => setKnowledgeBases([]))
     fetchPhoneNumbers().then(setPhoneNumbers).catch(() => setPhoneNumbers([]))
   }, [])
 
-  const saveArthaleadsInbound = async (enabled: boolean) => {
-    if (!arthaleadsInbound || !canManage) return
+  const saveArthaleadsInbound = async (config = arthaleadsInbound) => {
+    if (!config || !canManage) return
     setInboundSaving(true)
     setInboundMessage('')
     try {
-      const next = await updateArthaleadsInboundConfig({
-        enabled,
-        agentId: arthaleadsInbound.agentId,
-        fromNumber: arthaleadsInbound.fromNumber,
-      })
+      const next = await updateArthaleadsInboundConfig({ sources: config.sources, routes: config.routes })
       setArthaleadsInbound(next)
-      setInboundMessage(enabled ? 'New Arthaleads leads will be queued for AI calls.' : 'Automatic calls are paused.')
+      setInboundMessage('ArthaLeads routing saved. Only enabled sources with a matching page or project rule will queue calls.')
     } catch (error) {
       setInboundMessage(error instanceof Error ? error.message : 'Could not save the ArthaLeads call setup.')
     } finally {
@@ -215,69 +214,66 @@ export function Integrations() {
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <p className="font-semibold">ArthaLeads → Vistrow Voice</p>
-              <p className="text-xs text-text-muted">Import new CRM leads as tagged Contacts and queue them for an AI call.</p>
+              <p className="text-xs text-text-muted">Every new CRM lead is imported and tagged. Calls require an enabled source and a matching route.</p>
             </div>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${arthaleadsInbound?.enabled ? 'bg-success/15 text-success' : 'bg-surface-high text-text-muted'}`}>
-              {arthaleadsInbound?.enabled ? 'Enabled' : 'Paused'}
+            <span className="rounded-full bg-surface-high px-2.5 py-1 text-xs font-semibold text-text-muted">
+              {arthaleadsInbound && Object.values(arthaleadsInbound.sources).some(Boolean) ? 'Selected sources on' : 'Calls off'}
             </span>
           </div>
           <p className="mb-4 text-xs text-text-muted">
-            Only new leads are accepted. Existing Arthaleads records are not imported. Calling starts after the next dialer check (up to 15 seconds when the line, calling window, and capacity are available); opt-outs, DNC, and account calling hours still apply.
+            Like Website Widget page rules, each page, project, or campaign can use its own agent and knowledge base. Leads without an enabled, matching rule stay in Contacts and are not called. New leads only; DNC, opt-outs, calling hours, and dialer capacity still apply.
           </p>
-          {arthaleadsInbound === null ? (
-            <p className="text-xs text-text-muted">Loading setup…</p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-xs text-text-muted">
-                Calling agent
-                <select
-                  value={arthaleadsInbound.agentId ?? ''}
-                  disabled={!canManage || inboundSaving}
-                  onChange={(event) => setArthaleadsInbound({ ...arthaleadsInbound, agentId: event.target.value ? Number(event.target.value) : null })}
-                  className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
-                >
-                  <option value="">Choose an active agent</option>
-                  {agents.filter((agent) => agent.status === 'live' && !agent.isPlatformDemo).map((agent) => (
-                    <option key={agent.id} value={agent.id}>{agent.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs text-text-muted">
-                Caller number
-                <select
-                  value={arthaleadsInbound.fromNumber}
-                  disabled={!canManage || inboundSaving}
-                  onChange={(event) => setArthaleadsInbound({ ...arthaleadsInbound, fromNumber: event.target.value })}
-                  className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
-                >
-                  <option value="">Choose an active number</option>
-                  {phoneNumbers.filter((number) => number.status === 'active').map((number) => (
-                    <option key={number.id} value={number.number}>{number.label || number.number} · {number.number}</option>
-                  ))}
-                </select>
-              </label>
+          {arthaleadsInbound === null ? <p className="text-xs text-text-muted">Loading setup…</p> : <>
+            <div className="mb-5 flex flex-wrap gap-4">
+              {([['website', 'Website'], ['facebook', 'Facebook'], ['whatsapp', 'WhatsApp']] as const).map(([key, label]) => (
+                <label key={key} className="inline-flex items-center gap-2 text-sm text-text">
+                  <input type="checkbox" checked={arthaleadsInbound.sources[key]} disabled={!canManage || inboundSaving}
+                    onChange={(event) => setArthaleadsInbound({ ...arthaleadsInbound, sources: { ...arthaleadsInbound.sources, [key]: event.target.checked } })} />
+                  {label} calls
+                </label>
+              ))}
             </div>
-          )}
-          {!arthaleadsInbound?.telephonyConnected && (
-            <p className="mt-3 rounded-lg bg-warning/10 p-3 text-xs text-text-muted">
-              Connect EnableX and add an active phone number before automatic calls can be enabled.
-            </p>
-          )}
+            <div className="space-y-3">
+              {arthaleadsInbound.routes.map((route, index) => (
+                <div key={`${route.source}-${index}`} className="grid gap-2 rounded-xl border border-border p-3 md:grid-cols-[140px_minmax(160px,1fr)_minmax(170px,1fr)_minmax(160px,1fr)_auto]">
+                  <label className="text-xs text-text-muted">Source
+                    <select value={route.source} disabled={!canManage || inboundSaving} onChange={(event) => {
+                      const routes = [...arthaleadsInbound.routes]; routes[index] = { ...route, source: event.target.value as typeof route.source }; setArthaleadsInbound({ ...arthaleadsInbound, routes })
+                    }} className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text">
+                      <option value="website">Website</option><option value="facebook">Facebook</option><option value="whatsapp">WhatsApp</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-text-muted">{route.source === 'website' ? 'URL contains' : route.source === 'facebook' ? 'Project' : 'Project / campaign'}
+                    <input value={route.match} disabled={!canManage || inboundSaving} placeholder={route.source === 'website' ? '/project-page/' : 'Project or campaign name'} onChange={(event) => {
+                      const routes = [...arthaleadsInbound.routes]; routes[index] = { ...route, match: event.target.value }; setArthaleadsInbound({ ...arthaleadsInbound, routes })
+                    }} className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text" />
+                  </label>
+                  <label className="text-xs text-text-muted">Agent and attached knowledge base
+                    <select value={route.agentId ?? ''} disabled={!canManage || inboundSaving} onChange={(event) => {
+                      const routes = [...arthaleadsInbound.routes]; routes[index] = { ...route, agentId: event.target.value ? Number(event.target.value) : null }; setArthaleadsInbound({ ...arthaleadsInbound, routes })
+                    }} className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text">
+                      <option value="">Choose agent</option>{agents.filter((agent) => agent.status === 'live' && !agent.isPlatformDemo && agent.kbId != null).map((agent) => <option key={agent.id} value={agent.id}>{agent.name} · {knowledgeBases.find((kb) => kb.id === agent.kbId)?.name || 'Knowledge base'}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-xs text-text-muted">Caller number
+                    <select value={route.fromNumber} disabled={!canManage || inboundSaving} onChange={(event) => {
+                      const routes = [...arthaleadsInbound.routes]; routes[index] = { ...route, fromNumber: event.target.value }; setArthaleadsInbound({ ...arthaleadsInbound, routes })
+                    }} className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text">
+                      <option value="">Choose number</option>{phoneNumbers.filter((number) => number.status === 'active').map((number) => <option key={number.id} value={number.number}>{number.label || number.number} · {number.number}</option>)}
+                    </select>
+                  </label>
+                  {canManage && <button aria-label={`Remove ${route.source} route`} onClick={() => setArthaleadsInbound({ ...arthaleadsInbound, routes: arthaleadsInbound.routes.filter((_, i) => i !== index) })} className="self-end rounded-lg border border-border px-3 py-2 text-sm text-text-muted">Remove</button>}
+                  {route.ready && <p className="md:col-span-5 text-xs text-success">Routes to {route.agentName} · KB: {route.knowledgeBaseName} · caller {route.fromNumber}</p>}
+                </div>
+              ))}
+            </div>
+            {canManage && <div className="mt-3 flex flex-wrap gap-2">
+              <button onClick={() => setArthaleadsInbound({ ...arthaleadsInbound, routes: [...arthaleadsInbound.routes, { source: 'facebook', match: '', agentId: null, agentName: '', knowledgeBaseName: '', fromNumber: '', ready: false }] })} className="rounded-lg border border-border px-3 py-2 text-sm text-text">Add route</button>
+              <button disabled={inboundSaving || arthaleadsInbound.routes.some((route) => Boolean(route.match.trim()) && arthaleadsInbound.sources[route.source] && (!route.agentId || !route.fromNumber || !arthaleadsInbound.telephonyConnected))} onClick={() => saveArthaleadsInbound({ ...arthaleadsInbound, routes: arthaleadsInbound.routes.filter((route) => route.match.trim()) })} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{inboundSaving ? 'Saving…' : 'Save routing'}</button>
+            </div>}
+          </>}
+          {!arthaleadsInbound?.telephonyConnected && <p className="mt-3 rounded-lg bg-warning/10 p-3 text-xs text-text-muted">Connect EnableX and add an active phone number before enabling a call route.</p>}
           {inboundMessage && <p className="mt-3 text-xs text-text-muted">{inboundMessage}</p>}
-          {canManage && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                disabled={inboundSaving || !arthaleadsInbound?.agentId || !arthaleadsInbound?.fromNumber || !arthaleadsInbound?.telephonyConnected}
-                onClick={() => saveArthaleadsInbound(true)}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >{inboundSaving ? 'Saving…' : 'Enable auto-calling'}</button>
-              {arthaleadsInbound?.enabled && (
-                <button disabled={inboundSaving} onClick={() => saveArthaleadsInbound(false)} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text">
-                  Pause auto-calling
-                </button>
-              )}
-            </div>
-          )}
         </Card>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
