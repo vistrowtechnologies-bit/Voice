@@ -124,7 +124,7 @@ export function Agents() {
 
   const copyAgentId = async (agent: AgentConfig) => {
     try {
-      await navigator.clipboard.writeText(String(agent.id))
+      await navigator.clipboard.writeText(String(agent.publicId ?? agent.id))
       setCopiedAgentId(agent.id)
       window.setTimeout(() => setCopiedAgentId((current) => current === agent.id ? null : current), 1600)
     } catch {
@@ -248,7 +248,7 @@ export function Agents() {
               <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-high/30 px-3 py-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="shrink-0 text-[11px] text-text-muted">Agent ID</span>
-                  <code className="truncate rounded bg-surface px-2 py-1 font-mono text-xs font-semibold text-text">{agent.id}</code>
+                  <code className="truncate rounded bg-surface px-2 py-1 font-mono text-xs font-semibold text-text">{agent.publicId ?? agent.id}</code>
                 </div>
                 <button
                   type="button"

@@ -4958,7 +4958,7 @@ def leads_inbound_agents(account_id: int, request: Request) -> dict:
         if agent.get("status") != "active" or not kb_name:
             continue
         agents.append({
-            "id": str(agent["id"]),
+            "id": str(agent.get("publicId") or agent["id"]),
             "name": agent.get("name") or "Vistrow agent",
             "knowledge_base": kb_name,
         })
