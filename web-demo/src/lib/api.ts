@@ -446,8 +446,7 @@ export interface ArthaleadsInboundConfig {
   telephonyConnected: boolean
 }
 export interface ArthaleadsPickerOptions {
-  projects: Array<{ id: string; name: string; location: string }>
-  campaigns: Array<{ id: string; name: string; source: 'facebook_campaign' | 'whatsapp_ad'; leads: number }>
+  projects: Array<{ id: string; name: string; location?: string }>
 }
 export const fetchArthaleadsInboundConfig = () =>
   get<ArthaleadsInboundConfig>('/integrations/arthaleads-inbound')

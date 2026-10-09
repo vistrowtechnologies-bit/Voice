@@ -11,8 +11,7 @@ import urllib.error
 import urllib.request
 
 
-PICKER_OPTIONS_URL = "https://api.arthaleads.com/webhook/vistrow/picker-options"
-ALLOWED_CAMPAIGN_SOURCES = {"facebook_campaign", "whatsapp_ad"}
+PICKER_OPTIONS_URL = "https://api.arthaleads.com/webhook/lead/projects"
 
 
 class ArthaLeadsPickerError(Exception):
@@ -38,21 +37,7 @@ def _clean_options(data: object) -> dict:
                 "location": str(item.get("location") or "").strip()[:200],
             })
 
-    campaigns = []
-    for item in data.get("campaigns", []) if isinstance(data.get("campaigns"), list) else []:
-        if not isinstance(item, dict):
-            continue
-        source = str(item.get("source") or "").strip()
-        campaign_id = str(item.get("id") or "").strip()[:200]
-        name = str(item.get("name") or "").strip()[:200]
-        if source in ALLOWED_CAMPAIGN_SOURCES and campaign_id and name:
-            campaigns.append({
-                "id": campaign_id,
-                "name": name,
-                "source": source,
-                "leads": max(0, min(int(item.get("leads") or 0), 1_000_000)),
-            })
-    return {"projects": projects, "campaigns": campaigns}
+    return {"projects": projects}
 
 
 def fetch_picker_options(token: str) -> dict:
@@ -62,7 +47,7 @@ def fetch_picker_options(token: str) -> dict:
     request = urllib.request.Request(
         PICKER_OPTIONS_URL,
         headers={
-            "Authorization": f"Bearer {secret}",
+            "X-ArthaLeads-Connection-Token": secret,
             "Accept": "application/json",
             "User-Agent": "Vistrow-Voice/1.0",
         },

@@ -5513,7 +5513,12 @@ def _arthaleads_route_match(route: dict, fields: dict) -> bool:
     match_kind = str(route.get("matchKind") or "")
     match_id = str(route.get("matchId") or "").strip()
     if match_id and match_kind == "project":
-        return str(fields.get("project_id") or "").strip() == match_id
+        project_id = str(fields.get("project_id") or "").strip()
+        if project_id:
+            return project_id == match_id
+        project_name = str(fields.get("project") or fields.get("project_name") or "").strip().casefold()
+        route_name = str(route.get("matchLabel") or route.get("match") or "").strip().casefold()
+        return bool(project_name and route_name and project_name == route_name)
     if match_id and match_kind == "facebook_campaign":
         return source == "facebook" and str(fields.get("campaign_id") or "").strip() == match_id
     if match_id and match_kind == "whatsapp_ad":
@@ -5545,15 +5550,67 @@ def _arthaleads_campaign_setting_key(route: dict) -> str:
     return f"arthaleads_instant_campaign_{digest}"
 
 
-def _resolve_arthaleads_route(config: dict, source: str, fields: dict) -> dict | None:
-    """Resolve only an enabled source's most-specific explicit rule."""
+def _resolve_arthaleads_route_decision(config: dict, source: str, fields: dict) -> tuple[dict | None, str]:
+    """Resolve an enabled source rule; reject ties that name different agents."""
     sources = config.get("sources") if isinstance(config.get("sources"), dict) else {}
     if sources.get(source) is not True:
-        return None
+        return None, "source_disabled"
     routes = config.get("routes") if isinstance(config.get("routes"), list) else []
     candidates = [route for route in routes if isinstance(route, dict)
                   and route.get("source") == source and _arthaleads_route_match(route, fields)]
-    return max(candidates, key=lambda route: len(str(route.get("match") or ""))) if candidates else None
+    if not candidates:
+        return None, "no_route"
+    specificity = lambda route: len(str(route.get("matchId") or route.get("match") or ""))
+    best_specificity = max(specificity(route) for route in candidates)
+    best = [route for route in candidates if specificity(route) == best_specificity]
+    if len({str(route.get("agentId") or "") for route in best}) > 1:
+        return None, "ambiguous_route"
+    return best[0], ""
+
+
+def _resolve_arthaleads_route(config: dict, source: str, fields: dict) -> dict | None:
+    """Compatibility helper for callers that only need the matched route."""
+    return _resolve_arthaleads_route_decision(config, source, fields)[0]
+
+
+def _arthaleads_call_readiness(account_id: int, route: dict, phone: str, requested_agent_id: int) -> str:
+    """Return a stable decline code before queuing a CRM lead for outbound."""
+    try:
+        routed_agent_id = int(route.get("agentId") or 0)
+    except (TypeError, ValueError):
+        routed_agent_id = 0
+    if routed_agent_id != requested_agent_id:
+        return "agent_mismatch"
+    conn = _connect()
+    try:
+        agent = conn.execute(
+            "SELECT 1 FROM agents WHERE id = ? AND account_id = ? AND status = 'live' "
+            "AND kb_id IS NOT NULL AND is_platform_demo = 0 "
+            "AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
+            (requested_agent_id, account_id),
+        ).fetchone()
+        if not agent:
+            return "agent_missing"
+        number = str(route.get("fromNumber") or "").strip()
+        phone_row = conn.execute(
+            "SELECT 1 FROM phone_numbers WHERE account_id = ? AND number = ? AND status = 'active'",
+            (account_id, number),
+        ).fetchone() if number else None
+        if not phone_row:
+            return "no_number"
+    finally:
+        conn.close()
+
+    compliance = get_compliance(account_id)
+    # ArthaLeads' consent_basis is marketing-channel metadata, not call consent.
+    if compliance.get("require_consent", False):
+        return "call_consent_required"
+    if compliance.get("honor_dnc", True) and is_dnc(account_id, phone):
+        return "dnd_blocked"
+    allowed, _reason = within_calling_window(account_id)
+    if not allowed:
+        return "outside_calling_window"
+    return ""
 
 
 def arthaleads_inbound_config(account_id: int) -> dict:
@@ -5774,7 +5831,8 @@ def get_or_create_instant_campaign(account_id: int, source: str = "", route: dic
 
 def ingest_inbound_lead(
     account_id: int, name: str, phone: str, source: str,
-    external_id: str = "", custom_fields: dict | None = None, allow_call: bool = True,
+    external_id: str = "", custom_fields: dict | None = None, allow_call: bool | None = None,
+    call_agent_id: int | None = None, call_decline_reason: str = "",
 ) -> dict:
     """Entry point for every external lead source (Facebook Lead Ads via
     Zapier or a native Meta webhook, WhatsApp Cloud API, or any other
@@ -5799,18 +5857,33 @@ def ingest_inbound_lead(
         return {"ok": False, "reason": "missing_lead_id"}
     fields = dict(custom_fields or {})
     arthaleads_source = next((category for value in (
-        fields.get("source_detail"), fields.get("lead_source"), fields.get("source"), fields.get("channel")
+        fields.get("lead_source"), fields.get("arthaleads_source"), fields.get("source_detail"), fields.get("channel")
     ) if (category := _arthaleads_source(value))), "") if source == "arthaleads" else ""
     route = None
-    if source == "arthaleads" and allow_call and arthaleads_source:
-        try:
-            routing = json.loads(get_setting(_ARTHALEADS_INBOUND_ROUTING, account_id) or "{}")
-        except (TypeError, ValueError):
-            routing = {}
-        route = _resolve_arthaleads_route(routing, arthaleads_source, fields)
+    call_reason = ""
+    arthaleads_call_requested = allow_call is True
+    if source == "arthaleads" and arthaleads_call_requested and arthaleads_source:
+        if not call_agent_id:
+            call_reason = "agent_missing"
+        else:
+            try:
+                routing = json.loads(get_setting(_ARTHALEADS_INBOUND_ROUTING, account_id) or "{}")
+            except (TypeError, ValueError):
+                routing = {}
+            route, call_reason = _resolve_arthaleads_route_decision(routing, arthaleads_source, fields)
+            if route and not call_reason:
+                call_reason = _arthaleads_call_readiness(account_id, route, phone, call_agent_id)
+                if call_reason:
+                    route = None
+    elif source == "arthaleads":
+        call_reason = call_decline_reason or "not_auto_source"
     if source == "arthaleads":
         fields["channel_source"] = arthaleads_source or "unknown"
-    campaign_id = get_or_create_instant_campaign(account_id, source, route)
+        if call_decline_reason and call_reason:
+            call_reason = call_decline_reason
+    campaign_id = get_or_create_instant_campaign(account_id, source, route) if not call_reason else None
+    if source == "arthaleads" and arthaleads_call_requested and route and campaign_id is None and not call_reason:
+        call_reason = "no_number"
     if campaign_id is None and source != "arthaleads":
         return {"ok": False, "reason": "auto_call_not_ready_or_paused"}
     fields["source"] = source
@@ -5819,6 +5892,7 @@ def ingest_inbound_lead(
     conn = _connect()
     try:
         with conn:
+            event_deduped = False
             if external_id:
                 reserved = conn.execute(
                     "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id) "
@@ -5838,6 +5912,7 @@ def ingest_inbound_lead(
                     # This event was already imported without a route. A later
                     # retry must not turn yesterday's deliberately uncalled lead
                     # into a fresh call after an operator changes routing.
+                    event_deduped = True
                     campaign_id = None
             contact_id = None
             deduped = False
@@ -5915,6 +5990,8 @@ def ingest_inbound_lead(
                         if fields.get(key)
                     ),
                     *( [f"channel:{fields['channel_source']}"] if fields.get("channel_source") else [] ),
+                    *(fields.get("tags") if isinstance(fields.get("tags"), list) else str(fields.get("tags") or "").split(",")),
+                    *( ["opted_out"] if fields.get("opt_out") is True else [] ),
                 ])
                 contact_row = conn.execute(
                     f"INSERT INTO contacts (account_id, name, phone, email, custom_fields, status, tags, source) "
@@ -5928,8 +6005,9 @@ def ingest_inbound_lead(
                 ).fetchone()
         queued = bool(campaign_id and contact_id)
         if source == "arthaleads" and not queued:
-            return {"ok": True, "reason": "no_matching_enabled_route", "imported": True,
-                    "contactId": contact_row["id"], "queued": False}
+            return {"ok": True, "imported": True,
+                    "contactId": contact_row["id"], "queued": False,
+                    "deduped": event_deduped, "reason": call_reason or "no_route"}
         return {"ok": True, "campaign_id": campaign_id, "contact_id": contact_id,
                 "contactId": contact_row["id"] if source == "arthaleads" else None,
                 "queued": queued, "deduped": deduped}

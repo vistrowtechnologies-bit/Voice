@@ -1,5 +1,6 @@
 """Source normalization and widget-style page/project routing safeguards."""
 import unittest
+from unittest.mock import patch
 
 import calls_db
 
@@ -86,6 +87,49 @@ class ArthaleadsRouteTests(unittest.TestCase):
             "website", {"page_path": "/projects/khopoli/units/"},
         )
         self.assertEqual(route["agentId"], 22)
+
+    def test_project_picker_route_matches_id_or_name_but_never_overrides_a_different_id(self):
+        route = {"source": "facebook", "matchKind": "project", "matchId": "p-1", "matchLabel": "Khopoli"}
+        self.assertTrue(calls_db._arthaleads_route_match(route, {"project_id": "p-1", "project": "Khopoli"}))
+        self.assertTrue(calls_db._arthaleads_route_match(route, {"project": "Khopoli"}))
+        self.assertFalse(calls_db._arthaleads_route_match(route, {"project_id": "p-2", "project": "Khopoli"}))
+
+    def test_equal_specificity_rules_for_different_agents_decline_as_ambiguous(self):
+        config = {"sources": {"facebook": True}, "routes": [
+            {"source": "facebook", "matchKind": "project", "matchId": "p-1", "match": "p-1", "agentId": 11},
+            {"source": "facebook", "matchKind": "project", "matchId": "p-1", "match": "p-1", "agentId": 22},
+        ]}
+        self.assertEqual(calls_db._resolve_arthaleads_route_decision(config, "facebook", {"project_id": "p-1"}),
+                         (None, "ambiguous_route"))
+
+    def test_call_readiness_checks_explicit_agent_number_dnd_window_and_consent(self):
+        class _Cursor:
+            def fetchone(self):
+                return {"id": 1}
+
+        class _Connection:
+            def execute(self, *_args):
+                return _Cursor()
+
+            def close(self):
+                pass
+
+        route = {"agentId": 12, "fromNumber": "+14155552671"}
+        with patch.object(calls_db, "_connect", return_value=_Connection()), \
+             patch.object(calls_db, "get_compliance", return_value={"require_consent": False, "honor_dnc": True}), \
+             patch.object(calls_db, "is_dnc", return_value=False), \
+             patch.object(calls_db, "within_calling_window", return_value=(True, "")):
+            self.assertEqual(calls_db._arthaleads_call_readiness(1, route, "+14155552672", 12), "")
+            self.assertEqual(calls_db._arthaleads_call_readiness(1, route, "+14155552672", 99), "agent_mismatch")
+
+        with patch.object(calls_db, "_connect", return_value=_Connection()), \
+             patch.object(calls_db, "get_compliance", return_value={"require_consent": False, "honor_dnc": True}), \
+             patch.object(calls_db, "is_dnc", return_value=True):
+            self.assertEqual(calls_db._arthaleads_call_readiness(1, route, "+14155552672", 12), "dnd_blocked")
+
+        with patch.object(calls_db, "_connect", return_value=_Connection()), \
+             patch.object(calls_db, "get_compliance", return_value={"require_consent": True, "honor_dnc": True}):
+            self.assertEqual(calls_db._arthaleads_call_readiness(1, route, "+14155552672", 12), "call_consent_required")
 
 
 if __name__ == "__main__":

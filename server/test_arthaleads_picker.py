@@ -19,7 +19,7 @@ class _Response(BytesIO):
 
 class ArthaleadsPickerTests(unittest.TestCase):
     @patch("arthaleads_picker.urllib.request.urlopen")
-    def test_fetches_active_choices_with_header_and_returns_only_picker_fields(self, urlopen):
+    def test_fetches_projects_with_connection_header_and_returns_only_picker_fields(self, urlopen):
         urlopen.return_value = _Response(json.dumps({
             "ok": True,
             "org_id": "private-org-id",
@@ -27,25 +27,17 @@ class ArthaleadsPickerTests(unittest.TestCase):
                 {"id": "p1", "name": "Khopoli", "location": "Maharashtra", "leadCount": 12},
                 {"id": "", "name": "Invalid"},
             ],
-            "campaigns": [
-                {"id": "fb1", "name": "Facebook form", "source": "facebook_campaign", "leads": 4},
-                {"id": "wa1", "name": "WhatsApp ad", "source": "whatsapp_ad", "leads": 2},
-                {"id": "g1", "name": "Google campaign", "source": "google_campaign", "leads": 1},
-            ],
+            "campaigns": [{"id": "ignored", "name": "Not in the confirmed endpoint"}],
         }).encode())
 
         result = arthaleads_picker.fetch_picker_options("private-connection-key")
 
         request = urlopen.call_args.args[0]
         self.assertEqual(request.full_url, arthaleads_picker.PICKER_OPTIONS_URL)
-        self.assertEqual(request.get_header("Authorization"), "Bearer private-connection-key")
+        self.assertEqual(request.get_header("X-arthaleads-connection-token"), "private-connection-key")
         self.assertNotIn("private-connection-key", request.full_url)
         self.assertEqual(result, {
             "projects": [{"id": "p1", "name": "Khopoli", "location": "Maharashtra"}],
-            "campaigns": [
-                {"id": "fb1", "name": "Facebook form", "source": "facebook_campaign", "leads": 4},
-                {"id": "wa1", "name": "WhatsApp ad", "source": "whatsapp_ad", "leads": 2},
-            ],
         })
         self.assertNotIn("org_id", result)
 

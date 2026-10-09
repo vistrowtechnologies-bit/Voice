@@ -51,7 +51,7 @@ const CONNECT_HINT: Record<string, string> = {
 }
 
 type ArthaleadsRouteOption = {
-  kind: 'project' | 'facebook_campaign' | 'whatsapp_ad'
+  kind: 'project'
   id: string
   name: string
   detail?: string
@@ -68,6 +68,11 @@ export function Integrations() {
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, string>>({})
   const [leadWebhookUrl, setLeadWebhookUrl] = useState<string | null | undefined>(undefined)
+  const [leadWebhookBaseUrl, setLeadWebhookBaseUrl] = useState<string | null>(null)
+  const [leadWebhookAccountId, setLeadWebhookAccountId] = useState<number | null>(null)
+  const [leadWebhookToken, setLeadWebhookToken] = useState('')
+  const [leadWebhookTokenShown, setLeadWebhookTokenShown] = useState(false)
+  const [leadWebhookTokenCopied, setLeadWebhookTokenCopied] = useState(false)
   const [leadWebhookShown, setLeadWebhookShown] = useState(false)
   const [leadWebhookCopied, setLeadWebhookCopied] = useState(false)
   const [arthaleadsInbound, setArthaleadsInbound] = useState<ArthaleadsInboundConfig | null>(null)
@@ -79,12 +84,18 @@ export function Integrations() {
   const [arthaleadsPickerOptions, setArthaleadsPickerOptions] = useState<ArthaleadsPickerOptions | null>(null)
   const [arthaleadsPickerLoading, setArthaleadsPickerLoading] = useState(false)
   const [arthaleadsPickerError, setArthaleadsPickerError] = useState('')
+  const [arthaleadsProjectSearch, setArthaleadsProjectSearch] = useState('')
 
   const reload = () => fetchIntegrations().then((list) => setIntegrations(sortIntegrations(list))).catch(() => setIntegrations([]))
 
   useEffect(() => {
     reload()
-    fetchLeadWebhook().then((r) => setLeadWebhookUrl(r.url)).catch(() => setLeadWebhookUrl(null))
+    fetchLeadWebhook().then((r) => {
+      setLeadWebhookUrl(r.url)
+      setLeadWebhookBaseUrl(r.url ? new URL(r.url).origin : null)
+      setLeadWebhookAccountId(r.accountId)
+      setLeadWebhookToken(r.token)
+    }).catch(() => setLeadWebhookUrl(null))
     fetchArthaleadsInboundConfig().then(setArthaleadsInbound).catch(() => setArthaleadsInbound(null))
     fetchAgents().then(setAgents).catch(() => setAgents([]))
     fetchKnowledgeBases().then(setKnowledgeBases).catch(() => setKnowledgeBases([]))
@@ -101,18 +112,24 @@ export function Integrations() {
     }
     setArthaleadsPickerLoading(true)
     setArthaleadsPickerError('')
+    setArthaleadsPickerOptions(null)
     fetchArthaleadsPickerOptions()
       .then(setArthaleadsPickerOptions)
-      .catch((error) => setArthaleadsPickerError(error instanceof Error ? error.message : 'Could not load ArthaLeads projects.'))
+      .catch((error) => {
+        setArthaleadsPickerOptions(null)
+        setArthaleadsPickerError(error instanceof Error ? error.message : 'Could not load ArthaLeads projects.')
+      })
       .finally(() => setArthaleadsPickerLoading(false))
   }, [canManage, integrations])
 
   const refreshArthaleadsOptions = async () => {
     setArthaleadsPickerLoading(true)
     setArthaleadsPickerError('')
+    setArthaleadsPickerOptions(null)
     try {
       setArthaleadsPickerOptions(await fetchArthaleadsPickerOptions())
     } catch (error) {
+      setArthaleadsPickerOptions(null)
       setArthaleadsPickerError(error instanceof Error ? error.message : 'Could not load ArthaLeads projects.')
     } finally {
       setArthaleadsPickerLoading(false)
@@ -121,14 +138,9 @@ export function Integrations() {
 
   const optionsForRoute = (source: 'website' | 'facebook' | 'whatsapp'): ArthaleadsRouteOption[] => {
     if (!arthaleadsPickerOptions || source === 'website') return []
-    const projects: ArthaleadsRouteOption[] = arthaleadsPickerOptions.projects.map((project) => ({
+    return arthaleadsPickerOptions.projects.map((project) => ({
       kind: 'project', id: project.id, name: project.name, detail: project.location,
     }))
-    const campaignSource = source === 'facebook' ? 'facebook_campaign' : 'whatsapp_ad'
-    const campaigns: ArthaleadsRouteOption[] = arthaleadsPickerOptions.campaigns
-      .filter((campaign) => campaign.source === campaignSource)
-      .map((campaign) => ({ kind: campaignSource, id: campaign.id, name: campaign.name, detail: `${campaign.leads} leads` }))
-    return [...projects, ...campaigns]
   }
 
   const saveArthaleadsInbound = async (config = arthaleadsInbound) => {
@@ -161,6 +173,13 @@ export function Integrations() {
     await navigator.clipboard.writeText(leadWebhookUrl)
     setLeadWebhookCopied(true)
     setTimeout(() => setLeadWebhookCopied(false), 1500)
+  }
+
+  const copyLeadWebhookToken = async () => {
+    if (!leadWebhookToken) return
+    await navigator.clipboard.writeText(leadWebhookToken)
+    setLeadWebhookTokenCopied(true)
+    setTimeout(() => setLeadWebhookTokenCopied(false), 1500)
   }
 
   const connected = integrations.filter((i) => i.status === 'connected').length
@@ -270,6 +289,24 @@ export function Integrations() {
           )}
         </Card>
 
+        {canManage && leadWebhookBaseUrl && leadWebhookAccountId != null && leadWebhookToken && <Card>
+          <div className="mb-3">
+            <p className="font-semibold">Connect ArthaLeads to this Vistrow account</p>
+            <p className="text-xs text-text-muted">In ArthaLeads, open Integrations → Vistrow Voice and enter these three values. The connection key is sent in a secure request header.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="text-xs text-text-muted">Vistrow address
+              <div className="mt-1 flex gap-2"><input readOnly value={leadWebhookBaseUrl} className="min-w-0 flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 font-mono text-xs text-text" /><button type="button" onClick={() => navigator.clipboard.writeText(leadWebhookBaseUrl)} className="rounded-lg border border-border px-3 text-text" aria-label="Copy Vistrow address"><Icon name="content_copy" className="text-[15px]" /></button></div>
+            </label>
+            <label className="text-xs text-text-muted">Vistrow account ID
+              <div className="mt-1 flex gap-2"><input readOnly value={leadWebhookAccountId} className="min-w-0 flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 font-mono text-xs text-text" /><button type="button" onClick={() => navigator.clipboard.writeText(String(leadWebhookAccountId))} className="rounded-lg border border-border px-3 text-text" aria-label="Copy Vistrow account ID"><Icon name="content_copy" className="text-[15px]" /></button></div>
+            </label>
+            <label className="text-xs text-text-muted">Connection key
+              <div className="mt-1 flex gap-2"><input readOnly value={leadWebhookTokenShown ? leadWebhookToken : '•'.repeat(20)} className="min-w-0 flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 font-mono text-xs text-text" /><button type="button" onClick={() => setLeadWebhookTokenShown((shown) => !shown)} className="rounded-lg border border-border px-3 text-text" aria-label={leadWebhookTokenShown ? 'Hide connection key' : 'Show connection key'}><Icon name={leadWebhookTokenShown ? 'visibility_off' : 'visibility'} className="text-[15px]" /></button><button type="button" onClick={copyLeadWebhookToken} className="rounded-lg border border-border px-3 text-text" aria-label="Copy connection key"><Icon name={leadWebhookTokenCopied ? 'check' : 'content_copy'} className="text-[15px]" /></button></div>
+            </label>
+          </div>
+        </Card>}
+
         <Card>
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
@@ -301,12 +338,23 @@ export function Integrations() {
               {arthaleadsPickerError && <span role="status" className="text-xs text-destructive">{arthaleadsPickerError}</span>}
               {arthaleadsPickerOptions && <span className="text-xs text-text-muted">{arthaleadsPickerOptions.projects.length} active projects loaded</span>}
             </div>}
+            {canManage && arthaleadsPickerOptions && arthaleadsPickerOptions.projects.length > 0 && <label className="mb-3 block max-w-md text-xs text-text-muted">
+              Find a project
+              <input type="search" value={arthaleadsProjectSearch} onChange={(event) => setArthaleadsProjectSearch(event.target.value)} placeholder="Search active projects" className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text" />
+            </label>}
             <div className="space-y-3">
               {arthaleadsInbound.routes.map((route, index) => {
-                const options = optionsForRoute(route.source)
+                const allOptions = optionsForRoute(route.source)
+                const normalizedSearch = arthaleadsProjectSearch.trim().toLocaleLowerCase()
+                const options = normalizedSearch
+                  ? allOptions.filter((option) => `${option.name} ${option.detail || ''}`.toLocaleLowerCase().includes(normalizedSearch))
+                  : allOptions
                 const selectedOption = route.matchId
-                  ? options.find((option) => option.id === route.matchId && option.kind === route.matchKind)
-                  : options.find((option) => option.name === route.match)
+                  ? allOptions.find((option) => option.id === route.matchId && option.kind === route.matchKind)
+                  : allOptions.find((option) => option.name === route.match)
+                const visibleOptions = selectedOption && !options.includes(selectedOption)
+                  ? [selectedOption, ...options]
+                  : options
                 const selectedKey = selectedOption ? `${selectedOption.kind}::${selectedOption.id}` : ''
                 const staleKey = !selectedOption && route.matchId && route.matchKind ? `${route.matchKind}::${route.matchId}` : ''
                 return (
@@ -318,7 +366,7 @@ export function Integrations() {
                       <option value="website">Website</option><option value="facebook">Facebook</option><option value="whatsapp">WhatsApp</option>
                     </select>
                   </label>
-                  <label className="text-xs text-text-muted">{route.source === 'website' ? 'Website page' : route.source === 'facebook' ? 'Facebook project or campaign' : 'WhatsApp project or campaign'}
+                  <label className="text-xs text-text-muted">{route.source === 'website' ? 'Website page' : route.source === 'facebook' ? 'Facebook project' : 'WhatsApp project'}
                     {route.source === 'website' ? <input value={route.match} disabled={!canManage || inboundSaving} placeholder="Paste a page address or part of it" onChange={(event) => {
                       const routes = [...arthaleadsInbound.routes]; routes[index] = { ...route, match: event.target.value, matchId: '', matchKind: 'website', matchLabel: event.target.value }; setArthaleadsInbound({ ...arthaleadsInbound, routes })
                     }} className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text" /> : <select value={selectedKey || staleKey} disabled={!canManage || inboundSaving || arthaleadsPickerLoading || !arthaleadsPickerOptions} onChange={(event) => {
@@ -331,11 +379,8 @@ export function Integrations() {
                     }} className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text">
                       <option value="">{arthaleadsPickerLoading ? 'Loading active projects…' : arthaleadsPickerOptions ? 'Choose an active project or campaign' : 'Connect ArthaLeads CRM to load projects'}</option>
                       {staleKey && <option value={staleKey}>Saved: {route.matchLabel || route.match} (no longer active)</option>}
-                      {options.filter((option) => option.kind === 'project').length > 0 && <optgroup label="Active projects">
-                        {options.filter((option) => option.kind === 'project').map((option) => <option key={`${option.kind}:${option.id}`} value={`${option.kind}::${option.id}`}>{option.name}{option.detail ? ` · ${option.detail}` : ''}</option>)}
-                      </optgroup>}
-                      {options.filter((option) => option.kind !== 'project').length > 0 && <optgroup label={route.source === 'facebook' ? 'Facebook campaigns' : 'WhatsApp ads'}>
-                        {options.filter((option) => option.kind !== 'project').map((option) => <option key={`${option.kind}:${option.id}`} value={`${option.kind}::${option.id}`}>{option.name}{option.detail ? ` · ${option.detail}` : ''}</option>)}
+                      {options.length > 0 && <optgroup label="Active ArthaLeads projects">
+                        {visibleOptions.map((option) => <option key={`${option.kind}:${option.id}`} value={`${option.kind}::${option.id}`}>{option.name}{option.detail ? ` · ${option.detail}` : ''}</option>)}
                       </optgroup>}
                     </select>}
                   </label>
