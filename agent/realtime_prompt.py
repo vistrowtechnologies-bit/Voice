@@ -86,13 +86,13 @@ def compact(instructions: str, *, language_name: str, kb_limit: int = 6000) -> s
             rest.append(_trim_kb(p, kb_limit))
         else:
             rest.append(p)
-    if rules:
-        # Nobody has spoken on the opening turn, so there is nothing to "not catch".
-        rules = rules.replace(
-            "If a message is garbled",
-            "Once the caller has spoken, if a message is garbled",
-            1,
-        )
     ordered = [x for x in (identity, language_directive(language_name), rules) if x] + rest + [_TURN_STYLE]
     out = "\n".join(p.rstrip("\n") + "\n" for p in ordered)
+    # This rule exists in BOTH Platform rules and Only state back what they
+    # actually said. Qualifying just the first copy leaves an unconditional
+    # apology instruction in the model's system prompt on the opening turn.
+    out = out.replace(
+        "If a message is garbled",
+        "Only after a genuine spoken caller request (never noise or silence), if a message is garbled",
+    )
     return out.strip() + "\n"

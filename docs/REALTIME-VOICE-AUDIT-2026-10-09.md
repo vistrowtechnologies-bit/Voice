@@ -54,6 +54,14 @@ and a repeated introduction; it is not sufficient evidence of flawless 3.1.
    The audio-level estimate can be biased by echo/noise; neither metric alone
    isolates network transit or playback buffering.
 
+5. **A second unconditional garbled-speech rule survived the earlier fix.**
+   Claude qualified the copy in Platform rules for after the caller spoke,
+   but the copy in Only state back what they actually said still asked for an
+   apology/repeat unconditionally. Both copies now require a genuine spoken
+   request and explicitly exclude noise/silence. This is a confirmed prompt
+   defect consistent with the apology opening; it is not proof of the exact
+   model decision on that call.
+
 ## Why captions and repeated turns can be misleading
 
 Gemini receives microphone audio directly; Sarvam STT is not in this route.
@@ -89,7 +97,7 @@ support from 1.8.2 onward. No model substitution or fallback was added.
 
 ## Before calling this launch-ready
 
-Offline verification: 65 tests passed (plus two subtests) across
+Offline verification: 66 tests passed (plus two subtests) across
 `test_realtime_config`, `test_realtime_prompt`, `test_agent_constructs`,
 `test_turn_latency`, `test_held_opening`, and `test_ringback`, with LiveKit 1.8.3.
 The database URL was deliberately unreachable and the OpenAI key was a dummy;
