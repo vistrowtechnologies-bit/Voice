@@ -62,6 +62,35 @@ and a repeated introduction; it is not sufficient evidence of flawless 3.1.
    defect consistent with the apology opening; it is not proof of the exact
    model decision on that call.
 
+6. **Deferred silence handling can inject a turn into active native audio.**
+   The main away handler checked recent raw audio, but its deferred reminder
+   bypassed that check. The post-reminder timeout could also request a goodbye
+   while a model turn was still thinking/speaking. All native reminder sends
+   now share the recent-audio/state guard; the timeout waits for an idle window.
+   Google 3.1 explicitly says an injected client turn with `turn_complete=true`
+   interrupts generation. This is a confirmed application race, but the logs
+   do not establish which repeated reply it caused. Failed openings now release
+   the pending flag and allow presence recovery rather than suppressing it forever.
+
+7. **The alternate route ignored native-model compatibility.** Voice selected
+   the separate orchestrator by account flag. That orchestrator runs STT, sends
+   the configured model name to a text completion API, then runs TTS; it cannot
+   execute `gemini-live` aliases. Dashboard tests, contact calls, phone tests and
+   inbound events now bypass that route for an explicitly assigned native agent.
+   The orchestrator also refuses native browser/demo tokens and native pipeline
+   session construction. Pipeline models retain their route. Browser agent and
+   phone-number ownership are checked before proxying. This was a latent defect;
+   the two inspected calls actually ran on LiveKit, so it did not explain those
+   two recordings. Native agents need a configured LiveKit phone path: if it is
+   absent, setup must fail clearly instead of pretending the text pipeline can
+   handle the selected model. Deployment now includes Voice server and orchestrator.
+
+8. **Agent/server catalogs had already diverged on main.** The worker copy
+   lacked the server's current fallback defaults and hidden-voice rules. Synced
+   the agent from the server's existing catalog as required by AGENTS.md, and
+   added a byte-equality regression check. Existing voice resolution is retained;
+   this is a consistency defect, not evidence of a Gemini native-audio failure.
+
 ## Why captions and repeated turns can be misleading
 
 Gemini receives microphone audio directly; Sarvam STT is not in this route.
@@ -97,14 +126,23 @@ support from 1.8.2 onward. No model substitution or fallback was added.
 
 ## Before calling this launch-ready
 
-Offline verification: 66 tests passed (plus two subtests) across
+Offline verification: 82 agent tests passed (plus four subtests) across
 `test_realtime_config`, `test_realtime_prompt`, `test_agent_constructs`,
-`test_turn_latency`, `test_held_opening`, and `test_ringback`, with LiveKit 1.8.3.
+`test_turn_latency`, `test_held_opening`, `test_ringback`,
+`test_google31_preview_voice`, `test_google38_voices`, and
+`test_gemini38_voice_personality`, with LiveKit 1.8.3.
 The database URL was deliberately unreachable and the OpenAI key was a dummy;
-construct tests use an in-memory compliance configuration. Python compilation
+construct tests use an in-memory compliance configuration; the additional voice
+regressions also mock the compliance lookup. Python compilation
 and `git diff --check` passed. One existing `audioop` deprecation warning remains.
 
-1. Review and merge the PR, then deploy the agent code to both tenant and platform
+Additionally: 31 server routing, EnableX, hidden-voice and tenant-default tests
+passed (six subtests), executing real
+endpoint bodies with mocked database/HTTP/dial collaborators; nine orchestrator
+route tests passed with unittest. In total, 122 selected tests passed.
+No test dialled a number or used a real token.
+
+1. Review and merge the PR, deploy Voice server and orchestrator, then deploy the agent code to both tenant and platform
    LiveKit workers. A Railway/server deployment alone does not update these workers.
 2. Use owner-started tests for each model on dashboard, embedded widget, and phone.
    Start with ambience off and headphones; then test speakers and ambience separately.

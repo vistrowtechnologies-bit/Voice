@@ -20,3 +20,19 @@ def aec_warmup_duration(*, realtime: bool, phone: bool) -> float | None:
     # Native realtime must receive the caller's first words and interruptions.
     # Browser WebRTC echo cancellation remains enabled independently.
     return None if realtime or phone else 3.0
+
+
+def automated_speech_blocked(userdata: dict, now: float, *, recent_voice_s: float) -> bool:
+    """Do not inject reminders into native audio while a real turn is active.
+
+    Google finalizes input/state events late. Raw audio is therefore an
+    additional presence signal, including for deferred timers, not only the
+    main 'away' handler.
+    """
+    if (userdata.get("realtime_greeting_pending")
+            or userdata.get("agent_state") in {"thinking", "speaking"}
+            or userdata.get("user_state") == "speaking"):
+        return True
+    meter = userdata.get("turn_meter")
+    age = meter.voice_age(now) if meter is not None else None
+    return age is not None and age < recent_voice_s

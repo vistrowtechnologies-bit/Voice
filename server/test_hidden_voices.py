@@ -1,10 +1,16 @@
 """Slow or known-bad voices are withheld from pickers but still resolve for agents already using them."""
 import unittest
+from pathlib import Path
 
 import voice_catalog as vc
 
 
 class HiddenVoices(unittest.TestCase):
+    def test_agent_and_server_catalogs_are_identical(self):
+        root = Path(__file__).resolve().parent.parent
+        self.assertEqual((root / "agent/voice_catalog.py").read_bytes(),
+                         (root / "server/voice_catalog.py").read_bytes())
+
     def test_slow_and_bad_voices_are_hidden(self):
         for value in ("google31:kore", "google:kore", "google:charon", "google:hi-IN-Standard-A", "elevenlabs:zT03pEAEi0VHKciJODfn"):
             self.assertTrue(vc.is_hidden(value), value)

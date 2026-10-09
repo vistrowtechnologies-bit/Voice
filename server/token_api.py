@@ -31,6 +31,7 @@ import kb_extract
 import livekit_sip
 import llm_warmer
 import project_sync
+import voice_routing
 import razorpay_client
 import billing_documents
 import retention_worker
@@ -2951,7 +2952,11 @@ def call_contact_now(contact_id: int, data: dict = Body(...), user: dict = Depen
     custom["tags"] = ",".join(contact.get("tags") or [])
     custom_json = json.dumps(custom)
     orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
-    if orchestrator_url and calls_db.is_on_orchestrator_pipeline(user["account_id"]):
+    if orchestrator_url and voice_routing.use_orchestrator(
+        user["account_id"], agent_id,
+        is_enabled=calls_db.is_on_orchestrator_pipeline,
+        get_agent=calls_db.get_agent_by_id_unscoped,
+    ):
         try:
             request = urllib.request.Request(
                 f"{orchestrator_url.rstrip('/')}/telephony/enablex/outbound-test-call",
@@ -4194,8 +4199,16 @@ def telephony_test_call(data: dict = Body(...), user: dict = Depends(current_use
     if not from_number or not to_number:
         raise HTTPException(400, "Both a from (virtual) number and a to number are required")
 
+    number = calls_db.get_phone_number_by_number(from_number)
+    if not number or number.get("accountId") != user["account_id"]:
+        raise HTTPException(404, "Phone number not found in this workspace")
+
     orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
-    if orchestrator_url and calls_db.is_on_orchestrator_pipeline(user["account_id"]):
+    if orchestrator_url and voice_routing.use_orchestrator(
+        user["account_id"], number.get("agentId"),
+        is_enabled=calls_db.is_on_orchestrator_pipeline,
+        get_agent=calls_db.get_agent_by_id_unscoped,
+    ):
         # This account is on the Railway-native pipeline (orchestrator/) —
         # EnableX WebSocket streaming, no LiveKit SIP bridge involved. Every
         # other account still goes through place_test_call() below.
@@ -4249,8 +4262,15 @@ def orchestrator_browser_token(data: dict = Body(...), user: dict = Depends(curr
     if not agent_id:
         raise HTTPException(400, "agentId is required")
 
+    if not calls_db.agent_belongs_to_account(agent_id, user["account_id"]):
+        raise HTTPException(404, "Agent not found in this workspace")
+
     orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
-    if not (orchestrator_url and calls_db.is_on_orchestrator_pipeline(user["account_id"])):
+    if not (orchestrator_url and voice_routing.use_orchestrator(
+        user["account_id"], agent_id,
+        is_enabled=calls_db.is_on_orchestrator_pipeline,
+        get_agent=calls_db.get_agent_by_id_unscoped,
+    )):
         raise HTTPException(400, "This account isn't on the orchestrator pipeline yet.")
 
     try:
@@ -4377,7 +4397,11 @@ async def enablex_inbound_event(request: Request, background_tasks: BackgroundTa
                 break
     if number_row is not None:
         orchestrator_url = os.environ.get("ORCHESTRATOR_URL")
-        if orchestrator_url and calls_db.is_on_orchestrator_pipeline(number_row["accountId"]):
+        if orchestrator_url and voice_routing.use_orchestrator(
+            number_row["accountId"], number_row.get("agentId"),
+            is_enabled=calls_db.is_on_orchestrator_pipeline,
+            get_agent=calls_db.get_agent_by_id_unscoped,
+        ):
             # EnableX requires a quick 200 acknowledgment. Do the potentially
             # slow cross-service request only after this response is sent;
             # the orchestrator is callback-order tolerant and derives its

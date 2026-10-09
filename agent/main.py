@@ -4249,6 +4249,12 @@ class RealEstateAgent(Agent):
                     )
                 await speech.wait_for_playout()
                 self.session.userdata["greeting_played"] = True
+            except Exception:
+                # Keep a failed request distinct from an opening still in
+                # progress, so presence recovery is not suppressed forever.
+                self.session.userdata["realtime_greeting_failed"] = True
+                logger.exception("realtime opening failed before completing playback")
+                raise
             finally:
                 self.session.userdata["realtime_greeting_pending"] = False
             return
@@ -6951,7 +6957,19 @@ async def entrypoint(ctx: JobContext) -> None:
 
         async def _watch() -> None:
             try:
-                await asyncio.sleep(_POST_CHECKIN_TIMEOUT_S)
+                # A pending model reply can outlast this timer. For native
+                # audio, wait for an idle window rather than force a goodbye
+                # that interrupts the reply (3.1 client turns interrupt).
+                while _rt_call:
+                    await asyncio.sleep(_POST_CHECKIN_TIMEOUT_S)
+                    if not realtime_config.automated_speech_blocked(
+                        userdata, time.monotonic(), recent_voice_s=_POST_CHECKIN_TIMEOUT_S,
+                    ):
+                        break
+                    if userdata.get("ending_call"):
+                        return
+                if not _rt_call:
+                    await asyncio.sleep(_POST_CHECKIN_TIMEOUT_S)
                 if userdata.get("ending_call"):
                     return  # a goodbye is already being spoken (e.g. the time-limit wrap-up); don't talk over it
                 # Speech-to-speech: "the caller spoke" normally comes from the model's own
@@ -6985,6 +7003,13 @@ async def entrypoint(ctx: JobContext) -> None:
             deferred_checkin_task["handle"] = None
 
     def _send_silence_checkin() -> None:
+        # Deferred timers bypass _on_user_state_changed's guards. Check at
+        # the common send point too; a late Google state event must not let
+        # an injected turn cut off the real caller/model conversation.
+        if _rt_call and realtime_config.automated_speech_blocked(
+            userdata, time.monotonic(), recent_voice_s=8.0,
+        ):
+            return
         sent = userdata.get("silence_reminders", 0)
         if sent >= silence_reminder_max:
             return
@@ -7242,7 +7267,7 @@ async def entrypoint(ctx: JobContext) -> None:
             if _age is not None and _age < 8.0:
                 logger.info("model reported the caller away but audio was heard %.1fs ago — ignoring", _age)
                 return
-            if not userdata.get("greeting_played", False):
+            if not userdata.get("greeting_played", False) and not userdata.get("realtime_greeting_failed", False):
                 # Away fired before the opening line finished playing (slow
                 # cold start / TTS) — not real caller silence, ignore it.
                 return

@@ -7,6 +7,7 @@ from livekit import rtc
 from livekit.agents.voice.agent_activity import AgentActivity
 
 import realtime_config as config
+from turn_latency import TurnLatencyMeter
 
 
 @pytest.mark.parametrize("model", sorted(config.API_MODELS))
@@ -47,3 +48,26 @@ def test_caller_audio_during_greeting(realtime, phone, expected):
         assert bytes(sent.data) == bytes(frame.data)
     else:
         assert not any(bytes(sent.data))
+
+
+def test_delayed_provider_states_do_not_allow_reminder_during_real_speech():
+    meter = TurnLatencyMeter()
+    meter.feed(0.2, 10.0)
+    meter.feed(0.2, 10.2)
+    data = {"turn_meter": meter, "user_state": "listening", "agent_state": "listening"}
+    assert config.automated_speech_blocked(data, 10.3, recent_voice_s=8)
+    assert not config.automated_speech_blocked(data, 18.3, recent_voice_s=8)
+
+
+@pytest.mark.parametrize("active", [
+    {"agent_state": "thinking"}, {"agent_state": "speaking"},
+    {"user_state": "speaking"}, {"realtime_greeting_pending": True},
+])
+def test_reminder_and_silence_hangup_wait_for_active_turn(active):
+    assert config.automated_speech_blocked(active, 100, recent_voice_s=12)
+
+
+def test_never_spoken_caller_can_still_be_checked_on_when_idle():
+    assert not config.automated_speech_blocked(
+        {"turn_meter": TurnLatencyMeter()}, 100, recent_voice_s=8,
+    )

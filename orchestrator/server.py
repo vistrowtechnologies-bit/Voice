@@ -359,6 +359,8 @@ async def _build_session(
     this one.
     """
     cfg = await asyncio.to_thread(db.get_agent_config, agent_id) or {}
+    if str(cfg.get("model") or "").startswith("gemini-live"):
+        raise ValueError("Native Google Live audio requires the LiveKit realtime route, not the STT/LLM/TTS orchestrator")
     try:
         custom_fields = json.loads(contact_custom_fields) if contact_custom_fields else {}
         if not isinstance(custom_fields, dict):
@@ -976,6 +978,9 @@ async def browser_token(
     agent_id = agent_id or TEST_AGENT_ID or None
     if not account_id or not agent_id:
         return {"ok": False, "error": "account_id/agent_id not provided and TEST_ACCOUNT_ID/TEST_AGENT_ID not configured."}
+    cfg = await asyncio.to_thread(db.get_agent_config, agent_id) or {}
+    if str(cfg.get("model") or "").startswith("gemini-live"):
+        return {"ok": False, "error": "This agent requires the LiveKit native realtime connection."}
     wss_base = enablex.public_wss_host()
     if not wss_base:
         return {"ok": False, "error": "PUBLIC_BASE_URL/WSS_PUBLIC_HOST not set."}
@@ -998,6 +1003,8 @@ async def browser_token_platform_demo(
     whichever agent is flagged is_platform_demo, reading the same `agents`
     table — no separate config needed here."""
     cfg = await asyncio.to_thread(db.get_agent_config, None) or {}
+    if str(cfg.get("model") or "").startswith("gemini-live"):
+        return {"ok": False, "error": "This demo uses native realtime audio. Please retry the LiveKit connection."}
     account_id = cfg.get("account_id")
     agent_id = cfg.get("id")
     if not account_id or not agent_id:

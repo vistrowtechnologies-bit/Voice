@@ -15,6 +15,28 @@ import server
 
 
 class EnableXEventRoutingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_native_live_never_constructs_a_text_pipeline_session(self):
+        for model in ("gemini-live", "gemini-live:gemini-3.1-flash-live-preview"):
+            with patch.object(server.db, "get_agent_config", return_value={"model": model}):
+                with self.assertRaisesRegex(ValueError, "realtime route"):
+                    await server._build_session(2, 26, "browser")
+
+    async def test_native_demo_never_issues_pipeline_fallback_token(self):
+        with patch.object(server.db, "get_agent_config", return_value={
+            "model": "gemini-live", "account_id": 2, "id": 26,
+        }), patch.object(server.ws_security, "issue_stream_token") as issue:
+            result = await server.browser_token_platform_demo()
+        self.assertFalse(result["ok"])
+        issue.assert_not_called()
+
+    async def test_native_browser_never_issues_pipeline_token(self):
+        with patch.object(server.db, "get_agent_config", return_value={
+            "model": "gemini-live:gemini-3.1-flash-live-preview", "account_id": 2, "id": 26,
+        }), patch.object(server.ws_security, "issue_stream_token") as issue:
+            result = await server.browser_token(account_id=2, agent_id=26)
+        self.assertFalse(result["ok"])
+        issue.assert_not_called()
+
     def setUp(self) -> None:
         server._PENDING_ACCOUNT_BY_VOICE_ID.clear()
         server._PENDING_AGENT_BY_VOICE_ID.clear()

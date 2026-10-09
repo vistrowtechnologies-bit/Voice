@@ -150,6 +150,7 @@ class RealtimeGreetingLifecycle(unittest.IsolatedAsyncioTestCase):
             await main.RealEstateAgent.on_enter(agent)
         self.assertFalse(agent.session.userdata["realtime_greeting_pending"])
         self.assertFalse(agent.session.userdata.get("greeting_played", False))
+        self.assertTrue(agent.session.userdata["realtime_greeting_failed"])
 
     async def test_user_speaks_first_does_not_generate_a_greeting(self):
         agent = self.agent(AsyncMock())
