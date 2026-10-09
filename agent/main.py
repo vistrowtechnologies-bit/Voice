@@ -67,6 +67,7 @@ import jev_intent
 import ringback
 import turn_latency
 import realtime_prompt
+import realtime_config
 import sarvam_realtime_stt
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
@@ -1745,22 +1746,13 @@ class _InstrumentedTurnDetector(eot.TurnDetector):
 # place names against Google's 0/5). Until that is measured for Gemini Live
 # on Hindi and Marathi, this stays admin-only.
 _GEMINI_LIVE_PREFIX = "gemini-live"
-# NOT the 3.1 model, despite it being newer. The plugin warns that any model
-# with "3.1" in the name "has limited mid-session update support: instructions,
-# chat context, and tool updates will not be applied until the next session" —
-# and mid-session instruction updates are how every per-turn guard in this file
-# works. The objective that stops the funnel overriding a question, the garbled
-# handling, the site-visit suppression, the facts reminder: all of them are a
-# system message added in on_user_turn_completed. On 3.1 they would be accepted
-# and silently ignored, which is worse than not having them, because the tests
-# would still pass.
-_GEMINI_LIVE_DEFAULT_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
+# LiveKit >=1.8.2 supports 3.1 mid-session updates. Provider-managed audio
+# turns do not run the pipeline's on_user_turn_completed hook; essential
+# realtime conversation rules belong in realtime_prompt, not that hook.
+_GEMINI_LIVE_DEFAULT_MODEL = realtime_config.DEFAULT_MODEL
 # Live models reachable with a plain GEMINI_API_KEY. The plugin also lists
 # gemini-live-2.5-flash-native-audio, which is VertexAI-only.
-_GEMINI_LIVE_API_MODELS = {
-    "gemini-3.1-flash-live-preview",
-    "gemini-2.5-flash-native-audio-preview-12-2025",
-}
+_GEMINI_LIVE_API_MODELS = realtime_config.API_MODELS
 # Gemini Live's own voice list; the ones this platform already uses appear in
 # it verbatim, so a Chirp 3 persona maps straight across.
 _GEMINI_LIVE_VOICES = {
@@ -1810,10 +1802,12 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
         api_key=api_key,
         instructions=instructions,
         voice=_gemini_live_voice(voice_value),
-        language=language,
+        # Native audio does not support speech_config.language_code. The
+        # realtime prompt sets the language and permits natural switching.
+        thinking_config=realtime_config.thinking_config(name),
         # Without these there is no transcript at all: no dashboard call
-        # record, no lead extraction, and none of the per-turn guards this
-        # file relies on, all of which read the caller's words.
+        # record or lead extraction. Audio itself streams independently;
+        # final input captions may arrive after the model's reply.
         input_audio_transcription={},
         output_audio_transcription={},
         # Gemini Live runs its OWN turn detection server-side, so none of
@@ -4246,12 +4240,17 @@ class RealEstateAgent(Agent):
             )
             if _opener:
                 _greet += f" Open with this line, or as close to it as reads naturally: {_opener}"
-            self.session.generate_reply(instructions=_greet)
-            self.session.userdata["greeting_played"] = True
-            if dispatch_t0 is not None:
-                logger.info(
-                    "[latency] realtime greeting requested at +%.2fs", time.monotonic() - dispatch_t0
-                )
+            self.session.userdata["realtime_greeting_pending"] = True
+            try:
+                speech = self.session.generate_reply(instructions=_greet)
+                if dispatch_t0 is not None:
+                    logger.info(
+                        "[latency] realtime greeting requested at +%.2fs", time.monotonic() - dispatch_t0
+                    )
+                await speech.wait_for_playout()
+                self.session.userdata["greeting_played"] = True
+            finally:
+                self.session.userdata["realtime_greeting_pending"] = False
             return
         if self._direction == "outbound":
             # Hold the opening until we know a human is actually listening.
@@ -6687,8 +6686,11 @@ async def entrypoint(ctx: JobContext) -> None:
         # cancellation warmup exists for an open mic and speaker in a room; a
         # phone line has no acoustic path to cancel, so the 3s default is
         # 3 seconds of the call spent warming up something that cannot help.
-        # Kept at the default for the browser widget, where it is real.
-        aec_warmup_duration=None if _is_phone_call else 3.0,
+        # For native audio, do not replace the caller's first words with
+        # silence during the greeting. Browser WebRTC AEC stays enabled.
+        aec_warmup_duration=realtime_config.aec_warmup_duration(
+            realtime=_rt_call, phone=_is_phone_call,
+        ),
         # Sarvam's STT runs its own server-side VAD, so LiveKit's would be a
         # second detector and a second network hop over the same audio. Their
         # guide is explicit: vad=None. Passing None (not omitting it) matters
@@ -6709,7 +6711,7 @@ async def entrypoint(ctx: JobContext) -> None:
             _make_repeated_opener_transform(agent),
             _make_caller_gender_guard_transform(agent),
         ],
-        turn_handling=TurnHandlingOptions() if _rt_call else TurnHandlingOptions(
+        turn_handling=TurnHandlingOptions(turn_detection="realtime_llm") if _rt_call else TurnHandlingOptions(
             interruption={
                 "min_words": min_words,
                 # min_words alone is language-asymmetric and cut real callers
@@ -7244,7 +7246,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 # Away fired before the opening line finished playing (slow
                 # cold start / TTS) — not real caller silence, ignore it.
                 return
-            if userdata.get("opening_being_played", False):
+            if userdata.get("realtime_greeting_pending") or userdata.get("opening_being_played", False):
                 # greeting_played is set the moment the opening is RELEASED,
                 # not when its audio ends, so on an outbound call it flips
                 # true ~12s into a silence the caller never heard. The next
@@ -7525,6 +7527,13 @@ async def entrypoint(ctx: JobContext) -> None:
         metadata = getattr(metric, "metadata", None)
         provider = getattr(metadata, "model_provider", None) if metadata else None
         model = getattr(metadata, "model_name", None) if metadata else None
+        if metric_type == "realtime_model_metrics" and _rt_call:
+            provider = provider or "google"
+            configured_model = (cfg.get("model") or "")
+            model = model or (
+                configured_model[len(_GEMINI_LIVE_PREFIX):].lstrip(":-")
+                or _GEMINI_LIVE_DEFAULT_MODEL
+            )
         label = "/".join(part for part in (provider, model) if part)
         # A RealtimeModel emits no metadata, so provider and model are both
         # None and the joined label comes out empty — which is how a realtime
@@ -7622,7 +7631,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 model=model,
             )
             logger.info(
-                "[latency] realtime turn: first reply audio %dms after the caller stopped", duration_ms
+                "[latency] realtime provider TTFT=%dms (not caller-stop-to-playback)", duration_ms
             )
         else:
             return
@@ -8162,6 +8171,7 @@ async def entrypoint(ctx: JobContext) -> None:
         if perceived_ms is None:
             return
         userdata["latency_metrics"]["callerStopToFirstAudioMs"].append(perceived_ms)
+        logger.info("[latency] realtime caller-stop-to-playback=%dms (audio-level estimate)", perceived_ms)
         _record_diagnostic(
             "metric", "turn", "Reply audio reached caller",
             "warning" if perceived_ms >= 1500 else "ok", durationMs=perceived_ms,

@@ -33,10 +33,14 @@ _DROP = (
 
 _TURN_STYLE = (
     "# How to talk\n"
-    "You are on a live phone call, so listen more than you talk. One sentence per turn by default, "
+    "You are in a live voice conversation, so listen more than you talk. One sentence per turn by default, "
     "two at most, under about 35 spoken words. Ask one question at a time, then stop and let them answer. "
     "React briefly to what they actually said, then answer directly. If they start speaking, stop at once. "
     "Never repeat their words back to them, and never end every answer with \"anything else?\".\n"
+    "Background sounds, echo, silence, and <noise> are not caller requests. Wait quietly for clear speech; "
+    "do not apologise, ask for a repeat, or invent an answer because of noise alone. "
+    "Greet once when asked to open the conversation. Do not repeat the greeting later. "
+    "If interrupted, answer the caller's new request rather than restarting the previous reply.\n"
 )
 
 _LANGUAGE_TOOL_LINE = (

@@ -13,6 +13,9 @@ prompt builders directly. A crash in __init__ was invisible.
 import os
 import sys
 import unittest
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("LIVEKIT_URL", "ws://x")
@@ -26,6 +29,7 @@ BASE = {
     "id": 1, "account_id": 1, "name": "Test", "model": "gpt-4.1-mini",
     "voice": "shubh", "language": "hi-IN", "tone": "balanced",
     "system_prompt": "You are a test agent.", "enabled_functions": "end_call",
+    "_compliance_config": {},
 }
 
 
@@ -73,6 +77,20 @@ class RealtimeIgnoresThePipeline(unittest.TestCase):
         self.assertIsNotNone(a.tts)
         self.assertNotEqual(a._tts_provider, "realtime")
 
+    def test_native_provider_settings(self):
+        from livekit.agents.utils import is_given
+        for model in ("gemini-live", "gemini-live:gemini-3.1-flash-live-preview"):
+            a = self._agent(model)
+            opts = a.llm._opts
+            self.assertFalse(is_given(opts.language))
+            self.assertFalse(opts.thinking_config.include_thoughts)
+            if "3.1" in model:
+                self.assertEqual(opts.thinking_config.thinking_level.value, "MINIMAL")
+                self.assertIsNone(opts.thinking_config.thinking_budget)
+            else:
+                self.assertEqual(opts.thinking_config.thinking_budget, 0)
+                self.assertIsNone(opts.thinking_config.thinking_level)
+
 
 class TheChannelReachesTheStt(unittest.TestCase):
     """Sarvam's per-channel VAD silence: 500ms telephony, 300ms browser."""
@@ -97,6 +115,47 @@ class TheChannelReachesTheStt(unittest.TestCase):
         names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
         self.assertNotIn("call_context", names,
                          "__init__ reads call_context, which is a local of entrypoint()")
+
+
+class RealtimeGreetingLifecycle(unittest.IsolatedAsyncioTestCase):
+    def agent(self, playout):
+        session = SimpleNamespace(userdata={}, generate_reply=Mock(
+            return_value=SimpleNamespace(wait_for_playout=playout)))
+        return SimpleNamespace(
+            session=session, _first_speaker="agent", _is_realtime=True,
+            _welcome_message="Namaste, main Artha bol rahi hoon.",
+            _reply_language="hi-IN", _warm_llm_prompt_cache=Mock(),
+            _await_own_audio_track=AsyncMock(),
+        )
+
+    async def test_greeting_is_pending_until_playout_finishes(self):
+        entered, release = asyncio.Event(), asyncio.Event()
+        async def playout():
+            entered.set()
+            await release.wait()
+        agent = self.agent(playout)
+        task = asyncio.create_task(main.RealEstateAgent.on_enter(agent))
+        await entered.wait()
+        self.assertTrue(agent.session.userdata["realtime_greeting_pending"])
+        self.assertFalse(agent.session.userdata.get("greeting_played", False))
+        release.set()
+        await task
+        self.assertTrue(agent.session.userdata["greeting_played"])
+        self.assertFalse(agent.session.userdata["realtime_greeting_pending"])
+        agent.session.generate_reply.assert_called_once()
+
+    async def test_failed_greeting_releases_pending_flag(self):
+        agent = self.agent(AsyncMock(side_effect=RuntimeError("offline failure")))
+        with self.assertRaises(RuntimeError):
+            await main.RealEstateAgent.on_enter(agent)
+        self.assertFalse(agent.session.userdata["realtime_greeting_pending"])
+        self.assertFalse(agent.session.userdata.get("greeting_played", False))
+
+    async def test_user_speaks_first_does_not_generate_a_greeting(self):
+        agent = self.agent(AsyncMock())
+        agent._first_speaker = "user"
+        await main.RealEstateAgent.on_enter(agent)
+        agent.session.generate_reply.assert_not_called()
 
 
 if __name__ == "__main__":

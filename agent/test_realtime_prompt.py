@@ -43,6 +43,11 @@ class Compact(unittest.TestCase):
     def test_first_turn_is_exempt_from_the_did_not_catch_rule(self):
         self.assertIn("Once the caller has spoken, if a message is garbled", self.out)
 
+    def test_noise_is_not_a_request_and_opening_is_once(self):
+        self.assertIn("<noise> are not caller requests", self.out)
+        self.assertIn("Greet once", self.out)
+        self.assertIn("rather than restarting the previous reply", self.out)
+
     def test_knowledge_base_is_cut_on_a_whole_answer(self):
         self.assertIn("Q: one", self.out)
         self.assertNotIn("Q: three", self.out)
