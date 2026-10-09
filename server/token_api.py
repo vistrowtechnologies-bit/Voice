@@ -4932,6 +4932,39 @@ def _parse_facebook_field_data(field_data: list) -> tuple[str, str]:
     return name, phone
 
 
+@app.get("/leads/inbound/{account_id}/agents")
+def leads_inbound_agents(account_id: int, request: Request) -> dict:
+    """Return the small, safe agent list an external CRM needs for setup.
+
+    The account's lead-webhook token is accepted only in a header so it can
+    never be copied into a URL, browser history, or access log. Prompts,
+    provider settings, and other private agent configuration are not exposed.
+    """
+    header_token = request.headers.get("x-vistrow-webhook-token", "").strip()
+    authorization = request.headers.get("authorization", "")
+    if not header_token and authorization.lower().startswith("bearer "):
+        header_token = authorization[7:].strip()
+    if calls_db.account_id_for_lead_webhook_token(header_token) != account_id:
+        raise HTTPException(404, "Not found")
+
+    knowledge_bases = {
+        str(kb.get("id")): kb.get("name")
+        for kb in calls_db.list_knowledge_bases(account_id)
+    }
+    agents = []
+    for agent in calls_db.list_agents(account_id):
+        kb_id = agent.get("kbId")
+        kb_name = knowledge_bases.get(str(kb_id)) if kb_id is not None else None
+        if agent.get("status") != "active" or not kb_name:
+            continue
+        agents.append({
+            "id": str(agent["id"]),
+            "name": agent.get("name") or "Vistrow agent",
+            "knowledge_base": kb_name,
+        })
+    return {"agents": agents}
+
+
 @app.post("/leads/inbound/{account_id}")
 async def leads_inbound(account_id: int, request: Request, token: str | None = None) -> dict:
     """Generic entry point for any external lead source that can POST JSON —
