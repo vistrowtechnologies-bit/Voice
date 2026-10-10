@@ -154,25 +154,53 @@ def email_from_id_token(id_token: str | None) -> str:
         return ""
 
 
-def format_requests(sheet_id: int) -> list[dict]:
-    """One batchUpdate that turns a blank tab into the leads sheet: bold
-    frozen header, Date/time as a date-time, Phone as plain text (so a typed
-    or pasted +91 number keeps its +), and readable column widths."""
+# Vistrow brand colours (web-demo/src/index.css, light theme), as Sheets
+# RGB fractions.
+def _rgb(hex_colour: str) -> dict:
+    h = hex_colour.lstrip("#")
+    return {"red": int(h[0:2], 16) / 255, "green": int(h[2:4], 16) / 255, "blue": int(h[4:6], 16) / 255}
+
+
+BRAND_PURPLE = _rgb("#9333ea")
+BRAND_PURPLE_DARK = _rgb("#7e22ce")
+BRAND_LAVENDER = _rgb("#faf5ff")
+_WHITE = _rgb("#ffffff")
+LINK_TEXT = "▶ Play recording"
+
+
+def format_requests(sheet_id: int, add_banding: bool = True, add_filter: bool = True) -> list[dict]:
+    """One batchUpdate that turns a blank tab into the leads sheet in Vistrow
+    colours: purple frozen header with white bold text, lavender/white row
+    bands, a filter on every column, Date/time as a date-time, Phone as plain
+    text (so a typed or pasted +91 number keeps its +), and readable column
+    widths. add_banding/add_filter are False when restyling a sheet that
+    already has them - Google rejects a second band or filter on the same
+    range, and the whole batch with it."""
+    header_format = {
+        "backgroundColor": BRAND_PURPLE,
+        "textFormat": {"bold": True, "foregroundColor": _WHITE, "fontSize": 10},
+        "verticalAlignment": "MIDDLE",
+        "horizontalAlignment": "LEFT",
+    }
     requests: list[dict] = [
         {
             "updateCells": {
                 "start": {"sheetId": sheet_id, "rowIndex": 0, "columnIndex": 0},
                 "rows": [{"values": [
-                    {"userEnteredValue": {"stringValue": h}, "userEnteredFormat": {"textFormat": {"bold": True}}}
+                    {"userEnteredValue": {"stringValue": h}, "userEnteredFormat": header_format}
                     for h in HEADERS
                 ]}],
-                "fields": "userEnteredValue,userEnteredFormat.textFormat.bold",
+                "fields": "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,verticalAlignment,horizontalAlignment)",
             }
         },
         {
             "updateSheetProperties": {
-                "properties": {"sheetId": sheet_id, "gridProperties": {"frozenRowCount": 1}},
-                "fields": "gridProperties.frozenRowCount",
+                "properties": {
+                    "sheetId": sheet_id,
+                    "gridProperties": {"frozenRowCount": 1},
+                    "tabColorStyle": {"rgbColor": BRAND_PURPLE},
+                },
+                "fields": "gridProperties.frozenRowCount,tabColorStyle",
             }
         },
         {
@@ -189,7 +217,40 @@ def format_requests(sheet_id: int) -> list[dict]:
                 "fields": "userEnteredFormat.numberFormat",
             }
         },
+        {
+            # Body rows: middle-aligned and clipped, so a long Details cell
+            # doesn't make one row ten lines tall.
+            "repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": len(HEADERS)},
+                "cell": {"userEnteredFormat": {"verticalAlignment": "MIDDLE", "wrapStrategy": "CLIP"}},
+                "fields": "userEnteredFormat(verticalAlignment,wrapStrategy)",
+            }
+        },
+        {
+            "updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "ROWS", "startIndex": 0, "endIndex": 1},
+                "properties": {"pixelSize": 36},
+                "fields": "pixelSize",
+            }
+        },
     ]
+    if add_banding:
+        requests.append({
+            "addBanding": {"bandedRange": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0, "startColumnIndex": 0, "endColumnIndex": len(HEADERS)},
+                "rowProperties": {
+                    "headerColorStyle": {"rgbColor": BRAND_PURPLE},
+                    "firstBandColorStyle": {"rgbColor": _WHITE},
+                    "secondBandColorStyle": {"rgbColor": BRAND_LAVENDER},
+                },
+            }}
+        })
+    if add_filter:
+        requests.append({
+            "setBasicFilter": {"filter": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0, "startColumnIndex": 0, "endColumnIndex": len(HEADERS)},
+            }}
+        })
     for index, width in enumerate(_COLUMN_WIDTHS):
         requests.append({
             "updateDimensionProperties": {
@@ -199,6 +260,70 @@ def format_requests(sheet_id: int) -> list[dict]:
             }
         })
     return requests
+
+
+# Sheet column for each owner-selectable field (server/calls_db.py
+# INTEGRATION_FIELDS). "transcript" has no column; Date/time always shows.
+FIELD_COLUMNS = {
+    "name": 1, "phone": 2, "email": 3, "company": 4, "channel": 5, "agent": 6, "language": 7,
+    "duration": 8, "details": 9, "page": 10, "recording": 11, "call_id": 12,
+}
+
+
+def column_visibility_requests(sheet_id: int, fields: list | None) -> list[dict]:
+    """Hide the columns of fields the owner left out (they are written empty
+    anyway) and show the rest. No fields chosen = everything shown."""
+    chosen = set(fields) if fields else set(FIELD_COLUMNS)
+    return [
+        {
+            "updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": col, "endIndex": col + 1},
+                "properties": {"hiddenByUser": field not in chosen},
+                "fields": "hiddenByUser",
+            }
+        }
+        for field, col in FIELD_COLUMNS.items()
+    ]
+
+
+def apply_column_visibility(config: dict, fields: list | None, client_id: str | None, client_secret: str | None,
+                            save_config) -> tuple[bool, str]:
+    """Show/hide columns on the main tab and every agent tab right after the
+    owner changes the field choice. Returns (ok, owner-facing detail)."""
+    if config.get("needs_reconnect") or not config.get("refresh_token") or not config.get("spreadsheet_id"):
+        return False, ERR_ACCESS_REMOVED
+    try:
+        if time.time() >= float(config.get("expires_at") or 0) - 60:
+            config = refresh_access_token(config, client_id, client_secret)
+            save_config(config)
+        tabs = {int(config["sheet_id"]), *(int(v) for v in (config.get("agent_tabs") or {}).values())}
+        requests = [r for tab in sorted(tabs) for r in column_visibility_requests(tab, fields)]
+        _request("POST", f"{SHEETS_API}/{urllib.parse.quote(config['spreadsheet_id'])}:batchUpdate",
+                 token=config["access_token"], body={"requests": requests})
+        return True, "Columns updated"
+    except GoogleError as e:
+        return False, error_message(e.status, e.body)
+
+
+def restyle(access_token: str, spreadsheet_id: str, sheet_id: int) -> None:
+    """Apply the current Vistrow styling to an existing leads tab (a
+    reconnect keeps the owner's sheet, which may predate the styling).
+    Best-effort: a styling failure must never fail the reconnect."""
+    try:
+        meta = _request(
+            "GET",
+            f"{SHEETS_API}/{urllib.parse.quote(spreadsheet_id)}?fields=sheets(properties.sheetId,bandedRanges.bandedRangeId,basicFilter.range)",
+            token=access_token,
+        )
+        tab = next(
+            (s for s in meta.get("sheets") or [] if int((s.get("properties") or {}).get("sheetId", -1)) == int(sheet_id)),
+            {},
+        )
+        _request("POST", f"{SHEETS_API}/{urllib.parse.quote(spreadsheet_id)}:batchUpdate", token=access_token, body={
+            "requests": format_requests(sheet_id, add_banding=not tab.get("bandedRanges"), add_filter=not tab.get("basicFilter")),
+        })
+    except Exception as e:  # never fail a reconnect over styling
+        logger.info("sheets: restyle of existing sheet failed (%s) - keeping it as is", getattr(e, "status", e))
 
 
 def create_spreadsheet(access_token: str) -> dict:
@@ -317,6 +442,29 @@ def _sheet_serial(now: datetime) -> float:
     return (local - datetime(1899, 12, 30)).total_seconds() / 86400
 
 
+def play_url(recording_url: object) -> str:
+    """The browser player page for a recording link. The CRM link
+    (/public/calls/<id>/recording?token=...) redirects to the raw WAV, which
+    many browsers download instead of playing; /play wraps it in a page with
+    an audio player. Any other URL is returned unchanged."""
+    url = str(recording_url or "").strip()
+    if "/public/calls/" in url and "/recording?token=" in url:
+        return url.replace("/recording?token=", "/play?token=", 1)
+    return url
+
+
+def recording_cell(recording_url: object) -> dict:
+    """A "▶ Play recording" link, not a formula: the URL rides on the text
+    format, so nothing in the cell is ever evaluated."""
+    url = play_url(recording_url)
+    if not url.startswith(("https://", "http://")):
+        return {"userEnteredValue": {"stringValue": ""}}
+    return {
+        "userEnteredValue": {"stringValue": LINK_TEXT},
+        "userEnteredFormat": {"textFormat": {"link": {"uri": url}, "foregroundColor": BRAND_PURPLE_DARK, "bold": True}},
+    }
+
+
 def row_cells(lead: dict, now: datetime | None = None) -> list[dict]:
     extracted = lead.get("extracted_data") or {}
     duration = lead.get("duration_seconds")
@@ -343,7 +491,7 @@ def row_cells(lead: dict, now: datetime | None = None) -> list[dict]:
         number(duration) if duration not in (None, "") else text(""),
         text(_details(lead)),
         text(lead.get("page_path") or ""),
-        text(lead.get("recording_url") or ""),
+        recording_cell(lead.get("recording_url")),
         number(call_id) if call_id not in (None, "") else text(""),
     ]
 
@@ -352,7 +500,9 @@ def append_body(sheet_id: int, lead: dict, now: datetime | None = None) -> dict:
     return {"requests": [{"appendCells": {
         "sheetId": sheet_id,
         "rows": [{"values": row_cells(lead, now)}],
-        "fields": "userEnteredValue",
+        # textFormat too, for the recording link; the column number formats
+        # (date-time, plain-text phone) are left alone by this mask.
+        "fields": "userEnteredValue,userEnteredFormat.textFormat",
     }}]}
 
 

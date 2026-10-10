@@ -1367,6 +1367,31 @@ def end_call_room(room_name: str) -> None:
 _NOW = "(to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))"
 
 
+def record_integration_delivery(
+    account_id: int | None, key: str, event_type: str, status: str,
+    detail: str = "", lead_name: str = "", call_id: int | None = None,
+) -> None:
+    """One Activity row for the dashboard's integration page (status: sent,
+    failed or skipped). Mirrors server/calls_db.py's function of the same
+    name. Best-effort - never raises into a live call."""
+    if account_id is None:
+        return
+    try:
+        conn = dbconn.connect()
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT INTO integration_deliveries (account_id, key, event_type, status, detail, lead_name, call_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (account_id, key, (event_type or "")[:40], status, (detail or "")[:500],
+                     str(lead_name or "")[:200], call_id),
+                )
+        finally:
+            conn.close()
+    except Exception:
+        logger.warning("could not record integration delivery for %s", key, exc_info=True)
+
+
 def touch_integration_sync(account_id: int | None, key: str) -> None:
     """Stamp last_sync = now and clear any stale last_error after a
     successful live-call delivery. Best-effort — a status-tracking hiccup

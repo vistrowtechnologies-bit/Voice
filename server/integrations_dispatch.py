@@ -362,6 +362,39 @@ def deliver_lead(account_id: int, lead: dict) -> dict:
     return results
 
 
+# Lead keys behind each owner-selectable field. Same as agent/tools.py
+# _INTEGRATION_FIELDS, so a test send drops exactly what a live call drops.
+_INTEGRATION_FIELDS = {
+    "name": ("name",),
+    "phone": ("phone",),
+    "email": ("email",),
+    "company": ("company",),
+    "channel": ("channel",),
+    "agent": ("agent_name",),
+    "language": ("language",),
+    "duration": ("duration_seconds",),
+    "details": ("extracted_data", "summary", "use_case", "message"),
+    "transcript": ("transcript",),
+    "page": ("page_path",),
+    "recording": ("recording_url", "recording_mime_type"),
+    "call_id": ("call_id",),
+}
+
+
+def apply_field_choice(key: str, config: dict, lead: dict) -> dict:
+    chosen = config.get("fields")
+    if key not in calls_db.FIELD_CONFIGURABLE_KEYS or not isinstance(chosen, list) or not chosen:
+        return lead
+    out = dict(lead)
+    for field, lead_keys in _INTEGRATION_FIELDS.items():
+        if field not in chosen:
+            for lead_key in lead_keys:
+                out.pop(lead_key, None)
+    if "company" not in chosen and isinstance(out.get("extracted_data"), dict):
+        out["extracted_data"] = {k: v for k, v in out["extracted_data"].items() if k != "company"}
+    return out
+
+
 def test_integration(account_id: int, key: str) -> tuple[bool, str]:
     """Send a sample lead to one integration so the operator can confirm the
     wiring from the dashboard before relying on it."""
@@ -393,6 +426,7 @@ def test_integration(account_id: int, key: str) -> tuple[bool, str]:
     if key == "sheets" and (integ.get("config") or {}).get("mode") == "oauth":
         # A real row lands in the owner's sheet, so make it obviously deletable.
         sample = {**sample, "name": google_sheets.TEST_ROW_NAME, "channel": "Dashboard test"}
+    sample = apply_field_choice(key, integ.get("config") or {}, sample)
     ok, detail = _deliver_one(key, integ.get("config") or {}, sample, account_id)
     try:
         if ok:
@@ -401,6 +435,9 @@ def test_integration(account_id: int, key: str) -> tuple[bool, str]:
             calls_db.mark_integration_error(account_id, key, detail)
     except Exception:
         pass
+    calls_db.record_integration_delivery(
+        account_id, key, "test", "sent" if ok else "failed", "" if ok else detail, sample.get("name") or "",
+    )
     return ok, detail
 
 

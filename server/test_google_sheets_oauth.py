@@ -175,7 +175,7 @@ class Callback(unittest.TestCase):
                            ({}, FakeCallsDb(role="member"))):
             google = FakeGoogle({})
             resp = self._run(db, google, **kwargs)
-            self.assertTrue(resp.headers["location"].endswith("/dashboard/integrations?sheets=failed"), kwargs)
+            self.assertTrue(resp.headers["location"].endswith("/dashboard/integrations/sheets?sheets=failed"), kwargs)
             self.assertEqual(google.calls, [])
             self.assertEqual(db.saved, [])
 
@@ -212,13 +212,31 @@ class Callback(unittest.TestCase):
         google = FakeGoogle({
             ("POST", google_sheets.TOKEN_URL): [{"access_token": "at2", "refresh_token": "rt2", "expires_in": 3599}],
             ("GET", google_sheets.SHEETS_API + "/SHEET1"): [
-                {"spreadsheetId": "SHEET1", "spreadsheetUrl": "u2", "sheets": [{"properties": {"sheetId": 777, "title": "My leads"}}]}],
+                {"spreadsheetId": "SHEET1", "spreadsheetUrl": "u2", "sheets": [{"properties": {"sheetId": 777, "title": "My leads"}}]},
+                # restyle: the kept tab already has bands, but no filter
+                {"sheets": [{"properties": {"sheetId": 777}, "bandedRanges": [{"bandedRangeId": 1}]}]}],
+            ("POST", google_sheets.SHEETS_API + "/SHEET1:batchUpdate"): [{}],
         })
         self._run(db, google)
         config = db.saved[0][2]
         self.assertEqual((config["spreadsheet_id"], config["sheet_title"], config["spreadsheet_url"]), ("SHEET1", "My leads", "u2"))
         self.assertNotIn("needs_reconnect", config)
         self.assertFalse(any(m == "POST" and u == google_sheets.SHEETS_API for m, u, *_ in google.calls))
+        restyle = json.loads(next(c[2] for c in google.calls if c[1].endswith(":batchUpdate")))["requests"]
+        kinds = [next(iter(r)) for r in restyle]
+        self.assertNotIn("addBanding", kinds, "a second band on the same range fails the whole batch")
+        self.assertIn("setBasicFilter", kinds)
+
+    def test_reconnect_survives_a_failed_restyle(self):
+        db = FakeCallsDb(existing=dict(OAUTH_CONFIG))
+        google = FakeGoogle({
+            ("POST", google_sheets.TOKEN_URL): [{"access_token": "at2", "refresh_token": "rt2"}],
+            ("GET", google_sheets.SHEETS_API + "/SHEET1"): [
+                {"spreadsheetId": "SHEET1", "sheets": [{"properties": {"sheetId": 777, "title": "Leads"}}]},
+                (500, "down"), (500, "down")],
+        })
+        resp = self._run(db, google)
+        self.assertEqual(db.saved[0][2]["spreadsheet_id"], "SHEET1")
 
     def test_reconnect_creates_a_new_sheet_when_the_old_one_is_gone(self):
         db = FakeCallsDb(existing=dict(OAUTH_CONFIG))
@@ -347,10 +365,16 @@ class Append(unittest.TestCase):
         reqs = google_sheets.format_requests(9)
         kinds = [next(iter(r)) for r in reqs]
         self.assertEqual(kinds[:4], ["updateCells", "updateSheetProperties", "repeatCell", "repeatCell"])
-        self.assertEqual(kinds.count("updateDimensionProperties"), len(google_sheets.HEADERS))
+        # one per column, plus the header row height
+        self.assertEqual(kinds.count("updateDimensionProperties"), len(google_sheets.HEADERS) + 1)
+        self.assertEqual((kinds.count("addBanding"), kinds.count("setBasicFilter")), (1, 1))
         header = reqs[0]["updateCells"]["rows"][0]["values"]
         self.assertEqual([c["userEnteredValue"]["stringValue"] for c in header], google_sheets.HEADERS)
         self.assertTrue(all(c["userEnteredFormat"]["textFormat"]["bold"] for c in header))
+        self.assertTrue(all(c["userEnteredFormat"]["backgroundColor"] == google_sheets.BRAND_PURPLE for c in header))
+        bare = [next(iter(r)) for r in google_sheets.format_requests(9, add_banding=False, add_filter=False)]
+        self.assertNotIn("addBanding", bare)
+        self.assertNotIn("setBasicFilter", bare)
         self.assertEqual(reqs[1]["updateSheetProperties"]["properties"]["gridProperties"]["frozenRowCount"], 1)
         self.assertEqual(reqs[2]["repeatCell"]["cell"]["userEnteredFormat"]["numberFormat"]["type"], "DATE_TIME")
         self.assertEqual(reqs[3]["repeatCell"]["range"]["startColumnIndex"], google_sheets.HEADERS.index("Phone"))
