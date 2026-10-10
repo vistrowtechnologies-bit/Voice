@@ -1930,6 +1930,19 @@ function init(): void {
         // happen) must never reset an already-running countdown.
         startCallTimer()
       })
+      room.on(RoomEvent.ParticipantDisconnected, () => {
+        // A normal goodbye deletes the room (Disconnected/ROOM_DELETED below).
+        // An agent whose process died just leaves, and the visitor was left on
+        // a silent "connected" call until the 5-minute limit. Give a clean
+        // room deletion a moment to arrive first, then end it honestly.
+        const thisRoom = room
+        if (!thisRoom || thisRoom.remoteParticipants.size > 0) return
+        window.setTimeout(() => {
+          if (room !== thisRoom || intentionalEnd || callCompleted || thisRoom.remoteParticipants.size > 0) return
+          console.warn('[Vistrow Voice widget] agent left the call without ending it')
+          failCall('The call was interrupted. Please try again.')
+        }, 5000)
+      })
       room.on(RoomEvent.ParticipantAttributesChanged, (changed: Record<string, string>) => {
         if ('lk.agent.state' in changed) applyAgentState(changed['lk.agent.state'])
       })
