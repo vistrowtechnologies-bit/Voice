@@ -8,9 +8,10 @@ import { LaunchFilm } from '../../components/LaunchFilm'
 import { Seo } from '../../components/Seo'
 import { BrassRule, CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
 import { IndiaMap } from '../../components/IndiaMap'
+import { HowItWorksStory } from '../../components/HowItWorksStory'
+import { ScrollTypedCall } from '../../components/ScrollTypedCall'
 import { RotatingGreeting, ScriptMarquee } from '../../components/BharatBits'
 import { Reveal } from '../../components/Reveal'
-import arthaAvatar from '../../assets/artha-avatar.webp'
 import { trackMarketingCta } from '../../lib/analytics'
 import {
   HOME_FEATURES,
@@ -206,24 +207,7 @@ export function Home() {
             <p className="mt-3 text-sm leading-relaxed text-text-muted">Artha follows the caller naturally instead of forcing a language menu or a separate agent.</p>
             <a href="#live-demo" className="mt-5 inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline">Try it live <Icon name="arrow_forward" className="text-[16px]" /></a>
           </div>
-          <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 to-surface p-7" aria-label="Example multilingual conversation">
-            <div className="flex gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-high text-xs font-bold">You</span>
-              <p className="rounded-2xl rounded-tl-sm bg-surface-high px-4 py-3 text-sm">Mujhe pricing samajhni hai, but please explain in English.</p>
-            </div>
-            <div className="mt-4 flex justify-end gap-3">
-              <p className="rounded-2xl rounded-tr-sm bg-primary px-4 py-3 text-sm text-white">Of course. I’ll explain the plans in English and help you choose based on your call volume.</p>
-              <img
-                src={arthaAvatar}
-                alt=""
-                aria-hidden="true"
-                loading="lazy"
-                decoding="async"
-                className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-primary/25"
-              />
-            </div>
-            <p className="mt-4 text-right text-[11px] font-semibold uppercase tracking-wider text-text-muted">Hindi → English · same voice · same conversation</p>
-          </div>
+          <ScrollTypedCall />
         </div>
       </section>
 
@@ -353,26 +337,9 @@ export function Home() {
             the numbers already imply order, but nothing was drawing the eye
             along it. Desktop only: stacked on mobile, a horizontal rail would
             point nowhere. */}
-        <div className="relative grid gap-6 md:grid-cols-3">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute left-0 right-0 top-[52px] hidden h-px bg-gradient-to-r from-transparent via-border to-transparent md:block"
-          />
-          {HOW_IT_WORKS.map((step, i) => (
-            <Reveal key={step.title} delayMs={i * 90} className="h-full">
-              <div className="vv-lift relative h-full rounded-2xl border border-border bg-surface p-7">
-                <div className="flex items-center justify-between">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-high text-primary">
-                    <Icon name={step.icon} className="text-[22px]" />
-                  </span>
-                  <span className="font-display text-3xl font-bold text-border">{`0${i + 1}`}</span>
-                </div>
-                <h3 className="mt-5 font-display text-xl font-semibold">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
+        {/* A scroll story rather than three identical cards: the product screen stays pinned
+            and changes per step while the steps scroll past (HowItWorksStory). */}
+        <HowItWorksStory steps={HOW_IT_WORKS} />
       </section>
       </div>
 
