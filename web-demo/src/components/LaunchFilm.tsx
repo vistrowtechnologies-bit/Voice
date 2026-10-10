@@ -87,8 +87,10 @@ export function LaunchFilm() {
             Try Vistrow Voice
           </Link>
         </div>
-        <div ref={boxRef} className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-[#07040d] shadow-[0_40px_100px_-40px_rgba(124,58,237,0.45)]">
-          <div role="group" aria-label="Film language" className="absolute right-3 top-3 z-10 flex rounded-full bg-black/55 p-1 text-sm font-bold backdrop-blur md:right-4 md:top-4">
+        <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-end gap-3">
+          <span id="film-lang" className="text-xs font-bold uppercase tracking-[0.18em] text-text-muted">Watch in</span>
+          <div role="group" aria-labelledby="film-lang" className="flex rounded-full border border-border bg-surface p-1 text-sm font-bold">
             {(['en', 'hi'] as const).map((l) => (
               <button
                 key={l}
@@ -96,12 +98,14 @@ export function LaunchFilm() {
                 lang={l}
                 aria-pressed={lang === l}
                 onClick={() => choose(l)}
-                className={`min-h-9 rounded-full px-4 transition-colors ${lang === l ? 'bg-white text-[#150c24]' : 'text-white/80 hover:text-white'}`}
+                className={`min-h-9 rounded-full px-4 transition-colors ${lang === l ? 'bg-text text-bg' : 'text-text-muted hover:text-text'}`}
               >
                 {l === 'en' ? 'English' : 'हिंदी'}
               </button>
             ))}
           </div>
+        </div>
+        <div ref={boxRef} className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-[#07040d] shadow-[0_40px_100px_-40px_rgba(124,58,237,0.45)]">
           {started ? (
             <video
               key={lang /* a new element per language, so the new film starts cleanly */}
@@ -136,14 +140,16 @@ export function LaunchFilm() {
                 decoding="async"
                 className="h-full w-full object-cover"
               />
-              <span className="absolute bottom-4 left-4 flex items-center gap-3 rounded-full bg-primary py-2 pl-2 pr-5 text-sm font-bold text-white shadow-xl transition-transform group-hover:scale-105 md:bottom-6 md:left-6 md:text-base">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 md:h-12 md:w-12">
-                  <svg viewBox="0 0 24 24" className="h-5 w-5 md:h-6 md:w-6" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
+              {/* small on phones, where the film itself is small; full size from md up */}
+              <span className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full bg-primary py-1 pl-1 pr-3 text-xs font-bold text-white shadow-xl transition-transform group-hover:scale-105 md:bottom-6 md:left-6 md:gap-3 md:py-2 md:pl-2 md:pr-5 md:text-base">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 md:h-12 md:w-12">
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 md:h-6 md:w-6" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
                 </span>
                 Play film · {film.length}
               </span>
             </button>
           )}
+        </div>
         </div>
       </div>
     </section>
