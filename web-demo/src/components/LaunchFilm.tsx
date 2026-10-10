@@ -118,7 +118,9 @@ export function LaunchFilm() {
                 if (inView.current && !e.currentTarget.ended) userPaused.current = true
               }}
               onPlay={() => { userPaused.current = false }}
-              className="h-full w-full"
+              // cover, not contain: inside the 1px border the box is a hair wider than 16:9,
+              // and contain would letterbox it with thin dark bars at the sides
+              className="h-full w-full object-cover"
             />
           ) : (
             <button
