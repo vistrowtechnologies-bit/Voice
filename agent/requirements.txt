@@ -7,3 +7,6 @@ psycopg[binary,pool]>=3.2
 python-dotenv
 boto3
 phonenumbers>=9.0
+
+# Native input transcription language_codes (no separate STT engine).
+google-genai>=2.29.0

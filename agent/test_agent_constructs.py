@@ -95,6 +95,7 @@ class RealtimeIgnoresThePipeline(unittest.TestCase):
         """Verify SDK wire setup, without opening a connection or sending audio."""
         from livekit.plugins.google.realtime.realtime_api import RealtimeSession
         from livekit.agents import llm
+        from google.genai import types, _live_converters, _common
         from unittest.mock import patch
         import realtime_config
         with patch.dict(os.environ, {}, clear=True):
@@ -111,9 +112,19 @@ class RealtimeIgnoresThePipeline(unittest.TestCase):
                 assert conf.response_modalities == ["AUDIO"]
                 assert conf.speech_config.language_code is None
                 assert conf.speech_config.voice_config.prebuilt_voice_config.voice_name == "Achernar"
-                assert conf.input_audio_transcription is not None
+                assert conf.input_audio_transcription.language_codes == (["hi-IN", "en-IN"] if name == realtime_config.DEFAULT_MODEL else None)
                 assert conf.output_audio_transcription is not None
+                aad = conf.realtime_input_config.automatic_activity_detection
+                assert aad.end_of_speech_sensitivity.value == ("END_SENSITIVITY_HIGH" if name == realtime_config.DEFAULT_MODEL else "END_SENSITIVITY_LOW")
+                assert aad.prefix_padding_ms == (20 if name == realtime_config.DEFAULT_MODEL else 200)
+                wire = conf.model_dump(by_alias=True, exclude_none=True)
+                assert wire["inputAudioTranscription"] == ({"languageCodes": ["hi-IN", "en-IN"]} if name == realtime_config.DEFAULT_MODEL else {})
                 assert conf.realtime_input_config.automatic_activity_detection.silence_duration_ms == silence
+                payload = _common.convert_to_dict(_live_converters._LiveConnectParameters_to_mldev(
+                    None, types.LiveConnectParameters(model=name, config=conf).model_dump(exclude_none=True)
+                ))["setup"]
+                assert payload["inputAudioTranscription"] == ({"language_codes": ["hi-IN", "en-IN"]} if name == realtime_config.DEFAULT_MODEL else {})
+                assert payload["realtimeInputConfig"]["automatic_activity_detection"]["prefix_padding_ms"] == (20 if name == realtime_config.DEFAULT_MODEL else 200)
                 thinking = conf.generation_config.thinking_config
                 assert not thinking.include_thoughts
                 if name == realtime_config.DEFAULT_MODEL:

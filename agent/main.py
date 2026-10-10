@@ -1803,7 +1803,7 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
         # Without these there is no transcript at all: no dashboard call
         # record or lead extraction. Audio itself streams independently;
         # final input captions may arrive after the model's reply.
-        input_audio_transcription={},
+        input_audio_transcription=realtime_config.input_transcription(name, language),
         output_audio_transcription={},
         # Google owns native turn detection. Keep Hindi pause protection,
         # but tune 2.5 independently of the already-tested 3.1 profile.

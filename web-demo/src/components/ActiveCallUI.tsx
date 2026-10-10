@@ -14,6 +14,7 @@ import type { AgentState } from '@livekit/components-react'
 import { ConnectionState, Track } from 'livekit-client'
 import type { RemoteParticipant } from 'livekit-client'
 import { Icon } from './Icon'
+import { TranscriptOrder } from '../lib/transcriptOrder'
 import { BRAND } from '../lib/brand'
 import type { LeadSummary, TranscriptEntry } from '../lib/types'
 
@@ -130,7 +131,7 @@ export function ActiveCallUI({
   // the separate "lk.chat" topic — so a typed message reached and was
   // answered by the agent but never appeared as a bubble here. Echo it
   // into sentTexts locally instead of relying on the SDK to reflect it back.
-  const [sentTexts, setSentTexts] = useState<{ id: string; text: string }[]>([])
+  const [sentTexts, setSentTexts] = useState<{ id: string; text: string; timestamp: number }[]>([])
 
   const handleSendText = () => {
     const value = textInput.trim()
@@ -139,46 +140,31 @@ export function ActiveCallUI({
       // Best-effort — a failed send just leaves the caller's draft in the
       // box to retry, same as a dropped mic packet would.
     })
-    setSentTexts((prev) => [...prev, { id: `local-text-${prev.length}-${value.slice(0, 20)}`, text: value }])
+    setSentTexts((prev) => [...prev, { id: `local-text-${prev.length}-${value.slice(0, 20)}`, text: value, timestamp: Date.now() }])
     setTextInput('')
   }
 
   const transcriptions = useTranscriptions()
-  // Sequence local text sends and live transcription events into a single
-  // stable order (append-order, since neither source carries a timestamp)
-  // so a typed message lands where it was actually sent relative to the
-  // rest of the conversation, not always trailing behind it.
-  const seqRef = useRef(new Map<string, number>())
-  const nextSeqRef = useRef(0)
-  const seqFor = (id: string) => {
-    let seq = seqRef.current.get(id)
-    if (seq === undefined) {
-      seq = nextSeqRef.current++
-      seqRef.current.set(id, seq)
-    }
-    return seq
-  }
+  // Caption chunks may arrive after newer turns. Use the stream header time,
+  // retaining each entry's position when its partial text is updated.
+  const transcriptOrder = useRef(new TranscriptOrder())
   const transcriptEntries: TranscriptEntry[] = useMemo(() => {
     const fromVoice = transcriptions.map((t) => ({
       id: t.streamInfo.id,
+      timestamp: t.streamInfo.timestamp,
       identity: t.participantInfo.identity,
       text: t.text,
       isLocal: t.participantInfo.identity === localParticipant.identity,
     }))
     const fromTyped = sentTexts.map((t) => ({
       id: t.id,
+      timestamp: t.timestamp,
       identity: localParticipant.identity,
       text: t.text,
       isLocal: true,
     }))
     const entries = [...fromVoice, ...fromTyped]
-    // Number every entry the first time it is seen, BEFORE sorting. This
-    // used to happen lazily inside the sort comparator — but sort never
-    // calls the comparator for a one-item list, so the agent's opening line
-    // (alone on screen for its whole greeting) got no number, and the first
-    // typed message took #0 and jumped above it.
-    for (const entry of entries) seqFor(entry.id)
-    return entries.sort((a, b) => seqFor(a.id) - seqFor(b.id))
+    return transcriptOrder.current.sort(entries)
   }, [transcriptions, sentTexts, localParticipant.identity])
 
   useEffect(() => {

@@ -20,7 +20,10 @@ def test_native_endpointing_models_are_independent(monkeypatch):
     assert config.activity_detection(config.MODEL_31).automatic_activity_detection.silence_duration_ms == 700
     for model in config.API_MODELS:
         aad = config.activity_detection(model).automatic_activity_detection
-        assert aad.end_of_speech_sensitivity.value == "END_SENSITIVITY_LOW"
+        assert aad.end_of_speech_sensitivity.value == (
+            "END_SENSITIVITY_HIGH" if model == config.DEFAULT_MODEL else "END_SENSITIVITY_LOW"
+        )
+        assert aad.prefix_padding_ms == (20 if model == config.DEFAULT_MODEL else 200)
         assert not aad.disabled
 
 
@@ -100,3 +103,10 @@ def test_never_spoken_caller_can_still_be_checked_on_when_idle():
     assert not config.automated_speech_blocked(
         {"turn_meter": TurnLatencyMeter()}, 100, recent_voice_s=8,
     )
+
+
+def test_native_language_hints_are_model_scoped():
+    assert config.input_transcription(config.DEFAULT_MODEL, "hi-IN").language_codes == ["hi-IN", "en-IN"]
+    assert config.input_transcription(config.DEFAULT_MODEL, "en-US").language_codes == ["en-US"]
+    assert config.input_transcription(config.DEFAULT_MODEL, "auto").language_codes is None
+    assert config.input_transcription(config.MODEL_31, "hi-IN").language_codes is None
