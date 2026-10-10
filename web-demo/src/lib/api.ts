@@ -437,6 +437,35 @@ export const updateIntegration = (key: string, status: string, config: Record<st
   send('PATCH', `/integrations/${key}`, { status, config, name })
 export const testIntegration = (key: string) =>
   send<{ ok: boolean; detail: string }>('POST', `/integrations/${key}/test`)
+export interface IntegrationDelivery {
+  id: number
+  eventType: string
+  status: 'sent' | 'failed' | 'skipped'
+  detail: string
+  leadName: string
+  callId: number | null
+  createdAt: string
+}
+export interface IntegrationDeliveries {
+  items: IntegrationDelivery[]
+  stats: { sent7d: number; failed7d: number; skipped7d: number }
+}
+/** Recent delivery attempts for one integration plus 7-day totals. */
+export const fetchIntegrationDeliveries = (key: string, status = '') =>
+  get<IntegrationDeliveries>(`/integrations/${key}/deliveries${status ? `?status=${status}` : ''}`)
+/** Merged server-side, so saved tokens are never touched. */
+export const updateIntegrationSettings = (key: string, settings: { events?: string[]; template?: string; fields?: string[] }) =>
+  send<{ events?: string[]; template?: string; fields?: string[]; sheetColumns?: string }>('PATCH', `/integrations/${key}/settings`, settings)
+export interface FacebookLead {
+  leadId: string
+  createdAt: string
+  name: string
+  phone: string
+  callStatus: string
+  outcome: string
+  callId: number | null
+}
+export const fetchFacebookLeads = () => get<FacebookLead[]>('/integrations/facebook/leads')
 export const slackIntegrationStartUrl = '/api/integrations/slack/start'
 export const facebookIntegrationStartUrl = '/api/integrations/facebook/start'
 export const zohoIntegrationStartUrl = '/api/integrations/zoho_crm/start'

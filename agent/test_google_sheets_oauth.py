@@ -14,8 +14,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tools
 
 APPEND = "https://sheets.googleapis.com/v4/spreadsheets/SHEET1:batchUpdate"
+# Artha's own tab already exists (as 777), so these tests exercise the append
+# itself; creating per-agent tabs is covered in test_sheets_agent_tabs.py.
 CONFIG = {"mode": "oauth", "spreadsheet_id": "SHEET1", "sheet_id": 777, "access_token": "at",
-          "refresh_token": "rt", "expires_at": time.time() + 3000}
+          "refresh_token": "rt", "expires_at": time.time() + 3000, "agent_tabs": {"Artha": 777}}
 END = {"type": "call_completed", "name": "@evil", "phone": "+919876543210", "channel": "phone",
        "extracted_data": {"budget": "50k"}, "agent_name": "Artha", "duration_seconds": 61.2, "call_id": 9}
 ENV = {"GOOGLE_SHEETS_OAUTH_CLIENT_ID": "cid", "GOOGLE_SHEETS_OAUTH_CLIENT_SECRET": "secret"}
@@ -127,7 +129,7 @@ class FanOut(unittest.TestCase):
     def _fan_out(self, config, lead):
         marks, syncs, delivered, posted = [], [], [], []
 
-        async def fake_row(http, account_id, cfg, lead_):
+        async def fake_row(http, account_id, cfg, lead_, agent_name=None):
             delivered.append(lead_)
             return False, "The leads sheet was deleted. Reconnect to create a new one."
 

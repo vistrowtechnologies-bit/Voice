@@ -870,6 +870,24 @@ def _sheets_details(lead: dict) -> str:
     return "\n".join(lines)[:45000]  # Sheets caps a cell at 50,000 characters
 
 
+# Same as server/google_sheets.py's play_url/recording_cell: a "▶ Play
+# recording" link to the browser player page, in the brand's dark purple.
+_SHEETS_LINK_TEXT = "▶ Play recording"
+_SHEETS_LINK_RGB = {"red": 0x7e / 255, "green": 0x22 / 255, "blue": 0xce / 255}
+
+
+def _sheets_recording_cell(recording_url: object) -> dict:
+    url = str(recording_url or "").strip()
+    if "/public/calls/" in url and "/recording?token=" in url:
+        url = url.replace("/recording?token=", "/play?token=", 1)
+    if not url.startswith(("https://", "http://")):
+        return {"userEnteredValue": {"stringValue": ""}}
+    return {
+        "userEnteredValue": {"stringValue": _SHEETS_LINK_TEXT},
+        "userEnteredFormat": {"textFormat": {"link": {"uri": url}, "foregroundColor": _SHEETS_LINK_RGB, "bold": True}},
+    }
+
+
 def _sheets_row_cells(lead: dict, now: datetime | None = None) -> list[dict]:
     extracted = lead.get("extracted_data") or {}
     # Sheets' date serial (days since 1899-12-30) of the IST wall-clock time:
@@ -899,7 +917,7 @@ def _sheets_row_cells(lead: dict, now: datetime | None = None) -> list[dict]:
         number(duration) if duration not in (None, "") else text(""),
         text(_sheets_details(lead)),
         text(lead.get("page_path") or ""),
-        text(lead.get("recording_url") or ""),
+        _sheets_recording_cell(lead.get("recording_url")),
         number(call_id) if call_id not in (None, "") else text(""),
     ]
 
@@ -908,8 +926,207 @@ def _sheets_append_body(sheet_id: int, lead: dict, now: datetime | None = None) 
     return {"requests": [{"appendCells": {
         "sheetId": sheet_id,
         "rows": [{"values": _sheets_row_cells(lead, now)}],
-        "fields": "userEnteredValue",
+        "fields": "userEnteredValue,userEnteredFormat.textFormat",
     }}]}
+
+
+_SHEETS_HEADERS = [
+    "Date/time (IST)", "Name", "Phone", "Email", "Company", "Channel", "Agent",
+    "Language", "Duration (s)", "Details", "Page", "Recording", "Call ID",
+]
+_SHEETS_COLUMN_WIDTHS = [150, 160, 140, 200, 160, 120, 120, 90, 90, 360, 180, 220, 80]
+
+
+# Copy of server/google_sheets.py format_requests (agent/ and server/ are
+# separate deployables); test_sheets_agent_tabs.py checks they match. Used
+# to style a new per-agent tab.
+def _sheets_rgb(hex_colour: str) -> dict:
+    h = hex_colour.lstrip("#")
+    return {"red": int(h[0:2], 16) / 255, "green": int(h[2:4], 16) / 255, "blue": int(h[4:6], 16) / 255}
+
+
+_SHEETS_PURPLE = _sheets_rgb("#9333ea")
+_SHEETS_PURPLE_DARK = _sheets_rgb("#7e22ce")
+_SHEETS_LAVENDER = _sheets_rgb("#faf5ff")
+_SHEETS_WHITE = _sheets_rgb("#ffffff")
+
+
+def _sheets_format_requests(sheet_id: int, add_banding: bool = True, add_filter: bool = True) -> list[dict]:
+    """One batchUpdate that turns a blank tab into the leads sheet in Vistrow
+    colours: purple frozen header with white bold text, lavender/white row
+    bands, a filter on every column, Date/time as a date-time, Phone as plain
+    text (so a typed or pasted +91 number keeps its +), and readable column
+    widths. add_banding/add_filter are False when restyling a sheet that
+    already has them - Google rejects a second band or filter on the same
+    range, and the whole batch with it."""
+    header_format = {
+        "backgroundColor": _SHEETS_PURPLE,
+        "textFormat": {"bold": True, "foregroundColor": _SHEETS_WHITE, "fontSize": 10},
+        "verticalAlignment": "MIDDLE",
+        "horizontalAlignment": "LEFT",
+    }
+    requests: list[dict] = [
+        {
+            "updateCells": {
+                "start": {"sheetId": sheet_id, "rowIndex": 0, "columnIndex": 0},
+                "rows": [{"values": [
+                    {"userEnteredValue": {"stringValue": h}, "userEnteredFormat": header_format}
+                    for h in _SHEETS_HEADERS
+                ]}],
+                "fields": "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,verticalAlignment,horizontalAlignment)",
+            }
+        },
+        {
+            "updateSheetProperties": {
+                "properties": {
+                    "sheetId": sheet_id,
+                    "gridProperties": {"frozenRowCount": 1},
+                    "tabColorStyle": {"rgbColor": _SHEETS_PURPLE},
+                },
+                "fields": "gridProperties.frozenRowCount,tabColorStyle",
+            }
+        },
+        {
+            "repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": 1},
+                "cell": {"userEnteredFormat": {"numberFormat": {"type": "DATE_TIME", "pattern": "yyyy-mm-dd hh:mm"}}},
+                "fields": "userEnteredFormat.numberFormat",
+            }
+        },
+        {
+            "repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 1, "startColumnIndex": 2, "endColumnIndex": 3},
+                "cell": {"userEnteredFormat": {"numberFormat": {"type": "TEXT"}}},
+                "fields": "userEnteredFormat.numberFormat",
+            }
+        },
+        {
+            # Body rows: middle-aligned and clipped, so a long Details cell
+            # doesn't make one row ten lines tall.
+            "repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": len(_SHEETS_HEADERS)},
+                "cell": {"userEnteredFormat": {"verticalAlignment": "MIDDLE", "wrapStrategy": "CLIP"}},
+                "fields": "userEnteredFormat(verticalAlignment,wrapStrategy)",
+            }
+        },
+        {
+            "updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "ROWS", "startIndex": 0, "endIndex": 1},
+                "properties": {"pixelSize": 36},
+                "fields": "pixelSize",
+            }
+        },
+    ]
+    if add_banding:
+        requests.append({
+            "addBanding": {"bandedRange": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0, "startColumnIndex": 0, "endColumnIndex": len(_SHEETS_HEADERS)},
+                "rowProperties": {
+                    "headerColorStyle": {"rgbColor": _SHEETS_PURPLE},
+                    "firstBandColorStyle": {"rgbColor": _SHEETS_WHITE},
+                    "secondBandColorStyle": {"rgbColor": _SHEETS_LAVENDER},
+                },
+            }}
+        })
+    if add_filter:
+        requests.append({
+            "setBasicFilter": {"filter": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0, "startColumnIndex": 0, "endColumnIndex": len(_SHEETS_HEADERS)},
+            }}
+        })
+    for index, width in enumerate(_SHEETS_COLUMN_WIDTHS):
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": index, "endIndex": index + 1},
+                "properties": {"pixelSize": width},
+                "fields": "pixelSize",
+            }
+        })
+    return requests
+
+
+# Same as server/google_sheets.py FIELD_COLUMNS / column_visibility_requests.
+_SHEETS_FIELD_COLUMNS = {
+    "name": 1, "phone": 2, "email": 3, "company": 4, "channel": 5, "agent": 6, "language": 7,
+    "duration": 8, "details": 9, "page": 10, "recording": 11, "call_id": 12,
+}
+
+
+def _sheets_column_visibility_requests(sheet_id: int, fields: list | None) -> list[dict]:
+    chosen = set(fields) if fields else set(_SHEETS_FIELD_COLUMNS)
+    return [
+        {
+            "updateDimensionProperties": {
+                "range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": col, "endIndex": col + 1},
+                "properties": {"hiddenByUser": field not in chosen},
+                "fields": "hiddenByUser",
+            }
+        }
+        for field, col in _SHEETS_FIELD_COLUMNS.items()
+    ]
+
+
+def _sheets_tab_title(agent_name: object) -> str:
+    """The agent's tab name: its name, trimmed to Sheets' 100-char limit
+    with characters Sheets rejects in a title removed."""
+    title = " ".join(str(agent_name or "").replace("'", "").split())
+    for ch in "[]*?:/\\":
+        title = title.replace(ch, "")
+    return title[:90].strip()
+
+
+async def _sheets_agent_tab(
+    http: aiohttp.ClientSession, account_id: int | None, config: dict, agent_name: object, token: str,
+) -> int:
+    """The sheetId of this call's agent tab in the leads spreadsheet - one
+    tab per agent, named after it, created and styled on its first lead.
+    Falls back to the main tab when there's no agent name or Google won't
+    create the tab, so a lead is never lost over a tab."""
+    default = int(config["sheet_id"])
+    title = _sheets_tab_title(agent_name)
+    if not title or title.lower() == str(config.get("sheet_title") or "Leads").lower():
+        return default
+    tabs = config.get("agent_tabs") if isinstance(config.get("agent_tabs"), dict) else {}
+    if title in tabs:
+        return int(tabs[title])
+    spreadsheet = config["spreadsheet_id"]
+    headers = {"Authorization": f"Bearer {token}"}
+    status, text, data = await _sheets_post(
+        http, f"{_SHEETS_API}/{spreadsheet}:batchUpdate", headers=headers,
+        json={"requests": [{"addSheet": {"properties": {"title": title, "tabColorStyle": {"rgbColor": _SHEETS_PURPLE}}}}]},
+    )
+    sheet_id = None
+    if status is not None and 200 <= status < 300:
+        try:
+            sheet_id = int(data["replies"][0]["addSheet"]["properties"]["sheetId"])
+        except (KeyError, IndexError, TypeError, ValueError):
+            sheet_id = None
+        if sheet_id is not None:
+            await _sheets_post(
+                http, f"{_SHEETS_API}/{spreadsheet}:batchUpdate", headers=headers,
+                json={"requests": _sheets_format_requests(sheet_id) + _sheets_column_visibility_requests(sheet_id, config.get("fields"))},
+            )
+    elif status == 400 and "already exists" in (text or "").lower():
+        # Created earlier (e.g. before a reconnect reset our tab list), or
+        # by a call that ended at the same moment: find it by title.
+        try:
+            async with http.get(
+                f"{_SHEETS_API}/{spreadsheet}?fields=sheets.properties(sheetId,title)", headers=headers,
+            ) as resp:
+                meta = await resp.json(content_type=None) if resp.status == 200 else {}
+            sheet_id = next(
+                (int(s["properties"]["sheetId"]) for s in meta.get("sheets") or []
+                 if (s.get("properties") or {}).get("title") == title),
+                None,
+            )
+        except Exception:
+            logger.warning("sheets: could not look up agent tab %r", title, exc_info=True)
+    if sheet_id is None:
+        logger.warning("sheets: no tab for agent %r (HTTP %s) - using the main tab", title, status)
+        return default
+    config["agent_tabs"] = {**tabs, title: sheet_id}
+    await asyncio.to_thread(db.update_integration_config, account_id, "sheets", config)
+    return sheet_id
 
 
 def _sheets_error_message(status: int | None, body: str) -> str:
@@ -975,7 +1192,7 @@ async def _sheets_refresh_access_token(http: aiohttp.ClientSession, config: dict
 
 
 async def _deliver_google_sheet_row(
-    http: aiohttp.ClientSession, account_id: int | None, config: dict, lead: dict
+    http: aiohttp.ClientSession, account_id: int | None, config: dict, lead: dict, agent_name: object = None,
 ) -> tuple[bool, str]:
     """Append one row; (ok, owner-facing detail for last_error)."""
     if config.get("needs_reconnect"):
@@ -1002,22 +1219,113 @@ async def _deliver_google_sheet_row(
             config = updated
 
     url = f"{_SHEETS_API}/{config['spreadsheet_id']}:batchUpdate"
-    body = _sheets_append_body(int(config["sheet_id"]), lead)
+    token = config.get("access_token") or ""
+    # Each agent's leads go to its own tab, named after the agent.
+    # agent_name comes separately: the owner may have left the Agent column out.
+    tab_agent = agent_name if agent_name is not None else lead.get("agent_name")
+    target = await _sheets_agent_tab(http, account_id, config, tab_agent, token)
 
     async def _append(token: str) -> tuple[int | None, str]:
+        body = _sheets_append_body(target, lead)
         status, text, _ = await _sheets_post(http, url, json=body, headers={"Authorization": f"Bearer {token}"})
         return status, text
 
-    status, text = await _append(config.get("access_token") or "")
+    status, text = await _append(token)
     if status == 401:
         # Expired sooner than our bookkeeping expected - one forced refresh.
         updated, _ = await _refresh(config)
         if not updated:
             return False, _SHEETS_ERR_ACCESS_REMOVED
-        status, text = await _append(updated["access_token"])
+        config, token = updated, updated["access_token"]
+        status, text = await _append(token)
+    if status == 400 and "grid" in (text or "").lower() and target != int(config["sheet_id"]):
+        # The owner deleted this agent's tab: forget it and make a new one.
+        tabs = dict(config.get("agent_tabs") or {})
+        tabs.pop(_sheets_tab_title(tab_agent), None)
+        config = {**config, "agent_tabs": tabs}
+        target = await _sheets_agent_tab(http, account_id, config, tab_agent, token)
+        status, text = await _append(token)
     if status is not None and 200 <= status < 300:
         return True, "Row added"
     return False, _sheets_error_message(status, text)
+
+
+# Same lists as server/calls_db.py's INTEGRATION_EVENTS /
+# EVENT_CONFIGURABLE_KEYS / default_integration_events: an owner can pick
+# which of these events Webhook, Slack, WhatsApp and Apps Script sheets get
+# (config["events"]). Zoho, ArthaLeads and the Google sign-in sheet keep their
+# fixed one-record-per-caller rule.
+_INTEGRATION_EVENTS = ("call_completed", "lead_update", "appointment_booked", "callback_requested")
+_EVENT_CONFIGURABLE_KEYS = frozenset({"webhook", "slack", "whatsapp", "sheets"})
+
+
+def _integration_wants_event(key: str, config: dict, lead: dict) -> bool:
+    """Whether this integration's owner wants this event. With nothing
+    chosen yet, everything goes - except WhatsApp, which messages the caller
+    and so only fires once, at the end of the call. An event type outside
+    the known list (or none) is never filtered."""
+    if key not in _EVENT_CONFIGURABLE_KEYS or (key == "sheets" and config.get("mode") == "oauth"):
+        return True
+    event = lead.get("type")
+    if event == "platform_lead_update":
+        event = "lead_update"
+    if event not in _INTEGRATION_EVENTS:
+        return True
+    chosen = config.get("events")
+    if not isinstance(chosen, list) or not chosen:
+        chosen = ["call_completed"] if key == "whatsapp" else list(_INTEGRATION_EVENTS)
+    return event in chosen
+
+
+# Fields an owner can leave out of Webhook, Slack and Sheets deliveries
+# (config["fields"]; absent = everything). Same list as server/calls_db.py
+# INTEGRATION_FIELDS. A left-out field is removed from the lead before the
+# payload is built, so it is never sent - in a sheet the column stays (old
+# rows don't shift) but is hidden and left empty.
+_INTEGRATION_FIELDS = {
+    "name": ("name",),
+    "phone": ("phone",),
+    "email": ("email",),
+    "company": ("company",),
+    "channel": ("channel",),
+    "agent": ("agent_name",),
+    "language": ("language",),
+    "duration": ("duration_seconds",),
+    "details": ("extracted_data", "summary", "use_case", "message"),
+    "transcript": ("transcript",),
+    "page": ("page_path",),
+    "recording": ("recording_url", "recording_mime_type"),
+    "call_id": ("call_id",),
+}
+_FIELD_CONFIGURABLE_KEYS = frozenset({"webhook", "slack", "sheets"})
+
+
+def _apply_field_choice(key: str, config: dict, lead: dict) -> dict:
+    """The lead minus the fields this integration's owner left out."""
+    chosen = config.get("fields")
+    if key not in _FIELD_CONFIGURABLE_KEYS or not isinstance(chosen, list) or not chosen:
+        return lead
+    out = dict(lead)
+    for field, lead_keys in _INTEGRATION_FIELDS.items():
+        if field not in chosen:
+            for lead_key in lead_keys:
+                out.pop(lead_key, None)
+    if "company" not in chosen and isinstance(out.get("extracted_data"), dict):
+        out["extracted_data"] = {k: v for k, v in out["extracted_data"].items() if k != "company"}
+    return out
+
+
+async def _log_delivery(
+    account_id: int | None, key: str, lead: dict, status: str, detail: str = "", call_id: int | None = None,
+) -> None:
+    """Activity row for the dashboard's integration page."""
+    try:
+        await asyncio.to_thread(
+            db.record_integration_delivery, account_id, key, str(lead.get("type") or ""), status,
+            detail, str(lead.get("name") or ""), lead.get("call_id") or call_id,
+        )
+    except Exception:
+        logger.warning("could not log %s delivery", key, exc_info=True)
 
 
 async def _deliver_to_integrations(
@@ -1072,13 +1380,21 @@ async def _deliver_to_integrations(
     try:
         timeout = aiohttp.ClientTimeout(total=5)
         async with aiohttp.ClientSession(timeout=timeout) as http:
+            all_fields_lead = lead
             for integ in integrations:
+                lead = all_fields_lead
+                if not _integration_wants_event(integ["key"], integ.get("config") or {}, lead):
+                    logger.info("%s: skipped %s event (not chosen on its integration page)", integ["key"], lead.get("type"))
+                    continue
+                lead = _apply_field_choice(integ["key"], integ.get("config") or {}, lead)
                 if integ["key"] == "zoho_crm":
                     # Authenticated API call, not a plain webhook POST — its
                     # own path, same on/error bookkeeping as the generic one
                     # below.
                     if not _zoho_should_send(lead):
                         logger.info("zoho_crm: skipped %s event (one lead per reachable caller)", lead.get("type"))
+                        if lead.get("type") == "call_completed":
+                            await _log_delivery(account_id, "zoho_crm", all_fields_lead, "skipped", "No phone or email from the caller", call_id)
                         continue
                     try:
                         ok = await _deliver_zoho_crm_lead(http, account_id, integ.get("config") or {}, lead)
@@ -1088,30 +1404,41 @@ async def _deliver_to_integrations(
                     if ok:
                         logger.info("delivered lead to zoho_crm integration")
                         await asyncio.to_thread(db.touch_integration_sync, account_id, "zoho_crm")
+                        await _log_delivery(account_id, "zoho_crm", all_fields_lead, "sent", "", call_id)
                     else:
                         logger.warning("zoho_crm delivery returned falsy — marking integration error")
                         await asyncio.to_thread(
                             db.mark_integration_error, account_id, "zoho_crm", "Delivery failed — check connection"
                         )
+                        await _log_delivery(account_id, "zoho_crm", all_fields_lead, "failed", "Delivery failed — check connection", call_id)
                     continue
                 if integ["key"] == "sheets" and (integ.get("config") or {}).get("mode") == "oauth":
                     # "Sign in with Google" sheet: one row per reachable
                     # caller, same rule as Zoho. Apps Script URL configs (no
                     # mode) fall through to the generic POST below unchanged.
-                    if not _zoho_should_send(lead):
+                    # Judged on the full lead: the owner may have left phone
+                    # or email out of the sheet, which must not make every
+                    # caller look unreachable.
+                    if not _zoho_should_send(all_fields_lead):
                         logger.info("sheets: skipped %s event (one row per reachable caller)", lead.get("type"))
+                        if lead.get("type") == "call_completed":
+                            await _log_delivery(account_id, "sheets", all_fields_lead, "skipped", "No phone or email from the caller", call_id)
                         continue
                     try:
-                        ok, detail = await _deliver_google_sheet_row(http, account_id, integ.get("config") or {}, lead)
+                        ok, detail = await _deliver_google_sheet_row(
+                            http, account_id, integ.get("config") or {}, lead, agent_name=all_fields_lead.get("agent_name"),
+                        )
                     except Exception:
                         logger.warning("sheets delivery failed", exc_info=True)
                         ok, detail = False, "Network error — delivery failed"
                     if ok:
                         logger.info("delivered lead to sheets integration")
                         await asyncio.to_thread(db.touch_integration_sync, account_id, "sheets")
+                        await _log_delivery(account_id, "sheets", all_fields_lead, "sent", "", call_id)
                     else:
                         logger.warning("sheets delivery failed: %s", detail)
                         await asyncio.to_thread(db.mark_integration_error, account_id, "sheets", detail)
+                        await _log_delivery(account_id, "sheets", all_fields_lead, "failed", detail, call_id)
                     continue
                 shaped = _integration_body(integ["key"], integ.get("config") or {}, lead)
                 if shaped is None:
@@ -1126,6 +1453,7 @@ async def _deliver_to_integrations(
                         reason = "Automatic delivery skipped: missing " + ", ".join(missing or ["required data"])
                         logger.warning("arthaleads %s", reason.lower())
                         await asyncio.to_thread(db.set_call_arthaleads_status, call_id, "failed", reason)
+                        await _log_delivery(account_id, "arthaleads", all_fields_lead, "skipped", reason, call_id)
                     continue
                 url, body = shaped
                 try:
@@ -1133,6 +1461,7 @@ async def _deliver_to_integrations(
                         if 200 <= resp.status < 300:
                             logger.info("delivered lead to %s integration", integ["key"])
                             await asyncio.to_thread(db.touch_integration_sync, account_id, integ["key"])
+                            await _log_delivery(account_id, integ["key"], all_fields_lead, "sent", "", call_id)
                             if integ["key"] == "arthaleads":
                                 await asyncio.to_thread(db.set_call_arthaleads_status, call_id, "sent")
                         elif resp.status == 401:
@@ -1140,6 +1469,7 @@ async def _deliver_to_integrations(
                             await asyncio.to_thread(
                                 db.mark_integration_error, account_id, integ["key"], "Invalid token — reconnect"
                             )
+                            await _log_delivery(account_id, integ["key"], all_fields_lead, "failed", "Invalid token — reconnect", call_id)
                             if integ["key"] == "arthaleads":
                                 await asyncio.to_thread(
                                     db.set_call_arthaleads_status, call_id, "failed", "Invalid token — reconnect"
@@ -1150,6 +1480,7 @@ async def _deliver_to_integrations(
                             await asyncio.to_thread(
                                 db.mark_integration_error, account_id, integ["key"], f"HTTP {resp.status}: {text}"
                             )
+                            await _log_delivery(account_id, integ["key"], all_fields_lead, "failed", f"HTTP {resp.status}: {text}", call_id)
                             if integ["key"] == "arthaleads":
                                 await asyncio.to_thread(
                                     db.set_call_arthaleads_status,
@@ -1160,6 +1491,7 @@ async def _deliver_to_integrations(
                     await asyncio.to_thread(
                         db.mark_integration_error, account_id, integ["key"], "Network error — delivery failed"
                     )
+                    await _log_delivery(account_id, integ["key"], all_fields_lead, "failed", "Network error — delivery failed", call_id)
                     if integ["key"] == "arthaleads":
                         await asyncio.to_thread(
                             db.set_call_arthaleads_status, call_id, "failed", "Network error — delivery failed"
