@@ -6,7 +6,8 @@ import { MarketingLayout } from '../../components/MarketingLayout'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
 import { LaunchFilm } from '../../components/LaunchFilm'
 import { Seo } from '../../components/Seo'
-import { CTABand, TalkToArthaButton } from '../../components/MarketingBits'
+import { BrassRule, CTABand, SectionEyebrow, TalkToArthaButton } from '../../components/MarketingBits'
+import { IndiaMap } from '../../components/IndiaMap'
 import { RotatingGreeting, ScriptMarquee } from '../../components/BharatBits'
 import { Reveal } from '../../components/Reveal'
 import arthaAvatar from '../../assets/artha-avatar.webp'
@@ -91,12 +92,6 @@ const BHARAT_POINTS = [
   },
 ]
 
-function SectionEyebrow({ children }: { children: string }) {
-  return (
-    <span className="text-xs font-bold uppercase tracking-widest text-cyan">{children}</span>
-  )
-}
-
 export function Home() {
   const [demoSpotlight, setDemoSpotlight] = useState(false)
   const spotlightTimer = useRef<number | null>(null)
@@ -142,17 +137,13 @@ export function Home() {
         <Icon name="arrow_forward" className="text-[16px]" />
       </button>
       {/* ---------- Hero ---------- */}
-      <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-5 py-12 md:px-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)] lg:items-start lg:gap-12 lg:py-12">
+      <section className="relative isolate mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 overflow-x-clip px-5 py-12 md:px-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)] lg:items-start lg:gap-12 lg:py-12">
         <div>
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold uppercase tracking-[0.28em]">
-            <span className="font-sans normal-case tracking-normal text-sm text-text-muted">
-              भारत के लिए
-            </span>
-            <span className="text-border">/</span>
-            <span aria-label="Built for Bharat">
-              <span className="text-text-muted">Built for </span>
-              <span className="text-[#ff9933]">BH</span><span className="bharat-middle-letter">AR</span><span className="text-[#138808]">AT</span>
-            </span>
+          {/* Devanagari stays untracked: letter-spacing breaks its conjuncts. */}
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-brass">
+            <BrassRule />
+            <span className="text-sm font-semibold">भारत के लिए</span>
+            <span className="text-xs font-bold uppercase tracking-[0.22em]">· Built for Bharat</span>
           </p>
           {/* The greeting rotates through all ten scripts Artha speaks. It
               carries the positioning better than any adjective could: the
@@ -163,7 +154,7 @@ export function Home() {
           <h1 className="mt-4 font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl lg:text-[3.4rem]">
             <RotatingGreeting className="block min-h-[1.1em]" />
             <span className="mt-1 block">Answer every customer</span>
-            <span className="block bg-gradient-to-r from-primary to-magenta bg-clip-text text-transparent">
+            <span className="block bg-gradient-to-r from-primary via-magenta to-[#ff7a45] bg-clip-text pb-[0.08em] text-transparent">
               in their own language.
             </span>
           </h1>
@@ -185,14 +176,21 @@ export function Home() {
           <div className="mt-8 grid grid-cols-3 gap-4 border-t border-border pt-5 sm:gap-8">
             {HERO_STATS.map((stat) => (
               <div key={stat.label}>
-                <p className="font-display text-2xl font-bold text-text">{stat.value}</p>
+                <p className="bharat-serif font-display text-3xl font-light text-text">{stat.value}</p>
                 <p className="text-xs uppercase tracking-wider text-text-muted">{stat.label}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <div>
+        {/* The live demo inside a jharokha: a thin brass arch rises above the card and its
+            sides run down beside it, over a faint jaali lattice. Decorative only. */}
+        <div className="relative mx-auto w-full max-w-[420px] pt-14 lg:mx-0 lg:ml-auto">
+          <div aria-hidden="true" className="jaali-bg pointer-events-none absolute -inset-x-16 -inset-y-6 -z-10" />
+          <svg aria-hidden="true" viewBox="0 0 448 110" preserveAspectRatio="none" className="pointer-events-none absolute -inset-x-2.5 top-0 h-[110px] w-[calc(100%+20px)] text-brass/70 sm:-inset-x-3.5 sm:w-[calc(100%+28px)]">
+            <path d="M0.5 110V96C0.5 74 18 56 38 50 48 22 86 6 124 12 150-2 196-4 224 6 252-4 298-2 324 12 362 6 400 22 410 50 430 56 447.5 74 447.5 96V110" fill="none" stroke="currentColor" vectorEffect="non-scaling-stroke" />
+          </svg>
+          <div aria-hidden="true" className="pointer-events-none absolute -inset-x-2.5 bottom-[-10px] top-[110px] rounded-b-[34px] border border-t-0 border-brass/70 sm:-inset-x-3.5 sm:bottom-[-14px]" />
           <DemoOrbCard spotlight={demoSpotlight} />
         </div>
       </section>
@@ -242,18 +240,21 @@ export function Home() {
           specifics are what a foreign-built agent gets wrong. */}
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
         <Reveal>
-          <div className="mb-12 max-w-2xl">
-            {/* Not "Built for Bharat" - that's already the hero kicker, and
-                repeating it two screens later reads as a template, not a
-                point of view. */}
-            <SectionEyebrow>The difference</SectionEyebrow>
-            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">
-              Global voice AI treats India as an edge case.
-            </h2>
-            <p className="mt-4 text-lg leading-relaxed text-text-muted">
-              We started here. These aren’t features we bolted on for a market - they’re the
-              assumptions the whole system was built around.
-            </p>
+          <div className="mb-12 grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
+            <div className="max-w-2xl">
+              {/* Not "Built for Bharat" - that's already the hero kicker, and
+                  repeating it two screens later reads as a template, not a
+                  point of view. */}
+              <SectionEyebrow>The difference</SectionEyebrow>
+              <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">
+                Global voice AI treats India as an edge case.
+              </h2>
+              <p className="mt-4 text-lg leading-relaxed text-text-muted">
+                We started here. These aren’t features we bolted on for a market - they’re the
+                assumptions the whole system was built around.
+              </p>
+            </div>
+            <IndiaMap className="mx-auto max-w-[380px]" />
           </div>
         </Reveal>
 
@@ -265,7 +266,7 @@ export function Home() {
                   <h3 className="font-display text-lg font-semibold">{point.title}</h3>
                   <span
                     aria-hidden="true"
-                    className="shrink-0 font-display text-2xl text-text-muted transition-colors group-hover:text-primary"
+                    className="shrink-0 font-display text-2xl text-brass transition-colors group-hover:text-primary"
                   >
                     {point.glyph}
                   </span>
@@ -289,7 +290,7 @@ export function Home() {
                     <h3 className="font-display text-lg font-semibold">Ten Indian languages plus 88 more, one agent</h3>
                     <span
                       aria-hidden="true"
-                      className="shrink-0 font-display text-2xl text-text-muted transition-colors group-hover:text-primary md:hidden"
+                      className="shrink-0 font-display text-2xl text-brass transition-colors group-hover:text-primary md:hidden"
                     >
                       अ अ अ
                     </span>

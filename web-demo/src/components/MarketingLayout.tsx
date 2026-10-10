@@ -399,7 +399,7 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
   }, [pathname])
 
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className="theme-bharat min-h-screen bg-bg text-text">
       <Header />
       <main>{children}</main>
       <Footer />

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { SectionEyebrow } from './MarketingBits'
 
 /** The launch film, in English or Hindi. Nothing but the poster image loads
  * until the visitor reaches it; then it plays, and it pauses again when they
@@ -74,7 +75,7 @@ export function LaunchFilm() {
     <section id="launch-film" className="mx-auto max-w-7xl px-5 py-16 md:px-8">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Watch the film</p>
+          <SectionEyebrow>Watch the film</SectionEyebrow>
           <h2 className="mt-2 font-display text-3xl font-bold tracking-tight md:text-4xl">Meet Artha</h2>
         </div>
         <div className="flex items-center gap-3">

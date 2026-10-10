@@ -3,8 +3,24 @@ import { Icon } from './Icon'
 import { trackMarketingCta } from '../lib/analytics'
 import { hostBucket } from '../lib/hostBuckets'
 
+/** The fine brass rule that opens every section label: a hairline, a small diamond, a fading hairline. */
+export function BrassRule() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 64 10" className="h-2.5 w-16 shrink-0">
+      <path d="M0 5H26" stroke="currentColor" />
+      <path d="M32 1.5 35.5 5 32 8.5 28.5 5Z" fill="none" stroke="currentColor" />
+      <path d="M38 5H64" stroke="currentColor" strokeOpacity=".35" />
+    </svg>
+  )
+}
+
 export function SectionEyebrow({ children }: { children: string }) {
-  return <span className="text-xs font-bold uppercase tracking-widest text-cyan">{children}</span>
+  return (
+    <span className="inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.22em] text-brass">
+      <BrassRule />
+      {children}
+    </span>
+  )
 }
 
 // Every "Talk to Artha live" CTA, wherever it appears, points at the same

@@ -28,6 +28,16 @@
   src: url("/fonts/sora-latin.woff2") format("woff2");
 }
 
+/* Marketing headlines only (the .theme-bharat rules below). Fraunces, OFL-1.1,
+   variable weight, Latin subset (37 KB). */
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 300 600;
+  font-display: swap;
+  src: url("/fonts/fraunces-latin.woff2") format("woff2");
+}
+
 @theme {
   --font-sans: "Manrope", sans-serif;
   --font-display: "Sora", "Manrope", sans-serif;
@@ -46,6 +56,8 @@
   --color-text: #f5f3ff;
   --color-text-muted: #9089b0;
   --color-destructive: #ef4444;
+  /* brass: the one metallic accent of the marketing theme, used for hairlines and small details */
+  --color-brass: #c9a35b;
 }
 
 /* Light mode: flip the design tokens and every bg-surface / text-cyan /
@@ -68,6 +80,7 @@
   --color-text: #1a1523;
   --color-text-muted: #5d5776;
   --color-destructive: #dc2626;
+  --color-brass: #96712f;
 }
 
 body {
@@ -918,3 +931,63 @@ html:not(.vv-icons-ready) .material-symbols-outlined {
 .vv-tooltip[data-side="right"] .vv-tooltip-arrow { transform: translate(0, -50%) rotate(45deg); }
 @keyframes vv-tooltip-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .vv-tooltip { animation: none; } }
+
+
+/* ---- Marketing theme: "Bharat", premium -------------------------------
+   Scoped to MarketingLayout (.theme-bharat), so the dashboard is untouched.
+   Restraint over decoration: serif headlines, one brass accent for hairlines,
+   a faint jaali lattice behind the live demo, and a jharokha arch framing it. */
+/* Headings and marked figures only: the logo wordmark, nav and pills keep Sora. */
+.theme-bharat :is(h1, h2, h3).font-display,
+.theme-bharat .bharat-serif {
+  font-family: "Fraunces", "Sora", Georgia, serif;
+  letter-spacing: -0.02em;
+}
+.theme-bharat h1.font-display,
+.theme-bharat h2.font-display {
+  font-weight: 400;
+}
+.theme-bharat h3.font-display {
+  font-weight: 500;
+}
+
+/* jaali: overlapping circles, the lattice carved into stone window screens */
+.jaali-bg {
+  --jaali: color-mix(in srgb, var(--color-brass) 22%, transparent);
+  background-image:
+    radial-gradient(circle at 0 0, transparent 23.4px, var(--jaali) 23.6px, var(--jaali) 24.4px, transparent 24.6px),
+    radial-gradient(circle at 48px 0, transparent 23.4px, var(--jaali) 23.6px, var(--jaali) 24.4px, transparent 24.6px),
+    radial-gradient(circle at 0 48px, transparent 23.4px, var(--jaali) 23.6px, var(--jaali) 24.4px, transparent 24.6px),
+    radial-gradient(circle at 48px 48px, transparent 23.4px, var(--jaali) 23.6px, var(--jaali) 24.4px, transparent 24.6px),
+    radial-gradient(circle at 24px 24px, transparent 23.4px, var(--jaali) 23.6px, var(--jaali) 24.4px, transparent 24.6px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(closest-side, #000 30%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 30%, transparent 100%);
+}
+
+/* India map: cities brighten one after another (IndiaMap.tsx) */
+.india-city {
+  opacity: 0.55;
+  animation: india-city-lit 10.5s ease-in-out infinite;
+}
+.india-city .india-ring {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: india-city-ping 10.5s ease-out infinite;
+  animation-delay: inherit;
+}
+@keyframes india-city-lit {
+  0%, 100% { opacity: 0.55; }
+  4%, 14% { opacity: 1; }
+  22% { opacity: 0.55; }
+}
+@keyframes india-city-ping {
+  0% { opacity: 0; transform: scale(0.4); }
+  4% { opacity: 0.9; }
+  14% { opacity: 0; transform: scale(1.8); }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .india-city, .india-city .india-ring { animation: none; }
+}
