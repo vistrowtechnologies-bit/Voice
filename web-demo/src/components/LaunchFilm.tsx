@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 /** The launch film. Nothing but the poster image loads until the visitor
  * reaches it; then it plays, and it pauses again when they scroll away.
  * A visitor who pauses it themselves is left alone. */
-const FILM_HD = '/media/launch-film-v3.mp4'
-const FILM_SD = '/media/launch-film-v3-720.mp4'
+const FILM_HD = '/media/launch-film-v4.mp4'
+const FILM_SD = '/media/launch-film-v4-720.mp4'
 
-/** Phones and Save-Data visitors get the 720p file (5 MB instead of 12 MB). */
+/** Phones and Save-Data visitors get the 720p file (6 MB instead of 12 MB). */
 function pickFilm(): string {
   try {
     const nav = navigator as Navigator & { connection?: { saveData?: boolean } }
@@ -61,7 +61,7 @@ export function LaunchFilm() {
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Watch the film</p>
             <h2 className="mt-3 font-display text-3xl font-bold tracking-tight md:text-4xl">Meet Artha</h2>
             <p className="mt-4 text-base leading-relaxed text-text-muted">
-              How she answers, switches language mid-call, books the appointment and writes up every conversation. Under three minutes.
+              How she answers, switches language mid-call, books the appointment and writes up every conversation. About three and a half minutes.
             </p>
           </div>
           <Link
@@ -75,7 +75,7 @@ export function LaunchFilm() {
           {started ? (
             <video
               src={src}
-              poster="/media/launch-film-v2-poster.jpg"
+              poster="/media/launch-film-v4-poster.jpg"
               ref={(v) => {
                 videoRef.current = v
                 if (v && inView.current && v.paused && !userPaused.current && v.readyState === 0) void tryPlay(v)
@@ -93,12 +93,12 @@ export function LaunchFilm() {
             <button
               type="button"
               onClick={() => setStarted(true)}
-              aria-label="Play the Vistrow Voice launch film (2 minutes 38 seconds, with sound)"
+              aria-label="Play the Vistrow Voice launch film (3 minutes 34 seconds, with sound)"
               className="group absolute inset-0 h-full w-full"
             >
               <img
-                src="/media/launch-film-v2-poster.jpg"
-                alt="A map of India at night with a phone ringing in Pune"
+                src="/media/launch-film-v4-poster.jpg"
+                alt="Artha booking a restaurant table on a live phone call, in Hindi"
                 loading="lazy"
                 decoding="async"
                 className="h-full w-full object-cover"
@@ -107,7 +107,7 @@ export function LaunchFilm() {
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 md:h-12 md:w-12">
                   <svg viewBox="0 0 24 24" className="h-5 w-5 md:h-6 md:w-6" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
                 </span>
-                Play film · 2:38
+                Play film · 3:34
               </span>
             </button>
           )}
