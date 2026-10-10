@@ -4,41 +4,65 @@ import { useScrollProgress } from '../lib/useScrollProgress'
 import type { FeatureRow } from '../lib/marketingContent'
 import arthaAvatar from '../assets/artha-avatar.webp'
 
-/** "How it works" as a scroll story: on desktop one product screen stays pinned while the
- * steps scroll past; the screen changes per step and a brass line fills down the steps.
- * On phones each step simply shows its own screen. The screens are illustrative UI with
- * sample data, not live product numbers. */
+/** "How it works" as a scroll story. On desktop the whole block (product screen plus a compact
+ * list of the steps) pins in place for a short stretch of scrolling; scrolling advances the lit
+ * step, changes the screen and fills a brass line. Nothing is spaced out, so there are no gaps.
+ * On phones each step simply shows its own screen. The screens are illustrative UI with sample
+ * data, not live product numbers. */
 export function HowItWorksStory({ steps }: { steps: FeatureRow[] }) {
   const ref = useRef<HTMLDivElement>(null)
-  // 0 when the steps' top reaches the middle of the screen, 1 when their bottom does
-  const progress = useScrollProgress(ref, (r, vh) => (vh * 0.5 - r.top) / r.height)
+  // 0 when the block pins (its top reaches 7rem from the top), 1 when the extra scroll runs out
+  const progress = useScrollProgress(ref, (r, vh) => (112 - r.top) / Math.max(1, r.height - (vh - 112)))
   const active = Math.min(steps.length - 1, Math.floor(progress * steps.length))
 
+  // Clicking a step scrolls to the middle of its stretch of the pinned scroll.
+  const goTo = (i: number) => {
+    const el = ref.current
+    if (!el || !window.matchMedia('(min-width: 1024px)').matches) return
+    const r = el.getBoundingClientRect()
+    const travel = r.height - (window.innerHeight - 112)
+    const top = window.scrollY + r.top - 112 + travel * ((i + 0.5) / steps.length)
+    window.scrollTo({ top, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+  }
+
   return (
-    <div ref={ref} className="relative grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16">
-      <div className="hidden lg:block">
-        <div className="sticky top-28">
+    <div ref={ref} className="relative lg:h-[200vh]">
+      <div className="grid items-center gap-10 lg:sticky lg:top-28 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16">
+        <div className="hidden lg:block">
           <StoryScreen active={active} />
         </div>
+        <ol className="relative">
+          <span aria-hidden="true" className="absolute bottom-5 left-[19px] top-5 w-px bg-border" />
+          <span aria-hidden="true" className="absolute left-[19px] top-5 w-px bg-brass transition-[height] duration-150" style={{ height: `calc(${progress} * (100% - 2.5rem))` }} />
+          {steps.map((step, i) => {
+            const state = i === active ? 'active' : i < active ? 'done' : 'next'
+            return (
+              <li key={step.title} onClick={() => goTo(i)} className="group relative flex gap-6 pb-12 last:pb-0 lg:cursor-pointer lg:pb-10">
+                {/* The circle stays opaque so the line runs behind it; only the text dims. */}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); goTo(i) }}
+                  aria-label={`Step ${i + 1}: ${step.title}`}
+                  aria-current={state === 'active' ? 'step' : undefined}
+                  className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brass bg-surface font-display text-sm font-semibold text-brass transition-colors duration-300 ${
+                    state === 'active' ? 'lg:bg-brass lg:text-white' : state === 'next' ? 'lg:border-border lg:text-text-muted lg:group-hover:border-brass lg:group-hover:text-brass' : ''
+                  }`}
+                >
+                  {state === 'active' && <span aria-hidden="true" className="absolute -inset-1.5 hidden animate-ping rounded-full border border-brass/40 motion-reduce:animate-none lg:block" />}
+                  {`0${i + 1}`}
+                </button>
+                <div className={`min-w-0 pt-1.5 transition-opacity duration-300 ${state === 'active' ? '' : 'lg:opacity-45 lg:group-hover:opacity-80'}`}>
+                  <h3 className="font-display text-2xl font-semibold">{step.title}</h3>
+                  <p className="mt-2 max-w-md text-base leading-relaxed text-text-muted">{step.body}</p>
+                  <div className="mt-6 lg:hidden">
+                    <StoryScreen active={i} only />
+                  </div>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
       </div>
-      <ol className="relative">
-        <span aria-hidden="true" className="absolute bottom-6 left-[19px] top-6 w-px bg-border" />
-        <span aria-hidden="true" className="absolute left-[19px] top-6 w-px bg-brass transition-[height] duration-150" style={{ height: `calc(${progress} * (100% - 3rem))` }} />
-        {steps.map((step, i) => (
-          <li key={step.title} className={`relative flex gap-6 pb-14 last:pb-0 lg:min-h-[48vh] lg:pb-0 ${i === active ? '' : 'lg:opacity-40'} transition-opacity duration-300`}>
-            <span className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-bg font-display text-sm font-semibold transition-colors duration-300 ${i <= active ? 'border-brass text-brass' : 'border-border text-text-muted'}`}>
-              {`0${i + 1}`}
-            </span>
-            <div className="min-w-0 pt-1.5">
-              <h3 className="font-display text-2xl font-semibold">{step.title}</h3>
-              <p className="mt-2 max-w-md text-base leading-relaxed text-text-muted">{step.body}</p>
-              <div className="mt-6 lg:hidden">
-                <StoryScreen active={i} only />
-              </div>
-            </div>
-          </li>
-        ))}
-      </ol>
     </div>
   )
 }
