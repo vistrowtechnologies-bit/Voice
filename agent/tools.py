@@ -32,6 +32,13 @@ from language import (
 
 logger = logging.getLogger("real-estate-tools")
 
+
+def _mask_phone(phone) -> str:
+    """A phone number fit for INFO logs: only the last 4 digits survive.
+    Worker logs are shipped off-box, so full caller numbers stay out of them."""
+    digits = re.sub(r"\D", "", str(phone or ""))
+    return f"***{digits[-4:]}" if digits else "(none)"
+
 # Spoken via RunContext.with_filler() while a tool's webhook/integration
 # fan-out is in flight (log_lead, book_appointment, capture_platform_lead) -
 # that sequence of awaited network calls was measured live at ~1.8s, long
@@ -987,7 +994,7 @@ async def _calendar_book(
     # with no way to tell them apart. The conversation still behaves exactly
     # as if the booking succeeded; nothing is persisted.
     if _is_demo(context):
-        logger.info("demo agent: simulating booking for %s on %s at %s (nothing written)", name, date, time)
+        logger.info("demo agent: simulating booking on %s at %s (nothing written)", date, time)
         return {"ok": True}
     account_id = (context.userdata or {}).get("account_id")
     agent_id = (context.userdata or {}).get("agent_id")
@@ -1317,14 +1324,14 @@ async def do_not_call(context: RunContext, reason: str = "") -> str:
             "assure them they will not be contacted again, and close the call politely."
         )
     if _is_demo(context):
-        logger.info("demo agent: simulating do-not-call for %s", phone)
+        logger.info("demo agent: simulating do-not-call for %s", _mask_phone(phone))
         added = True
     else:
         added = await asyncio.to_thread(
             db.record_do_not_call, userdata.get("account_id"), phone, reason
         )
     await _publish_event(context, {"type": "do_not_call", "phone": phone, "reason": reason})
-    logger.info("do-not-call recorded mid-call for %s (new: %s)", phone, added)
+    logger.info("do-not-call recorded mid-call for %s (new: %s)", _mask_phone(phone), added)
     return (
         "Done — they will not be called again. Apologise briefly for the interruption, thank "
         "them for their time, and end the call. Do not pitch, do not ask why, and do not offer "
@@ -1361,7 +1368,7 @@ async def request_callback(
             "one at a time — and call this again once you have both."
         )
     if _is_demo(context):
-        logger.info("demo agent: simulating callback request for %s (%s)", name, phone)
+        logger.info("demo agent: simulating callback request for %s", _mask_phone(phone))
         result = {"ok": True}
     else:
         result = await asyncio.to_thread(
@@ -1384,7 +1391,7 @@ async def request_callback(
     # have lost, so it needs to reach Slack/Sheets/CRM, not just the database.
     await _fan_out_integrations(context, event)
     if result is None:
-        logger.warning("callback request could not be stored for %s", name)
+        logger.warning("callback request could not be stored for %s", _mask_phone(phone))
         return (
             f"Noted {name}'s details and passed them to the team. Confirm to the caller that "
             f"someone will call back about a slot, then close warmly."
@@ -1481,7 +1488,8 @@ async def book_appointment(
         )
 
     name, phone, purpose = clean_name, clean_phone, clean_purpose
-    logger.info("booking appointment: %s (%s) %s %s for %s", name, phone, date, time, purpose)
+    # Name and purpose stay out of INFO logs (PII); the slot is what debugging needs.
+    logger.info("booking appointment: %s %s for %s", date, time, _mask_phone(phone))
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is not None:
         lead_data.setdefault("name", name)
@@ -1711,7 +1719,8 @@ async def log_lead(
     if lead_data.get("name") and (lead_data.get("phone") or lead_data.get("email")):
         userdata["lead_captured"] = True
 
-    logger.info("lead updated: %s", {k: lead_data.get(k) for k in changed})
+    # Field names only at INFO: the values are the caller's PII.
+    logger.info("lead updated: %s", sorted(changed))
     event = {"type": "lead_update", **{k: lead_data.get(k, "") for k in _LEAD_FIELDS}}
     # Still not awaited — the fan-out is genuinely off the speech path.
     _fan_out_in_background(context, event)

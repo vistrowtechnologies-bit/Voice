@@ -100,8 +100,26 @@ class EntrypointDeclines(unittest.TestCase):
         start = self.src.index("config = await _await_agent_config(")
         block = self.src[start:self.src.index("_admission_task = ", start)]
         self.assertIn('config is None and call_context.get("agent_id") is not None', block)
-        self.assertEqual(block.count("await _hang_up(ctx.room.name)"), 2, "config-missing and paused both hang up")
+        self.assertEqual(
+            block.count("await _hang_up(ctx.room.name)"), 3,
+            "config-missing, paused and unowned-agent all hang up",
+        )
 
+    def test_unowned_agent_is_declined_and_reported_before_admission(self):
+        start = self.src.index("if _is_unowned_tenant_agent(config, call_context):")
+        self.assertLess(start, self.src.index("_admission_task = "))
+        block = self.src[start:self.src.index("_admission_base = ", start)]
+        self.assertIn("db.log_platform_error", block)
+        self.assertIn("await _hang_up(ctx.room.name)", block)
+        self.assertIn("return", block)
+
+    def test_admission_decline_tells_the_widget_before_hanging_up(self):
+        start = self.src.index("if not _admitted:")
+        block = self.src[start:self.src.index("return", start)]
+        self.assertLess(
+            block.index('await _signal_end_reason(ctx.room, "busy")'),
+            block.index("await _hang_up(ctx.room.name)"),
+        )
 
     def test_agent_construction_failure_hangs_up_and_frees_the_slot(self):
         # A missing provider key / unsupported realtime model raises inside
@@ -120,6 +138,49 @@ class EntrypointDeclines(unittest.TestCase):
         # The slot is released by the shutdown callback, which must already be
         # registered before construction can fail.
         self.assertLess(self.src.index("ctx.add_shutdown_callback(_release_call_slot)"), start)
+
+
+class UnownedAgent(unittest.TestCase):
+    """account_id None skips every plan/credit/concurrency check in
+    try_start_call, so only genuine platform paths may keep it."""
+
+    def test_named_tenant_agent_without_account_is_declined(self):
+        self.assertTrue(main._is_unowned_tenant_agent({"account_id": None}, {"agent_id": 7}))
+
+    def test_owned_agent_is_allowed(self):
+        self.assertFalse(main._is_unowned_tenant_agent({"account_id": 3}, {"agent_id": 7}))
+
+    def test_platform_paths_keep_working(self):
+        # Default demo room (no agent_id), the marketing demo and industry demos.
+        self.assertFalse(main._is_unowned_tenant_agent({"account_id": None}, {"agent_id": None}))
+        self.assertFalse(main._is_unowned_tenant_agent(
+            {"account_id": None, "is_platform_demo": 1}, {"agent_id": 7}))
+        self.assertFalse(main._is_unowned_tenant_agent(
+            {"account_id": None, "public_demo_slug": "healthcare"}, {"agent_id": 7}))
+        self.assertTrue(main._is_unowned_tenant_agent(
+            {"account_id": None, "public_demo_slug": "  "}, {"agent_id": 7}))
+
+    def test_no_config_is_left_to_the_existing_checks(self):
+        self.assertFalse(main._is_unowned_tenant_agent(None, {"agent_id": 7}))
+        self.assertFalse(main._is_unowned_tenant_agent({}, {"agent_id": None}))
+
+
+class EndReasonSignal(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(main, "_END_REASON_PROPAGATE_S", 0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_sets_the_attribute_the_widget_reads(self):
+        room = mock.Mock()
+        room.local_participant.set_attributes = mock.AsyncMock()
+        run(main._signal_end_reason(room, "busy"))
+        room.local_participant.set_attributes.assert_awaited_once_with({"vistrow.end_reason": "busy"})
+
+    def test_failure_never_raises(self):
+        room = mock.Mock()
+        room.local_participant.set_attributes = mock.AsyncMock(side_effect=RuntimeError("not connected"))
+        run(main._signal_end_reason(room, "busy"))  # must not raise
 
 
 if __name__ == "__main__":

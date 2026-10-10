@@ -324,7 +324,24 @@ def _invalidate_agent_config_cache(payload: str) -> None:
     always be evicted too: changing which agent is public, or editing the
     currently public agent, otherwise leaves unauthenticated demo calls on
     the previous configuration.
+
+    ``kb:<id>`` payloads (sent when a knowledge base is saved or deleted)
+    evict that knowledge base instead; without this a KB edit was served
+    stale for up to _KB_CACHE_TTL_S (10 minutes).
     """
+    if isinstance(payload, str) and payload.startswith("kb:"):
+        raw = payload[3:].strip()
+        # The cache is keyed by whatever get_kb was called with - agents.kb_id
+        # (normally int) - so evict both spellings of the id.
+        _kb_cache.pop(raw, None)
+        try:
+            _kb_cache.pop(int(raw), None)
+        except ValueError:
+            _kb_cache.clear()
+            logger.warning("cleared knowledge-base cache after invalidation payload %r", payload)
+            return
+        logger.info("invalidated cached knowledge base kb_id=%s", raw)
+        return
     try:
         agent_id = int(payload)
     except (TypeError, ValueError):
