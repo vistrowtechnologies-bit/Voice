@@ -124,6 +124,7 @@ export function DemoOrbCard({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
+  const handingOffRef = useRef(false)
 
   // Backs off "Try Again" after repeated failures instead of letting a
   // frustrated visitor hammer it - every immediate re-click starts a brand
@@ -182,8 +183,8 @@ export function DemoOrbCard({
         return warmed
       })
       .catch(() => {
-        // Best-effort - handleStart falls back to fetching its own token
-        // live if this never lands or the room ends up rejected.
+        // handleStart surfaces a retry. Repeating a failed request here
+        // would double the waiting time and could dispatch another room.
         return null
       })
     prewarmPromiseRef.current = request.finally(() => {
@@ -243,6 +244,7 @@ export function DemoOrbCard({
       return
     }
     creditChargedRef.current = false
+    handingOffRef.current = false
     setPhase('connecting')
     setErrorMessage(null)
     // Start dispatch before asking for microphone permission. On a first
@@ -251,8 +253,12 @@ export function DemoOrbCard({
     // with getUserMedia and WebRTC setup.
     const warming = prewarm()
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true })
+      // This stream only asks permission. LiveKit owns the actual call
+      // stream; retaining both keeps an unused microphone capture alive.
+      const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      permissionStream.getTracks().forEach((track) => track.stop())
       const warm = (await warming) ?? prewarmRef.current
+      if (!warm) throw new Error('Could not connect to Artha. Please try again.')
       const isFresh = warm && warm.consented && Date.now() - warm.at < PREWARM_MAX_AGE_MS
       const room = isFresh ? warm.room : randomId('voice-agent-demo')
       const { token: newToken, url } =
@@ -302,6 +308,12 @@ export function DemoOrbCard({
     // still prewarms, where a caller genuinely is waiting.
   }, [])
 
+  const handleLiveKitDisconnected = useCallback(() => {
+    // Unmounting LiveKit during fallback can emit a late disconnect. It
+    // must not reset the new connection attempt to the idle screen.
+    if (!handingOffRef.current) handleDisconnected()
+  }, [handleDisconnected])
+
   const handleFeedbackDone = useCallback(() => {
     setPhase(hasDemoCallsRemaining() ? 'idle' : 'capped')
   }, [])
@@ -327,6 +339,8 @@ export function DemoOrbCard({
   // Railway-native orchestrator pipeline for this one call, same visitor
   // experience either way - only errors out if THAT also fails.
   const handleAgentUnavailable = useCallback(() => {
+    if (handingOffRef.current) return
+    handingOffRef.current = true
     setToken(null)
     setServerUrl(null)
     if (pipelineProfile) {
@@ -340,6 +354,19 @@ export function DemoOrbCard({
     }
     setPhase('active-orchestrator')
   }, [pipelineProfile])
+
+  const handleConnectionError = useCallback((error: Error) => {
+    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+      handingOffRef.current = true
+      releaseCallLock()
+      setToken(null)
+      setServerUrl(null)
+      setErrorMessage('Mic access is blocked. Enable it in your browser settings to continue.')
+      setPhase('denied')
+      return
+    }
+    handleAgentUnavailable()
+  }, [handleAgentUnavailable])
 
   const handleOrchestratorFailed = useCallback(() => {
     // Both providers failed for this attempt - genuinely over, unlike
@@ -433,7 +460,8 @@ export function DemoOrbCard({
             token={token}
             connect
             audio
-            onDisconnected={handleDisconnected}
+            onDisconnected={handleLiveKitDisconnected}
+            onError={handleConnectionError}
           >
             <RoomAudioRenderer />
             <InlineCallBody onAgentUnavailable={handleAgentUnavailable} onConnected={chargeDemoCall} />
