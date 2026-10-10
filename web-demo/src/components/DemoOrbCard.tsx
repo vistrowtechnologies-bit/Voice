@@ -91,12 +91,16 @@ function consentArg(): { version: string; acceptedAt: string } | undefined {
 // browser's own native prompt, then the same card shows live call state
 // (status, timer, mute/end controls) in place of the idle "Tap to talk"
 // content. Reused on the homepage hero and every solution/product page.
+// Jharokha dome for the arched card: two cusps rising to a pointed peak (viewBox 400 x 96).
+const ARCH_DOME = 'M0.5 96C0.5 75.5 25.3 58.9 52.6 52.5C67.4 25.6 113.7 10.2 160 15.4C178.9 5.1 195.8 0.5 200 0.5C204.2 0.5 221.1 5.1 240 15.4C286.3 10.2 332.6 25.6 347.4 52.5C374.7 58.9 399.5 75.5 399.5 96'
+
 export function DemoOrbCard({
   spotlight = false,
   demoSlug,
   language,
   badgeLabel = 'Live demo',
   accentHue,
+  arch = false,
 }: {
   spotlight?: boolean
   /** Published industry-demo slug (e.g. 'healthcare'). Omitted on the
@@ -111,6 +115,9 @@ export function DemoOrbCard({
    * industry's demo reads as its own thing instead of five identical purple
    * cards. Omitted = the homepage's original purple, untouched. */
   accentHue?: string
+  /** Homepage only: the card's top becomes a jharokha arch (one shape, the badge centred
+   * under the dome) instead of a rounded rectangle. */
+  arch?: boolean
 }) {
   // Hidden QA entry point: /?pipeline=sarvam-livekit sends only this demo
   // call to the dedicated demo worker's all-Sarvam LiveKit profile. It is
@@ -395,7 +402,7 @@ export function DemoOrbCard({
   const isCallLiveOrchestrator = phase === 'active-orchestrator'
   const isIdleLike = !isCallLive && !isCallLiveOrchestrator
 
-  // The idle/capped content includes a "Native support / Low latency"
+  // The idle/capped content includes a "Native support / Natural conversation"
   // footer the live-call states don't need, so swapping to InlineCallBody
   // used to visibly shrink the card mid-page - a jarring layout shift right
   // when a visitor taps to talk. Locking min-height to whatever the
@@ -418,7 +425,7 @@ export function DemoOrbCard({
       id="live-demo"
       // Live transcript can hold what the visitor said (name, number) — keep it out of Clarity recordings.
       data-clarity-mask="true"
-      className={`demo-card-shell relative mx-auto w-full max-w-[420px] scroll-mt-20 lg:mx-0 lg:ml-auto ${spotlight ? 'demo-card-spotlight' : ''}`}
+      className={`demo-card-shell relative mx-auto w-full max-w-[420px] scroll-mt-20 lg:mx-0 lg:ml-auto ${spotlight ? 'demo-card-spotlight' : ''} ${arch ? 'demo-card-arched' : ''}`}
       style={accentHue ? ({ '--demo-accent-hue': accentHue } as React.CSSProperties) : undefined}
     >
       {/* inset-x-0, not -inset-10: a negative horizontal inset made this box
@@ -426,16 +433,29 @@ export function DemoOrbCard({
           screens and gave the whole page a horizontal scrollbar. The blur
           still paints well outside the box, so the glow looks identical -
           it just no longer contributes that width to layout. */}
-      <div className="demo-glow pointer-events-none absolute inset-x-0 -inset-y-10 rounded-full bg-primary/20 blur-[100px]" />
+      {/* The arched card stands on its own; the purple glow behind it read as a stray oval. */}
+      {!arch && <div className="demo-glow pointer-events-none absolute inset-x-0 -inset-y-10 rounded-full bg-primary/20 blur-[100px]" />}
+      {arch && (
+        // The dome: the same fill and border as the card below it, so the two read as one shape,
+        // with a brass line inside that carries on down the card's sides.
+        <svg aria-hidden="true" viewBox="0 0 400 96" preserveAspectRatio="none" className="relative block h-24 w-full">
+          <path d={ARCH_DOME + ' L400 96 L0 96Z'} className="fill-surface" />
+          <path d={ARCH_DOME} className="fill-none stroke-border" vectorEffect="non-scaling-stroke" />
+          <path d={ARCH_DOME} transform="translate(12 12) scale(0.94 0.875)" className="fill-none stroke-brass/60" vectorEffect="non-scaling-stroke" />
+        </svg>
+      )}
       <div
         ref={cardRef}
         style={cardMinHeight ? { minHeight: cardMinHeight } : undefined}
-        className="relative flex w-full flex-col items-center rounded-[28px] border border-border bg-surface/80 p-8 text-center backdrop-blur-xl sm:p-10"
+        className={`relative flex w-full flex-col items-center p-8 text-center sm:p-10 ${
+          arch ? 'rounded-b-[28px] border-x border-b border-border bg-surface' : 'rounded-[28px] border border-border bg-surface/80 backdrop-blur-xl'
+        }`}
       >
+        {arch && <span aria-hidden="true" className="pointer-events-none absolute inset-x-3 bottom-3 top-0 rounded-b-[20px] border-x border-b border-brass/60" />}
         <span className="demo-start-label" aria-hidden="true">
           <Icon name="south_east" className="text-[15px]" /> Start here
         </span>
-        <div className="demo-accent absolute right-5 top-5 flex items-center gap-1.5 rounded-full border border-border bg-surface-high px-3 py-1">
+        <div className="demo-badge demo-accent absolute right-5 top-5 flex items-center gap-1.5 rounded-full border border-border bg-surface-high px-3 py-1">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan" />
@@ -672,8 +692,11 @@ function DemoCardFooter() {
         <p className="mt-1 text-xs text-text">Hindi · Tamil +9 more</p>
       </div>
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Low latency</p>
-        <p className="mt-1 text-xs text-text">Real-time · emotion-aware</p>
+        {/* Not "low latency / real-time": measured replies land about 1.2-1.5 s after the
+            caller stops (calls.latency_metrics_json), which is good but not instant.
+            Interrupting is a real, demonstrable behaviour; emotion cues are agent/emotion.py. */}
+        <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Natural conversation</p>
+        <p className="mt-1 text-xs text-text">Interrupt anytime · emotion-aware</p>
       </div>
     </div>
   )

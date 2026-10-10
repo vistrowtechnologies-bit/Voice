@@ -183,15 +183,10 @@ export function Home() {
           </div>
         </div>
 
-        {/* The live demo inside a jharokha: a thin brass arch rises above the card and its
-            sides run down beside it, over a faint jaali lattice. Decorative only. */}
-        <div className="relative mx-auto w-full max-w-[420px] pt-14 lg:mx-0 lg:ml-auto">
+        {/* The live demo as a jharokha: the card's own top is the arch. A faint jaali lattice behind. */}
+        <div className="relative mx-auto w-full max-w-[420px] lg:mx-0 lg:ml-auto">
           <div aria-hidden="true" className="jaali-bg pointer-events-none absolute -inset-x-16 -inset-y-6 -z-10" />
-          <svg aria-hidden="true" viewBox="0 0 448 110" preserveAspectRatio="none" className="pointer-events-none absolute -inset-x-2.5 top-0 h-[110px] w-[calc(100%+20px)] text-brass/70 sm:-inset-x-3.5 sm:w-[calc(100%+28px)]">
-            <path d="M0.5 110V96C0.5 74 18 56 38 50 48 22 86 6 124 12 150-2 196-4 224 6 252-4 298-2 324 12 362 6 400 22 410 50 430 56 447.5 74 447.5 96V110" fill="none" stroke="currentColor" vectorEffect="non-scaling-stroke" />
-          </svg>
-          <div aria-hidden="true" className="pointer-events-none absolute -inset-x-2.5 bottom-[-10px] top-[110px] rounded-b-[34px] border border-t-0 border-brass/70 sm:-inset-x-3.5 sm:bottom-[-14px]" />
-          <DemoOrbCard spotlight={demoSpotlight} />
+          <DemoOrbCard spotlight={demoSpotlight} arch />
         </div>
       </section>
 

@@ -991,3 +991,12 @@ html:not(.vv-icons-ready) .material-symbols-outlined {
 @media (prefers-reduced-motion: reduce) {
   .india-city, .india-city .india-ring { animation: none; }
 }
+
+/* Arched demo card (DemoOrbCard arch): the badge sits centred under the dome, the
+   edge-sweep highlight (drawn along a straight top edge) is not used. */
+.demo-card-arched::before { display: none; }
+.demo-card-arched .demo-badge {
+  top: -44px;
+  right: 50%;
+  transform: translateX(50%);
+}
