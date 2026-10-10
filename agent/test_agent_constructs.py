@@ -96,6 +96,7 @@ class RealtimeIgnoresThePipeline(unittest.TestCase):
         from livekit.plugins.google.realtime.realtime_api import RealtimeSession
         from livekit.agents import llm
         from google.genai import types, _live_converters, _common
+        from types import SimpleNamespace
         from unittest.mock import patch
         import realtime_config
         with patch.dict(os.environ, {}, clear=True):
@@ -121,7 +122,7 @@ class RealtimeIgnoresThePipeline(unittest.TestCase):
                 assert wire["inputAudioTranscription"] == ({"languageCodes": ["hi-IN", "en-IN"]} if name == realtime_config.DEFAULT_MODEL else {})
                 assert conf.realtime_input_config.automatic_activity_detection.silence_duration_ms == silence
                 payload = _common.convert_to_dict(_live_converters._LiveConnectParameters_to_mldev(
-                    None, types.LiveConnectParameters(model=name, config=conf).model_dump(exclude_none=True)
+                    SimpleNamespace(vertexai=False), types.LiveConnectParameters(model=name, config=conf).model_dump(exclude_none=True)
                 ))["setup"]
                 assert payload["inputAudioTranscription"] == ({"language_codes": ["hi-IN", "en-IN"]} if name == realtime_config.DEFAULT_MODEL else {})
                 assert payload["realtimeInputConfig"]["automatic_activity_detection"]["prefix_padding_ms"] == (20 if name == realtime_config.DEFAULT_MODEL else 200)
