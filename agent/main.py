@@ -5894,6 +5894,47 @@ async def _hang_up(room_name: str) -> None:
         logger.warning("failed to end call gracefully for room %s", room_name, exc_info=True)
 
 
+# One retry rides out a brief stall on the Railway DB proxy (the 5 Oct 2026
+# PoolTimeout incident) before a call is declined.
+_CALL_START_DB_RETRY_DELAY_S = 0.5
+
+
+async def _lookup_number_owner(dialled_number: str) -> dict | None:
+    """The tenant that owns a dialled number, or None if it can't be resolved.
+    db.get_phone_number_by_number returns None on a query error and raises on
+    a pool timeout; both are treated as "unknown" after one retry."""
+    for attempt in range(2):
+        try:
+            owner = await asyncio.to_thread(db.get_phone_number_by_number, dialled_number)
+        except Exception:
+            logger.warning("number owner lookup failed for %s (attempt %d)", dialled_number, attempt + 1, exc_info=True)
+            owner = None
+        if owner is not None:
+            return owner
+        if attempt == 0:
+            await asyncio.sleep(_CALL_START_DB_RETRY_DELAY_S)
+    return None
+
+
+async def _await_agent_config(config_task: asyncio.Task, agent_id: int | None) -> dict | None:
+    """The head-start config lookup's result. db.get_agent_config returns None
+    on a query error and raises on a pool timeout; for a named agent, retry
+    once before the caller is declined."""
+    try:
+        config = await config_task
+    except Exception:
+        logger.warning("agent config lookup failed for agent %s", agent_id, exc_info=True)
+        config = None
+    if config is not None or agent_id is None:
+        return config
+    await asyncio.sleep(_CALL_START_DB_RETRY_DELAY_S)
+    try:
+        return await asyncio.to_thread(db.get_agent_config, agent_id)
+    except Exception:
+        logger.warning("agent config retry failed for agent %s", agent_id, exc_info=True)
+        return None
+
+
 # Upper bound on the post-call enrichment pass. It runs inside LiveKit's
 # shutdown callback, so it must not be able to stall teardown; the durable
 # call row is written before it either way, so exceeding this only costs the
@@ -6106,8 +6147,22 @@ async def entrypoint(ctx: JobContext) -> None:
             if caller_number and caller_number.lstrip("+") == dialled_number.lstrip("+")
             else "inbound"
         )
-        owner = await asyncio.to_thread(db.get_phone_number_by_number, dialled_number)
-        owner_agent_id = (owner or {}).get("agent_id")
+        owner = await _lookup_number_owner(dialled_number)
+        if owner is None:
+            # The rule's static agent_id belongs to whichever tenant registered
+            # first (see above), so answering with it would hand this caller to
+            # another tenant's agent, prompt and knowledge base. Decline instead.
+            logger.error("inbound to %s: owning tenant could not be resolved; declining (room=%s)",
+                         dialled_number, ctx.room.name)
+            await asyncio.to_thread(
+                db.log_platform_error,
+                f"Inbound call to {dialled_number} declined: number owner lookup failed",
+                context=ctx.room.name,
+            )
+            config_task.add_done_callback(lambda t: t.cancelled() or t.exception())
+            await _hang_up(ctx.room.name)
+            return
+        owner_agent_id = owner.get("agent_id")
         if owner_agent_id and owner_agent_id != call_context["agent_id"]:
             logger.info(
                 "inbound to %s belongs to agent %s (room metadata said %s) — reloading config",
@@ -6156,12 +6211,27 @@ async def entrypoint(ctx: JobContext) -> None:
                     await _hang_up(ctx.room.name)
                     return
 
-    config = await config_task
+    config = await _await_agent_config(config_task, call_context.get("agent_id"))
     _config_ready_ms = round((time.monotonic() - _t0) * 1000)
     logger.info("[latency] config_task awaited at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
+    if config is None and call_context.get("agent_id") is not None:
+        # A named agent whose config can't be read (DB error, deleted agent).
+        # Building RealEstateAgent({}) would answer as the generic default
+        # persona with no account: wrong business, unbilled, invisible to the
+        # tenant. Hang up so the caller isn't left on that, or on silence.
+        logger.error("agent %s config unavailable; declining room %s", call_context["agent_id"], ctx.room.name)
+        await asyncio.to_thread(
+            db.log_platform_error,
+            f"Call declined: config for agent {call_context['agent_id']} could not be loaded",
+            context=ctx.room.name,
+        )
+        await _hang_up(ctx.room.name)
+        return
     if config and config.get("status") == "paused":
-        # Paused from the dashboard — don't take the call.
+        # Paused from the dashboard — don't take the call. The caller has
+        # already joined, so end the room rather than leave them on silence.
         logger.info("agent '%s' is paused; skipping room %s", config.get("name"), ctx.room.name)
+        await _hang_up(ctx.room.name)
         return
     # The agent prompt needs a KB snapshot, optional caller memory, and
     # compliance settings. Load these blocking Postgres reads in parallel on

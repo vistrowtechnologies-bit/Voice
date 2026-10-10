@@ -440,6 +440,34 @@ _BUILTIN_TEST_SCENARIOS = {
 }
 
 
+def _session_owns_agent(request: Request, agent_id: int) -> bool:
+    """/token is public, so it reads the session cookie itself: a valid,
+    current session whose workspace owns this agent."""
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if session is None:
+        return False
+    profile = calls_db.get_user_by_id(session["uid"])
+    return bool(
+        profile is not None
+        and int(profile.get("session_version") or 1) == int(session.get("sv") or 1)
+        and (not session.get("sid") or calls_db.validate_user_session(session["sid"], session["uid"]))
+        and int(profile.get("account_id") or 0) == int(session.get("aid") or 0)
+        and calls_db.agent_account_id(agent_id) == session.get("aid")
+    )
+
+
+def _token_room_allowed(room: str, agent_id: int | None, test_run: bool) -> bool:
+    """Only the room shapes the two /token callers create: the marketing demo
+    orb (voice-agent-demo-*) and the dashboard test call for this agent
+    (test-agent-<id>-* / test-lab-<id>-*, see AgentTestCall.tsx)."""
+    if len(room) > 128:
+        return False
+    if agent_id is None:
+        return room == "voice-agent-demo" or room.startswith("voice-agent-demo-")
+    prefix = "test-lab" if test_run else "test-agent"
+    return room.startswith(f"{prefix}-{agent_id}-")
+
+
 @app.post("/token")
 async def create_token(req: TokenRequest, request: Request) -> dict:
     # Public/unauthenticated: cap per client IP so a script can't mint
@@ -483,6 +511,15 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         agent_id = calls_db.agent_id_for_public_demo_slug(req.demoSlug)
         if agent_id is None:
             raise HTTPException(404, "That demo isn't available right now.")
+    elif agent_id is not None and not _session_owns_agent(request, agent_id):
+        # A raw agent id is the dashboard's "test call": it must come from a
+        # signed-in member of the agent's own workspace. Without this, anyone
+        # could dispatch any tenant's agent on that tenant's credits.
+        raise HTTPException(403, "Sign in to test this agent.")
+    if not _token_room_allowed(req.room, agent_id if not req.demoSlug else None, bool(req.testRunId)):
+        # The grant is room_join on exactly this name, so a caller-chosen name
+        # could join someone else's live call or pick an unbilled test prefix.
+        raise HTTPException(400, "Invalid call room.")
 
     meta: dict = {}
     if agent_id is not None:
@@ -498,19 +535,7 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         meta["demo_language"] = req.language
     if req.testRunId:
         session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
-        profile = calls_db.get_user_by_id(session["uid"]) if session is not None else None
-        session_is_valid = bool(
-            session is not None
-            and profile is not None
-            and int(profile.get("session_version") or 1) == int(session.get("sv") or 1)
-            and (not session.get("sid") or calls_db.validate_user_session(session["sid"], session["uid"]))
-        )
-        if (
-            not session_is_valid
-            or agent_id is None
-            or int(profile.get("account_id") or 0) != int(session.get("aid") or 0)
-            or calls_db.agent_account_id(agent_id) != session.get("aid")
-        ):
+        if req.demoSlug or agent_id is None or not _session_owns_agent(request, agent_id):
             raise HTTPException(403, "Testing Lab runs require an authenticated workspace agent.")
         run_id = req.testRunId.strip()
         if not run_id or len(run_id) > 80:
