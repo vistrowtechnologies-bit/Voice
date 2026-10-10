@@ -3070,15 +3070,19 @@ def _build_tools(config: dict) -> list:
 _PLATFORM_MAX_CALL_DURATION_S = 45 * 60
 
 
-def _effective_max_call_duration_s(configured) -> int:
-    """The tenant's max_call_duration_s, bounded by the platform ceiling."""
+def _tenant_max_call_duration_s(configured) -> int:
+    """The tenant's own limit within the ceiling, or 0 when they set none
+    (or one at/above the ceiling, so the platform ceiling is what applies)."""
     try:
         value = int(configured or 0)
     except (TypeError, ValueError):
         value = 0
-    if value <= 0:
-        return _PLATFORM_MAX_CALL_DURATION_S
-    return min(value, _PLATFORM_MAX_CALL_DURATION_S)
+    return value if 0 < value < _PLATFORM_MAX_CALL_DURATION_S else 0
+
+
+def _effective_max_call_duration_s(configured) -> int:
+    """The tenant's max_call_duration_s, bounded by the platform ceiling."""
+    return _tenant_max_call_duration_s(configured) or _PLATFORM_MAX_CALL_DURATION_S
 
 
 _MAX_VISITOR_NAME = 80
@@ -6481,7 +6485,9 @@ async def entrypoint(ctx: JobContext) -> None:
             "call admission denied (plan, configuration, capacity or database) for account_id=%s — declining room %s",
             cfg.get("account_id"), ctx.room.name,
         )
-        await _signal_end_reason(ctx.room, "busy")
+        if call_context.get("call_type") != "phone":
+            # Only the web widget reads this; a phone caller has no screen.
+            await _signal_end_reason(ctx.room, "busy")
         await _hang_up(ctx.room.name)
         return
     # Registered immediately after the claim above (rather than folded into
@@ -8276,6 +8282,9 @@ async def entrypoint(ctx: JobContext) -> None:
                 speak=lambda instructions: session.generate_reply(instructions=instructions),
                 hang_up=lambda: _hang_up(ctx.room.name),
                 is_platform_demo=bool(cfg.get("is_platform_demo")),
+                # Only the platform ceiling spares a call a person has taken
+                # over; a limit the tenant set themselves applies as before.
+                spare_handed_off=_tenant_max_call_duration_s(cfg.get("max_call_duration_s")) == 0,
                 before_speak=lambda: (
                     _cancel_silence_hangup(),
                     _cancel_post_checkin_timeout(),

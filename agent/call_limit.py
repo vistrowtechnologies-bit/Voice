@@ -47,6 +47,7 @@ async def run_guard(
     speak: Callable[[str], object],
     hang_up: Callable[[], Awaitable[None]],
     is_platform_demo: bool = False,
+    spare_handed_off: bool = False,
     before_speak: Callable[[], None] | None = None,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     log: logging.Logger | None = None,
@@ -80,6 +81,11 @@ async def run_guard(
                 userdata["ending_call"] = False
                 log.exception("time-limit wrap-up could not be started")
         await sleep(max(0.0, max_s - elapsed))
+        if spare_handed_off and userdata.get("handed_off"):
+            # The platform ceiling exists to stop an agent-only call running
+            # forever; a person has taken this one over, so leave it to them.
+            log.info("max duration %ds reached on a call handed to a person; not hanging up", max_s)
+            return
         log.info("hanging up after max duration %ds", max_s)
         await hang_up()
     except asyncio.CancelledError:
