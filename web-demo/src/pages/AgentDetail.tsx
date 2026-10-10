@@ -20,6 +20,7 @@ import {
 } from '../lib/api'
 import {
   AMBIENT_NOISE_OPTIONS,
+  geminiLiveVoiceName,
   LANGUAGES,
   isRealtimeModel,
   modelOptionsFor,
@@ -332,6 +333,9 @@ function AgentEditorForm({
                 'Loading your voices…'
               ) : (
                 <>
+                  {isRealtimeModel(form.model)
+                    ? 'Realtime models speak with the Gemini voice of the same name, so only those voices are listed. '
+                    : null}
                   Only voices you’ve added appear here.{' '}
                   <Link to="/dashboard/voices" className="text-primary hover:underline">
                     Manage voices →
@@ -346,10 +350,16 @@ function AgentEditorForm({
                     one removed from the menu since it was set) - surface it so the
                     browser doesn't silently show a different option as selected and
                     re-persist the wrong voice on Save. */}
-                {!myVoices.some((v) => v.value === form.voice) && (
-                  <option value={form.voice}>{voiceLabel(form.voice)} (not in your voices)</option>
+                {isRealtimeModel(form.model) && !geminiLiveVoiceName(form.voice) ? (
+                  <option value={form.voice}>{voiceLabel(form.voice)} (not available on realtime, calls use Kore)</option>
+                ) : (
+                  !myVoices.some((v) => v.value === form.voice) && (
+                    <option value={form.voice}>{voiceLabel(form.voice)} (not in your voices)</option>
+                  )
                 )}
-                {voicePickerGroups(myVoices).map((group) => {
+                {voicePickerGroups(
+                  isRealtimeModel(form.model) ? myVoices.filter((v) => geminiLiveVoiceName(v.value)) : myVoices,
+                ).map((group) => {
                   if (group.voices.length === 0) return null
                   return (
                     <optgroup key={group.key} label={`${group.label} - ${group.note}`}>
@@ -365,7 +375,9 @@ function AgentEditorForm({
               </select>
               {(() => {
                 const current = myVoices.find((v) => v.value === form.voice)
-                if (!current) return null
+                // The preview plays the pipeline TTS voice, not the Gemini Live
+                // voice a realtime call actually speaks with - so don't offer it.
+                if (!current || isRealtimeModel(form.model)) return null
                 return (
                   <VoicePreviewButton
                     voice={form.voice}

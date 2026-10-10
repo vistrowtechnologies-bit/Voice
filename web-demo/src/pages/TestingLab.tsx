@@ -150,6 +150,7 @@ export function TestingLab() {
   const [resultRunId, setResultRunId] = useState<string | null>(null)
   const [runNotice, setRunNotice] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [showCustom, setShowCustom] = useState(false)
   const [customName, setCustomName] = useState('')
   const [customBrief, setCustomBrief] = useState('')
@@ -212,6 +213,7 @@ export function TestingLab() {
   const saveSelected = async () => {
     if (selected.source === 'saved') return
     setSaving(true)
+    setSaveError('')
     try {
       const created = await createTestScenario({
         agentId,
@@ -223,6 +225,8 @@ export function TestingLab() {
       })
       await reloadSaved()
       setSelected({ source: 'saved', ...created })
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not save this scenario.')
     } finally {
       setSaving(false)
     }
@@ -231,6 +235,7 @@ export function TestingLab() {
   const createCustom = async () => {
     if (!customName.trim() || !customBrief.trim()) return
     setSaving(true)
+    setSaveError('')
     try {
       const created = await createTestScenario({
         agentId,
@@ -246,6 +251,8 @@ export function TestingLab() {
       setCustomBrief('')
       setCustomExpected('')
       setShowCustom(false)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not save this scenario.')
     } finally {
       setSaving(false)
     }
@@ -273,6 +280,7 @@ export function TestingLab() {
                 <textarea value={customBrief} onChange={(event) => setCustomBrief(event.target.value)} placeholder="What should the person testing the agent say and do?" rows={3} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary" />
                 <textarea value={customExpected} onChange={(event) => setCustomExpected(event.target.value)} placeholder={'Expected agent behaviours — one per line'} rows={3} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary" />
                 <button onClick={createCustom} disabled={saving || !customName.trim() || !customBrief.trim()} className="justify-self-start rounded-lg bg-primary px-4 py-2 text-xs font-bold text-bg disabled:opacity-40">Save regression case</button>
+                {saveError && <p className="text-sm text-destructive">{saveError}</p>}
               </div>
             )}
 
@@ -330,6 +338,7 @@ export function TestingLab() {
               {selected.source === 'builtin' && <button onClick={saveSelected} disabled={saving} className="rounded-lg border border-primary px-3 py-2.5 text-xs font-bold text-primary disabled:opacity-40">{saving ? 'Saving…' : 'Save as regression'}</button>}
               <button onClick={startTest} disabled={!selectedAgent} className="rounded-lg bg-primary px-3 py-2.5 text-xs font-bold text-bg disabled:opacity-40"><Icon name="mic" className="mr-1 align-[-3px] text-[16px]" />Start live test</button>
             </div>
+            {saveError && !showCustom && <p className="text-sm text-destructive">{saveError}</p>}
           </Card>
         </div>
 

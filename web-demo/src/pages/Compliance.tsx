@@ -77,6 +77,7 @@ export function Compliance() {
   const [bulkText, setBulkText] = useState('')
   const [bulkOpen, setBulkOpen] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const [dncError, setDncError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
 
   const reloadDnc = () => fetchDnc().then(setDnc).catch(() => setDnc([]))
@@ -112,7 +113,14 @@ export function Compliance() {
 
   const submitDnc = async () => {
     if (!dncPhone.trim()) return
-    const res = await addDnc(dncPhone.trim(), dncReason.trim())
+    setDncError(null)
+    let res
+    try {
+      res = await addDnc(dncPhone.trim(), dncReason.trim())
+    } catch (err) {
+      setDncError(err instanceof Error ? err.message : 'Could not add this number.')
+      return
+    }
     setMsg(res.added ? `Added ${dncPhone.trim()} to Do-Not-Call.` : `${dncPhone.trim()} was already blocked.`)
     setDncPhone('')
     setDncReason('')
@@ -122,7 +130,14 @@ export function Compliance() {
 
   const submitBulk = async () => {
     if (!bulkText.trim()) return
-    const res = await bulkAddDnc(bulkText)
+    setDncError(null)
+    let res
+    try {
+      res = await bulkAddDnc(bulkText)
+    } catch (err) {
+      setDncError(err instanceof Error ? err.message : 'Could not import these numbers.')
+      return
+    }
     setMsg(`Imported ${res.added} new number${res.added === 1 ? '' : 's'} (${res.total - res.added} already blocked).`)
     setBulkText('')
     setBulkOpen(false)
@@ -260,6 +275,7 @@ export function Compliance() {
                   {msg}
                 </div>
               )}
+              {dncError && <p className="text-sm text-destructive">{dncError}</p>}
               {canManage && (
                 <div className="flex flex-col gap-2">
                   <div className="flex gap-2">

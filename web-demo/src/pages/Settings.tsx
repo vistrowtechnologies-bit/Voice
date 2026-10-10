@@ -83,7 +83,7 @@ const TAB_GROUPS: TabGroup[] = [
     tabs: [
       { id: 'profile', label: 'My profile', description: 'Your name and sign-in email', icon: 'person' },
       { id: 'security', label: 'Sign-in & security', description: 'Password and account protection', icon: 'lock' },
-      { id: 'preferences', label: 'Preferences', description: 'Personal timezone, language and alerts', icon: 'tune' },
+      { id: 'preferences', label: 'Preferences', description: 'Personal timezone and alerts', icon: 'tune' },
       { id: 'privacy', label: 'Data & privacy', description: 'Export data or delete your account', icon: 'privacy_tip' },
     ],
   },
@@ -634,7 +634,6 @@ function PreferencesTab() {
   return <div className="flex flex-col gap-4">
     <SettingsCard title="Personal preferences" subtitle="These settings affect your own dashboard experience, not your team’s shared booking schedule.">
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Communication language<select value={prefs.language} onChange={(e) => save({ ...prefs, language: e.target.value as 'en' | 'hi' })} className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm text-text outline-none focus:border-primary"><option value="en">English</option><option value="hi">Hindi</option></select><span className="font-normal text-[11px]">Used for account emails where a translation is available.</span></label>
         <label className="flex flex-col gap-1.5 text-xs font-semibold text-text-muted">Your timezone<TimezoneSelect value={prefs.timezone} onChange={(timezone) => save({ ...prefs, timezone })} /></label>
       </div>
       {saving && <p className="text-xs text-text-muted">Saving…</p>}
