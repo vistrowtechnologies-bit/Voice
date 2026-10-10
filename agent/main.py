@@ -3749,6 +3749,11 @@ class RealEstateAgent(Agent):
         agent_tools = _build_tools(config)
         _model_name = config.get("model") or "gpt-4.1-mini"
         self._is_realtime = _model_name.startswith(_GEMINI_LIVE_PREFIX)
+        # The Google model id, resolved exactly as _build_realtime_llm does.
+        self._realtime_model_name = (
+            (_model_name[len(_GEMINI_LIVE_PREFIX):].lstrip(":-") or _GEMINI_LIVE_DEFAULT_MODEL)
+            if self._is_realtime else ""
+        )
         if self._is_realtime:
             # The assembled instruction is written for a separate TTS voice and runs to
             # ~35,000 characters that Google re-bills every turn. Reshape it for a
@@ -8329,6 +8334,14 @@ async def entrypoint(ctx: JobContext) -> None:
         noise_filter = (
             noise_cancellation.BVCTelephony() if call_context["call_type"] == "phone" else noise_cancellation.BVC()
         )
+    _clean_rt_browser = bool(getattr(agent, "_is_realtime", False)) and realtime_config.clean_browser_input(
+        getattr(agent, "_realtime_model_name", ""), phone=call_context["call_type"] == "phone",
+    )
+    if _clean_rt_browser and noise_filter is None:
+        # An agent's "off" is a phone-line remedy; on a 2.5 browser call raw
+        # room noise and ambience echo hold Gemini's turn open (realtime_config).
+        noise_filter = noise_cancellation.BVC()
+        logger.info("Gemini 2.5 browser call: noise suppression on despite agent setting")
     # Lets the widget's in-call "type instead" fallback (a noisy-environment
     # visitor who can't reliably be heard by STT) inject a turn as if it had
     # been spoken — generate_reply(user_input=...) runs it through the same
@@ -8588,6 +8601,11 @@ async def entrypoint(ctx: JobContext) -> None:
     # If muted-PSTN reports ever come back, this is the first thing to
     # suspect - re-add `and call_context["call_type"] != "phone"`.
     _ambient_preset = cfg.get("ambient_noise") or "off"
+    if _clean_rt_browser and _ambient_preset != "off":
+        # Its echo back through the browser mic delays 2.5's end-of-speech
+        # detection by about a second (realtime_config.clean_browser_input).
+        logger.info("Gemini 2.5 browser call: background ambience skipped")
+        _ambient_preset = "off"
     if _ambient_preset == "on":
         # Legacy value from when this was a plain on/off toggle - the only
         # sound that ever existed was the office bed, so keep old rows

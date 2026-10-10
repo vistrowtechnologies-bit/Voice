@@ -86,3 +86,18 @@ def input_transcription(model: str, language: str) -> types.AudioTranscriptionCo
             hints.append("en-IN")
         return types.AudioTranscriptionConfig(language_codes=hints)
     return types.AudioTranscriptionConfig()
+
+
+def clean_browser_input(model: str, *, phone: bool) -> bool:
+    """2.5 browser calls: no background ambience and always noise-suppressed input.
+
+    Lab, 10 Oct 2026 (same Hindi utterance streamed straight to the API, our
+    exact 2.5 config, 3 runs each): office ambience after the caller stopped
+    took 4.3 s to first audio vs 3.1 s with silence, while 3.1 was unaffected
+    (~2.0 s). On a browser the agent's own ambience leaks back into the mic
+    through echo cancellation, and 2.5's server-side end-of-speech detector
+    keeps the turn open on it. Steady room noise alone did not slow it.
+    Phone lines have no acoustic echo path, and 3.1 is unaffected, so both
+    keep their tested behaviour.
+    """
+    return model == DEFAULT_MODEL and not phone
