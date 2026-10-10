@@ -698,26 +698,60 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
     return url, body
 
 
+def _zoho_should_send(lead: dict) -> bool:
+    """One Zoho lead per real caller. Every event used to create a new record
+    (each mid-call lead update, callback, booking, and the end-of-call event
+    of EVERY call), so the CRM filled with "Unknown caller" rows with no
+    phone or email and repeats of the same caller (10 Oct 2026). Only the
+    end-of-call event goes - it already carries everything captured plus the
+    post-call read - and only when there is a way to reach the person."""
+    return lead.get("type") == "call_completed" and bool(
+        str(lead.get("phone") or "").strip() or str(lead.get("email") or "").strip()
+    )
+
+
+def _zoho_description(lead: dict) -> str:
+    lines = []
+    for key, value in (lead.get("extracted_data") or {}).items():
+        if value not in (None, "", [], {}):
+            lines.append(f"{str(key).replace('_', ' ').capitalize()}: {value}")
+    if lead.get("use_case") or lead.get("message"):
+        lines.append(str(lead.get("use_case") or lead.get("message")))
+    meta = []
+    if lead.get("agent_name"):
+        meta.append(f"Agent: {lead['agent_name']}")
+    if lead.get("duration_seconds"):
+        meta.append(f"Call length: {round(float(lead['duration_seconds']))} s")
+    if lead.get("language"):
+        meta.append(f"Language: {lead['language']}")
+    if lead.get("page_path"):
+        meta.append(f"Page: {lead['page_path']}")
+    if lead.get("recording_url"):
+        meta.append(f"Recording: {lead['recording_url']}")
+    return "\n".join(lines + meta)[:32000]
+
+
 def _zoho_lead_body(lead: dict) -> dict:
-    # Mirrors server/integrations_dispatch.py's _zoho_lead_body exactly —
-    # Zoho's Leads module requires Last_Name (and Company, on most default
-    # layouts), so the caller's full name goes in Last_Name and doubles as
-    # Company when none was captured, rather than failing the whole record
-    # over a missing field. The two files can't share code (agent/ and
-    # server/ are separate deployments with separate venvs), so keep any
-    # future change to one mirrored in the other.
-    name = str(lead.get("name") or "Unknown caller").strip()
+    # Mirrors server/integrations_dispatch.py's _zoho_lead_body - keep both in
+    # step (agent/ and server/ are separate deployments). Zoho's Leads module
+    # requires Last_Name (and Company on most layouts), so the caller's name
+    # fills both when no company was captured. Empty fields are left out
+    # rather than sent as "": the record is upserted on Phone/Email, and an
+    # empty match field could match an unrelated lead.
+    name = str(lead.get("name") or "").strip() or "Website visitor"
+    record = {
+        "Last_Name": name,
+        "Company": str(lead.get("company") or "").strip() or name,
+        "Phone": str(lead.get("phone") or "").strip(),
+        "Email": str(lead.get("email") or "").strip(),
+        "Description": _zoho_description(lead),
+        "Lead_Source": _CHANNEL_LABELS.get(lead.get("channel"), lead.get("channel") or "") or "Call",
+    }
+    record = {k: v for k, v in record.items() if v}
     return {
-        "data": [
-            {
-                "Last_Name": name,
-                "Company": lead.get("company") or name,
-                "Phone": lead.get("phone", ""),
-                "Email": lead.get("email", ""),
-                "Description": lead.get("use_case") or lead.get("message") or "",
-                "Lead_Source": _CHANNEL_LABELS.get(lead.get("channel"), lead.get("channel") or "") or "Call",
-            }
-        ]
+        "data": [record],
+        # Same person calling again updates their lead instead of adding one.
+        "duplicate_check_fields": [f for f in ("Phone", "Email") if record.get(f)],
     }
 
 
@@ -764,7 +798,7 @@ async def _deliver_zoho_crm_lead(http: aiohttp.ClientSession, account_id: int | 
     async def _post(token: str) -> tuple[bool, int | None]:
         try:
             async with http.post(
-                f"{api_domain}/crm/v2/Leads",
+                f"{api_domain}/crm/v2/Leads/upsert",
                 json=_zoho_lead_body(lead),
                 headers={"Authorization": f"Zoho-oauthtoken {token}"},
             ) as resp:
@@ -846,6 +880,9 @@ async def _deliver_to_integrations(
                     # Authenticated API call, not a plain webhook POST — its
                     # own path, same on/error bookkeeping as the generic one
                     # below.
+                    if not _zoho_should_send(lead):
+                        logger.info("zoho_crm: skipped %s event (one lead per reachable caller)", lead.get("type"))
+                        continue
                     try:
                         ok = await _deliver_zoho_crm_lead(http, account_id, integ.get("config") or {}, lead)
                     except Exception:
