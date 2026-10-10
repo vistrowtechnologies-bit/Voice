@@ -67,6 +67,8 @@ export function LaunchFilm() {
     wantPlay.current = true
     setLang(next)
     setStarted(true)
+    // On phones the switch sits above the film; bring the film on screen so it can play.
+    boxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }
 
   return (
@@ -80,29 +82,30 @@ export function LaunchFilm() {
               How she answers, switches language mid-call, books the appointment and writes up every conversation. About three and a half minutes, in English or Hindi.
             </p>
           </div>
-          <Link
-            to="/signup"
-            className="inline-flex w-fit items-center rounded-full bg-text px-6 py-3 text-sm font-bold text-bg transition-opacity hover:opacity-90"
-          >
-            Try Vistrow Voice
-          </Link>
-        </div>
-        <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-end gap-3">
-          <span id="film-lang" className="text-xs font-bold uppercase tracking-[0.18em] text-text-muted">Watch in</span>
-          <div role="group" aria-labelledby="film-lang" className="flex rounded-full border border-border bg-surface p-1 text-sm font-bold">
-            {(['en', 'hi'] as const).map((l) => (
-              <button
-                key={l}
-                type="button"
-                lang={l}
-                aria-pressed={lang === l}
-                onClick={() => choose(l)}
-                className={`min-h-9 rounded-full px-4 transition-colors ${lang === l ? 'bg-text text-bg' : 'text-text-muted hover:text-text'}`}
-              >
-                {l === 'en' ? 'English' : 'हिंदी'}
-              </button>
-            ))}
+          <div className="flex flex-col gap-5">
+            <div className="flex items-center gap-3">
+              <span id="film-lang" className="text-xs font-bold uppercase tracking-[0.18em] text-text-muted">Watch in</span>
+              <div role="group" aria-labelledby="film-lang" className="flex rounded-full border border-border bg-surface p-1 text-sm font-bold">
+                {(['en', 'hi'] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    lang={l}
+                    aria-pressed={lang === l}
+                    onClick={() => choose(l)}
+                    className={`min-h-9 rounded-full px-4 transition-colors ${lang === l ? 'bg-text text-bg' : 'text-text-muted hover:text-text'}`}
+                  >
+                    {l === 'en' ? 'English' : 'हिंदी'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Link
+              to="/signup"
+              className="inline-flex w-fit items-center rounded-full bg-text px-6 py-3 text-sm font-bold text-bg transition-opacity hover:opacity-90"
+            >
+              Try Vistrow Voice
+            </Link>
           </div>
         </div>
         <div ref={boxRef} className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-[#07040d] shadow-[0_40px_100px_-40px_rgba(124,58,237,0.45)]">
@@ -149,7 +152,6 @@ export function LaunchFilm() {
               </span>
             </button>
           )}
-        </div>
         </div>
       </div>
     </section>
