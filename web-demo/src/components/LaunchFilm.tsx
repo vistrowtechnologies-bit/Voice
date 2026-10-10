@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 
 /** The launch film, in English or Hindi. Nothing but the poster image loads
@@ -73,86 +72,73 @@ export function LaunchFilm() {
 
   return (
     <section id="launch-film" className="mx-auto max-w-7xl px-5 py-16 md:px-8">
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]">
-        <div className="flex flex-col justify-between gap-8 rounded-2xl border border-border bg-surface p-7 md:p-9">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Watch the film</p>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight md:text-4xl">Meet Artha</h2>
-            <p className="mt-4 text-base leading-relaxed text-text-muted">
-              How she answers, switches language mid-call, books the appointment and writes up every conversation. About three and a half minutes, in English or Hindi.
-            </p>
-          </div>
-          <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-3">
-              <span id="film-lang" className="text-xs font-bold uppercase tracking-[0.18em] text-text-muted">Watch in</span>
-              <div role="group" aria-labelledby="film-lang" className="flex rounded-full border border-border bg-surface p-1 text-sm font-bold">
-                {(['en', 'hi'] as const).map((l) => (
-                  <button
-                    key={l}
-                    type="button"
-                    lang={l}
-                    aria-pressed={lang === l}
-                    onClick={() => choose(l)}
-                    className={`min-h-9 rounded-full px-4 transition-colors ${lang === l ? 'bg-text text-bg' : 'text-text-muted hover:text-text'}`}
-                  >
-                    {l === 'en' ? 'English' : 'हिंदी'}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Link
-              to="/signup"
-              className="inline-flex w-fit items-center rounded-full bg-text px-6 py-3 text-sm font-bold text-bg transition-opacity hover:opacity-90"
-            >
-              Try Vistrow Voice
-            </Link>
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Watch the film</p>
+          <h2 className="mt-2 font-display text-3xl font-bold tracking-tight md:text-4xl">Meet Artha</h2>
+        </div>
+        <div className="flex items-center gap-3">
+          <span id="film-lang" className="text-xs font-bold uppercase tracking-[0.18em] text-text-muted">Watch in</span>
+          <div role="group" aria-labelledby="film-lang" className="flex rounded-full border border-border bg-surface p-1 text-sm font-bold">
+            {(['en', 'hi'] as const).map((l) => (
+              <button
+                key={l}
+                type="button"
+                lang={l}
+                aria-pressed={lang === l}
+                onClick={() => choose(l)}
+                className={`min-h-9 rounded-full px-4 transition-colors ${lang === l ? 'bg-text text-bg' : 'text-text-muted hover:text-text'}`}
+              >
+                {l === 'en' ? 'English' : 'हिंदी'}
+              </button>
+            ))}
           </div>
         </div>
-        <div ref={boxRef} className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-[#07040d] shadow-[0_40px_100px_-40px_rgba(124,58,237,0.45)]">
-          {started ? (
-            <video
-              key={lang /* a new element per language, so the new film starts cleanly */}
-              src={film[size]}
-              poster="/media/launch-film-v4-poster.jpg"
-              ref={(v) => {
-                videoRef.current = v
-                if (v && (inView.current || wantPlay.current) && v.paused && !userPaused.current && v.readyState === 0) void tryPlay(v)
-              }}
-              controls
-              playsInline
-              onPause={(e) => {
-                // A pause while the film is still on screen came from the visitor.
-                if (inView.current && !e.currentTarget.ended) userPaused.current = true
-              }}
-              onPlay={() => { userPaused.current = false }}
-              // cover, not contain: inside the 1px border the box is a hair wider than 16:9,
-              // and contain would letterbox it with thin dark bars at the sides
+      </div>
+      <div ref={boxRef} className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-[#07040d] shadow-[0_40px_100px_-40px_rgba(124,58,237,0.45)]">
+        {started ? (
+          <video
+            key={lang /* a new element per language, so the new film starts cleanly */}
+            src={film[size]}
+            poster="/media/launch-film-v4-poster.jpg"
+            ref={(v) => {
+              videoRef.current = v
+              if (v && (inView.current || wantPlay.current) && v.paused && !userPaused.current && v.readyState === 0) void tryPlay(v)
+            }}
+            controls
+            playsInline
+            onPause={(e) => {
+              // A pause while the film is still on screen came from the visitor.
+              if (inView.current && !e.currentTarget.ended) userPaused.current = true
+            }}
+            onPlay={() => { userPaused.current = false }}
+            // cover, not contain: inside the 1px border the box is a hair wider than 16:9,
+            // and contain would letterbox it with thin dark bars at the sides
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => { wantPlay.current = true; setStarted(true) }}
+            aria-label={`Play the Vistrow Voice launch film in ${lang === 'en' ? 'English' : 'Hindi'} (${film.spoken}, with sound)`}
+            className="group absolute inset-0 h-full w-full"
+          >
+            <img
+              src="/media/launch-film-v4-poster.jpg"
+              alt="Artha booking a restaurant table on a live phone call, in Hindi"
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover"
             />
-          ) : (
-            <button
-              type="button"
-              onClick={() => { wantPlay.current = true; setStarted(true) }}
-              aria-label={`Play the Vistrow Voice launch film in ${lang === 'en' ? 'English' : 'Hindi'} (${film.spoken}, with sound)`}
-              className="group absolute inset-0 h-full w-full"
-            >
-              <img
-                src="/media/launch-film-v4-poster.jpg"
-                alt="Artha booking a restaurant table on a live phone call, in Hindi"
-                loading="lazy"
-                decoding="async"
-                className="h-full w-full object-cover"
-              />
-              {/* small on phones, where the film itself is small; full size from md up */}
-              <span className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full bg-primary py-1 pl-1 pr-3 text-xs font-bold text-white shadow-xl transition-transform group-hover:scale-105 md:bottom-6 md:left-6 md:gap-3 md:py-2 md:pl-2 md:pr-5 md:text-base">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 md:h-12 md:w-12">
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 md:h-6 md:w-6" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
-                </span>
-                Play film · {film.length}
+            {/* small on phones, where the film itself is small; full size from md up */}
+            <span className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full bg-primary py-1 pl-1 pr-3 text-xs font-bold text-white shadow-xl transition-transform group-hover:scale-105 md:bottom-6 md:left-6 md:gap-3 md:py-2 md:pl-2 md:pr-5 md:text-base">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 md:h-12 md:w-12">
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 md:h-6 md:w-6" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
               </span>
-            </button>
-          )}
-        </div>
+              Play film · {film.length}
+            </span>
+          </button>
+        )}
       </div>
     </section>
   )
