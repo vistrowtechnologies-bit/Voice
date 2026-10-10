@@ -41,7 +41,6 @@ from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
 from livekit.agents.tts import TTS as _BaseTTS, TTSCapabilities
 from livekit.agents.types import DEFAULT_API_CONNECT_OPTIONS, NOT_GIVEN, APIConnectOptions
 from livekit.agents.voice.agent_session import SessionConnectOptions
-from google.genai import types as genai_types
 from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarvam
 # EarlyFlushTTS (sarvam_early_flush_patch) is NOT wired in below — call 984,
 # 2026-09-16: it intermittently ends the whole reply after the first clause
@@ -68,6 +67,7 @@ import ringback
 import turn_latency
 import realtime_prompt
 import realtime_config
+import realtime_timing
 import sarvam_realtime_stt
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
@@ -1774,11 +1774,6 @@ def _gemini_live_voice(voice_value: str) -> str:
     return persona.capitalize() if (persona or "").lower() in _GEMINI_LIVE_VOICES else "Kore"
 
 
-# End-of-speech window for Gemini Live, added to every reply. Env override so it
-# can be measured on a call without a code change; 700 is the shipped value.
-_REALTIME_SILENCE_MS = int(os.environ.get("REALTIME_SILENCE_MS", "700"))
-
-
 def _build_realtime_llm(model: str, instructions: str, voice_value: str, language: str):
     """Gemini Live RealtimeModel — replaces llm+stt+tts, not just the llm."""
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -1810,35 +1805,9 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
         # final input captions may arrive after the model's reply.
         input_audio_transcription={},
         output_audio_transcription={},
-        # Gemini Live runs its OWN turn detection server-side, so none of
-        # this file's endpointing settings reach it — and its defaults split
-        # Hindi mid-sentence. Observed on a real test call: "naam kya hai
-        # aapka" arrived as THREE separate turns ("naam" / "kya" / "hai
-        # aapka"), and "रियल स्टेट में" as two. Each fragment was answered as
-        # if it were a whole question, which is why the replies read as
-        # confused rather than the model being weak.
-        #
-        # The two sensitivities pull in opposite directions and both
-        # complaints are here:
-        #   END_SENSITIVITY_LOW + a longer silence window stops it ending a
-        #   turn on the pauses Hindi has mid-sentence — that is the
-        #   fragmentation.
-        #   START_SENSITIVITY_HIGH keeps it noticing the caller has begun
-        #   speaking straight away — that is barge-in, which was also
-        #   reported as not working.
-        #
-        # 700ms is a starting value, not a tuned one: it is roughly the pause
-        # this platform's own turn detector already tolerates (min_delay 0.4s
-        # plus Sarvam's ~0.3s VAD window) and should be measured on a call
-        # rather than argued about.
-        realtime_input_config=genai_types.RealtimeInputConfig(
-            automatic_activity_detection=genai_types.AutomaticActivityDetection(
-                start_of_speech_sensitivity=genai_types.StartSensitivity.START_SENSITIVITY_HIGH,
-                end_of_speech_sensitivity=genai_types.EndSensitivity.END_SENSITIVITY_LOW,
-                prefix_padding_ms=200,
-                silence_duration_ms=_REALTIME_SILENCE_MS,
-            )
-        ),
+        # Google owns native turn detection. Keep Hindi pause protection,
+        # but tune 2.5 independently of the already-tested 3.1 profile.
+        realtime_input_config=realtime_config.activity_detection(name),
     )
 
 
@@ -4146,6 +4115,12 @@ class RealEstateAgent(Agent):
             logger.exception("could not release the held outbound opening")
 
     async def on_enter(self) -> None:
+        if self._is_realtime:
+            try:
+                realtime_timing.attach(self.realtime_llm_session, self.session.userdata, logger)
+            except Exception:
+                # Observability must never prevent an opening or mute a call.
+                logger.warning("native timing observer unavailable", exc_info=True)
         # Outbound carriers can expose early media (ringback/announcements)
         # after reporting SIP 200/"active" but before the handset user is
         # actually ready. Speaking on SIP active alone therefore loses the
@@ -7626,29 +7601,25 @@ async def entrypoint(ctx: JobContext) -> None:
                 model=model,
             )
         elif metric_type == "realtime_model_metrics" and not metric.cancelled:
-            # Speech-to-speech reports ONE number where the pipeline reports
-            # three, because it is one hop: audio in, audio out. ttft here is
-            # the caller's turn ending to the first audio of the reply — the
-            # same span the pipeline only produces by adding eouMs + llmTtftMs
-            # + ttsTtfbMs together.
-            #
-            # This branch is why Gemini Live was parked. It was never written,
-            # so every realtime call recorded providers=[] and no timings at
-            # all, and the architecture adopted specifically to cut latency
-            # reported none. Three test calls were judged on "feels slower"
-            # because there was nothing else to judge them on.
-            #
-            # Stored under realtimeTtftMs, deliberately NOT merged into
-            # llmTtftMs: the pipeline's llmTtftMs excludes endpointing and
-            # synthesis, so averaging the two together would compare a part
-            # against a whole and flatter whichever was measured last.
-            duration_ms = round(max(0.0, metric.ttft) * 1000)
-            timings.setdefault("realtimeTtftMs", []).append(duration_ms)
-            request_duration_ms = round(max(0.0, metric.duration) * 1000)
-            first_audio_offset_ms = max(0, collected_offset_ms - request_duration_ms + duration_ms)
+            # In Google plugin 1.8.3 this starts at the first server event,
+            # not at caller end-of-speech. The metric's own timestamp + TTFT
+            # identifies received audio; collection time can be delayed.
+            first_audio_at = realtime_timing.first_audio_time(metric)
+            duration_ms = round(metric.ttft * 1000) if first_audio_at is not None else None
+            if duration_ms is not None:
+                timings.setdefault("realtimeTtftMs", []).append(duration_ms)
+            first_audio_offset_ms = (
+                max(0, round((first_audio_at - (time.time() - (time.monotonic() - _t0))) * 1000))
+                if first_audio_at is not None else None
+            )
+            logger.info(
+                "[native-timing] provider-audio id=%s generationAt=%.3f firstAudioAt=%s ttftMs=%s",
+                metric.request_id, metric.timestamp, first_audio_at,
+                duration_ms if first_audio_at is not None else None,
+            )
             _record_diagnostic(
-                "metric", "llm", "Reply audio started (speech-to-speech)",
-                "warning" if duration_ms >= 1500 else "ok",
+                "metric", "llm", "First audio received from Google",
+                "info" if duration_ms is None else "warning" if duration_ms >= 1500 else "ok",
                 durationMs=duration_ms,
                 offsetMs=first_audio_offset_ms,
                 observedAtOffsetMs=collected_offset_ms,
@@ -7656,7 +7627,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 model=model,
             )
             logger.info(
-                "[latency] realtime provider TTFT=%dms (not caller-stop-to-playback)", duration_ms
+                "[latency] realtime provider TTFT=%sms (not caller-stop-to-playback)", duration_ms
             )
         else:
             return
@@ -8185,6 +8156,7 @@ async def entrypoint(ctx: JobContext) -> None:
     logger.info("[latency] session.start() returned at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
 
     def _on_reply_audio_started(ev) -> None:
+        logger.info("[native-timing] playback at=%.3f", float(ev.created_at))
         # Speech-to-speech: the first frame of a reply actually leaving for the
         # caller. The framework's agent "speaking" state is raised by model
         # events and can run ahead of or behind the audio, so it is not used.

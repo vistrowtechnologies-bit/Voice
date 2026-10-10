@@ -123,6 +123,7 @@ class RealtimeGreetingLifecycle(unittest.IsolatedAsyncioTestCase):
             return_value=SimpleNamespace(wait_for_playout=playout)))
         return SimpleNamespace(
             session=session, _first_speaker="agent", _is_realtime=True,
+            realtime_llm_session=Mock(),
             _welcome_message="Namaste, main Artha bol rahi hoon.",
             _reply_language="hi-IN", _warm_llm_prompt_cache=Mock(),
             _await_own_audio_track=AsyncMock(),

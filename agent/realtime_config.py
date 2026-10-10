@@ -1,9 +1,38 @@
 """Native Google audio profiles; never apply these to the STT/LLM/TTS pipeline."""
+import os
 from google.genai import types
 
 DEFAULT_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
 MODEL_31 = "gemini-3.1-flash-live-preview"
 API_MODELS = {DEFAULT_MODEL, MODEL_31}
+
+
+def activity_detection(model: str) -> types.RealtimeInputConfig:
+    """Keep native endpointing independent of the pipeline and of other models.
+
+    2.5's 500 ms window is a conservative latency tuning, not a fix for every
+    multi-second delay. Keep END_LOW to protect pauses inside Hindi sentences.
+    Explicit per-model overrides win over the legacy shared override.
+    """
+    if model not in API_MODELS:
+        raise ValueError(f"Unsupported realtime model: {model}")
+    key = "REALTIME_25_SILENCE_MS" if model == DEFAULT_MODEL else "REALTIME_31_SILENCE_MS"
+    default = "500" if model == DEFAULT_MODEL else "700"
+    value = os.environ.get(key, os.environ.get("REALTIME_SILENCE_MS", default))
+    try:
+        silence_ms = int(value)
+        if not 200 <= silence_ms <= 2000:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise ValueError(f"{key} must be an integer between 200 and 2000 ms") from None
+    return types.RealtimeInputConfig(
+        automatic_activity_detection=types.AutomaticActivityDetection(
+            start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
+            end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
+            prefix_padding_ms=200,
+            silence_duration_ms=silence_ms,
+        ),
+    )
 
 
 def thinking_config(model: str) -> types.ThinkingConfig:
