@@ -115,6 +115,7 @@ _DEVICE_COOKIE_NAME = "vv_device"
 # Routes reachable without a session. Everything else (the dashboard/admin
 # API) requires a valid session cookie, enforced by the middleware below.
 _PUBLIC_PATHS = {
+    "/healthz",                        # Railway deploy healthcheck + external uptime monitor
     "/token",                          # LiveKit token for the public demo + browser test
     "/widget.js",                      # embedded widget script
     "/widget/token",                   # widget call token (runs on customers' sites)
@@ -2312,6 +2313,24 @@ def admin_billing(admin: dict = Depends(require_platform_owner)) -> dict:
 @app.get("/admin/audit")
 def admin_audit(action: str = "", limit: int = 100, offset: int = 0, admin: dict = Depends(require_platform_owner)) -> dict:
     return admin_db.audit_log(action, limit, offset)
+
+
+@app.get("/healthz")
+def healthz() -> Response:
+    """Liveness for Railway's deploy healthcheck and an external uptime
+    monitor: 200 only if this process can query the database. Before this the
+    only health route was owner-gated, so nothing outside could tell a hung
+    or DB-less API from a working one. Reveals nothing beyond up/down."""
+    try:
+        conn = calls_db._connect()
+        try:
+            conn.execute("SELECT 1").fetchone()
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("healthz: database check failed")
+        return Response('{"ok": false}', status_code=503, media_type="application/json")
+    return Response('{"ok": true}', media_type="application/json")
 
 
 @app.get("/admin/health")

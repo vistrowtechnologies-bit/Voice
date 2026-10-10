@@ -23,6 +23,7 @@ import time
 import boto3
 from botocore.client import Config
 
+import admin_db
 import calls_db
 import email_sender
 
@@ -124,6 +125,9 @@ def run_backup_now() -> dict:
         return {"ok": True, "key": key, "size_mb": size_mb, "pruned": deleted}
     except Exception as exc:
         logger.exception("db backup failed")
+        # The email below silently does nothing when no email provider is
+        # configured, so also record it where System Health shows it.
+        admin_db.log_error(f"Daily database backup failed: {exc}", source="db_backup")
         _notify(
             "Vistrow Voice: daily backup FAILED",
             f"<p>The daily database backup did not complete.</p><p>Error: {exc}</p>",

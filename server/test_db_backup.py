@@ -25,6 +25,7 @@ class RecordingFailsAfterUpload(unittest.TestCase):
         for p in self.patches:
             p.start()
         self.notify = mock.patch.object(db_backup, "_notify").start()
+        self.log_error = mock.patch.object(db_backup.admin_db, "log_error").start()
         self.addCleanup(mock.patch.stopall)
 
     def test_upload_ok_but_settings_missing_is_not_a_failure(self):
@@ -50,6 +51,9 @@ class RecordingFailsAfterUpload(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("FAILED", self.notify.call_args.args[0])
         self.assertIsNone(db_backup._last_ok_date)
+        # Email is a no-op without a provider; System Health must still see it.
+        self.log_error.assert_called_once()
+        self.assertIn("backup failed", self.log_error.call_args.args[0])
 
 
 if __name__ == "__main__":

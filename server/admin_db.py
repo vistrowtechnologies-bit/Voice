@@ -14,9 +14,12 @@ calls_db.billing_summary() for the exact figure.
 """
 
 import json
+import logging
 
 import dbconn
 import vendor_live
+
+logger = logging.getLogger(__name__)
 
 # Monthly plan pricing in INR — mirrors the marketing pricing page. The admin
 # "MRR" is estimated from this × each account's plan (no payment processor is
@@ -61,7 +64,13 @@ def write_audit(
 
 
 def log_error(message: str, source: str = "backend", level: str = "error", account_id: int | None = None, context: str = "") -> None:
-    conn = _connect()
+    # The error sink must never itself raise into a request path - including
+    # when the database is the thing that is down, so connect inside the try.
+    try:
+        conn = _connect()
+    except Exception:
+        logger.warning("log_error: could not connect to record %r", message[:200])
+        return
     try:
         with conn:
             conn.execute(
@@ -69,7 +78,6 @@ def log_error(message: str, source: str = "backend", level: str = "error", accou
                 (account_id, source, level, message[:2000], context[:2000]),
             )
     except Exception:
-        # The error sink must never itself raise into a request path.
         pass
     finally:
         conn.close()
