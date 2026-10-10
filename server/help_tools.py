@@ -142,11 +142,11 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "contact_requirements",
-            "description": "What a specific caller or contact asked for: their most recent calls with the AI summary, key points, action items, captured lead details, and the end of the transcript, plus any saved contact notes. Use for questions like 'what does Abhishek want' or 'what did +91... ask about'.",
+            "description": "What a caller or contact asked for: their most recent calls with the AI summary, key points, action items, captured lead details, and the end of the transcript, plus any saved contact notes. Use for questions like 'what does Abhishek want', 'what did +91... ask about', or, with no query, 'what did my last caller ask for'.",
             "parameters": {
                 "type": "object",
-                "properties": {"query": {"type": "string", "description": "Caller or contact name, or phone number."}},
-                "required": ["query"],
+                "properties": {"query": {"type": "string", "description": "Caller or contact name, or phone number. Leave empty for the most recent callers."}},
+                "required": [],
             },
         },
     },
@@ -420,15 +420,15 @@ def _matching_contact(account_id: int, query: str) -> dict | None:
 
 def contact_requirements(account_id: int, query: str = "", **_ignored) -> dict:
     query = str(query or "").strip()
-    if not query:
-        return {"found": False, "error": "no caller name or phone number given"}
     calls = []
-    for call in calls_db.list_calls(account_id, limit=3, search=query):
+    # No query = the most recent callers ("what did my last caller ask for").
+    recent = calls_db.list_calls(account_id, limit=3, search=query) if query else calls_db.list_calls(account_id, limit=3)
+    for call in recent:
         # list_calls omits transcripts; get_call (account-scoped) has them.
         full = calls_db.get_call(int(call["id"]), account_id)
         if full:
             calls.append(_call_requirements(full))
-    contact = _matching_contact(account_id, query)
+    contact = _matching_contact(account_id, query) if query else None
     if not calls and not contact:
         return {"found": False, "query": query}
     return {
@@ -453,9 +453,18 @@ def contact_requirements(account_id: int, query: str = "", **_ignored) -> dict:
     }
 
 
+def _recent_failures(account_id: int, key: str) -> list[dict]:
+    try:
+        log = calls_db.list_integration_deliveries(account_id, key, limit=5, status="failed")
+    except Exception:
+        return []
+    return [
+        {"at": d["createdAt"], "event": d["eventType"], "caller": _text(d["leadName"]), "reason": _text(d["detail"])}
+        for d in log.get("items", [])
+    ]
+
+
 def failing_integrations(account_id: int, **_ignored) -> dict:
-    # TODO: once calls_db.list_integration_deliveries(account_id, key, limit, status)
-    # lands, attach each integration's last 5 failed deliveries here.
     integrations = calls_db.list_integrations(account_id)
     failing = [i for i in integrations if i["status"] == "connected" and i["lastError"]]
     return {
@@ -467,6 +476,7 @@ def failing_integrations(account_id: int, **_ignored) -> dict:
                 "name": i["name"],
                 "lastSync": i["lastSync"],
                 "lastError": _text(i["lastError"]),
+                "recentFailures": _recent_failures(account_id, i["key"]),
             }
             for i in failing[:MAX_LIST_ITEMS]
         ],
