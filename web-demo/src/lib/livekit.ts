@@ -22,27 +22,43 @@ export async function fetchLiveKitToken(
    * stamps its own receipt time next to acceptedAt as the call's evidence. */
   consent?: { version: string; acceptedAt: string },
 ): Promise<TokenResponse> {
-  const res = await fetch('/api/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      identity,
-      room,
-      agentId,
-      consentVersion: consent?.version,
-      consentAcceptedAt: consent?.acceptedAt,
-      demoSlug,
-      language,
-      testRunId: testContext?.runId,
-      testScenarioId: testContext?.scenarioId,
-      testScenarioKey: testContext?.scenarioKey,
-      pipelineProfile,
-    }),
-  })
-  if (!res.ok) {
-    throw new Error(`token request failed with status ${res.status}`)
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 12_000)
+  try {
+    const res = await fetch('/api/token', {
+      signal: controller.signal,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identity,
+        room,
+        agentId,
+        consentVersion: consent?.version,
+        consentAcceptedAt: consent?.acceptedAt,
+        demoSlug,
+        language,
+        testRunId: testContext?.runId,
+        testScenarioId: testContext?.scenarioId,
+        testScenarioKey: testContext?.scenarioKey,
+        pipelineProfile,
+      }),
+    })
+    if (!res.ok) {
+      throw new Error(`token request failed with status ${res.status}`)
+    }
+    const data = await res.json()
+    if (typeof data?.token !== 'string' || !data.token || typeof data?.url !== 'string' || !data.url) {
+      throw new Error('The connection could not be prepared. Please try again.')
+    }
+    return data
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error('The connection took too long. Please try again.')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
   }
-  return res.json()
 }
 
 export function randomId(prefix: string): string {
