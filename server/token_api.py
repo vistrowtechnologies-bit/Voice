@@ -909,7 +909,7 @@ def _complete_slack_integration_oauth(
     redirect_uri = os.environ.get("SLACK_OAUTH_REDIRECT_URI") or f"{base_url}/api/auth/oauth/slack/callback"
 
     def _finish(query: str = "") -> RedirectResponse:
-        response = RedirectResponse(f"{base_url}/dashboard/integrations{query}")
+        response = RedirectResponse(f"{base_url}/dashboard/integrations/slack{query}")
         response.delete_cookie(_SLACK_INTEGRATION_STATE_COOKIE, path="/")
         return response
 
@@ -1035,7 +1035,7 @@ def auth_oauth_zoho_callback(
     expected_state = request.cookies.get(_ZOHO_INTEGRATION_STATE_COOKIE)
 
     def _finish(query: str = "") -> RedirectResponse:
-        response = RedirectResponse(f"{base_url}/dashboard/integrations{query}")
+        response = RedirectResponse(f"{base_url}/dashboard/integrations/zoho_crm{query}")
         response.delete_cookie(_ZOHO_INTEGRATION_STATE_COOKIE, path="/")
         return response
 
@@ -1106,7 +1106,7 @@ def auth_oauth_zoho_callback(
 _GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE = "vv_google_sheets_integration_state"
 # OAuth tokens never leave the server: GET /integrations strips these from
 # every integration's config (Zoho's and Google Sheets' both live there).
-_SECRET_CONFIG_KEYS = {"access_token", "refresh_token", "id_token"}
+_SECRET_CONFIG_KEYS = {"access_token", "refresh_token", "id_token", "pageAccessToken"}
 
 
 @app.get("/integrations/google_sheets/start")
@@ -1143,7 +1143,7 @@ def auth_oauth_google_sheets_callback(
     expected_state = request.cookies.get(_GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE)
 
     def _finish(query: str) -> RedirectResponse:
-        response = RedirectResponse(f"{base_url}/dashboard/integrations{query}")
+        response = RedirectResponse(f"{base_url}/dashboard/integrations/sheets{query}")
         response.delete_cookie(_GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE, path="/")
         return response
 
@@ -1180,7 +1180,17 @@ def auth_oauth_google_sheets_callback(
         # A re-connect keeps writing to the owner's existing sheet when Google
         # still lets us open it; otherwise (deleted, other Google account)
         # a fresh one is created.
-        sheet = google_sheets.reusable_spreadsheet(access_token, previous) or google_sheets.create_spreadsheet(access_token)
+        sheet = google_sheets.reusable_spreadsheet(access_token, previous)
+        if sheet:
+            # The kept sheet (and its per-agent tabs) may predate the
+            # current Vistrow styling.
+            agent_tabs = previous.get("agent_tabs") if isinstance(previous.get("agent_tabs"), dict) else {}
+            for tab_id in (sheet["sheet_id"], *agent_tabs.values()):
+                google_sheets.restyle(access_token, sheet["spreadsheet_id"], int(tab_id))
+            if agent_tabs:
+                sheet = {**sheet, "agent_tabs": agent_tabs}
+        else:
+            sheet = google_sheets.create_spreadsheet(access_token)
     except google_sheets.GoogleError as e:
         logger.error("Google Sheets integration could not create the leads sheet: %s", e)
         return _finish("?sheets=failed")
@@ -1274,7 +1284,7 @@ def integration_facebook_callback(
     base_url = _app_base_url(request)
 
     def _finish(query: str = "") -> RedirectResponse:
-        response = RedirectResponse(f"{base_url}/dashboard/integrations{query}")
+        response = RedirectResponse(f"{base_url}/dashboard/integrations/facebook{query}")
         response.delete_cookie(_FACEBOOK_INTEGRATION_STATE_COOKIE, path="/")
         return response
 
@@ -2831,6 +2841,43 @@ def get_shared_call_recording(call_id: int, token: str = "") -> RedirectResponse
     return RedirectResponse(url, status_code=307, headers={"Cache-Control": "private, no-store"})
 
 
+@app.get("/public/calls/{call_id}/play", include_in_schema=False, response_class=HTMLResponse)
+def play_shared_call_recording(call_id: int, token: str = "") -> HTMLResponse:
+    """Browser player for the CRM recording link - the Google Sheets
+    "▶ Play recording" cell opens this. The raw /recording link redirects to
+    a WAV that many browsers download instead of playing. Same bearer check
+    as /recording; the page reveals nothing beyond what that link does."""
+    available = bool(calls_db.get_shared_call_recording_key(call_id, token))
+    src = f"/public/calls/{call_id}/recording?token={urllib.parse.quote(token, safe='')}"
+    body = (
+        f'<audio controls autoplay preload="auto" src="{html.escape(src)}"></audio>'
+        '<p class="hint" id="err" hidden>The recording could not be played. Please try again in a minute.</p>'
+        if available else
+        '<p class="hint">This recording isn’t available. It may still be processing — try again in a minute.</p>'
+    )
+    page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Call recording · Vistrow Voice</title>
+<style>
+:root{{color-scheme:light dark}}
+body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f2f9;color:#1c1530}}
+.card{{width:min(440px,calc(100vw - 32px));background:#fff;border:1px solid #e9e3f5;border-radius:16px;
+padding:24px;box-shadow:0 12px 32px rgba(147,51,234,.12)}}
+.brand{{display:flex;align-items:center;gap:8px;font-weight:700;color:#7e22ce;font-size:14px}}
+.dot{{width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,#9333ea,#0e7490)}}
+h1{{font-size:18px;margin:14px 0 4px}}.sub{{margin:0 0 16px;color:#6b6380;font-size:13px}}
+audio{{width:100%}}.hint{{color:#6b6380;font-size:13px;margin:12px 0 0}}
+@media (prefers-color-scheme:dark){{body{{background:#0a0a12;color:#f3f0fa}}
+.card{{background:#17121f;border-color:#2a2236}}.brand{{color:#c084fc}}.sub,.hint{{color:#a49bb8}}}}
+</style></head><body><main class="card">
+<div class="brand"><span class="dot"></span>Vistrow Voice</div>
+<h1>Call recording</h1><p class="sub">Call #{call_id}</p>{body}
+</main><script>var a=document.querySelector('audio');if(a)a.addEventListener('error',function(){{document.getElementById('err').hidden=false}});</script>
+</body></html>"""
+    return HTMLResponse(page, status_code=200 if available else 404)
+
+
 @app.get("/calls/{call_id}/recording/download")
 def download_call_recording(call_id: int, user: dict = Depends(current_user)) -> Response:
     """The recording as an MP3, named after the caller, instead of the raw
@@ -4329,6 +4376,53 @@ def update_integration(key: str, data: dict = Body(...), user: dict = Depends(re
 def test_integration(key: str, user: dict = Depends(require_role("admin"))) -> dict:
     ok, detail = integrations_dispatch.test_integration(user["account_id"], key)
     return {"ok": ok, "detail": detail}
+
+
+@app.patch("/integrations/{key}/settings")
+def update_integration_settings(key: str, data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
+    """Event choices and the WhatsApp template. Merged server-side: the
+    browser only sees a redacted config, so PATCH /integrations/{key} (which
+    replaces the whole config) would drop tokens."""
+    events = data.get("events")
+    if events is not None and not isinstance(events, list):
+        raise HTTPException(400, "events must be a list")
+    template = data.get("template")
+    if template is not None and not isinstance(template, str):
+        raise HTTPException(400, "template must be text")
+    fields = data.get("fields")
+    if fields is not None and not isinstance(fields, list):
+        raise HTTPException(400, "fields must be a list")
+    account_id = user["account_id"]
+    try:
+        saved = calls_db.update_integration_settings(account_id, key, events=events, template=template, fields=fields)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    integ = next((i for i in calls_db.list_integrations(account_id) if i["key"] == key), {})
+    config = integ.get("config") or {}
+    if fields is not None and key == "sheets" and config.get("mode") == "oauth":
+        # Hide/show the columns now, rather than waiting for the next lead.
+        # The settings are already saved; a Google hiccup is reported, not raised.
+        try:
+            ok, detail = google_sheets.apply_column_visibility(
+                config, saved.get("fields"),
+                os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_ID"), os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_SECRET"),
+                lambda updated: calls_db.update_integration("sheets", "connected", updated, account_id),
+            )
+        except Exception as e:
+            logger.warning("sheets: column visibility update failed", exc_info=True)
+            ok, detail = False, str(e)[:200] or "Could not update the sheet"
+        saved = {**saved, "sheetColumns": "updated" if ok else detail}
+    return saved
+
+
+@app.get("/integrations/{key}/deliveries")
+def list_integration_deliveries(key: str, status: str = "", limit: int = 50, user: dict = Depends(current_user)) -> dict:
+    return calls_db.list_integration_deliveries(user["account_id"], key, limit=limit, status=status)
+
+
+@app.get("/integrations/facebook/leads")
+def list_facebook_leads(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_facebook_leads(user["account_id"])
 
 
 # --------------------------------------------------------------- appointments

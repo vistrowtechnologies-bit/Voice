@@ -520,7 +520,10 @@ export interface Integration {
   category: string
   description: string
   status: 'connected' | 'not_connected'
-  config: Record<string, string>
+  // Mostly strings (url, channel, google_email...), plus `events` (string[])
+  // and the Sheets sheet_id (number). Tokens are redacted server-side.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  config: Record<string, any>
   lastSync: string | null
   lastError: string | null
 }
