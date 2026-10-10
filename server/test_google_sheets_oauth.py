@@ -107,8 +107,10 @@ class StartRoute(unittest.TestCase):
         self.assertTrue(url.startswith("https://accounts.google.com/o/oauth2/v2/auth?"))
         q = dict(urllib.parse.parse_qsl(url.split("?", 1)[1]))
         self.assertEqual(q["scope"], "openid email https://www.googleapis.com/auth/drive.file")
-        self.assertEqual((q["access_type"], q["prompt"], q["include_granted_scopes"], q["response_type"]),
-                         ("offline", "consent", "true", "code"))
+        self.assertEqual((q["access_type"], q["prompt"], q["response_type"]), ("offline", "consent", "code"))
+        # Earlier grants on the project (Google Calendar, sensitive) must not be
+        # folded in: that is what showed "Google hasn't verified this app".
+        self.assertNotIn("include_granted_scopes", q)
         self.assertEqual(q["redirect_uri"], REDIRECT)
         self.assertIn(f"vv_gs={q['state']}", resp.headers["set-cookie"])
 

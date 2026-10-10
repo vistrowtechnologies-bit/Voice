@@ -119,7 +119,10 @@ def auth_url(client_id: str, redirect_uri: str, state: str) -> str:
         "scope": SCOPE,
         "access_type": "offline",  # required to receive a refresh_token
         "prompt": "consent",  # forces a fresh refresh_token even on a re-connect
-        "include_granted_scopes": "true",
+        # No include_granted_scopes: it folded this account's earlier grants on
+        # the same Cloud project (Google Calendar, a sensitive scope) into the
+        # request, so Google showed "hasn't verified this app" for a sign-in
+        # that only needs the non-sensitive drive.file + email.
         "state": state,
     }
     return f"{AUTH_URL}?{urllib.parse.urlencode(params)}"
