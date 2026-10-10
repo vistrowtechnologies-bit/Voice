@@ -51,6 +51,17 @@ This change is not a declaration that 2.5 is launch-ready.
 
 ## Primary references
 
+Configuration audit: exact 2.5 December model and exact 3.1 model, AUDIO-only
+output, input/output transcription enabled, language directed in prompt rather
+than unsupported native speech language_code, 2.5 thinkingBudget=0 vs 3.1
+thinkingLevel=minimal, thoughts hidden. Actual LiveKit setup serialization is
+checked offline, so configured thinking and endpointing options cannot silently
+disappear before reaching Google's setup message. Google defaults provide
+START_OF_ACTIVITY_INTERRUPTS and model-specific turn coverage; these are not
+overridden. The pinned plugin sends resampled mono 16 kHz PCM in 50 ms chunks,
+inside Google's 20–100 ms buffering guidance, and receives 24 kHz PCM. No
+separate Sarvam STT, text LLM, or TTS is constructed for either native model.
+
 - [Google Live API reference](https://ai.google.dev/api/live): silenceDurationMs
   increases latency; input transcription is independently ordered; turnComplete
   may wait for playback.
@@ -58,3 +69,7 @@ This change is not a declaration that 2.5 is launch-ready.
   stream small PCM chunks, resample to 16 kHz, clear playback on interruption.
 - [LiveKit Gemini plugin](https://docs.livekit.io/agents/models/realtime/plugins/gemini/):
   native VAD and model-specific thinking configuration.
+- [Google thinking configuration](https://ai.google.dev/gemini-api/docs/generate-content/thinking):
+  2.5 thinkingBudget=0 disables thinking; the native audio table lists the
+  September snapshot. December support is confirmed by the pinned SDK and
+  previously accepted live sessions, not by claiming that table names December.

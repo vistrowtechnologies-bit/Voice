@@ -91,6 +91,36 @@ class RealtimeIgnoresThePipeline(unittest.TestCase):
                 self.assertEqual(opts.thinking_config.thinking_budget, 0)
                 self.assertIsNone(opts.thinking_config.thinking_level)
 
+    def test_actual_google_setup_keeps_native_options(self):
+        """Verify SDK wire setup, without opening a connection or sending audio."""
+        from livekit.plugins.google.realtime.realtime_api import RealtimeSession
+        from livekit.agents import llm
+        from unittest.mock import patch
+        import realtime_config
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ["GEMINI_API_KEY"] = "offline-not-used"
+            for name, silence in ((realtime_config.DEFAULT_MODEL, 500), (realtime_config.MODEL_31, 700)):
+                model = main._build_realtime_llm("gemini-live:" + name, "RESPOND IN HINDI", "Achernar", "hi-IN")
+                # Avoid the SDK constructor: it starts background network tasks.
+                session = object.__new__(RealtimeSession)
+                session._realtime_model = model
+                session._opts = model._opts
+                session._tools = llm.ToolContext.empty()
+                session._session_resumption_handle = None
+                conf = session._build_connect_config()
+                assert conf.response_modalities == ["AUDIO"]
+                assert conf.speech_config.language_code is None
+                assert conf.speech_config.voice_config.prebuilt_voice_config.voice_name == "Achernar"
+                assert conf.input_audio_transcription is not None
+                assert conf.output_audio_transcription is not None
+                assert conf.realtime_input_config.automatic_activity_detection.silence_duration_ms == silence
+                thinking = conf.generation_config.thinking_config
+                assert not thinking.include_thoughts
+                if name == realtime_config.DEFAULT_MODEL:
+                    assert thinking.thinking_budget == 0 and thinking.thinking_level is None
+                else:
+                    assert thinking.thinking_level.value == "MINIMAL" and thinking.thinking_budget is None
+
 
 class TheChannelReachesTheStt(unittest.TestCase):
     """Sarvam's per-channel VAD silence: 500ms telephony, 300ms browser."""
