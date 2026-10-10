@@ -16,6 +16,8 @@ from pathlib import Path
 
 import admin_db
 import auth
+import arthaleads_inbound
+import arthaleads_picker
 import call_intelligence
 import calls_db
 import plan_policy
@@ -4986,7 +4988,7 @@ def leads_inbound_agents(account_id: int, request: Request) -> dict:
     for agent in calls_db.list_agents(account_id):
         kb_id = agent.get("kbId")
         kb_name = knowledge_bases.get(str(kb_id)) if kb_id is not None else None
-        if agent.get("status") != "active" or not kb_name:
+        if agent.get("status") != "live" or not kb_name:
             continue
         agents.append({
             "id": str(agent["id"]),
@@ -5037,29 +5039,10 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
         org_id = str(body.get("org_id") or "").strip()
         if not lead_id or not org_id or len(lead_id) > 128 or len(org_id) > 128:
             return {"ok": False, "reason": "missing_or_invalid_lead_identity"}
-        if body.get("opt_out") is True or body.get("do_not_call") is True:
-            return {"ok": False, "reason": "lead_opted_out"}
-        fields = {}
-        for key in (
-            "project", "property_type", "bhk", "purpose", "requirements", "budget",
-            "priority", "preferred_location", "street_address", "city", "timeline",
-            "remarks", "remark", "remark_1", "remark_2", "language",
-            "preferred_callback_time", "source_detail", "lead_source", "subsource",
-            "campaign_name", "ad_name", "form_name", "status", "assigned_to",
-            "follow_up_date", "lead_outcome",
-            "email", "whatsapp", "campaign_id", "ad_id", "form_id",
-            "created_at", "consent_basis", "page_url", "page_path", "landing_page",
-            "project_name", "channel", "source",
-        ):
-            value = body.get(key)
-            if value is not None and not isinstance(value, (dict, list)):
-                fields[key] = str(value)[:2000]
-        extra = body.get("custom_fields")
-        if isinstance(extra, dict):
-            for key, value in list(extra.items())[:60]:
-                if (isinstance(key, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", key)
-                        and value is not None and not isinstance(value, (dict, list))):
-                    fields[key] = str(value)[:2000]
+        fields = arthaleads_inbound.copy_scalar_fields(body)
+        allow_call, agent_id, decline_reason = arthaleads_inbound.call_request(
+            body, is_test=request.headers.get("x-arthaleads-test", "").strip() == "1",
+        )
         # The agent's contact-notes builder recognises these established keys.
         for source_key, target_key in (
             ("source_detail", "lead_source"),
@@ -5079,7 +5062,8 @@ async def leads_inbound(account_id: int, request: Request, token: str | None = N
         result = calls_db.ingest_inbound_lead(
             account_id, str(body.get("name") or ""), str(body.get("phone") or ""),
             source="arthaleads", external_id=f"{org_id}:{lead_id}",
-            custom_fields=fields, allow_call=body.get("auto_call") is not False,
+            custom_fields=fields, allow_call=allow_call, call_agent_id=agent_id,
+            call_decline_reason=decline_reason,
         )
         if not result.get("ok"):
             logger.warning("leads_inbound: ArthaLeads lead not queued for account %s: %s",
@@ -5213,6 +5197,21 @@ def integrations_lead_webhook(user: dict = Depends(current_user)) -> dict:
 @app.get("/integrations/arthaleads-inbound")
 def arthaleads_inbound_config(user: dict = Depends(current_user)) -> dict:
     return calls_db.arthaleads_inbound_config(user["account_id"])
+
+
+@app.get("/integrations/arthaleads/picker-options")
+def arthaleads_picker_options(user: dict = Depends(require_role("admin"))) -> dict:
+    """Fetch the connected ArthaLeads account's active project/campaign names.
+
+    The CRM connection token stays server-side and is never returned to the
+    browser. This read-only request cannot create a lead or queue a call.
+    """
+    config = calls_db.get_integration_config(user["account_id"], "arthaleads")
+    token = (config or {}).get("token") if isinstance(config, dict) else None
+    try:
+        return arthaleads_picker.fetch_picker_options(token or "")
+    except arthaleads_picker.ArthaLeadsPickerError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
 
 
 @app.put("/integrations/arthaleads-inbound")

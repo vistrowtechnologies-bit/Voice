@@ -5510,6 +5510,19 @@ def _arthaleads_source(value: object) -> str:
 
 def _arthaleads_route_match(route: dict, fields: dict) -> bool:
     source = route.get("source")
+    match_kind = str(route.get("matchKind") or "")
+    match_id = str(route.get("matchId") or "").strip()
+    if match_id and match_kind == "project":
+        project_id = str(fields.get("project_id") or "").strip()
+        if project_id:
+            return project_id == match_id
+        project_name = str(fields.get("project") or fields.get("project_name") or "").strip().casefold()
+        route_name = str(route.get("matchLabel") or route.get("match") or "").strip().casefold()
+        return bool(project_name and route_name and project_name == route_name)
+    if match_id and match_kind == "facebook_campaign":
+        return source == "facebook" and str(fields.get("campaign_id") or "").strip() == match_id
+    if match_id and match_kind == "whatsapp_ad":
+        return source == "whatsapp" and str(fields.get("ad_id") or "").strip() == match_id
     match = str(route.get("match") or "").strip().casefold().rstrip("/")
     if not source or not match:
         return False
@@ -5526,21 +5539,78 @@ def _arthaleads_route_match(route: dict, fields: dict) -> bool:
 
 
 def _arthaleads_campaign_setting_key(route: dict) -> str:
+    if route.get("matchId") or route.get("matchKind"):
+        raw_key = f"{route.get('source')}|{route.get('matchKind') or ''}|{route.get('matchId') or route.get('match')}|{route.get('agentId')}|{route.get('fromNumber')}"
+    else:
+        # Keep existing route campaign IDs stable across this schema extension.
+        raw_key = f"{route.get('source')}|{route.get('match')}|{route.get('agentId')}|{route.get('fromNumber')}"
     digest = hashlib.sha256(
-        f"{route.get('source')}|{route.get('match')}|{route.get('agentId')}|{route.get('fromNumber')}".encode()
+        raw_key.encode()
     ).hexdigest()[:20]
     return f"arthaleads_instant_campaign_{digest}"
 
 
-def _resolve_arthaleads_route(config: dict, source: str, fields: dict) -> dict | None:
-    """Resolve only an enabled source's most-specific explicit rule."""
+def _resolve_arthaleads_route_decision(config: dict, source: str, fields: dict) -> tuple[dict | None, str]:
+    """Resolve an enabled source rule; reject ties that name different agents."""
     sources = config.get("sources") if isinstance(config.get("sources"), dict) else {}
     if sources.get(source) is not True:
-        return None
+        return None, "source_disabled"
     routes = config.get("routes") if isinstance(config.get("routes"), list) else []
     candidates = [route for route in routes if isinstance(route, dict)
                   and route.get("source") == source and _arthaleads_route_match(route, fields)]
-    return max(candidates, key=lambda route: len(str(route.get("match") or ""))) if candidates else None
+    if not candidates:
+        return None, "no_route"
+    specificity = lambda route: len(str(route.get("matchId") or route.get("match") or ""))
+    best_specificity = max(specificity(route) for route in candidates)
+    best = [route for route in candidates if specificity(route) == best_specificity]
+    if len({str(route.get("agentId") or "") for route in best}) > 1:
+        return None, "ambiguous_route"
+    return best[0], ""
+
+
+def _resolve_arthaleads_route(config: dict, source: str, fields: dict) -> dict | None:
+    """Compatibility helper for callers that only need the matched route."""
+    return _resolve_arthaleads_route_decision(config, source, fields)[0]
+
+
+def _arthaleads_call_readiness(account_id: int, route: dict, phone: str, requested_agent_id: int) -> str:
+    """Return a stable decline code before queuing a CRM lead for outbound."""
+    try:
+        routed_agent_id = int(route.get("agentId") or 0)
+    except (TypeError, ValueError):
+        routed_agent_id = 0
+    if routed_agent_id != requested_agent_id:
+        return "agent_mismatch"
+    conn = _connect()
+    try:
+        agent = conn.execute(
+            "SELECT 1 FROM agents WHERE id = ? AND account_id = ? AND status = 'live' "
+            "AND kb_id IS NOT NULL AND is_platform_demo = 0 "
+            "AND (public_demo_slug = '' OR public_demo_slug IS NULL)",
+            (requested_agent_id, account_id),
+        ).fetchone()
+        if not agent:
+            return "agent_missing"
+        number = str(route.get("fromNumber") or "").strip()
+        phone_row = conn.execute(
+            "SELECT 1 FROM phone_numbers WHERE account_id = ? AND number = ? AND status = 'active'",
+            (account_id, number),
+        ).fetchone() if number else None
+        if not phone_row:
+            return "no_number"
+    finally:
+        conn.close()
+
+    compliance = get_compliance(account_id)
+    # ArthaLeads' consent_basis is marketing-channel metadata, not call consent.
+    if compliance.get("require_consent", False):
+        return "call_consent_required"
+    if compliance.get("honor_dnc", True) and is_dnc(account_id, phone):
+        return "dnd_blocked"
+    allowed, _reason = within_calling_window(account_id)
+    if not allowed:
+        return "outside_calling_window"
+    return ""
 
 
 def arthaleads_inbound_config(account_id: int) -> dict:
@@ -5598,12 +5668,23 @@ def configure_arthaleads_inbound(account_id: int, sources: dict, routes: list[di
                 raise ValueError("Each route must be an object")
             source = str(route.get("source") or "")
             match = str(route.get("match") or "").strip()[:300]
+            match_id = str(route.get("matchId") or "").strip()[:200]
+            match_kind = str(route.get("matchKind") or "").strip()
+            match_label = str(route.get("matchLabel") or match).strip()[:300]
             agent_id = int(route.get("agentId") or 0)
             from_number = str(route.get("fromNumber") or "").strip()
             if source not in allowed_sources:
                 raise ValueError("Route source must be Website, Facebook, or WhatsApp")
             if not match:
                 raise ValueError("Each route needs a page path, project, or campaign match")
+            if match_kind and match_kind not in {"website", "project", "facebook_campaign", "whatsapp_ad"}:
+                raise ValueError("Route must use an active project or campaign")
+            if match_kind == "facebook_campaign" and source != "facebook":
+                raise ValueError("Facebook campaigns can only route Facebook leads")
+            if match_kind == "whatsapp_ad" and source != "whatsapp":
+                raise ValueError("WhatsApp ads can only route WhatsApp leads")
+            if match_kind in {"project", "facebook_campaign", "whatsapp_ad"} and not match_id:
+                raise ValueError("Choose an active ArthaLeads project or campaign")
             if allowed_sources[source]:
                 agent = conn.execute(
                     "SELECT 1 FROM agents WHERE id = ? AND account_id = ? AND status = 'live' AND kb_id IS NOT NULL "
@@ -5619,8 +5700,12 @@ def configure_arthaleads_inbound(account_id: int, sources: dict, routes: list[di
                 if not (_get_setting(conn, account_id, "enablex_app_id")
                         and _get_setting(conn, account_id, "enablex_app_key")):
                     raise ValueError("Connect EnableX before enabling automatic calls")
-            clean_routes.append({"source": source, "match": match, "agentId": agent_id,
-                                 "fromNumber": from_number})
+            clean_route = {"source": source, "match": match, "agentId": agent_id,
+                           "fromNumber": from_number}
+            if match_kind:
+                clean_route.update({"matchKind": match_kind, "matchId": match_id,
+                                    "matchLabel": match_label})
+            clean_routes.append(clean_route)
         try:
             previous = json.loads(_get_setting(conn, account_id, _ARTHALEADS_INBOUND_ROUTING) or "{}")
         except (TypeError, ValueError):
@@ -5632,7 +5717,9 @@ def configure_arthaleads_inbound(account_id: int, sources: dict, routes: list[di
                     continue
                 still_configured = any(
                     str(current.get("source") or "") == str(old_route.get("source") or "")
-                    and str(current.get("match") or "").strip() == str(old_route.get("match") or "").strip()
+                    and (str(current.get("matchId") or "").strip() == str(old_route.get("matchId") or "").strip()
+                         if old_route.get("matchId") or current.get("matchId")
+                         else str(current.get("match") or "").strip() == str(old_route.get("match") or "").strip())
                     and int(current.get("agentId") or 0) == int(old_route.get("agentId") or 0)
                     and str(current.get("fromNumber") or "") == str(old_route.get("fromNumber") or "")
                     for current in clean_routes
@@ -5744,7 +5831,8 @@ def get_or_create_instant_campaign(account_id: int, source: str = "", route: dic
 
 def ingest_inbound_lead(
     account_id: int, name: str, phone: str, source: str,
-    external_id: str = "", custom_fields: dict | None = None, allow_call: bool = True,
+    external_id: str = "", custom_fields: dict | None = None, allow_call: bool | None = None,
+    call_agent_id: int | None = None, call_decline_reason: str = "",
 ) -> dict:
     """Entry point for every external lead source (Facebook Lead Ads via
     Zapier or a native Meta webhook, WhatsApp Cloud API, or any other
@@ -5769,18 +5857,33 @@ def ingest_inbound_lead(
         return {"ok": False, "reason": "missing_lead_id"}
     fields = dict(custom_fields or {})
     arthaleads_source = next((category for value in (
-        fields.get("source_detail"), fields.get("lead_source"), fields.get("source"), fields.get("channel")
+        fields.get("lead_source"), fields.get("arthaleads_source"), fields.get("source_detail"), fields.get("channel")
     ) if (category := _arthaleads_source(value))), "") if source == "arthaleads" else ""
     route = None
-    if source == "arthaleads" and allow_call and arthaleads_source:
-        try:
-            routing = json.loads(get_setting(_ARTHALEADS_INBOUND_ROUTING, account_id) or "{}")
-        except (TypeError, ValueError):
-            routing = {}
-        route = _resolve_arthaleads_route(routing, arthaleads_source, fields)
+    call_reason = ""
+    arthaleads_call_requested = allow_call is True
+    if source == "arthaleads" and arthaleads_call_requested and arthaleads_source:
+        if not call_agent_id:
+            call_reason = "agent_missing"
+        else:
+            try:
+                routing = json.loads(get_setting(_ARTHALEADS_INBOUND_ROUTING, account_id) or "{}")
+            except (TypeError, ValueError):
+                routing = {}
+            route, call_reason = _resolve_arthaleads_route_decision(routing, arthaleads_source, fields)
+            if route and not call_reason:
+                call_reason = _arthaleads_call_readiness(account_id, route, phone, call_agent_id)
+                if call_reason:
+                    route = None
+    elif source == "arthaleads":
+        call_reason = call_decline_reason or "not_auto_source"
     if source == "arthaleads":
         fields["channel_source"] = arthaleads_source or "unknown"
-    campaign_id = get_or_create_instant_campaign(account_id, source, route)
+        if call_decline_reason and call_reason:
+            call_reason = call_decline_reason
+    campaign_id = get_or_create_instant_campaign(account_id, source, route) if not call_reason else None
+    if source == "arthaleads" and arthaleads_call_requested and route and campaign_id is None and not call_reason:
+        call_reason = "no_number"
     if campaign_id is None and source != "arthaleads":
         return {"ok": False, "reason": "auto_call_not_ready_or_paused"}
     fields["source"] = source
@@ -5789,6 +5892,7 @@ def ingest_inbound_lead(
     conn = _connect()
     try:
         with conn:
+            event_deduped = False
             if external_id:
                 reserved = conn.execute(
                     "INSERT INTO inbound_lead_events (account_id, source, external_id, campaign_contact_id) "
@@ -5808,6 +5912,7 @@ def ingest_inbound_lead(
                     # This event was already imported without a route. A later
                     # retry must not turn yesterday's deliberately uncalled lead
                     # into a fresh call after an operator changes routing.
+                    event_deduped = True
                     campaign_id = None
             contact_id = None
             deduped = False
@@ -5885,6 +5990,8 @@ def ingest_inbound_lead(
                         if fields.get(key)
                     ),
                     *( [f"channel:{fields['channel_source']}"] if fields.get("channel_source") else [] ),
+                    *(fields.get("tags") if isinstance(fields.get("tags"), list) else str(fields.get("tags") or "").split(",")),
+                    *( ["opted_out"] if fields.get("opt_out") is True else [] ),
                 ])
                 contact_row = conn.execute(
                     f"INSERT INTO contacts (account_id, name, phone, email, custom_fields, status, tags, source) "
@@ -5898,8 +6005,9 @@ def ingest_inbound_lead(
                 ).fetchone()
         queued = bool(campaign_id and contact_id)
         if source == "arthaleads" and not queued:
-            return {"ok": True, "reason": "no_matching_enabled_route", "imported": True,
-                    "contactId": contact_row["id"], "queued": False}
+            return {"ok": True, "imported": True,
+                    "contactId": contact_row["id"], "queued": False,
+                    "deduped": event_deduped, "reason": call_reason or "no_route"}
         return {"ok": True, "campaign_id": campaign_id, "contact_id": contact_id,
                 "contactId": contact_row["id"] if source == "arthaleads" else None,
                 "queued": queued, "deduped": deduped}
@@ -6927,6 +7035,29 @@ def list_integrations(account_id: int) -> list[dict]:
             }
             for r in conn.execute("SELECT * FROM integrations WHERE account_id = ?", (account_id,)).fetchall()
         ]
+    finally:
+        conn.close()
+
+
+def get_integration_config(account_id: int, key: str) -> dict | None:
+    """Read one integration's saved config for a server-side operation.
+
+    Credentials returned here stay inside the API process; do not serialize
+    this result to the dashboard.
+    """
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT status, config_json FROM integrations WHERE key = ? AND account_id = ?",
+            (key, account_id),
+        ).fetchone()
+        if not row or row["status"] != "connected":
+            return None
+        try:
+            config = json.loads(row["config_json"] or "{}")
+        except (TypeError, ValueError):
+            return None
+        return config if isinstance(config, dict) else None
     finally:
         conn.close()
 
