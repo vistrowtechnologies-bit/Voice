@@ -23,7 +23,7 @@ import time
 
 import psycopg
 from psycopg import sql as psycopg_sql
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import dbconn
 import phone_format
@@ -941,6 +941,24 @@ def _appt_slot_conflict(conn, account_id: int, appt_date: str, start_time: str, 
     return False
 
 
+def _availability_now(cfg: dict) -> "datetime.datetime":
+    """Now in the availability config's timezone (IST when unset/invalid)."""
+    try:
+        tz = ZoneInfo(cfg.get("timezone") or "Asia/Kolkata")
+    except (ZoneInfoNotFoundError, ValueError, TypeError):
+        tz = ZoneInfo("Asia/Kolkata")
+    return datetime.datetime.now(tz)
+
+
+def _appointment_in_past(account_id: int, date: str, time: str) -> bool:
+    try:
+        when = datetime.datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        return False  # not a date/time this check can judge; leave it to the insert
+    now = _availability_now(get_availability_config(account_id))
+    return when <= now.replace(tzinfo=None, second=0, microsecond=0)
+
+
 def check_appointment_availability(account_id: int | None, date: str, duration_minutes: int) -> list[str] | None:
     """Open HH:MM slots for `date` against the account's availability config +
     existing confirmed bookings. None only on a genuine DB error, so the tool
@@ -963,7 +981,12 @@ def check_appointment_availability(account_id: int | None, date: str, duration_m
             return []
         slot_minutes = int(cfg.get("slot_minutes", 30))
         open_m, close_m = _hhmm_to_minutes(hours["open"]), _hhmm_to_minutes(hours["close"])
-        now = datetime.datetime.now(ZoneInfo(cfg.get("timezone", "Asia/Kolkata")))
+        now = _availability_now(cfg)
+        # A past date used to return every slot (only today was filtered), and
+        # those slots became "verified" for book_appointment, so a caller could
+        # be booked into yesterday.
+        if datetime.date.fromisoformat(date) < now.date():
+            return []
         is_today = date == now.date().isoformat()
         now_minutes = now.hour * 60 + now.minute
         slots: list[str] = []
@@ -994,6 +1017,10 @@ def book_native_appointment(
     genuine DB error — matches the old _calendar_book contract."""
     if account_id is None:
         return None
+    # Defence in depth behind check_appointment_availability: never insert a
+    # booking for a time that has already passed in the account's timezone.
+    if _appointment_in_past(account_id, date, time):
+        return {"ok": False, "error": "that time has already passed"}
     conn = dbconn.connect()
     try:
         with conn:
@@ -1296,14 +1323,19 @@ def end_call_room(room_name: str) -> None:
     """Releases the concurrent-call slot claimed by try_start_call. Called
     from the shutdown callback, so it must never raise — best-effort, same as
     every other teardown step there."""
-    conn = dbconn.connect()
+    # Catch everything, not just psycopg.Error: connect() can raise PoolTimeout
+    # and returning the connection can raise a pool ValueError, and an escaped
+    # error here leaks the active_calls row, which holds a concurrency slot
+    # until the 4 h stale-row sweep.
     try:
-        with conn:
-            conn.execute("DELETE FROM active_calls WHERE room_name = ?", (room_name,))
-    except psycopg.Error:
-        logger.warning("end_call_room: DB error releasing room %s", room_name, exc_info=True)
-    finally:
-        conn.close()
+        conn = dbconn.connect()
+        try:
+            with conn:
+                conn.execute("DELETE FROM active_calls WHERE room_name = ?", (room_name,))
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001 - teardown must never raise
+        logger.warning("end_call_room: error releasing room %s", room_name, exc_info=True)
 
 
 _NOW = "(to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))"

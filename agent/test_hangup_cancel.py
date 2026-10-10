@@ -50,5 +50,27 @@ class TheToolMarksItsOwnHangup(unittest.TestCase):
         self.assertIn('userdata.get("user_state") != "speaking"', src[i:i + 300])
 
 
+class AgentOwnGoodbye(unittest.TestCase):
+    """The agent's own closing phrase only ends the call when it is the last
+    sentence, and that hang-up is cancellable like end_call's."""
+
+    def test_closing_phrase_mid_reply_does_not_hang_up(self):
+        self.assertFalse(main._agent_reply_closes_call("Our team will take care of the paperwork. What is your budget?"))
+
+    def test_english_goodbye_as_last_sentence_hangs_up(self):
+        self.assertTrue(main._agent_reply_closes_call("Thank you, take care!"))
+
+    def test_hindi_goodbye_as_last_sentence_hangs_up(self):
+        self.assertTrue(main._agent_reply_closes_call("धन्यवाद, फिर मिलते हैं।"))
+
+    def test_empty_reply_does_not_hang_up(self):
+        self.assertFalse(main._agent_reply_closes_call(""))
+
+    def test_the_forced_hangup_is_marked_cancellable(self):
+        src = io.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py"), encoding="utf-8").read()
+        i = src.index("if _agent_reply_closes_call(text):")
+        self.assertIn('userdata["ending_call_from_tool"] = True', src[i:i + 800])
+
+
 if __name__ == "__main__":
     unittest.main()

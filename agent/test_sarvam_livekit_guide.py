@@ -111,7 +111,13 @@ class Interruption(unittest.TestCase):
     def test_aec_warmup_is_disabled_on_telephony(self):
         # A phone line has no acoustic path to cancel; the 3s default is 3s
         # of the call spent warming up something that cannot help.
-        self.assertIn("aec_warmup_duration=None if _is_phone_call else 3.0", SRC)
+        # The value now comes from realtime_config (native audio also skips
+        # warmup); the phone guarantee is checked on the helper itself.
+        import realtime_config
+        self.assertIn("aec_warmup_duration=realtime_config.aec_warmup_duration(\n"
+                      "            realtime=_rt_call, phone=_is_phone_call,", SRC)
+        self.assertIsNone(realtime_config.aec_warmup_duration(realtime=False, phone=True))
+        self.assertEqual(realtime_config.aec_warmup_duration(realtime=False, phone=False), 3.0)
 
 
 class TheAdapterIsGone(unittest.TestCase):

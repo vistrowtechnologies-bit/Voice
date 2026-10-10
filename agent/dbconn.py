@@ -202,7 +202,14 @@ class Conn:
         if self._raw.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
             self._raw.rollback()
         self._raw._vv_last_used = time.monotonic()
-        _get_pool().putconn(self._raw)
+        # Return it to the pool it came from, not whatever pool is current:
+        # connect() swaps in a fresh pool after a PoolTimeout, and psycopg_pool
+        # raises ValueError ("it comes from pool ...") when a connection from
+        # the old pool is handed to the new one — an error that escapes every
+        # handler catching only psycopg.Error. psycopg_pool records the owner
+        # on conn._pool; a closed old pool's putconn just closes the socket.
+        pool = getattr(self._raw, "_pool", None) or _get_pool()
+        pool.putconn(self._raw)
 
 
 def warm() -> None:

@@ -46,6 +46,13 @@ def _kwarg(call: ast.Call, name: str) -> ast.expr:
 
 def _turn_handling_key(name: str) -> ast.expr:
     th = _kwarg(_agent_session_call(), "turn_handling")
+    # main.py now gives a realtime (Gemini Live) call its own minimal options:
+    # `TurnHandlingOptions(turn_detection="realtime_llm") if _rt_call else
+    # TurnHandlingOptions(...)`. These Sarvam values belong to the pipeline
+    # branch, so read that one.
+    if isinstance(th, ast.IfExp):
+        assert ast.unparse(th.test) == "_rt_call", "turn_handling is gated on something other than _rt_call"
+        th = th.orelse
     assert isinstance(th, ast.Call), "turn_handling is no longer TurnHandlingOptions(...)"
     return _kwarg(th, name)
 
