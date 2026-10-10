@@ -5988,6 +5988,37 @@ async def _await_agent_config(config_task: asyncio.Task, agent_id: int | None) -
         return None
 
 
+# Retries for the end-of-call write. A Railway proxy stall at hang-up (the
+# 5 Oct 2026 PoolTimeout incident) used to lose the whole call: no transcript,
+# no recording link, and no billing, since usage is summed from calls rows.
+# Bounded well inside LiveKit's 60 s shutdown window.
+_SAVE_CALL_ATTEMPTS = 3
+_SAVE_CALL_RETRY_DELAY_S = 2.0
+
+
+async def _save_call_with_retry(room_name: str, account_id: int | None, record: dict) -> int | None:
+    """db.save_call with retries that can't double-write: before each retry,
+    look for a row the previous attempt may have committed before failing."""
+    for attempt in range(1, _SAVE_CALL_ATTEMPTS + 1):
+        if attempt > 1:
+            await asyncio.sleep(_SAVE_CALL_RETRY_DELAY_S)
+            try:
+                existing = await asyncio.to_thread(db.find_saved_call, room_name, record["started_at"])
+            except Exception:
+                logger.warning("save_call retry: could not check for an existing row (room=%s)", room_name, exc_info=True)
+                continue
+            if existing is not None:
+                return existing
+        try:
+            return await asyncio.to_thread(db.save_call, record)
+        except Exception:
+            if attempt == _SAVE_CALL_ATTEMPTS:
+                raise
+            logger.warning("save_call attempt %d/%d failed (room=%s, account=%s)",
+                           attempt, _SAVE_CALL_ATTEMPTS, room_name, account_id, exc_info=True)
+    raise RuntimeError(f"call record for {room_name} could not be saved or found")
+
+
 # Upper bound on the post-call enrichment pass. It runs inside LiveKit's
 # shutdown callback, so it must not be able to stall teardown; the durable
 # call row is written before it either way, so exceeding this only costs the
@@ -7862,7 +7893,7 @@ async def entrypoint(ctx: JobContext) -> None:
         # session or access to our private B2 bucket.
         recording_share_token = secrets.token_urlsafe(32)
         try:
-            saved_call_id = await asyncio.to_thread(db.save_call,
+            saved_call_id = await _save_call_with_retry(ctx.room.name, cfg.get("account_id"),
                 {
                     "room_name": ctx.room.name,
                     "visitor_identity": visitor_holder["identity"],
@@ -7909,6 +7940,15 @@ async def entrypoint(ctx: JobContext) -> None:
             logger.info("saved call log for room %s (%d turns)", ctx.room.name, len(transcript))
         except Exception:
             logger.exception("failed to save call log for room %s", ctx.room.name)
+            # No row means no transcript, no recording link and no credits
+            # charged (usage is summed from calls rows). Make the loss visible.
+            await asyncio.to_thread(
+                db.log_platform_error,
+                f"Call record lost after retries: room {ctx.room.name}, "
+                f"{(ended_at - started_at).total_seconds():.0f}s, agent {resolved_agent_id}",
+                account_id=cfg.get("account_id"),
+                context=ctx.room.name,
+            )
 
         # Link the campaign contact to the call it produced, so a campaign's
         # recorded outcome can be checked against the actual call (the

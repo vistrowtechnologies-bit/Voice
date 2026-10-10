@@ -1500,6 +1500,22 @@ def save_call(record: dict) -> int | None:
         conn.close()
 
 
+def find_saved_call(room_name: str, started_at: str) -> int | None:
+    """The id of a call row already written for this room and start time, if
+    any. Used before retrying save_call: an insert can commit and still raise
+    (the connection drops before the reply), and a blind retry would then
+    write the call twice, billing it twice. started_at is stored verbatim."""
+    conn = dbconn.connect()
+    try:
+        row = conn.execute(
+            "SELECT id FROM calls WHERE room_name = ? AND started_at = ? ORDER BY id DESC LIMIT 1",
+            (room_name, started_at),
+        ).fetchone()
+        return row["id"] if row else None
+    finally:
+        conn.close()
+
+
 def set_call_arthaleads_status(call_id: int | None, status: str, error: str | None = None) -> None:
     """Records this specific call's ArthaLeads delivery outcome — separate
     from the integration-level last_sync/last_error, which only reflect the
