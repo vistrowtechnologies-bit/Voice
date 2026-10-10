@@ -152,7 +152,16 @@ def _trial_credits_exhausted(conn, account_id: int) -> bool:
     credits_total = float(total_row["value"]) if total_row else 0.0
     if credits_total <= 0:
         return True
+    # Same window as server/calls_db.usage_period_start: a subscription's
+    # period; else, for a free trial, since the trial started (one-time, never
+    # reset); else (accounts that predate the trial marker) the calendar month.
     period_start = sub["current_period_start"] if sub and sub["current_period_start"] else None
+    if not period_start:
+        trial = conn.execute(
+            "SELECT value FROM settings WHERE account_id = ? AND key = 'trial_started_at'",
+            (account_id,),
+        ).fetchone()
+        period_start = trial["value"] if trial else None
     if not period_start:
         period_start = conn.execute("SELECT date_trunc('month', now())::text AS s").fetchone()["s"]
     rates = {}

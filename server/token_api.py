@@ -2465,6 +2465,7 @@ def admin_set_plan(account_id: int, req: AdminPlanRequest, admin: dict = Depends
     if req.plan not in admin_db.PLAN_PRICING:
         raise HTTPException(400, "Unknown plan")
     admin_db.change_plan(account_id, req.plan)
+    calls_db.end_trial(account_id)
     admin_db.write_audit(admin["user_id"], admin["email"], "change_plan", account_id, detail=f"plan={req.plan}. {req.reason}".strip())
     return admin_db.account_detail(account_id)
 

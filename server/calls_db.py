@@ -1014,6 +1014,14 @@ def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
             "ON CONFLICT (account_id, key) DO NOTHING",
             (account_id, key, value),
         )
+    # A new signup's free allowance is a one-time trial counted from here, not
+    # a monthly grant (see usage_period_start). Accounts created before this
+    # marker existed keep the calendar-month window they've always had.
+    conn.execute(
+        f"INSERT INTO settings (account_id, key, value) VALUES (?, ?, {_NOW}) "
+        "ON CONFLICT (account_id, key) DO NOTHING",
+        (account_id, TRIAL_STARTED_SETTING),
+    )
 
 
 def _ensure_industry_demo_agents(conn: dbconn.Conn) -> None:
@@ -8310,6 +8318,40 @@ def _credits_used_in_period(conn, account_id: int, rates: dict, period_start: st
     return round(used, 1), by_type, by_voice_tier
 
 
+TRIAL_STARTED_SETTING = "trial_started_at"
+
+
+def usage_period_start(conn, account_id: int, sub) -> str:
+    """Start of the window credits and free test minutes are counted over.
+    agent/db.py _trial_credits_exhausted applies the same rule at admission.
+
+    - A subscription row: its current period (an active one renews; a
+      cancelled one stays on its last period, so it doesn't renew either).
+    - No subscription, on a free trial: since the trial started, never reset.
+    - No subscription and no trial marker (accounts that predate the one-time
+      trial, typically onboarded by hand): the calendar month, as before.
+    """
+    if sub and sub["current_period_start"]:
+        return sub["current_period_start"]
+    trial = _get_setting(conn, account_id, TRIAL_STARTED_SETTING)
+    if trial:
+        return trial
+    return conn.execute("SELECT date_trunc('month', now())::text AS s").fetchone()["s"]
+
+
+def end_trial(account_id: int) -> None:
+    """The platform owner set this account's plan or credits by hand: it is a
+    managed account now, so its allowance renews monthly like before."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "DELETE FROM settings WHERE account_id = ? AND key = ?", (account_id, TRIAL_STARTED_SETTING)
+            )
+    finally:
+        conn.close()
+
+
 def billing_summary(account_id: int) -> dict:
     conn = _connect()
     try:
@@ -8324,15 +8366,7 @@ def billing_summary(account_id: int) -> dict:
             "FROM subscriptions WHERE account_id = ?",
             (account_id,),
         ).fetchone()
-        if sub and sub["current_period_start"]:
-            period_start = sub["current_period_start"]
-        else:
-            # No subscription yet (never checked out) — fall back to
-            # calendar-month-to-date so a brand-new/legacy account still
-            # gets a sane rolling window instead of lifetime-cumulative,
-            # which used to make creditsRemaining hit 0 forever after one
-            # month of any usage at all.
-            period_start = conn.execute("SELECT date_trunc('month', now())::text AS s").fetchone()["s"]
+        period_start = usage_period_start(conn, account_id, sub)
 
         used, by_type, by_voice_tier = _credits_used_in_period(conn, account_id, rates, period_start)
 
