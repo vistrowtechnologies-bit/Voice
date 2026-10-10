@@ -163,13 +163,46 @@ class RealtimeGreetingLifecycle(unittest.IsolatedAsyncioTestCase):
     def agent(self, playout):
         session = SimpleNamespace(userdata={}, generate_reply=Mock(
             return_value=SimpleNamespace(wait_for_playout=playout)))
-        return SimpleNamespace(
+        agent = SimpleNamespace(
             session=session, _first_speaker="agent", _is_realtime=True,
             realtime_llm_session=Mock(),
             _welcome_message="Namaste, main Artha bol rahi hoon.",
             _reply_language="hi-IN", _warm_llm_prompt_cache=Mock(),
-            _await_own_audio_track=AsyncMock(),
+            _await_own_audio_track=AsyncMock(), _direction="inbound",
+            _HELD_OPENING_HARD_CAP_S=8.0,
         )
+        agent._speak_realtime_greeting = lambda *a, **k: main.RealEstateAgent._speak_realtime_greeting(
+            agent, *a, **k)
+        agent._release_held_opening_if_unheard = lambda: main.RealEstateAgent._release_held_opening_if_unheard(
+            agent)
+        return agent
+
+    async def test_realtime_outbound_holds_the_greeting_like_the_pipeline(self):
+        # The realtime branch used to greet straight away on outbound, into
+        # ringback. It must now hold, and the held release must greet through
+        # generate_reply (a realtime model cannot say()).
+        agent = self.agent(AsyncMock())
+        agent._direction = "outbound"
+        agent._HELD_OPENING_HARD_CAP_S = 0.05
+        await main.RealEstateAgent.on_enter(agent)
+        agent.session.generate_reply.assert_not_called()
+        self.assertTrue(agent.session.userdata["outbound_opening_pending"])
+        await agent._held_opening_task
+        agent.session.generate_reply.assert_called_once()
+        self.assertIn("just answered", agent.session.generate_reply.call_args.kwargs["instructions"])
+        self.assertTrue(agent.session.userdata["greeting_played"])
+        self.assertNotIn("outbound_opening_pending", agent.session.userdata)
+
+    async def test_realtime_outbound_held_while_ringback_plays(self):
+        agent = self.agent(AsyncMock())
+        agent._direction = "outbound"
+        agent._HELD_OPENING_HARD_CAP_S = 0.05
+        agent._RINGBACK_GIVE_UP_S = 30.0
+        agent.session.userdata["ringback_active"] = True
+        await main.RealEstateAgent.on_enter(agent)
+        await asyncio.sleep(0.2)
+        agent.session.generate_reply.assert_not_called()
+        agent._held_opening_task.cancel()
 
     async def test_greeting_is_pending_until_playout_finishes(self):
         entered, release = asyncio.Event(), asyncio.Event()

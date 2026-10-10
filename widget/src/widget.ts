@@ -945,6 +945,14 @@ function init(): void {
   let callStartedAtMonotonic = 0
   let lastDisplayedCallSecond = 0
   let callCompleted = false
+  // Why the agent ended the call, when it says (agent/main.py stamps the
+  // vistrow.end_reason participant attribute just before deleting the room
+  // on an admission decline). Without it a "lines busy / no credits" refusal
+  // looked exactly like a normal goodbye: "Call ended. Thanks for chatting!"
+  let agentEndReason = ''
+  const END_REASON_MESSAGES: Record<string, string> = {
+    busy: 'All our lines are busy right now. Please try again in a few minutes.',
+  }
 
   // Backs off repeated call attempts instead of letting an impatient
   // visitor hammer "Talk to X" after a failure - every fresh attempt
@@ -1815,6 +1823,7 @@ function init(): void {
     }
     intentionalEnd = false
     callCompleted = false
+    agentEndReason = ''
     if (attempt === 0) {
       // Conversation duration starts only when the agent actually joins.
       // Mic permission, token fetch and queue time are connection latency,
@@ -1945,6 +1954,7 @@ function init(): void {
       })
       room.on(RoomEvent.ParticipantAttributesChanged, (changed: Record<string, string>) => {
         if ('lk.agent.state' in changed) applyAgentState(changed['lk.agent.state'])
+        if (changed['vistrow.end_reason']) agentEndReason = changed['vistrow.end_reason']
       })
       room.on(RoomEvent.TranscriptionReceived, (segments: TranscriptionSegment[], participant?: Participant) => {
         const isLocal = participant?.identity === room?.localParticipant.identity
@@ -1962,6 +1972,11 @@ function init(): void {
         }
         if (intentionalEnd) {
           resetToIdle()
+        } else if (reason === DisconnectReason.ROOM_DELETED && agentEndReason) {
+          // A decline, not a goodbye. callCompleted stops the agent-left
+          // watchdog above from reporting it a second time.
+          callCompleted = true
+          failCall(END_REASON_MESSAGES[agentEndReason] || "We couldn't connect your call. Please try again later.")
         } else if (reason === DisconnectReason.ROOM_DELETED) {
           endCallGracefully('Call ended. Thanks for chatting!')
         } else {
