@@ -10,6 +10,35 @@ import realtime_config as config
 from turn_latency import TurnLatencyMeter
 
 
+def test_native_endpointing_models_are_independent(monkeypatch):
+    for key in ("REALTIME_SILENCE_MS", "REALTIME_25_SILENCE_MS", "REALTIME_31_SILENCE_MS"):
+        monkeypatch.delenv(key, raising=False)
+    assert config.activity_detection(config.DEFAULT_MODEL).automatic_activity_detection.silence_duration_ms == 500
+    assert config.activity_detection(config.MODEL_31).automatic_activity_detection.silence_duration_ms == 700
+    monkeypatch.setenv("REALTIME_25_SILENCE_MS", "600")
+    assert config.activity_detection(config.DEFAULT_MODEL).automatic_activity_detection.silence_duration_ms == 600
+    assert config.activity_detection(config.MODEL_31).automatic_activity_detection.silence_duration_ms == 700
+    for model in config.API_MODELS:
+        aad = config.activity_detection(model).automatic_activity_detection
+        assert aad.end_of_speech_sensitivity.value == "END_SENSITIVITY_LOW"
+        assert not aad.disabled
+
+
+def test_existing_shared_override_is_preserved(monkeypatch):
+    monkeypatch.setenv("REALTIME_SILENCE_MS", "800")
+    monkeypatch.delenv("REALTIME_25_SILENCE_MS", raising=False)
+    monkeypatch.setenv("REALTIME_31_SILENCE_MS", "900")
+    assert config.activity_detection(config.DEFAULT_MODEL).automatic_activity_detection.silence_duration_ms == 800
+    assert config.activity_detection(config.MODEL_31).automatic_activity_detection.silence_duration_ms == 900
+
+
+@pytest.mark.parametrize("value", ["garbage", "0", "199", "2001"])
+def test_invalid_native_window_rejected(monkeypatch, value):
+    monkeypatch.setenv("REALTIME_25_SILENCE_MS", value)
+    with pytest.raises(ValueError, match="200 and 2000"):
+        config.activity_detection(config.DEFAULT_MODEL)
+
+
 @pytest.mark.parametrize("model", sorted(config.API_MODELS))
 def test_native_thinking_profiles_do_not_mix_parameters(model):
     options = config.thinking_config(model)
