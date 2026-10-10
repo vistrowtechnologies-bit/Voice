@@ -11,33 +11,47 @@ import arthaAvatar from '../assets/artha-avatar.webp'
  * data, not live product numbers. */
 export function HowItWorksStory({ steps }: { steps: FeatureRow[] }) {
   const ref = useRef<HTMLDivElement>(null)
-  // 0 when the block pins (its top reaches 7rem from the top), 1 when the extra scroll runs out
-  const progress = useScrollProgress(ref, (r, vh) => (112 - r.top) / Math.max(1, r.height - (vh - 112)))
-  const active = Math.min(steps.length - 1, Math.floor(progress * steps.length))
+  const blockRef = useRef<HTMLDivElement>(null)
+  // The block pins centred on screen. 0 when it pins, 1 when the pinned stretch runs out.
+  const progress = useScrollProgress(ref, (r, vh) => {
+    const bh = blockRef.current?.offsetHeight ?? 0
+    return (pinTop(vh) - r.top) / Math.max(1, r.height - bh)
+  })
+  // The line between two steps fills while moving from one to the next; a step lights up the
+  // moment the line reaches it (n steps, n - 1 segments).
+  const n = steps.length
+  const t = progress * n - 0.5
+  const segmentFill = (i: number) => Math.min(1, Math.max(0, t - i))
+  const active = Math.min(n - 1, Math.max(0, Math.floor(t)))
 
   // Clicking a step scrolls to the middle of its stretch of the pinned scroll.
   const goTo = (i: number) => {
     const el = ref.current
     if (!el || !window.matchMedia('(min-width: 1024px)').matches) return
     const r = el.getBoundingClientRect()
-    const travel = r.height - (window.innerHeight - 112)
-    const top = window.scrollY + r.top - 112 + travel * ((i + 0.5) / steps.length)
+    const bh = blockRef.current?.offsetHeight ?? 0
+    const travel = r.height - bh
+    const top = window.scrollY + r.top - pinTop(window.innerHeight) + travel * ((i + 0.75) / steps.length)
     window.scrollTo({ top, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
   }
 
   return (
-    <div ref={ref} className="relative lg:h-[200vh]">
-      <div className="grid items-center gap-10 lg:sticky lg:top-28 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16">
+    <div ref={ref} className="relative lg:h-[160vh]">
+      <div ref={blockRef} className="grid items-center gap-10 lg:sticky lg:top-[max(7rem,calc(50vh-15rem))] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16">
         <div className="hidden lg:block">
           <StoryScreen active={active} />
         </div>
         <ol className="relative">
-          <span aria-hidden="true" className="absolute bottom-5 left-[19px] top-5 w-px bg-border" />
-          <span aria-hidden="true" className="absolute left-[19px] top-5 w-px bg-brass transition-[height] duration-150" style={{ height: `calc(${progress} * (100% - 2.5rem))` }} />
           {steps.map((step, i) => {
             const state = i === active ? 'active' : i < active ? 'done' : 'next'
             return (
               <li key={step.title} onClick={() => goTo(i)} className="group relative flex gap-6 pb-12 last:pb-0 lg:cursor-pointer lg:pb-10">
+                {/* the connector to the next step: grey track, brass fill */}
+                {i < n - 1 && (
+                  <span aria-hidden="true" className="absolute bottom-0 left-[19px] top-10 w-px bg-border">
+                    <span className="absolute inset-x-0 top-0 bg-brass" style={{ height: `${segmentFill(i) * 100}%` }} />
+                  </span>
+                )}
                 {/* The circle stays opaque so the line runs behind it; only the text dims. */}
                 <button
                   type="button"
@@ -65,6 +79,11 @@ export function HowItWorksStory({ steps }: { steps: FeatureRow[] }) {
       </div>
     </div>
   )
+}
+
+/** Top of the pinned block, matching its lg:top-[max(7rem,calc(50vh-15rem))] class. */
+function pinTop(vh: number) {
+  return Math.max(112, vh / 2 - 240)
 }
 
 /** The pinned screen. `only` renders just one panel (phones); otherwise all three crossfade. */
