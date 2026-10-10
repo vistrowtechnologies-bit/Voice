@@ -71,6 +71,7 @@ export function Compliance() {
   const [dnc, setDnc] = useState<DncEntry[]>([])
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [dncPhone, setDncPhone] = useState('')
   const [dncReason, setDncReason] = useState('')
   const [bulkText, setBulkText] = useState('')
@@ -96,11 +97,14 @@ export function Compliance() {
   const save = async () => {
     if (!cfg) return
     setSaving(true)
+    setSaveError(null)
     try {
       const updated = await updateCompliance(cfg)
       setCfg(updated)
       setSavedAt(true)
       setTimeout(() => setSavedAt(false), 2000)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not save the calling rules.')
     } finally {
       setSaving(false)
     }
@@ -144,6 +148,7 @@ export function Compliance() {
             {savedAt ? 'Saved' : saving ? 'Saving…' : 'Save rules'}
           </button>
         )}
+        {saveError && <span className="text-sm text-destructive">{saveError}</span>}
       </PageHeader>
 
       <section className="grid max-w-5xl gap-4 p-4 sm:p-6 lg:grid-cols-2">

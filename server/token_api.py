@@ -3408,8 +3408,28 @@ def list_help_faqs(user: dict = Depends(current_user)) -> list[dict]:
     return FAQS
 
 
+# Each help-chat message is up to two paid OpenAI completions, and any signed-in
+# user could loop it. Per-user caps, in memory like the other limiters here.
+_HELP_CHAT_LIMITS = ((60, 12), (24 * 3600, 200))  # (window seconds, max messages)
+_help_chat_calls: dict[int, list[float]] = {}
+
+
+def _help_chat_rate_limited(user_id: int, now: float | None = None) -> bool:
+    now = time.monotonic() if now is None else now
+    longest = max(window for window, _ in _HELP_CHAT_LIMITS)
+    calls = [t for t in _help_chat_calls.get(user_id, []) if now - t < longest]
+    if any(sum(1 for t in calls if now - t < window) >= cap for window, cap in _HELP_CHAT_LIMITS):
+        _help_chat_calls[user_id] = calls
+        return True
+    calls.append(now)
+    _help_chat_calls[user_id] = calls
+    return False
+
+
 @app.post("/help/chat")
 def help_chat_message(req: HelpChatRequest, user: dict = Depends(current_user)) -> dict:
+    if _help_chat_rate_limited(user["user_id"]):
+        raise HTTPException(429, "You've sent a lot of help messages — please wait a little, or open a support ticket.")
     try:
         preferences = calls_db.get_user_preferences(user["user_id"])
         result = help_chat.answer_help_question(
@@ -3425,7 +3445,9 @@ def help_chat_message(req: HelpChatRequest, user: dict = Depends(current_user)) 
 
 
 @app.post("/help/tickets")
-def create_help_ticket(req: HelpTicketRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+def create_help_ticket(
+    req: HelpTicketRequest, request: Request, background_tasks: BackgroundTasks, user: dict = Depends(current_user)
+) -> dict:
     user = _ticket_author(user)
     subject = req.subject.strip()[:160]
     detail = req.detail.strip()[:5_000]
@@ -3489,7 +3511,9 @@ def create_help_ticket(req: HelpTicketRequest, request: Request, user: dict = De
     )
     if sent:
         calls_db.mark_support_ticket_emailed(ticket_id, user["account_id"])
-    _email_ticket_confirmation(_app_base_url(request), user, ticket_id, subject, detail)
+    # The customer's receipt doesn't need to hold the request open: two
+    # sequential sends with 10 s timeouts made a slow provider a ~20 s submit.
+    background_tasks.add_task(_email_ticket_confirmation, _app_base_url(request), user, ticket_id, subject, detail)
     return {"ok": True, "ticketId": f"VV-{ticket_id}", "id": ticket_id, "emailSent": sent}
 
 
@@ -4010,7 +4034,10 @@ def get_compliance_settings(user: dict = Depends(current_user)) -> dict:
 
 @app.patch("/compliance/settings")
 def update_compliance_settings(data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
-    return calls_db.save_compliance(user["account_id"], data)
+    try:
+        return calls_db.save_compliance(user["account_id"], data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/compliance/dnc")

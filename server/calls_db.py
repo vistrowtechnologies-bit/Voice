@@ -4256,9 +4256,17 @@ def create_contact(data: dict, account_id: int) -> None:
                 INSERT INTO contacts (account_id, name, phone, email, company, custom_fields, status, tags, source)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(account_id, phone) DO UPDATE SET
-                    name = excluded.name, email = excluded.email, company = excluded.company,
-                    custom_fields = excluded.custom_fields,
-                    status = excluded.status, tags = excluded.tags,
+                    -- Re-adding or re-importing a known number fills in what the
+                    -- new row actually has and keeps the rest. It used to
+                    -- overwrite every field, so a CSV re-import blanked emails
+                    -- and tags and reset qualified/site_visit contacts to 'new'.
+                    name = COALESCE(NULLIF(NULLIF(excluded.name, ''), 'Unknown'), contacts.name),
+                    email = COALESCE(NULLIF(excluded.email, ''), contacts.email),
+                    company = COALESCE(NULLIF(excluded.company, ''), contacts.company),
+                    custom_fields = CASE WHEN excluded.custom_fields IN ('', '{{}}')
+                        THEN contacts.custom_fields ELSE excluded.custom_fields END,
+                    status = CASE WHEN ? THEN excluded.status ELSE contacts.status END,
+                    tags = COALESCE(NULLIF(excluded.tags, ''), contacts.tags),
                     deleted_at = NULL,
                     updated_at = {_NOW}
                 """,
@@ -4272,6 +4280,7 @@ def create_contact(data: dict, account_id: int) -> None:
                     data.get("status", "new"),
                     _clean_tags(data.get("tags")),
                     data.get("source", "manual"),
+                    bool(data.get("status")),
                 ),
             )
     finally:
@@ -9505,11 +9514,39 @@ def get_compliance(account_id: int) -> dict:
     return cfg
 
 
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def _compliance_error(cfg: dict) -> str | None:
+    """Why these calling rules can't be saved, or None. Nothing validated
+    them before, and within_calling_window treated an unparseable window as
+    "always allowed", so a typo silently turned the calling window off."""
+    for key in ("window_start", "window_end"):
+        if not _HHMM.match(str(cfg.get(key) or "")):
+            return f"{key.replace('_', ' ').capitalize()} must be a 24-hour time like 09:00."
+    try:
+        ZoneInfo(str(cfg.get("timezone") or ""))
+    except (ZoneInfoNotFoundError, ValueError):
+        return "Choose a valid timezone, for example Asia/Kolkata."
+    days = cfg.get("active_days")
+    if not isinstance(days, list) or any(d not in _DAY_ABBR for d in days):
+        return "Active days must be day names like Mon, Tue."
+    try:
+        if int(cfg.get("retention_days") or 0) < 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return "Retention must be 0 or a positive number of days."
+    return None
+
+
 def save_compliance(account_id: int, data: dict) -> dict:
     cfg = get_compliance(account_id)
     for k in _COMPLIANCE_DEFAULTS:
         if k in data:
             cfg[k] = data[k]
+    error = _compliance_error(cfg)
+    if error:
+        raise ValueError(error)
     set_setting(_COMPLIANCE_KEY, json.dumps(cfg), account_id)
     return cfg
 
@@ -9540,11 +9577,14 @@ def within_calling_window(account_id: int, at: datetime.datetime | None = None) 
     active = cfg.get("active_days") or _COMPLIANCE_DEFAULTS["active_days"]
     if day not in active:
         return False, f"Outside allowed calling days ({', '.join(active)}) — today is {day}."
-    try:
-        sh, sm = (int(x) for x in str(cfg.get("window_start", "09:00")).split(":"))
-        eh, em = (int(x) for x in str(cfg.get("window_end", "21:00")).split(":"))
-    except (ValueError, TypeError):
-        return True, ""
+    # A stored value that isn't HH:MM (saved before validation existed) falls
+    # back to the default window. It used to return "allowed" - calling at
+    # any hour - and "25:00" crashed the check outright.
+    start_s, end_s = str(cfg.get("window_start") or ""), str(cfg.get("window_end") or "")
+    if not (_HHMM.match(start_s) and _HHMM.match(end_s)):
+        start_s, end_s = _COMPLIANCE_DEFAULTS["window_start"], _COMPLIANCE_DEFAULTS["window_end"]
+    sh, sm = (int(x) for x in start_s.split(":"))
+    eh, em = (int(x) for x in end_s.split(":"))
     start = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
     end = now.replace(hour=eh, minute=em, second=0, microsecond=0)
     if start <= now <= end:
