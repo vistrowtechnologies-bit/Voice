@@ -22,6 +22,7 @@ import urllib.parse
 import urllib.request
 
 import calls_db
+import google_sheets
 
 logger = logging.getLogger("vistrow-integrations")
 
@@ -318,6 +319,17 @@ def _deliver_one(key: str, config: dict, lead: dict, account_id: int | None = No
         return False, "CRM delivery requires the Growth or Scale plan"
     if key == "zoho_crm":
         return _deliver_zoho_crm(account_id, config, lead)
+    if key == "sheets" and config.get("mode") == "oauth":
+        # "Sign in with Google" sheets: an authenticated Sheets API append,
+        # not a POST to an Apps Script URL (configs without mode=oauth still
+        # take the URL path below, unchanged).
+        return google_sheets.append_lead(
+            config,
+            lead,
+            os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_ID"),
+            os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_SECRET"),
+            lambda updated: calls_db.update_integration("sheets", "connected", updated, account_id),
+        )
     body = _body_for(key, config, lead)
     if body is None:
         return False, "not configured"
@@ -378,6 +390,9 @@ def test_integration(account_id: int, key: str) -> tuple[bool, str]:
         "language": "en",
         "agent_name": "Test Agent",
     }
+    if key == "sheets" and (integ.get("config") or {}).get("mode") == "oauth":
+        # A real row lands in the owner's sheet, so make it obviously deletable.
+        sample = {**sample, "name": google_sheets.TEST_ROW_NAME, "channel": "Dashboard test"}
     ok, detail = _deliver_one(key, integ.get("config") or {}, sample, account_id)
     try:
         if ok:

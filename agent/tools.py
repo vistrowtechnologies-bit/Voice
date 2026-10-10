@@ -823,6 +823,203 @@ async def _deliver_zoho_crm_lead(http: aiohttp.ClientSession, account_id: int | 
     return ok
 
 
+# ---------------------------------------------------------------------------
+# Google Sheets over OAuth ("Sign in with Google"). Async twin of
+# server/google_sheets.py - keep the row shape and the owner-facing error
+# wording identical (separate deployables, no shared module). Rows go in via
+# batchUpdate appendCells addressed by the tab's numeric sheetId, so a
+# renamed tab still works, and text cells are stringValues Sheets never
+# parses as formulas; see server/google_sheets.py's docstring for the full
+# reasoning.
+_SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets"
+_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+_SHEETS_ERR_ACCESS_REMOVED = "Google access was removed. Sign in with Google again."
+_SHEETS_ERR_SHEET_DELETED = "The leads sheet was deleted. Reconnect to create a new one."
+_SHEETS_ERR_NO_PERMISSION = "Vistrow Voice can no longer edit the leads sheet. Sign in with Google again."
+_SHEETS_ERR_API_DISABLED = "Google Sheets is turned off for Vistrow Voice's Google project. Please contact support."
+_SHEETS_ERR_BUSY = "Google Sheets is busy right now. The next lead will try again."
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _sheets_safe_text(value: object) -> str:
+    """A leading = + - @ gets an apostrophe, so the text can't run as a
+    formula even after the owner exports the sheet to CSV and opens it in
+    Excel (Sheets itself never parses a stringValue)."""
+    text = str(value if value is not None else "").strip()
+    return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+
+
+def _sheets_safe_phone(value: object) -> str:
+    # A real phone number keeps its leading + (the Phone column is plain-text
+    # formatted); anything that isn't digits/spaces/()- is treated as text.
+    text = str(value or "").strip()
+    if text and all(ch.isdigit() or ch in "+ -()" for ch in text) and "+" not in text[1:]:
+        return text
+    return _sheets_safe_text(text)
+
+
+def _sheets_details(lead: dict) -> str:
+    """_zoho_description without the meta lines (agent, length, language,
+    page, recording) - the sheet has its own columns for those."""
+    lines = []
+    for key, value in (lead.get("extracted_data") or {}).items():
+        if value not in (None, "", [], {}):
+            lines.append(f"{str(key).replace('_', ' ').capitalize()}: {value}")
+    if lead.get("use_case") or lead.get("message"):
+        lines.append(str(lead.get("use_case") or lead.get("message")))
+    return "\n".join(lines)[:45000]  # Sheets caps a cell at 50,000 characters
+
+
+def _sheets_row_cells(lead: dict, now: datetime | None = None) -> list[dict]:
+    extracted = lead.get("extracted_data") or {}
+    # Sheets' date serial (days since 1899-12-30) of the IST wall-clock time:
+    # a real date-time cell whatever timezone the spreadsheet is set to.
+    local = (now or datetime.now(timezone.utc)).astimezone(_IST).replace(tzinfo=None)
+    serial = (local - datetime(1899, 12, 30)).total_seconds() / 86400
+
+    def text(value: object) -> dict:
+        return {"userEnteredValue": {"stringValue": _sheets_safe_text(value)}}
+
+    def number(value: object) -> dict:
+        try:
+            return {"userEnteredValue": {"numberValue": round(float(value))}}
+        except (TypeError, ValueError):
+            return text("")
+
+    duration, call_id = lead.get("duration_seconds"), lead.get("call_id")
+    return [
+        {"userEnteredValue": {"numberValue": serial}},
+        text(lead.get("name") or ""),
+        {"userEnteredValue": {"stringValue": _sheets_safe_phone(lead.get("phone"))}},
+        text(lead.get("email") or ""),
+        text(lead.get("company") or extracted.get("company") or ""),
+        text(_CHANNEL_LABELS.get(lead.get("channel"), lead.get("channel") or "")),
+        text(lead.get("agent_name") or ""),
+        text(lead.get("language") or ""),
+        number(duration) if duration not in (None, "") else text(""),
+        text(_sheets_details(lead)),
+        text(lead.get("page_path") or ""),
+        text(lead.get("recording_url") or ""),
+        number(call_id) if call_id not in (None, "") else text(""),
+    ]
+
+
+def _sheets_append_body(sheet_id: int, lead: dict, now: datetime | None = None) -> dict:
+    return {"requests": [{"appendCells": {
+        "sheetId": sheet_id,
+        "rows": [{"values": _sheets_row_cells(lead, now)}],
+        "fields": "userEnteredValue",
+    }}]}
+
+
+def _sheets_error_message(status: int | None, body: str) -> str:
+    lowered = (body or "").lower()
+    if status == 401 or (status == 400 and "invalid_grant" in lowered):
+        return _SHEETS_ERR_ACCESS_REMOVED
+    if status == 404:
+        return _SHEETS_ERR_SHEET_DELETED
+    if status == 403:
+        if "service_disabled" in lowered or "has not been used" in lowered or "is disabled" in lowered:
+            return _SHEETS_ERR_API_DISABLED
+        return _SHEETS_ERR_NO_PERMISSION
+    if status == 400 and "grid" in lowered:
+        return _SHEETS_ERR_SHEET_DELETED  # the tab itself was deleted
+    if status == 429 or (status or 0) >= 500:
+        return _SHEETS_ERR_BUSY
+    return f"Google Sheets error (HTTP {status})" if status else "Could not reach Google Sheets"
+
+
+async def _sheets_post(http: aiohttp.ClientSession, url: str, **kwargs) -> tuple[int | None, str, dict]:
+    """POST with one retry on 429/5xx after a short backoff. This runs after
+    the call row is saved (log_call's delivery task), never on the live
+    audio path, and each attempt is bounded by the session's 5 s timeout."""
+    for attempt in range(2):
+        try:
+            async with http.post(url, **kwargs) as resp:
+                text = await resp.text()
+                status = resp.status
+        except Exception:
+            logger.warning("sheets: request to Google failed", exc_info=True)
+            return None, "", {}
+        if attempt == 0 and (status == 429 or status >= 500):
+            await asyncio.sleep(1.0)
+            continue
+        try:
+            data = json.loads(text) if text else {}
+        except ValueError:
+            data = {}
+        return status, text, data if isinstance(data, dict) else {}
+    return None, "", {}  # pragma: no cover
+
+
+async def _sheets_refresh_access_token(http: aiohttp.ClientSession, config: dict) -> tuple[dict | None, bool]:
+    """(updated_config, revoked). revoked=True means Google answered
+    invalid_grant: the tenant removed our access or changed their password."""
+    client_id = os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_SECRET")
+    if not client_id or not client_secret or not config.get("refresh_token"):
+        return None, False
+    status, text, data = await _sheets_post(http, _GOOGLE_TOKEN_URL, data={
+        "refresh_token": config["refresh_token"],
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "refresh_token",
+    })
+    if status == 400 and "invalid_grant" in text:
+        return None, True
+    if status is None or not (200 <= status < 300) or not data.get("access_token"):
+        logger.warning("sheets: token refresh failed: HTTP %s", status)
+        return None, False
+    return {**config, "access_token": data["access_token"],
+            "expires_at": time.time() + float(data.get("expires_in") or 3600)}, False
+
+
+async def _deliver_google_sheet_row(
+    http: aiohttp.ClientSession, account_id: int | None, config: dict, lead: dict
+) -> tuple[bool, str]:
+    """Append one row; (ok, owner-facing detail for last_error)."""
+    if config.get("needs_reconnect"):
+        # invalid_grant already said the grant is gone; asking Google again
+        # on every call won't bring it back. The next Sign in clears this.
+        return False, _SHEETS_ERR_ACCESS_REMOVED
+    if not config.get("refresh_token") or not config.get("spreadsheet_id") or config.get("sheet_id") is None:
+        logger.warning("sheets: oauth config missing fields, keys=%s", sorted(config.keys()))
+        return False, "not configured"
+
+    async def _refresh(cfg: dict) -> tuple[dict | None, bool]:
+        updated, revoked = await _sheets_refresh_access_token(http, cfg)
+        if revoked:
+            await asyncio.to_thread(db.update_integration_config, account_id, "sheets", {**cfg, "needs_reconnect": True})
+        elif updated:
+            await asyncio.to_thread(db.update_integration_config, account_id, "sheets", updated)
+        return updated, revoked
+
+    if time.time() >= float(config.get("expires_at") or 0) - 60:
+        updated, revoked = await _refresh(config)
+        if revoked:
+            return False, _SHEETS_ERR_ACCESS_REMOVED
+        if updated:
+            config = updated
+
+    url = f"{_SHEETS_API}/{config['spreadsheet_id']}:batchUpdate"
+    body = _sheets_append_body(int(config["sheet_id"]), lead)
+
+    async def _append(token: str) -> tuple[int | None, str]:
+        status, text, _ = await _sheets_post(http, url, json=body, headers={"Authorization": f"Bearer {token}"})
+        return status, text
+
+    status, text = await _append(config.get("access_token") or "")
+    if status == 401:
+        # Expired sooner than our bookkeeping expected - one forced refresh.
+        updated, _ = await _refresh(config)
+        if not updated:
+            return False, _SHEETS_ERR_ACCESS_REMOVED
+        status, text = await _append(updated["access_token"])
+    if status is not None and 200 <= status < 300:
+        return True, "Row added"
+    return False, _sheets_error_message(status, text)
+
+
 async def _deliver_to_integrations(
     account_id: int | None,
     lead: dict,
@@ -896,6 +1093,25 @@ async def _deliver_to_integrations(
                         await asyncio.to_thread(
                             db.mark_integration_error, account_id, "zoho_crm", "Delivery failed — check connection"
                         )
+                    continue
+                if integ["key"] == "sheets" and (integ.get("config") or {}).get("mode") == "oauth":
+                    # "Sign in with Google" sheet: one row per reachable
+                    # caller, same rule as Zoho. Apps Script URL configs (no
+                    # mode) fall through to the generic POST below unchanged.
+                    if not _zoho_should_send(lead):
+                        logger.info("sheets: skipped %s event (one row per reachable caller)", lead.get("type"))
+                        continue
+                    try:
+                        ok, detail = await _deliver_google_sheet_row(http, account_id, integ.get("config") or {}, lead)
+                    except Exception:
+                        logger.warning("sheets delivery failed", exc_info=True)
+                        ok, detail = False, "Network error — delivery failed"
+                    if ok:
+                        logger.info("delivered lead to sheets integration")
+                        await asyncio.to_thread(db.touch_integration_sync, account_id, "sheets")
+                    else:
+                        logger.warning("sheets delivery failed: %s", detail)
+                        await asyncio.to_thread(db.mark_integration_error, account_id, "sheets", detail)
                     continue
                 shaped = _integration_body(integ["key"], integ.get("config") or {}, lead)
                 if shaped is None:
