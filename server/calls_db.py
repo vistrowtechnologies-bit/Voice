@@ -3533,7 +3533,12 @@ def analytics(account_id: int) -> dict:
 _AGENT_FIELDS = (
     "name", "description", "model", "voice", "stt_provider", "language", "status",
     "system_prompt", "kb_id", "tone", "is_platform_demo",
-    "first_speaker", "welcome_message", "interruption_sensitivity",
+    # welcome_message_outbound and noise_cancellation were mapped in
+    # _AGENT_CAMEL_TO_SNAKE but missing here, so update_agent silently dropped
+    # them: every outbound call used the inbound opener and the noise toggle
+    # never saved, though agent/main.py reads both.
+    "first_speaker", "welcome_message", "welcome_message_outbound", "noise_cancellation",
+    "interruption_sensitivity",
     "silence_reminder_ms", "silence_reminder_max", "end_call_on_silence_ms",
     "max_call_duration_s", "enabled_functions", "transfer_phone",
     "custom_functions", "post_call_fields", "webhook_url", "memory_enabled",

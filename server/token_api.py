@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -8,6 +9,7 @@ import os
 import re
 import secrets
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -4351,6 +4353,29 @@ def _verify_enablex_webhook(request: Request) -> bool:
 
 
 _ENABLEX_BRIDGED_VOICE_IDS: set = set()
+# The inbound handler runs in the threadpool (see enablex_inbound_event), so
+# the check-and-add on the set above must be atomic across threads.
+_ENABLEX_BRIDGE_LOCK = threading.Lock()
+
+
+def _claim_enablex_bridge(voice_id: str) -> bool:
+    """True if this call leg has not been bridged yet (and marks it). EnableX
+    can send 'incomingcall' more than once and also 'connected' for the same
+    leg; only the first may accept and bridge, or the leg is double-bridged."""
+    with _ENABLEX_BRIDGE_LOCK:
+        if voice_id in _ENABLEX_BRIDGED_VOICE_IDS:
+            return False
+        if len(_ENABLEX_BRIDGED_VOICE_IDS) > 500:
+            _ENABLEX_BRIDGED_VOICE_IDS.clear()
+        _ENABLEX_BRIDGED_VOICE_IDS.add(voice_id)
+        return True
+
+
+def _release_enablex_bridge(voice_id: str) -> None:
+    """After a failed accept/bridge, so a later 'connected' can still rescue
+    the call instead of being ignored as a duplicate."""
+    with _ENABLEX_BRIDGE_LOCK:
+        _ENABLEX_BRIDGED_VOICE_IDS.discard(voice_id)
 
 
 @app.post("/telephony/enablex/inbound-event")
@@ -4403,7 +4428,15 @@ async def enablex_inbound_event(request: Request, background_tasks: BackgroundTa
             "EnableX inbound event: unparsed body (content-type=%s): %r", content_type, raw_body[:2000]
         )
         return {"ok": True}
+    # Everything below does blocking psycopg reads and EnableX REST calls
+    # (urllib with sleep-based retries, up to ~45 s each). On this async
+    # route they ran on the event loop of the single uvicorn process, so one
+    # slow inbound call stalled every other request: widget tokens, the
+    # dashboard, other webhooks. Run them in the threadpool instead.
+    return await asyncio.to_thread(_handle_enablex_inbound_event, event, background_tasks)
 
+
+def _handle_enablex_inbound_event(event: dict, background_tasks: BackgroundTasks) -> dict:
     state = event.get("state")
     voice_id = event.get("voice_id")
     dialed_number = event.get("to")
@@ -4455,27 +4488,22 @@ async def enablex_inbound_event(request: Request, background_tasks: BackgroundTa
     # sending only initiated/connected (no 'incomingcall') — nobody then
     # bridges it and it drops after ~25 s. A connected event whose `to` is
     # one of our DIDs is an inbound leg, so bridge it once per voice_id.
-    is_inbound_connected = (
-        state == "connected"
-        and voice_id
-        and dialed_number
-        and voice_id not in _ENABLEX_BRIDGED_VOICE_IDS
-        and calls_db.get_phone_number_by_number(dialed_number) is not None
-    )
-    if is_inbound_connected:
-        _ENABLEX_BRIDGED_VOICE_IDS.add(voice_id)
-        if len(_ENABLEX_BRIDGED_VOICE_IDS) > 500:
-            _ENABLEX_BRIDGED_VOICE_IDS.clear()
-        logger.warning("EnableX inbound %s: 'connected' with no 'incomingcall' — bridging as a fallback", voice_id)
-    elif state != "incomingcall" or not voice_id or not dialed_number:
+    if state not in ("incomingcall", "connected") or not voice_id or not dialed_number:
         return {"ok": True}
-    else:
-        _ENABLEX_BRIDGED_VOICE_IDS.add(voice_id)
-
     number_row = calls_db.get_phone_number_by_number(dialed_number)
+    is_inbound_connected = state == "connected"
     if number_row is None:
+        if is_inbound_connected:
+            # A connected event whose `to` isn't one of our DIDs is not an
+            # inbound leg (e.g. the far end of an outbound call).
+            return {"ok": True}
         logger.warning("inbound call to unregistered number %s — hanging up", dialed_number)
         return {"ok": False, "error": "number not registered"}
+    if not _claim_enablex_bridge(voice_id):
+        logger.info("EnableX inbound %s: '%s' for a leg already being bridged; ignoring", voice_id, state)
+        return {"ok": True}
+    if is_inbound_connected:
+        logger.warning("EnableX inbound %s: 'connected' with no 'incomingcall' — bridging as a fallback", voice_id)
     account_id = number_row["accountId"]
 
     accept = enablex_inbound.accept_if_ringing(
@@ -4487,6 +4515,7 @@ async def enablex_inbound_event(request: Request, background_tasks: BackgroundTa
     if accept is not None:
         if not accept.get("ok"):
             logger.error("failed to accept EnableX call %s: %s", voice_id, accept.get("error"))
+            _release_enablex_bridge(voice_id)
             return accept
         logger.info("accepted EnableX call %s: %s", voice_id, accept.get("response"))
 
@@ -4497,6 +4526,7 @@ async def enablex_inbound_event(request: Request, background_tasks: BackgroundTa
     bridge = calls_db.enablex_connect_to_sip(voice_id, dialed_number, sip_uri, account_id)
     if not bridge.get("ok"):
         logger.error("failed to bridge EnableX call %s to %s: %s", voice_id, sip_uri, bridge.get("error"))
+        _release_enablex_bridge(voice_id)
     else:
         # EnableX returning ok=True here only means it accepted the connect
         # *request* — it says nothing about whether the SIP INVITE it then
