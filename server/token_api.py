@@ -2010,7 +2010,10 @@ def profile_privacy_requests(user: dict = Depends(current_user)) -> dict:
 
 
 @app.post("/profile/request-account-deletion")
-def request_account_deletion(req: AccountDeletionRequest, user: dict = Depends(current_user)) -> dict:
+def request_account_deletion(
+    req: AccountDeletionRequest, request: Request, background_tasks: BackgroundTasks,
+    user: dict = Depends(current_user),
+) -> dict:
     profile = calls_db.get_user_by_id(user["user_id"])
     if profile is None:
         raise HTTPException(404, "Account not found")
@@ -2025,7 +2028,35 @@ def request_account_deletion(req: AccountDeletionRequest, user: dict = Depends(c
         email_sender.send_email(profile["email"], "Vistrow Voice account deletion request", html, email_sender.FROM_ACCOUNT_SECURITY)
     calls_db.record_security_event(user["user_id"], "account_deletion_requested")
     request_row = calls_db.create_privacy_request(user["user_id"], user["account_id"], "deletion")
+    # The customer is promised a review within 2 business days, but only they
+    # were emailed: the team learned of a request only by opening the admin
+    # page. Tell the support inbox too.
+    background_tasks.add_task(
+        _email_deletion_request_alert, _app_base_url(request), request_row["id"],
+        user["account_id"], profile["email"],
+    )
     return {"ok": True, "requestId": request_row["id"], "status": request_row["status"]}
+
+
+def _email_deletion_request_alert(base: str, request_id: int, account_id: int, email: str) -> None:
+    rendered = email_sender.render_email(
+        preheader=f"Account deletion request #{request_id}",
+        heading="Account deletion requested",
+        body_html=(
+            f"<p>A user asked for their account to be deleted (request #{request_id}, "
+            f"workspace {account_id}, {html.escape(email)}).</p>"
+            "<p>The customer was told the privacy team will review it within 2 business days.</p>"
+        ),
+        cta_label="Open privacy requests",
+        cta_url=f"{base}/admin/privacy-requests",
+    )
+    if not email_sender.send_email(
+        _support_inbox(), f"Account deletion request #{request_id}", rendered, email_sender.FROM_SUPPORT
+    ):
+        admin_db.log_error(
+            f"Account deletion request #{request_id} (workspace {account_id}): alert email failed",
+            source="privacy", level="warning",
+        )
 
 
 @app.delete("/profile/account-deletion-request/{request_id}")
