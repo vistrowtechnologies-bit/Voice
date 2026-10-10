@@ -39,6 +39,17 @@ class IntegrationSettingsAndDeliveries(unittest.TestCase):
         db.update_integration("webhook", "not_connected", {}, self.a)
         self.assertEqual(self.config(self.a, "webhook"), {}, "disconnect forgets everything")
 
+    def test_server_restart_keeps_the_owners_webhook_name(self):
+        db = self.db
+        db.update_integration("webhook", "connected", {"url": "https://x.test/a"}, self.a, name="Sales CRM")
+        db.init_tables()  # the catalog refresh runs on every server start
+        names = {i["key"]: i["name"] for i in db.list_integrations(self.a)}
+        self.assertEqual(names["webhook"], "Sales CRM")
+        self.assertEqual(names["slack"], "Slack", "seed rows still pick up current branding")
+        db.update_integration("webhook", "not_connected", {}, self.a)
+        db.init_tables()
+        self.assertEqual({i["key"]: i["name"] for i in db.list_integrations(self.a)}["webhook"], "CRM / Webhook")
+
     def test_settings_validation(self):
         db = self.db
         db.update_integration("whatsapp", "connected", {"url": "https://w.test"}, self.a)

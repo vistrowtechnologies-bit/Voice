@@ -1591,13 +1591,18 @@ def init_tables() -> None:
             # integrations (Slack/WhatsApp) for accounts that lack them and
             # refreshes name/category/description on the seed rows — so old
             # rows like "ArthaleLeads webhook" pick up current branding —
-            # without disturbing each tenant's status/config/last_sync.
+            # without disturbing each tenant's status/config/last_sync. A
+            # connected webhook keeps its name: that is the one slot an
+            # owner relabels (update_integration's `name`), and this used
+            # to reset "Sales CRM" to "CRM / Webhook" on every deploy.
             for skey, sname, scategory, sdescription in _SEED_INTEGRATIONS:
                 conn.execute(
                     "INSERT INTO integrations (account_id, key, name, category, description) "
                     "SELECT a.id, ?, ?, ?, ? FROM accounts a "
                     "ON CONFLICT (account_id, key) DO UPDATE SET "
-                    "name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description",
+                    "name = CASE WHEN integrations.key = 'webhook' AND integrations.status = 'connected' "
+                    "THEN integrations.name ELSE EXCLUDED.name END, "
+                    "category = EXCLUDED.category, description = EXCLUDED.description",
                     (skey, sname, scategory, sdescription),
                 )
             # gcal/calcom retired in favor of the native appointments system
