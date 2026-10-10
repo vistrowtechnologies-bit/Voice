@@ -374,6 +374,8 @@ export interface DncEntry {
 export const fetchCompliance = () => get<ComplianceSettings>('/compliance/settings')
 export const updateCompliance = (data: Partial<ComplianceSettings>) =>
   send<ComplianceSettings>('PATCH', '/compliance/settings', data)
+export const previewRetentionPurge = (days: number) =>
+  get<{ days: number; callsToDelete: number }>(`/compliance/retention-preview?days=${days}`)
 export const fetchDnc = () => get<DncEntry[]>('/compliance/dnc')
 export const addDnc = (phone: string, reason: string) =>
   send<{ ok: boolean; added: boolean }>('POST', '/compliance/dnc', { phone, reason })

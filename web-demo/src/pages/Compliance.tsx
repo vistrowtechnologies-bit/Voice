@@ -8,6 +8,7 @@ import {
   bulkAddDnc,
   fetchCompliance,
   fetchDnc,
+  previewRetentionPurge,
   removeDnc,
   updateCompliance,
   type ComplianceSettings,
@@ -82,8 +83,16 @@ export function Compliance() {
 
   const reloadDnc = () => fetchDnc().then(setDnc).catch(() => setDnc([]))
 
+  // Retention as last loaded/saved, to tell when a save shortens it.
+  const [savedRetention, setSavedRetention] = useState(0)
+
   useEffect(() => {
-    fetchCompliance().then(setCfg).catch(() => setCfg(null))
+    fetchCompliance()
+      .then((c) => {
+        setCfg(c)
+        setSavedRetention(Number(c.retention_days) || 0)
+      })
+      .catch(() => setCfg(null))
     reloadDnc()
   }, [])
 
@@ -100,8 +109,24 @@ export function Compliance() {
     setSaving(true)
     setSaveError(null)
     try {
+      // Calls older than the retention window are purged permanently the next
+      // time this page loads, so say how many before shortening it.
+      const days = Number(cfg.retention_days) || 0
+      if (days > 0 && (savedRetention === 0 || days < savedRetention)) {
+        const { callsToDelete } = await previewRetentionPurge(days)
+        if (
+          callsToDelete > 0 &&
+          !window.confirm(
+            `Keeping calls for ${days} day${days === 1 ? '' : 's'} will permanently delete ${callsToDelete} older ` +
+              `call${callsToDelete === 1 ? '' : 's'}, including transcripts and recordings. This cannot be undone. Continue?`,
+          )
+        ) {
+          return
+        }
+      }
       const updated = await updateCompliance(cfg)
       setCfg(updated)
+      setSavedRetention(Number(updated.retention_days) || 0)
       setSavedAt(true)
       setTimeout(() => setSavedAt(false), 2000)
     } catch (err) {
