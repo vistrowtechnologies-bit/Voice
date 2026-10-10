@@ -37,7 +37,7 @@ import { InfoTip } from '../components/ui/Tooltip'
 // filled from the contact record with no dashboard configuration needed.
 const BUILTIN_TEMPLATE_VARS = ['first_name', 'last_name', 'name', 'phone', 'company']
 
-type AgentForm = Omit<AgentConfig, 'id' | 'createdAt' | 'updatedAt'>
+type AgentForm = Omit<AgentConfig, 'id' | 'publicId' | 'createdAt' | 'updatedAt'>
 
 // Same set agent/db.py's get_delivery_integrations() will actually deliver
 // to - keeps this picker from offering integrations that can never receive

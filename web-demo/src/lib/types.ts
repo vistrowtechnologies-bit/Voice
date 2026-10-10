@@ -293,6 +293,9 @@ export interface AgentVariable {
 
 export interface AgentConfig {
   id: number
+  // The "Agent ID" shown and copied on the dashboard: a random 8-digit
+  // number, so cards don't read 1, 3, 24. `id` stays the internal key.
+  publicId: number | null
   name: string
   description: string
   model: string

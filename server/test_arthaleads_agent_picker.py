@@ -29,7 +29,7 @@ class ArthaLeadsAgentPickerTests(unittest.TestCase):
     def test_returns_only_active_agents_with_a_named_knowledge_base(self):
         fn, db = self._endpoint(
             agents=[
-                {"id": 7, "name": "Siya Khopoli", "status": "active", "kbId": 3,
+                {"id": 7, "publicId": 48203917, "name": "Siya Khopoli", "status": "active", "kbId": 3,
                  "systemPrompt": "private prompt"},
                 {"id": 8, "name": "Paused", "status": "inactive", "kbId": 3},
                 {"id": 9, "name": "No knowledge", "status": "active", "kbId": None},
@@ -41,7 +41,7 @@ class ArthaLeadsAgentPickerTests(unittest.TestCase):
         result = fn(42, request)
 
         self.assertEqual(result, {"agents": [{
-            "id": "7", "name": "Siya Khopoli", "knowledge_base": "Khopoli project"
+            "id": "48203917", "name": "Siya Khopoli", "knowledge_base": "Khopoli project"
         }]})
         self.assertNotIn("systemPrompt", str(result))
         db.account_id_for_lead_webhook_token.assert_called_once_with("account-key")

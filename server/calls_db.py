@@ -1079,6 +1079,33 @@ def _ensure_industry_demo_agents(conn: dbconn.Conn) -> None:
         )
 
 
+def _ensure_agent_public_ids(conn: dbconn.Conn) -> None:
+    """The Agent ID shown and copied on the dashboard is agents.public_id, a
+    random 8-digit number, not the sequential agents.id (1, 3, 24...) that
+    would tell every tenant how many agents the platform has. agents.id stays
+    the key everything else references. A column default covers every INSERT
+    path (create, clone, demo seeding); 8 digits keeps it clear of any
+    internal id, so resolve_agent_ref can still accept legacy ids."""
+    conn.execute(
+        "CREATE OR REPLACE FUNCTION vistrow_agent_public_id() RETURNS BIGINT AS $$ "
+        "DECLARE candidate BIGINT; "
+        "BEGIN "
+        "  LOOP "
+        "    candidate := 10000000 + floor(random() * 90000000)::BIGINT; "
+        "    EXIT WHEN NOT EXISTS (SELECT 1 FROM agents WHERE public_id = candidate); "
+        "  END LOOP; "
+        "  RETURN candidate; "
+        "END $$ LANGUAGE plpgsql VOLATILE"
+    )
+    conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS public_id BIGINT")
+    conn.execute("ALTER TABLE agents ALTER COLUMN public_id SET DEFAULT vistrow_agent_public_id()")
+    # One statement per row: a single UPDATE over all rows would not see its
+    # own earlier picks, so two agents could draw the same number.
+    for row in conn.execute("SELECT id FROM agents WHERE public_id IS NULL ORDER BY id").fetchall():
+        conn.execute("UPDATE agents SET public_id = vistrow_agent_public_id() WHERE id = ?", (row["id"],))
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS agents_public_id_unique ON agents (public_id)")
+
+
 def init_tables() -> None:
     conn = _connect()
     try:
@@ -1192,6 +1219,7 @@ def init_tables() -> None:
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
+            _ensure_agent_public_ids(conn)
             # Agent-builder settings added after go-live — explicit migrations so
             # they land on the existing production agents table (see agents CREATE
             # TABLE above for what each one does).
@@ -3599,6 +3627,9 @@ def _row_get(row, key, default=None):
 def _agent_dict(row: dict) -> dict:
     return {
         "id": row["id"],
+        # What the dashboard shows and copies as "Agent ID" - see
+        # _ensure_agent_public_ids. Resolve it back with resolve_agent_ref.
+        "publicId": _row_get(row, "public_id"),
         "name": row["name"],
         "description": row["description"],
         "model": row["model"],
@@ -3748,6 +3779,30 @@ def list_agents(account_id: int) -> list[dict]:
             _agent_dict(r)
             for r in conn.execute("SELECT * FROM agents WHERE account_id = ? ORDER BY id", (account_id,)).fetchall()
         ]
+    finally:
+        conn.close()
+
+
+def resolve_agent_ref(account_id: int, ref) -> int | None:
+    """Internal agents.id for an Agent ID someone copied out of the dashboard.
+
+    Accepts the 8-digit public id, and the old sequential id for integrations
+    set up before public ids existed. Scoped to the account, so another
+    tenant's agent never resolves. None when nothing matches."""
+    try:
+        value = int(str(ref).strip())
+    except (TypeError, ValueError):
+        return None
+    if value <= 0 or value >= 10**12:
+        return None
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id FROM agents WHERE account_id = ? AND (public_id = ? OR id = ?) "
+            "ORDER BY (public_id = ?) DESC LIMIT 1",
+            (account_id, value, value, value),
+        ).fetchone()
+        return row["id"] if row else None
     finally:
         conn.close()
 
