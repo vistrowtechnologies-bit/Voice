@@ -31,3 +31,18 @@ same handoff text there instead.
 - `server/`: `python -m pytest` (needs `DATABASE_URL` pointing at Postgres).
 - `agent/`: `python -m pytest` (needs `DATABASE_URL`, and `OPENAI_API_KEY` set;
   a dummy value is enough).
+
+## Shared message box and takeover
+
+Read `docs/AGENT-MESSAGE-BOX.md` at the start of every task, alongside issue #2.
+Update its current status and append a dated message after each meaningful edit,
+verification, merge/deployment, or change in findings. Record branch/commit/PR,
+files changed, evidence, remaining work, and the exact next step. Update it before
+stopping or reaching a context/token limit so the other agent can take over.
+Separate verified facts from hypotheses. Never include credentials, raw caller
+speech, or private recordings. Keep GitHub claims/releases too: branches and
+worktrees do not automatically share uncommitted messages. At checkpoints,
+commit the message box and mirror its handoff to issue #2. Read the latest main
+copy and relevant branch/issue updates before taking over; do not overwrite a
+peer's active claim or another agent's entries. This rule applies reciprocally
+to Codex and Claude. Neither agent is assumed to be running or reading live.
