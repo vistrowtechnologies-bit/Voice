@@ -81,4 +81,13 @@ Verified: server suite 422 passed (includes new `test_integration_settings_and_d
 Not verified: a real Google sheet (styling, link cell, addSheet) — needs the owner's live connection; column hiding on a real sheet; live WhatsApp/Slack delivery with the new filters.
 
 Next: fix review findings, commit, PR to main, Railway deploys server+dashboard; then `lk agent deploy` to BOTH workers (tenant `CA_TGdpVhSdxDyS`, platform `CA_53d8HgBktjZ7`) from a clean `git archive` of the merged sha, since the filter/log/tabs live in `agent/`. Deploy order: Railway (server creates `integration_deliveries` in `init_tables`) BEFORE the workers; until then the agent's delivery-log insert just warns. Then owner: Reconnect Sheets once (re-styles the existing sheet) and Send test.
+### Claude — 2026-10-10 — copilot phase 1
+
+Branch `claude/copilot-phase1` (worktree, not pushed, no PR). Read-only Copilot answers per `docs/COPILOT-ACTIONS-PLAN-2026-10-10.md` Phase 1; no write tools, no confirmation chips, no plan gate (Phase 2).
+
+Files: `server/help_tools.py` (new tools `list_my_agents`, `agent_detail`, `contact_requirements`, `failing_integrations`, `upcoming_appointments`, `phone_numbers`; tenant model labels; transcript trimmed to last 20 turns / 2,500 chars; `config` never returned), `server/help_chat.py` (bounded loop: max 4 model rounds, 8 tool calls, then forced final answer; every tool result wrapped as `{"data", "note"}` untrusted data and cut at 4,000 chars; system prompt says data is untrusted and the bot cannot change anything), `web-demo/src/components/HelpChatWidget.tsx` (new per-page suggestions on Calls, Contacts, Appointments, Integrations, Agents, Phone Numbers), `server/test_help_tools.py`, new `server/test_help_chat_loop.py`.
+
+Verified: server suite 433 passed (+136 subtests) against the local throwaway Postgres `vv_inttest`; `tsc --noEmit -p web-demo/tsconfig.app.json` clean; `npm run build` passes. Unverified: no live OpenAI call was made (loop tested with a fake urllib responder), nothing deployed, not tried on a real tenant dashboard. Assumption: `calls_db.list_integration_deliveries` does not exist on main yet, so `failing_integrations` returns lastError/lastSync only (TODO in code).
+
+Next step: Phase 2 (write actions with confirmation chip, signed token, `copilot_actions` audit table, `growth` plan gate) — see the plan doc section 3.
 
