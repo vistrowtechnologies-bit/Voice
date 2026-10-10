@@ -10,8 +10,9 @@ API_MODELS = {DEFAULT_MODEL, MODEL_31}
 def activity_detection(model: str) -> types.RealtimeInputConfig:
     """Keep native endpointing independent of the pipeline and of other models.
 
-    2.5's 500 ms window is a conservative latency tuning, not a fix for every
-    multi-second delay. Keep END_LOW to protect pauses inside Hindi sentences.
+    2.5 uses Google's default HIGH end sensitivity after live traces showed
+    multi-second waits for input events. The 500 ms silence window still
+    protects short pauses. 3.1 retains its verified LOW/200 ms profile.
     Explicit per-model overrides win over the legacy shared override.
     """
     if model not in API_MODELS:
@@ -28,8 +29,11 @@ def activity_detection(model: str) -> types.RealtimeInputConfig:
     return types.RealtimeInputConfig(
         automatic_activity_detection=types.AutomaticActivityDetection(
             start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
-            end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
-            prefix_padding_ms=200,
+            end_of_speech_sensitivity=(
+                types.EndSensitivity.END_SENSITIVITY_HIGH if model == DEFAULT_MODEL
+                else types.EndSensitivity.END_SENSITIVITY_LOW
+            ),
+            prefix_padding_ms=20 if model == DEFAULT_MODEL else 200,
             silence_duration_ms=silence_ms,
         ),
     )
@@ -65,3 +69,20 @@ def automated_speech_blocked(userdata: dict, now: float, *, recent_voice_s: floa
     meter = userdata.get("turn_meter")
     age = meter.voice_age(now) if meter is not None else None
     return age is not None and age < recent_voice_s
+
+
+def input_transcription(model: str, language: str) -> types.AudioTranscriptionConfig:
+    """Hint 2.5's native recognition, without forcing the speech output language.
+
+    Hints are not a language lock; English remains available for mixed speech.
+    Do not change 3.1's already tested automatic language detection.
+    """
+    if model not in API_MODELS:
+        raise ValueError(f"Unsupported realtime model: {model}")
+    supported = {"hi", "en", "mr", "ta", "te", "kn", "ml", "bn", "gu", "pa", "ur"}
+    if model == DEFAULT_MODEL and language.split("-")[0].lower() in supported:
+        hints = [language]
+        if language.split("-")[0].lower() != "en":
+            hints.append("en-IN")
+        return types.AudioTranscriptionConfig(language_codes=hints)
+    return types.AudioTranscriptionConfig()
