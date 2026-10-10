@@ -103,5 +103,24 @@ class EntrypointDeclines(unittest.TestCase):
         self.assertEqual(block.count("await _hang_up(ctx.room.name)"), 2, "config-missing and paused both hang up")
 
 
+    def test_agent_construction_failure_hangs_up_and_frees_the_slot(self):
+        # A missing provider key / unsupported realtime model raises inside
+        # RealEstateAgent(...) after the caller joined and after admission
+        # claimed a slot.
+        start = self.src.index("agent = RealEstateAgent(")
+        guard = self.src[self.src.rindex("try:", 0, start):start]
+        self.assertEqual(guard.strip(), "try:", "construction must sit directly inside a try")
+        block = self.src[start:self.src.index("_agent_ready_ms = ", start)]
+        self.assertIn("except Exception", block)
+        self.assertIn("db.log_platform_error", block)
+        self.assertIn('account_id=cfg.get("account_id")', block)
+        self.assertIn("await _hang_up(ctx.room.name)", block)
+        self.assertIn("ctx.shutdown(", block)
+        self.assertIn("return", block)
+        # The slot is released by the shutdown callback, which must already be
+        # registered before construction can fail.
+        self.assertLess(self.src.index("ctx.add_shutdown_callback(_release_call_slot)"), start)
+
+
 if __name__ == "__main__":
     unittest.main()

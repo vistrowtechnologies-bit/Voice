@@ -106,6 +106,15 @@ def _tool_filler(context: RunContext):
     userdata = getattr(context.session, "userdata", None) or {}
     if userdata.get("backchannel_turn"):
         return contextlib.nullcontext()
+    # with_filler speaks through session.say(), which a speech-to-speech
+    # agent (Gemini Live, supports_say=False) cannot do: it logged an error on
+    # every booking. Skip it there, as the calendar-check filler already does.
+    try:
+        realtime = getattr(context.session.current_agent, "_is_realtime", False)
+    except Exception:  # current_agent raises when no agent is running
+        realtime = False
+    if realtime:
+        return contextlib.nullcontext()
     return context.with_filler(_TOOL_FILLER_TEXT, delay=0.6)
 
 # Availability checks need an immediate spoken bridge, even though the native

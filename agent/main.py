@@ -8,7 +8,7 @@ import secrets
 import threading
 import time
 import wave
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
@@ -162,8 +162,27 @@ LANGUAGE_SWITCH_CONFIRMATION_TURNS = 3
 # The LLM has no built-in notion of "today" — without this, it resolves
 # "next Sunday" / "tomorrow" against whatever date feels plausible from its
 # training data, which is how a real production call booked a site visit for
-# 2023-11-05. India-focused product, so IST rather than the room's UTC clock.
-_IST = timezone(timedelta(hours=5, minutes=30))
+# 2023-11-05. The account's availability timezone (IST by default), never the
+# room's UTC clock.
+_DEFAULT_CALL_TZ = "Asia/Kolkata"
+
+
+def _call_local_now(tz_name: str | None, now: datetime | None = None) -> tuple[datetime, str]:
+    """Wall-clock time in the account's availability timezone, plus its label.
+
+    check_appointment_availability judges "today" and past slots in that
+    timezone; a hardcoded IST here gave a tenant in any other timezone a
+    different "today" from its own calendar for part of every night. Unset
+    or invalid falls back to IST, the availability default.
+    """
+    try:
+        tz = ZoneInfo(tz_name or _DEFAULT_CALL_TZ)
+    except (ZoneInfoNotFoundError, ValueError, TypeError):
+        tz = ZoneInfo(_DEFAULT_CALL_TZ)
+    local = (now or datetime.now(timezone.utc)).astimezone(tz)
+    # "IST" for Indian tenants keeps their prompt text exactly as before.
+    label = "IST" if tz.key == _DEFAULT_CALL_TZ else f"({tz.key} time)"
+    return local, label
 
 # Spoken the moment a caller asks to be put through, before anything is
 # dialled. Short on purpose: the transfer takes a second or two, and the
@@ -467,6 +486,31 @@ def _caller_reopened_conversation(userdata: dict, text: str) -> bool:
         and not _looks_like_farewell(text)
         and not backchannel_patch.is_backchannel(text)
     )
+
+
+# Closing lines the agent sometimes speaks WITHOUT calling end_call (see
+# _on_conversation_item_added in entrypoint for the live call that needed it).
+_AGENT_CLOSING_PHRASES = (
+    "समाप्त कर रही हूँ", "समाप्त कर रहा हूँ", "कॉल समाप्त", "कॉल खत्म",
+    "अलविदा", "फिर मिलते हैं", "शुभ दिन",
+    "have a great day", "goodbye", "bye for now", "take care",
+    "i'll end the call", "i'll go ahead and end", "ending the call now",
+)
+_SENTENCE_BREAK_RE = re.compile(r"[.!?।\n]+")
+
+
+def _agent_reply_closes_call(text: str) -> bool:
+    """True when the reply's LAST sentence is a goodbye.
+
+    Matching anywhere in the reply ends the call mid-conversation: "Our team
+    will take care of the paperwork. What is your budget?" contains "take
+    care", and would hang up on the agent's own question. A real goodbye is
+    the last thing said, so only the final sentence counts.
+    """
+    segments = [seg for seg in _SENTENCE_BREAK_RE.split((text or "").lower()) if re.search(r"\w", seg)]
+    if not segments:
+        return False
+    return any(phrase in segments[-1] for phrase in _AGENT_CLOSING_PHRASES)
 
 
 # capture_platform_lead/log_lead (tools.py) both write into userdata["lead_data"]
@@ -3299,10 +3343,10 @@ class RealEstateAgent(Agent):
         # the cache from 98% to 67% and re-charged 2,900 tokens at full price
         # instead of 212. Moving it to the very end leaves the whole static
         # prompt as a stable shared prefix and costs nothing to do.
-        now_ist = datetime.now(_IST)
+        now_local, tz_label = _call_local_now((config.get("_availability_config") or {}).get("timezone"))
         date_instruction = (
-            f"\n\n# Current date and time\nRight now it is {now_ist.strftime('%A, %d %B %Y')}, "
-            f"{now_ist.strftime('%H:%M')} IST. This is the ONLY source of truth for \"today\", "
+            f"\n\n# Current date and time\nRight now it is {now_local.strftime('%A, %d %B %Y')}, "
+            f"{now_local.strftime('%H:%M')} {tz_label}. This is the ONLY source of truth for \"today\", "
             "\"tomorrow\", \"next Monday\", \"this weekend\", etc. — never resolve a relative date "
             "from memory or assumption. When calling check_calendar_availability or "
             "book_appointment, compute the date argument (YYYY-MM-DD) from this real date."
@@ -4474,10 +4518,19 @@ class RealEstateAgent(Agent):
         # so on call 1066 the caller asked to be put through and the line
         # simply went silent on them. A person being handed over has to hear
         # that it is happening.
+        hold_line = _TRANSFER_HOLD_LINE.get(
+            (self._reply_language or "").split("-")[0], _TRANSFER_HOLD_LINE["en"]
+        )
         try:
-            await self.session.say(_TRANSFER_HOLD_LINE.get(
-                (self._reply_language or "").split("-")[0], _TRANSFER_HOLD_LINE["en"]
-            ))
+            if getattr(self, "_is_realtime", False):
+                # A speech-to-speech model has no say() (supports_say=False):
+                # it raised, the warning below swallowed it, and realtime
+                # transfers bridged in silence. Have the model speak the line.
+                await self.session.generate_reply(
+                    instructions=f'Say exactly this, and nothing else: "{hold_line}"'
+                )
+            else:
+                await self.session.say(hold_line)
         except Exception:
             logger.warning("could not announce the transfer", exc_info=True)
 
@@ -5965,6 +6018,10 @@ async def _load_runtime_call_context(config: dict, caller_phone: str | None) -> 
 
     account_id = config.get("account_id")
     add("_compliance_config", db.get_compliance_config, account_id)
+    if account_id is not None:
+        # Only for its timezone: the prompt's "today" must match the day
+        # check_appointment_availability uses (see _call_local_now).
+        add("_availability_config", db.get_availability_config, account_id)
     kb_id = config.get("kb_id")
     if kb_id:
         add("_runtime_kb_content", db.get_kb_content, kb_id)
@@ -5977,7 +6034,7 @@ async def _load_runtime_call_context(config: dict, caller_phone: str | None) -> 
         for (name, _), value in zip(reads, values):
             if isinstance(value, BaseException):
                 logger.warning("call context read %s failed; using safe default", name, exc_info=value)
-                value = {} if name == "_compliance_config" else (False if name == "_runtime_kb_strict" else "")
+                value = {} if name in ("_compliance_config", "_availability_config") else (False if name == "_runtime_kb_strict" else "")
             config[name] = value
     return config
 
@@ -6452,14 +6509,35 @@ async def entrypoint(ctx: JobContext) -> None:
             else "",
         )
 
-    agent = RealEstateAgent(
-        config,
-        call_context["visitor_name"],
-        call_context["visitor_phone"],
-        direction=call_context.get("direction"),
-        call_type=call_context.get("call_type"),
-        sarvam_latency_lab=sarvam_latency_lab,
-    )
+    # Construction builds the STT/LLM/TTS (or realtime) plugins, which raise
+    # RuntimeError for a missing provider key and ValueError for an
+    # unsupported realtime model. The caller has already joined by now, so an
+    # escaped error left them on silence with nothing on System Health. Decline
+    # the call instead; the room deletion ends the job, and shutdown runs
+    # _release_call_slot (registered above) so the admission slot is freed.
+    # AgentSession(...) below builds no plugins, so it needs no such guard.
+    try:
+        agent = RealEstateAgent(
+            config,
+            call_context["visitor_name"],
+            call_context["visitor_phone"],
+            direction=call_context.get("direction"),
+            call_type=call_context.get("call_type"),
+            sarvam_latency_lab=sarvam_latency_lab,
+        )
+    except Exception as exc:
+        logger.exception("agent could not be built; declining room %s", ctx.room.name)
+        await asyncio.to_thread(
+            db.log_platform_error,
+            f"Call declined: agent could not be built ({type(exc).__name__}: {exc})",
+            account_id=cfg.get("account_id"),
+            context=ctx.room.name,
+        )
+        await _hang_up(ctx.room.name)
+        # _hang_up only logs when the room delete fails; shut the job down
+        # directly too so the slot release never depends on that call.
+        ctx.shutdown(reason="agent construction failed")
+        return
     _agent_ready_ms = round((time.monotonic() - _t0) * 1000)
     logger.info("[latency] RealEstateAgent() constructed at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
     # See the [latency] markers above/below — lets on_enter() log its own
@@ -7528,12 +7606,8 @@ async def entrypoint(ctx: JobContext) -> None:
     # ending_call directly when the tool call never happened, reusing
     # _on_agent_state_changed's existing "wait for speech to finish, then
     # hang up" logic above rather than a separate hangup path.
-    _AGENT_CLOSING_PHRASES = (
-        "समाप्त कर रही हूँ", "समाप्त कर रहा हूँ", "कॉल समाप्त", "कॉल खत्म",
-        "अलविदा", "फिर मिलते हैं", "शुभ दिन",
-        "have a great day", "goodbye", "bye for now", "take care",
-        "i'll end the call", "i'll go ahead and end", "ending the call now",
-    )
+    # The phrase list and the final-sentence match live at module level in
+    # _agent_reply_closes_call.
 
     def _on_conversation_item_added(ev) -> None:
         item = ev.item
@@ -7574,9 +7648,14 @@ async def entrypoint(ctx: JobContext) -> None:
                 _record_diagnostic(
                     "quality", "agent", "Agent replayed its opening line mid-call", "error",
                 )
-        if any(phrase.lower() in text for phrase in _AGENT_CLOSING_PHRASES):
+        if _agent_reply_closes_call(text):
             logger.info("agent's own reply looked like a goodbye without end_call being called — forcing hangup after it finishes")
             userdata["ending_call"] = True
+            # Same flag the end_call tool sets, so _caller_reopened_conversation
+            # cancels this hang-up too when the caller speaks again with a real
+            # question before the line drops. Without it a guessed goodbye was
+            # the one hang-up path a caller could not talk their way out of.
+            userdata["ending_call_from_tool"] = True
             # Safety net: _on_agent_state_changed above only fires ON the
             # speaking -> not-speaking transition. If that transition
             # already happened by the time this event fires (this text
