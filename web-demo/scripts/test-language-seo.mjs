@@ -9,21 +9,25 @@ const pages = [
     slug: 'hindi',
     title: 'Hindi AI Voice Calling Agent for Phone & Web | Vistrow Voice',
     phrases: ['Hinglish AI voice calling agent', 'real AI phone calling agent', 'North & Central India'],
+    demo: 'hindi-real-estate-lead-qualification',
   },
   {
     slug: 'kannada',
     title: 'Kannada AI Voice Calling Agent for Customer Calls | Vistrow Voice',
     phrases: ['best AI voice calling agent in Kannada', 'Bengaluru and Karnataka', 'Kannada-English code-switching'],
+    demo: 'kannada-inbound-property-enquiry',
   },
   {
     slug: 'telugu',
     title: 'Telugu AI Voice Agent for Phone & Website Calls | Vistrow Voice',
     phrases: ['Telugu voice agent for customer calls', 'Andhra Pradesh & Telangana', 'Hyderabad real estate'],
+    demo: 'telugu-website-widget-call',
   },
   {
     slug: 'marathi',
     title: 'Marathi AI Voice Calling Agent for Maharashtra | Vistrow Voice',
     phrases: ['Marathi AI voice calling agent', 'Pune, Mumbai', 'Maharashtra'],
+    demo: 'marathi-site-visit-booking',
   },
 ]
 
@@ -41,6 +45,7 @@ for (const page of pages) {
   assert(html.includes(`<title>${page.title}</title>`), `${page.slug}: expected prerendered title`)
   assert(html.includes('FAQPage'), `${page.slug}: expected FAQPage schema`)
   assert(html.includes('Built for people searching'), `${page.slug}: expected search-intent section`)
+  assert(html.includes(`/demo-calls/${page.demo}`), `${page.slug}: missing relevant call-example link`)
   assert(rawHtml.length > 20_000, `${page.slug}: prerendered HTML looks too thin`)
   for (const phrase of page.phrases) {
     assert(html.includes(phrase), `${page.slug}: missing SEO phrase "${phrase}"`)

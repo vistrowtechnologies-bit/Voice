@@ -29,6 +29,16 @@ const LANGUAGE_SEO_META: Record<string, { title: string; description: string }> 
   },
 }
 
+// Give high-intent language landing pages a clear next step into a useful,
+// matching example. These are explicitly labelled as representative samples
+// on the destination page; they are not presented as customer case studies.
+const LANGUAGE_DEMO_CALLS: Record<string, { slug: string; title: string }> = {
+  hindi: { slug: 'hindi-real-estate-lead-qualification', title: 'Hindi real-estate lead qualification' },
+  marathi: { slug: 'marathi-site-visit-booking', title: 'Marathi site-visit booking' },
+  kannada: { slug: 'kannada-inbound-property-enquiry', title: 'Kannada inbound property enquiry' },
+  telugu: { slug: 'telugu-website-widget-call', title: 'Telugu website-widget call' },
+}
+
 // One template renders all ten language pages, keyed by :slug - same
 // approach as ProductDetail/SolutionDetail. These exist for long-tail
 // search ("AI voice agent in Tamil"), which is why each one carries its
@@ -41,6 +51,7 @@ export function LanguageDetail() {
     title: `${lang.name} AI Voice Agent for Customer Calls | Vistrow Voice`,
     description: `Handle inbound, outbound, and website customer conversations with a ${lang.name} AI voice agent that supports natural English code-switching and 24/7 availability.`,
   }
+  const demoCall = LANGUAGE_DEMO_CALLS[lang.slug]
 
   const faqs = [
     ...(lang.seoFaq ? [lang.seoFaq] : []),
@@ -184,6 +195,29 @@ export function LanguageDetail() {
           ))}
         </div>
       </section>
+
+      {demoCall && (
+        <section className="mx-auto max-w-7xl px-5 pb-12 md:px-8">
+          <div className="flex flex-col gap-4 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/[0.08] to-surface p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+            <div>
+              <SectionEyebrow>See a sample conversation</SectionEyebrow>
+              <h2 className="mt-2 font-display text-xl font-bold tracking-tight">
+                Explore a representative {lang.name} AI voice call.
+              </h2>
+              <p className="mt-1 text-sm text-text-muted">
+                Read the sample transcript and the structured outcome the team receives.
+              </p>
+            </div>
+            <Link
+              to={`/demo-calls/${demoCall.slug}`}
+              className="inline-flex shrink-0 items-center gap-2 rounded-full border border-primary/30 px-5 py-3 text-sm font-bold text-primary transition-colors hover:bg-primary/10"
+            >
+              {demoCall.title}
+              <Icon name="arrow_forward" className="text-[16px]" />
+            </Link>
+          </div>
+        </section>
+      )}
 
       <FaqSection items={faqs} />
 
