@@ -375,6 +375,7 @@ function RateRequest({ ticket, onRated }: { ticket: SupportTicket; onRated: (t: 
   const [choice, setChoice] = useState<'good' | 'bad' | null>(null)
   const [comment, setComment] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   if (ticket.rating) {
     return (
       <p className="flex items-center gap-2 rounded-xl border border-border bg-surface-high/50 px-4 py-3 text-sm text-text-muted">
@@ -386,8 +387,11 @@ function RateRequest({ ticket, onRated }: { ticket: SupportTicket; onRated: (t: 
   const submit = async () => {
     if (!choice) return
     setSaving(true)
+    setError('')
     try {
       onRated(await rateSupportTicket(ticket.id, choice, comment))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send your feedback.')
     } finally {
       setSaving(false)
     }
@@ -413,6 +417,7 @@ function RateRequest({ ticket, onRated }: { ticket: SupportTicket; onRated: (t: 
           <button onClick={submit} disabled={saving} className="w-fit rounded-lg bg-primary px-4 py-1.5 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-40">
             {saving ? 'Sending…' : 'Send feedback'}
           </button>
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </>
       )}
     </div>
@@ -422,9 +427,11 @@ function RateRequest({ ticket, onRated }: { ticket: SupportTicket; onRated: (t: 
 function RequestDetail({ id, onChanged }: { id: number; onChanged: (t: SupportTicket) => void }) {
   const [ticket, setTicket] = useState<SupportTicket | null>(null)
   const [missing, setMissing] = useState(false)
+  const [solveError, setSolveError] = useState('')
 
   useEffect(() => {
     setTicket(null)
+    setSolveError('')
     fetchSupportTicket(id).then(setTicket).catch(() => setMissing(true))
   }, [id])
 
@@ -456,9 +463,12 @@ function RequestDetail({ id, onChanged }: { id: number; onChanged: (t: SupportTi
             </p>
           </div>
           {!solved && (
-            <button onClick={() => setSupportTicketStatus(ticket.id, 'resolved').then(apply)} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold text-text-muted hover:border-success hover:text-success">
+            <div className="flex flex-col items-end gap-1">
+            <button onClick={() => { setSolveError(''); setSupportTicketStatus(ticket.id, 'resolved').then(apply).catch((err) => setSolveError(err instanceof Error ? err.message : 'Could not mark this request as solved.')) }} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold text-text-muted hover:border-success hover:text-success">
               <Icon name="task_alt" className="text-[16px]" /> Mark as solved
             </button>
+            {solveError && <p className="text-sm text-destructive">{solveError}</p>}
+            </div>
           )}
         </div>
         <div className="flex flex-col gap-4 bg-bg/40 p-5">

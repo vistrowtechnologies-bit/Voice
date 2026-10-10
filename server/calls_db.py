@@ -360,6 +360,15 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     updated_at TEXT DEFAULT {_NOW}
 );
 
+-- Razorpay webhook deliveries already processed, keyed on x-razorpay-event-id.
+-- Razorpay redelivers on timeouts; replaying subscription.charged would add
+-- a duplicate invoice, reset credits mid-cycle and add the overage twice.
+CREATE TABLE IF NOT EXISTS razorpay_webhook_events (
+    event_id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    created_at TEXT DEFAULT {_NOW}
+);
+
 -- "I have read this" for the notification bell, per person (not per browser).
 -- Notification ids are content-derived, so a new occurrence is a new id.
 CREATE TABLE IF NOT EXISTS notification_dismissals (
@@ -913,7 +922,7 @@ _SEED_INTEGRATIONS = [
         "sheets",
         "Google Sheets",
         "Reporting",
-        "Append every qualified lead as a row via a Google Apps Script web-app URL (no OAuth).",
+        "Sign in with Google and every reachable caller is added as a row to a leads sheet we create in your Drive.",
     ),
     (
         "facebook",
@@ -1005,6 +1014,14 @@ def provision_account_defaults(conn: dbconn.Conn, account_id: int) -> None:
             "ON CONFLICT (account_id, key) DO NOTHING",
             (account_id, key, value),
         )
+    # A new signup's free allowance is a one-time trial counted from here, not
+    # a monthly grant (see usage_period_start). Accounts created before this
+    # marker existed keep the calendar-month window they've always had.
+    conn.execute(
+        f"INSERT INTO settings (account_id, key, value) VALUES (?, ?, {_NOW}) "
+        "ON CONFLICT (account_id, key) DO NOTHING",
+        (account_id, TRIAL_STARTED_SETTING),
+    )
 
 
 def _ensure_industry_demo_agents(conn: dbconn.Conn) -> None:
@@ -2508,7 +2525,11 @@ def accept_invite(invite_id: int, password_hash: str) -> dict:
         invite = conn.execute("SELECT * FROM invites WHERE id = ?", (invite_id,)).fetchone()
         with conn:
             cur = conn.execute(
-                "INSERT INTO users (account_id, email, name, password_hash, role) VALUES (?, ?, ?, ?, ?) RETURNING id",
+                # The invite link reached this inbox, which is the proof email
+                # verification asks for. Without it, /auth/login refused the
+                # new member with "verify your email" after their first logout.
+                f"INSERT INTO users (account_id, email, name, password_hash, role, email_verified_at) "
+                f"VALUES (?, ?, ?, ?, ?, {_NOW}) RETURNING id",
                 (invite["account_id"], invite["email"].lower(), invite["name"], password_hash, invite["role"]),
             )
             conn.execute("UPDATE invites SET status = 'accepted' WHERE id = ?", (invite_id,))
@@ -3533,7 +3554,12 @@ def analytics(account_id: int) -> dict:
 _AGENT_FIELDS = (
     "name", "description", "model", "voice", "stt_provider", "language", "status",
     "system_prompt", "kb_id", "tone", "is_platform_demo",
-    "first_speaker", "welcome_message", "interruption_sensitivity",
+    # welcome_message_outbound and noise_cancellation were mapped in
+    # _AGENT_CAMEL_TO_SNAKE but missing here, so update_agent silently dropped
+    # them: every outbound call used the inbound opener and the noise toggle
+    # never saved, though agent/main.py reads both.
+    "first_speaker", "welcome_message", "welcome_message_outbound", "noise_cancellation",
+    "interruption_sensitivity",
     "silence_reminder_ms", "silence_reminder_max", "end_call_on_silence_ms",
     "max_call_duration_s", "enabled_functions", "transfer_phone",
     "custom_functions", "post_call_fields", "webhook_url", "memory_enabled",
@@ -4242,9 +4268,17 @@ def create_contact(data: dict, account_id: int) -> None:
                 INSERT INTO contacts (account_id, name, phone, email, company, custom_fields, status, tags, source)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(account_id, phone) DO UPDATE SET
-                    name = excluded.name, email = excluded.email, company = excluded.company,
-                    custom_fields = excluded.custom_fields,
-                    status = excluded.status, tags = excluded.tags,
+                    -- Re-adding or re-importing a known number fills in what the
+                    -- new row actually has and keeps the rest. It used to
+                    -- overwrite every field, so a CSV re-import blanked emails
+                    -- and tags and reset qualified/site_visit contacts to 'new'.
+                    name = COALESCE(NULLIF(NULLIF(excluded.name, ''), 'Unknown'), contacts.name),
+                    email = COALESCE(NULLIF(excluded.email, ''), contacts.email),
+                    company = COALESCE(NULLIF(excluded.company, ''), contacts.company),
+                    custom_fields = CASE WHEN excluded.custom_fields IN ('', '{{}}')
+                        THEN contacts.custom_fields ELSE excluded.custom_fields END,
+                    status = CASE WHEN ? THEN excluded.status ELSE contacts.status END,
+                    tags = COALESCE(NULLIF(excluded.tags, ''), contacts.tags),
                     deleted_at = NULL,
                     updated_at = {_NOW}
                 """,
@@ -4258,6 +4292,7 @@ def create_contact(data: dict, account_id: int) -> None:
                     data.get("status", "new"),
                     _clean_tags(data.get("tags")),
                     data.get("source", "manual"),
+                    bool(data.get("status")),
                 ),
             )
     finally:
@@ -4444,13 +4479,15 @@ def import_contacts_mapped(text: str, mapping: dict, account_id: int) -> dict:
     (see agent/main.py's template substitution)."""
     if "phone" not in mapping.values():
         raise ValueError("Map one column to Phone before importing")
-    reader = csv.DictReader(io.StringIO(text))
+    # Count first: each row commits on its own, so checking inside the loop
+    # inserted 5,000 contacts and then reported the whole file as rejected.
+    rows = list(csv.DictReader(io.StringIO(text)))
+    if len(rows) > 5000:
+        raise ValueError("Import is limited to 5,000 contacts at a time")
     count = 0
     skipped_missing_phone = 0
     skipped_invalid_phone = 0
-    for row_number, row in enumerate(reader, start=2):
-        if row_number > 5001:
-            raise ValueError("Import is limited to 5,000 contacts at a time")
+    for row_number, row in enumerate(rows, start=2):
         first_name = last_name = name = phone = email = company = tags = ""
         custom: dict = {}
         for header, value in row.items():
@@ -4842,6 +4879,7 @@ def book_appointment_native(
     purpose: str = "",
     email: str = "",
     source: str = "agent",
+    notes: str = "",
 ) -> dict:
     """{"ok": True, "id": ...} or {"ok": False, "error": ...}. Takes a
     per-account-per-date advisory lock before the check-then-insert so two
@@ -4856,10 +4894,10 @@ def book_appointment_native(
                 return {"ok": False, "error": "slot no longer available"}
             cur = conn.execute(
                 "INSERT INTO appointments (account_id, agent_id, call_id, contact_name, contact_phone, "
-                "contact_email, purpose, appt_date, start_time, duration_minutes, status, source) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?) RETURNING id",
+                "contact_email, purpose, appt_date, start_time, duration_minutes, status, source, notes) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?) RETURNING id",
                 (account_id, agent_id, call_id, name, account_phone(account_id, phone) or phone, email,
-                 purpose, date, time, duration_minutes, source),
+                 purpose, date, time, duration_minutes, source, notes or ""),
             )
             return {"ok": True, "id": cur.lastrowid}
     finally:
@@ -4979,10 +5017,27 @@ def create_knowledge_base(name: str, account_id: int) -> None:
         conn.close()
 
 
+# Agent workers cache knowledge-base content for 10 minutes. Without a
+# notification a tenant's KB edit was served stale for that long; the
+# 'kb:<id>' payload on the agent-config channel clears just that KB.
+_KB_NOTIFY_SQL = "SELECT pg_notify('vistrow_agent_config_changed', 'kb:' || ?)"
+
+
+def _notify_kb_changed(conn, kb_id: int) -> None:
+    conn.execute(_KB_NOTIFY_SQL, (str(kb_id),))
+
+
 def delete_knowledge_base(kb_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
+            # Agents losing this KB must reload their config too.
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', id::text) FROM agents "
+                "WHERE kb_id = ? AND account_id = ?",
+                (kb_id, account_id),
+            )
+            _notify_kb_changed(conn, kb_id)
             conn.execute("DELETE FROM knowledge_sources WHERE kb_id = ?", (kb_id,))
             conn.execute("DELETE FROM kb_qa WHERE kb_id = ?", (kb_id,))
             conn.execute("DELETE FROM knowledge_bases WHERE id = ? AND account_id = ?", (kb_id, account_id))
@@ -4999,6 +5054,7 @@ def set_kb_strict(kb_id: int, strict: bool, account_id: int) -> None:
                 "UPDATE knowledge_bases SET strict = ? WHERE id = ? AND account_id = ?",
                 (1 if strict else 0, kb_id, account_id),
             )
+            _notify_kb_changed(conn, kb_id)
     finally:
         conn.close()
 
@@ -5023,6 +5079,7 @@ def add_knowledge_source(kb_id: int, name: str, content: str, account_id: int, s
                 "SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM knowledge_bases WHERE id = ? AND account_id = ?)",
                 (kb_id, name, source_type, content, kb_id, account_id),
             )
+            _notify_kb_changed(conn, kb_id)
     finally:
         conn.close()
 
@@ -5047,6 +5104,11 @@ def update_knowledge_source(
                 "AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
                 (*params, source_id, account_id),
             )
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', 'kb:' || kb_id::text) "
+                "FROM knowledge_sources WHERE id = ?",
+                (source_id,),
+            )
         return get_knowledge_source_content(source_id, account_id, conn=conn)
     finally:
         conn.close()
@@ -5056,6 +5118,11 @@ def delete_knowledge_source(source_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', 'kb:' || kb_id::text) "
+                "FROM knowledge_sources WHERE id = ?",
+                (source_id,),
+            )
             conn.execute(
                 "DELETE FROM knowledge_sources WHERE id = ? "
                 "AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
@@ -5108,6 +5175,7 @@ def add_kb_qa(kb_id: int, question: str, answer: str, account_id: int) -> int | 
                 "INSERT INTO kb_qa (kb_id, question, answer, position) VALUES (?, ?, ?, ?) RETURNING id",
                 (kb_id, question, answer, pos),
             )
+            _notify_kb_changed(conn, kb_id)
             return cur.lastrowid
     finally:
         conn.close()
@@ -5139,6 +5207,8 @@ def add_kb_qa_bulk(kb_id: int, pairs: list[dict], account_id: int) -> int:
                     (kb_id, question, answer, pos),
                 )
                 added += 1
+            if added:
+                _notify_kb_changed(conn, kb_id)
     finally:
         conn.close()
     return added
@@ -5153,6 +5223,10 @@ def update_kb_qa(qa_id: int, question: str, answer: str, account_id: int) -> Non
                 "WHERE id = ? AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
                 (question, answer, qa_id, account_id),
             )
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', 'kb:' || kb_id::text) FROM kb_qa WHERE id = ?",
+                (qa_id,),
+            )
     finally:
         conn.close()
 
@@ -5161,6 +5235,10 @@ def delete_kb_qa(qa_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', 'kb:' || kb_id::text) FROM kb_qa WHERE id = ?",
+                (qa_id,),
+            )
             conn.execute(
                 "DELETE FROM kb_qa WHERE id = ? AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
                 (qa_id, account_id),
@@ -6969,6 +7047,20 @@ def touch_integration_sync(account_id: int, key: str) -> None:
         conn.close()
 
 
+def clear_integration_error(account_id: int, key: str) -> None:
+    """Drop a stale last_error after a re-connect, without stamping last_sync
+    (nothing has been delivered yet)."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE integrations SET last_error = NULL WHERE key = ? AND account_id = ?",
+                (key, account_id),
+            )
+    finally:
+        conn.close()
+
+
 def mark_integration_error(account_id: int, key: str, message: str) -> None:
     """Record why the last live-call delivery to this integration failed —
     surfaced on the Integrations card so a bad token doesn't fail silently.
@@ -8240,6 +8332,40 @@ def _credits_used_in_period(conn, account_id: int, rates: dict, period_start: st
     return round(used, 1), by_type, by_voice_tier
 
 
+TRIAL_STARTED_SETTING = "trial_started_at"
+
+
+def usage_period_start(conn, account_id: int, sub) -> str:
+    """Start of the window credits and free test minutes are counted over.
+    agent/db.py _trial_credits_exhausted applies the same rule at admission.
+
+    - A subscription row: its current period (an active one renews; a
+      cancelled one stays on its last period, so it doesn't renew either).
+    - No subscription, on a free trial: since the trial started, never reset.
+    - No subscription and no trial marker (accounts that predate the one-time
+      trial, typically onboarded by hand): the calendar month, as before.
+    """
+    if sub and sub["current_period_start"]:
+        return sub["current_period_start"]
+    trial = _get_setting(conn, account_id, TRIAL_STARTED_SETTING)
+    if trial:
+        return trial
+    return conn.execute("SELECT date_trunc('month', now())::text AS s").fetchone()["s"]
+
+
+def end_trial(account_id: int) -> None:
+    """The platform owner set this account's plan or credits by hand: it is a
+    managed account now, so its allowance renews monthly like before."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "DELETE FROM settings WHERE account_id = ? AND key = ?", (account_id, TRIAL_STARTED_SETTING)
+            )
+    finally:
+        conn.close()
+
+
 def billing_summary(account_id: int) -> dict:
     conn = _connect()
     try:
@@ -8254,15 +8380,7 @@ def billing_summary(account_id: int) -> dict:
             "FROM subscriptions WHERE account_id = ?",
             (account_id,),
         ).fetchone()
-        if sub and sub["current_period_start"]:
-            period_start = sub["current_period_start"]
-        else:
-            # No subscription yet (never checked out) — fall back to
-            # calendar-month-to-date so a brand-new/legacy account still
-            # gets a sane rolling window instead of lifetime-cumulative,
-            # which used to make creditsRemaining hit 0 forever after one
-            # month of any usage at all.
-            period_start = conn.execute("SELECT date_trunc('month', now())::text AS s").fetchone()["s"]
+        period_start = usage_period_start(conn, account_id, sub)
 
         used, by_type, by_voice_tier = _credits_used_in_period(conn, account_id, rates, period_start)
 
@@ -8333,9 +8451,8 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
     can never disagree with the page it links to, and an item disappears by
     itself the moment the underlying problem is fixed.
 
-    The tradeoff is that "I dismissed this" cannot live here. The frontend
-    keeps dismissals in localStorage keyed by the stable `id` below, which
-    is per-browser but costs no correctness. Ids are content-derived, so a
+    Dismissals are stored per person in notification_dismissals, keyed by
+    the stable `id` below, and filtered out at the end. Ids are content-derived, so a
     NEW occurrence (a fresh integration error, a lower credit threshold)
     produces a new id and notifies again rather than staying silently
     dismissed.
@@ -8441,7 +8558,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/integrations",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: integrations section failed", exc_info=True)
 
         # --- support replied and is waiting on the customer --------------
@@ -8464,7 +8581,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": f"/dashboard/support?ticket={r['id']}",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: support section failed", exc_info=True)
 
         # --- calls that ended badly in the last 24h ---------------------
@@ -8488,7 +8605,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/calls",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: failed-calls section failed", exc_info=True)
 
         # --- campaigns the dialer stopped by itself ---------------------
@@ -8510,7 +8627,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/outbound",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: paused-campaign section failed", exc_info=True)
 
         # --- calls that dropped without a real conversation -------------
@@ -8538,7 +8655,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/calls?status=failed",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: dropped-calls section failed", exc_info=True)
 
         # --- negative feedback in the last 7 days -----------------------
@@ -8567,7 +8684,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/calls?feedback=not_helpful",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: feedback section failed", exc_info=True)
 
         # --- campaigns finished in the last 7 days ----------------------
@@ -8587,7 +8704,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/outbound",
                     "at": r["completed_at"],
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: campaigns section failed", exc_info=True)
 
         # --- failed payments -----------------------------------------------
@@ -8618,7 +8735,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/settings?tab=billing",
                     "at": r["created_at"],
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: payments section failed", exc_info=True)
 
         # --- what just happened: calls and bookings in the last 48h ------
@@ -8651,7 +8768,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "at": r["started_at"],
                     "kind": "call",
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: recent-calls section failed", exc_info=True)
 
         try:
@@ -8671,7 +8788,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "at": r["created_at"],
                     "kind": "appointment",
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: appointments section failed", exc_info=True)
     finally:
         conn.close()
@@ -8884,6 +9001,44 @@ def find_account_id_by_razorpay_subscription(razorpay_subscription_id: str) -> i
             (razorpay_subscription_id,),
         ).fetchone()
         return row["account_id"] if row else None
+    finally:
+        conn.close()
+
+
+def claim_razorpay_webhook_event(event_id: str, event_type: str) -> bool:
+    """True the first time a delivery is seen; False for a redelivery."""
+    conn = _connect()
+    try:
+        with conn:
+            row = conn.execute(
+                "INSERT INTO razorpay_webhook_events (event_id, event_type) VALUES (?, ?) "
+                "ON CONFLICT DO NOTHING RETURNING event_id",
+                (event_id, event_type),
+            ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def release_razorpay_webhook_event(event_id: str) -> None:
+    """Processing failed after the claim: forget it so Razorpay's retry runs."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("DELETE FROM razorpay_webhook_events WHERE event_id = ?", (event_id,))
+    finally:
+        conn.close()
+
+
+def invoice_exists_for_payment(razorpay_payment_id: str | None) -> bool:
+    if not razorpay_payment_id:
+        return False
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM invoices WHERE razorpay_payment_id = ? LIMIT 1", (razorpay_payment_id,)
+        ).fetchone()
+        return row is not None
     finally:
         conn.close()
 
@@ -9271,6 +9426,14 @@ def delete_phone_number(number_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
+            # Inbound routes are looked up by number alone at call time
+            # (agent/db.py get_inbound_route), so a route left behind would
+            # apply this tenant's hours and limits to whoever gets the number next.
+            conn.execute(
+                "DELETE FROM inbound_routes WHERE account_id = ? AND phone_number IN "
+                "(SELECT number FROM phone_numbers WHERE id = ? AND account_id = ?)",
+                (account_id, number_id, account_id),
+            )
             conn.execute("DELETE FROM phone_numbers WHERE id = ? AND account_id = ?", (number_id, account_id))
     finally:
         conn.close()
@@ -9453,11 +9616,39 @@ def get_compliance(account_id: int) -> dict:
     return cfg
 
 
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def _compliance_error(cfg: dict) -> str | None:
+    """Why these calling rules can't be saved, or None. Nothing validated
+    them before, and within_calling_window treated an unparseable window as
+    "always allowed", so a typo silently turned the calling window off."""
+    for key in ("window_start", "window_end"):
+        if not _HHMM.match(str(cfg.get(key) or "")):
+            return f"{key.replace('_', ' ').capitalize()} must be a 24-hour time like 09:00."
+    try:
+        ZoneInfo(str(cfg.get("timezone") or ""))
+    except (ZoneInfoNotFoundError, ValueError):
+        return "Choose a valid timezone, for example Asia/Kolkata."
+    days = cfg.get("active_days")
+    if not isinstance(days, list) or any(d not in _DAY_ABBR for d in days):
+        return "Active days must be day names like Mon, Tue."
+    try:
+        if int(cfg.get("retention_days") or 0) < 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return "Retention must be 0 or a positive number of days."
+    return None
+
+
 def save_compliance(account_id: int, data: dict) -> dict:
     cfg = get_compliance(account_id)
     for k in _COMPLIANCE_DEFAULTS:
         if k in data:
             cfg[k] = data[k]
+    error = _compliance_error(cfg)
+    if error:
+        raise ValueError(error)
     set_setting(_COMPLIANCE_KEY, json.dumps(cfg), account_id)
     return cfg
 
@@ -9488,11 +9679,14 @@ def within_calling_window(account_id: int, at: datetime.datetime | None = None) 
     active = cfg.get("active_days") or _COMPLIANCE_DEFAULTS["active_days"]
     if day not in active:
         return False, f"Outside allowed calling days ({', '.join(active)}) — today is {day}."
-    try:
-        sh, sm = (int(x) for x in str(cfg.get("window_start", "09:00")).split(":"))
-        eh, em = (int(x) for x in str(cfg.get("window_end", "21:00")).split(":"))
-    except (ValueError, TypeError):
-        return True, ""
+    # A stored value that isn't HH:MM (saved before validation existed) falls
+    # back to the default window. It used to return "allowed" - calling at
+    # any hour - and "25:00" crashed the check outright.
+    start_s, end_s = str(cfg.get("window_start") or ""), str(cfg.get("window_end") or "")
+    if not (_HHMM.match(start_s) and _HHMM.match(end_s)):
+        start_s, end_s = _COMPLIANCE_DEFAULTS["window_start"], _COMPLIANCE_DEFAULTS["window_end"]
+    sh, sm = (int(x) for x in start_s.split(":"))
+    eh, em = (int(x) for x in end_s.split(":"))
     start = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
     end = now.replace(hour=eh, minute=em, second=0, microsecond=0)
     if start <= now <= end:
@@ -9574,6 +9768,23 @@ def remove_dnc(account_id: int, dnc_id: int) -> None:
     try:
         with conn:
             conn.execute("DELETE FROM dnc_list WHERE id = ? AND account_id = ?", (dnc_id, account_id))
+    finally:
+        conn.close()
+
+
+def count_calls_older_than(account_id: int, days: int) -> int:
+    """How many of this tenant's calls a retention of `days` would delete.
+    Read-only; the Compliance page asks before saving a shorter retention,
+    because the purge runs as soon as the page next loads and is permanent."""
+    if days <= 0:
+        return 0
+    conn = _connect()
+    try:
+        return conn.execute(
+            "SELECT COUNT(*) c FROM calls WHERE account_id = ? "
+            "AND started_at::timestamptz < now() - (? || ' days')::interval",
+            (account_id, days),
+        ).fetchone()["c"]
     finally:
         conn.close()
 

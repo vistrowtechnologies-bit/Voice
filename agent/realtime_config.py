@@ -86,3 +86,36 @@ def input_transcription(model: str, language: str) -> types.AudioTranscriptionCo
             hints.append("en-IN")
         return types.AudioTranscriptionConfig(language_codes=hints)
     return types.AudioTranscriptionConfig()
+
+
+def clean_browser_input(model: str, *, phone: bool) -> bool:
+    """2.5 browser calls: no background ambience and always noise-suppressed input.
+
+    Lab, 10 Oct 2026 (same Hindi utterance streamed straight to the API, our
+    exact 2.5 config, 3 runs each): office ambience after the caller stopped
+    took 4.3 s to first audio vs 3.1 s with silence, while 3.1 was unaffected
+    (~2.0 s). On a browser the agent's own ambience leaks back into the mic
+    through echo cancellation, and 2.5's server-side end-of-speech detector
+    keeps the turn open on it. Steady room noise alone did not slow it.
+    Phone lines have no acoustic echo path, and 3.1 is unaffected, so both
+    keep their tested behaviour.
+    """
+    return model == DEFAULT_MODEL and not phone
+
+
+def context_compression(instructions: str) -> types.ContextWindowCompressionConfig:
+    """Cap the conversation history Google re-bills on every turn.
+
+    The bill (Oct 6-9 2026) showed the platform demo averaging ~44k text
+    input tokens per turn against a ~18k-token instruction: the rest is the
+    growing conversation, re-sent each turn. Once history passes ~10k tokens
+    beyond the instruction, Google's sliding window drops the oldest turns
+    back to ~6k (the system instruction is always kept). Roughly the last
+    few minutes of a call stay in context; facts already saved through the
+    lead tools are unaffected.
+    """
+    instruction_tokens = len(instructions) // 4 + 1  # ~4.2 chars/token measured for these prompts
+    return types.ContextWindowCompressionConfig(
+        trigger_tokens=instruction_tokens + 10_000,
+        sliding_window=types.SlidingWindow(target_tokens=instruction_tokens + 6_000),
+    )

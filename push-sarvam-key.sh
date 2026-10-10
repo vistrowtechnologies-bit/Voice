@@ -7,7 +7,7 @@
 #
 # HOW TO USE
 #   1. Open   /Users/mac15/BRANDS/VISTROW VOICE/.env
-#   2. Change the SARVAM_API_KEY=sk_mva3isfe_s9jrdXK5pDY6HW6O93wqZjNn , save.
+#   2. Change the SARVAM_API_KEY=<your new key>, save.
 #   3. bash push-sarvam-key.sh
 #
 # Pushes to all three remote places (the .env is already the fourth):

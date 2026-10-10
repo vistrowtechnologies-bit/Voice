@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -8,6 +9,7 @@ import os
 import re
 import secrets
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -24,6 +26,7 @@ import db_backup
 import email_sender
 import disposable_email
 import enablex_inbound
+import google_sheets
 import help_chat
 import integrations_dispatch
 import kb_crawl
@@ -113,6 +116,7 @@ _DEVICE_COOKIE_NAME = "vv_device"
 # Routes reachable without a session. Everything else (the dashboard/admin
 # API) requires a valid session cookie, enforced by the middleware below.
 _PUBLIC_PATHS = {
+    "/healthz",                        # Railway deploy healthcheck + external uptime monitor
     "/token",                          # LiveKit token for the public demo + browser test
     "/widget.js",                      # embedded widget script
     "/widget/token",                   # widget call token (runs on customers' sites)
@@ -440,6 +444,34 @@ _BUILTIN_TEST_SCENARIOS = {
 }
 
 
+def _session_owns_agent(request: Request, agent_id: int) -> bool:
+    """/token is public, so it reads the session cookie itself: a valid,
+    current session whose workspace owns this agent."""
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if session is None:
+        return False
+    profile = calls_db.get_user_by_id(session["uid"])
+    return bool(
+        profile is not None
+        and int(profile.get("session_version") or 1) == int(session.get("sv") or 1)
+        and (not session.get("sid") or calls_db.validate_user_session(session["sid"], session["uid"]))
+        and int(profile.get("account_id") or 0) == int(session.get("aid") or 0)
+        and calls_db.agent_account_id(agent_id) == session.get("aid")
+    )
+
+
+def _token_room_allowed(room: str, agent_id: int | None, test_run: bool) -> bool:
+    """Only the room shapes the two /token callers create: the marketing demo
+    orb (voice-agent-demo-*) and the dashboard test call for this agent
+    (test-agent-<id>-* / test-lab-<id>-*, see AgentTestCall.tsx)."""
+    if len(room) > 128:
+        return False
+    if agent_id is None:
+        return room == "voice-agent-demo" or room.startswith("voice-agent-demo-")
+    prefix = "test-lab" if test_run else "test-agent"
+    return room.startswith(f"{prefix}-{agent_id}-")
+
+
 @app.post("/token")
 async def create_token(req: TokenRequest, request: Request) -> dict:
     # Public/unauthenticated: cap per client IP so a script can't mint
@@ -483,6 +515,15 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         agent_id = calls_db.agent_id_for_public_demo_slug(req.demoSlug)
         if agent_id is None:
             raise HTTPException(404, "That demo isn't available right now.")
+    elif agent_id is not None and not _session_owns_agent(request, agent_id):
+        # A raw agent id is the dashboard's "test call": it must come from a
+        # signed-in member of the agent's own workspace. Without this, anyone
+        # could dispatch any tenant's agent on that tenant's credits.
+        raise HTTPException(403, "Sign in to test this agent.")
+    if not _token_room_allowed(req.room, agent_id if not req.demoSlug else None, bool(req.testRunId)):
+        # The grant is room_join on exactly this name, so a caller-chosen name
+        # could join someone else's live call or pick an unbilled test prefix.
+        raise HTTPException(400, "Invalid call room.")
 
     meta: dict = {}
     if agent_id is not None:
@@ -498,19 +539,7 @@ async def create_token(req: TokenRequest, request: Request) -> dict:
         meta["demo_language"] = req.language
     if req.testRunId:
         session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
-        profile = calls_db.get_user_by_id(session["uid"]) if session is not None else None
-        session_is_valid = bool(
-            session is not None
-            and profile is not None
-            and int(profile.get("session_version") or 1) == int(session.get("sv") or 1)
-            and (not session.get("sid") or calls_db.validate_user_session(session["sid"], session["uid"]))
-        )
-        if (
-            not session_is_valid
-            or agent_id is None
-            or int(profile.get("account_id") or 0) != int(session.get("aid") or 0)
-            or calls_db.agent_account_id(agent_id) != session.get("aid")
-        ):
+        if req.demoSlug or agent_id is None or not _session_owns_agent(request, agent_id):
             raise HTTPException(403, "Testing Lab runs require an authenticated workspace agent.")
         run_id = req.testRunId.strip()
         if not run_id or len(run_id) > 80:
@@ -1074,6 +1103,123 @@ def auth_oauth_zoho_callback(
     return _finish()
 
 
+_GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE = "vv_google_sheets_integration_state"
+# OAuth tokens never leave the server: GET /integrations strips these from
+# every integration's config (Zoho's and Google Sheets' both live there).
+_SECRET_CONFIG_KEYS = {"access_token", "refresh_token", "id_token"}
+
+
+@app.get("/integrations/google_sheets/start")
+def integration_google_sheets_start(user: dict = Depends(require_role("admin"))) -> RedirectResponse:
+    """A tenant admin connects Google Sheets by signing in with Google; the
+    callback creates the leads spreadsheet in their Drive. Same shape as
+    /integrations/zoho_crm/start. Scope is google_sheets.SCOPE (drive.file -
+    see the comment there for why not the wider spreadsheets scope)."""
+    client_id = os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("GOOGLE_SHEETS_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        raise HTTPException(404, "Google Sheets integration is not configured on this server")
+    state = secrets.token_urlsafe(24)
+    redirect = RedirectResponse(google_sheets.auth_url(client_id, redirect_uri, state))
+    redirect.set_cookie(
+        _GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE, state, max_age=600, httponly=True, secure=_COOKIE_SECURE, samesite="lax", path="/"
+    )
+    return redirect
+
+
+@app.get("/auth/oauth/google-sheets/callback")
+def auth_oauth_google_sheets_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    """Registered as the Sheets OAuth client's redirect_uri. Lives under the
+    public "/auth/" prefix and reads the session cookie itself, exactly like
+    the Zoho callback, so an expired session lands back on the integrations
+    page with ?sheets=failed rather than a bare 401."""
+    base_url = _app_base_url(request)
+    expected_state = request.cookies.get(_GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE)
+
+    def _finish(query: str) -> RedirectResponse:
+        response = RedirectResponse(f"{base_url}/dashboard/integrations{query}")
+        response.delete_cookie(_GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE, path="/")
+        return response
+
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if error or not code or not expected_state or not secrets.compare_digest(state or "", expected_state) or not session:
+        return _finish("?sheets=failed")
+
+    full_user = calls_db.get_user_by_id(session["uid"])
+    if full_user is None or calls_db.ROLE_RANK.get(full_user["role"], 0) < calls_db.ROLE_RANK["admin"]:
+        return _finish("?sheets=failed")
+
+    client_id = os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("GOOGLE_SHEETS_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        return _finish("?sheets=failed")
+
+    try:
+        token_data = google_sheets.exchange_code(code, client_id, client_secret, redirect_uri)
+    except google_sheets.GoogleError as e:
+        logger.error("Google Sheets integration OAuth failed: %s", e)
+        return _finish("?sheets=failed")
+    access_token = token_data.get("access_token")
+    refresh_token = token_data.get("refresh_token")
+    if not access_token or not refresh_token:
+        logger.error("Google Sheets integration OAuth returned no usable tokens: %s", token_data.get("error", "missing tokens"))
+        return _finish("?sheets=failed")
+
+    account_id = full_user["account_id"]
+    previous = next(
+        (i.get("config") or {} for i in calls_db.list_integrations(account_id) if i["key"] == "sheets"), {}
+    )
+    try:
+        # A re-connect keeps writing to the owner's existing sheet when Google
+        # still lets us open it; otherwise (deleted, other Google account)
+        # a fresh one is created.
+        sheet = google_sheets.reusable_spreadsheet(access_token, previous) or google_sheets.create_spreadsheet(access_token)
+    except google_sheets.GoogleError as e:
+        logger.error("Google Sheets integration could not create the leads sheet: %s", e)
+        return _finish("?sheets=failed")
+
+    try:
+        calls_db.update_integration(
+            "sheets",
+            "connected",
+            {
+                "mode": "oauth",
+                **sheet,
+                "google_email": google_sheets.email_from_id_token(token_data.get("id_token")),
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "expires_at": time.time() + float(token_data.get("expires_in") or 3600),
+            },
+            account_id,
+        )
+    except plan_policy.EntitlementError:
+        return _finish("?sheets=failed")
+    # A fresh grant clears any "access was removed" error from the old one.
+    calls_db.clear_integration_error(account_id, "sheets")
+    return _finish("?sheets=connected")
+
+
+@app.post("/integrations/google_sheets/disconnect")
+def integration_google_sheets_disconnect(user: dict = Depends(require_role("admin"))) -> dict:
+    """Revoke our Google grant (best-effort) and forget the tokens. The
+    spreadsheet itself stays in the owner's Drive - it's their data."""
+    config = next(
+        (i.get("config") or {} for i in calls_db.list_integrations(user["account_id"]) if i["key"] == "sheets"), {}
+    )
+    if config.get("mode") == "oauth":
+        # Revoking the refresh token revokes the whole grant, access tokens included.
+        google_sheets.revoke(config.get("refresh_token") or config.get("access_token") or "")
+    calls_db.update_integration("sheets", "not_connected", {}, user["account_id"])
+    return {"ok": True}
+
+
 _FACEBOOK_INTEGRATION_STATE_COOKIE = "vv_facebook_integration_state"
 _META_GRAPH_VERSION = "v25.0"  # v20.0 sunsets 2026-09-24; stay current explicitly rather than drift.
 
@@ -1353,7 +1499,11 @@ def auth_verify_email(req: VerifyEmailRequest, response: Response, request: Requ
 
 
 @app.post("/auth/resend-email-verification")
-def auth_resend_email_verification(req: ResendEmailVerificationRequest) -> dict:
+def auth_resend_email_verification(req: ResendEmailVerificationRequest, request: Request) -> dict:
+    # The per-user 60 s cooldown alone let one client send a branded email to
+    # any number of unverified addresses; cap per IP like signup/login.
+    if _auth_rate_limited(_client_ip(request)):
+        raise HTTPException(429, "Too many attempts. Please wait a minute and try again.")
     # Generic success shape prevents using this endpoint to enumerate users.
     email = req.email.strip().lower()
     user = calls_db.get_user_by_email(email)
@@ -1409,7 +1559,7 @@ class ContactRequest(BaseModel):
 
 
 @app.post("/public/contact")
-def public_contact(req: ContactRequest) -> dict:
+def public_contact(req: ContactRequest, request: Request) -> dict:
     """The marketing site's "Book a Demo" form (web-demo/src/pages/marketing/
     Contact.tsx) — unauthenticated, no per-tenant account involved, just a
     prospective customer reaching the Vistrow Voice team directly. Notifies
@@ -1417,6 +1567,9 @@ def public_contact(req: ContactRequest) -> dict:
     a lead for an account's own CRM, it's a lead for Vistrow itself)."""
     if req.hp.strip():
         return {"ok": True}
+    # The honeypot stops dumb bots only; each submission emails the sales inbox.
+    if _auth_rate_limited(_client_ip(request)):
+        raise HTTPException(429, "Too many requests. Please wait a minute and try again.")
     name = req.name.strip()
     email = req.email.strip().lower()
     if not name or "@" not in email or "." not in email.split("@")[-1]:
@@ -1704,7 +1857,7 @@ class UpdateAccountRequest(BaseModel):
 
 
 @app.patch("/account")
-def update_account(req: UpdateAccountRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+def update_account(req: UpdateAccountRequest, request: Request, user: dict = Depends(require_role("member"))) -> dict:
     if req.name is not None:
         name = req.name.strip()
         if not name:
@@ -1975,7 +2128,10 @@ def profile_privacy_requests(user: dict = Depends(current_user)) -> dict:
 
 
 @app.post("/profile/request-account-deletion")
-def request_account_deletion(req: AccountDeletionRequest, user: dict = Depends(current_user)) -> dict:
+def request_account_deletion(
+    req: AccountDeletionRequest, request: Request, background_tasks: BackgroundTasks,
+    user: dict = Depends(current_user),
+) -> dict:
     profile = calls_db.get_user_by_id(user["user_id"])
     if profile is None:
         raise HTTPException(404, "Account not found")
@@ -1990,7 +2146,35 @@ def request_account_deletion(req: AccountDeletionRequest, user: dict = Depends(c
         email_sender.send_email(profile["email"], "Vistrow Voice account deletion request", html, email_sender.FROM_ACCOUNT_SECURITY)
     calls_db.record_security_event(user["user_id"], "account_deletion_requested")
     request_row = calls_db.create_privacy_request(user["user_id"], user["account_id"], "deletion")
+    # The customer is promised a review within 2 business days, but only they
+    # were emailed: the team learned of a request only by opening the admin
+    # page. Tell the support inbox too.
+    background_tasks.add_task(
+        _email_deletion_request_alert, _app_base_url(request), request_row["id"],
+        user["account_id"], profile["email"],
+    )
     return {"ok": True, "requestId": request_row["id"], "status": request_row["status"]}
+
+
+def _email_deletion_request_alert(base: str, request_id: int, account_id: int, email: str) -> None:
+    rendered = email_sender.render_email(
+        preheader=f"Account deletion request #{request_id}",
+        heading="Account deletion requested",
+        body_html=(
+            f"<p>A user asked for their account to be deleted (request #{request_id}, "
+            f"workspace {account_id}, {html.escape(email)}).</p>"
+            "<p>The customer was told the privacy team will review it within 2 business days.</p>"
+        ),
+        cta_label="Open privacy requests",
+        cta_url=f"{base}/admin/privacy-requests",
+    )
+    if not email_sender.send_email(
+        _support_inbox(), f"Account deletion request #{request_id}", rendered, email_sender.FROM_SUPPORT
+    ):
+        admin_db.log_error(
+            f"Account deletion request #{request_id} (workspace {account_id}): alert email failed",
+            source="privacy", level="warning",
+        )
 
 
 @app.delete("/profile/account-deletion-request/{request_id}")
@@ -2287,6 +2471,24 @@ def admin_audit(action: str = "", limit: int = 100, offset: int = 0, admin: dict
     return admin_db.audit_log(action, limit, offset)
 
 
+@app.get("/healthz")
+def healthz() -> Response:
+    """Liveness for Railway's deploy healthcheck and an external uptime
+    monitor: 200 only if this process can query the database. Before this the
+    only health route was owner-gated, so nothing outside could tell a hung
+    or DB-less API from a working one. Reveals nothing beyond up/down."""
+    try:
+        conn = calls_db._connect()
+        try:
+            conn.execute("SELECT 1").fetchone()
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("healthz: database check failed")
+        return Response('{"ok": false}', status_code=503, media_type="application/json")
+    return Response('{"ok": true}', media_type="application/json")
+
+
 @app.get("/admin/health")
 async def admin_health(admin: dict = Depends(require_platform_owner)) -> dict:
     health = admin_db.system_health()
@@ -2412,6 +2614,7 @@ def admin_set_plan(account_id: int, req: AdminPlanRequest, admin: dict = Depends
     if req.plan not in admin_db.PLAN_PRICING:
         raise HTTPException(400, "Unknown plan")
     admin_db.change_plan(account_id, req.plan)
+    calls_db.end_trial(account_id)
     admin_db.write_audit(admin["user_id"], admin["email"], "change_plan", account_id, detail=f"plan={req.plan}. {req.reason}".strip())
     return admin_db.account_detail(account_id)
 
@@ -2681,7 +2884,7 @@ def download_call_recording(call_id: int, user: dict = Depends(current_user)) ->
 
 
 @app.post("/calls/{call_id}/analyze")
-def analyze_call(call_id: int, user: dict = Depends(current_user)) -> dict:
+def analyze_call(call_id: int, user: dict = Depends(require_role("member"))) -> dict:
     """Run (or re-run) conversation intelligence on one call and cache it on
     the row. Returns the intelligence object."""
     transcript = calls_db.get_call_transcript(call_id, user["account_id"])
@@ -2824,10 +3027,51 @@ def _guard_voice_tier(data: dict | None, account_id: int) -> None:
         raise HTTPException(400, f"{label} voices aren't available on your plan - upgrade to use this voice.")
 
 
+# Voices a Gemini Live (realtime) model can speak with. Must match
+# agent/main.py's _GEMINI_LIVE_VOICES (test_realtime_voice_guard.py checks it):
+# the runtime silently swaps any other voice for Kore, so a male agent could
+# go out speaking as a female voice with nothing in the dashboard saying so.
+_GEMINI_LIVE_VOICES = frozenset({
+    "achernar", "achird", "algenib", "algieba", "alnilam", "aoede", "autonoe", "callirrhoe",
+    "charon", "despina", "enceladus", "erinome", "fenrir", "gacrux", "iapetus", "kore",
+    "laomedeia", "leda", "orus", "pulcherrima", "puck", "rasalgethi", "sadachbia",
+    "sadaltager", "schedar", "sulafat", "umbriel", "vindemiatrix", "zephyr", "zubenelgenubi",
+})
+
+
+def _realtime_voice_usable(voice: str) -> bool:
+    """Same resolution as agent/main.py's _gemini_live_voice."""
+    persona = voice_catalog.chirp3_persona(voice or "") or (voice or "").split(":")[-1].strip()
+    return (persona or "").lower() in _GEMINI_LIVE_VOICES
+
+
+def _guard_realtime_voice(data: dict, account_id: int, agent_id: int | None = None) -> None:
+    """Refuse a realtime model paired with a voice it can't speak with.
+    Checked only when the request touches the model or the voice, against the
+    effective pair (request values over the saved agent's), so an unrelated
+    edit to an already-mismatched agent is not blocked."""
+    if "model" not in data and "voice" not in data:
+        return
+    saved: dict = {}
+    if agent_id is not None:
+        row = calls_db.get_agent_by_id_unscoped(agent_id)
+        if row and calls_db.agent_account_id(agent_id) == account_id:
+            saved = row
+    model = str(data.get("model") or saved.get("model") or "")
+    voice = str(data.get("voice") or saved.get("voice") or "")
+    if model.startswith("gemini-live") and voice and not _realtime_voice_usable(voice):
+        raise HTTPException(
+            400,
+            "Realtime models can only speak with a Gemini realtime voice (for example Aoede or Kore). "
+            "Pick one of those voices for this agent.",
+        )
+
+
 @app.post("/agents")
 def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     _guard_stt_provider(data)
     _guard_voice_tier(data, user["account_id"])
+    _guard_realtime_voice(data, user["account_id"])
     _guard_admin_only_model(data, user["account_id"])
     try:
         return calls_db.create_agent(data, user["account_id"])
@@ -2839,6 +3083,7 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
 def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     _guard_stt_provider(data)
     _guard_voice_tier(data, user["account_id"])
+    _guard_realtime_voice(data, user["account_id"], agent_id)
     _guard_admin_only_model(data, user["account_id"])
     for fields, feature in ((('kbId', 'kb_id'), 'knowledge'),
                             (('liveCatalogEnabled', 'live_catalog_enabled'), 'live_catalog')):
@@ -2881,7 +3126,7 @@ def list_testing_scenarios(user: dict = Depends(current_user)) -> list[dict]:
 
 
 @app.post("/testing/scenarios")
-def create_testing_scenario(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def create_testing_scenario(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     try:
         return calls_db.create_test_scenario(data, user["account_id"])
     except ValueError as exc:
@@ -2889,7 +3134,7 @@ def create_testing_scenario(data: dict = Body(...), user: dict = Depends(current
 
 
 @app.delete("/testing/scenarios/{scenario_id}")
-def delete_testing_scenario(scenario_id: int, user: dict = Depends(current_user)) -> dict:
+def delete_testing_scenario(scenario_id: int, user: dict = Depends(require_role("member"))) -> dict:
     if not calls_db.delete_test_scenario(scenario_id, user["account_id"]):
         raise HTTPException(404, "Regression case not found")
     return {"ok": True}
@@ -3019,18 +3264,30 @@ def export_contacts_csv(user: dict = Depends(current_user)) -> PlainTextResponse
     )
 
 
+# 5,000 rows is the import cap; even wide rows fit well inside this. A larger
+# body is refused before it is parsed into memory.
+_IMPORT_CSV_MAX_CHARS = 10 * 1024 * 1024
+
+
+def _bounded_import_csv(data: dict) -> str:
+    text = data.get("csv", "") or ""
+    if not isinstance(text, str) or len(text) > _IMPORT_CSV_MAX_CHARS:
+        raise HTTPException(413, "That file is too large. Import up to 5,000 contacts (10 MB) at a time.")
+    return text
+
+
 @app.post("/contacts/import/preview")
 def preview_contacts_import(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     """First step of the column-mapping import flow — parse just the header
     row + a few sample rows so the frontend can render a Facebook-Custom-
     Audience-style "map each column" screen before anything is imported."""
-    return calls_db.preview_csv_columns(data.get("csv", ""))
+    return calls_db.preview_csv_columns(_bounded_import_csv(data))
 
 
 @app.post("/contacts/import/mapped")
 def import_contacts_mapped(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     try:
-        return calls_db.import_contacts_mapped(data.get("csv", ""), data.get("mapping") or {}, user["account_id"])
+        return calls_db.import_contacts_mapped(_bounded_import_csv(data), data.get("mapping") or {}, user["account_id"])
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -3362,8 +3619,28 @@ def list_help_faqs(user: dict = Depends(current_user)) -> list[dict]:
     return FAQS
 
 
+# Each help-chat message is up to two paid OpenAI completions, and any signed-in
+# user could loop it. Per-user caps, in memory like the other limiters here.
+_HELP_CHAT_LIMITS = ((60, 12), (24 * 3600, 200))  # (window seconds, max messages)
+_help_chat_calls: dict[int, list[float]] = {}
+
+
+def _help_chat_rate_limited(user_id: int, now: float | None = None) -> bool:
+    now = time.monotonic() if now is None else now
+    longest = max(window for window, _ in _HELP_CHAT_LIMITS)
+    calls = [t for t in _help_chat_calls.get(user_id, []) if now - t < longest]
+    if any(sum(1 for t in calls if now - t < window) >= cap for window, cap in _HELP_CHAT_LIMITS):
+        _help_chat_calls[user_id] = calls
+        return True
+    calls.append(now)
+    _help_chat_calls[user_id] = calls
+    return False
+
+
 @app.post("/help/chat")
 def help_chat_message(req: HelpChatRequest, user: dict = Depends(current_user)) -> dict:
+    if _help_chat_rate_limited(user["user_id"]):
+        raise HTTPException(429, "You've sent a lot of help messages — please wait a little, or open a support ticket.")
     try:
         preferences = calls_db.get_user_preferences(user["user_id"])
         result = help_chat.answer_help_question(
@@ -3379,7 +3656,9 @@ def help_chat_message(req: HelpChatRequest, user: dict = Depends(current_user)) 
 
 
 @app.post("/help/tickets")
-def create_help_ticket(req: HelpTicketRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+def create_help_ticket(
+    req: HelpTicketRequest, request: Request, background_tasks: BackgroundTasks, user: dict = Depends(current_user)
+) -> dict:
     user = _ticket_author(user)
     subject = req.subject.strip()[:160]
     detail = req.detail.strip()[:5_000]
@@ -3443,7 +3722,9 @@ def create_help_ticket(req: HelpTicketRequest, request: Request, user: dict = De
     )
     if sent:
         calls_db.mark_support_ticket_emailed(ticket_id, user["account_id"])
-    _email_ticket_confirmation(_app_base_url(request), user, ticket_id, subject, detail)
+    # The customer's receipt doesn't need to hold the request open: two
+    # sequential sends with 10 s timeouts made a slow provider a ~20 s submit.
+    background_tasks.add_task(_email_ticket_confirmation, _app_base_url(request), user, ticket_id, subject, detail)
     return {"ok": True, "ticketId": f"VV-{ticket_id}", "id": ticket_id, "emailSent": sent}
 
 
@@ -3950,6 +4231,13 @@ def update_campaign(campaign_id: int, data: dict = Body(...), user: dict = Depen
 # are admin+ because getting compliance wrong is a legal, not cosmetic, risk.
 
 
+@app.get("/compliance/retention-preview")
+def compliance_retention_preview(days: int, user: dict = Depends(require_role("admin"))) -> dict:
+    if days < 0:
+        raise HTTPException(400, "Retention must be 0 or a positive number of days.")
+    return {"days": days, "callsToDelete": calls_db.count_calls_older_than(user["account_id"], days)}
+
+
 @app.get("/compliance/settings")
 def get_compliance_settings(user: dict = Depends(current_user)) -> dict:
     # Opportunistic retention enforcement — purge on read so DPDP retention is
@@ -3964,7 +4252,10 @@ def get_compliance_settings(user: dict = Depends(current_user)) -> dict:
 
 @app.patch("/compliance/settings")
 def update_compliance_settings(data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
-    return calls_db.save_compliance(user["account_id"], data)
+    try:
+        return calls_db.save_compliance(user["account_id"], data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/compliance/dnc")
@@ -3977,6 +4268,11 @@ def add_dnc(data: dict = Body(...), user: dict = Depends(require_role("admin")))
     phone = (data.get("phone") or "").strip()
     if not phone:
         raise HTTPException(400, "A phone number is required")
+    # add_dnc returns False both for "already blocked" and for a number that
+    # normalises to nothing, so the page told the operator a typo was already
+    # blocked while nothing was blocked at all.
+    if not calls_db._normalize_phone(phone, user["account_id"]):
+        raise HTTPException(400, "Enter a valid phone number with country code.")
     added = calls_db.add_dnc(user["account_id"], phone, reason=(data.get("reason") or "").strip())
     return {"ok": True, "added": added}
 
@@ -4008,7 +4304,13 @@ def remove_dnc(dnc_id: int, user: dict = Depends(require_role("admin"))) -> dict
 
 @app.get("/integrations")
 def list_integrations(user: dict = Depends(current_user)) -> list[dict]:
-    return calls_db.list_integrations(user["account_id"])
+    # Redacted here, not in calls_db.list_integrations: the delivery code
+    # (integrations_dispatch) reads the same rows and needs the real tokens.
+    # Zoho's tokens were returned to the browser before this.
+    return [
+        {**item, "config": {k: v for k, v in (item.get("config") or {}).items() if k not in _SECRET_CONFIG_KEYS}}
+        for item in calls_db.list_integrations(user["account_id"])
+    ]
 
 
 @app.patch("/integrations/{key}")
@@ -4044,6 +4346,8 @@ def create_appointment(data: dict = Body(...), user: dict = Depends(current_user
         user["account_id"], data.get("agentId"), None,
         data.get("name", ""), data.get("phone", ""), data["date"], data["time"],
         int(data.get("durationMinutes", 30)), data.get("purpose", ""), data.get("email", ""), source="manual",
+        # The booking modal sends notes; they were dropped on create.
+        notes=str(data.get("notes") or "")[:2000],
     )
     if not result.get("ok"):
         raise HTTPException(409, result.get("error", "could not book"))
@@ -4052,7 +4356,10 @@ def create_appointment(data: dict = Body(...), user: dict = Depends(current_user
 
 @app.patch("/appointments/{appt_id}/status")
 def update_appointment_status(appt_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
-    appt = calls_db.update_appointment_status(appt_id, user["account_id"], data.get("status", ""))
+    try:
+        appt = calls_db.update_appointment_status(appt_id, user["account_id"], data.get("status", ""))
+    except ValueError as exc:
+        raise HTTPException(400, "Unknown appointment status.") from exc
     if not appt:
         raise HTTPException(404, "not found")
     return appt
@@ -4326,6 +4633,29 @@ def _verify_enablex_webhook(request: Request) -> bool:
 
 
 _ENABLEX_BRIDGED_VOICE_IDS: set = set()
+# The inbound handler runs in the threadpool (see enablex_inbound_event), so
+# the check-and-add on the set above must be atomic across threads.
+_ENABLEX_BRIDGE_LOCK = threading.Lock()
+
+
+def _claim_enablex_bridge(voice_id: str) -> bool:
+    """True if this call leg has not been bridged yet (and marks it). EnableX
+    can send 'incomingcall' more than once and also 'connected' for the same
+    leg; only the first may accept and bridge, or the leg is double-bridged."""
+    with _ENABLEX_BRIDGE_LOCK:
+        if voice_id in _ENABLEX_BRIDGED_VOICE_IDS:
+            return False
+        if len(_ENABLEX_BRIDGED_VOICE_IDS) > 500:
+            _ENABLEX_BRIDGED_VOICE_IDS.clear()
+        _ENABLEX_BRIDGED_VOICE_IDS.add(voice_id)
+        return True
+
+
+def _release_enablex_bridge(voice_id: str) -> None:
+    """After a failed accept/bridge, so a later 'connected' can still rescue
+    the call instead of being ignored as a duplicate."""
+    with _ENABLEX_BRIDGE_LOCK:
+        _ENABLEX_BRIDGED_VOICE_IDS.discard(voice_id)
 
 
 @app.post("/telephony/enablex/inbound-event")
@@ -4378,7 +4708,15 @@ async def enablex_inbound_event(request: Request, background_tasks: BackgroundTa
             "EnableX inbound event: unparsed body (content-type=%s): %r", content_type, raw_body[:2000]
         )
         return {"ok": True}
+    # Everything below does blocking psycopg reads and EnableX REST calls
+    # (urllib with sleep-based retries, up to ~45 s each). On this async
+    # route they ran on the event loop of the single uvicorn process, so one
+    # slow inbound call stalled every other request: widget tokens, the
+    # dashboard, other webhooks. Run them in the threadpool instead.
+    return await asyncio.to_thread(_handle_enablex_inbound_event, event, background_tasks)
 
+
+def _handle_enablex_inbound_event(event: dict, background_tasks: BackgroundTasks) -> dict:
     state = event.get("state")
     voice_id = event.get("voice_id")
     dialed_number = event.get("to")
@@ -4430,27 +4768,22 @@ async def enablex_inbound_event(request: Request, background_tasks: BackgroundTa
     # sending only initiated/connected (no 'incomingcall') — nobody then
     # bridges it and it drops after ~25 s. A connected event whose `to` is
     # one of our DIDs is an inbound leg, so bridge it once per voice_id.
-    is_inbound_connected = (
-        state == "connected"
-        and voice_id
-        and dialed_number
-        and voice_id not in _ENABLEX_BRIDGED_VOICE_IDS
-        and calls_db.get_phone_number_by_number(dialed_number) is not None
-    )
-    if is_inbound_connected:
-        _ENABLEX_BRIDGED_VOICE_IDS.add(voice_id)
-        if len(_ENABLEX_BRIDGED_VOICE_IDS) > 500:
-            _ENABLEX_BRIDGED_VOICE_IDS.clear()
-        logger.warning("EnableX inbound %s: 'connected' with no 'incomingcall' — bridging as a fallback", voice_id)
-    elif state != "incomingcall" or not voice_id or not dialed_number:
+    if state not in ("incomingcall", "connected") or not voice_id or not dialed_number:
         return {"ok": True}
-    else:
-        _ENABLEX_BRIDGED_VOICE_IDS.add(voice_id)
-
     number_row = calls_db.get_phone_number_by_number(dialed_number)
+    is_inbound_connected = state == "connected"
     if number_row is None:
+        if is_inbound_connected:
+            # A connected event whose `to` isn't one of our DIDs is not an
+            # inbound leg (e.g. the far end of an outbound call).
+            return {"ok": True}
         logger.warning("inbound call to unregistered number %s — hanging up", dialed_number)
         return {"ok": False, "error": "number not registered"}
+    if not _claim_enablex_bridge(voice_id):
+        logger.info("EnableX inbound %s: '%s' for a leg already being bridged; ignoring", voice_id, state)
+        return {"ok": True}
+    if is_inbound_connected:
+        logger.warning("EnableX inbound %s: 'connected' with no 'incomingcall' — bridging as a fallback", voice_id)
     account_id = number_row["accountId"]
 
     accept = enablex_inbound.accept_if_ringing(
@@ -4462,6 +4795,7 @@ async def enablex_inbound_event(request: Request, background_tasks: BackgroundTa
     if accept is not None:
         if not accept.get("ok"):
             logger.error("failed to accept EnableX call %s: %s", voice_id, accept.get("error"))
+            _release_enablex_bridge(voice_id)
             return accept
         logger.info("accepted EnableX call %s: %s", voice_id, accept.get("response"))
 
@@ -4472,6 +4806,7 @@ async def enablex_inbound_event(request: Request, background_tasks: BackgroundTa
     bridge = calls_db.enablex_connect_to_sip(voice_id, dialed_number, sip_uri, account_id)
     if not bridge.get("ok"):
         logger.error("failed to bridge EnableX call %s to %s: %s", voice_id, sip_uri, bridge.get("error"))
+        _release_enablex_bridge(voice_id)
     else:
         # EnableX returning ok=True here only means it accepted the connect
         # *request* — it says nothing about whether the SIP INVITE it then
@@ -4763,6 +5098,19 @@ def billing_verify_payment(req: VerifyPaymentRequest, user: dict = Depends(curre
     return {"ok": True}
 
 
+def _report_unmatched_razorpay_event(event_type: str, sub: dict) -> None:
+    """A paid activation/charge we can't attach to an account is money taken
+    with no plan granted. Returning 5xx would make Razorpay retry and then
+    disable the whole webhook, so record it where the platform owner looks."""
+    admin_db.log_error(
+        f"Razorpay {event_type} for subscription {sub.get('id')} matches no account; "
+        "the customer may have paid without getting their plan",
+        source="billing", level="error",
+        context=json.dumps({"subscription_id": sub.get("id"), "customer_id": sub.get("customer_id"),
+                            "notes": sub.get("notes")})[:2000],
+    )
+
+
 @app.post("/billing/razorpay/webhook")
 async def billing_razorpay_webhook(request: Request) -> dict:
     """Source of truth for subscription lifecycle — Razorpay calls this on
@@ -4779,6 +5127,32 @@ async def billing_razorpay_webhook(request: Request) -> dict:
         raise HTTPException(400, "Invalid webhook signature")
 
     event = json.loads(raw_body)
+    # The handlers below do blocking DB writes and Razorpay API calls; keep
+    # them off the event loop (same reason as the EnableX inbound webhook).
+    return await asyncio.to_thread(
+        _handle_razorpay_webhook, event, request.headers.get("x-razorpay-event-id", "")
+    )
+
+
+def _handle_razorpay_webhook(event: dict, event_id: str) -> dict:
+    """Process each delivery once. Razorpay redelivers on timeouts, and a
+    replayed subscription.charged added a duplicate invoice, reset credits to
+    the plan base mid-cycle (erasing top-ups) and added the overage again. If
+    processing fails after the claim, the claim is released and the error
+    propagates (500) so Razorpay's retry runs it."""
+    event_type = event.get("event", "")
+    if event_id and not calls_db.claim_razorpay_webhook_event(event_id, event_type):
+        logger.info("razorpay webhook %s (%s) already processed; ignoring redelivery", event_id, event_type)
+        return {"ok": True}
+    try:
+        return _process_razorpay_event(event)
+    except Exception:
+        if event_id:
+            calls_db.release_razorpay_webhook_event(event_id)
+        raise
+
+
+def _process_razorpay_event(event: dict) -> dict:
     event_type = event.get("event", "")
     payload = event.get("payload", {})
     logger.info("razorpay webhook: %s", event_type)
@@ -4804,12 +5178,16 @@ async def billing_razorpay_webhook(request: Request) -> dict:
             # subscription id, race with checkout) produced zero trace,
             # while Razorpay still got 200 OK and never retried.
             logger.warning("razorpay %s: no account for subscription %s", event_type, sub.get("id"))
+            _report_unmatched_razorpay_event(event_type, sub)
 
     elif event_type == "subscription.charged":
         sub = payload.get("subscription", {}).get("entity", {})
         payment = payload.get("payment", {}).get("entity", {})
         account_id = calls_db.find_account_id_by_razorpay_subscription(sub.get("id", ""))
-        if account_id:
+        if account_id and calls_db.invoice_exists_for_payment(payment.get("id")):
+            # Second guard for a redelivery that arrives without an event id.
+            logger.info("razorpay subscription.charged: payment %s already recorded; ignoring", payment.get("id"))
+        elif account_id:
             existing = calls_db.get_subscription(account_id)
             plan = (sub.get("notes") or {}).get("plan") or (existing["plan"] if existing else "starter")
             new_period_start = _epoch_to_iso(sub.get("current_start"))
@@ -4865,6 +5243,7 @@ async def billing_razorpay_webhook(request: Request) -> dict:
             admin_db.change_plan(account_id, plan)
         else:
             logger.warning("razorpay subscription.charged: no account for subscription %s", sub.get("id"))
+            _report_unmatched_razorpay_event(event_type, sub)
 
     elif event_type == "subscription.cancelled":
         sub = payload.get("subscription", {}).get("entity", {})
@@ -5253,7 +5632,7 @@ def voices_mine(user: dict = Depends(current_user)) -> list[dict]:
 
 
 @app.post("/voices/mine")
-def voices_add(body: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def voices_add(body: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     voice = (body or {}).get("voice", "")
     try:
         calls_db.add_account_voice(user["account_id"], voice)
@@ -5263,7 +5642,7 @@ def voices_add(body: dict = Body(...), user: dict = Depends(current_user)) -> di
 
 
 @app.delete("/voices/mine/{voice:path}")
-def voices_remove(voice: str, user: dict = Depends(current_user)) -> dict:
+def voices_remove(voice: str, user: dict = Depends(require_role("member"))) -> dict:
     calls_db.remove_account_voice(user["account_id"], voice)
     return {"ok": True, "voices": calls_db.list_account_voices(user["account_id"])}
 

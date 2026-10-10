@@ -22,6 +22,7 @@ import urllib.parse
 import urllib.request
 
 import calls_db
+import google_sheets
 
 logger = logging.getLogger("vistrow-integrations")
 
@@ -256,23 +257,20 @@ def _zoho_refresh_access_token(config: dict) -> tuple[str, dict] | None:
 
 
 def _zoho_lead_body(lead: dict) -> dict:
-    # Zoho's Leads module requires Last_Name (and Company, on most default
-    # layouts) — there's no single "name" field to map onto, so the full
-    # caller name goes in Last_Name and doubles as Company when none was
-    # captured, rather than failing the whole record over a missing field.
-    name = str(lead.get("name") or "Unknown caller").strip()
-    return {
-        "data": [
-            {
-                "Last_Name": name,
-                "Company": lead.get("company") or name,
-                "Phone": lead.get("phone", ""),
-                "Email": lead.get("email", ""),
-                "Description": lead.get("summary") or _lead_summary_line(lead),
-                "Lead_Source": _human_channel(lead),
-            }
-        ]
+    # Mirrors agent/tools.py's _zoho_lead_body: empty fields are left out and
+    # the record is upserted on whichever of Phone/Email is present, so a
+    # repeat caller updates their lead instead of creating another.
+    name = str(lead.get("name") or "").strip() or "Website visitor"
+    record = {
+        "Last_Name": name,
+        "Company": str(lead.get("company") or "").strip() or name,
+        "Phone": str(lead.get("phone") or "").strip(),
+        "Email": str(lead.get("email") or "").strip(),
+        "Description": lead.get("summary") or _lead_summary_line(lead),
+        "Lead_Source": _human_channel(lead),
     }
+    record = {k: v for k, v in record.items() if v}
+    return {"data": [record], "duplicate_check_fields": [f for f in ("Phone", "Email") if record.get(f)]}
 
 
 def _deliver_zoho_crm(account_id: int, config: dict, lead: dict) -> tuple[bool, str]:
@@ -283,7 +281,7 @@ def _deliver_zoho_crm(account_id: int, config: dict, lead: dict) -> tuple[bool, 
 
     def _post(token: str) -> tuple[bool, str, int | None]:
         req = urllib.request.Request(
-            f"{api_domain}/crm/v2/Leads",
+            f"{api_domain}/crm/v2/Leads/upsert",
             data=json.dumps(_zoho_lead_body(lead)).encode(),
             headers={"Authorization": f"Zoho-oauthtoken {token}", "Content-Type": "application/json"},
             method="POST",
@@ -321,6 +319,17 @@ def _deliver_one(key: str, config: dict, lead: dict, account_id: int | None = No
         return False, "CRM delivery requires the Growth or Scale plan"
     if key == "zoho_crm":
         return _deliver_zoho_crm(account_id, config, lead)
+    if key == "sheets" and config.get("mode") == "oauth":
+        # "Sign in with Google" sheets: an authenticated Sheets API append,
+        # not a POST to an Apps Script URL (configs without mode=oauth still
+        # take the URL path below, unchanged).
+        return google_sheets.append_lead(
+            config,
+            lead,
+            os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_ID"),
+            os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_SECRET"),
+            lambda updated: calls_db.update_integration("sheets", "connected", updated, account_id),
+        )
     body = _body_for(key, config, lead)
     if body is None:
         return False, "not configured"
@@ -381,6 +390,9 @@ def test_integration(account_id: int, key: str) -> tuple[bool, str]:
         "language": "en",
         "agent_name": "Test Agent",
     }
+    if key == "sheets" and (integ.get("config") or {}).get("mode") == "oauth":
+        # A real row lands in the owner's sheet, so make it obviously deletable.
+        sample = {**sample, "name": google_sheets.TEST_ROW_NAME, "channel": "Dashboard test"}
     ok, detail = _deliver_one(key, integ.get("config") or {}, sample, account_id)
     try:
         if ok:

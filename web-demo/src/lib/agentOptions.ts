@@ -308,6 +308,25 @@ export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: s
 /** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */
 export const isRealtimeModel = (value: string) => value.startsWith('gemini-live')
 
+// Gemini Live's own voice list (agent/main.py _GEMINI_LIVE_VOICES). A realtime
+// agent speaks with the persona its voice value names; any other voice is
+// replaced with Kore at call time.
+const GEMINI_LIVE_VOICES = new Set([
+  'achernar', 'achird', 'algenib', 'algieba', 'alnilam', 'aoede', 'autonoe', 'callirrhoe',
+  'charon', 'despina', 'enceladus', 'erinome', 'fenrir', 'gacrux', 'iapetus', 'kore',
+  'laomedeia', 'leda', 'orus', 'pulcherrima', 'puck', 'rasalgethi', 'sadachbia',
+  'sadaltager', 'schedar', 'sulafat', 'umbriel', 'vindemiatrix', 'zephyr', 'zubenelgenubi',
+])
+
+/** The Gemini Live persona a voice value maps to ("google:chirp3:Aoede" -> "Aoede",
+ *  "google:chirp3:hi-IN-Chirp3-HD-Aoede" -> "Aoede"), or null if a realtime
+ *  model can't use it. */
+export const geminiLiveVoiceName = (value: string): string | null => {
+  const tail = (value || '').split(':').pop()!.trim()
+  const persona = tail.split('-').pop()!.toLowerCase()
+  return GEMINI_LIVE_VOICES.has(persona) ? persona.charAt(0).toUpperCase() + persona.slice(1) : null
+}
+
 // Kept out of the dropdown but still resolvable, so calls 853 and 854 render
 // under a name instead of leaking the raw vendor string at a tenant.
 const RETIRED_ADMIN_MODELS = [

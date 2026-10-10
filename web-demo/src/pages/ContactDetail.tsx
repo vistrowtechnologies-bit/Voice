@@ -49,6 +49,7 @@ export function ContactDetail() {
   const [tab, setTab] = useState<Tab>('Activity')
   const [noteBody, setNoteBody] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [noteError, setNoteError] = useState('')
   const [showEdit, setShowEdit] = useState(false)
   const [showCall, setShowCall] = useState(false)
   const [savingContact, setSavingContact] = useState(false)
@@ -86,6 +87,13 @@ export function ContactDetail() {
 
   useEffect(reload, [id])
 
+  // Refresh after a note change. Unlike the initial load, a failure here must not
+  // turn the page into "Contact not found"; the caller shows the error instead.
+  const refresh = async () => {
+    if (!id) return
+    setContact(await fetchContactDetail(Number(id)))
+  }
+
   if (contact === undefined) {
     return (
       <DashboardLayout>
@@ -115,12 +123,26 @@ export function ContactDetail() {
     const body = noteBody.trim()
     if (!body) return
     setSavingNote(true)
+    setNoteError('')
     try {
       await addContactNote(contact.id, body)
       setNoteBody('')
-      reload()
+      await refresh()
+    } catch (error) {
+      setNoteError(error instanceof Error ? error.message : 'Could not save the note.')
     } finally {
       setSavingNote(false)
+    }
+  }
+
+  const handleDeleteNote = async (noteId: number) => {
+    if (!contact) return
+    setNoteError('')
+    try {
+      await deleteContactNote(contact.id, noteId)
+      await refresh()
+    } catch (error) {
+      setNoteError(error instanceof Error ? error.message : 'Could not delete the note.')
     }
   }
 
@@ -649,6 +671,7 @@ export function ContactDetail() {
                   Add
                 </button>
               </div>
+              {noteError && <p className="text-sm text-destructive">{noteError}</p>}
               {contact.notes.length === 0 ? (
                 <EmptyState text="No notes yet." compact />
               ) : (
@@ -662,7 +685,7 @@ export function ContactDetail() {
                         </p>
                       </div>
                       <button
-                        onClick={() => deleteContactNote(contact.id, n.id).then(reload)}
+                        onClick={() => handleDeleteNote(n.id)}
                         aria-label="Delete note"
                         className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-surface-high text-destructive hover:bg-destructive hover:text-bg"
                       >

@@ -8,6 +8,7 @@ import {
   bulkAddDnc,
   fetchCompliance,
   fetchDnc,
+  previewRetentionPurge,
   removeDnc,
   updateCompliance,
   type ComplianceSettings,
@@ -71,17 +72,27 @@ export function Compliance() {
   const [dnc, setDnc] = useState<DncEntry[]>([])
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [dncPhone, setDncPhone] = useState('')
   const [dncReason, setDncReason] = useState('')
   const [bulkText, setBulkText] = useState('')
   const [bulkOpen, setBulkOpen] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const [dncError, setDncError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
 
   const reloadDnc = () => fetchDnc().then(setDnc).catch(() => setDnc([]))
 
+  // Retention as last loaded/saved, to tell when a save shortens it.
+  const [savedRetention, setSavedRetention] = useState(0)
+
   useEffect(() => {
-    fetchCompliance().then(setCfg).catch(() => setCfg(null))
+    fetchCompliance()
+      .then((c) => {
+        setCfg(c)
+        setSavedRetention(Number(c.retention_days) || 0)
+      })
+      .catch(() => setCfg(null))
     reloadDnc()
   }, [])
 
@@ -96,11 +107,30 @@ export function Compliance() {
   const save = async () => {
     if (!cfg) return
     setSaving(true)
+    setSaveError(null)
     try {
+      // Calls older than the retention window are purged permanently the next
+      // time this page loads, so say how many before shortening it.
+      const days = Number(cfg.retention_days) || 0
+      if (days > 0 && (savedRetention === 0 || days < savedRetention)) {
+        const { callsToDelete } = await previewRetentionPurge(days)
+        if (
+          callsToDelete > 0 &&
+          !window.confirm(
+            `Keeping calls for ${days} day${days === 1 ? '' : 's'} will permanently delete ${callsToDelete} older ` +
+              `call${callsToDelete === 1 ? '' : 's'}, including transcripts and recordings. This cannot be undone. Continue?`,
+          )
+        ) {
+          return
+        }
+      }
       const updated = await updateCompliance(cfg)
       setCfg(updated)
+      setSavedRetention(Number(updated.retention_days) || 0)
       setSavedAt(true)
       setTimeout(() => setSavedAt(false), 2000)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not save the calling rules.')
     } finally {
       setSaving(false)
     }
@@ -108,7 +138,14 @@ export function Compliance() {
 
   const submitDnc = async () => {
     if (!dncPhone.trim()) return
-    const res = await addDnc(dncPhone.trim(), dncReason.trim())
+    setDncError(null)
+    let res
+    try {
+      res = await addDnc(dncPhone.trim(), dncReason.trim())
+    } catch (err) {
+      setDncError(err instanceof Error ? err.message : 'Could not add this number.')
+      return
+    }
     setMsg(res.added ? `Added ${dncPhone.trim()} to Do-Not-Call.` : `${dncPhone.trim()} was already blocked.`)
     setDncPhone('')
     setDncReason('')
@@ -118,7 +155,14 @@ export function Compliance() {
 
   const submitBulk = async () => {
     if (!bulkText.trim()) return
-    const res = await bulkAddDnc(bulkText)
+    setDncError(null)
+    let res
+    try {
+      res = await bulkAddDnc(bulkText)
+    } catch (err) {
+      setDncError(err instanceof Error ? err.message : 'Could not import these numbers.')
+      return
+    }
     setMsg(`Imported ${res.added} new number${res.added === 1 ? '' : 's'} (${res.total - res.added} already blocked).`)
     setBulkText('')
     setBulkOpen(false)
@@ -144,6 +188,7 @@ export function Compliance() {
             {savedAt ? 'Saved' : saving ? 'Saving…' : 'Save rules'}
           </button>
         )}
+        {saveError && <span className="text-sm text-destructive">{saveError}</span>}
       </PageHeader>
 
       <section className="grid max-w-5xl gap-4 p-4 sm:p-6 lg:grid-cols-2">
@@ -255,6 +300,7 @@ export function Compliance() {
                   {msg}
                 </div>
               )}
+              {dncError && <p className="text-sm text-destructive">{dncError}</p>}
               {canManage && (
                 <div className="flex flex-col gap-2">
                   <div className="flex gap-2">

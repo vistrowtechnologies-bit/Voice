@@ -374,6 +374,8 @@ export interface DncEntry {
 export const fetchCompliance = () => get<ComplianceSettings>('/compliance/settings')
 export const updateCompliance = (data: Partial<ComplianceSettings>) =>
   send<ComplianceSettings>('PATCH', '/compliance/settings', data)
+export const previewRetentionPurge = (days: number) =>
+  get<{ days: number; callsToDelete: number }>(`/compliance/retention-preview?days=${days}`)
 export const fetchDnc = () => get<DncEntry[]>('/compliance/dnc')
 export const addDnc = (phone: string, reason: string) =>
   send<{ ok: boolean; added: boolean }>('POST', '/compliance/dnc', { phone, reason })
@@ -438,6 +440,9 @@ export const testIntegration = (key: string) =>
 export const slackIntegrationStartUrl = '/api/integrations/slack/start'
 export const facebookIntegrationStartUrl = '/api/integrations/facebook/start'
 export const zohoIntegrationStartUrl = '/api/integrations/zoho_crm/start'
+export const googleSheetsIntegrationStartUrl = '/api/integrations/google_sheets/start'
+/** Revokes the Google grant (best-effort) and clears the stored tokens. */
+export const disconnectGoogleSheets = () => send<{ ok: boolean }>('POST', '/integrations/google_sheets/disconnect')
 export const fetchLeadWebhook = () =>
   get<{ url: string | null; accountId: number; token: string }>('/integrations/lead-webhook')
 export interface ArthaleadsInboundConfig {

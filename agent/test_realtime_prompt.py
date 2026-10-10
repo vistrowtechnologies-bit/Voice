@@ -74,3 +74,23 @@ class Compact(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StyleCoachingIsDroppedForRealtime(unittest.TestCase):
+    """Delivery coaching for a TTS voice is re-billed every turn and native
+    audio does not need it; the four rules that matter survive as one block."""
+    def test_style_sections_are_dropped_but_their_essential_rules_remain(self):
+        src = (
+            "# Your identity\nYou are Artha.\n"
+            "# Voice conversation rules\nlong rules\n"
+            "# Sounding like a person — fillers, humor, warmth\nfillers\n"
+            "# Natural speech imperfections — don't be TOO clean\nhmm\n"
+            "# A few jokes to have in your back pocket — use sparingly\njoke\n"
+            "# Pricing\nNo rupee figures.\n"
+        )
+        out = rp.compact(src, language_name="Hindi")
+        for gone in ("# Voice conversation rules", "# Sounding like a person", "# Natural speech imperfections", "# A few jokes"):
+            self.assertNotIn(gone, out)
+        self.assertIn("# Pricing", out)
+        for rule in ("borrowed English word", "one moment", "never a reason to end the call", "one short goodbye"):
+            self.assertIn(rule, out)

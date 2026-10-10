@@ -163,13 +163,38 @@ class RealtimeGreetingLifecycle(unittest.IsolatedAsyncioTestCase):
     def agent(self, playout):
         session = SimpleNamespace(userdata={}, generate_reply=Mock(
             return_value=SimpleNamespace(wait_for_playout=playout)))
-        return SimpleNamespace(
+        agent = SimpleNamespace(
             session=session, _first_speaker="agent", _is_realtime=True,
             realtime_llm_session=Mock(),
             _welcome_message="Namaste, main Artha bol rahi hoon.",
             _reply_language="hi-IN", _warm_llm_prompt_cache=Mock(),
-            _await_own_audio_track=AsyncMock(),
+            _await_own_audio_track=AsyncMock(), _direction="inbound",
+            _HELD_OPENING_HARD_CAP_S=8.0,
         )
+        agent._speak_realtime_greeting = lambda *a, **k: main.RealEstateAgent._speak_realtime_greeting(
+            agent, *a, **k)
+        agent._release_held_opening_if_unheard = lambda: main.RealEstateAgent._release_held_opening_if_unheard(
+            agent)
+        return agent
+
+    async def test_realtime_outbound_greets_as_soon_as_connected(self):
+        # Holding the realtime outbound greeting left live calls 1158/1159
+        # mute (10 Oct 2026): the hold's release signals (an STT transcript,
+        # caller-speech state) don't exist on a realtime call. It greets at
+        # once, with the "you are calling them" wording.
+        agent = self.agent(AsyncMock())
+        agent._direction = "outbound"
+        await main.RealEstateAgent.on_enter(agent)
+        agent.session.generate_reply.assert_called_once()
+        self.assertIn("just answered", agent.session.generate_reply.call_args.kwargs["instructions"])
+        self.assertNotIn("outbound_opening_pending", agent.session.userdata)
+        self.assertTrue(agent.session.userdata["greeting_played"])
+
+    async def test_realtime_inbound_keeps_the_inbound_wording(self):
+        agent = self.agent(AsyncMock())
+        agent._direction = "inbound"
+        await main.RealEstateAgent.on_enter(agent)
+        self.assertNotIn("just answered", agent.session.generate_reply.call_args.kwargs["instructions"])
 
     async def test_greeting_is_pending_until_playout_finishes(self):
         entered, release = asyncio.Event(), asyncio.Event()

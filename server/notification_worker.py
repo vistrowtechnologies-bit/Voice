@@ -107,6 +107,10 @@ def _max_call_id(account_id: int) -> int:
         conn.close()
 
 
+# A long email outage must not turn into one enormous email afterwards.
+_MAX_LEADS_PER_EMAIL = 50
+
+
 def check_leads(account_id: int) -> int:
     mark = calls_db.get_setting(_LEADS_MARK, account_id)
     if mark is None:
@@ -116,9 +120,10 @@ def check_leads(account_id: int) -> int:
     leads = new_leads(account_id, int(mark))
     if not leads:
         return 0
-    calls_db.set_setting(_LEADS_MARK, str(leads[-1]["id"]), account_id)
+    leads = leads[:_MAX_LEADS_PER_EMAIL]
     to = recipients(account_id, "notify_leads")
     if not to:
+        calls_db.set_setting(_LEADS_MARK, str(leads[-1]["id"]), account_id)
         return 0
     rows = "".join(
         "<tr>"
@@ -131,12 +136,18 @@ def check_leads(account_id: int) -> int:
     )
     n = len(leads)
     subject = f"{n} new lead{'s' if n > 1 else ''} from your AI agent" if n > 1 else f"New lead: {leads[0]['lead_name'] or leads[0]['lead_phone']}"
-    return _send(
+    sent = _send(
         to, subject, subject,
         f"<p>Your agent just captured {'these leads' if n > 1 else 'a lead'}:</p>"
         f"<table style='border-collapse:collapse;font-size:14px'>{rows}</table>",
         "Open the calls", "/dashboard/calls",
     )
+    # Advance only once the email went out. The mark used to move before the
+    # send, so an email-provider outage silently dropped those leads' alerts;
+    # now the next tick retries them.
+    if sent:
+        calls_db.set_setting(_LEADS_MARK, str(leads[-1]["id"]), account_id)
+    return sent
 
 
 # -------------------------------------------------------- integrations

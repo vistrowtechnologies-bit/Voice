@@ -23,7 +23,7 @@ import time
 
 import psycopg
 from psycopg import sql as psycopg_sql
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import dbconn
 import phone_format
@@ -152,7 +152,16 @@ def _trial_credits_exhausted(conn, account_id: int) -> bool:
     credits_total = float(total_row["value"]) if total_row else 0.0
     if credits_total <= 0:
         return True
+    # Same window as server/calls_db.usage_period_start: a subscription's
+    # period; else, for a free trial, since the trial started (one-time, never
+    # reset); else (accounts that predate the trial marker) the calendar month.
     period_start = sub["current_period_start"] if sub and sub["current_period_start"] else None
+    if not period_start:
+        trial = conn.execute(
+            "SELECT value FROM settings WHERE account_id = ? AND key = 'trial_started_at'",
+            (account_id,),
+        ).fetchone()
+        period_start = trial["value"] if trial else None
     if not period_start:
         period_start = conn.execute("SELECT date_trunc('month', now())::text AS s").fetchone()["s"]
     rates = {}
@@ -324,7 +333,24 @@ def _invalidate_agent_config_cache(payload: str) -> None:
     always be evicted too: changing which agent is public, or editing the
     currently public agent, otherwise leaves unauthenticated demo calls on
     the previous configuration.
+
+    ``kb:<id>`` payloads (sent when a knowledge base is saved or deleted)
+    evict that knowledge base instead; without this a KB edit was served
+    stale for up to _KB_CACHE_TTL_S (10 minutes).
     """
+    if isinstance(payload, str) and payload.startswith("kb:"):
+        raw = payload[3:].strip()
+        # The cache is keyed by whatever get_kb was called with - agents.kb_id
+        # (normally int) - so evict both spellings of the id.
+        _kb_cache.pop(raw, None)
+        try:
+            _kb_cache.pop(int(raw), None)
+        except ValueError:
+            _kb_cache.clear()
+            logger.warning("cleared knowledge-base cache after invalidation payload %r", payload)
+            return
+        logger.info("invalidated cached knowledge base kb_id=%s", raw)
+        return
     try:
         agent_id = int(payload)
     except (TypeError, ValueError):
@@ -941,6 +967,24 @@ def _appt_slot_conflict(conn, account_id: int, appt_date: str, start_time: str, 
     return False
 
 
+def _availability_now(cfg: dict) -> "datetime.datetime":
+    """Now in the availability config's timezone (IST when unset/invalid)."""
+    try:
+        tz = ZoneInfo(cfg.get("timezone") or "Asia/Kolkata")
+    except (ZoneInfoNotFoundError, ValueError, TypeError):
+        tz = ZoneInfo("Asia/Kolkata")
+    return datetime.datetime.now(tz)
+
+
+def _appointment_in_past(account_id: int, date: str, time: str) -> bool:
+    try:
+        when = datetime.datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        return False  # not a date/time this check can judge; leave it to the insert
+    now = _availability_now(get_availability_config(account_id))
+    return when <= now.replace(tzinfo=None, second=0, microsecond=0)
+
+
 def check_appointment_availability(account_id: int | None, date: str, duration_minutes: int) -> list[str] | None:
     """Open HH:MM slots for `date` against the account's availability config +
     existing confirmed bookings. None only on a genuine DB error, so the tool
@@ -963,7 +1007,12 @@ def check_appointment_availability(account_id: int | None, date: str, duration_m
             return []
         slot_minutes = int(cfg.get("slot_minutes", 30))
         open_m, close_m = _hhmm_to_minutes(hours["open"]), _hhmm_to_minutes(hours["close"])
-        now = datetime.datetime.now(ZoneInfo(cfg.get("timezone", "Asia/Kolkata")))
+        now = _availability_now(cfg)
+        # A past date used to return every slot (only today was filtered), and
+        # those slots became "verified" for book_appointment, so a caller could
+        # be booked into yesterday.
+        if datetime.date.fromisoformat(date) < now.date():
+            return []
         is_today = date == now.date().isoformat()
         now_minutes = now.hour * 60 + now.minute
         slots: list[str] = []
@@ -994,6 +1043,10 @@ def book_native_appointment(
     genuine DB error — matches the old _calendar_book contract."""
     if account_id is None:
         return None
+    # Defence in depth behind check_appointment_availability: never insert a
+    # booking for a time that has already passed in the account's timezone.
+    if _appointment_in_past(account_id, date, time):
+        return {"ok": False, "error": "that time has already passed"}
     conn = dbconn.connect()
     try:
         with conn:
@@ -1296,14 +1349,19 @@ def end_call_room(room_name: str) -> None:
     """Releases the concurrent-call slot claimed by try_start_call. Called
     from the shutdown callback, so it must never raise — best-effort, same as
     every other teardown step there."""
-    conn = dbconn.connect()
+    # Catch everything, not just psycopg.Error: connect() can raise PoolTimeout
+    # and returning the connection can raise a pool ValueError, and an escaped
+    # error here leaks the active_calls row, which holds a concurrency slot
+    # until the 4 h stale-row sweep.
     try:
-        with conn:
-            conn.execute("DELETE FROM active_calls WHERE room_name = ?", (room_name,))
-    except psycopg.Error:
-        logger.warning("end_call_room: DB error releasing room %s", room_name, exc_info=True)
-    finally:
-        conn.close()
+        conn = dbconn.connect()
+        try:
+            with conn:
+                conn.execute("DELETE FROM active_calls WHERE room_name = ?", (room_name,))
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001 - teardown must never raise
+        logger.warning("end_call_room: error releasing room %s", room_name, exc_info=True)
 
 
 _NOW = "(to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))"
@@ -1464,6 +1522,22 @@ def save_call(record: dict) -> int | None:
                 ),
             )
             return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def find_saved_call(room_name: str, started_at: str) -> int | None:
+    """The id of a call row already written for this room and start time, if
+    any. Used before retrying save_call: an insert can commit and still raise
+    (the connection drops before the reply), and a blind retry would then
+    write the call twice, billing it twice. started_at is stored verbatim."""
+    conn = dbconn.connect()
+    try:
+        row = conn.execute(
+            "SELECT id FROM calls WHERE room_name = ? AND started_at = ? ORDER BY id DESC LIMIT 1",
+            (room_name, started_at),
+        ).fetchone()
+        return row["id"] if row else None
     finally:
         conn.close()
 
