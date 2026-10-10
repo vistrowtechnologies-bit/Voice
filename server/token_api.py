@@ -1381,7 +1381,11 @@ def auth_verify_email(req: VerifyEmailRequest, response: Response, request: Requ
 
 
 @app.post("/auth/resend-email-verification")
-def auth_resend_email_verification(req: ResendEmailVerificationRequest) -> dict:
+def auth_resend_email_verification(req: ResendEmailVerificationRequest, request: Request) -> dict:
+    # The per-user 60 s cooldown alone let one client send a branded email to
+    # any number of unverified addresses; cap per IP like signup/login.
+    if _auth_rate_limited(_client_ip(request)):
+        raise HTTPException(429, "Too many attempts. Please wait a minute and try again.")
     # Generic success shape prevents using this endpoint to enumerate users.
     email = req.email.strip().lower()
     user = calls_db.get_user_by_email(email)
@@ -1437,7 +1441,7 @@ class ContactRequest(BaseModel):
 
 
 @app.post("/public/contact")
-def public_contact(req: ContactRequest) -> dict:
+def public_contact(req: ContactRequest, request: Request) -> dict:
     """The marketing site's "Book a Demo" form (web-demo/src/pages/marketing/
     Contact.tsx) — unauthenticated, no per-tenant account involved, just a
     prospective customer reaching the Vistrow Voice team directly. Notifies
@@ -1445,6 +1449,9 @@ def public_contact(req: ContactRequest) -> dict:
     a lead for an account's own CRM, it's a lead for Vistrow itself)."""
     if req.hp.strip():
         return {"ok": True}
+    # The honeypot stops dumb bots only; each submission emails the sales inbox.
+    if _auth_rate_limited(_client_ip(request)):
+        raise HTTPException(429, "Too many requests. Please wait a minute and try again.")
     name = req.name.strip()
     email = req.email.strip().lower()
     if not name or "@" not in email or "." not in email.split("@")[-1]:
@@ -1732,7 +1739,7 @@ class UpdateAccountRequest(BaseModel):
 
 
 @app.patch("/account")
-def update_account(req: UpdateAccountRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+def update_account(req: UpdateAccountRequest, request: Request, user: dict = Depends(require_role("member"))) -> dict:
     if req.name is not None:
         name = req.name.strip()
         if not name:
@@ -2727,7 +2734,7 @@ def download_call_recording(call_id: int, user: dict = Depends(current_user)) ->
 
 
 @app.post("/calls/{call_id}/analyze")
-def analyze_call(call_id: int, user: dict = Depends(current_user)) -> dict:
+def analyze_call(call_id: int, user: dict = Depends(require_role("member"))) -> dict:
     """Run (or re-run) conversation intelligence on one call and cache it on
     the row. Returns the intelligence object."""
     transcript = calls_db.get_call_transcript(call_id, user["account_id"])
@@ -2870,10 +2877,51 @@ def _guard_voice_tier(data: dict | None, account_id: int) -> None:
         raise HTTPException(400, f"{label} voices aren't available on your plan - upgrade to use this voice.")
 
 
+# Voices a Gemini Live (realtime) model can speak with. Must match
+# agent/main.py's _GEMINI_LIVE_VOICES (test_realtime_voice_guard.py checks it):
+# the runtime silently swaps any other voice for Kore, so a male agent could
+# go out speaking as a female voice with nothing in the dashboard saying so.
+_GEMINI_LIVE_VOICES = frozenset({
+    "achernar", "achird", "algenib", "algieba", "alnilam", "aoede", "autonoe", "callirrhoe",
+    "charon", "despina", "enceladus", "erinome", "fenrir", "gacrux", "iapetus", "kore",
+    "laomedeia", "leda", "orus", "pulcherrima", "puck", "rasalgethi", "sadachbia",
+    "sadaltager", "schedar", "sulafat", "umbriel", "vindemiatrix", "zephyr", "zubenelgenubi",
+})
+
+
+def _realtime_voice_usable(voice: str) -> bool:
+    """Same resolution as agent/main.py's _gemini_live_voice."""
+    persona = voice_catalog.chirp3_persona(voice or "") or (voice or "").split(":")[-1].strip()
+    return (persona or "").lower() in _GEMINI_LIVE_VOICES
+
+
+def _guard_realtime_voice(data: dict, account_id: int, agent_id: int | None = None) -> None:
+    """Refuse a realtime model paired with a voice it can't speak with.
+    Checked only when the request touches the model or the voice, against the
+    effective pair (request values over the saved agent's), so an unrelated
+    edit to an already-mismatched agent is not blocked."""
+    if "model" not in data and "voice" not in data:
+        return
+    saved: dict = {}
+    if agent_id is not None:
+        row = calls_db.get_agent_by_id_unscoped(agent_id)
+        if row and calls_db.agent_account_id(agent_id) == account_id:
+            saved = row
+    model = str(data.get("model") or saved.get("model") or "")
+    voice = str(data.get("voice") or saved.get("voice") or "")
+    if model.startswith("gemini-live") and voice and not _realtime_voice_usable(voice):
+        raise HTTPException(
+            400,
+            "Realtime models can only speak with a Gemini realtime voice (for example Aoede or Kore). "
+            "Pick one of those voices for this agent.",
+        )
+
+
 @app.post("/agents")
 def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     _guard_stt_provider(data)
     _guard_voice_tier(data, user["account_id"])
+    _guard_realtime_voice(data, user["account_id"])
     _guard_admin_only_model(data, user["account_id"])
     try:
         return calls_db.create_agent(data, user["account_id"])
@@ -2885,6 +2933,7 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
 def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     _guard_stt_provider(data)
     _guard_voice_tier(data, user["account_id"])
+    _guard_realtime_voice(data, user["account_id"], agent_id)
     _guard_admin_only_model(data, user["account_id"])
     for fields, feature in ((('kbId', 'kb_id'), 'knowledge'),
                             (('liveCatalogEnabled', 'live_catalog_enabled'), 'live_catalog')):
@@ -2927,7 +2976,7 @@ def list_testing_scenarios(user: dict = Depends(current_user)) -> list[dict]:
 
 
 @app.post("/testing/scenarios")
-def create_testing_scenario(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def create_testing_scenario(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     try:
         return calls_db.create_test_scenario(data, user["account_id"])
     except ValueError as exc:
@@ -2935,7 +2984,7 @@ def create_testing_scenario(data: dict = Body(...), user: dict = Depends(current
 
 
 @app.delete("/testing/scenarios/{scenario_id}")
-def delete_testing_scenario(scenario_id: int, user: dict = Depends(current_user)) -> dict:
+def delete_testing_scenario(scenario_id: int, user: dict = Depends(require_role("member"))) -> dict:
     if not calls_db.delete_test_scenario(scenario_id, user["account_id"]):
         raise HTTPException(404, "Regression case not found")
     return {"ok": True}
@@ -3065,18 +3114,30 @@ def export_contacts_csv(user: dict = Depends(current_user)) -> PlainTextResponse
     )
 
 
+# 5,000 rows is the import cap; even wide rows fit well inside this. A larger
+# body is refused before it is parsed into memory.
+_IMPORT_CSV_MAX_CHARS = 10 * 1024 * 1024
+
+
+def _bounded_import_csv(data: dict) -> str:
+    text = data.get("csv", "") or ""
+    if not isinstance(text, str) or len(text) > _IMPORT_CSV_MAX_CHARS:
+        raise HTTPException(413, "That file is too large. Import up to 5,000 contacts (10 MB) at a time.")
+    return text
+
+
 @app.post("/contacts/import/preview")
 def preview_contacts_import(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     """First step of the column-mapping import flow — parse just the header
     row + a few sample rows so the frontend can render a Facebook-Custom-
     Audience-style "map each column" screen before anything is imported."""
-    return calls_db.preview_csv_columns(data.get("csv", ""))
+    return calls_db.preview_csv_columns(_bounded_import_csv(data))
 
 
 @app.post("/contacts/import/mapped")
 def import_contacts_mapped(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     try:
-        return calls_db.import_contacts_mapped(data.get("csv", ""), data.get("mapping") or {}, user["account_id"])
+        return calls_db.import_contacts_mapped(_bounded_import_csv(data), data.get("mapping") or {}, user["account_id"])
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -4020,6 +4081,13 @@ def update_campaign(campaign_id: int, data: dict = Body(...), user: dict = Depen
 # are admin+ because getting compliance wrong is a legal, not cosmetic, risk.
 
 
+@app.get("/compliance/retention-preview")
+def compliance_retention_preview(days: int, user: dict = Depends(require_role("admin"))) -> dict:
+    if days < 0:
+        raise HTTPException(400, "Retention must be 0 or a positive number of days.")
+    return {"days": days, "callsToDelete": calls_db.count_calls_older_than(user["account_id"], days)}
+
+
 @app.get("/compliance/settings")
 def get_compliance_settings(user: dict = Depends(current_user)) -> dict:
     # Opportunistic retention enforcement — purge on read so DPDP retention is
@@ -4050,6 +4118,11 @@ def add_dnc(data: dict = Body(...), user: dict = Depends(require_role("admin")))
     phone = (data.get("phone") or "").strip()
     if not phone:
         raise HTTPException(400, "A phone number is required")
+    # add_dnc returns False both for "already blocked" and for a number that
+    # normalises to nothing, so the page told the operator a typo was already
+    # blocked while nothing was blocked at all.
+    if not calls_db._normalize_phone(phone, user["account_id"]):
+        raise HTTPException(400, "Enter a valid phone number with country code.")
     added = calls_db.add_dnc(user["account_id"], phone, reason=(data.get("reason") or "").strip())
     return {"ok": True, "added": added}
 
@@ -4117,6 +4190,8 @@ def create_appointment(data: dict = Body(...), user: dict = Depends(current_user
         user["account_id"], data.get("agentId"), None,
         data.get("name", ""), data.get("phone", ""), data["date"], data["time"],
         int(data.get("durationMinutes", 30)), data.get("purpose", ""), data.get("email", ""), source="manual",
+        # The booking modal sends notes; they were dropped on create.
+        notes=str(data.get("notes") or "")[:2000],
     )
     if not result.get("ok"):
         raise HTTPException(409, result.get("error", "could not book"))
@@ -4125,7 +4200,10 @@ def create_appointment(data: dict = Body(...), user: dict = Depends(current_user
 
 @app.patch("/appointments/{appt_id}/status")
 def update_appointment_status(appt_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
-    appt = calls_db.update_appointment_status(appt_id, user["account_id"], data.get("status", ""))
+    try:
+        appt = calls_db.update_appointment_status(appt_id, user["account_id"], data.get("status", ""))
+    except ValueError as exc:
+        raise HTTPException(400, "Unknown appointment status.") from exc
     if not appt:
         raise HTTPException(404, "not found")
     return appt
@@ -5398,7 +5476,7 @@ def voices_mine(user: dict = Depends(current_user)) -> list[dict]:
 
 
 @app.post("/voices/mine")
-def voices_add(body: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def voices_add(body: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     voice = (body or {}).get("voice", "")
     try:
         calls_db.add_account_voice(user["account_id"], voice)
@@ -5408,7 +5486,7 @@ def voices_add(body: dict = Body(...), user: dict = Depends(current_user)) -> di
 
 
 @app.delete("/voices/mine/{voice:path}")
-def voices_remove(voice: str, user: dict = Depends(current_user)) -> dict:
+def voices_remove(voice: str, user: dict = Depends(require_role("member"))) -> dict:
     calls_db.remove_account_voice(user["account_id"], voice)
     return {"ok": True, "voices": calls_db.list_account_voices(user["account_id"])}
 

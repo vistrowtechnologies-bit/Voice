@@ -124,6 +124,32 @@ _OUTBOUND_ROOM_EMPTY_TIMEOUT_S = 120
 _RINGING_TIMEOUT = duration_pb2.Duration(seconds=35)
 
 
+# Simultaneous outbound channels bought from the carrier (same env var the
+# campaign dialer reads). EnableX rejects anything beyond it.
+_OUTBOUND_CHANNELS = max(1, int(os.environ.get("OUTBOUND_CHANNEL_LIMIT", "2") or 2))
+
+
+async def outbound_rooms_in_use() -> int | None:
+    """Live outbound calls, ringing or connected, counted from LiveKit itself:
+    every room this module dials from carries direction=outbound metadata.
+    None if LiveKit can't be asked."""
+    try:
+        async with api.LiveKitAPI() as lkapi:
+            rooms = (await lkapi.room.list_rooms(ListRoomsRequest())).rooms
+    except Exception:
+        logger.warning("could not list rooms to count outbound channels", exc_info=True)
+        return None
+    count = 0
+    for room in rooms:
+        try:
+            meta = json.loads(room.metadata) if room.metadata else {}
+        except ValueError:
+            continue
+        if isinstance(meta, dict) and meta.get("direction") == "outbound":
+            count += 1
+    return count
+
+
 async def place_outbound_call(
     to_number: str,
     from_number: str,
@@ -172,6 +198,20 @@ async def place_outbound_call(
     allowed, reason = calls_db.check_call_allowed(account_id, to_number)
     if not allowed:
         return {"ok": False, "blocked": True, "error": reason}
+
+    # The campaign dialer holds its own dials to the channel budget, but a
+    # contact "Call now" or a dashboard test call skipped any check, so two
+    # campaign dials plus one test call put three calls on a 2-channel trunk.
+    # Campaign dials are left to the dialer: refusing one here would spend a
+    # contact's attempt. If LiveKit can't be asked, the dial proceeds.
+    if campaign_contact_id is None:
+        in_use = await outbound_rooms_in_use()
+        if in_use is not None and in_use >= _OUTBOUND_CHANNELS:
+            return {
+                "ok": False,
+                "busy": True,
+                "error": "All outbound lines are in use right now. Try again when a call ends.",
+            }
 
     trunk_id = calls_db.get_setting(OUTBOUND_TRUNK_ID_SETTING, calls_db.PLATFORM_ACCOUNT_ID)
     if not trunk_id:

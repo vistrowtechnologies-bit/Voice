@@ -267,10 +267,20 @@ def answer_help_question(
                 args = json.loads(call.get("function", {}).get("arguments") or "{}")
             except json.JSONDecodeError:
                 args = {}
+            if not isinstance(args, dict):
+                args = {}
             if name == "calls_on_date":
                 args["timezone_name"] = timezone_name
             fn = TOOL_FUNCTIONS.get(name)
-            result = fn(account_id, **args) if fn else {"error": f"unknown tool {name}"}
+            # Arguments come from the model: a wrong type ("limit": "x") or an
+            # unexpected key used to raise past the route's RuntimeError
+            # handler as a 500. Feed the error back to the model instead.
+            args.pop("account_id", None)
+            try:
+                result = fn(account_id, **args) if fn else {"error": f"unknown tool {name}"}
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("help tool %s failed: %s", name, exc)
+                result = {"error": "That lookup failed; answer without it."}
             messages.append(
                 {"role": "tool", "tool_call_id": call.get("id", ""), "content": json.dumps(result)}
             )

@@ -2517,7 +2517,11 @@ def accept_invite(invite_id: int, password_hash: str) -> dict:
         invite = conn.execute("SELECT * FROM invites WHERE id = ?", (invite_id,)).fetchone()
         with conn:
             cur = conn.execute(
-                "INSERT INTO users (account_id, email, name, password_hash, role) VALUES (?, ?, ?, ?, ?) RETURNING id",
+                # The invite link reached this inbox, which is the proof email
+                # verification asks for. Without it, /auth/login refused the
+                # new member with "verify your email" after their first logout.
+                f"INSERT INTO users (account_id, email, name, password_hash, role, email_verified_at) "
+                f"VALUES (?, ?, ?, ?, ?, {_NOW}) RETURNING id",
                 (invite["account_id"], invite["email"].lower(), invite["name"], password_hash, invite["role"]),
             )
             conn.execute("UPDATE invites SET status = 'accepted' WHERE id = ?", (invite_id,))
@@ -4467,13 +4471,15 @@ def import_contacts_mapped(text: str, mapping: dict, account_id: int) -> dict:
     (see agent/main.py's template substitution)."""
     if "phone" not in mapping.values():
         raise ValueError("Map one column to Phone before importing")
-    reader = csv.DictReader(io.StringIO(text))
+    # Count first: each row commits on its own, so checking inside the loop
+    # inserted 5,000 contacts and then reported the whole file as rejected.
+    rows = list(csv.DictReader(io.StringIO(text)))
+    if len(rows) > 5000:
+        raise ValueError("Import is limited to 5,000 contacts at a time")
     count = 0
     skipped_missing_phone = 0
     skipped_invalid_phone = 0
-    for row_number, row in enumerate(reader, start=2):
-        if row_number > 5001:
-            raise ValueError("Import is limited to 5,000 contacts at a time")
+    for row_number, row in enumerate(rows, start=2):
         first_name = last_name = name = phone = email = company = tags = ""
         custom: dict = {}
         for header, value in row.items():
@@ -4865,6 +4871,7 @@ def book_appointment_native(
     purpose: str = "",
     email: str = "",
     source: str = "agent",
+    notes: str = "",
 ) -> dict:
     """{"ok": True, "id": ...} or {"ok": False, "error": ...}. Takes a
     per-account-per-date advisory lock before the check-then-insert so two
@@ -4879,10 +4886,10 @@ def book_appointment_native(
                 return {"ok": False, "error": "slot no longer available"}
             cur = conn.execute(
                 "INSERT INTO appointments (account_id, agent_id, call_id, contact_name, contact_phone, "
-                "contact_email, purpose, appt_date, start_time, duration_minutes, status, source) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?) RETURNING id",
+                "contact_email, purpose, appt_date, start_time, duration_minutes, status, source, notes) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?) RETURNING id",
                 (account_id, agent_id, call_id, name, account_phone(account_id, phone) or phone, email,
-                 purpose, date, time, duration_minutes, source),
+                 purpose, date, time, duration_minutes, source, notes or ""),
             )
             return {"ok": True, "id": cur.lastrowid}
     finally:
@@ -5002,10 +5009,27 @@ def create_knowledge_base(name: str, account_id: int) -> None:
         conn.close()
 
 
+# Agent workers cache knowledge-base content for 10 minutes. Without a
+# notification a tenant's KB edit was served stale for that long; the
+# 'kb:<id>' payload on the agent-config channel clears just that KB.
+_KB_NOTIFY_SQL = "SELECT pg_notify('vistrow_agent_config_changed', 'kb:' || ?)"
+
+
+def _notify_kb_changed(conn, kb_id: int) -> None:
+    conn.execute(_KB_NOTIFY_SQL, (str(kb_id),))
+
+
 def delete_knowledge_base(kb_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
+            # Agents losing this KB must reload their config too.
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', id::text) FROM agents "
+                "WHERE kb_id = ? AND account_id = ?",
+                (kb_id, account_id),
+            )
+            _notify_kb_changed(conn, kb_id)
             conn.execute("DELETE FROM knowledge_sources WHERE kb_id = ?", (kb_id,))
             conn.execute("DELETE FROM kb_qa WHERE kb_id = ?", (kb_id,))
             conn.execute("DELETE FROM knowledge_bases WHERE id = ? AND account_id = ?", (kb_id, account_id))
@@ -5022,6 +5046,7 @@ def set_kb_strict(kb_id: int, strict: bool, account_id: int) -> None:
                 "UPDATE knowledge_bases SET strict = ? WHERE id = ? AND account_id = ?",
                 (1 if strict else 0, kb_id, account_id),
             )
+            _notify_kb_changed(conn, kb_id)
     finally:
         conn.close()
 
@@ -5046,6 +5071,7 @@ def add_knowledge_source(kb_id: int, name: str, content: str, account_id: int, s
                 "SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM knowledge_bases WHERE id = ? AND account_id = ?)",
                 (kb_id, name, source_type, content, kb_id, account_id),
             )
+            _notify_kb_changed(conn, kb_id)
     finally:
         conn.close()
 
@@ -5070,6 +5096,11 @@ def update_knowledge_source(
                 "AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
                 (*params, source_id, account_id),
             )
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', 'kb:' || kb_id::text) "
+                "FROM knowledge_sources WHERE id = ?",
+                (source_id,),
+            )
         return get_knowledge_source_content(source_id, account_id, conn=conn)
     finally:
         conn.close()
@@ -5079,6 +5110,11 @@ def delete_knowledge_source(source_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', 'kb:' || kb_id::text) "
+                "FROM knowledge_sources WHERE id = ?",
+                (source_id,),
+            )
             conn.execute(
                 "DELETE FROM knowledge_sources WHERE id = ? "
                 "AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
@@ -5131,6 +5167,7 @@ def add_kb_qa(kb_id: int, question: str, answer: str, account_id: int) -> int | 
                 "INSERT INTO kb_qa (kb_id, question, answer, position) VALUES (?, ?, ?, ?) RETURNING id",
                 (kb_id, question, answer, pos),
             )
+            _notify_kb_changed(conn, kb_id)
             return cur.lastrowid
     finally:
         conn.close()
@@ -5162,6 +5199,8 @@ def add_kb_qa_bulk(kb_id: int, pairs: list[dict], account_id: int) -> int:
                     (kb_id, question, answer, pos),
                 )
                 added += 1
+            if added:
+                _notify_kb_changed(conn, kb_id)
     finally:
         conn.close()
     return added
@@ -5176,6 +5215,10 @@ def update_kb_qa(qa_id: int, question: str, answer: str, account_id: int) -> Non
                 "WHERE id = ? AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
                 (question, answer, qa_id, account_id),
             )
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', 'kb:' || kb_id::text) FROM kb_qa WHERE id = ?",
+                (qa_id,),
+            )
     finally:
         conn.close()
 
@@ -5184,6 +5227,10 @@ def delete_kb_qa(qa_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
+            conn.execute(
+                "SELECT pg_notify('vistrow_agent_config_changed', 'kb:' || kb_id::text) FROM kb_qa WHERE id = ?",
+                (qa_id,),
+            )
             conn.execute(
                 "DELETE FROM kb_qa WHERE id = ? AND kb_id IN (SELECT id FROM knowledge_bases WHERE account_id = ?)",
                 (qa_id, account_id),
@@ -8356,9 +8403,8 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
     can never disagree with the page it links to, and an item disappears by
     itself the moment the underlying problem is fixed.
 
-    The tradeoff is that "I dismissed this" cannot live here. The frontend
-    keeps dismissals in localStorage keyed by the stable `id` below, which
-    is per-browser but costs no correctness. Ids are content-derived, so a
+    Dismissals are stored per person in notification_dismissals, keyed by
+    the stable `id` below, and filtered out at the end. Ids are content-derived, so a
     NEW occurrence (a fresh integration error, a lower credit threshold)
     produces a new id and notifies again rather than staying silently
     dismissed.
@@ -8464,7 +8510,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/integrations",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: integrations section failed", exc_info=True)
 
         # --- support replied and is waiting on the customer --------------
@@ -8487,7 +8533,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": f"/dashboard/support?ticket={r['id']}",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: support section failed", exc_info=True)
 
         # --- calls that ended badly in the last 24h ---------------------
@@ -8511,7 +8557,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/calls",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: failed-calls section failed", exc_info=True)
 
         # --- campaigns the dialer stopped by itself ---------------------
@@ -8533,7 +8579,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/outbound",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: paused-campaign section failed", exc_info=True)
 
         # --- calls that dropped without a real conversation -------------
@@ -8561,7 +8607,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/calls?status=failed",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: dropped-calls section failed", exc_info=True)
 
         # --- negative feedback in the last 7 days -----------------------
@@ -8590,7 +8636,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/calls?feedback=not_helpful",
                     "at": None,
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: feedback section failed", exc_info=True)
 
         # --- campaigns finished in the last 7 days ----------------------
@@ -8610,7 +8656,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/outbound",
                     "at": r["completed_at"],
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: campaigns section failed", exc_info=True)
 
         # --- failed payments -----------------------------------------------
@@ -8641,7 +8687,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/settings?tab=billing",
                     "at": r["created_at"],
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: payments section failed", exc_info=True)
 
         # --- what just happened: calls and bookings in the last 48h ------
@@ -8674,7 +8720,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "at": r["started_at"],
                     "kind": "call",
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: recent-calls section failed", exc_info=True)
 
         try:
@@ -8694,7 +8740,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "at": r["created_at"],
                     "kind": "appointment",
                 })
-        except psycopg.Error:
+        except Exception:  # best-effort per section: never blank the feed
             logger.warning("notifications: appointments section failed", exc_info=True)
     finally:
         conn.close()
@@ -9332,6 +9378,14 @@ def delete_phone_number(number_id: int, account_id: int) -> None:
     conn = _connect()
     try:
         with conn:
+            # Inbound routes are looked up by number alone at call time
+            # (agent/db.py get_inbound_route), so a route left behind would
+            # apply this tenant's hours and limits to whoever gets the number next.
+            conn.execute(
+                "DELETE FROM inbound_routes WHERE account_id = ? AND phone_number IN "
+                "(SELECT number FROM phone_numbers WHERE id = ? AND account_id = ?)",
+                (account_id, number_id, account_id),
+            )
             conn.execute("DELETE FROM phone_numbers WHERE id = ? AND account_id = ?", (number_id, account_id))
     finally:
         conn.close()
@@ -9666,6 +9720,23 @@ def remove_dnc(account_id: int, dnc_id: int) -> None:
     try:
         with conn:
             conn.execute("DELETE FROM dnc_list WHERE id = ? AND account_id = ?", (dnc_id, account_id))
+    finally:
+        conn.close()
+
+
+def count_calls_older_than(account_id: int, days: int) -> int:
+    """How many of this tenant's calls a retention of `days` would delete.
+    Read-only; the Compliance page asks before saving a shorter retention,
+    because the purge runs as soon as the page next loads and is permanent."""
+    if days <= 0:
+        return 0
+    conn = _connect()
+    try:
+        return conn.execute(
+            "SELECT COUNT(*) c FROM calls WHERE account_id = ? "
+            "AND started_at::timestamptz < now() - (? || ' days')::interval",
+            (account_id, days),
+        ).fetchone()["c"]
     finally:
         conn.close()
 

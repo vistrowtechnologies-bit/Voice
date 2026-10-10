@@ -17,6 +17,10 @@ TMP="$(mktemp -t lk-secrets)"
 trap 'rm -f "$TMP"' EXIT
 chmod 600 "$TMP"
 
+# Never add LIVEKIT_AGENT_NAME here. It belongs only on the platform-demo
+# worker (CA_53d8HgBktjZ7); on this one it would give the phone worker a
+# dispatch name and take it off implicit dispatch, so phone calls would stop
+# reaching any agent.
 KEYS=(
   DATABASE_URL OPENAI_API_KEY SARVAM_API_KEY GOOGLE_APPLICATION_CREDENTIALS_JSON
   ELEVEN_API_KEY GEMINI_API_KEY TAVILY_API_KEY ZOHO_OAUTH_CLIENT_ID
