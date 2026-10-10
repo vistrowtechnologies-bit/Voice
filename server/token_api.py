@@ -26,6 +26,7 @@ import db_backup
 import email_sender
 import disposable_email
 import enablex_inbound
+import google_sheets
 import help_chat
 import integrations_dispatch
 import kb_crawl
@@ -1100,6 +1101,123 @@ def auth_oauth_zoho_callback(
         full_user["account_id"],
     )
     return _finish()
+
+
+_GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE = "vv_google_sheets_integration_state"
+# OAuth tokens never leave the server: GET /integrations strips these from
+# every integration's config (Zoho's and Google Sheets' both live there).
+_SECRET_CONFIG_KEYS = {"access_token", "refresh_token", "id_token"}
+
+
+@app.get("/integrations/google_sheets/start")
+def integration_google_sheets_start(user: dict = Depends(require_role("admin"))) -> RedirectResponse:
+    """A tenant admin connects Google Sheets by signing in with Google; the
+    callback creates the leads spreadsheet in their Drive. Same shape as
+    /integrations/zoho_crm/start. Scope is google_sheets.SCOPE (drive.file -
+    see the comment there for why not the wider spreadsheets scope)."""
+    client_id = os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("GOOGLE_SHEETS_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        raise HTTPException(404, "Google Sheets integration is not configured on this server")
+    state = secrets.token_urlsafe(24)
+    redirect = RedirectResponse(google_sheets.auth_url(client_id, redirect_uri, state))
+    redirect.set_cookie(
+        _GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE, state, max_age=600, httponly=True, secure=_COOKIE_SECURE, samesite="lax", path="/"
+    )
+    return redirect
+
+
+@app.get("/auth/oauth/google-sheets/callback")
+def auth_oauth_google_sheets_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    """Registered as the Sheets OAuth client's redirect_uri. Lives under the
+    public "/auth/" prefix and reads the session cookie itself, exactly like
+    the Zoho callback, so an expired session lands back on the integrations
+    page with ?sheets=failed rather than a bare 401."""
+    base_url = _app_base_url(request)
+    expected_state = request.cookies.get(_GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE)
+
+    def _finish(query: str) -> RedirectResponse:
+        response = RedirectResponse(f"{base_url}/dashboard/integrations{query}")
+        response.delete_cookie(_GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE, path="/")
+        return response
+
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if error or not code or not expected_state or not secrets.compare_digest(state or "", expected_state) or not session:
+        return _finish("?sheets=failed")
+
+    full_user = calls_db.get_user_by_id(session["uid"])
+    if full_user is None or calls_db.ROLE_RANK.get(full_user["role"], 0) < calls_db.ROLE_RANK["admin"]:
+        return _finish("?sheets=failed")
+
+    client_id = os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_SHEETS_OAUTH_CLIENT_SECRET")
+    redirect_uri = os.environ.get("GOOGLE_SHEETS_OAUTH_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        return _finish("?sheets=failed")
+
+    try:
+        token_data = google_sheets.exchange_code(code, client_id, client_secret, redirect_uri)
+    except google_sheets.GoogleError as e:
+        logger.error("Google Sheets integration OAuth failed: %s", e)
+        return _finish("?sheets=failed")
+    access_token = token_data.get("access_token")
+    refresh_token = token_data.get("refresh_token")
+    if not access_token or not refresh_token:
+        logger.error("Google Sheets integration OAuth returned no usable tokens: %s", token_data.get("error", "missing tokens"))
+        return _finish("?sheets=failed")
+
+    account_id = full_user["account_id"]
+    previous = next(
+        (i.get("config") or {} for i in calls_db.list_integrations(account_id) if i["key"] == "sheets"), {}
+    )
+    try:
+        # A re-connect keeps writing to the owner's existing sheet when Google
+        # still lets us open it; otherwise (deleted, other Google account)
+        # a fresh one is created.
+        sheet = google_sheets.reusable_spreadsheet(access_token, previous) or google_sheets.create_spreadsheet(access_token)
+    except google_sheets.GoogleError as e:
+        logger.error("Google Sheets integration could not create the leads sheet: %s", e)
+        return _finish("?sheets=failed")
+
+    try:
+        calls_db.update_integration(
+            "sheets",
+            "connected",
+            {
+                "mode": "oauth",
+                **sheet,
+                "google_email": google_sheets.email_from_id_token(token_data.get("id_token")),
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "expires_at": time.time() + float(token_data.get("expires_in") or 3600),
+            },
+            account_id,
+        )
+    except plan_policy.EntitlementError:
+        return _finish("?sheets=failed")
+    # A fresh grant clears any "access was removed" error from the old one.
+    calls_db.clear_integration_error(account_id, "sheets")
+    return _finish("?sheets=connected")
+
+
+@app.post("/integrations/google_sheets/disconnect")
+def integration_google_sheets_disconnect(user: dict = Depends(require_role("admin"))) -> dict:
+    """Revoke our Google grant (best-effort) and forget the tokens. The
+    spreadsheet itself stays in the owner's Drive - it's their data."""
+    config = next(
+        (i.get("config") or {} for i in calls_db.list_integrations(user["account_id"]) if i["key"] == "sheets"), {}
+    )
+    if config.get("mode") == "oauth":
+        # Revoking the refresh token revokes the whole grant, access tokens included.
+        google_sheets.revoke(config.get("refresh_token") or config.get("access_token") or "")
+    calls_db.update_integration("sheets", "not_connected", {}, user["account_id"])
+    return {"ok": True}
 
 
 _FACEBOOK_INTEGRATION_STATE_COOKIE = "vv_facebook_integration_state"
@@ -4186,7 +4304,13 @@ def remove_dnc(dnc_id: int, user: dict = Depends(require_role("admin"))) -> dict
 
 @app.get("/integrations")
 def list_integrations(user: dict = Depends(current_user)) -> list[dict]:
-    return calls_db.list_integrations(user["account_id"])
+    # Redacted here, not in calls_db.list_integrations: the delivery code
+    # (integrations_dispatch) reads the same rows and needs the real tokens.
+    # Zoho's tokens were returned to the browser before this.
+    return [
+        {**item, "config": {k: v for k, v in (item.get("config") or {}).items() if k not in _SECRET_CONFIG_KEYS}}
+        for item in calls_db.list_integrations(user["account_id"])
+    ]
 
 
 @app.patch("/integrations/{key}")

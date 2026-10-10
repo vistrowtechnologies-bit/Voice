@@ -922,7 +922,7 @@ _SEED_INTEGRATIONS = [
         "sheets",
         "Google Sheets",
         "Reporting",
-        "Append every qualified lead as a row via a Google Apps Script web-app URL (no OAuth).",
+        "Sign in with Google and every reachable caller is added as a row to a leads sheet we create in your Drive.",
     ),
     (
         "facebook",
@@ -7041,6 +7041,20 @@ def touch_integration_sync(account_id: int, key: str) -> None:
         with conn:
             conn.execute(
                 f"UPDATE integrations SET last_sync = {_NOW}, last_error = NULL WHERE key = ? AND account_id = ?",
+                (key, account_id),
+            )
+    finally:
+        conn.close()
+
+
+def clear_integration_error(account_id: int, key: str) -> None:
+    """Drop a stale last_error after a re-connect, without stamping last_sync
+    (nothing has been delivered yet)."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE integrations SET last_error = NULL WHERE key = ? AND account_id = ?",
                 (key, account_id),
             )
     finally:

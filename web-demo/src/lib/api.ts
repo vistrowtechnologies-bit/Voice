@@ -440,6 +440,9 @@ export const testIntegration = (key: string) =>
 export const slackIntegrationStartUrl = '/api/integrations/slack/start'
 export const facebookIntegrationStartUrl = '/api/integrations/facebook/start'
 export const zohoIntegrationStartUrl = '/api/integrations/zoho_crm/start'
+export const googleSheetsIntegrationStartUrl = '/api/integrations/google_sheets/start'
+/** Revokes the Google grant (best-effort) and clears the stored tokens. */
+export const disconnectGoogleSheets = () => send<{ ok: boolean }>('POST', '/integrations/google_sheets/disconnect')
 export const fetchLeadWebhook = () =>
   get<{ url: string | null; accountId: number; token: string }>('/integrations/lead-webhook')
 export interface ArthaleadsInboundConfig {

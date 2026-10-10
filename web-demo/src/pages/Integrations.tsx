@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
-import { facebookIntegrationStartUrl, fetchAgents, fetchArthaleadsInboundConfig, fetchIntegrations, fetchKnowledgeBases, fetchLeadWebhook, fetchPhoneNumbers, formatRelativeTime, slackIntegrationStartUrl, testIntegration, updateArthaleadsInboundConfig, updateIntegration, zohoIntegrationStartUrl } from '../lib/api'
+import { disconnectGoogleSheets, facebookIntegrationStartUrl, fetchAgents, fetchArthaleadsInboundConfig, fetchIntegrations, fetchKnowledgeBases, fetchLeadWebhook, fetchPhoneNumbers, formatRelativeTime, googleSheetsIntegrationStartUrl, slackIntegrationStartUrl, testIntegration, updateArthaleadsInboundConfig, updateIntegration, zohoIntegrationStartUrl } from '../lib/api'
 import type { ArthaleadsInboundConfig } from '../lib/api'
 import type { AgentConfig, Integration, KnowledgeBase, PhoneNumber } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
@@ -47,7 +47,7 @@ const CONNECT_HINT: Record<string, string> = {
   webhook: 'Every qualified lead POSTs to this URL as JSON in real time.',
   slack: 'Choose the Slack channel that should receive qualified-lead alerts.',
   whatsapp: 'Your provider’s send endpoint receives { to, message } per lead.',
-  sheets: 'Paste a Google Apps Script web-app URL that appends the lead JSON as a row.',
+  sheets: 'Advanced: paste a Google Apps Script web-app URL that appends the lead JSON as a row. Most people should use Sign in with Google instead.',
 }
 
 export function Integrations() {
@@ -69,10 +69,20 @@ export function Integrations() {
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([])
   const [inboundSaving, setInboundSaving] = useState(false)
   const [inboundMessage, setInboundMessage] = useState('')
+  // Result of the Google Sheets OAuth round-trip (?sheets=connected|failed),
+  // read once on arrival and then dropped from the URL so a refresh doesn't
+  // show it again.
+  const [sheetsResult] = useState(() => new URLSearchParams(window.location.search).get('sheets'))
 
   const reload = () => fetchIntegrations().then((list) => setIntegrations(sortIntegrations(list))).catch(() => setIntegrations([]))
 
   useEffect(() => {
+    if (sheetsResult) {
+      const params = new URLSearchParams(window.location.search)
+      params.delete('sheets')
+      const query = params.toString()
+      window.history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : ''))
+    }
     reload()
     fetchLeadWebhook().then((r) => setLeadWebhookUrl(r.url)).catch(() => setLeadWebhookUrl(null))
     fetchArthaleadsInboundConfig().then(setArthaleadsInbound).catch(() => setArthaleadsInbound(null))
@@ -118,6 +128,12 @@ export function Integrations() {
       window.location.href = zohoIntegrationStartUrl
       return
     }
+    if (key === 'sheets' && configuring !== 'sheets') {
+      // Sign in with Google; the Apps Script URL form (configuring ===
+      // 'sheets') still saves through the generic path below.
+      window.location.href = googleSheetsIntegrationStartUrl
+      return
+    }
     if (key === 'arthaleads') {
       if (!token.trim()) return
       await updateIntegration(key, 'connected', { token: token.trim() })
@@ -140,7 +156,9 @@ export function Integrations() {
   }
 
   const handleDisconnect = async (key: string) => {
-    await updateIntegration(key, 'not_connected', {})
+    const integration = integrations.find((i) => i.key === key)
+    if (key === 'sheets' && integration?.config.mode === 'oauth') await disconnectGoogleSheets()
+    else await updateIntegration(key, 'not_connected', {})
     reload()
   }
 
@@ -169,6 +187,17 @@ export function Integrations() {
           <StatCard icon="apps" label="Available Integrations" value={String(integrations.length)} hint="Ready to connect" />
           <StatCard icon="monitoring" label="Sync Status" value={connected > 0 ? 'Live' : 'Idle'} hint={connected > 0 ? 'events push in real time' : 'No integrations connected yet'} />
         </div>
+
+        {sheetsResult === 'connected' && (
+          <p className="rounded-lg border border-success/30 bg-success/10 p-3 text-xs font-semibold text-success">
+            Google Sheets connected. New leads will be added to your “Vistrow Voice — Leads” sheet.
+          </p>
+        )}
+        {sheetsResult === 'failed' && (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs font-semibold text-destructive">
+            Google Sheets could not be connected. Please try Sign in with Google again.
+          </p>
+        )}
 
         <Card>
           <div className="mb-3 flex items-center gap-3">
@@ -329,6 +358,20 @@ export function Integrations() {
                   <InfoRow label="Page" value={integration.config.pageName || '-'} />
                 ) : integration.key === 'zoho_crm' ? (
                   <InfoRow label="Zoho org" value={integration.config.api_domain || '-'} />
+                ) : integration.key === 'sheets' && integration.config.mode === 'oauth' ? (
+                  <>
+                    <InfoRow label="Google account" value={integration.config.google_email || '-'} />
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-text-muted">Sheet</span>
+                      {integration.config.spreadsheet_url ? (
+                        <a href={integration.config.spreadsheet_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 font-semibold text-cyan hover:underline">
+                          Open sheet <Icon name="north_east" className="text-[13px]" />
+                        </a>
+                      ) : (
+                        <span className="font-semibold">-</span>
+                      )}
+                    </div>
+                  </>
                 ) : (
                   <InfoRow label="Endpoint" value={integration.config.url ? integration.config.url.slice(0, 40) : '-'} />
                 )}
@@ -407,7 +450,16 @@ export function Integrations() {
                           : 'Send test'}
                     </button>
                   )}
-                  {CONNECTABLE.has(integration.key) && (
+                  {integration.key === 'sheets' && integration.config.mode === 'oauth' && (
+                    <Tooltip content="Sign in with Google again (keeps the same sheet)"><button
+                      onClick={() => { window.location.href = googleSheetsIntegrationStartUrl }}
+                      className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-bold text-text-muted hover:border-primary"
+                      aria-label="Sign in with Google again"
+                    >
+                      <Icon name="refresh" className="text-[15px]" />
+                    </button></Tooltip>
+                  )}
+                  {CONNECTABLE.has(integration.key) && !(integration.key === 'sheets' && integration.config.mode === 'oauth') && (
                     <Tooltip content="Edit URL / token"><button
                       onClick={() => {
                         setUrl(integration.config.url || '')
@@ -453,6 +505,22 @@ export function Integrations() {
                   <Icon name="link" className="text-[15px]" />
                   Connect with Zoho
                 </button>
+              ) : integration.key === 'sheets' ? (
+                <div className="mt-auto flex flex-col gap-1.5">
+                  <button
+                    onClick={() => handleConnect('sheets')}
+                    className="flex items-center justify-center gap-1.5 rounded-lg border border-cyan/40 py-2 text-xs font-bold text-cyan hover:bg-cyan/10"
+                  >
+                    <Icon name="login" className="text-[15px]" />
+                    Sign in with Google
+                  </button>
+                  <button
+                    onClick={() => setConfiguring('sheets')}
+                    className="text-center text-[11px] text-text-muted underline-offset-2 hover:text-text hover:underline"
+                  >
+                    Use an Apps Script URL instead
+                  </button>
+                </div>
               ) : CONNECTABLE.has(integration.key) ? (
                 <button
                   onClick={() => setConfiguring(integration.key)}
