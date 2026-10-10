@@ -4818,6 +4818,19 @@ def billing_verify_payment(req: VerifyPaymentRequest, user: dict = Depends(curre
     return {"ok": True}
 
 
+def _report_unmatched_razorpay_event(event_type: str, sub: dict) -> None:
+    """A paid activation/charge we can't attach to an account is money taken
+    with no plan granted. Returning 5xx would make Razorpay retry and then
+    disable the whole webhook, so record it where the platform owner looks."""
+    admin_db.log_error(
+        f"Razorpay {event_type} for subscription {sub.get('id')} matches no account; "
+        "the customer may have paid without getting their plan",
+        source="billing", level="error",
+        context=json.dumps({"subscription_id": sub.get("id"), "customer_id": sub.get("customer_id"),
+                            "notes": sub.get("notes")})[:2000],
+    )
+
+
 @app.post("/billing/razorpay/webhook")
 async def billing_razorpay_webhook(request: Request) -> dict:
     """Source of truth for subscription lifecycle — Razorpay calls this on
@@ -4834,6 +4847,32 @@ async def billing_razorpay_webhook(request: Request) -> dict:
         raise HTTPException(400, "Invalid webhook signature")
 
     event = json.loads(raw_body)
+    # The handlers below do blocking DB writes and Razorpay API calls; keep
+    # them off the event loop (same reason as the EnableX inbound webhook).
+    return await asyncio.to_thread(
+        _handle_razorpay_webhook, event, request.headers.get("x-razorpay-event-id", "")
+    )
+
+
+def _handle_razorpay_webhook(event: dict, event_id: str) -> dict:
+    """Process each delivery once. Razorpay redelivers on timeouts, and a
+    replayed subscription.charged added a duplicate invoice, reset credits to
+    the plan base mid-cycle (erasing top-ups) and added the overage again. If
+    processing fails after the claim, the claim is released and the error
+    propagates (500) so Razorpay's retry runs it."""
+    event_type = event.get("event", "")
+    if event_id and not calls_db.claim_razorpay_webhook_event(event_id, event_type):
+        logger.info("razorpay webhook %s (%s) already processed; ignoring redelivery", event_id, event_type)
+        return {"ok": True}
+    try:
+        return _process_razorpay_event(event)
+    except Exception:
+        if event_id:
+            calls_db.release_razorpay_webhook_event(event_id)
+        raise
+
+
+def _process_razorpay_event(event: dict) -> dict:
     event_type = event.get("event", "")
     payload = event.get("payload", {})
     logger.info("razorpay webhook: %s", event_type)
@@ -4859,12 +4898,16 @@ async def billing_razorpay_webhook(request: Request) -> dict:
             # subscription id, race with checkout) produced zero trace,
             # while Razorpay still got 200 OK and never retried.
             logger.warning("razorpay %s: no account for subscription %s", event_type, sub.get("id"))
+            _report_unmatched_razorpay_event(event_type, sub)
 
     elif event_type == "subscription.charged":
         sub = payload.get("subscription", {}).get("entity", {})
         payment = payload.get("payment", {}).get("entity", {})
         account_id = calls_db.find_account_id_by_razorpay_subscription(sub.get("id", ""))
-        if account_id:
+        if account_id and calls_db.invoice_exists_for_payment(payment.get("id")):
+            # Second guard for a redelivery that arrives without an event id.
+            logger.info("razorpay subscription.charged: payment %s already recorded; ignoring", payment.get("id"))
+        elif account_id:
             existing = calls_db.get_subscription(account_id)
             plan = (sub.get("notes") or {}).get("plan") or (existing["plan"] if existing else "starter")
             new_period_start = _epoch_to_iso(sub.get("current_start"))
@@ -4920,6 +4963,7 @@ async def billing_razorpay_webhook(request: Request) -> dict:
             admin_db.change_plan(account_id, plan)
         else:
             logger.warning("razorpay subscription.charged: no account for subscription %s", sub.get("id"))
+            _report_unmatched_razorpay_event(event_type, sub)
 
     elif event_type == "subscription.cancelled":
         sub = payload.get("subscription", {}).get("entity", {})

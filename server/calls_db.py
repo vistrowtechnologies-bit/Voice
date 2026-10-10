@@ -360,6 +360,15 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     updated_at TEXT DEFAULT {_NOW}
 );
 
+-- Razorpay webhook deliveries already processed, keyed on x-razorpay-event-id.
+-- Razorpay redelivers on timeouts; replaying subscription.charged would add
+-- a duplicate invoice, reset credits mid-cycle and add the overage twice.
+CREATE TABLE IF NOT EXISTS razorpay_webhook_events (
+    event_id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    created_at TEXT DEFAULT {_NOW}
+);
+
 -- "I have read this" for the notification bell, per person (not per browser).
 -- Notification ids are content-derived, so a new occurrence is a new id.
 CREATE TABLE IF NOT EXISTS notification_dismissals (
@@ -8889,6 +8898,44 @@ def find_account_id_by_razorpay_subscription(razorpay_subscription_id: str) -> i
             (razorpay_subscription_id,),
         ).fetchone()
         return row["account_id"] if row else None
+    finally:
+        conn.close()
+
+
+def claim_razorpay_webhook_event(event_id: str, event_type: str) -> bool:
+    """True the first time a delivery is seen; False for a redelivery."""
+    conn = _connect()
+    try:
+        with conn:
+            row = conn.execute(
+                "INSERT INTO razorpay_webhook_events (event_id, event_type) VALUES (?, ?) "
+                "ON CONFLICT DO NOTHING RETURNING event_id",
+                (event_id, event_type),
+            ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def release_razorpay_webhook_event(event_id: str) -> None:
+    """Processing failed after the claim: forget it so Razorpay's retry runs."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("DELETE FROM razorpay_webhook_events WHERE event_id = ?", (event_id,))
+    finally:
+        conn.close()
+
+
+def invoice_exists_for_payment(razorpay_payment_id: str | None) -> bool:
+    if not razorpay_payment_id:
+        return False
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM invoices WHERE razorpay_payment_id = ? LIMIT 1", (razorpay_payment_id,)
+        ).fetchone()
+        return row is not None
     finally:
         conn.close()
 
