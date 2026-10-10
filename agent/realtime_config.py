@@ -101,3 +101,21 @@ def clean_browser_input(model: str, *, phone: bool) -> bool:
     keep their tested behaviour.
     """
     return model == DEFAULT_MODEL and not phone
+
+
+def context_compression(instructions: str) -> types.ContextWindowCompressionConfig:
+    """Cap the conversation history Google re-bills on every turn.
+
+    The bill (Oct 6-9 2026) showed the platform demo averaging ~44k text
+    input tokens per turn against a ~18k-token instruction: the rest is the
+    growing conversation, re-sent each turn. Once history passes ~10k tokens
+    beyond the instruction, Google's sliding window drops the oldest turns
+    back to ~6k (the system instruction is always kept). Roughly the last
+    few minutes of a call stay in context; facts already saved through the
+    lead tools are unaffected.
+    """
+    instruction_tokens = len(instructions) // 4 + 1  # ~4.2 chars/token measured for these prompts
+    return types.ContextWindowCompressionConfig(
+        trigger_tokens=instruction_tokens + 10_000,
+        sliding_window=types.SlidingWindow(target_tokens=instruction_tokens + 6_000),
+    )

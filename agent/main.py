@@ -1853,6 +1853,9 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
         # Google owns native turn detection. Keep Hindi pause protection,
         # but tune 2.5 independently of the already-tested 3.1 profile.
         realtime_input_config=realtime_config.activity_detection(name),
+        # Verified on 3.1 only (10 Oct 2026); 2.5 could not be tested.
+        **({"context_window_compression": realtime_config.context_compression(instructions)}
+           if name == realtime_config.MODEL_31 else {}),
     )
 
 
@@ -4338,13 +4341,14 @@ class RealEstateAgent(Agent):
         # directly. The opener is passed as an instruction to say that exact
         # line rather than as text to synthesize.
         #
-        # Outbound is held first for BOTH pipelines. The realtime branch used
-        # to return before the hold, so a realtime outbound call greeted into
-        # ringback - the exact failure the hold below exists to prevent. The
-        # release (_release_held_opening_if_unheard) speaks the realtime
-        # greeting through _speak_realtime_greeting.
-        if self._is_realtime and self._direction != "outbound":
-            await self._speak_realtime_greeting(dispatch_t0)
+        # Realtime greets at once, outbound included. Holding it (10 Oct 2026)
+        # left live calls 1158/1159 mute: the hold is released by an STT
+        # transcript or by caller-speech state events, and a realtime call has
+        # neither - its "user state" events are Google starting a reply, not
+        # the caller talking. 1158 never greeted at all; 1159 greeted ~10 s
+        # after the answer. Outbound uses the "you are calling them" wording.
+        if self._is_realtime:
+            await self._speak_realtime_greeting(dispatch_t0, answered=self._direction == "outbound")
             return
         if self._direction == "outbound":
             # Hold the opening until we know a human is actually listening.

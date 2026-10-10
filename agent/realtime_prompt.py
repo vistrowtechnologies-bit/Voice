@@ -29,6 +29,15 @@ _DROP = (
     "# Global languages",
     # Same rule as "Platform rules" 1 and "Truthfulness about actions".
     "# Never claim something you have not actually done",
+    # Delivery coaching for a separate TTS voice (fillers, hesitations,
+    # quips). Native audio already speaks this way, and the coaching was
+    # behind stray "um..." lines. Billed every turn: the platform demo spent
+    # ~12,900 characters per turn on these four alone (10 Oct 2026). The few
+    # rules in "Voice conversation rules" that matter are in _TURN_STYLE.
+    "# Voice conversation rules",
+    "# Sounding like a person",
+    "# Natural speech imperfections",
+    "# A few jokes to have in your back pocket",
 )
 
 _TURN_STYLE = (
@@ -41,6 +50,10 @@ _TURN_STYLE = (
     "do not apologise, ask for a repeat, or invent an answer because of noise alone. "
     "Greet once when asked to open the conversation. Do not repeat the greeting later. "
     "If interrupted, answer the caller's new request rather than restarting the previous reply.\n"
+    "A borrowed English word or number inside the caller's sentence is not a request to change language. "
+    "Do not say \"one moment\" or \"let me check\" unless a tool is actually about to run. "
+    "Unclear or garbled turns are never a reason to end the call; ask one short clarifying question. "
+    "When the caller says goodbye or that they are done, give one short goodbye and end the call.\n"
 )
 
 _LANGUAGE_TOOL_LINE = (
