@@ -279,5 +279,39 @@ class CopilotReadToolsTests(unittest.TestCase):
             self.assertNotIn("account_id", schema["function"]["parameters"]["properties"])
 
 
+class LatestCallerAndDeliveries(unittest.TestCase):
+    @patch("help_tools.calls_db.contact_detail")
+    @patch("help_tools.calls_db.list_contacts", return_value=[])
+    @patch("help_tools.calls_db.get_call")
+    @patch("help_tools.calls_db.list_calls")
+    def test_no_query_means_the_most_recent_callers(self, list_calls, get_call, list_contacts, contact_detail):
+        list_calls.return_value = [{"id": "901"}]
+        class Row(dict):  # a real calls row has every column; missing ones read as ""
+            def __missing__(self, key):
+                return ""
+
+        get_call.return_value = Row(id=901, name="Asha", phone="+91", transcript=[], intelligence={})
+        result = help_tools.contact_requirements(7, query="")
+        list_calls.assert_called_once_with(7, limit=3)
+        self.assertTrue(result["found"])
+        self.assertEqual(len(result["calls"]), 1)
+        list_contacts.assert_not_called()
+
+    @patch("help_tools.calls_db.list_integration_deliveries")
+    @patch("help_tools.calls_db.list_integrations")
+    def test_failing_integrations_include_recent_failed_deliveries(self, list_integrations, deliveries):
+        list_integrations.return_value = [
+            {"key": "sheets", "name": "Google Sheets", "status": "connected", "lastError": "busy", "lastSync": None,
+             "config": {"access_token": "secret"}},
+        ]
+        deliveries.return_value = {"items": [
+            {"createdAt": "2026-10-11 09:00:00", "eventType": "call_completed", "leadName": "Asha", "detail": "busy", "status": "failed"},
+        ]}
+        result = help_tools.failing_integrations(7)
+        deliveries.assert_called_once_with(7, "sheets", limit=5, status="failed")
+        self.assertEqual(result["failing"][0]["recentFailures"][0]["caller"], "Asha")
+        self.assertNotIn("secret", str(result))
+
+
 if __name__ == "__main__":
     unittest.main()
