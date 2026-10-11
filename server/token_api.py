@@ -44,6 +44,7 @@ import support_files
 import support_inbound
 import help_articles
 import notification_worker
+import ops_alert_worker
 import widget_avatars
 import widget_chat
 import voice_catalog
@@ -85,6 +86,8 @@ retention_worker.start_retention_worker()
 # Sends the emails behind Settings → Preferences → Notifications, which were
 # saved and never sent before 2026-09-24 (see notification_worker.py).
 notification_worker.start_notification_worker()
+# Emails the platform owner about failures that need them (see ops_alert_worker.py).
+ops_alert_worker.start_ops_alert_worker()
 # Deletes support-ticket attachments 14 days after a ticket is solved.
 support_files.start_support_file_purge()
 # Keeps OpenAI's prompt cache warm for agents actually taking calls right
