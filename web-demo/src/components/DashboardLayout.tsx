@@ -453,9 +453,14 @@ function FullPageHeader({
   const showNewAgent = pathname === '/dashboard/agents'
 
   useEffect(() => {
-    fetchBilling()
-      .then((b) => setCredits(b.creditsRemaining))
-      .catch(() => setCredits(null))
+    const load = () =>
+      fetchBilling()
+        .then((b) => setCredits(b.creditsRemaining))
+        .catch(() => setCredits(null))
+    load()
+    // A top-up (TopupModal) announces itself so the pill updates without a reload.
+    window.addEventListener('vv:billing-changed', load)
+    return () => window.removeEventListener('vv:billing-changed', load)
   }, [refreshSignal])
 
   return (
@@ -467,13 +472,14 @@ function FullPageHeader({
       <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 xl:w-auto">
         <CommandMenuButton />
         {credits !== null && (
-          <Tooltip content="Plan, credits and invoices"><Link
-            to="/dashboard/settings?tab=billing"
-            aria-label={`${credits} credits remaining. Open plan and billing`}
+          <Tooltip content="Buy credits · plan and invoices"><Link
+            to="/dashboard/settings?tab=billing&topup=1"
+            aria-label={`${credits} credits remaining. Buy credits`}
             className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
           >
             <Icon name="toll" className="text-[15px] text-cyan" />
             {credits} credits
+            <span className="hidden text-primary sm:inline">· Top up</span>
           </Link></Tooltip>
         )}
         <NotificationBell />

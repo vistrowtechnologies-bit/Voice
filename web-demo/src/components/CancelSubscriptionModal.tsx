@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { cancelSubscription } from '../lib/api'
+import { PLANS } from '../lib/plans'
 import { Icon } from './Icon'
 
 const REASONS = [
@@ -14,16 +15,21 @@ const REASONS = [
 /** Two steps: why (optional), then exactly what happens, then confirm. The cancellation is for the END of
  * the paid period, so nothing is lost today and nothing is hidden behind a support request. */
 export function CancelSubscriptionModal({
+  planKey,
   planName,
   endsOn,
   onClose,
   onDone,
 }: {
+  planKey: string
   planName: string
   endsOn: string | null
   onClose: () => void
   onDone: () => void
 }) {
+  // What the workspace loses on the end date: everything this plan lists that Starter does not.
+  const starter = PLANS[0].features
+  const losses = (PLANS.find((p) => p.key === planKey)?.features ?? []).filter((f) => !starter.includes(f))
   const [step, setStep] = useState<'reason' | 'confirm' | 'done'>('reason')
   const [reason, setReason] = useState('')
   const [other, setOther] = useState('')
@@ -73,6 +79,12 @@ export function CancelSubscriptionModal({
               <li className="flex gap-2"><Icon name="check_circle" className="mt-0.5 shrink-0 text-[17px] text-cyan" /><span>You keep your {planName} plan until <b>{date}</b>. Nothing changes before then.</span></li>
               <li className="flex gap-2"><Icon name="check_circle" className="mt-0.5 shrink-0 text-[17px] text-cyan" /><span>You will not be charged again.</span></li>
               <li className="flex gap-2"><Icon name="info" className="mt-0.5 shrink-0 text-[17px] text-text-muted" /><span>After that your workspace goes back to the Starter plan&apos;s limits. Agents beyond those limits pause, and nothing is deleted.</span></li>
+              {losses.length > 0 && (
+                <li className="ml-6 rounded-lg bg-surface-high px-3 py-2 text-xs text-text-muted">
+                  <p className="mb-1 font-semibold text-text">On {date} you lose:</p>
+                  <ul className="list-disc pl-4">{losses.map((f) => <li key={f}>{f}</li>)}</ul>
+                </li>
+              )}
               <li className="flex gap-2"><Icon name="info" className="mt-0.5 shrink-0 text-[17px] text-text-muted" /><span>You can choose a plan again from Plan &amp; billing at any time.</span></li>
             </ul>
             {error && <p className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}

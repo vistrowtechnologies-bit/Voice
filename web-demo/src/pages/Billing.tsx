@@ -1,52 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
-import { fetchBilling, fetchSubscription, invoiceDocumentUrl, startCheckout, startTopup, verifyTopupPayment } from '../lib/api'
+import { fetchBilling, fetchSubscription, invoiceDocumentUrl, resumeSubscription, startCheckout } from '../lib/api'
 import { hasRole, useAuth } from '../lib/auth'
 import { BillingDetailsCard } from '../components/BillingDetailsCard'
 import { CancelSubscriptionModal } from '../components/CancelSubscriptionModal'
+import { TopupModal } from '../components/TopupModal'
 import { CONTACT_EMAIL } from '../lib/marketingContent'
 import { ANNUAL_MONTHS_CHARGED, PLANS, PRICING_FINALIZED, SHARED_PLAN_FEATURES, planHighlights } from '../lib/plans'
+import { loadRazorpayCheckout } from '../lib/razorpay'
 import type { BillingSummary, Invoice } from '../lib/types'
 import { Tooltip } from '../components/ui/Tooltip'
-
-// Razorpay's Checkout.js attaches itself to window - loaded on demand (only
-// once) rather than globally, so a user who never touches Billing never
-// pulls in a third-party script.
-let razorpayScriptPromise: Promise<void> | null = null
-function loadRazorpayCheckout(): Promise<void> {
-  if (razorpayScriptPromise) return razorpayScriptPromise
-  razorpayScriptPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error('Could not load Razorpay checkout'))
-    document.body.appendChild(script)
-  })
-  return razorpayScriptPromise
-}
-
-interface RazorpayCheckoutOptions {
-  key: string
-  subscription_id?: string
-  order_id?: string
-  name: string
-  description: string
-  image?: string
-  theme?: { color: string }
-  handler: (response: { razorpay_payment_id: string; razorpay_order_id?: string; razorpay_signature?: string }) => void
-  modal?: { ondismiss?: () => void }
-}
-
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayCheckoutOptions) => { open: () => void }
-  }
-}
 
 const INVOICE_KIND_LABELS: Record<string, string> = {
   subscription: 'Plan renewal',
@@ -64,11 +32,20 @@ export function Billing() {
   const [cycle] = useState<'monthly' | 'annual'>('monthly')
   const [busyPlan, setBusyPlan] = useState<string | null>(null)
   const [topupOpen, setTopupOpen] = useState(false)
-  const [topupCredits, setTopupCredits] = useState(100)
-  const [topupBusy, setTopupBusy] = useState(false)
+  const [resumeBusy, setResumeBusy] = useState(false)
   const [error, setError] = useState('')
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
   const canManage = hasRole(user, 'admin')
+
+  // The header credits pill links here with ?topup=1 to open the modal straight away.
+  useEffect(() => {
+    if (searchParams.get('topup') !== '1') return
+    setTopupOpen(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('topup')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   function refetch() {
     fetchBilling().then(setBilling).catch(() => setBilling(null))
@@ -85,13 +62,7 @@ export function Billing() {
   const usedPct = billing && billing.creditsTotal > 0 ? Math.max(0, Math.min(100, Math.round((billing.creditsUsed / billing.creditsTotal) * 100))) : 0
   const currentPlanKey = billing?.plan || (user?.plan || 'starter').toLowerCase()
   const currentPlanName = PLANS.find((p) => p.key === currentPlanKey)?.name || 'Starter'
-  // Must match server/token_api.py's billing_topup exactly: plan price over
-  // the PLAN's fixed credit count (calls_db.PLAN_PRICING), not this
-  // account's possibly-overridden creditsTotal setting - those two can
-  // differ (e.g. a manually-adjusted trial account), and this is a real
-  // price quote, not just a usage-page estimate.
   const currentPlanCredits = PLANS.find((p) => p.key === currentPlanKey)?.creditsNum || billing?.creditsTotal || 1
-  const perCreditRate = billing ? billing.planPriceInr / currentPlanCredits : 0
 
   async function handleUpgrade(planKey: 'starter' | 'growth' | 'scale', planName: string) {
     setError('')
@@ -122,33 +93,16 @@ export function Billing() {
     }
   }
 
-  async function handleTopup() {
+  async function handleResume() {
     setError('')
-    setTopupBusy(true)
+    setResumeBusy(true)
     try {
-      await loadRazorpayCheckout()
-      const session = await startTopup(topupCredits)
-      const razorpay = new window.Razorpay({
-        key: session.razorpayKeyId,
-        order_id: session.orderId,
-        name: 'Vistrow Voice',
-        description: `${session.credits} extra credits`,
-        image: 'https://app.vistrowvoice.com/apple-touch-icon.png',
-        theme: { color: '#a855f7' },
-        handler: async (response) => {
-          if (response.razorpay_order_id && response.razorpay_signature) {
-            await verifyTopupPayment(response.razorpay_order_id, response.razorpay_payment_id, response.razorpay_signature)
-            refetch()
-          }
-        },
-        modal: { ondismiss: () => setTopupBusy(false) },
-      })
-      razorpay.open()
-      setTopupOpen(false)
+      await resumeSubscription()
+      refetch()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not start top-up')
+      setError(e instanceof Error ? e.message : 'Could not resume the subscription')
     } finally {
-      setTopupBusy(false)
+      setResumeBusy(false)
     }
   }
 
@@ -232,7 +186,15 @@ export function Billing() {
             </p>
             {billing?.subscriptionStatus === 'active' && billing.cancelAtPeriodEnd && (
               <p className="mt-2 rounded-lg bg-amber/10 px-2.5 py-2 text-xs text-text">
-                Your plan ends on {billing.currentPeriodEnd ? new Date(billing.currentPeriodEnd).toLocaleDateString() : 'the end of this period'} and will not renew. You keep full access until then.
+                Ends on {billing.currentPeriodEnd ? new Date(billing.currentPeriodEnd).toLocaleDateString() : 'the end of this period'} and will not renew. You keep full access until then.
+                {canManage && (
+                  <>
+                    {' · '}
+                    <button type="button" onClick={() => void handleResume()} disabled={resumeBusy} className="font-semibold text-primary underline-offset-2 hover:underline disabled:opacity-60">
+                      {resumeBusy ? 'Resuming…' : 'Resume'}
+                    </button>
+                  </>
+                )}
               </p>
             )}
             {billing?.subscriptionStatus === 'active' && !billing.cancelAtPeriodEnd && canManage && (
@@ -407,60 +369,8 @@ export function Billing() {
           </div>
         </div>
 
-        {topupOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setTopupOpen(false)}>
-            <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-5" onClick={(e) => e.stopPropagation()}>
-              <h3 className="mb-3 text-sm font-bold">Buy extra credits</h3>
-              <label className="mb-1 block text-xs text-text-muted">Credits</label>
-              <input
-                type="number"
-                min={10}
-                step={10}
-                value={topupCredits}
-                onChange={(e) => setTopupCredits(Math.max(10, Number(e.target.value)))}
-                className="mb-4 w-full rounded-lg border border-border bg-surface-high px-3 py-2 text-sm"
-              />
-              <p className="mb-2 text-xs text-text-muted">
-                Billed at your plan's own rate ({perCreditRate.toFixed(2)}/credit) — credits apply to this billing
-                cycle immediately once payment confirms.
-              </p>
-              {(() => {
-                const base = topupCredits * perCreditRate
-                const gst = base * 0.18
-                return (
-                  <div className="mb-4 flex flex-col gap-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-xs">
-                    <div className="flex justify-between text-text-muted">
-                      <span>Subtotal</span>
-                      <span>₹{base.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-text-muted">
-                      <span>GST (18%)</span>
-                      <span>₹{gst.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between border-t border-border pt-1 font-bold text-text">
-                      <span>Total</span>
-                      <span>₹{(base + gst).toFixed(2)}</span>
-                    </div>
-                  </div>
-                )
-              })()}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setTopupOpen(false)}
-                  className="flex-1 rounded-lg border border-border py-2 text-sm font-bold text-text-muted"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleTopup}
-                  disabled={topupBusy}
-                  className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-bg disabled:opacity-40"
-                >
-                  {topupBusy ? 'Opening…' : 'Continue'}
-                </button>
-              </div>
-            </div>
-          </div>
+        {topupOpen && billing && razorpayConfigured && PRICING_FINALIZED && (
+          <TopupModal billing={billing} onClose={() => setTopupOpen(false)} onSuccess={refetch} />
         )}
 
         <SectionCard title="Payment history" subtitle="Includes payment attempts and billing records. Only records marked Paid confirm a completed payment; pending attempts are not paid invoices.">
@@ -471,7 +381,10 @@ export function Billing() {
               {invoices.map((inv) => (
                 <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm sm:px-5">
                   <div>
-                    <p>{INVOICE_KIND_LABELS[inv.kind] || inv.kind}</p>
+                    <p>
+                      {INVOICE_KIND_LABELS[inv.kind] || inv.kind}
+                      {inv.kind === 'topup' && inv.credits ? ` · +${(inv.credits + (inv.bonus_credits || 0)).toLocaleString('en-IN')} credits` : ''}
+                    </p>
                     <p className="text-xs text-text-muted">{new Date(inv.created_at).toLocaleDateString()}{inv.invoice_number ? ` · ${inv.invoice_number}` : ''}</p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -494,7 +407,9 @@ export function Billing() {
                           ? 'bg-cyan/15 text-cyan'
                           : inv.status === 'failed'
                             ? 'bg-destructive/15 text-destructive'
-                            : 'bg-amber/15 text-amber'
+                            : inv.status === 'refunded'
+                              ? 'bg-surface-high text-text-muted'
+                              : 'bg-amber/15 text-amber'
                       }`}
                     >
                       {inv.status === 'created' ? 'Payment not completed' : inv.status === 'pending_next_cycle' ? 'Pending billing' : inv.status}
@@ -511,6 +426,7 @@ export function Billing() {
 
       {cancelOpen && (
         <CancelSubscriptionModal
+          planKey={currentPlanKey}
           planName={currentPlanName}
           endsOn={billing?.currentPeriodEnd ?? null}
           onClose={() => setCancelOpen(false)}

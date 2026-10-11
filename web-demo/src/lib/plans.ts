@@ -33,6 +33,18 @@ export const ANNUAL_MONTHS_CHARGED = 10
 // Mirrors server/calls_db.py's PRICING_FINALIZED - keep both in sync.
 export const PRICING_FINALIZED = true
 
+// One-off credit top-ups. Mirrors agent/plan_policy.py's TOPUP_PACKS /
+// TOPUP_MIN_CREDITS / TOPUP_MAX_CREDITS - the server prices and grants; this
+// is display copy. The bonus is granted, only the base is invoiced.
+export const TOPUP_PACKS: { key: string; credits: number; bonusPct: number }[] = [
+  { key: '100', credits: 100, bonusPct: 0 },
+  { key: '250', credits: 250, bonusPct: 5 },
+  { key: '500', credits: 500, bonusPct: 10 },
+  { key: '1000', credits: 1000, bonusPct: 15 },
+]
+export const TOPUP_MIN_CREDITS = 50
+export const TOPUP_MAX_CREDITS = 10000
+
 // Existing dashboard capabilities, not promises of unlimited usage or support.
 const DASHBOARD_FEATURES = [
   'Scenario-based live testing & saved regression cases',
