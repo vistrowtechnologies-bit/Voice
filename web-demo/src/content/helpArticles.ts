@@ -263,7 +263,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     "slug": "how-credits-work",
     "title": "How credits are counted",
     "summary": "Credits per minute, by channel, voice tier and model.",
-    "body": "Credits = call minutes × channel rate × voice multiplier × model multiplier.\n\n- **Voice tiers** — Standard 1×, Premium 2×, Vistrow Expressive 2×.\n- **Model tiers** — Standard 1×, Premium 2×, Premium Plus 4×.\n\n**Billing** shows your remaining credits, minutes used this cycle, and usage split by call type and voice tier. Each call's details show the exact credits it used. If you enable low-credit emails in your preferences, you're emailed when credits drop below 10% of your allocation."
+    "body": "Credits = call minutes × channel rate × voice multiplier × model multiplier.\n\n- **Voice tiers** — Standard 1×, Premium 2×, Vistrow Expressive 2×.\n- **Model tiers** — Standard 1×, Premium 2×, Premium Plus 4×.\n\n**Billing** shows your remaining credits and minutes used this cycle. **Usage** (under Monitor) breaks credits down by day, channel, agent, voice tier, model tier, direction and phone number for any date range, and lists the most expensive calls. Each call's details show the exact credits it used. If you enable low-credit emails in your preferences, you're emailed when credits drop below 10% of your allocation."
    },
    {
     "slug": "plans",

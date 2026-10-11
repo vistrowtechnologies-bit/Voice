@@ -49,7 +49,7 @@ import widget_chat
 import voice_catalog
 from help_content import FAQS
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from livekit import api
@@ -4972,6 +4972,41 @@ def dismiss_notifications(req: DismissNotificationsRequest, user: dict = Depends
 @app.get("/billing/summary")
 def billing(user: dict = Depends(current_user)) -> dict:
     return calls_db.billing_summary(user["account_id"])
+
+
+def _usage_timezone(user: dict, tz: str | None) -> str:
+    """Days on the Usage page follow the caller's own preference unless the
+    request names a zone; Asia/Kolkata when nothing is stored."""
+    return tz or calls_db.get_user_preferences(user["user_id"]).get("timezone") or "Asia/Kolkata"
+
+
+@app.get("/usage")
+def usage(
+    from_date: str | None = Query(None, alias="from"),
+    to: str | None = None,
+    tz: str | None = None,
+    user: dict = Depends(current_user),
+) -> dict:
+    try:
+        return calls_db.usage_report(user["account_id"], from_date, to, _usage_timezone(user, tz))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/usage/export.csv", response_class=PlainTextResponse)
+def usage_export_csv(
+    from_date: str | None = Query(None, alias="from"),
+    to: str | None = None,
+    tz: str | None = None,
+    user: dict = Depends(require_role("admin")),
+) -> PlainTextResponse:
+    try:
+        body = calls_db.usage_csv(user["account_id"], from_date, to, _usage_timezone(user, tz))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return PlainTextResponse(
+        body, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=usage.csv"}
+    )
 
 
 @app.get("/billing/subscription")

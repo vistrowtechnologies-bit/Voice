@@ -424,7 +424,7 @@ Click **Save rules** after changing anything.""",
 - **Voice tiers** — Standard 1×, Premium 2×, Vistrow Expressive 2×.
 - **Model tiers** — Standard 1×, Premium 2×, Premium Plus 4×.
 
-**Billing** shows your remaining credits, minutes used this cycle, and usage split by call type and voice tier. Each call's details show the exact credits it used. If you enable low-credit emails in your preferences, you're emailed when credits drop below 10% of your allocation.""",
+**Billing** shows your remaining credits and minutes used this cycle. **Usage** (under Monitor) breaks credits down by day, channel, agent, voice tier, model tier, direction and phone number for any date range, and lists the most expensive calls. Each call's details show the exact credits it used. If you enable low-credit emails in your preferences, you're emailed when credits drop below 10% of your allocation.""",
             },
             {
                 "slug": "plans",

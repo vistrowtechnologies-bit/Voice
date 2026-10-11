@@ -554,6 +554,30 @@ export interface BillingSummary {
   estimatedNextInvoiceInr: number
 }
 
+export interface UsageBucket {
+  key: string
+  label: string
+  minutes: number
+  calls: number
+  credits: number
+}
+
+/** GET /usage - the Usage page. Priced per call by the same formula as BillingSummary. */
+export interface UsageReport {
+  range: { from: string; to: string; tz: string }
+  totals: { credits: number; minutes: number; calls: number; avgCreditsPerMinute: number; testOverageCredits: number }
+  balance: { creditsTotal: number; creditsUsedCycle: number; creditsRemaining: number; estDaysLeft: number | null }
+  daily: { date: string; credits: number; minutes: number; calls: number }[]
+  byChannel: UsageBucket[]
+  byAgent: UsageBucket[]
+  byVoiceTier: UsageBucket[]
+  byModelTier: UsageBucket[]
+  byDirection: UsageBucket[]
+  byNumber: UsageBucket[]
+  topCalls: { id: string; startedAt: string; agentName: string; channel: string; minutes: number; credits: number; callerName: string }[]
+  cycle: { start: string; end: string | null; allowance: number }
+}
+
 export interface Subscription {
   account_id: number
   plan: string

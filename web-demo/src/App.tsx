@@ -68,6 +68,7 @@ const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage').then((m
 const Inbound = lazy(() => import('./pages/Inbound').then((m) => ({ default: m.Inbound })))
 const Outbound = lazy(() => import('./pages/Outbound').then((m) => ({ default: m.Outbound })))
 const CallsHistory = lazy(() => import('./pages/CallsHistory').then((m) => ({ default: m.CallsHistory })))
+const Usage = lazy(() => import('./pages/Usage').then((m) => ({ default: m.Usage })))
 const Contacts = lazy(() => import('./pages/Contacts').then((m) => ({ default: m.Contacts })))
 const ContactDetail = lazy(() => import('./pages/ContactDetail').then((m) => ({ default: m.ContactDetail })))
 const Appointments = lazy(() => import('./pages/Appointments').then((m) => ({ default: m.Appointments })))
@@ -204,6 +205,7 @@ function App() {
             what clicking from the list gives you - one presentation of a
             call, never a separate standalone page that looks different. */}
         <Route path="/dashboard/calls/:id" element={guard(<CallsHistory />)} />
+        <Route path="/dashboard/usage" element={guard(<Usage />)} />
         <Route path="/dashboard/contacts" element={guard(<Contacts />)} />
         <Route path="/dashboard/contacts/:id" element={guard(<ContactDetail />)} />
         <Route path="/dashboard/appointments" element={guard(<Appointments />)} />

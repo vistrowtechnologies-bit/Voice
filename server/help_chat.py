@@ -62,6 +62,7 @@ Return exactly one JSON object with no text outside it:
 # HELP_DOC) — keys are route prefixes, checked longest-first by the caller.
 _PAGE_LABELS: dict[str, str] = {
     "/dashboard/calls": "All Calls History",
+    "/dashboard/usage": "Usage",
     "/dashboard/contacts": "Contacts",
     "/dashboard/appointments": "Appointments",
     "/dashboard/billing": "Billing",
