@@ -28,7 +28,7 @@ export function AdminPrivacyRequests() {
   return <>
     <PageHeader title="Privacy requests" subtitle="Track data exports and account-deletion requests across every tenant." />
     <AdminCard className="mb-4 flex flex-wrap gap-2 p-3">
-      {FILTERS.map((value) => <button key={value || 'all'} onClick={() => setFilter(value)} className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${filter === value ? 'border-primary bg-primary/10 text-primary' : 'border-border text-text-muted'}`}>{value ? value.replace('_', ' ') : 'All'}</button>)}
+      {FILTERS.map((value) => <button key={value || 'all'} onClick={() => setFilter(value)} className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${filter === value ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-transparent text-text-muted'}`}>{value ? value.replace('_', ' ') : 'All'}</button>)}
     </AdminCard>
     <AdminCard className="overflow-hidden">
       {loading ? <p className="p-5 text-sm text-text-muted">Loading…</p> : rows.length === 0 ? <EmptyState icon="policy" message="No privacy requests. Requests submitted from tenant Settings will appear here." /> :

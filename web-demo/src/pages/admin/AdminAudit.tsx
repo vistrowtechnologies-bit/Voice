@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { adminAudit, type AdminAuditEntry } from '../../lib/adminApi'
-import { AdminCard, EmptyState, PageHeader, Pill, timeAgo } from '../../components/AdminUI'
+import { AdminCard, EmptyState, ErrorState, PageHeader, Pill, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
 const ACTION_META: Record<string, { icon: string; tone: 'primary' | 'warning' | 'suspended' | 'neutral' }> = {
   impersonate: { icon: 'visibility', tone: 'primary' },
+  impersonate_write: { icon: 'edit', tone: 'primary' },
+  impersonate_exit: { icon: 'visibility_off', tone: 'neutral' },
+  db_backup_run: { icon: 'inventory_2', tone: 'neutral' },
+  support_note: { icon: 'sticky_note_2', tone: 'neutral' },
   adjust_credits: { icon: 'toll', tone: 'warning' },
   change_plan: { icon: 'sync_alt', tone: 'warning' },
   set_status: { icon: 'block', tone: 'suspended' },
@@ -17,15 +21,21 @@ export function AdminAudit() {
   const [filter, setFilter] = useState<'' | 'impersonation' | 'actions'>('')
   const [entries, setEntries] = useState<AdminAuditEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const navigate = useNavigate()
 
   useEffect(() => {
     setLoading(true)
+    setError(null)
     adminAudit({ action: filter, limit: 200 })
       .then((r) => setEntries(r.entries))
-      .catch(() => setEntries([]))
+      .catch((e: unknown) => {
+        setEntries([])
+        setError(e instanceof Error ? e.message : 'Request failed')
+      })
       .finally(() => setLoading(false))
-  }, [filter])
+  }, [filter, attempt])
 
   const tabs: { id: '' | 'impersonation' | 'actions'; label: string }[] = [
     { id: '', label: 'All activity' },
@@ -43,7 +53,7 @@ export function AdminAudit() {
             key={t.id}
             onClick={() => setFilter(t.id)}
             className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
-              filter === t.id ? 'border-primary bg-primary/15 text-primary' : 'border-border text-text-muted hover:text-text'
+              filter === t.id ? 'border-primary bg-primary/15 text-primary' : 'border-border bg-transparent text-text-muted hover:text-text'
             }`}
           >
             {t.label}
@@ -54,6 +64,8 @@ export function AdminAudit() {
       <AdminCard className="overflow-hidden">
         {loading ? (
           <div className="px-4 py-6 text-center text-sm text-text-muted">Loading…</div>
+        ) : error ? (
+          <ErrorState message={`Couldn't load the audit log: ${error}`} onRetry={() => setAttempt((n) => n + 1)} />
         ) : entries.length === 0 ? (
           <EmptyState icon="history" message="No activity logged yet." />
         ) : (

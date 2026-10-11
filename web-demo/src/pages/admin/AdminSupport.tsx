@@ -103,7 +103,7 @@ export function AdminSupport() {
           <button
             key={f.id || 'all'}
             onClick={() => setFilter(f.id)}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${filter === f.id ? 'border-primary bg-primary/10 text-primary' : 'border-border text-text-muted'}`}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${filter === f.id ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-transparent text-text-muted'}`}
           >
             {f.label}
           </button>
@@ -238,6 +238,7 @@ function ViewAsCustomer({ ticket }: { ticket: SupportTicket }) {
   const navigate = useNavigate()
   const { refresh } = useAuth()
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   const landOn = ticket.currentPage.startsWith('/dashboard') ? ticket.currentPage : '/dashboard'
   return (
     <div className="mt-2 flex flex-wrap gap-2">
@@ -245,11 +246,14 @@ function ViewAsCustomer({ ticket }: { ticket: SupportTicket }) {
         disabled={busy}
         onClick={async () => {
           setBusy(true)
+          setError('')
           try {
             rememberSupportReturn(`/admin/support?ticket=${ticket.id}`)
             await adminImpersonate(ticket.accountId)
             await refresh()
             navigate(landOn)
+          } catch (e) {
+            setError(`Couldn't start the support session: ${e instanceof Error ? e.message : 'request failed'}`)
           } finally {
             setBusy(false)
           }
@@ -260,10 +264,15 @@ function ViewAsCustomer({ ticket }: { ticket: SupportTicket }) {
       </button>
       <Link
         to={`/admin/accounts/${ticket.accountId}`}
-        className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:border-primary"
+        className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold hover:border-primary"
       >
         <Icon name="monitor_heart" className="text-[15px]" /> Account health
       </Link>
+      {error && (
+        <p role="alert" className="w-full text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

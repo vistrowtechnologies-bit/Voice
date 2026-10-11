@@ -53,6 +53,8 @@ def verify_password(password: str, stored: str) -> bool:
 
 COOKIE_NAME = "vv_session"
 SESSION_TTL_SECONDS = 30 * 24 * 3600  # 30 days
+# A super-admin "View as" session expires on its own after two hours.
+IMPERSONATION_TTL_SECONDS = 2 * 3600
 
 
 _DEV_FALLBACK_SECRET = "dev-insecure-secret-change-me"
@@ -94,12 +96,14 @@ def make_session_token(
     impersonator_id: int | None = None,
     session_version: int = 1,
     session_id: str | None = None,
+    ttl_seconds: int = SESSION_TTL_SECONDS,
 ) -> str:
     """`impersonator_id`, when set, marks this as a super-admin support session:
     uid/aid point at the TARGET tenant (so every tenant route works unchanged),
     while `imp` records the real platform-owner user driving it. read_session_token
     surfaces it so /auth/me can show the support banner and gate the exit."""
-    payload = {"uid": user_id, "aid": account_id, "sv": session_version, "exp": int(time.time()) + SESSION_TTL_SECONDS}
+    now = int(time.time())
+    payload = {"uid": user_id, "aid": account_id, "sv": session_version, "iat": now, "exp": now + ttl_seconds}
     if impersonator_id is not None:
         payload["imp"] = impersonator_id
     if session_id is not None:
@@ -130,6 +134,8 @@ def read_session_token(token: str | None) -> dict | None:
         "imp": payload.get("imp"),
         "sv": payload.get("sv", 1),
         "sid": payload.get("sid"),
+        "iat": payload.get("iat"),
+        "exp": payload.get("exp"),
     }
 
 

@@ -44,6 +44,7 @@ import support_files
 import support_inbound
 import help_articles
 import notification_worker
+import ops_alert_worker
 import widget_avatars
 import widget_chat
 import voice_catalog
@@ -85,6 +86,8 @@ retention_worker.start_retention_worker()
 # Sends the emails behind Settings → Preferences → Notifications, which were
 # saved and never sent before 2026-09-24 (see notification_worker.py).
 notification_worker.start_notification_worker()
+# Emails the platform owner about failures that need them (see ops_alert_worker.py).
+ops_alert_worker.start_ops_alert_worker()
 # Deletes support-ticket attachments 14 days after a ticket is solved.
 support_files.start_support_file_purge()
 # Keeps OpenAI's prompt cache warm for agents actually taking calls right
@@ -161,6 +164,54 @@ async def no_store_api_responses(request: Request, call_next):
     return response
 
 
+# "View as" (a super-admin support session) can look at everything and fix
+# a customer's setup, but never touch what is the customer's own: keys,
+# billing, team, profile and sign-in, recordings, numbers, integration
+# disconnects, account deletion. Any DELETE is refused too.
+_SUPPORT_BLOCKED_PATHS = re.compile(
+    r"^/(api-keys|billing|team|profile|auth|telephony/numbers|storage/recordings)(/|$)"
+    r"|^/calls/[^/]+/recording"
+    r"|^/integrations/[^/]+/disconnect$"
+)
+
+
+def support_session_blocks(method: str, path: str) -> bool:
+    if method in ("GET", "HEAD", "OPTIONS"):
+        return False
+    if method == "DELETE":
+        return True
+    return path != "/auth/logout" and bool(_SUPPORT_BLOCKED_PATHS.match(path))
+
+
+@app.middleware("http")
+async def guard_support_session(request: Request, call_next):
+    """Refuses the routes above during "View as" and writes an audit row,
+    attributed to the admin, for every other write. Registered before
+    require_session so it runs inside it: a revoked or expired support cookie
+    has already been turned away there and is never audited. /auth/* is public
+    to require_session, so the cookie is read here directly."""
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return await call_next(request)
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if session is None or not session.get("imp"):
+        return await call_next(request)
+    path = request.url.path
+    if support_session_blocks(request.method, path):
+        return JSONResponse({"detail": "Not allowed while viewing as a customer."}, status_code=403)
+    response = await call_next(request)
+    # /admin/* routes write their own audit rows, already as the admin.
+    if not path.startswith("/admin/"):
+        try:
+            admin = calls_db.get_user_by_id(session["imp"]) or {}
+            admin_db.write_audit(
+                session["imp"], admin.get("email") or "", "impersonate_write", session["aid"], session["uid"],
+                detail=f"{request.method} {path} -> {response.status_code}",
+            )
+        except Exception:
+            logger.exception("could not audit a support-session write to %s", path)
+    return response
+
+
 @app.middleware("http")
 async def require_session(request: Request, call_next):
     """Gate the dashboard API behind a valid session cookie. Public demo,
@@ -175,6 +226,9 @@ async def require_session(request: Request, call_next):
             return JSONResponse({"detail": "Session expired — please sign in again"}, status_code=401)
         if session.get("sid") and not calls_db.validate_user_session(session["sid"], session["uid"]):
             return JSONResponse({"detail": "This device was signed out"}, status_code=401)
+        if session.get("imp") and not session.get("sid"):
+            # A support cookie from before support sessions were revocable.
+            return JSONResponse({"detail": "Support session expired — please sign in again"}, status_code=401)
         # Stash for downstream handlers/dependencies (Phase 3 scopes queries by it).
         request.state.user_id = session["uid"]
         request.state.account_id = session["aid"]
@@ -1741,10 +1795,27 @@ def auth_me(request: Request, response: Response) -> dict:
     if session.get("sid"):
         if not calls_db.validate_user_session(session["sid"], session["uid"]):
             raise HTTPException(401, "This device was signed out")
+    elif session.get("imp"):
+        # Never upgrade an old support cookie into the owner's own session.
+        raise HTTPException(401, "Support session expired — please sign in again")
     else:
         # Transparently upgrade pre-device-management cookies after deploy.
         _set_session_cookie(response, session["uid"], session["aid"], request)
-    return {"user": _me_payload(session["uid"], session.get("imp"))}
+    payload = _me_payload(session["uid"], session.get("imp"))
+    if session.get("imp"):
+        admin = calls_db.get_user_by_id(session["imp"]) or {}
+        payload["impersonating"] = {
+            "adminEmail": admin.get("email") or "",
+            "startedAt": _iso_utc(session.get("iat")),
+            "expiresAt": _iso_utc(session.get("exp")),
+        }
+    return {"user": payload}
+
+
+def _iso_utc(epoch: int | None) -> str | None:
+    if not epoch:
+        return None
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(epoch)))
 
 
 class UpdateProfileRequest(BaseModel):
@@ -2398,14 +2469,21 @@ async def list_active_calls(user: dict = Depends(current_user)) -> list[dict]:
 # owner can operate inside a tenant while the banner + audit trail stay on.
 
 
-async def _platform_live_call_count() -> int:
-    """Count of rooms currently live across ALL tenants (num_participants >= 2)."""
-    lkapi = api.LiveKitAPI()
+async def _platform_live_call_count() -> int | None:
+    """Count of rooms currently live across ALL tenants (num_participants >= 2).
+    None when LiveKit can't be asked (unconfigured or down): the overview must
+    still load, and "unknown" is more honest than 0."""
+    try:
+        lkapi = api.LiveKitAPI()
+    except Exception:
+        logger.warning("admin: LiveKit not configured; live call count unavailable")
+        return None
     try:
         rooms = await lkapi.room.list_rooms(ListRoomsRequest())
         return sum(1 for r in rooms.rooms if r.num_participants >= 2)
     except Exception:
-        return 0
+        logger.warning("admin: LiveKit list_rooms failed; live call count unavailable", exc_info=True)
+        return None
     finally:
         await lkapi.aclose()
 
@@ -2463,9 +2541,14 @@ def admin_users(search: str = "", limit: int = 50, offset: int = 0, admin: dict 
 @app.get("/admin/calls")
 def admin_calls(
     account_id: int = 0, channel: str = "", days: int = 0, search: str = "",
-    limit: int = 50, offset: int = 0, admin: dict = Depends(require_platform_owner),
+    limit: int = 50, offset: int = 0, outcome: str = "", hours: int = 0,
+    admin: dict = Depends(require_platform_owner),
 ) -> dict:
-    return admin_db.list_all_calls(account_id, channel, days, search, limit, offset)
+    if outcome not in ("", "failed", "ok"):
+        raise HTTPException(400, "outcome must be failed or ok")
+    if hours and not 1 <= hours <= 720:
+        raise HTTPException(400, "hours must be between 1 and 720")
+    return admin_db.list_all_calls(account_id, channel, days, search, limit, offset, outcome, hours)
 
 
 @app.get("/admin/calls/{call_id}")
@@ -2530,6 +2613,7 @@ def admin_outbound_trunk_status(admin: dict = Depends(require_platform_owner)) -
 class AdminOutboundTrunkRequest(BaseModel):
     address: str
     caller_id: str
+    reason: str = ""
 
 
 @app.post("/admin/outbound-trunk")
@@ -2548,7 +2632,7 @@ async def admin_outbound_trunk_sync(req: AdminOutboundTrunkRequest, admin: dict 
         raise HTTPException(502, f"LiveKit rejected the trunk config: {exc}") from exc
     admin_db.write_audit(
         admin["user_id"], admin["email"], "sync_outbound_trunk", None,
-        detail=f"address={address} caller_id={caller_id} trunk_id={trunk_id}",
+        detail=f"address={address} caller_id={caller_id} trunk_id={trunk_id}. {req.reason.strip()}".strip(),
     )
     return livekit_sip.outbound_trunk_status()
 
@@ -2560,7 +2644,12 @@ def admin_db_backup_run(admin: dict = Depends(require_platform_owner)) -> dict:
     waiting for the daily 3am UTC window. Synchronous: a full pg_dump +
     upload takes a few seconds to a minute at this database's current
     size, well inside a normal request timeout."""
-    return db_backup.run_backup_now()
+    result = db_backup.run_backup_now()
+    admin_db.write_audit(
+        admin["user_id"], admin["email"], "db_backup_run", None,
+        detail=f"key={result.get('key')}" if result.get("ok") else f"failed: {str(result.get('error'))[:300]}",
+    )
+    return result
 
 
 class AdminPrivacyRequestUpdate(BaseModel):
@@ -2612,6 +2701,14 @@ def admin_update_vendor_credit(key: str, req: AdminVendorCreditRequest, admin: d
     return {"vendors": admin_db.list_vendor_credits()}
 
 
+def _admin_reason(reason: str | None) -> str:
+    """Credits, plan and status changes say why, for the audit trail."""
+    reason = (reason or "").strip()
+    if len(reason) < 5:
+        raise HTTPException(400, "A reason is required (at least 5 characters).")
+    return reason
+
+
 class AdminCreditsRequest(BaseModel):
     total: int
     reason: str = ""
@@ -2619,8 +2716,9 @@ class AdminCreditsRequest(BaseModel):
 
 @app.post("/admin/accounts/{account_id}/credits")
 def admin_set_credits(account_id: int, req: AdminCreditsRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    reason = _admin_reason(req.reason)
     admin_db.adjust_credits(account_id, req.total)
-    admin_db.write_audit(admin["user_id"], admin["email"], "adjust_credits", account_id, detail=f"set credits_total={req.total}. {req.reason}".strip())
+    admin_db.write_audit(admin["user_id"], admin["email"], "adjust_credits", account_id, detail=f"set credits_total={req.total}. {reason}")
     return admin_db.account_detail(account_id)
 
 
@@ -2631,11 +2729,12 @@ class AdminPlanRequest(BaseModel):
 
 @app.post("/admin/accounts/{account_id}/plan")
 def admin_set_plan(account_id: int, req: AdminPlanRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    reason = _admin_reason(req.reason)
     if req.plan not in admin_db.PLAN_PRICING:
         raise HTTPException(400, "Unknown plan")
     admin_db.change_plan(account_id, req.plan)
     calls_db.end_trial(account_id)
-    admin_db.write_audit(admin["user_id"], admin["email"], "change_plan", account_id, detail=f"plan={req.plan}. {req.reason}".strip())
+    admin_db.write_audit(admin["user_id"], admin["email"], "change_plan", account_id, detail=f"plan={req.plan}. {reason}")
     return admin_db.account_detail(account_id)
 
 
@@ -2646,10 +2745,11 @@ class AdminStatusRequest(BaseModel):
 
 @app.post("/admin/accounts/{account_id}/status")
 def admin_set_status(account_id: int, req: AdminStatusRequest, admin: dict = Depends(require_platform_owner)) -> dict:
+    reason = _admin_reason(req.reason)
     if req.status not in ("active", "suspended"):
         raise HTTPException(400, "Status must be active or suspended")
     admin_db.set_account_status(account_id, req.status)
-    admin_db.write_audit(admin["user_id"], admin["email"], "set_status", account_id, detail=f"status={req.status}. {req.reason}".strip())
+    admin_db.write_audit(admin["user_id"], admin["email"], "set_status", account_id, detail=f"status={req.status}. {reason}")
     return admin_db.account_detail(account_id)
 
 
@@ -2688,18 +2788,32 @@ def admin_reset_password(account_id: int, request: Request, admin: dict = Depend
     return {"ok": True, "emailSent": sent, "resetLink": link}
 
 
-@app.post("/admin/impersonate/{account_id}")
-def admin_impersonate(account_id: int, response: Response, admin: dict = Depends(require_platform_owner)) -> dict:
+# :int so "/admin/impersonate/exit" below is not swallowed by this route
+# (it answered 422 for "exit" before the converter was added).
+@app.post("/admin/impersonate/{account_id:int}")
+def admin_impersonate(account_id: int, request: Request, response: Response, admin: dict = Depends(require_platform_owner)) -> dict:
     """Start a support session AS this tenant's owner. uid/aid point at the
     tenant (so every tenant route works), imp records the real owner so the
-    banner shows and the owner can exit."""
+    banner shows and the owner can exit. It carries the owner's real
+    session_version and its own user_sessions row (provider 'support'), so it
+    works after "sign out other devices", shows in the owner's device list
+    where they can revoke it, and lasts two hours."""
     owner_uid = calls_db.account_owner_user_id(account_id)
     if owner_uid is None:
         raise HTTPException(404, "Account has no owner user")
+    owner = calls_db.get_user_by_id(owner_uid) or {}
+    session_id = calls_db.create_user_session(
+        owner_uid, "support-" + secrets.token_urlsafe(24), request.headers.get("user-agent", ""),
+        "support", auth.IMPERSONATION_TTL_SECONDS,
+    )
     response.set_cookie(
         auth.COOKIE_NAME,
-        auth.make_session_token(owner_uid, account_id, impersonator_id=admin["user_id"]),
-        max_age=auth.SESSION_TTL_SECONDS, httponly=True, secure=_COOKIE_SECURE, samesite="lax", path="/",
+        auth.make_session_token(
+            owner_uid, account_id, impersonator_id=admin["user_id"],
+            session_version=int(owner.get("session_version") or 1), session_id=session_id,
+            ttl_seconds=auth.IMPERSONATION_TTL_SECONDS,
+        ),
+        max_age=auth.IMPERSONATION_TTL_SECONDS, httponly=True, secure=_COOKIE_SECURE, samesite="lax", path="/",
     )
     admin_db.write_audit(admin["user_id"], admin["email"], "impersonate", account_id, owner_uid, detail="started support session")
     return {"ok": True}
@@ -2714,7 +2828,10 @@ def admin_impersonate_exit(request: Request, response: Response) -> dict:
     owner = calls_db.get_user_by_id(session["imp"])
     if owner is None or not owner["is_platform_owner"]:
         raise HTTPException(403, "Not permitted")
+    if session.get("sid"):
+        calls_db.revoke_user_session(session["sid"], session["uid"])
     _set_session_cookie(response, owner["id"], owner["account_id"], request)
+    admin_db.write_audit(owner["id"], owner["email"], "impersonate_exit", session["aid"], session["uid"], detail="ended support session")
     return {"ok": True}
 
 
@@ -3927,6 +4044,7 @@ def admin_add_note(ticket_id: int, req: TicketMessageRequest, admin: dict = Depe
     ticket = calls_db.add_support_ticket_message(ticket_id, "note", body, admin["user_id"], profile.get("name") or "Support")
     if ticket is None:
         raise HTTPException(404, "Ticket not found")
+    admin_db.write_audit(admin["user_id"], admin["email"], "support_note", ticket["accountId"], detail=f"VV-{ticket_id}")
     return ticket
 
 

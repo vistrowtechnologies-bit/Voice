@@ -13,8 +13,10 @@ customized its rates (all of them today). The per-account detail view calls
 calls_db.billing_summary() for the exact figure.
 """
 
+import datetime
 import json
 import logging
+import time
 
 import dbconn
 import vendor_live
@@ -22,8 +24,8 @@ import vendor_live
 logger = logging.getLogger(__name__)
 
 # Monthly plan pricing in INR — mirrors the marketing pricing page. The admin
-# "MRR" is estimated from this × each account's plan (no payment processor is
-# wired yet). Keep in sync with web-demo marketingContent PRICING_PLANS.
+# "MRR" is this × the plan of each active subscription (see _mrr). Keep in
+# sync with web-demo marketingContent PRICING_PLANS.
 PLAN_PRICING = {"free": 0, "starter": 2999, "growth": 5999, "scale": 12999}
 # Anything not in this set counts as a paying account for funnel/MRR purposes.
 _FREE_PLANS = {"free", "trial", ""}
@@ -34,6 +36,58 @@ _CREDITS_EXPR = "COALESCE(duration_seconds, 0) / 60.0 * (CASE WHEN call_type = '
 # Mirrors calls_db.py's _NOW — duplicated rather than imported to keep this
 # module's deliberate separation from calls_db (see module docstring).
 _NOW = "(to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))"
+# Text timestamps in this database are UTC; compare them against this.
+_UTC_NOW = "(now() AT TIME ZONE 'UTC')"
+
+# Honest money. An account is paying when it has an active subscription or a
+# paid invoice in the last 35 days; MRR counts active subscriptions only.
+# accounts.plan says nothing about payment (every signup starts on 'starter').
+_ACTIVE_SUB_PLAN = "(SELECT s.plan FROM subscriptions s WHERE s.account_id = a.id AND s.status = 'active')"
+_PAYING = (
+    f"({_ACTIVE_SUB_PLAN} IS NOT NULL OR EXISTS (SELECT 1 FROM invoices i WHERE i.account_id = a.id "
+    f"AND i.status = 'paid' AND i.paid_at IS NOT NULL AND i.paid_at::timestamp >= {_UTC_NOW} - INTERVAL '35 days'))"
+)
+
+# The two LiveKit workers, each writing settings(0, 'worker_heartbeat.<name>')
+# every 60 s (agent/worker_heartbeat.py). Stale after 3 minutes.
+EXPECTED_WORKERS = (("tenant", "CA_TGdpVhSdxDyS"), ("platform-demo", "CA_53d8HgBktjZ7"))
+WORKER_STALE_SECONDS = 180
+
+
+def _mrr(conn) -> int:
+    return sum(
+        PLAN_PRICING.get((r["plan"] or "").lower(), 0)
+        for r in conn.execute("SELECT plan FROM subscriptions WHERE status = 'active'").fetchall()
+    )
+
+
+def _paying_count(conn) -> int:
+    return conn.execute(f"SELECT COUNT(*) c FROM accounts a WHERE {_PAYING}").fetchone()["c"]
+
+
+def _failed_call_sql(alias: str = "c") -> str:
+    """Same rule as the tenant Calls page's transport failures
+    (calls_db._status), without its too-short heuristic."""
+    import calls_db  # local import: see account_detail
+
+    reasons = ", ".join(f"'{r}'" for r in sorted(calls_db.FAILED_DISCONNECT_REASONS))
+    return (
+        f"(COALESCE(TRIM({alias}.failure_reason), '') <> '' "
+        f"OR LOWER(TRIM(COALESCE({alias}.disconnect_reason, ''))) IN ({reasons}))"
+    )
+
+
+def _iso_z(text) -> str | None:
+    """A stored timestamp (naive UTC text or ISO with offset) as UTC ISO with Z."""
+    if not text:
+        return None
+    try:
+        value = datetime.datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if value.tzinfo is not None:
+        value = value.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _connect() -> dbconn.Conn:
@@ -143,10 +197,7 @@ def platform_overview(days: int = 30) -> dict:
         )
         calls_total = one("SELECT COUNT(*) c FROM calls").get("c", 0)
 
-        # MRR = sum of plan price across all non-free accounts.
-        mrr = 0
-        for r in conn.execute("SELECT plan, COUNT(*) c FROM accounts GROUP BY plan").fetchall():
-            mrr += PLAN_PRICING.get((r["plan"] or "").lower(), 0) * r["c"]
+        mrr = _mrr(conn)
 
         # Credits consumed vs allocated (platform-wide %).
         allocated = one("SELECT COALESCE(SUM(value::numeric),0) t FROM settings WHERE key = 'credits_total'").get("t", 0) or 0
@@ -189,10 +240,14 @@ def platform_overview(days: int = 30) -> dict:
             for r in conn.execute(
                 """SELECT a.id, a.name, a.plan, a.status, a.created_at,
                           (SELECT email FROM users WHERE account_id = a.id ORDER BY id LIMIT 1) owner_email,
-                          (SELECT auth_provider FROM users WHERE account_id = a.id ORDER BY id LIMIT 1) auth_provider
+                          (SELECT auth_provider FROM users WHERE account_id = a.id ORDER BY id LIMIT 1) auth_provider,
+                          (SELECT COUNT(*) FROM calls WHERE account_id = a.id) calls,
+                          (SELECT MIN(started_at) FROM calls WHERE account_id = a.id) "firstCallAt"
                    FROM accounts a ORDER BY a.id DESC LIMIT 8"""
             ).fetchall()
         ]
+        ops = _ops_counters(conn)
+        revenue = _revenue_mtd(conn)
 
         return {
             "kpis": {
@@ -214,9 +269,131 @@ def platform_overview(days: int = 30) -> dict:
             "callsByChannel": by_channel,
             "needsAttention": {"nearLimit": near_limit, "zeroCallSignups": zero_call_signups, "suspended": suspended},
             "recentSignups": recent_signups,
+            "ops": ops,
+            "revenueMtd": revenue,
         }
     finally:
         conn.close()
+
+
+def _revenue_mtd(conn) -> dict:
+    """Money actually captured this calendar month (IST), from invoices.
+    Captured counts invoices paid this month even if refunded later, so the
+    refund is not counted twice; amounts are the invoice totals."""
+    month = "date_trunc('month', now() AT TIME ZONE 'Asia/Kolkata')"
+    ist = "(({col}::timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata')"
+    row = conn.execute(
+        f"""SELECT
+              COALESCE(SUM(amount_inr) FILTER (WHERE status IN ('paid', 'refunded') AND paid_at IS NOT NULL
+                                               AND {ist.format(col='paid_at')} >= {month}), 0) captured,
+              COALESCE(SUM(amount_inr) FILTER (WHERE kind = 'topup' AND status IN ('paid', 'refunded') AND paid_at IS NOT NULL
+                                               AND {ist.format(col='paid_at')} >= {month}), 0) topups,
+              COALESCE(SUM(amount_inr) FILTER (WHERE status = 'refunded' AND refunded_at IS NOT NULL
+                                               AND {ist.format(col='refunded_at')} >= {month}), 0) refunds
+            FROM invoices"""
+    ).fetchone()
+    captured, topups, refunds = (round(float(row[k] or 0), 2) for k in ("captured", "topups", "refunds"))
+    return {"capturedInr": captured, "topupsInr": topups, "refundsInr": refunds, "netInr": round(captured - refunds, 2)}
+
+
+def credit_positions(conn=None) -> list[dict]:
+    """Every account's credits left this period (calls_db.billing_summary, the
+    number the tenant sees) and how many live agents it has."""
+    import calls_db  # local import: see account_detail
+
+    own = conn is None
+    conn = conn or _connect()
+    try:
+        rows = conn.execute(
+            "SELECT a.id, a.name, (SELECT COUNT(*) FROM agents g WHERE g.account_id = a.id AND g.status = 'live') live "
+            "FROM accounts a ORDER BY a.id"
+        ).fetchall()
+    finally:
+        if own:
+            conn.close()
+    positions = []
+    for r in rows:
+        try:
+            billing = calls_db.billing_summary(r["id"])
+        except Exception:
+            logger.exception("credit_positions: billing_summary failed for account %s", r["id"])
+            continue
+        positions.append({
+            "accountId": r["id"], "name": r["name"], "liveAgents": int(r["live"] or 0),
+            "total": float(billing.get("creditsTotal") or 0), "remaining": float(billing.get("creditsRemaining") or 0),
+        })
+    return positions
+
+
+def _ops_counters(conn) -> dict:
+    one = lambda sql, p=(): conn.execute(sql, p).fetchone()["c"]  # noqa: E731
+    failed = _failed_call_sql()
+    positions = credit_positions(conn)
+    workers = worker_statuses(conn)
+    return {
+        "failedCalls1h": one(f"SELECT COUNT(*) c FROM calls c WHERE {failed} AND c.started_at::timestamp >= {_UTC_NOW} - INTERVAL '1 hour'"),
+        "failedCalls24h": one(f"SELECT COUNT(*) c FROM calls c WHERE {failed} AND c.started_at::timestamp >= {_UTC_NOW} - INTERVAL '24 hours'"),
+        # The free trial is a one-time credit allowance with no end date in
+        # the code (settings.trial_started_at only marks its start), so there
+        # is nothing to count yet.
+        "trialsEnding7d": None,
+        "cancellationsPending": one(
+            "SELECT COUNT(*) c FROM subscriptions WHERE status = 'active' AND COALESCE(cancel_at_period_end, 0) = 1"
+        ),
+        "openTickets": one("SELECT COUNT(*) c FROM support_tickets WHERE status IN ('open', 'in_progress')"),
+        # Open tickets whose latest non-note message is not ours (or that
+        # nobody has answered yet).
+        "awaitingUs": one(
+            """SELECT COUNT(*) c FROM support_tickets t WHERE t.status IN ('open', 'in_progress')
+               AND COALESCE((SELECT m.author_type FROM support_ticket_messages m
+                             WHERE m.ticket_id = t.id AND m.author_type <> 'note' ORDER BY m.id DESC LIMIT 1), 'customer') <> 'support'"""
+        ),
+        "creditsLowAccounts": sum(1 for p in positions if p["total"] > 0 and p["remaining"] <= p["total"] * 0.2),
+        "zeroBalanceLiveAccounts": sum(1 for p in positions if p["remaining"] <= 0 and p["liveAgents"] > 0),
+        "integrationFailures24h": one(
+            f"SELECT COUNT(*) c FROM integration_deliveries WHERE status = 'failed' AND created_at::timestamp >= {_UTC_NOW} - INTERVAL '24 hours'"
+        ),
+        "workersHealthy": sum(1 for w in workers if w["status"] == "ok"),
+        "workersExpected": len(EXPECTED_WORKERS),
+    }
+
+
+def worker_statuses(conn=None, now: float | None = None) -> list[dict]:
+    """Both expected LiveKit workers, from their heartbeat settings rows."""
+    own = conn is None
+    conn = conn or _connect()
+    try:
+        keys = tuple(f"worker_heartbeat.{name}" for name, _ in EXPECTED_WORKERS)
+        rows = {
+            r["key"]: r["value"]
+            for r in conn.execute(
+                f"SELECT key, value FROM settings WHERE account_id = 0 AND key IN ({', '.join('?' for _ in keys)})", keys
+            ).fetchall()
+        }
+    finally:
+        if own:
+            conn.close()
+    now = time.time() if now is None else now
+    workers = []
+    for name, agent_id in EXPECTED_WORKERS:
+        try:
+            beat = json.loads(rows.get(f"worker_heartbeat.{name}") or "{}")
+        except ValueError:
+            beat = {}
+        seen = beat.get("seenAt")
+        age = None
+        if seen:
+            try:
+                seen_dt = datetime.datetime.strptime(seen, "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+                age = max(0, int(now - seen_dt.timestamp()))
+            except ValueError:
+                seen = None
+        workers.append({
+            "name": name, "agentId": agent_id, "lastSeenAt": seen, "ageSeconds": age,
+            "status": "unknown" if age is None else ("ok" if age <= WORKER_STALE_SECONDS else "stale"),
+            "version": beat.get("version") or None, "host": beat.get("host") or None,
+        })
+    return workers
 
 
 # ----------------------------------------------------------------- accounts
@@ -246,7 +423,8 @@ def list_accounts(search: str = "", plan: str = "", status: str = "", activity: 
                        (SELECT COUNT(*) FROM calls WHERE account_id = a.id) calls,
                        (SELECT MAX(started_at) FROM calls WHERE account_id = a.id) last_call,
                        COALESCE((SELECT SUM({_CREDITS_EXPR}) FROM calls WHERE account_id = a.id), 0) credits_used,
-                       COALESCE((SELECT value::numeric FROM settings WHERE account_id = a.id AND key = 'credits_total'), 300) credits_total
+                       COALESCE((SELECT value::numeric FROM settings WHERE account_id = a.id AND key = 'credits_total'), 300) credits_total,
+                       {_ACTIVE_SUB_PLAN} sub_plan
                 FROM accounts a {clause}
                 ORDER BY a.id DESC LIMIT ? OFFSET ?""",
             tuple(params) + (limit, offset),
@@ -256,7 +434,7 @@ def list_accounts(search: str = "", plan: str = "", status: str = "", activity: 
             d = dict(r)
             d["credits_used"] = round(float(d["credits_used"] or 0), 1)
             d["credits_total"] = round(float(d["credits_total"] or 0), 0)
-            d["mrr"] = PLAN_PRICING.get((d["plan"] or "").lower(), 0)
+            d["mrr"] = PLAN_PRICING.get((d.pop("sub_plan") or "").lower(), 0)
             accounts.append(d)
         # Activity filter is post-computed (needs the calls count above).
         if activity == "active":
@@ -345,12 +523,13 @@ def account_detail(account_id: int) -> dict | None:
 
         billing = calls_db.billing_summary(account_id)
         health = _account_health(conn, acct, billing, users, agents, numbers, integrations)
+        sub_plan = conn.execute(f"SELECT {_ACTIVE_SUB_PLAN} p FROM accounts a WHERE a.id = ?", (account_id,)).fetchone()["p"]
         return {
             "health": health,
             "account": acct,
             "owner": dict(owner) if owner else None,
             "billing": billing,
-            "mrr": PLAN_PRICING.get((acct.get("plan") or "").lower(), 0),
+            "mrr": PLAN_PRICING.get((sub_plan or "").lower(), 0),
             "users": users,
             "agents": agents,
             "knowledgeBases": kbs,
@@ -519,7 +698,10 @@ def list_all_users(search: str = "", limit: int = 50, offset: int = 0) -> dict:
 # ----------------------------------------------------------------- calls
 
 
-def list_all_calls(account_id: int = 0, channel: str = "", days: int = 0, search: str = "", limit: int = 50, offset: int = 0) -> dict:
+def list_all_calls(
+    account_id: int = 0, channel: str = "", days: int = 0, search: str = "", limit: int = 50, offset: int = 0,
+    outcome: str = "", hours: int = 0,
+) -> dict:
     conn = _connect()
     try:
         where, params = [], []
@@ -529,7 +711,13 @@ def list_all_calls(account_id: int = 0, channel: str = "", days: int = 0, search
         if channel:
             where.append("COALESCE(c.call_type, 'browser') = ?")
             params.append(channel)
-        if days:
+        if outcome == "failed":
+            where.append(_failed_call_sql())
+        elif outcome == "ok":
+            where.append(f"NOT {_failed_call_sql()}")
+        if hours:
+            where.append(f"c.started_at::timestamp >= {_UTC_NOW} - INTERVAL '{int(hours)} hours'")
+        elif days:
             where.append(f"c.started_at::date >= (CURRENT_DATE - INTERVAL '{int(days)} days')::date")
         if search:
             where.append("(c.lead_name ILIKE ? OR c.lead_phone ILIKE ? OR c.room_name ILIKE ?)")
@@ -540,6 +728,7 @@ def list_all_calls(account_id: int = 0, channel: str = "", days: int = 0, search
             f"""SELECT c.id, c.account_id, a.name account_name, c.room_name, c.started_at,
                        c.duration_seconds, COALESCE(c.call_type,'browser') call_type, c.reply_language,
                        c.lead_name, c.lead_phone, c.agent_id,
+                       NULLIF(c.failure_reason, '') "failureReason", NULLIF(c.disconnect_reason, '') "disconnectReason",
                        {_CREDITS_EXPR} credits
                 FROM calls c LEFT JOIN accounts a ON a.id = c.account_id {clause}
                 ORDER BY c.started_at DESC LIMIT ? OFFSET ?""",
@@ -550,6 +739,7 @@ def list_all_calls(account_id: int = 0, channel: str = "", days: int = 0, search
             d = dict(r)
             d["credits"] = round(float(d["credits"] or 0), 2)
             d["qualified"] = bool(d.get("lead_name"))
+            d["startedAtIso"] = _iso_z(d.get("started_at"))
             calls.append(d)
         return {"calls": calls, "total": total}
     finally:
@@ -566,6 +756,10 @@ def call_detail(call_id: int) -> dict | None:
         if row is None:
             return None
         d = dict(row)
+        # The storage key and the public CRM playback token are bearer
+        # secrets; the admin page only needs to know a recording exists.
+        d["hasRecording"] = bool(d.pop("recording_key", None))
+        d.pop("recording_share_token", None)
         d["transcript"] = json.loads(d.pop("transcript_json")) if d.get("transcript_json") else []
         try:
             d["latency_metrics"] = json.loads(d.pop("latency_metrics_json") or "{}")
@@ -629,7 +823,7 @@ def analytics(days: int = 30) -> dict:
         with_agent = one("SELECT COUNT(DISTINCT account_id) c FROM agents WHERE account_id IS NOT NULL").get("c", 0)
         with_call = one("SELECT COUNT(DISTINCT account_id) c FROM calls").get("c", 0)
         with_qualified = one("SELECT COUNT(DISTINCT account_id) c FROM calls WHERE lead_name IS NOT NULL").get("c", 0)
-        paying = one("SELECT COUNT(*) c FROM accounts WHERE LOWER(COALESCE(plan,'')) NOT IN ('free','trial','')").get("c", 0)
+        paying = _paying_count(conn)
 
         avg_duration = one("SELECT COALESCE(AVG(duration_seconds),0) a FROM calls").get("a", 0)
 
@@ -641,9 +835,7 @@ def analytics(days: int = 30) -> dict:
         ).get("c", 0)
 
         # MRR + ARPA.
-        mrr = 0
-        for r in conn.execute("SELECT plan, COUNT(*) c FROM accounts GROUP BY plan").fetchall():
-            mrr += PLAN_PRICING.get((r["plan"] or "").lower(), 0) * r["c"]
+        mrr = _mrr(conn)
 
         return {
             "signupSeries": signup_series,
@@ -672,20 +864,25 @@ def analytics(days: int = 30) -> dict:
 def billing_overview() -> dict:
     conn = _connect()
     try:
-        by_plan = []
-        mrr = 0
-        for r in conn.execute("SELECT plan, COUNT(*) c FROM accounts GROUP BY plan ORDER BY c DESC").fetchall():
-            price = PLAN_PRICING.get((r["plan"] or "").lower(), 0)
-            contribution = price * r["c"]
-            mrr += contribution
-            by_plan.append({"plan": r["plan"] or "free", "accounts": r["c"], "price": price, "mrr": contribution})
-
-        paying = sum(p["accounts"] for p in by_plan if p["price"] > 0)
+        # Accounts per plan label; MRR only from the active subscriptions.
+        plans: dict[str, dict] = {}
+        for r in conn.execute(
+            """SELECT a.plan, s.plan sub_plan FROM accounts a
+               LEFT JOIN subscriptions s ON s.account_id = a.id AND s.status = 'active'"""
+        ).fetchall():
+            plan = r["plan"] or "free"
+            row = plans.setdefault(plan, {"plan": plan, "accounts": 0, "price": PLAN_PRICING.get(plan.lower(), 0), "mrr": 0})
+            row["accounts"] += 1
+            row["mrr"] += PLAN_PRICING.get((r["sub_plan"] or "").lower(), 0)
+        by_plan = sorted(plans.values(), key=lambda p: p["accounts"], reverse=True)
+        mrr = _mrr(conn)
+        paying = _paying_count(conn)
 
         usage = conn.execute(
             f"""SELECT a.id, a.name, a.plan,
                        COALESCE((SELECT value::numeric FROM settings WHERE account_id = a.id AND key = 'credits_total'), 300) tot,
-                       COALESCE((SELECT SUM({_CREDITS_EXPR}) FROM calls WHERE account_id = a.id), 0) used
+                       COALESCE((SELECT SUM({_CREDITS_EXPR}) FROM calls WHERE account_id = a.id), 0) used,
+                       {_PAYING} paying
                 FROM accounts a"""
         ).fetchall()
         near_limit, convert = [], []
@@ -696,7 +893,7 @@ def billing_overview() -> dict:
             row = {"id": r["id"], "name": r["name"], "plan": r["plan"], "used": used, "total": round(tot, 0), "pct": pct}
             if tot > 0 and pct >= 80:
                 near_limit.append(row)
-            if PLAN_PRICING.get((r["plan"] or "").lower(), 0) == 0 and used > 5:
+            if not r["paying"] and used > 5:
                 convert.append(row)
         near_limit.sort(key=lambda x: x["pct"], reverse=True)
         convert.sort(key=lambda x: x["used"], reverse=True)
@@ -721,9 +918,9 @@ def audit_log(action: str = "", limit: int = 100, offset: int = 0) -> dict:
     try:
         where, params = [], []
         if action == "impersonation":
-            where.append("action = 'impersonate'")
+            where.append("starts_with(action, 'impersonate')")
         elif action == "actions":
-            where.append("action != 'impersonate'")
+            where.append("NOT starts_with(action, 'impersonate')")
         clause = ("WHERE " + " AND ".join(where)) if where else ""
         total = conn.execute(f"SELECT COUNT(*) c FROM admin_audit_log {clause}", tuple(params)).fetchone()["c"]
         rows = conn.execute(
@@ -745,7 +942,9 @@ def system_health() -> dict:
     conn = _connect()
     try:
         # DB ping (round-trip on the live pooled connection).
+        started = time.perf_counter()
         db_ok = conn.execute("SELECT 1 ok").fetchone()["ok"] == 1
+        db_latency_ms = round((time.perf_counter() - started) * 1000)
 
         errors = [
             dict(r)
@@ -779,6 +978,8 @@ def system_health() -> dict:
         return {
             "dbOk": db_ok, "errors": errors, "errorCount24h": error_count_24h,
             "disconnectReasons24h": disconnects,
+            "workers": worker_statuses(conn),
+            "api": {"ok": db_ok, "dbLatencyMs": db_latency_ms},
         }
     finally:
         conn.close()

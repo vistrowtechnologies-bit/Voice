@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom'
 import { BRAND } from '../lib/brand'
 import { adminExitImpersonation, takeSupportReturn } from '../lib/adminApi'
 import { initClarity, stopClarityForStaff, tagClarityAccount } from '../lib/analytics'
-import { useAuth, hasRole } from '../lib/auth'
+import { useAuth, hasRole, type AuthUser } from '../lib/auth'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { DashboardTour } from './DashboardTour'
 import { HelpChatWidget } from './HelpChatWidget'
@@ -526,22 +526,49 @@ export function PageHeader(props: PageHeaderProps) {
 
 /** Sticky red bar shown to the platform owner while inside a tenant's account
  * via "View as". Exiting restores the owner's own session and returns to /admin. */
-function ImpersonationBanner({ accountName }: { accountName: string }) {
+function ImpersonationBanner({ accountName, session }: { accountName: string; session: AuthUser['impersonating'] }) {
   const { refresh } = useAuth()
   const navigate = useNavigate()
+  const [exiting, setExiting] = useState(false)
+  const [exitError, setExitError] = useState('')
+  const expiresAt = typeof session === 'object' && session.expiresAt ? new Date(session.expiresAt) : null
+  const endsAt =
+    expiresAt && !Number.isNaN(expiresAt.getTime())
+      ? expiresAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+      : null
   const exit = async () => {
-    await adminExitImpersonation().catch(() => {})
+    setExiting(true)
+    setExitError('')
+    try {
+      await adminExitImpersonation()
+    } catch (e) {
+      // Stay put and say so - navigating away would leave the admin unsure
+      // whether they are still acting as the customer.
+      setExitError(`Exit failed: ${e instanceof Error ? e.message : 'request failed'}`)
+      setExiting(false)
+      return
+    }
     await refresh()
     navigate(takeSupportReturn())
   }
   return (
-    <div className="fixed inset-x-0 top-0 z-50 flex h-9 items-center justify-between bg-destructive px-4 text-white">
-      <span className="flex items-center gap-2 text-xs font-semibold">
-        <Icon name="visibility" className="text-[16px]" />
-        Support session - viewing <strong>{accountName}</strong>. Actions are logged.
+    <div className="fixed inset-x-0 top-0 z-50 flex h-9 items-center justify-between gap-3 bg-destructive px-4 text-white">
+      <span className="flex min-w-0 items-center gap-2 text-xs font-semibold">
+        <Icon name="visibility" className="shrink-0 text-[16px]" />
+        <span className="truncate">
+          {exitError ? (
+            exitError
+          ) : (
+            <>
+              Viewing as <strong>{accountName}</strong>
+              {endsAt && ` · ends ${endsAt}`}
+              <span className="hidden sm:inline">. Actions are logged.</span>
+            </>
+          )}
+        </span>
       </span>
-      <button onClick={exit} className="flex items-center gap-1 text-xs font-bold hover:underline">
-        <Icon name="logout" className="text-[15px]" /> Exit
+      <button onClick={exit} disabled={exiting} className="flex shrink-0 items-center gap-1 text-xs font-bold hover:underline disabled:opacity-70">
+        <Icon name="logout" className="text-[15px]" /> {exiting ? 'Exiting…' : exitError ? 'Retry exit' : 'Exit'}
       </button>
     </div>
   )
@@ -620,7 +647,7 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
       {/* Mounted once for the whole dashboard - it is keyboard-summoned, so
           it has no trigger in the layout and renders nothing until opened. */}
       <CommandPalette />
-      {user?.impersonating && <ImpersonationBanner accountName={user.accountName} />}
+      {user?.impersonating && <ImpersonationBanner accountName={user.accountName} session={user.impersonating} />}
       <aside
         data-dashboard-sidebar
         className={`fixed left-0 z-30 hidden flex-col overflow-x-hidden border-r border-border bg-surface py-3 transition-[width] duration-200 ease-out motion-reduce:transition-none lg:flex ${

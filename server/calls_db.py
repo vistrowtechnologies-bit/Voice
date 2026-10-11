@@ -2579,23 +2579,28 @@ def _sentiment(transcript: list[dict]) -> str:
     return "neutral"
 
 
+# Call endings that mean the call failed (also the admin Calls page's
+# outcome=failed filter, see admin_db.list_all_calls).
+FAILED_DISCONNECT_REASONS = frozenset({
+    "agent_error",
+    "connection_timeout",
+    "error",
+    "job_shutdown",
+    "join_failure",
+    "media_failure",
+    "sip_trunk_failure",
+    "user_rejected",
+    "user_unavailable",
+})
+
+
 def _status(row: dict, transcript: list[dict]) -> str:
     # Transport/provider failures win over transcript heuristics. A greeting
     # can be added to the transcript before RTP fails, so transcript length
     # alone must never turn a failed SIP call into "Completed".
     if (_row_get(row, "failure_reason") or "").strip():
         return "failed"
-    if (_row_get(row, "disconnect_reason") or "").strip().lower() in {
-        "agent_error",
-        "connection_timeout",
-        "error",
-        "job_shutdown",
-        "join_failure",
-        "media_failure",
-        "sip_trunk_failure",
-        "user_rejected",
-        "user_unavailable",
-    }:
+    if (_row_get(row, "disconnect_reason") or "").strip().lower() in FAILED_DISCONNECT_REASONS:
         return "failed"
     if (row["duration_seconds"] or 0) < 10 and not row["lead_name"] and len(transcript) < 2:
         return "failed"

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { adminCalls, adminCallDetail, type AdminCallRow, type AdminCallDetail } from '../../lib/adminApi'
-import { AdminCard, EmptyState, fmtDuration, FilterChip, PageHeader, Pill, SearchInput, timeAgo } from '../../components/AdminUI'
+import { AdminCard, EmptyState, ErrorState, fmtDateTime, fmtDuration, FilterChip, PageHeader, Pill, SearchInput, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
 const CHANNELS = ['browser', 'phone', 'widget']
@@ -13,86 +13,173 @@ function latencySummary(values?: number[]): string | null {
   return `p50 ${(percentile(0.5) / 1000).toFixed(2)}s · p95 ${(percentile(0.95) / 1000).toFixed(2)}s`
 }
 
+// Time-window chips map onto the backend's `hours` (1..720, overrides days)
+// and `days` params; the URL carries the same names so overview alerts can
+// deep-link (e.g. /admin/calls?outcome=failed&hours=1).
+const WINDOWS: { id: string; label: string; hours?: number; days?: number }[] = [
+  { id: '1h', label: '1 h', hours: 1 },
+  { id: '24h', label: '24 h', hours: 24 },
+  { id: '7d', label: '7 d', days: 7 },
+  { id: '30d', label: '30 d', days: 30 },
+  { id: '', label: 'All' },
+]
+
 export function AdminCalls() {
-  const [search, setSearch] = useState('')
-  const [channel, setChannel] = useState('')
-  const [days, setDays] = useState(0)
+  const [params, setParams] = useSearchParams()
+  const [search, setSearch] = useState(params.get('q') || '')
   const [rows, setRows] = useState<AdminCallRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const navigate = useNavigate()
+
+  const channel = params.get('channel') || ''
+  const outcome = params.get('outcome') === 'failed' ? 'failed' : ''
+  const hours = Number(params.get('hours')) || 0
+  const days = hours ? 0 : Number(params.get('days')) || 0
+  const accountId = Number(params.get('account_id')) || 0
+  const windowId = WINDOWS.find((w) => (w.hours && w.hours === hours) || (w.days && w.days === days))?.id ?? (hours || days ? 'custom' : '')
+
+  const update = (changes: Record<string, string | number | undefined>) => {
+    const next = new URLSearchParams(params)
+    for (const [k, v] of Object.entries(changes)) {
+      if (v) next.set(k, String(v))
+      else next.delete(k)
+    }
+    setParams(next, { replace: true })
+  }
+
+  const setWindow = (id: string) => {
+    const w = WINDOWS.find((x) => x.id === id)
+    update({ hours: w?.hours, days: w?.days })
+  }
 
   useEffect(() => {
     setLoading(true)
+    setError(null)
     const t = setTimeout(() => {
-      adminCalls({ search, channel, days, limit: 100 })
+      if (search !== (params.get('q') || '')) update({ q: search })
+      adminCalls({ search, channel, days, hours, outcome, account_id: accountId || undefined, limit: 100 })
         .then((r) => {
           setRows(r.calls)
           setTotal(r.total)
         })
-        .catch(() => setRows([]))
+        .catch((e: unknown) => {
+          setRows([])
+          setError(e instanceof Error ? e.message : 'Request failed')
+        })
         .finally(() => setLoading(false))
     }, 200)
     return () => clearTimeout(t)
-  }, [search, channel, days])
+    // `update`/`params` are read for the search->URL sync only; refetch is driven by the filter values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, channel, days, hours, outcome, accountId, attempt])
+
+  const accountLabel = rows.find((r) => r.account_id === accountId)?.account_name || `#${accountId}`
 
   return (
     <>
-      <PageHeader title="All Calls" subtitle={`Every call across the platform - ${total.toLocaleString()} total. Click any call to read the transcript.`} />
+      <PageHeader title="All Calls" subtitle={`Every call across the platform - ${total.toLocaleString('en-IN')} matching. Click any call to read the transcript.`} />
       <AdminCard className="mb-4 p-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by lead, phone, or room…" />
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Outcome</span>
+          <FilterChip active={!outcome} onClick={() => update({ outcome: '' })}>
+            All
+          </FilterChip>
+          <FilterChip active={outcome === 'failed'} onClick={() => update({ outcome: 'failed' })}>
+            Failed
+          </FilterChip>
+          <span className="ml-3 text-[11px] font-bold uppercase tracking-wide text-text-muted">Window</span>
+          {WINDOWS.map((w) => (
+            <FilterChip key={w.id || 'all'} active={windowId === w.id} onClick={() => setWindow(w.id)}>
+              {w.label}
+            </FilterChip>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Channel</span>
           {CHANNELS.map((c) => (
-            <FilterChip key={c} active={channel === c} onClick={() => setChannel(channel === c ? '' : c)}>
+            <FilterChip key={c} active={channel === c} onClick={() => update({ channel: channel === c ? '' : c })}>
               {c}
             </FilterChip>
           ))}
-          <span className="ml-3 text-[11px] font-bold uppercase tracking-wide text-text-muted">Range</span>
-          <FilterChip active={days === 7} onClick={() => setDays(days === 7 ? 0 : 7)}>
-            7d
-          </FilterChip>
-          <FilterChip active={days === 30} onClick={() => setDays(days === 30 ? 0 : 30)}>
-            30d
-          </FilterChip>
+          {accountId > 0 && (
+            <>
+              <span className="ml-3 text-[11px] font-bold uppercase tracking-wide text-text-muted">Account</span>
+              <button
+                onClick={() => update({ account_id: '' })}
+                aria-label="Clear account filter"
+                className="flex items-center gap-1 rounded-full border border-primary bg-primary/15 px-3 py-1 text-xs font-semibold text-primary"
+              >
+                {accountLabel}
+                <Icon name="close" className="text-[14px]" />
+              </button>
+            </>
+          )}
         </div>
       </AdminCard>
 
       <AdminCard className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-3 font-semibold">Time</th>
-                <th className="px-4 py-3 font-semibold">Account</th>
-                <th className="px-4 py-3 font-semibold">Channel</th>
-                <th className="px-4 py-3 text-right font-semibold">Duration</th>
-                <th className="px-4 py-3 font-semibold">Outcome</th>
-                <th className="px-4 py-3 text-right font-semibold">Credits</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((c) => (
-                <tr
-                  key={c.id}
-                  onClick={() => navigate(`/admin/calls/${c.id}`)}
-                  className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high"
-                >
-                  <td className="px-4 py-3 text-text-muted">{timeAgo(c.started_at)}</td>
-                  <td className="px-4 py-3 font-semibold">{c.account_name || '-'}</td>
-                  <td className="px-4 py-3 capitalize">{c.call_type}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtDuration(c.duration_seconds)}</td>
-                  <td className="px-4 py-3">
-                    {c.qualified ? <Pill tone="active">Qualified</Pill> : <Pill tone="neutral">No lead</Pill>}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{c.credits.toFixed(1)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {loading && <div className="px-4 py-6 text-center text-sm text-text-muted">Loading…</div>}
-        {!loading && rows.length === 0 && <EmptyState icon="call" message="No calls match these filters." />}
+        {error ? (
+          <ErrorState message={`Couldn't load calls: ${error}`} onRetry={() => setAttempt((n) => n + 1)} />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-text-muted">
+                    <th className="px-4 py-3 font-semibold">Time</th>
+                    <th className="px-4 py-3 font-semibold">Account</th>
+                    <th className="px-4 py-3 font-semibold">Channel</th>
+                    <th className="px-4 py-3 text-right font-semibold">Duration</th>
+                    <th className="px-4 py-3 font-semibold">Lead</th>
+                    <th className="px-4 py-3 font-semibold">Failure</th>
+                    <th className="px-4 py-3 text-right font-semibold">Credits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((c) => {
+                    const failure = c.failureReason || c.disconnectReason
+                    return (
+                      <tr
+                        key={c.id}
+                        onClick={() => navigate(`/admin/calls/${c.id}`)}
+                        className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high"
+                      >
+                        <td className="whitespace-nowrap px-4 py-3 text-text-muted">
+                          <span title={fmtDateTime(c.startedAtIso || c.started_at)}>{timeAgo(c.startedAtIso || c.started_at)}</span>
+                        </td>
+                        <td className="px-4 py-3 font-semibold">{c.account_name || '-'}</td>
+                        <td className="px-4 py-3 capitalize">{c.call_type}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{fmtDuration(c.duration_seconds)}</td>
+                        <td className="px-4 py-3">
+                          {c.qualified ? <Pill tone="active">Qualified</Pill> : <Pill tone="neutral">No lead</Pill>}
+                        </td>
+                        <td className="max-w-[260px] px-4 py-3">
+                          {failure ? (
+                            <span
+                              title={failure}
+                              className={`block truncate font-mono text-xs ${c.failureReason ? 'text-destructive' : 'text-text-muted'}`}
+                            >
+                              {failure}
+                            </span>
+                          ) : (
+                            <span className="text-text-muted">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">{c.credits.toFixed(1)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {loading && <div className="px-4 py-6 text-center text-sm text-text-muted">Loading…</div>}
+            {!loading && rows.length === 0 && <EmptyState icon="call" message="No calls match these filters." />}
+          </>
+        )}
       </AdminCard>
     </>
   )
@@ -121,7 +208,7 @@ export function AdminCallDetailPage() {
         subtitle={`${c.call_type} call · ${fmtDuration(c.duration_seconds)} · ${timeAgo(c.started_at)}`}
         action={
           c.account_id ? (
-            <button onClick={() => navigate(`/admin/accounts/${c.account_id}`)} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:border-primary">
+            <button onClick={() => navigate(`/admin/accounts/${c.account_id}`)} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-semibold hover:border-primary">
               Open account
             </button>
           ) : undefined
