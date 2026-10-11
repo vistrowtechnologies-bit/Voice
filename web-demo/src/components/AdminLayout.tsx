@@ -166,7 +166,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           <button
             aria-label="Open navigation"
             onClick={() => setMobileNav(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface text-text-muted"
           >
             <Icon name="menu" />
           </button>

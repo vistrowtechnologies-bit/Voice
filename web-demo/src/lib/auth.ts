@@ -16,7 +16,9 @@ export interface AuthUser {
   onboarded: boolean
   consent: { accepted: boolean; version: string; currentVersion: string }
   tourCompleted: boolean
-  impersonating: boolean
+  /** Truthy during a support ("View as") session. Newer servers send the
+   * session details instead of `true`; every field is optional. */
+  impersonating: boolean | { adminEmail?: string; startedAt?: string; expiresAt?: string }
   authProvider: string
   passwordSet: boolean
   avatarUrl: string

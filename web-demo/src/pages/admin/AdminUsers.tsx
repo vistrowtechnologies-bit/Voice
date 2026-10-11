@@ -1,28 +1,34 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { adminUsers, type AdminUserRow } from '../../lib/adminApi'
-import { AdminCard, EmptyState, fmtDate, PageHeader, Pill, SearchInput, timeAgo } from '../../components/AdminUI'
+import { AdminCard, EmptyState, ErrorState, fmtDate, PageHeader, Pill, SearchInput, timeAgo } from '../../components/AdminUI'
 
 export function AdminUsers() {
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState<AdminUserRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const navigate = useNavigate()
 
   useEffect(() => {
     setLoading(true)
+    setError(null)
     const t = setTimeout(() => {
       adminUsers({ search, limit: 100 })
         .then((r) => {
           setRows(r.users)
           setTotal(r.total)
         })
-        .catch(() => setRows([]))
+        .catch((e: unknown) => {
+          setRows([])
+          setError(e instanceof Error ? e.message : 'Request failed')
+        })
         .finally(() => setLoading(false))
     }, 200)
     return () => clearTimeout(t)
-  }, [search])
+  }, [search, attempt])
 
   return (
     <>
@@ -71,7 +77,8 @@ export function AdminUsers() {
           </table>
         </div>
         {loading && <div className="px-4 py-6 text-center text-sm text-text-muted">Loading…</div>}
-        {!loading && rows.length === 0 && <EmptyState icon="group" message="No users match this search." />}
+        {!loading && error && <ErrorState message={`Couldn't load users: ${error}`} onRetry={() => setAttempt((n) => n + 1)} />}
+        {!loading && !error && rows.length === 0 && <EmptyState icon="group" message="No users match this search." />}
       </AdminCard>
     </>
   )

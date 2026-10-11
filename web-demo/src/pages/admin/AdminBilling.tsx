@@ -19,16 +19,12 @@ export function AdminBilling() {
   return (
     <>
       <PageHeader title="Billing" subtitle="Revenue oversight, plan mix, and upsell signals." />
-      <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber/30 bg-amber/10 px-3 py-2 text-xs text-amber">
-        <Icon name="info" className="text-[16px]" />
-        Revenue is estimated from plan pricing - connect a payment processor for real billing.
-      </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="MRR" value={fmtINR(d.mrr)} icon="payments" />
-        <StatCard label="Paying accounts" value={d.payingAccounts} icon="verified" />
+        <StatCard label="Contracted MRR (active subscriptions)" value={fmtINR(d.mrr)} icon="payments" />
+        <StatCard label="Paying accounts" value={d.payingAccounts.toLocaleString('en-IN')} sub="active subscription or paid invoice (35 d)" icon="verified" />
         <StatCard label="ARPA" value={fmtINR(d.arpa)} icon="account_balance" />
-        <StatCard label="Near limit" value={d.nearLimit.length} sub="≥80% credits used" icon="warning" />
+        <StatCard label="Near limit" value={d.nearLimit.length.toLocaleString('en-IN')} sub="≥80% credits used" icon="warning" />
       </div>
 
       <AdminCard className="mt-6 overflow-hidden">

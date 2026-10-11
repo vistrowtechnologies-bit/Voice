@@ -88,7 +88,7 @@ export function AdminVendorCredits() {
                 </span>
                 <button
                   onClick={() => setEditingKey(v.key)}
-                  className="justify-self-end rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
+                  className="justify-self-end rounded-lg border border-border bg-transparent px-2.5 py-1 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
                 >
                   Edit
                 </button>
