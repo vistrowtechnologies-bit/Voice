@@ -111,7 +111,7 @@ class TopupFlowTests(unittest.TestCase):
         self.captured(session["orderId"], account=self.a)
         self.assertEqual(self.credits(self.a), 200)
         self.assertEqual(self.invoice_for(session["orderId"])["status"], "paid")
-        self.receipts.assert_not_called()
+        self.receipts.assert_called_once()  # the verify path is the common one; it must email too
 
     def test_webhook_then_verify_credits_exactly_once(self):
         session = self.order(credits=100)
@@ -180,6 +180,29 @@ class TopupFlowTests(unittest.TestCase):
         self.assertIsNotNone(inv["refunded_at"])
         self.assertEqual(self.credits(self.a), 0)
         self.assertIsNone(self.db.refund_topup(self.pay), "a second refund event finds nothing")
+
+    def test_failed_attempt_then_successful_retry_still_credits(self):
+        """Razorpay sends payment.failed for a declined card while the order
+        stays payable; the retry in the same Checkout pays that order."""
+        session = self.order(credits=100)
+        self.ns["_process_razorpay_event"](
+            {"event": "payment.failed", "payload": {"payment": {"entity": {"id": "pay_declined", "order_id": session["orderId"]}}}}
+        )
+        self.assertEqual(self.invoice_for(session["orderId"])["status"], "failed")
+        self.assertEqual(self.verify(session["orderId"])["credits"], 100)
+        self.assertEqual(self.credits(self.a), 200)
+        self.assertEqual(self.invoice_for(session["orderId"])["status"], "paid")
+
+    def test_partial_refund_takes_back_the_same_share_of_credits(self):
+        session = self.order(pack="500")  # 500 + 50 bonus credits
+        self.verify(session["orderId"])
+        before = self.credits(self.a)
+        half = round(float(self.invoice_for(session["orderId"])["amount_inr"]) * 100 / 2)  # paise
+        self.ns["_process_razorpay_event"](
+            {"event": "refund.processed", "payload": {"refund": {"entity": {"payment_id": self.pay, "amount": half}}}}
+        )
+        self.assertEqual(self.credits(self.a), before - 275, "half the money back = half of the 550 credits back")
+        self.assertEqual(self.invoice_for(session["orderId"])["status"], "paid", "a partial refund leaves the invoice paid")
 
     def test_refund_of_an_unknown_payment_is_a_no_op(self):
         self.ns["_process_razorpay_event"](

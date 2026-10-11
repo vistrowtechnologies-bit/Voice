@@ -5,12 +5,12 @@ import { CommandMenuButton, CommandPalette } from './CommandPalette'
 import { NotificationBell } from './NotificationBell'
 import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { fetchBilling } from '../lib/api'
+import { fetchBilling, fetchSubscription } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
 import { BRAND } from '../lib/brand'
 import { adminExitImpersonation, takeSupportReturn } from '../lib/adminApi'
 import { initClarity, stopClarityForStaff, tagClarityAccount } from '../lib/analytics'
-import { useAuth } from '../lib/auth'
+import { useAuth, hasRole } from '../lib/auth'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { DashboardTour } from './DashboardTour'
 import { HelpChatWidget } from './HelpChatWidget'
@@ -452,6 +452,15 @@ function FullPageHeader({
   // duplicated Quick actions and displaced dashboard-specific controls.
   const showNewAgent = pathname === '/dashboard/agents'
 
+  // "· Top up" only where it can work: checkout switched on for this
+  // deployment and an admin who may pay. Everyone else keeps the plain pill.
+  const [topupAvailable, setTopupAvailable] = useState(false)
+  const { user: headerUser } = useAuth()
+  useEffect(() => {
+    if (!hasRole(headerUser, 'admin')) { setTopupAvailable(false); return }
+    fetchSubscription().then((r) => setTopupAvailable(r.razorpayConfigured)).catch(() => setTopupAvailable(false))
+  }, [headerUser])
+
   useEffect(() => {
     const load = () =>
       fetchBilling()
@@ -472,14 +481,14 @@ function FullPageHeader({
       <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 xl:w-auto">
         <CommandMenuButton />
         {credits !== null && (
-          <Tooltip content="Buy credits · plan and invoices"><Link
-            to="/dashboard/settings?tab=billing&topup=1"
-            aria-label={`${credits} credits remaining. Buy credits`}
+          <Tooltip content={topupAvailable ? 'Buy credits · plan and invoices' : 'Plan and billing'}><Link
+            to={topupAvailable ? '/dashboard/settings?tab=billing&topup=1' : '/dashboard/settings?tab=billing'}
+            aria-label={topupAvailable ? `${credits} credits remaining. Buy credits` : `${credits} credits remaining. Open plan and billing`}
             className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
           >
             <Icon name="toll" className="text-[15px] text-cyan" />
             {credits} credits
-            <span className="hidden text-primary sm:inline">· Top up</span>
+            {topupAvailable && <span className="hidden text-primary sm:inline">· Top up</span>}
           </Link></Tooltip>
         )}
         <NotificationBell />

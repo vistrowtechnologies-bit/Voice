@@ -5015,7 +5015,7 @@ def billing_topups(user: dict = Depends(current_user)) -> list[dict]:
     """The last 20 credit top-ups (paid, pending, failed, refunded), newest first."""
     rows = calls_db.list_topups(user["account_id"])
     for r in rows:
-        r["documentUrl"] = f"/api/billing/invoices/{r['id']}/document" if r["status"] == "paid" else None
+        r["documentUrl"] = f"/api/billing/invoices/{r['id']}/document" if r["status"] in ("paid", "refunded") else None
     return rows
 
 
@@ -5269,6 +5269,12 @@ def billing_verify_payment(req: VerifyPaymentRequest, user: dict = Depends(requi
     if invoice:
         logger.info("billing: top-up invoice %s paid via verify (account %s, +%s credits)",
                     invoice["id"], user["account_id"], int(invoice["credits"] or 0) + int(invoice.get("bonus_credits") or 0))
+        # The browser callback usually wins the race with the webhook, so
+        # this is the common path for the receipt.
+        try:
+            _send_topup_receipt(invoice)
+        except Exception:
+            logger.warning("top-up receipt email failed for invoice %s", invoice["id"], exc_info=True)
         return {
             "ok": True, "credits": int(invoice["credits"] or 0) + int(invoice.get("bonus_credits") or 0),
             "creditsRemaining": calls_db.billing_summary(user["account_id"])["creditsRemaining"], "invoiceId": invoice["id"],
@@ -5278,6 +5284,12 @@ def billing_verify_payment(req: VerifyPaymentRequest, user: dict = Depends(requi
     )
     if existing is None:
         raise HTTPException(404, "No top-up order found for this workspace")
+    if existing.get("status") != "paid":
+        # Signature was valid, so Razorpay took the money, yet the invoice is
+        # not paid (e.g. refunded in between). Never report success here.
+        logger.error("billing: verified payment %s for order %s but invoice %s is %s",
+                     req.razorpayPaymentId, req.razorpayOrderId, existing["id"], existing.get("status"))
+        raise HTTPException(409, "Payment received but the credits could not be applied. Please contact billing support.")
     return {
         "ok": True, "alreadyApplied": True,
         "creditsRemaining": calls_db.billing_summary(user["account_id"])["creditsRemaining"], "invoiceId": existing["id"],
@@ -5541,10 +5553,12 @@ def _process_razorpay_event(event: dict) -> dict:
     elif event_type in ("refund.processed", "payment.refunded"):
         refund = payload.get("refund", {}).get("entity", {})
         payment_id = refund.get("payment_id") or payload.get("payment", {}).get("entity", {}).get("id")
-        invoice = calls_db.refund_topup(payment_id)
+        amount = refund.get("amount")  # paise; absent = treat as a full refund
+        invoice = calls_db.refund_topup(payment_id, int(amount) if isinstance(amount, (int, float)) else None)
         if invoice:
-            logger.info("billing: top-up invoice %s refunded (account %s, balance now %s)",
-                        invoice["id"], invoice["account_id"], invoice["creditsTotal"])
+            logger.info("billing: top-up invoice %s %s refund took back %s credits (account %s, balance now %s)",
+                        invoice["id"], "full" if invoice["status"] == "refunded" else "partial",
+                        invoice["creditsTakenBack"], invoice["account_id"], invoice["creditsTotal"])
         else:
             logger.info("razorpay %s: no paid top-up for payment %s; ignoring", event_type, payment_id)
 

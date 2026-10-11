@@ -632,17 +632,6 @@ export interface TopupResult {
 }
 
 /** GET /billing/topups */
-export interface TopupRecord {
-  id: number
-  createdAt: string
-  credits: number
-  bonusCredits: number
-  amountInr: number
-  status: string
-  invoiceNumber: string | null
-  documentUrl: string | null
-}
-
 export interface TelephonyStatus {
   provider: string
   connected: boolean

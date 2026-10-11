@@ -8948,7 +8948,7 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                 "id": f"subscription-ends:{ends}",
                 "severity": "info",
                 "title": f"Subscription ends on {ends}" if ends else "Subscription will not renew",
-                "body": "Your plan will not renew. You keep full access until then; resume any time before that from Plan & billing.",
+                "body": "Your plan will not renew. You keep full access until then. To keep the plan after all, contact billing support before that date.",
                 "to": "/dashboard/billing",
                 "at": None,
             })
@@ -9321,9 +9321,11 @@ def mark_topup_paid_and_credit(account_id: int, order_id: str, payment_id: str |
     ONE transaction, so a crash between the two can never leave money taken
     with no credits given. Keyed by (order, account) so another tenant's
     order id finds nothing. Returns the invoice row plus `creditsTotal`, or
-    None when there is no such created invoice (already paid, unknown, or
-    not this account's) — both the verify callback and the webhook call this,
-    and whichever runs second just gets None."""
+    None when there is no such open invoice (already paid, refunded, unknown,
+    or not this account's) — both the verify callback and the webhook call
+    this, and whichever runs second just gets None. A `failed` row is still
+    open: Razorpay sends payment.failed per attempt while the order stays
+    payable, and the customer's retry in the same Checkout pays that order."""
     if not order_id:
         return None
     conn = _connect()
@@ -9331,7 +9333,7 @@ def mark_topup_paid_and_credit(account_id: int, order_id: str, payment_id: str |
         with conn:
             row = conn.execute(
                 f"UPDATE invoices SET status = 'paid', razorpay_payment_id = ?, paid_at = {_NOW} "
-                "WHERE razorpay_order_id = ? AND account_id = ? AND kind = 'topup' AND status = 'created' RETURNING *",
+                "WHERE razorpay_order_id = ? AND account_id = ? AND kind = 'topup' AND status IN ('created', 'failed') RETURNING *",
                 (payment_id, order_id, account_id),
             ).fetchone()
             if row is None:
@@ -9348,26 +9350,38 @@ def mark_topup_paid_and_credit(account_id: int, order_id: str, payment_id: str |
     return invoice
 
 
-def refund_topup(payment_id: str) -> dict | None:
-    """A Razorpay refund of a paid top-up: the invoice keeps its number and
-    becomes `refunded`, and the credits it granted come back off the balance
-    (never below 0). Returns the invoice, or None for an unknown or already
-    refunded payment."""
+def refund_topup(payment_id: str, amount_paise: int | None = None) -> dict | None:
+    """A Razorpay refund of a paid top-up. A full refund (amount missing or
+    >= what was paid) marks the invoice `refunded` (it keeps its number) and
+    takes back every credit it granted; a partial refund takes back the same
+    share of the credits and leaves the invoice paid. Never below 0. Returns
+    the invoice, or None for an unknown, unpaid or already refunded payment.
+    Replays of the same partial refund are stopped by the webhook event id,
+    not here. If the period has already rolled over the deduction comes off
+    the new allowance."""
     if not payment_id:
         return None
     conn = _connect()
     try:
         with conn:
             row = conn.execute(
-                f"UPDATE invoices SET status = 'refunded', refunded_at = {_NOW} "
-                "WHERE razorpay_payment_id = ? AND kind = 'topup' AND status = 'paid' RETURNING *",
+                "SELECT * FROM invoices WHERE razorpay_payment_id = ? AND kind = 'topup' AND status = 'paid' FOR UPDATE",
                 (payment_id,),
             ).fetchone()
             if row is None:
                 return None
             invoice = dict(row)
             granted = int(invoice["credits"] or 0) + int(invoice.get("bonus_credits") or 0)
-            invoice["creditsTotal"] = _adjust_credits_total(conn, invoice["account_id"], -granted)
+            paid_paise = round(float(invoice["amount_inr"] or 0) * 100)
+            full = amount_paise is None or paid_paise <= 0 or int(amount_paise) >= paid_paise
+            taken_back = granted if full else round(granted * int(amount_paise) / paid_paise)
+            if full:
+                conn.execute(
+                    f"UPDATE invoices SET status = 'refunded', refunded_at = {_NOW} WHERE id = ?", (invoice["id"],)
+                )
+                invoice["status"] = "refunded"
+            invoice["creditsTakenBack"] = taken_back
+            invoice["creditsTotal"] = _adjust_credits_total(conn, invoice["account_id"], -taken_back)
             return invoice
     finally:
         conn.close()

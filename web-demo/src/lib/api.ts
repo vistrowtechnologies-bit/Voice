@@ -25,7 +25,6 @@ import type {
   LaunchReadiness,
   ApiKey,
   Invoice,
-  TopupRecord,
   TopupResult,
   TopupSession,
   KnowledgeBase,
@@ -537,7 +536,6 @@ export const startTopup = (choice: { pack: string } | { credits: number }) =>
 export const verifyTopupPayment = (razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string) =>
   send<TopupResult>('POST', '/billing/verify-payment', { razorpayOrderId, razorpayPaymentId, razorpaySignature })
 
-export const fetchTopups = () => get<TopupRecord[]>('/billing/topups')
 
 export const resumeSubscription = () =>
   send<{ ok: boolean; alreadyActive: boolean }>('POST', '/billing/subscription/resume', {})

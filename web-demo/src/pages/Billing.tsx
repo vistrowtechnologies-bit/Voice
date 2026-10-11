@@ -5,7 +5,7 @@ import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
-import { fetchBilling, fetchSubscription, invoiceDocumentUrl, resumeSubscription, startCheckout } from '../lib/api'
+import { fetchBilling, fetchSubscription, invoiceDocumentUrl, startCheckout } from '../lib/api'
 import { hasRole, useAuth } from '../lib/auth'
 import { BillingDetailsCard } from '../components/BillingDetailsCard'
 import { CancelSubscriptionModal } from '../components/CancelSubscriptionModal'
@@ -32,7 +32,6 @@ export function Billing() {
   const [cycle] = useState<'monthly' | 'annual'>('monthly')
   const [busyPlan, setBusyPlan] = useState<string | null>(null)
   const [topupOpen, setTopupOpen] = useState(false)
-  const [resumeBusy, setResumeBusy] = useState(false)
   const [error, setError] = useState('')
   const [cancelOpen, setCancelOpen] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -90,19 +89,6 @@ export function Billing() {
       setError(e instanceof Error ? e.message : 'Could not start checkout')
     } finally {
       setBusyPlan(null)
-    }
-  }
-
-  async function handleResume() {
-    setError('')
-    setResumeBusy(true)
-    try {
-      await resumeSubscription()
-      refetch()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not resume the subscription')
-    } finally {
-      setResumeBusy(false)
     }
   }
 
@@ -187,12 +173,12 @@ export function Billing() {
             {billing?.subscriptionStatus === 'active' && billing.cancelAtPeriodEnd && (
               <p className="mt-2 rounded-lg bg-amber/10 px-2.5 py-2 text-xs text-text">
                 Ends on {billing.currentPeriodEnd ? new Date(billing.currentPeriodEnd).toLocaleDateString() : 'the end of this period'} and will not renew. You keep full access until then.
+                {/* Razorpay has no undo for a scheduled cancellation, so no Resume button: it would fail every time. */}
                 {canManage && (
                   <>
-                    {' · '}
-                    <button type="button" onClick={() => void handleResume()} disabled={resumeBusy} className="font-semibold text-primary underline-offset-2 hover:underline disabled:opacity-60">
-                      {resumeBusy ? 'Resuming…' : 'Resume'}
-                    </button>
+                    {' '}To keep the plan after all,{' '}
+                    <Link to="/dashboard/support" className="font-semibold text-primary underline-offset-2 hover:underline">contact billing support</Link>
+                    {' '}before that date.
                   </>
                 )}
               </p>
