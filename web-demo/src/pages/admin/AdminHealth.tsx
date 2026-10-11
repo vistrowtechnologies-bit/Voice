@@ -1,34 +1,60 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { adminHealth, type AdminHealth as Data } from '../../lib/adminApi'
-import { AdminCard, BarList, EmptyState, PageHeader, Pill, StatCard, timeAgo } from '../../components/AdminUI'
+import { adminHealth, type AdminHealth as Data, type AdminWorker } from '../../lib/adminApi'
+import { AdminCard, BarList, EmptyState, ErrorState, fmtDateTime, PageHeader, Pill, StatCard, timeAgo, useVisiblePoll } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
+
+const POLL_MS = 15000
 
 export function AdminHealth() {
   const [d, setD] = useState<Data | null>(null)
-  const [error, setError] = useState(false)
+  // A failed refresh is transient: keep the last good data on screen, say the
+  // refresh failed, and clear the note on the next success.
+  const [failure, setFailure] = useState<string | null>(null)
   const navigate = useNavigate()
 
-  useEffect(() => {
-    const load = () => adminHealth().then(setD).catch(() => setError(true))
-    load()
-    const iv = setInterval(load, 15000) // live-ish refresh
-    return () => clearInterval(iv)
+  const load = useCallback(() => {
+    adminHealth()
+      .then((r) => {
+        setD(r)
+        setFailure(null)
+      })
+      .catch((e: unknown) => setFailure(e instanceof Error ? e.message : 'Request failed'))
   }, [])
+  useVisiblePoll(load, POLL_MS)
 
-  if (error) return <EmptyState icon="error" message="Couldn't load system health." />
+  if (!d && failure) return <ErrorState message={`Couldn't load system health: ${failure}`} onRetry={load} />
   if (!d) return <div className="h-40 animate-pulse rounded-xl border border-border bg-surface" />
 
   return (
     <>
-      <PageHeader title="System Health" subtitle="Live platform status, error feed, and configuration." />
+      <PageHeader title="System Health" subtitle="Live platform status, error feed, and configuration. Refreshes every 15 s while this tab is open." />
+
+      {failure && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber/30 bg-amber/10 px-3 py-2 text-xs text-amber">
+          <Icon name="sync_problem" className="text-[16px]" />
+          Last refresh failed ({failure}), retrying. Showing the previous data.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatusCard label="Database" ok={d.dbOk} okText="Connected" badText="Unreachable" />
-        <StatCard label="Live calls" value={d.liveCalls} sub="active rooms" live />
-        <StatCard label="Errors (24h)" value={d.errorCount24h} sub="logged events" icon="error" />
-        <StatusCard label="Backend" ok={true} okText="Online" badText="Down" />
+        {d.api ? (
+          <StatusCard
+            label="API"
+            ok={d.api.ok}
+            okText="OK"
+            badText="Degraded"
+            sub={d.api.dbLatencyMs == null ? 'DB latency not measured' : `DB round trip ${d.api.dbLatencyMs.toLocaleString('en-IN')} ms`}
+          />
+        ) : (
+          <StatCard label="API" value="-" sub="Not reported by this server" icon="api" />
+        )}
+        <StatCard label="Live calls" value={d.liveCalls.toLocaleString('en-IN')} sub="active rooms" live />
+        <StatCard label="Errors (24h)" value={d.errorCount24h.toLocaleString('en-IN')} sub="logged events" icon="error" />
       </div>
+
+      <WorkersCard workers={d.workers} />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <AdminCard className="overflow-hidden lg:col-span-2">
@@ -95,7 +121,7 @@ export function AdminHealth() {
   )
 }
 
-function StatusCard({ label, ok, okText, badText }: { label: string; ok: boolean; okText: string; badText: string }) {
+function StatusCard({ label, ok, okText, badText, sub }: { label: string; ok: boolean; okText: string; badText: string; sub?: string }) {
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
       <div className="flex items-start justify-between">
@@ -103,6 +129,53 @@ function StatusCard({ label, ok, okText, badText }: { label: string; ok: boolean
         <span className={`h-2 w-2 rounded-full ${ok ? 'bg-success' : 'bg-destructive'}`} />
       </div>
       <div className={`mt-1 font-display text-lg font-bold ${ok ? 'text-success' : 'text-destructive'}`}>{ok ? okText : badText}</div>
+      {sub && <div className="mt-0.5 text-xs text-text-muted">{sub}</div>}
     </div>
+  )
+}
+
+const WORKER_TONE = { ok: 'active', stale: 'warning', unknown: 'neutral' } as const
+
+function fmtAge(seconds: number | null): string {
+  if (seconds == null) return 'never seen'
+  const s = Math.max(0, Math.round(seconds))
+  if (s < 120) return `last seen ${s.toLocaleString('en-IN')} s ago`
+  if (s < 7200) return `last seen ${Math.floor(s / 60).toLocaleString('en-IN')} min ago`
+  return `last seen ${Math.floor(s / 3600).toLocaleString('en-IN')} h ago`
+}
+
+/** LiveKit agent workers (web demo + phone), from their 60 s heartbeats. */
+function WorkersCard({ workers }: { workers?: AdminWorker[] }) {
+  return (
+    <AdminCard className="mt-6 overflow-hidden">
+      <div className="border-b border-border px-5 py-3">
+        <div className="font-display text-base font-semibold">Workers</div>
+        <div className="mt-0.5 text-xs text-text-muted">
+          LiveKit agent workers report a heartbeat every 60 s; older than 3 minutes is stale.
+        </div>
+      </div>
+      {!workers ? (
+        <EmptyState icon="dns" message="Worker heartbeats are not reported by this server yet." />
+      ) : workers.length === 0 ? (
+        <EmptyState icon="dns" message="No workers configured." />
+      ) : (
+        <div className="divide-y divide-border/60">
+          {workers.map((w) => (
+            <div key={w.name} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 text-sm">
+              <span className="font-semibold">{w.name}</span>
+              <span className="font-mono text-[11px] text-text-muted">{w.agentId}</span>
+              <Pill tone={WORKER_TONE[w.status] ?? 'neutral'}>{w.status}</Pill>
+              <span className="text-xs text-text-muted" title={fmtDateTime(w.lastSeenAt)}>
+                {fmtAge(w.ageSeconds)}
+              </span>
+              <span className="ml-auto font-mono text-[11px] text-text-muted">
+                {w.version ? `version ${w.version}` : 'version unknown'}
+                {w.host ? ` · ${w.host}` : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </AdminCard>
   )
 }

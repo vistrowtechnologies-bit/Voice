@@ -2,7 +2,7 @@
 // component vocabulary (stat cards, pills, tables, cards) rendered in the app's
 // own design tokens (violet primary, surface/border) rather than a separate
 // palette, so it stays consistent with the tenant dashboard.
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Icon } from './Icon'
 
 export function AdminCard({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -162,6 +162,60 @@ export function TimeRange({ value, onChange }: { value: number; onChange: (d: nu
       ))}
     </div>
   )
+}
+
+/** Run `load` now and every `intervalMs`, pausing while the tab is hidden and
+ * refreshing immediately when it becomes visible again. `load` must be stable
+ * (useCallback) or the timer restarts on every render. */
+export function useVisiblePoll(load: () => void, intervalMs: number) {
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null
+    const start = () => {
+      if (timer === null) timer = setInterval(load, intervalMs)
+    }
+    const stop = () => {
+      if (timer !== null) clearInterval(timer)
+      timer = null
+    }
+    const onVisibility = () => {
+      if (document.hidden) stop()
+      else {
+        load()
+        start()
+      }
+    }
+    load()
+    if (!document.hidden) start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [load, intervalMs])
+}
+
+/** Inline load-failure state with a Retry button - distinct from "no results". */
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+      <Icon name="error" className="text-[32px] text-destructive" />
+      <p className="max-w-md text-sm text-destructive">{message}</p>
+      {onRetry && (
+        <button onClick={onRetry} className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold hover:border-primary">
+          Retry
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Absolute local time for a `title` tooltip next to a relative "2m ago". */
+export function fmtDateTime(ts: string | null | undefined): string {
+  if (!ts) return ''
+  const d = new Date(ts.replace(' ', 'T') + (ts.includes('Z') || ts.includes('+') ? '' : 'Z'))
+  return Number.isNaN(d.getTime())
+    ? ts
+    : d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 /** Relative "2m ago" / "3d ago" from an ISO/pg timestamp string. */
