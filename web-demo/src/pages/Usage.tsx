@@ -157,18 +157,7 @@ export function Usage() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Usage" subtitle="Where your credits go - by day, channel, agent, voice and model, in your timezone.">
-        {hasRole(user, 'admin') && (
-          <a
-            href={usageExportUrl(range.from, range.to)}
-            download
-            className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-bold hover:border-primary"
-          >
-            <Icon name="download" className="text-[18px]" />
-            Export CSV
-          </a>
-        )}
-      </PageHeader>
+      <PageHeader title="Usage" subtitle="Where your credits go - by day, channel, agent, voice and model, in your timezone." />
 
       <div className="space-y-5">
         {activeCalls.length > 0 && (
@@ -201,6 +190,17 @@ export function Usage() {
           <span className="text-xs text-text-muted">
             {range.from === range.to ? range.from : `${range.from} → ${range.to}`} · {report?.range.tz ?? usageTimeZone()}
           </span>
+          {hasRole(user, 'admin') && (
+            // Export sits with the range it exports, not in the page header.
+            <a
+              href={usageExportUrl(range.from, range.to)}
+              download
+              className="ml-auto flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text hover:border-primary"
+            >
+              <Icon name="download" className="text-[16px]" />
+              Export CSV
+            </a>
+          )}
         </div>
 
         {error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2 text-xs text-destructive">{error}</p>}
