@@ -8,7 +8,7 @@ const ACTION_META: Record<string, { icon: string; tone: 'primary' | 'warning' | 
   impersonate: { icon: 'visibility', tone: 'primary' },
   impersonate_write: { icon: 'edit', tone: 'primary' },
   impersonate_exit: { icon: 'visibility_off', tone: 'neutral' },
-  db_backup_run: { icon: 'backup', tone: 'neutral' },
+  db_backup_run: { icon: 'inventory_2', tone: 'neutral' },
   support_note: { icon: 'sticky_note_2', tone: 'neutral' },
   adjust_credits: { icon: 'toll', tone: 'warning' },
   change_plan: { icon: 'sync_alt', tone: 'warning' },
