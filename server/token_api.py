@@ -2446,6 +2446,15 @@ def admin_account_detail(account_id: int, admin: dict = Depends(require_platform
     return detail
 
 
+@app.get("/admin/accounts/{account_id}/invoices/{invoice_id}/pdf")
+def admin_invoice_pdf(account_id: int, invoice_id: int, admin: dict = Depends(require_platform_owner)) -> Response:
+    """Same PDF the tenant downloads, for support and accounting."""
+    detail = admin_db.account_detail(account_id)
+    if detail is None:
+        raise HTTPException(404, "Account not found")
+    return _invoice_pdf_response(account_id, invoice_id, (detail.get("account") or {}).get("name") or "Workspace")
+
+
 @app.get("/admin/users")
 def admin_users(search: str = "", limit: int = 50, offset: int = 0, admin: dict = Depends(require_platform_owner)) -> dict:
     return admin_db.list_all_users(search, limit, offset)
@@ -5072,6 +5081,33 @@ def invoice_document(invoice_id: int, print: bool = False, user: dict = Depends(
         account.get("account_name") or "Your workspace", auto_print=print,
     )
     return HTMLResponse(page, headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
+def _invoice_pdf_response(account_id: int, invoice_id: int, account_name: str) -> Response:
+    """The A4 PDF of a paid (or later refunded) invoice as a download."""
+    invoice = calls_db.get_invoice(account_id, invoice_id)
+    if invoice is None or invoice.get("status") not in ("paid", "refunded"):
+        raise HTTPException(404, "No paid invoice found")
+    number = calls_db.ensure_invoice_number(invoice_id)
+    if number:
+        invoice["invoice_number"] = number
+    saved = calls_db.get_billing_profile(account_id)
+    profile = {
+        "legal_name": saved["legalName"], "gstin": saved["gstin"], "address": saved["address"],
+        "city": saved["city"], "state": saved["state"], "pincode": saved["pincode"],
+    }
+    pdf = billing_documents.render_invoice_pdf(invoice, profile, billing_documents.supplier_from_env(), account_name)
+    filename = (invoice.get("invoice_number") or f"receipt-{invoice_id}").replace("/", "-") + ".pdf"
+    return Response(
+        pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"},
+    )
+
+
+@app.get("/billing/invoices/{invoice_id}/pdf")
+def invoice_pdf(invoice_id: int, user: dict = Depends(require_role("admin"))) -> Response:
+    account = calls_db.get_user_by_id(user["user_id"]) or {}
+    return _invoice_pdf_response(user["account_id"], invoice_id, account.get("account_name") or "Your workspace")
 
 
 class CancelSubscriptionRequest(BaseModel):

@@ -5,7 +5,7 @@ import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { SectionCard } from '../components/ui/SectionCard'
-import { fetchBilling, fetchSubscription, invoiceDocumentUrl, startCheckout } from '../lib/api'
+import { fetchBilling, fetchSubscription, invoiceDocumentUrl, invoicePdfUrl, startCheckout } from '../lib/api'
 import { hasRole, useAuth } from '../lib/auth'
 import { BillingDetailsCard } from '../components/BillingDetailsCard'
 import { CancelSubscriptionModal } from '../components/CancelSubscriptionModal'
@@ -374,10 +374,15 @@ export function Billing() {
                     <p className="text-xs text-text-muted">{new Date(inv.created_at).toLocaleDateString()}{inv.invoice_number ? ` · ${inv.invoice_number}` : ''}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    {inv.status === 'paid' && canManage && (
-                      <a href={invoiceDocumentUrl(inv.id, true)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-                        <Icon name="receipt_long" className="text-[15px]" /> Invoice
-                      </a>
+                    {(inv.status === 'paid' || inv.status === 'refunded') && canManage && (
+                      <>
+                        <a href={invoiceDocumentUrl(inv.id, true)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                          <Icon name="receipt_long" className="text-[15px]" /> Invoice
+                        </a>
+                        <a href={invoicePdfUrl(inv.id)} download className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                          <Icon name="download" className="text-[15px]" /> PDF
+                        </a>
+                      </>
                     )}
                     {PRICING_FINALIZED && (
                       <span className="text-text-muted">
