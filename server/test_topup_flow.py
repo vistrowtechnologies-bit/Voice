@@ -195,5 +195,15 @@ class TopupFlowTests(unittest.TestCase):
         self.assertTrue(top["invoiceNumber"])
 
 
+class WebhookIsReachableWithoutASession(unittest.TestCase):
+    """Razorpay calls the webhook with no dashboard cookie. It used to be
+    caught by the session middleware (401) before the handler ever ran, so
+    no payment.captured or refund event could land."""
+
+    def test_public_path(self):
+        import token_api
+        self.assertIn("/billing/razorpay/webhook", token_api._PUBLIC_PATHS)
+
+
 if __name__ == "__main__":
     unittest.main()

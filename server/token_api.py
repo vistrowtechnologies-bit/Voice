@@ -133,6 +133,7 @@ _PUBLIC_PATHS = {
     "/telephony/enablex/outbound-test-event",  # EnableX outbound/test-call webhook (their server calls it — no session)
     "/webhooks/meta",                  # Meta's leadgen/WhatsApp webhook (GET verify + POST events — no session)
     "/support/inbound-email",          # Resend email.received webhook (Svix-signed; replies to ticket emails)
+    "/billing/razorpay/webhook",       # Razorpay webhook (HMAC-signed; their server calls it — no session)
 }
 _PUBLIC_PREFIXES = (
     "/auth/", "/invite/", "/widget-avatars/",
