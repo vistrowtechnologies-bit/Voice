@@ -50,7 +50,7 @@ export function AdminHealth() {
         ) : (
           <StatCard label="API" value="-" sub="Not reported by this server" icon="api" />
         )}
-        <StatCard label="Live calls" value={d.liveCalls.toLocaleString('en-IN')} sub="active rooms" live />
+        <StatCard label="Live calls" value={d.liveCalls == null ? '—' : d.liveCalls.toLocaleString('en-IN')} sub={d.liveCalls == null ? 'LiveKit unreachable' : 'active rooms'} live={d.liveCalls != null} />
         <StatCard label="Errors (24h)" value={d.errorCount24h.toLocaleString('en-IN')} sub="logged events" icon="error" />
       </div>
 

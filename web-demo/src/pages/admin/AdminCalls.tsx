@@ -134,7 +134,7 @@ export function AdminCalls() {
                     <th className="px-4 py-3 font-semibold">Account</th>
                     <th className="px-4 py-3 font-semibold">Channel</th>
                     <th className="px-4 py-3 text-right font-semibold">Duration</th>
-                    <th className="px-4 py-3 font-semibold">Outcome</th>
+                    <th className="px-4 py-3 font-semibold">Lead</th>
                     <th className="px-4 py-3 font-semibold">Failure</th>
                     <th className="px-4 py-3 text-right font-semibold">Credits</th>
                   </tr>

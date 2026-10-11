@@ -2469,14 +2469,21 @@ async def list_active_calls(user: dict = Depends(current_user)) -> list[dict]:
 # owner can operate inside a tenant while the banner + audit trail stay on.
 
 
-async def _platform_live_call_count() -> int:
-    """Count of rooms currently live across ALL tenants (num_participants >= 2)."""
-    lkapi = api.LiveKitAPI()
+async def _platform_live_call_count() -> int | None:
+    """Count of rooms currently live across ALL tenants (num_participants >= 2).
+    None when LiveKit can't be asked (unconfigured or down): the overview must
+    still load, and "unknown" is more honest than 0."""
+    try:
+        lkapi = api.LiveKitAPI()
+    except Exception:
+        logger.warning("admin: LiveKit not configured; live call count unavailable")
+        return None
     try:
         rooms = await lkapi.room.list_rooms(ListRoomsRequest())
         return sum(1 for r in rooms.rooms if r.num_participants >= 2)
     except Exception:
-        return 0
+        logger.warning("admin: LiveKit list_rooms failed; live call count unavailable", exc_info=True)
+        return None
     finally:
         await lkapi.aclose()
 

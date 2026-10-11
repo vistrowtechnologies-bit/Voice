@@ -19,7 +19,8 @@ import {
 import { Icon } from '../../components/Icon'
 
 const POLL_MS = 30000
-const n = (v: number) => v.toLocaleString('en-IN')
+// null = the server has no basis for the number yet (e.g. trials have no fixed length).
+const n = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString('en-IN'))
 
 export function AdminDashboard() {
   const [days, setDays] = useState(30)

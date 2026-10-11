@@ -81,7 +81,7 @@ export interface AdminOverview {
     creditsConsumed: number
     creditsAllocated: number
     creditsPct: number
-    liveCalls: number
+    liveCalls: number | null
   }
   signupSeries: { day: string; count: number }[]
   callsByChannel: { channel: string; count: number }[]
@@ -102,7 +102,7 @@ export interface AdminOverview {
   ops?: {
     failedCalls1h: number
     failedCalls24h: number
-    trialsEnding7d: number
+    trialsEnding7d: number | null
     cancellationsPending: number
     openTickets: number
     awaitingUs: number
@@ -311,7 +311,7 @@ export interface AdminVendorCredit {
 
 export interface AdminHealth {
   dbOk: boolean
-  liveCalls: number
+  liveCalls: number | null
   errorCount24h: number
   errors: {
     id: number
