@@ -34,13 +34,18 @@ export function AdminSettings() {
     loadTrunk().catch(() => setTrunk(null))
   }, [])
 
-  const handleSyncTrunk = async () => {
+  // Syncing mutates the production LiveKit outbound trunk, so it goes through
+  // a confirmation with an audited reason rather than firing on one click.
+  const [confirming, setConfirming] = useState(false)
+
+  const handleSyncTrunk = async (reason: string) => {
     if (!trunkAddress.trim() || !trunkCallerId.trim()) return
     setSyncing(true)
     setSyncError('')
     try {
-      const s = await adminSyncOutboundTrunk(trunkAddress.trim(), trunkCallerId.trim())
+      const s = await adminSyncOutboundTrunk(trunkAddress.trim(), trunkCallerId.trim(), reason)
       setTrunk(s)
+      setConfirming(false)
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Sync failed')
     } finally {
@@ -136,10 +141,13 @@ export function AdminSettings() {
               />
             </label>
           </div>
-          {syncError && <div className="text-sm text-danger">{syncError}</div>}
+          {syncError && !confirming && <div className="text-sm text-destructive">{syncError}</div>}
           <div className="flex items-center gap-3">
             <button
-              onClick={handleSyncTrunk}
+              onClick={() => {
+                setSyncError('')
+                setConfirming(true)
+              }}
               disabled={syncing || !trunkAddress.trim() || !trunkCallerId.trim()}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
             >
@@ -159,6 +167,73 @@ export function AdminSettings() {
           Manage in Agents
         </button>
       </AdminCard>
+
+      {confirming && (
+        <TrunkConfirmModal
+          address={trunkAddress.trim()}
+          callerId={trunkCallerId.trim()}
+          busy={syncing}
+          error={syncError}
+          onClose={() => setConfirming(false)}
+          onConfirm={handleSyncTrunk}
+        />
+      )}
     </>
+  )
+}
+
+const MIN_REASON = 5
+
+function TrunkConfirmModal({
+  address,
+  callerId,
+  busy,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  address: string
+  callerId: string
+  busy: boolean
+  error: string
+  onClose: () => void
+  onConfirm: (reason: string) => void
+}) {
+  const [reason, setReason] = useState('')
+  const valid = reason.trim().length >= MIN_REASON
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Confirm trunk sync" className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
+      <AdminCard className="w-full max-w-md p-6">
+        <h2 className="mb-2 font-display text-lg font-semibold">Sync the production outbound trunk?</h2>
+        <p className="text-sm text-text-muted">
+          This creates or updates the shared LiveKit outbound trunk used by every tenant's outbound calls, pointing it at{' '}
+          <span className="font-mono text-text">{address}</span> with caller ID <span className="font-mono text-text">{callerId}</span>.
+        </p>
+        <label className="mt-4 flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-text-muted">Reason (logged to the audit trail)</span>
+          <input
+            autoFocus
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Why are you changing the trunk?"
+            className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+        </label>
+        {!valid && <p className="mt-1 text-[11px] text-text-muted">At least {MIN_REASON} characters.</p>}
+        {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg border border-border bg-transparent px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">
+            Cancel
+          </button>
+          <button
+            disabled={busy || !valid}
+            onClick={() => onConfirm(reason.trim())}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+          >
+            {busy ? 'Syncing…' : 'Sync trunk'}
+          </button>
+        </div>
+      </AdminCard>
+    </div>
   )
 }
