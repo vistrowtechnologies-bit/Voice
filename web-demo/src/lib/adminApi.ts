@@ -8,13 +8,24 @@ function onUnauthorized() {
   window.dispatchEvent(new Event('vv-unauthorized'))
 }
 
+// FastAPI errors carry a human-readable `detail` (string, or a validation
+// list). Surface it so the admin sees "A reason is required…" instead of a
+// bare status code; fall back to the method/path/status when there is none.
+async function errorFrom(res: Response, fallback: string): Promise<Error> {
+  const data = await res.json().catch(() => null)
+  const detail = data?.detail
+  if (typeof detail === 'string' && detail.trim()) return new Error(detail)
+  if (Array.isArray(detail) && typeof detail[0]?.msg === 'string') return new Error(detail[0].msg)
+  return new Error(`${fallback} failed (${res.status})`)
+}
+
 // no-store on every call: an admin adjusting credits/plan/status must see it
 // reflected on the very next fetch - never a browser-cached GET, since the
 // account detail and list views are read right after a mutation.
 async function aget<T>(path: string): Promise<T> {
   const res = await fetch(`/api/admin${path}`, { credentials: 'include', cache: 'no-store' })
   if (res.status === 401) onUnauthorized()
-  if (!res.ok) throw new Error(`GET ${path} failed (${res.status})`)
+  if (!res.ok) throw await errorFrom(res, `GET ${path}`)
   return res.json()
 }
 
@@ -27,7 +38,7 @@ async function apost<T = unknown>(path: string, body?: unknown): Promise<T> {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   if (res.status === 401) onUnauthorized()
-  if (!res.ok) throw new Error(`POST ${path} failed (${res.status})`)
+  if (!res.ok) throw await errorFrom(res, `POST ${path}`)
   return res.json()
 }
 
@@ -40,7 +51,7 @@ async function apatch<T = unknown>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   })
   if (res.status === 401) onUnauthorized()
-  if (!res.ok) throw new Error(`PATCH ${path} failed (${res.status})`)
+  if (!res.ok) throw await errorFrom(res, `PATCH ${path}`)
   return res.json()
 }
 
@@ -83,7 +94,25 @@ export interface AdminOverview {
     created_at: string
     owner_email: string | null
     auth_provider: string | null
+    // Added by the admin P0 backend; absent on older servers.
+    calls?: number
+    firstCallAt?: string | null
   }[]
+  // Operations overview (admin P0). Optional until the backend ships it.
+  ops?: {
+    failedCalls1h: number
+    failedCalls24h: number
+    trialsEnding7d: number
+    cancellationsPending: number
+    openTickets: number
+    awaitingUs: number
+    creditsLowAccounts: number
+    zeroBalanceLiveAccounts: number
+    integrationFailures24h: number
+    workersHealthy: number
+    workersExpected: number
+  }
+  revenueMtd?: { capturedInr: number; topupsInr: number; refundsInr: number; netInr: number }
 }
 
 export interface AdminAccountRow {
@@ -187,6 +216,10 @@ export interface AdminCallRow {
   agent_id: number | null
   credits: number
   qualified: boolean
+  // Admin P0 triage fields; optional until the backend ships them.
+  failureReason?: string | null
+  disconnectReason?: string | null
+  startedAtIso?: string
 }
 
 export interface AdminCallDetail extends AdminCallRow {
@@ -292,6 +325,19 @@ export interface AdminHealth {
   }[]
   apiKeys: { name: string; configured: boolean }[]
   disconnectReasons24h: { reason: string; count: number }[]
+  // Admin P0: real liveness instead of a hard-coded "Backend online" tile.
+  workers?: AdminWorker[]
+  api?: { ok: boolean; dbLatencyMs: number | null }
+}
+
+export interface AdminWorker {
+  name: string
+  agentId: string
+  lastSeenAt: string | null
+  ageSeconds: number | null
+  status: 'ok' | 'stale' | 'unknown'
+  version: string | null
+  host: string | null
 }
 
 export interface AdminPrivacyRequest {
@@ -327,7 +373,9 @@ export const adminAccountDetail = (id: number) => aget<AdminAccountDetail>(`/acc
 export const adminUsers = (p: { search?: string; limit?: number; offset?: number } = {}) =>
   aget<{ users: AdminUserRow[]; total: number }>(`/users${qs(p)}`)
 
-export const adminCalls = (p: { account_id?: number; channel?: string; days?: number; search?: string; limit?: number; offset?: number } = {}) =>
+export const adminCalls = (
+  p: { account_id?: number; channel?: string; days?: number; hours?: number; outcome?: '' | 'failed' | 'ok'; search?: string; limit?: number; offset?: number } = {},
+) =>
   aget<{ calls: AdminCallRow[]; total: number }>(`/calls${qs(p)}`)
 
 export const adminCallDetail = (id: number) => aget<AdminCallDetail>(`/calls/${id}`)
@@ -385,8 +433,8 @@ export function takeSupportReturn(): string {
 }
 
 export const adminOutboundTrunkStatus = () => aget<AdminOutboundTrunkStatus>('/outbound-trunk')
-export const adminSyncOutboundTrunk = (address: string, callerId: string) =>
-  apost<AdminOutboundTrunkStatus>('/outbound-trunk', { address, caller_id: callerId })
+export const adminSyncOutboundTrunk = (address: string, callerId: string, reason: string) =>
+  apost<AdminOutboundTrunkStatus>('/outbound-trunk', { address, caller_id: callerId, reason })
 
 export const PLAN_LABELS: Record<string, string> = { free: 'Free', starter: 'Starter', growth: 'Growth', scale: 'Scale' }
 
@@ -418,7 +466,7 @@ export async function adminAssignSupportTicket(id: number, userId: number | null
     body: JSON.stringify({ userId }),
   })
   if (res.status === 401) onUnauthorized()
-  if (!res.ok) throw new Error(`PUT assignee failed (${res.status})`)
+  if (!res.ok) throw await errorFrom(res, 'PUT assignee')
   return res.json()
 }
 
