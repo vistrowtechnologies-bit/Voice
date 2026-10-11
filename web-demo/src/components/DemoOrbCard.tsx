@@ -395,7 +395,7 @@ export function DemoOrbCard({
   const isCallLiveOrchestrator = phase === 'active-orchestrator'
   const isIdleLike = !isCallLive && !isCallLiveOrchestrator
 
-  // The idle/capped content includes a "Native support / Low latency"
+  // The idle/capped content includes a "Native support / Natural conversation"
   // footer the live-call states don't need, so swapping to InlineCallBody
   // used to visibly shrink the card mid-page - a jarring layout shift right
   // when a visitor taps to talk. Locking min-height to whatever the
@@ -672,8 +672,11 @@ function DemoCardFooter() {
         <p className="mt-1 text-xs text-text">Hindi · Tamil +9 more</p>
       </div>
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Low latency</p>
-        <p className="mt-1 text-xs text-text">Real-time · emotion-aware</p>
+        {/* Not "low latency / real-time": measured replies land about 1.2-1.5 s after the
+            caller stops (calls.latency_metrics_json). Interrupting is a real, demonstrable
+            behaviour; emotion cues are agent/emotion.py. */}
+        <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Natural conversation</p>
+        <p className="mt-1 text-xs text-text">Interrupt anytime · emotion-aware</p>
       </div>
     </div>
   )

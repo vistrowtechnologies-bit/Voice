@@ -28,6 +28,15 @@
   src: url("/fonts/sora-latin.woff2") format("woff2");
 }
 
+/* Marketing "Signal" theme headlines only. Bricolage Grotesque, OFL-1.1, variable weight, Latin (41 KB). */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/fonts/bricolage-latin.woff2") format("woff2");
+}
+
 @theme {
   --font-sans: "Manrope", sans-serif;
   --font-display: "Sora", "Manrope", sans-serif;
@@ -918,3 +927,103 @@ html:not(.vv-icons-ready) .material-symbols-outlined {
 .vv-tooltip[data-side="right"] .vv-tooltip-arrow { transform: translate(0, -50%) rotate(45deg); }
 @keyframes vv-tooltip-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .vv-tooltip { animation: none; } }
+
+
+/* ---- Marketing "Signal" theme ---------------------------------------
+   The homepage (MarketingLayout signal). Dark stage, the logo gradient as the
+   identity, Bricolage Grotesque headlines. Scoped by class so the dashboard
+   and other marketing pages are untouched; tokens set here win over
+   :root[data-theme] because they sit on a closer ancestor. */
+.theme-signal {
+  --color-bg: #0a0a12;
+  --color-surface: #17121f;
+  --color-surface-high: #201b3b;
+  --color-border: rgba(255, 255, 255, 0.09);
+  --color-primary: #a855f7;
+  --color-primary-dark: #9333ea;
+  --color-cyan: #22d3ee;
+  --color-magenta: #ff3d9a;
+  --color-text: #f5f3ff;
+  --color-text-muted: #9089b0;
+  --signal-grad: linear-gradient(135deg, #7c3aed 0%, #a855f7 35%, #d026c8 70%, #ff3d9a 100%);
+  color-scheme: dark;
+}
+.theme-signal-light {
+  --color-bg: #f4f2f9;
+  --color-surface: #ffffff;
+  --color-surface-high: #ece8f6;
+  --color-border: #ddd7ec;
+  --color-primary: #9333ea;
+  --color-primary-dark: #7e22ce;
+  --color-cyan: #0e7490;
+  --color-magenta: #db2777;
+  --color-text: #1a1523;
+  --color-text-muted: #5d5776;
+  color-scheme: light;
+}
+.theme-signal :is(h1, h2, h3).font-display,
+.theme-signal .signal-display {
+  font-family: "Bricolage Grotesque", "Sora", sans-serif;
+  letter-spacing: -0.03em;
+}
+.signal-grad-text {
+  background: var(--signal-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+.signal-grad-bg { background: var(--signal-grad); }
+/* 1px gradient border on a glass card */
+.signal-glass {
+  position: relative;
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.signal-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.55), rgba(255, 61, 154, 0.25) 50%, rgba(255, 255, 255, 0.06));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+/* the gradient mesh behind the hero: two blurred blobs that drift slowly */
+.signal-mesh { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.signal-mesh i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.55;
+  animation: signal-drift 18s ease-in-out infinite alternate;
+}
+.signal-mesh i:nth-child(1) { left: 20%; top: -10%; width: 46vw; height: 46vw; background: #7c3aed; }
+.signal-mesh i:nth-child(2) { right: 8%; top: 10%; width: 38vw; height: 38vw; background: #ff3d9a; opacity: 0.35; animation-delay: -9s; }
+@keyframes signal-drift { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(6vw, 4vw, 0) scale(1.12); } }
+/* large faint Indian letters floating behind the hero */
+.signal-glyph {
+  position: absolute;
+  font-size: clamp(72px, 9vw, 140px);
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.05);
+  animation: signal-float 14s ease-in-out infinite alternate;
+  pointer-events: none;
+  user-select: none;
+}
+@keyframes signal-float { from { transform: translateY(0) rotate(0deg); } to { transform: translateY(-22px) rotate(4deg); } }
+/* the hero mesh already lights the demo card; the card's own glow read as a hard oval */
+.theme-signal .demo-glow { display: none; }
+/* gradient hover lift on bento tiles */
+.signal-tile { transition: transform 420ms cubic-bezier(0.2, 0.7, 0.2, 1), border-color 420ms; }
+.signal-tile:hover { transform: translateY(-4px); }
+@media (prefers-reduced-motion: reduce) {
+  .signal-mesh i, .signal-glyph { animation: none; }
+  .signal-tile:hover { transform: none; }
+}

@@ -297,7 +297,7 @@ function Header() {
   }, [])
   return (
     <>
-      <header ref={headerRef} className="sticky top-0 z-40 border-b border-border bg-bg backdrop-blur-xl">
+      <header ref={headerRef} className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3.5 md:px-8">
           <NavLink to="/" className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             <OrbMark />
@@ -379,7 +379,8 @@ function Footer() {
   )
 }
 
-export function MarketingLayout({ children }: { children: ReactNode }) {
+/** `signal`: the homepage's dark "Signal" theme (index.css .theme-signal) for the whole page, header and footer included. */
+export function MarketingLayout({ children, signal = false }: { children: ReactNode; signal?: boolean }) {
   const { pathname } = useLocation()
 
   // The marketing site used to be dark-only by design; it now honours the
@@ -399,7 +400,7 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
   }, [pathname])
 
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className={`min-h-screen bg-bg text-text ${signal ? 'theme-signal' : ''}`}>
       <Header />
       <main>{children}</main>
       <Footer />
