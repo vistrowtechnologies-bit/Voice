@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import {
   adminAccountDetail,
@@ -15,7 +15,7 @@ import {
   type HealthLevel,
   adminInvoicePdfUrl,
 } from '../../lib/adminApi'
-import { AdminCard, EmptyState, fmtDate, fmtDuration, Pill, PlanPill, StatusPill, timeAgo } from '../../components/AdminUI'
+import { AdminCard, EmptyState, ErrorState, fmtDate, fmtDateTime, fmtDuration, Pill, PlanPill, StatusPill, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
 type Tab = 'health' | 'users' | 'agents' | 'calls' | 'knowledge' | 'numbers' | 'integrations' | 'billing' | 'notes'
@@ -37,30 +37,42 @@ export function AdminAccountDetail() {
   const navigate = useNavigate()
   const { refresh } = useAuth()
   const [d, setD] = useState<Detail | null>(null)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('health')
   const [modal, setModal] = useState<null | 'credits' | 'plan' | 'status' | 'reset'>(null)
   const [banner, setBanner] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [impersonating, setImpersonating] = useState(false)
 
   const load = useCallback(() => {
-    setError(false)
-    return adminAccountDetail(accountId).then(setD).catch(() => setError(true))
+    setError(null)
+    return adminAccountDetail(accountId)
+      .then(setD)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Request failed'))
   }, [accountId])
   useEffect(() => {
     void load()
   }, [load])
 
-  if (error) return <EmptyState icon="error" message="Account not found." />
+  if (error) return <ErrorState message={`Couldn't load this account: ${error}`} onRetry={() => void load()} />
   if (!d) return <div className="h-40 animate-pulse rounded-xl border border-border bg-surface" />
 
   const a = d.account
   const suspended = a.status === 'suspended'
 
   const impersonate = async () => {
-    rememberSupportReturn(`/admin/accounts/${accountId}`)
-    await adminImpersonate(accountId)
-    await refresh()
-    navigate('/dashboard')
+    setActionError(null)
+    setImpersonating(true)
+    try {
+      rememberSupportReturn(`/admin/accounts/${accountId}`)
+      await adminImpersonate(accountId)
+      await refresh()
+      navigate('/dashboard')
+    } catch (e) {
+      setActionError(`Couldn't start the support session: ${e instanceof Error ? e.message : 'request failed'}`)
+    } finally {
+      setImpersonating(false)
+    }
   }
 
   return (
@@ -77,8 +89,12 @@ export function AdminAccountDetail() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={impersonate} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-bg hover:opacity-90">
-            <Icon name="visibility" className="text-[16px]" /> View as
+          <button
+            onClick={impersonate}
+            disabled={impersonating}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-bg hover:opacity-90 disabled:opacity-50"
+          >
+            <Icon name="visibility" className="text-[16px]" /> {impersonating ? 'Opening…' : 'View as'}
           </button>
           <ActionBtn onClick={() => setModal('credits')}>Adjust credits</ActionBtn>
           <ActionBtn onClick={() => setModal('plan')}>Change plan</ActionBtn>
@@ -97,6 +113,11 @@ export function AdminAccountDetail() {
       {banner && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
           <Icon name="check_circle" className="text-[16px]" /> {banner}
+        </div>
+      )}
+      {actionError && (
+        <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <Icon name="error" className="text-[16px]" /> {actionError}
         </div>
       )}
 
@@ -367,17 +388,27 @@ function AgentsTab({ d }: { d: Detail }) {
 
 function CallsTab({ d, navigate }: { d: Detail; navigate: (p: string) => void }) {
   return (
-    <TabTable head={['Time', 'Channel', 'Duration', 'Lead', 'Language']} empty={d.calls.length === 0}>
-      {d.calls.map((c) => (
-        <tr key={c.id} onClick={() => navigate(`/admin/calls/${c.id}`)} className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high">
-          <td className="px-4 py-3 text-text-muted">{timeAgo(c.started_at)}</td>
-          <td className="px-4 py-3 capitalize">{c.call_type}</td>
-          <td className="px-4 py-3 tabular-nums">{fmtDuration(c.duration_seconds)}</td>
-          <td className="px-4 py-3">{c.lead_name || <span className="text-text-muted">-</span>}</td>
-          <td className="px-4 py-3 text-text-muted">{c.reply_language || '-'}</td>
-        </tr>
-      ))}
-    </TabTable>
+    <>
+      <div className="mb-3 flex justify-end">
+        <Link
+          to={`/admin/calls?account_id=${d.account.id}`}
+          className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+        >
+          Calls: filter, failures and full history <Icon name="chevron_right" className="text-[16px]" />
+        </Link>
+      </div>
+      <TabTable head={['Time', 'Channel', 'Duration', 'Lead', 'Language']} empty={d.calls.length === 0}>
+        {d.calls.map((c) => (
+          <tr key={c.id} onClick={() => navigate(`/admin/calls/${c.id}`)} className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-surface-high">
+            <td className="px-4 py-3 text-text-muted" title={fmtDateTime(c.started_at)}>{timeAgo(c.started_at)}</td>
+            <td className="px-4 py-3 capitalize">{c.call_type}</td>
+            <td className="px-4 py-3 tabular-nums">{fmtDuration(c.duration_seconds)}</td>
+            <td className="px-4 py-3">{c.lead_name || <span className="text-text-muted">-</span>}</td>
+            <td className="px-4 py-3 text-text-muted">{c.reply_language || '-'}</td>
+          </tr>
+        ))}
+      </TabTable>
+    </>
   )
 }
 
@@ -481,6 +512,8 @@ function NotesTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
 
 // -------------------------------------------------------------- modals
 
+const MIN_REASON = 5
+
 function ReasonModal({
   title,
   field,
@@ -510,6 +543,8 @@ function ReasonModal({
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  // Mirrors the backend rule (trimmed length >= 5); the server still enforces it.
+  const reasonOk = reason.trim().length >= MIN_REASON
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
@@ -562,14 +597,14 @@ function ReasonModal({
               Cancel
             </button>
             <button
-              disabled={busy || !reason.trim()}
+              disabled={busy || !reasonOk}
               onClick={async () => {
                 setBusy(true)
                 setErr('')
                 try {
                   await onConfirm(value, reason.trim())
-                } catch {
-                  setErr('Something went wrong. Please try again.')
+                } catch (e) {
+                  setErr(e instanceof Error && e.message ? e.message : 'Something went wrong. Please try again.')
                 } finally {
                   setBusy(false)
                 }
@@ -579,7 +614,9 @@ function ReasonModal({
               {busy ? 'Working…' : confirmLabel}
             </button>
           </div>
-          {!reason.trim() && <p className="text-[11px] text-text-muted">A reason is required - every action is audit-logged.</p>}
+          {!reasonOk && (
+            <p className="text-[11px] text-text-muted">A reason of at least {MIN_REASON} characters is required - every action is audit-logged.</p>
+          )}
         </div>
       </AdminCard>
     </div>
@@ -591,11 +628,20 @@ function ResetModal({ accountId, ownerEmail, onClose, onDone }: { accountId: num
   const [link, setLink] = useState<string | null>(null)
   const [emailSent, setEmailSent] = useState(false)
 
+  const [err, setErr] = useState('')
+
   const run = async () => {
     setBusy(true)
-    const res = await adminResetPassword(accountId).finally(() => setBusy(false))
-    setLink(res.resetLink)
-    setEmailSent(res.emailSent)
+    setErr('')
+    try {
+      const res = await adminResetPassword(accountId)
+      setLink(res.resetLink)
+      setEmailSent(res.emailSent)
+    } catch (e) {
+      setErr(e instanceof Error && e.message ? e.message : 'Something went wrong. Please try again.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -612,6 +658,7 @@ function ResetModal({ accountId, ownerEmail, onClose, onDone }: { accountId: num
             <p className="text-sm text-text-muted">
               Generate a password-reset link for <span className="font-semibold text-text">{ownerEmail}</span>. This is logged to the audit trail.
             </p>
+            {err && <p className="mt-2 text-xs text-destructive">{err}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={onClose} className="rounded-lg border border-border bg-transparent px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">
                 Cancel

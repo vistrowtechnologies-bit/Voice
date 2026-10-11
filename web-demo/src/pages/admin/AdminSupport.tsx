@@ -238,6 +238,7 @@ function ViewAsCustomer({ ticket }: { ticket: SupportTicket }) {
   const navigate = useNavigate()
   const { refresh } = useAuth()
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   const landOn = ticket.currentPage.startsWith('/dashboard') ? ticket.currentPage : '/dashboard'
   return (
     <div className="mt-2 flex flex-wrap gap-2">
@@ -245,11 +246,14 @@ function ViewAsCustomer({ ticket }: { ticket: SupportTicket }) {
         disabled={busy}
         onClick={async () => {
           setBusy(true)
+          setError('')
           try {
             rememberSupportReturn(`/admin/support?ticket=${ticket.id}`)
             await adminImpersonate(ticket.accountId)
             await refresh()
             navigate(landOn)
+          } catch (e) {
+            setError(`Couldn't start the support session: ${e instanceof Error ? e.message : 'request failed'}`)
           } finally {
             setBusy(false)
           }
@@ -264,6 +268,11 @@ function ViewAsCustomer({ ticket }: { ticket: SupportTicket }) {
       >
         <Icon name="monitor_heart" className="text-[15px]" /> Account health
       </Link>
+      {error && (
+        <p role="alert" className="w-full text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
