@@ -5343,30 +5343,34 @@ def _topup_account_id(payment: dict, order_id: str) -> int | None:
 
 
 def _send_topup_receipt(invoice: dict) -> None:
-    """Receipt for a paid top-up, with a link to the GST invoice document."""
+    """Receipt for a paid top-up: the breakdown in the email and the GST
+    invoice attached as an A4 PDF, so the customer never has to sign in to
+    file it."""
     base = (os.environ.get("APP_BASE_URL") or "https://app.vistrowvoice.com").rstrip("/")
-    profile = calls_db.get_billing_profile(invoice["account_id"])
-    owner_id = calls_db.account_owner_user_id(invoice["account_id"])
+    account_id = invoice["account_id"]
+    saved = calls_db.get_billing_profile(account_id)
+    owner_id = calls_db.account_owner_user_id(account_id)
     owner = calls_db.get_user_by_id(owner_id) if owner_id else None
-    to = profile.get("billingEmail") or (owner or {}).get("email")
+    to = saved.get("billingEmail") or (owner or {}).get("email")
     if not to:
         return
-    granted = int(invoice["credits"] or 0) + int(invoice.get("bonus_credits") or 0)
-    bonus = int(invoice.get("bonus_credits") or 0)
-    html_body = email_sender.render_email(
-        preheader=f"{granted} credits added to your workspace",
-        heading="Top-up received",
-        body_html=(
-            f"<p>Thanks — we received ₹{float(invoice['amount_inr']):,.2f} (incl. GST) and added "
-            f"<strong style=\"color:{email_sender.TEXT}\">{granted} credits</strong>"
-            + (f" ({int(invoice['credits'] or 0)} + {bonus} bonus)" if bonus else "")
-            + " to your workspace. They are available right away.</p>"
-            "<p>Your GST invoice is on the Plan &amp; billing page (sign in as an admin to open it).</p>"
-        ),
-        cta_label="View invoice",
-        cta_url=f"{base}/api/billing/invoices/{invoice['id']}/document",
+    number = calls_db.ensure_invoice_number(invoice["id"])
+    if number:
+        invoice = {**invoice, "invoice_number": number}
+    profile = {
+        "legal_name": saved["legalName"], "gstin": saved["gstin"], "address": saved["address"],
+        "city": saved["city"], "state": saved["state"], "pincode": saved["pincode"],
+    }
+    mail = billing_documents.receipt_email(
+        invoice, profile, billing_documents.supplier_from_env(),
+        (owner or {}).get("account_name") or "your workspace",
     )
-    email_sender.send_email(to, f"Receipt: {granted} credits added to Vistrow Voice", html_body)
+    html_body = email_sender.render_email(
+        preheader=mail["preheader"], heading=mail["heading"], body_html=mail["body_html"],
+        cta_label="Open Plan & billing", cta_url=f"{base}/dashboard/settings?tab=billing",
+    )
+    email_sender.send_email(to, mail["subject"], html_body, from_address=email_sender.FROM_BILLING,
+                            attachments=mail["attachments"])
 
 
 def _report_unmatched_razorpay_event(event_type: str, sub: dict) -> None:

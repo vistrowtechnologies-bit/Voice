@@ -343,3 +343,58 @@ def render_invoice_pdf(invoice: dict, profile: dict | None, supplier: dict, acco
     c.showPage()
     c.save()
     return buf.getvalue()
+
+
+def receipt_email(invoice: dict, profile: dict | None, supplier: dict, account_name: str) -> dict:
+    """What the payment receipt email says, plus the invoice PDF to attach.
+    Returns {subject, preheader, heading, body_html, attachments} for
+    email_sender.render_email / send_email. Pure: the caller fetches rows."""
+    esc = html.escape
+    profile = profile or {}
+    tax = tax_split(invoice.get("amount_inr"), invoice.get("gst_inr"), supplier.get("state", ""), profile.get("state", ""))
+    paid_at = parse_when(invoice.get("paid_at") or invoice.get("created_at"))
+    number = invoice.get("invoice_number") or f"Receipt {invoice.get('id')}"
+    kind = invoice.get("kind")
+    label = KIND_LABELS.get(kind, "Vistrow Voice")
+    credits = int(invoice.get("credits") or 0) if kind == "topup" else 0
+    bonus = int(invoice.get("bonus_credits") or 0) if kind == "topup" else 0
+    if credits:
+        label += f" ({credits} credits)"
+    granted = credits + bonus
+
+    def row(name: str, amount: str, strong: bool = False) -> str:
+        weight = "font-weight:700;" if strong else ""
+        return (f"<tr><td style=\"padding:6px 0;{weight}\">{name}</td>"
+                f"<td style=\"padding:6px 0;text-align:right;white-space:nowrap;{weight}\">{amount}</td></tr>")
+
+    rows = [row(esc(label), _inr(tax["base"]))]
+    if bonus:
+        rows.append(row(f"Bonus credits ({bonus} credits) <span style=\"color:#625a73\">included free</span>", _inr(0)))
+    rows += [row(esc(name), _inr(amount)) for name, amount in tax["lines"]]
+    rows.append(row("Total paid", _inr(tax["total"]), strong=True))
+    table = (
+        "<table role=\"presentation\" cellspacing=\"0\" cellpadding=\"0\" style=\"width:100%;border-collapse:collapse;font-size:14px\">"
+        + "".join(rows) + "</table>"
+    )
+    headline = (
+        f"<strong>{granted} credits</strong> have been added to <strong>{esc(account_name)}</strong> and are ready to use."
+        if granted else f"Thanks, your payment for {esc(label)} is confirmed."
+    )
+    meta = (
+        f"<p style=\"color:#625a73;font-size:13px;margin:16px 0 8px\">Invoice {esc(number)} · {paid_at.strftime('%d %b %Y')}"
+        + (f" · Billed to {esc(profile['legal_name'])}" if profile.get("legal_name") else "")
+        + (f" · GSTIN {esc(profile['gstin'])}" if profile.get("gstin") else "") + "</p>"
+    )
+    footer = (
+        f"<p style=\"color:#625a73;font-size:13px;margin-top:16px\">Payment reference {esc(str(invoice.get('razorpay_payment_id') or '-'))}. "
+        "The GST invoice is attached as a PDF and stays available under Plan &amp; billing → Payment history.</p>"
+    )
+    pdf = render_invoice_pdf(invoice, profile, supplier, account_name)
+    filename = str(number).replace("/", "-") + ".pdf"
+    return {
+        "subject": f"Receipt {number} · {_inr(tax['total'])} · Vistrow Voice",
+        "preheader": f"{granted} credits added" if granted else f"Payment of {_inr(tax['total'])} confirmed",
+        "heading": "Payment received",
+        "body_html": f"<p>{headline}</p>{meta}{table}{footer}",
+        "attachments": [{"filename": filename, "content": base64.b64encode(pdf).decode(), "contentType": "application/pdf"}],
+    }

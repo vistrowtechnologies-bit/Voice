@@ -31,6 +31,25 @@ class InvoiceHtml(unittest.TestCase):
         self.assertNotIn("Bonus credits", html, "only top-ups carry a bonus")
 
 
+class ReceiptEmail(unittest.TestCase):
+    def test_breakdown_and_pdf_attachment(self):
+        import base64
+        mail = bd.receipt_email(INVOICE, PROFILE, SUPPLIER, "Acme Realty")
+        self.assertEqual(mail["subject"], "Receipt VV/2026-27/00007 · ₹3,540.00 · Vistrow Voice")
+        body = mail["body_html"]
+        for part in ("550 credits", "Credit top-up (500 credits)", "Bonus credits (50 credits)", "CGST (9%)", "₹270.00",
+                     "Total paid", "₹3,540.00", "Invoice VV/2026-27/00007", "GSTIN 27ABCDE1234F1Z5", "pay_1"):
+            self.assertIn(part, body, part)
+        [att] = mail["attachments"]
+        self.assertEqual((att["filename"], att["contentType"]), ("VV-2026-27-00007.pdf", "application/pdf"))
+        self.assertTrue(base64.b64decode(att["content"]).startswith(b"%PDF-"))
+
+    def test_subscription_receipt_has_no_credit_lines(self):
+        mail = bd.receipt_email({**INVOICE, "kind": "subscription", "credits": 1000, "bonus_credits": 0}, PROFILE, SUPPLIER, "Acme")
+        self.assertNotIn("credits</strong> have been added", mail["body_html"])
+        self.assertIn("Vistrow Voice subscription", mail["body_html"])
+
+
 class InvoicePdf(unittest.TestCase):
     def test_is_an_a4_pdf(self):
         pdf = bd.render_invoice_pdf(INVOICE, PROFILE, SUPPLIER, "Acme")

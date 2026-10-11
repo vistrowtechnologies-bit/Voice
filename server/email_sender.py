@@ -40,6 +40,7 @@ FROM_EMAIL_VERIFICATION = "Vistrow Voice <verify@vistrowvoice.com>"  # signup OT
 FROM_INVITES = "Vistrow Voice <invites@vistrowvoice.com>"  # team member invites
 FROM_WEBSITE = "Vistrow Voice Website <contact@vistrowvoice.com>"  # contact-form notifications
 FROM_SUPPORT = "Vistrow Voice Support <support@vistrowvoice.com>"
+FROM_BILLING = "Vistrow Voice Billing <billing@vistrowvoice.com>"  # receipts and invoices
 
 
 def is_configured() -> bool:
@@ -97,6 +98,7 @@ def render_email(*, preheader: str, heading: str, body_html: str, cta_label: str
 
     return f"""<!doctype html>
 <html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:{_BG};font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;">{preheader}</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{_BG};padding:40px 16px;">
