@@ -13,11 +13,12 @@ import {
   PLAN_LABELS,
   type AdminAccountDetail as Detail,
   type HealthLevel,
+  adminInvoicePdfUrl,
 } from '../../lib/adminApi'
 import { AdminCard, EmptyState, fmtDate, fmtDuration, Pill, PlanPill, StatusPill, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
-type Tab = 'health' | 'users' | 'agents' | 'calls' | 'knowledge' | 'numbers' | 'integrations' | 'notes'
+type Tab = 'health' | 'users' | 'agents' | 'calls' | 'knowledge' | 'numbers' | 'integrations' | 'billing' | 'notes'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'health', label: 'Health' },
   { id: 'users', label: 'Users' },
@@ -26,6 +27,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'knowledge', label: 'Knowledge' },
   { id: 'numbers', label: 'Numbers' },
   { id: 'integrations', label: 'Integrations' },
+  { id: 'billing', label: 'Billing' },
   { id: 'notes', label: 'Notes & Audit' },
 ]
 
@@ -141,6 +143,7 @@ export function AdminAccountDetail() {
         {tab === 'knowledge' && <KnowledgeTab d={d} />}
         {tab === 'numbers' && <NumbersTab d={d} />}
         {tab === 'integrations' && <IntegrationsTab d={d} />}
+        {tab === 'billing' && <BillingTab d={d} />}
         {tab === 'notes' && <NotesTab d={d} onSaved={load} />}
       </div>
 
@@ -637,6 +640,64 @@ function ResetModal({ accountId, ownerEmail, onClose, onDone }: { accountId: num
           </>
         )}
       </AdminCard>
+    </div>
+  )
+}
+
+const KIND_LABELS: Record<string, string> = {
+  subscription: 'Subscription',
+  topup: 'Credit top-up',
+  overage: 'Overage',
+  phone_number: 'Phone number',
+}
+
+/** The tenant's invoices and top-ups (last 10), with the same PDF the tenant downloads. */
+function BillingTab({ d }: { d: Detail }) {
+  const rows = d.invoices ?? []
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-text-muted">Invoices & top-ups</h3>
+      {rows.length === 0 ? (
+        <p className="text-sm text-text-muted">No payments or payment attempts yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-left text-xs">
+            <thead>
+              <tr className="border-b border-border text-[10px] uppercase tracking-widest text-text-muted">
+                <th className="py-2 pr-3 font-bold">Date</th>
+                <th className="py-2 pr-3 font-bold">What</th>
+                <th className="py-2 pr-3 font-bold">Invoice no.</th>
+                <th className="py-2 pr-3 text-right font-bold">Amount</th>
+                <th className="py-2 pr-3 font-bold">Status</th>
+                <th className="py-2 font-bold"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((inv) => (
+                <tr key={inv.id} className="border-b border-border/60 last:border-0">
+                  <td className="whitespace-nowrap py-2 pr-3 text-text-muted">{new Date((inv.paid_at ?? inv.created_at).replace(' ', 'T') + 'Z').toLocaleDateString('en-IN')}</td>
+                  <td className="py-2 pr-3">
+                    {KIND_LABELS[inv.kind] ?? inv.kind}
+                    {inv.kind === 'topup' && inv.credits ? ` · +${(inv.credits + (inv.bonus_credits ?? 0)).toLocaleString('en-IN')} credits` : ''}
+                  </td>
+                  <td className="whitespace-nowrap py-2 pr-3 font-mono">{inv.invoice_number ?? '-'}</td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-right tabular-nums">₹{Number(inv.amount_inr).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <td className="py-2 pr-3">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                      inv.status === 'paid' ? 'bg-success/10 text-success' : inv.status === 'refunded' ? 'bg-amber/10 text-amber' : inv.status === 'failed' ? 'bg-destructive/10 text-destructive' : 'bg-surface-high text-text-muted'
+                    }`}>{inv.status}</span>
+                  </td>
+                  <td className="py-2 text-right">
+                    {(inv.status === 'paid' || inv.status === 'refunded') && (
+                      <a href={adminInvoicePdfUrl(d.account.id, inv.id)} download className="text-xs font-semibold text-primary hover:underline">PDF</a>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

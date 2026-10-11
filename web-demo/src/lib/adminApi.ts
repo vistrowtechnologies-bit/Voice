@@ -129,6 +129,7 @@ export interface AdminAccountDetail {
   knowledgeBases: { id: number; name: string; strict: number; sources: number }[]
   numbers: { id: number; number: string; label: string; agent_id: number | null; status: string }[]
   integrations: { key: string; name: string; category: string; status: string }[]
+  invoices: { id: number; kind: string; amount_inr: number; status: string; credits: number | null; bonus_credits: number | null; invoice_number: string | null; created_at: string; paid_at: string | null }[]
   calls: {
     id: number
     room_name: string
@@ -420,3 +421,6 @@ export async function adminAssignSupportTicket(id: number, userId: number | null
   if (!res.ok) throw new Error(`PUT assignee failed (${res.status})`)
   return res.json()
 }
+
+/** A4 PDF of one of a tenant's invoices, for support and accounting. */
+export const adminInvoicePdfUrl = (accountId: number, invoiceId: number) => `/api/admin/accounts/${accountId}/invoices/${invoiceId}/pdf`

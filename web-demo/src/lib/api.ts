@@ -519,6 +519,8 @@ export const cancelSubscription = (reason: string) =>
   send<{ ok: boolean; alreadyScheduled: boolean; endsOn: string | null }>('POST', '/billing/subscription/cancel', { reason })
 /** The GST tax invoice for a paid charge. print=true opens the browser's print / save-as-PDF dialog. */
 export const invoiceDocumentUrl = (invoiceId: number, print = false) => `/api/billing/invoices/${invoiceId}/document${print ? '?print=1' : ''}`
+/** A4 PDF download of a paid (or refunded) invoice. */
+export const invoicePdfUrl = (invoiceId: number) => `/api/billing/invoices/${invoiceId}/pdf`
 
 export const fetchSubscription = () =>
   get<{ subscription: Subscription | null; invoices: Invoice[]; razorpayConfigured: boolean }>('/billing/subscription')

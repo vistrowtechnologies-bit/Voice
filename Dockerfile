@@ -30,7 +30,7 @@ WORKDIR /app
 # "unmet dependencies" rather than anything obviously about the codename.
 # Read it from /etc/os-release instead of hardcoding a guess, so a future
 # python:3.12-slim base bump can't silently break this again.
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl gnupg \
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl gnupg fonts-dejavu-core \
     && install -d /usr/share/postgresql-common/pgdg \
     && curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc \
     && . /etc/os-release \
