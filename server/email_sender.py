@@ -40,6 +40,7 @@ FROM_EMAIL_VERIFICATION = "Vistrow Voice <verify@vistrowvoice.com>"  # signup OT
 FROM_INVITES = "Vistrow Voice <invites@vistrowvoice.com>"  # team member invites
 FROM_WEBSITE = "Vistrow Voice Website <contact@vistrowvoice.com>"  # contact-form notifications
 FROM_SUPPORT = "Vistrow Voice Support <support@vistrowvoice.com>"
+FROM_BILLING = "Vistrow Voice Billing <billing@vistrowvoice.com>"  # receipts and invoices
 
 
 def is_configured() -> bool:
