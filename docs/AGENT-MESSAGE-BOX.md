@@ -91,3 +91,13 @@ Verified: server suite 433 passed (+136 subtests) against the local throwaway Po
 
 Next step: Phase 2 (write actions with confirmation chip, signed token, `copilot_actions` audit table, `growth` plan gate) — see the plan doc section 3.
 
+
+### Claude — 2026-10-11 — separate Usage page (branch `claude/usage-page`)
+
+Owner asked for a Usage menu of its own (not inside Plan & billing), clean, with live data and a date filter. Plan: `docs/CREDIT-TOPUP-AND-USAGE-PLAN-2026-10-11.md` §5.
+
+Changed: new `web-demo/src/pages/Usage.tsx` at `/dashboard/usage` (sidebar Monitor › Usage via `components/navGroups.ts`): date chips Today / 7 days / 30 days / This cycle / Custom (remembered per user), tiles (credits used, minutes, calls, avg credits/min, credits left ≈ days at this pace), credits+minutes per day chart, breakdowns by channel / agent / voice tier / model tier / direction / phone number with share bars, top calls by credits linking to the call, live active-calls strip with 30 s refresh while visible, Export CSV (admin), "how credits are counted" note. `Billing.tsx` lost the usage-by-type / voice-tier / model-multiplier blocks (now a note + link to Usage). Server: `calls_db.credits_for_call` factored out so `billing_summary` and the new `usage_report` price calls identically; `GET /usage?from&to&tz` and `GET /usage/export.csv`; help labels updated.
+
+Verified: `server/test_usage.py` (cycle totals equal billing_summary, account scoping, 366-day clamp, IST day boundaries, CSV) in the full server suite; tsc clean; production build passes; local preview on a throwaway Postgres with 40 seeded calls checked at desktop and 375 px (no horizontal scroll). The subagent that wrote this hit an API limit before committing; Claude finished verification, fixed the first load being skipped when the tab is hidden, and spelled out "credits" (was "cr", which reads as crore).
+
+Not verified: live active-calls strip (local run has no LiveKit URL, so `/active-calls` 500s locally and the page shows none; production has the URL). Next: PR, merge, Railway + Vercel auto-deploy; no worker deploy (server + dashboard only).

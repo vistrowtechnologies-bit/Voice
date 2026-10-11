@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
@@ -242,95 +243,10 @@ export function Billing() {
           </Card>
         </div>
 
-        {billing && (
-          <SectionCard
-            title="Usage by call type"
-            subtitle="Credits = call minutes × channel rate × voice multiplier × model multiplier. The figures below are base units before the two multipliers."
-          >
-            <div className="divide-y divide-border">
-              {(
-                [
-                  ['browser', 'Dashboard browser calls', 'call'],
-                  ['widget', 'Website widget calls', 'public'],
-                  ['phone', 'Real phone calls', 'call'],
-                ] as const
-              ).map(([type, label, icon]) => {
-                const minutes = billing.minutesByType[type] ?? 0
-                const rate = billing.creditRates[type] ?? 1
-                return (
-                  <div key={type} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm sm:px-5">
-                    <div className="flex items-center gap-2.5">
-                      <Icon name={icon} className="text-[16px] text-text-muted" />
-                      <span>{label}</span>
-                      <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-text-muted">
-                        {rate} base credit/min
-                      </span>
-                    </div>
-                    <span className="text-text-muted">
-                      {minutes} min · {Math.round(minutes * rate * 10) / 10} base units
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </SectionCard>
-        )}
-
-        {billing && (
-          <SectionCard
-            title="Usage by voice tier"
-            subtitle="Voice multipliers are one part of the final credit formula. Channel and model rates still apply."
-          >
-            <div className="divide-y divide-border">
-              {(
-                [
-                  ['economy', 'Economy', 'savings'],
-                  ['standard', 'Standard', 'graphic_eq'],
-                  ['premium', 'Premium', 'auto_awesome'],
-                ] as const
-              ).map(([tier, label, icon]) => {
-                const minutes = billing.minutesByVoiceTier[tier] ?? 0
-                const rate = billing.voiceTierRates[tier] ?? 1
-                return (
-                  <div key={tier} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm sm:px-5">
-                    <div className="flex items-center gap-2.5">
-                      <Icon name={icon} className="text-[16px] text-text-muted" />
-                      <span>{label}</span>
-                      <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-text-muted">
-                        {rate}x credits
-                      </span>
-                    </div>
-                    <span className="text-text-muted">
-                      {minutes} min · {rate}× voice multiplier
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </SectionCard>
-        )}
-
-        {billing && (
-          <SectionCard
-            title="Model multipliers"
-            subtitle="The selected AI model applies this multiplier after the channel and voice rates. Each call detail shows the exact final credits per minute."
-          >
-            <div className="grid gap-3 p-4 sm:grid-cols-3 sm:p-5">
-              {(
-                [
-                  ['standard', 'Standard'],
-                  ['premium', 'Premium'],
-                  ['premium_plus', 'Premium Plus'],
-                ] as const
-              ).map(([tier, label]) => (
-                <div key={tier} className="rounded-lg border border-border bg-surface-high/30 px-4 py-3">
-                  <p className="text-xs text-text-muted">{label}</p>
-                  <p className="mt-1 text-lg font-bold">{billing.modelTierRates?.[tier] ?? 1}×</p>
-                </div>
-              ))}
-            </div>
-          </SectionCard>
-        )}
+        <p className="text-xs text-text-muted">
+          Credits = call minutes × channel rate × voice multiplier × model multiplier. The full breakdown by day, channel, agent, voice and model is on{' '}
+          <Link to="/dashboard/usage" className="font-semibold text-cyan hover:underline">Usage</Link>.
+        </p>
 
         <div>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">

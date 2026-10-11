@@ -8133,6 +8133,19 @@ _MIN_CREDITS_PER_MINUTE = 0.75
 def _credits_per_minute(call_type_rate: float, voice_mult: float, model_mult: float) -> float:
     """Effective credits charged per minute, never below the fixed-cost floor."""
     return max(_MIN_CREDITS_PER_MINUTE, call_type_rate * voice_mult * model_mult)
+
+
+def credits_for_call(row, rates: dict, minutes: float) -> float:
+    """Credits for `minutes` of a call (or a GROUP BY bucket) with this
+    row's call_type / voice / model, at the account's per-channel `rates`.
+    The one place the formula lives: billing_summary, the overage webhook
+    and the Usage page all go through here so they can never disagree."""
+    call_type = row["call_type"] if row["call_type"] in rates else "browser"
+    return minutes * _credits_per_minute(
+        rates.get(call_type, 1.0),
+        _VOICE_TIER_MULTIPLIERS[voice_tier(row["voice"])],
+        _MODEL_TIER_MULTIPLIERS[model_tier(_row_get(row, "model"))],
+    )
 # Same Sarvam bulbul:v2 speaker set as agent/main.py's _SARVAM_V2_SPEAKERS and
 # web-demo/src/pages/Agents.tsx's SARVAM_V2_VOICES — duplicated across all
 # three the same way the full voice lists already are.
@@ -8459,14 +8472,9 @@ def _test_call_usage(conn, account_id: int, rates: dict, period_start, period_en
     query += " GROUP BY call_type, voice, model"
     minutes = credits = 0.0
     for row in conn.execute(query, params).fetchall():
-        call_type = row["call_type"] if row["call_type"] in rates else "browser"
         m = float(row["m"] or 0)
         minutes += m
-        credits += m * _credits_per_minute(
-            rates.get(call_type, 1.0),
-            _VOICE_TIER_MULTIPLIERS[voice_tier(row["voice"])],
-            _MODEL_TIER_MULTIPLIERS[model_tier(_row_get(row, "model"))],
-        )
+        credits += credits_for_call(row, rates, m)
     return minutes, credits
 
 
@@ -8514,11 +8522,8 @@ def _credits_used_in_period(conn, account_id: int, rates: dict, period_start: st
     for row in conn.execute(query, params).fetchall():
         call_type = row["call_type"] if row["call_type"] in rates else "browser"
         tier = voice_tier(row["voice"])
-        mtier = model_tier(_row_get(row, "model"))
         minutes = row["m"]
-        credits = minutes * _credits_per_minute(
-            rates.get(call_type, 1.0), _VOICE_TIER_MULTIPLIERS[tier], _MODEL_TIER_MULTIPLIERS[mtier]
-        )
+        credits = credits_for_call(row, rates, minutes)
         by_type[call_type] = round(by_type.get(call_type, 0.0) + minutes, 1)
         by_voice_tier[tier] = round(by_voice_tier.get(tier, 0.0) + minutes, 1)
         used += credits
@@ -8632,6 +8637,206 @@ def billing_summary(account_id: int) -> dict:
         }
     finally:
         conn.close()
+
+
+# ----------------------------------------------------------------- usage
+#
+# The Usage page: the same calls billing_summary counts (dashboard test
+# calls excluded, Testing Lab runs included), priced per call through
+# credits_for_call, cut by the caller's local calendar days.
+
+_USAGE_MAX_DAYS = 366
+_MODEL_TIER_LABELS = {"standard": "Standard", "premium": "Premium", "premium_plus": "Premium Plus"}
+_DIRECTION_LABELS = {"inbound": "Inbound", "outbound": "Outbound", "web": "Web / widget", "phone": "Phone (direction unknown)"}
+
+
+def _parse_db_timestamp(text: str) -> datetime.datetime:
+    """UTC-aware datetime from either shape started_at is stored in (see
+    calls_for_local_date); a naive value is UTC."""
+    value = datetime.datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+    return value.replace(tzinfo=datetime.timezone.utc) if value.tzinfo is None else value
+
+
+def _utc_text(local_dt: datetime.datetime) -> str:
+    return local_dt.astimezone(datetime.timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def usage_window(from_date: str | None, to_date: str | None, timezone_name: str) -> tuple:
+    """(from, to, tz) — inclusive local dates, defaulting to the last 30 days
+    and clamped to _USAGE_MAX_DAYS ending at `to`. Raises ValueError on bad
+    input, same contract as calls_for_local_date."""
+    try:
+        tz = ZoneInfo(timezone_name)
+        today = datetime.datetime.now(tz).date()
+        to_d = datetime.date.fromisoformat(to_date) if to_date else today
+        from_d = datetime.date.fromisoformat(from_date) if from_date else to_d - datetime.timedelta(days=29)
+    except (ValueError, ZoneInfoNotFoundError) as exc:
+        raise ValueError("Use valid YYYY-MM-DD dates and an IANA timezone") from exc
+    if from_d > to_d:
+        raise ValueError("'from' must not be after 'to'")
+    from_d = max(from_d, to_d - datetime.timedelta(days=_USAGE_MAX_DAYS - 1))
+    return from_d, to_d, tz
+
+
+def _usage_rows(conn, account_id: int, rates: dict, from_d, to_d, tz, agent_names: dict) -> list[dict]:
+    """One priced dict per billable call started within the local date range."""
+    start_utc = _utc_text(datetime.datetime.combine(from_d, datetime.time.min, tzinfo=tz))
+    end_utc = _utc_text(datetime.datetime.combine(to_d + datetime.timedelta(days=1), datetime.time.min, tzinfo=tz))
+    rows = conn.execute(
+        "SELECT id, started_at, duration_seconds, COALESCE(call_type, 'browser') call_type, voice, model, "
+        "direction, agent_id, lead_name, lead_phone FROM calls "
+        "WHERE account_id = ? AND room_name NOT LIKE ? AND room_name NOT LIKE ? "
+        "AND started_at::timestamp >= ?::timestamp AND started_at::timestamp < ?::timestamp "
+        "ORDER BY started_at",
+        (account_id, "test-phone-%", "test-agent-%", start_utc, end_utc),
+    ).fetchall()
+    out = []
+    for row in rows:
+        minutes = float(row["duration_seconds"] or 0) / 60.0
+        call_type = row["call_type"] if row["call_type"] in rates else "browser"
+        local = _parse_db_timestamp(row["started_at"]).astimezone(tz)
+        out.append({
+            "id": str(row["id"]),
+            "startedAt": local.isoformat(timespec="seconds"),
+            "date": local.date().isoformat(),
+            "agentId": row["agent_id"],
+            "agentName": agent_names.get(row["agent_id"]) or "Unknown agent",
+            "callType": call_type,
+            "channel": _CHANNEL_LABELS.get(call_type, "Web"),
+            "direction": row["direction"] or ("phone" if call_type == "phone" else "web"),
+            "callerName": row["lead_name"] or row["lead_phone"] or "Unknown caller",
+            "callerPhone": row["lead_phone"] or "",
+            "minutes": minutes,
+            "voiceTier": voice_tier(row["voice"]),
+            "modelTier": model_tier(row["model"]),
+            "credits": credits_for_call(row, rates, minutes),
+        })
+    return out
+
+
+def usage_report(account_id: int, from_date: str | None, to_date: str | None, timezone_name: str) -> dict:
+    from_d, to_d, tz = usage_window(from_date, to_date, timezone_name)
+    conn = _connect()
+    try:
+        rates = credit_rates(account_id, conn=conn)
+        agent_names = _agent_names_by_id(account_id, conn=conn)
+        calls = _usage_rows(conn, account_id, rates, from_d, to_d, tz, agent_names)
+        # Phone calls do not record the number they came in on; the number
+        # assigned to the call's agent is the closest thing the account has.
+        number_by_agent: dict = {}
+        for n in conn.execute(
+            "SELECT number, label, agent_id FROM phone_numbers WHERE account_id = ? ORDER BY id", (account_id,)
+        ).fetchall():
+            number_by_agent.setdefault(n["agent_id"], (n["number"], f"{n['number']} · {n['label']}" if n["label"] else n["number"]))
+
+        def breakdown(key_label) -> list[dict]:
+            buckets: dict = {}
+            for c in calls:
+                kl = key_label(c)
+                if kl is None:
+                    continue
+                b = buckets.setdefault(kl[0], {"key": kl[0], "label": kl[1], "minutes": 0.0, "calls": 0, "credits": 0.0})
+                b["minutes"] += c["minutes"]
+                b["calls"] += 1
+                b["credits"] += c["credits"]
+            out = sorted(buckets.values(), key=lambda b: -b["credits"])
+            for b in out:
+                b["minutes"] = round(b["minutes"], 1)
+                b["credits"] = round(b["credits"], 1)
+            return out
+
+        daily = {
+            (from_d + datetime.timedelta(days=i)).isoformat(): {"credits": 0.0, "minutes": 0.0, "calls": 0}
+            for i in range((to_d - from_d).days + 1)
+        }
+        for c in calls:
+            d = daily[c["date"]]
+            d["credits"] += c["credits"]
+            d["minutes"] += c["minutes"]
+            d["calls"] += 1
+
+        minutes = sum(c["minutes"] for c in calls)
+        # Same add-on billing_summary applies: dashboard test minutes past the
+        # free allowance are charged, so they belong in the total too.
+        test_overage = _test_overage_credits(
+            conn, account_id, rates,
+            _utc_text(datetime.datetime.combine(from_d, datetime.time.min, tzinfo=tz)),
+            _utc_text(datetime.datetime.combine(to_d + datetime.timedelta(days=1), datetime.time.min, tzinfo=tz)),
+        )
+        call_credits = sum(c["credits"] for c in calls)
+        credits = call_credits + test_overage
+
+        total_row = conn.execute(
+            "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total'", (account_id,)
+        ).fetchone()
+        credits_total = int(total_row["value"]) if total_row else 300
+        sub = conn.execute(
+            "SELECT current_period_start, current_period_end FROM subscriptions WHERE account_id = ?", (account_id,)
+        ).fetchone()
+        period_start = usage_period_start(conn, account_id, sub)
+        used_cycle = _credits_used_in_period(conn, account_id, rates, period_start)[0]
+        remaining = max(0, round(credits_total - used_cycle, 1))
+        today = datetime.datetime.now(tz).date()
+        week = _usage_rows(conn, account_id, rates, today - datetime.timedelta(days=6), today, tz, agent_names)
+        per_day = sum(c["credits"] for c in week) / 7
+        period_end = sub["current_period_end"] if sub and sub["current_period_end"] else None
+
+        return {
+            "range": {"from": from_d.isoformat(), "to": to_d.isoformat(), "tz": timezone_name},
+            "totals": {
+                "credits": round(credits, 1),
+                "minutes": round(minutes, 1),
+                "calls": len(calls),
+                "avgCreditsPerMinute": round(call_credits / minutes, 2) if minutes > 0 else 0.0,
+                "testOverageCredits": round(test_overage, 1),
+            },
+            "balance": {
+                "creditsTotal": credits_total,
+                "creditsUsedCycle": used_cycle,
+                "creditsRemaining": remaining,
+                "estDaysLeft": round(remaining / per_day, 1) if per_day > 0 else None,
+            },
+            "daily": [{"date": day, **{k: round(v, 1) if k != "calls" else v for k, v in d.items()}} for day, d in daily.items()],
+            "byChannel": breakdown(lambda c: (c["callType"], c["channel"])),
+            "byAgent": breakdown(lambda c: (str(c["agentId"] or "none"), c["agentName"])),
+            "byVoiceTier": breakdown(lambda c: (c["voiceTier"], c["voiceTier"].capitalize())),
+            "byModelTier": breakdown(lambda c: (c["modelTier"], _MODEL_TIER_LABELS[c["modelTier"]])),
+            "byDirection": breakdown(lambda c: (c["direction"], _DIRECTION_LABELS[c["direction"]])),
+            "byNumber": breakdown(
+                lambda c: (number_by_agent.get(c["agentId"]) or ("none", "No number on file")) if c["callType"] == "phone" else None
+            ),
+            "topCalls": [
+                {k: (round(c[k], 1) if k in ("minutes", "credits") else c[k])
+                 for k in ("id", "startedAt", "agentName", "channel", "minutes", "credits", "callerName")}
+                for c in sorted(calls, key=lambda c: -c["credits"])[:10]
+            ],
+            "cycle": {
+                "start": _parse_db_timestamp(period_start).astimezone(tz).date().isoformat(),
+                "end": _parse_db_timestamp(period_end).astimezone(tz).date().isoformat() if period_end else None,
+                "allowance": credits_total,
+            },
+        }
+    finally:
+        conn.close()
+
+
+def usage_csv(account_id: int, from_date: str | None, to_date: str | None, timezone_name: str) -> str:
+    from_d, to_d, tz = usage_window(from_date, to_date, timezone_name)
+    conn = _connect()
+    try:
+        rates = credit_rates(account_id, conn=conn)
+        calls = _usage_rows(conn, account_id, rates, from_d, to_d, tz, _agent_names_by_id(account_id, conn=conn))
+    finally:
+        conn.close()
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["id", "started_at", "agent", "channel", "direction", "number", "caller", "minutes", "voice_tier", "model_tier", "credits"])
+    for c in calls:
+        writer.writerow([
+            c["id"], c["startedAt"], c["agentName"], c["channel"], c["direction"], c["callerPhone"], c["callerName"],
+            round(c["minutes"], 2), c["voiceTier"], c["modelTier"], round(c["credits"], 2),
+        ])
+    return buf.getvalue()
 
 
 def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
@@ -9108,12 +9313,7 @@ def overage_for_account_period(account_id: int, plan: str, period_start: str, pe
         for row in conn.execute(
             query, (account_id, "test-phone-%", "test-agent-%", period_start, period_end)
         ).fetchall():
-            call_type = row["call_type"] if row["call_type"] in rates else "browser"
-            tier = voice_tier(row["voice"])
-            mtier = model_tier(_row_get(row, "model"))
-            used += row["m"] * _credits_per_minute(
-                rates.get(call_type, 1.0), _VOICE_TIER_MULTIPLIERS[tier], _MODEL_TIER_MULTIPLIERS[mtier]
-            )
+            used += credits_for_call(row, rates, row["m"])
         used = round(used + _test_overage_credits(conn, account_id, rates, period_start, period_end), 1)
         plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
         allowance_row = conn.execute(

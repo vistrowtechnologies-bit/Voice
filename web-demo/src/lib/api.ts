@@ -35,6 +35,7 @@ import type {
   Subscription,
   TelephonyStatus,
   TestScenario,
+  UsageReport,
   UsageTrends,
   VoiceCatalog,
   VoiceEntry,
@@ -487,6 +488,18 @@ export const updateArthaleadsInboundConfig = (config: { sources: ArthaleadsInbou
 // --------------------------------------------------------------- billing
 
 export const fetchBilling = () => get<BillingSummary>('/billing/summary')
+
+/** The zone Usage days are cut in: the same stored preference formatDateTime
+ * renders call times in, else the browser's own zone. */
+export function usageTimeZone(): string {
+  let stored: string | null = null
+  try { stored = window.localStorage.getItem('vv-timezone') } catch { stored = null }
+  return stored || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata'
+}
+const usageQuery = (from: string, to: string) =>
+  `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&tz=${encodeURIComponent(usageTimeZone())}`
+export const fetchUsage = (from: string, to: string) => get<UsageReport>(`/usage?${usageQuery(from, to)}`)
+export const usageExportUrl = (from: string, to: string) => `/api/usage/export.csv?${usageQuery(from, to)}`
 
 export interface BillingProfile {
   legalName: string
