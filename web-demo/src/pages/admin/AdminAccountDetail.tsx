@@ -208,7 +208,7 @@ export function AdminAccountDetail() {
 
 function ActionBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-text transition-colors hover:border-primary">
+    <button onClick={onClick} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-semibold text-text transition-colors hover:border-primary">
       {children}
     </button>
   )
@@ -543,7 +543,7 @@ function ReasonModal({
                       key={amount}
                       type="button"
                       onClick={() => setValue(String((Number(field?.initial) || 0) + amount))}
-                      className="rounded-full border border-border px-2.5 py-1 text-[11px] font-semibold text-text-muted hover:border-primary hover:text-primary"
+                      className="rounded-full border border-border bg-transparent px-2.5 py-1 text-[11px] font-semibold text-text-muted hover:border-primary hover:text-primary"
                     >
                       +{amount.toLocaleString()}
                     </button>
@@ -558,7 +558,7 @@ function ReasonModal({
           </label>
           {err && <p className="text-xs text-destructive">{err}</p>}
           <div className="mt-1 flex justify-end gap-2">
-            <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">
+            <button onClick={onClose} className="rounded-lg border border-border bg-transparent px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">
               Cancel
             </button>
             <button
@@ -613,7 +613,7 @@ function ResetModal({ accountId, ownerEmail, onClose, onDone }: { accountId: num
               Generate a password-reset link for <span className="font-semibold text-text">{ownerEmail}</span>. This is logged to the audit trail.
             </p>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">
+              <button onClick={onClose} className="rounded-lg border border-border bg-transparent px-4 py-2 text-sm font-semibold text-text-muted hover:text-text">
                 Cancel
               </button>
               <button disabled={busy} onClick={run} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg disabled:opacity-50">

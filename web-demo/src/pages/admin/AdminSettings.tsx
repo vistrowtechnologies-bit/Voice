@@ -155,7 +155,7 @@ export function AdminSettings() {
           <div className="font-display text-base font-semibold">Public demo agent</div>
           <div className="text-sm text-text-muted">Which of your own agents powers the "talk to Artha" demo on the marketing site.</div>
         </div>
-        <button onClick={() => navigate('/dashboard/agents')} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold hover:border-primary">
+        <button onClick={() => navigate('/dashboard/agents')} className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-semibold hover:border-primary">
           Manage in Agents
         </button>
       </AdminCard>

@@ -43,7 +43,7 @@ export function AdminAudit() {
             key={t.id}
             onClick={() => setFilter(t.id)}
             className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
-              filter === t.id ? 'border-primary bg-primary/15 text-primary' : 'border-border text-text-muted hover:text-text'
+              filter === t.id ? 'border-primary bg-primary/15 text-primary' : 'border-border bg-transparent text-text-muted hover:text-text'
             }`}
           >
             {t.label}

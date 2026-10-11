@@ -123,7 +123,7 @@ export function FilterChip({ active, onClick, children }: { active: boolean; onC
     <button
       onClick={onClick}
       className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-        active ? 'border-primary bg-primary/15 text-primary' : 'border-border text-text-muted hover:border-primary/50'
+        active ? 'border-primary bg-primary/15 text-primary' : 'border-border bg-transparent text-text-muted hover:border-primary/50'
       }`}
     >
       {children}

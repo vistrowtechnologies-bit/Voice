@@ -103,7 +103,7 @@ export function AdminSupport() {
           <button
             key={f.id || 'all'}
             onClick={() => setFilter(f.id)}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${filter === f.id ? 'border-primary bg-primary/10 text-primary' : 'border-border text-text-muted'}`}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-bold ${filter === f.id ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-transparent text-text-muted'}`}
           >
             {f.label}
           </button>
@@ -260,7 +260,7 @@ function ViewAsCustomer({ ticket }: { ticket: SupportTicket }) {
       </button>
       <Link
         to={`/admin/accounts/${ticket.accountId}`}
-        className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:border-primary"
+        className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold hover:border-primary"
       >
         <Icon name="monitor_heart" className="text-[15px]" /> Account health
       </Link>
