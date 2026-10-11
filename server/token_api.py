@@ -5009,6 +5009,15 @@ def usage_export_csv(
     )
 
 
+@app.get("/billing/topups")
+def billing_topups(user: dict = Depends(current_user)) -> list[dict]:
+    """The last 20 credit top-ups (paid, pending, failed, refunded), newest first."""
+    rows = calls_db.list_topups(user["account_id"])
+    for r in rows:
+        r["documentUrl"] = f"/api/billing/invoices/{r['id']}/document" if r["status"] == "paid" else None
+    return rows
+
+
 @app.get("/billing/subscription")
 def billing_subscription(user: dict = Depends(current_user)) -> dict:
     return {
@@ -5076,7 +5085,7 @@ def cancel_subscription(req: CancelSubscriptionRequest, user: dict = Depends(req
     account_id = user["account_id"]
     sub = calls_db.get_subscription(account_id)
     if not sub or sub.get("status") != "active" or not sub.get("razorpay_subscription_id"):
-        raise HTTPException(400, "There is no active subscription to cancel.")
+        raise HTTPException(404, "There is no active subscription to cancel.")
     if sub.get("cancel_at_period_end"):
         return {"ok": True, "alreadyScheduled": True, "endsOn": sub.get("current_period_end")}
     try:
@@ -5099,6 +5108,27 @@ def cancel_subscription(req: CancelSubscriptionRequest, user: dict = Depends(req
     except Exception:
         logger.warning("cancellation confirmation email failed for account %s", account_id, exc_info=True)
     return {"ok": True, "alreadyScheduled": False, "endsOn": sub.get("current_period_end")}
+
+
+@app.post("/billing/subscription/resume")
+def resume_subscription(user: dict = Depends(require_role("admin"))) -> dict:
+    """Undoes a scheduled cancellation while the paid period is still running. Razorpay is asked
+    first; our flag is cleared only once it agrees, so the dashboard never says "renews" while
+    Razorpay still intends to cancel (see razorpay_client.resume_subscription for the caveat)."""
+    account_id = user["account_id"]
+    sub = calls_db.get_subscription(account_id)
+    if not sub or sub.get("status") != "active" or not sub.get("razorpay_subscription_id"):
+        raise HTTPException(404, "There is no active subscription to resume.")
+    if not sub.get("cancel_at_period_end"):
+        return {"ok": True, "alreadyActive": True}
+    try:
+        razorpay_client.resume_subscription(sub["razorpay_subscription_id"])
+    except Exception as exc:
+        logger.exception("razorpay resume failed for account %s", account_id)
+        raise HTTPException(502, "The payment provider could not undo the cancellation. Nothing was changed; you can choose a plan again once the current period ends.") from exc
+    calls_db.resume_subscription(account_id)
+    logger.info("billing: account %s user %s resumed subscription", account_id, user.get("user_id"))
+    return {"ok": True, "alreadyActive": False}
 
 
 class CheckoutRequest(BaseModel):
@@ -5163,44 +5193,56 @@ def billing_checkout(req: CheckoutRequest, user: dict = Depends(require_role("ad
 
 
 class TopupRequest(BaseModel):
-    credits: int
+    pack: str | None = None
+    credits: int | None = None
 
 
 @app.post("/billing/topup")
 def billing_topup(req: TopupRequest, user: dict = Depends(require_role("admin"))) -> dict:
     """One-off credit purchase, priced at the account's own plan rate (not
-    the overage penalty rate — this is buying ahead, not running over)."""
+    the overage penalty rate — this is buying ahead, not running over).
+    Either a pack key (calls_db.TOPUP_PACKS, with a bonus) or a custom
+    credit count within the min/max."""
     if not calls_db.PRICING_FINALIZED:
         raise HTTPException(503, "Introductory pricing is still being finalized — top-ups aren't open yet.")
     if not razorpay_client.checkout_ready():
         raise HTTPException(503, "Checkout is not enabled for customer payments. Contact billing support.")
-    if req.credits <= 0:
-        raise HTTPException(400, "credits must be positive")
     summary = calls_db.billing_summary(user["account_id"])
-    plan_pricing = calls_db.PLAN_PRICING.get(summary["plan"], calls_db.PLAN_PRICING["starter"])
-    per_credit_rate = plan_pricing["price_inr"] / plan_pricing["credits"]
-    pricing = calls_db.with_gst(req.credits * per_credit_rate)
+    try:
+        quote = calls_db.topup_quote(summary["plan"], req.credits, req.pack)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
     try:
         order = razorpay_client.create_order(
-            pricing["total_inr"], receipt=f"topup-{user['account_id']}-{int(time.time())}",
-            notes={"account_id": str(user["account_id"]), "credits": str(req.credits)},
+            quote["totalInr"], receipt=f"topup-{user['account_id']}-{int(time.time())}",
+            notes={"account_id": str(user["account_id"]), "credits": str(quote["credits"]),
+                   "bonus": str(quote["bonusCredits"]), "pack": req.pack or ""},
         )
     except razorpay_client.RazorpayError as e:
         raise HTTPException(502, f"Could not start top-up: {e}") from e
 
     calls_db.record_invoice(
-        user["account_id"], kind="topup", amount_inr=pricing["total_inr"], status="created",
-        razorpay_order_id=order["id"], credits=req.credits, gst_inr=pricing["gst_inr"],
-        notes=f"{req.credits} credits at {per_credit_rate:.2f}/credit + GST",
+        user["account_id"], kind="topup", amount_inr=quote["totalInr"], status="created",
+        razorpay_order_id=order["id"], credits=quote["credits"], gst_inr=quote["gstInr"],
+        bonus_credits=quote["bonusCredits"],
+        notes=f"{quote['credits']} credits at {quote['perCreditInr']:.2f}/credit + GST"
+        + (f" (+{quote['bonusCredits']} bonus, pack {req.pack})" if quote["bonusCredits"] else ""),
     )
+    profile = calls_db.get_billing_profile(user["account_id"])
+    person = calls_db.get_user_by_id(user["user_id"]) or {}
     return {
         "razorpayKeyId": os.environ.get("RAZORPAY_KEY_ID"),
         "orderId": order["id"],
-        "amountInr": pricing["total_inr"],
-        "baseInr": pricing["base_inr"],
-        "gstInr": pricing["gst_inr"],
-        "credits": req.credits,
+        "amountInr": quote["totalInr"],
+        "baseInr": quote["baseInr"],
+        "gstInr": quote["gstInr"],
+        "credits": quote["credits"],
+        "bonusCredits": quote["bonusCredits"],
+        "prefill": {
+            "name": profile.get("legalName") or person.get("account_name") or person.get("name") or "",
+            "email": profile.get("billingEmail") or person.get("email") or "",
+        },
     }
 
 
@@ -5211,20 +5253,71 @@ class VerifyPaymentRequest(BaseModel):
 
 
 @app.post("/billing/verify-payment")
-def billing_verify_payment(req: VerifyPaymentRequest, user: dict = Depends(current_user)) -> dict:
+def billing_verify_payment(req: VerifyPaymentRequest, user: dict = Depends(require_role("admin"))) -> dict:
     """Confirms a top-up's Checkout callback wasn't forged, then applies the
     credits immediately. Subscription checkouts don't use this route — those
     activate via the webhook, since Razorpay's own subscription-checkout
     signature is keyed differently and the webhook is the authoritative
-    source there anyway."""
+    source there anyway. The webhook may have beaten us to it: then the
+    invoice is already paid and we just report the balance."""
     if not razorpay_client.verify_payment_signature(
         req.razorpayOrderId, req.razorpayPaymentId, req.razorpaySignature
     ):
         raise HTTPException(400, "Payment signature did not verify")
-    invoice = calls_db.mark_invoice_paid(razorpay_order_id=req.razorpayOrderId, razorpay_payment_id=req.razorpayPaymentId)
-    if invoice and invoice["account_id"] == user["account_id"] and invoice["kind"] == "topup" and invoice["credits"]:
-        calls_db.add_topup_credits(user["account_id"], invoice["credits"])
-    return {"ok": True}
+    invoice = calls_db.mark_topup_paid_and_credit(user["account_id"], req.razorpayOrderId, req.razorpayPaymentId)
+    if invoice:
+        logger.info("billing: top-up invoice %s paid via verify (account %s, +%s credits)",
+                    invoice["id"], user["account_id"], int(invoice["credits"] or 0) + int(invoice.get("bonus_credits") or 0))
+        return {
+            "ok": True, "credits": int(invoice["credits"] or 0) + int(invoice.get("bonus_credits") or 0),
+            "creditsRemaining": calls_db.billing_summary(user["account_id"])["creditsRemaining"], "invoiceId": invoice["id"],
+        }
+    existing = next(
+        (i for i in calls_db.list_invoices(user["account_id"]) if i.get("razorpay_order_id") == req.razorpayOrderId), None
+    )
+    if existing is None:
+        raise HTTPException(404, "No top-up order found for this workspace")
+    return {
+        "ok": True, "alreadyApplied": True,
+        "creditsRemaining": calls_db.billing_summary(user["account_id"])["creditsRemaining"], "invoiceId": existing["id"],
+    }
+
+
+def _topup_account_id(payment: dict, order_id: str) -> int | None:
+    """The tenant a captured payment belongs to: the account_id we wrote into
+    the order's notes (Razorpay copies them onto the payment), else the
+    invoice row created for that order."""
+    note = (payment.get("notes") or {}).get("account_id")
+    if note and str(note).isdigit():
+        return int(note)
+    return calls_db.invoice_account_for_order(order_id)
+
+
+def _send_topup_receipt(invoice: dict) -> None:
+    """Receipt for a paid top-up, with a link to the GST invoice document."""
+    base = (os.environ.get("APP_BASE_URL") or "https://app.vistrowvoice.com").rstrip("/")
+    profile = calls_db.get_billing_profile(invoice["account_id"])
+    owner_id = calls_db.account_owner_user_id(invoice["account_id"])
+    owner = calls_db.get_user_by_id(owner_id) if owner_id else None
+    to = profile.get("billingEmail") or (owner or {}).get("email")
+    if not to:
+        return
+    granted = int(invoice["credits"] or 0) + int(invoice.get("bonus_credits") or 0)
+    bonus = int(invoice.get("bonus_credits") or 0)
+    html_body = email_sender.render_email(
+        preheader=f"{granted} credits added to your workspace",
+        heading="Top-up received",
+        body_html=(
+            f"<p>Thanks — we received ₹{float(invoice['amount_inr']):,.2f} (incl. GST) and added "
+            f"<strong style=\"color:{email_sender.TEXT}\">{granted} credits</strong>"
+            + (f" ({int(invoice['credits'] or 0)} + {bonus} bonus)" if bonus else "")
+            + " to your workspace. They are available right away.</p>"
+            "<p>Your GST invoice is on the Plan &amp; billing page (sign in as an admin to open it).</p>"
+        ),
+        cta_label="View invoice",
+        cta_url=f"{base}/api/billing/invoices/{invoice['id']}/document",
+    )
+    email_sender.send_email(to, f"Receipt: {granted} credits added to Vistrow Voice", html_body)
 
 
 def _report_unmatched_razorpay_event(event_type: str, sub: dict) -> None:
@@ -5246,7 +5339,7 @@ async def billing_razorpay_webhook(request: Request) -> dict:
     every event (see https://razorpay.com/docs/webhooks/). Configure this
     URL (…/billing/razorpay/webhook) as a webhook in the Razorpay dashboard
     for: subscription.activated, subscription.charged, subscription.cancelled,
-    subscription.halted, payment.captured, payment.failed. Always returns 200
+    subscription.halted, payment.captured, payment.failed, refund.processed. Always returns 200
     once the signature
     checks out (even for events we don't act on) so Razorpay doesn't retry
     forever on an event we simply don't need."""
@@ -5429,14 +5522,30 @@ def _process_razorpay_event(event: dict) -> dict:
         payment = payload.get("payment", {}).get("entity", {})
         order_id = payment.get("order_id")
         if order_id:
-            invoice = calls_db.mark_invoice_paid(razorpay_order_id=order_id, razorpay_payment_id=payment.get("id"))
+            account_id = _topup_account_id(payment, order_id)
+            invoice = calls_db.mark_topup_paid_and_credit(account_id, order_id, payment.get("id")) if account_id else None
             if invoice:
-                if invoice["kind"] == "topup" and invoice["credits"]:
-                    calls_db.add_topup_credits(invoice["account_id"], invoice["credits"])
+                logger.info("billing: top-up invoice %s paid via webhook (account %s, +%s credits)",
+                            invoice["id"], account_id, int(invoice["credits"] or 0) + int(invoice.get("bonus_credits") or 0))
+                try:
+                    _send_topup_receipt(invoice)
+                except Exception:
+                    logger.warning("top-up receipt email failed for invoice %s", invoice["id"], exc_info=True)
             else:
-                logger.warning("razorpay payment.captured: no invoice for order %s (payment %s)", order_id, payment.get("id"))
+                # Expected when /billing/verify-payment already applied it.
+                logger.info("razorpay payment.captured: no unpaid top-up for order %s (payment %s)", order_id, payment.get("id"))
         else:
             logger.warning("razorpay payment.captured: payment %s has no order_id", payment.get("id"))
+
+    elif event_type in ("refund.processed", "payment.refunded"):
+        refund = payload.get("refund", {}).get("entity", {})
+        payment_id = refund.get("payment_id") or payload.get("payment", {}).get("entity", {}).get("id")
+        invoice = calls_db.refund_topup(payment_id)
+        if invoice:
+            logger.info("billing: top-up invoice %s refunded (account %s, balance now %s)",
+                        invoice["id"], invoice["account_id"], invoice["creditsTotal"])
+        else:
+            logger.info("razorpay %s: no paid top-up for payment %s; ignoring", event_type, payment_id)
 
     elif event_type == "payment.failed":
         payment = payload.get("payment", {}).get("entity", {})

@@ -153,6 +153,15 @@ def cancel_subscription(subscription_id: str, cancel_at_cycle_end: bool = True) 
     )
 
 
+def resume_subscription(subscription_id: str) -> dict:
+    """https://razorpay.com/docs/api/payments/subscriptions/resume/ — Razorpay
+    only documents resuming a PAUSED subscription; its cancel docs say
+    "Cancel can only be called once per subscription" and give no way to
+    undo a cancel_at_cycle_end. Expect a RazorpayError here for a merely
+    scheduled cancellation; the route surfaces it rather than pretending."""
+    return _request("POST", f"/subscriptions/{subscription_id}/resume", {"resume_at": "now"})
+
+
 def create_subscription_addon(subscription_id: str, amount_inr: float, description: str) -> dict:
     """https://razorpay.com/docs/api/payments/subscriptions/addons/ — bills
     on the subscription's NEXT charge, not immediately. That one-cycle lag is

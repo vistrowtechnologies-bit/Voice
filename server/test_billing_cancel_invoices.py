@@ -155,7 +155,7 @@ class CancelEndpointTests(unittest.TestCase):
             fn, calls, razorpay, _, HTTPException = self._endpoint(sub)
             with self.assertRaises(HTTPException) as ctx:
                 fn(self.REQ, self.USER)
-            self.assertEqual(ctx.exception.status, 400)
+            self.assertEqual(ctx.exception.status, 404)
             razorpay.cancel_subscription.assert_not_called()
             calls.mark_subscription_cancel_requested.assert_not_called()
 

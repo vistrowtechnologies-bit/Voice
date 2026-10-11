@@ -1350,6 +1350,10 @@ def init_tables() -> None:
             # meaning for every existing row/caller) - this is purely additive.
             conn.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS gst_inr NUMERIC DEFAULT 0")
             conn.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_number TEXT")
+            # Top-up pack bonus: granted with the base credits, never invoiced. A refund keeps the
+            # invoice (and its number) and only flips status + refunded_at.
+            conn.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS bonus_credits INTEGER DEFAULT 0")
+            conn.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS refunded_at TEXT")
             # A cancellation is scheduled for the end of the paid period: access continues until
             # then, and Razorpay's own subscription.cancelled webhook flips the status after.
             conn.execute("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancel_at_period_end INTEGER DEFAULT 0")
@@ -8053,6 +8057,38 @@ def with_gst(base_inr: float) -> dict:
     return {"base_inr": base_inr, "gst_inr": gst_inr, "total_inr": round(base_inr + gst_inr, 2)}
 
 
+TOPUP_PACKS = plan_policy.TOPUP_PACKS
+TOPUP_MIN_CREDITS = plan_policy.TOPUP_MIN_CREDITS
+TOPUP_MAX_CREDITS = plan_policy.TOPUP_MAX_CREDITS
+
+
+def topup_quote(plan: str, credits: int | None = None, pack_key: str | None = None) -> dict:
+    """Price of a one-off credit purchase at the plan's own per-credit rate
+    (trial/no-plan accounts pay the Starter rate). A pack sets the credits
+    and a bonus percentage; the bonus is granted, only the base is billed.
+    Raises ValueError for an unknown pack or credits outside the allowed range."""
+    bonus_pct = 0
+    if pack_key is not None:
+        pack = TOPUP_PACKS.get(str(pack_key))
+        if pack is None:
+            raise ValueError(f"Unknown credit pack: {pack_key}")
+        credits, bonus_pct = pack["credits"], pack["bonus_pct"]
+    if not isinstance(credits, int) or isinstance(credits, bool) or not TOPUP_MIN_CREDITS <= credits <= TOPUP_MAX_CREDITS:
+        raise ValueError(f"credits must be between {TOPUP_MIN_CREDITS} and {TOPUP_MAX_CREDITS}")
+    plan_pricing = PLAN_PRICING.get(plan, PLAN_PRICING["starter"])
+    # Rounded first so the rate shown (₹10.00/credit) times the credits is the invoice base.
+    per_credit = round(plan_pricing["price_inr"] / plan_pricing["credits"], 2)
+    pricing = with_gst(credits * per_credit)
+    return {
+        "credits": credits,
+        "bonusCredits": credits * bonus_pct // 100,
+        "baseInr": pricing["base_inr"],
+        "gstInr": pricing["gst_inr"],
+        "totalInr": pricing["total_inr"],
+        "perCreditInr": per_credit,
+    }
+
+
 def gst_from_total(total_inr: float) -> dict:
     """Same breakdown, worked backwards from a total we already know was
     charged (e.g. what Razorpay's subscription.charged webhook reports) —
@@ -8575,8 +8611,8 @@ def billing_summary(account_id: int) -> dict:
         rates = credit_rates(account_id, conn=conn)
 
         sub = conn.execute(
-            "SELECT plan, billing_cycle, status, current_period_start, current_period_end, cancel_at_period_end "
-            "FROM subscriptions WHERE account_id = ?",
+            "SELECT plan, billing_cycle, status, current_period_start, current_period_end, cancel_at_period_end, "
+            "cancel_reason FROM subscriptions WHERE account_id = ?",
             (account_id,),
         ).fetchone()
         period_start = usage_period_start(conn, account_id, sub)
@@ -8625,6 +8661,7 @@ def billing_summary(account_id: int) -> dict:
             "planPriceInr": plan_pricing["price_inr"],
             "subscriptionStatus": sub["status"] if sub else "inactive",
             "cancelAtPeriodEnd": bool(sub and sub["cancel_at_period_end"]),
+            "cancelReason": (sub["cancel_reason"] or "") if sub and sub["cancel_at_period_end"] else "",
             "billingCycle": sub["billing_cycle"] if sub else "monthly",
             "currentPeriodStart": sub["current_period_start"] if sub else None,
             "currentPeriodEnd": sub["current_period_end"] if sub else None,
@@ -8903,6 +8940,18 @@ def notifications(account_id: int, user_id: int | None = None) -> list[dict]:
                     "to": "/dashboard/billing",
                     "at": None,
                 })
+        # A scheduled cancellation: shown until the period ends (the row flips to
+        # cancelled then) or the owner resumes, when it disappears by itself.
+        if billing.get("subscriptionStatus") == "active" and billing.get("cancelAtPeriodEnd"):
+            ends = (billing.get("currentPeriodEnd") or "")[:10]
+            items.append({
+                "id": f"subscription-ends:{ends}",
+                "severity": "info",
+                "title": f"Subscription ends on {ends}" if ends else "Subscription will not renew",
+                "body": "Your plan will not renew. You keep full access until then; resume any time before that from Plan & billing.",
+                "to": "/dashboard/billing",
+                "at": None,
+            })
     except Exception:
         logger.warning("notifications: credits section failed for account %s", account_id, exc_info=True)
 
@@ -9250,22 +9299,107 @@ def dismiss_notifications(user_id: int, ids: list[str]) -> int:
         conn.close()
 
 
-def add_topup_credits(account_id: int, credits: int) -> None:
-    """Applied immediately once a top-up payment is verified — bumps this
-    cycle's credits_total so creditsRemaining reflects it right away instead
-    of waiting for the next invoice/period rollover."""
+def _adjust_credits_total(conn: dbconn.Conn, account_id: int, delta: int) -> int:
+    """Bumps this cycle's credits_total inside the caller's transaction so
+    creditsRemaining reflects a top-up right away (or a refund's deduction,
+    floored at 0). Returns the new total."""
+    row = conn.execute(
+        "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total' FOR UPDATE", (account_id,)
+    ).fetchone()
+    current = int(row["value"]) if row else PLAN_PRICING["starter"]["credits"]
+    new_total = max(0, current + delta)
+    conn.execute(
+        "INSERT INTO settings (account_id, key, value) VALUES (?, 'credits_total', ?) "
+        "ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value",
+        (account_id, str(new_total)),
+    )
+    return new_total
+
+
+def mark_topup_paid_and_credit(account_id: int, order_id: str, payment_id: str | None) -> dict | None:
+    """Flips a top-up invoice to paid and grants its credits (base + bonus) in
+    ONE transaction, so a crash between the two can never leave money taken
+    with no credits given. Keyed by (order, account) so another tenant's
+    order id finds nothing. Returns the invoice row plus `creditsTotal`, or
+    None when there is no such created invoice (already paid, unknown, or
+    not this account's) — both the verify callback and the webhook call this,
+    and whichever runs second just gets None."""
+    if not order_id:
+        return None
     conn = _connect()
     try:
         with conn:
             row = conn.execute(
-                "SELECT value FROM settings WHERE account_id = ? AND key = 'credits_total'", (account_id,)
+                f"UPDATE invoices SET status = 'paid', razorpay_payment_id = ?, paid_at = {_NOW} "
+                "WHERE razorpay_order_id = ? AND account_id = ? AND kind = 'topup' AND status = 'created' RETURNING *",
+                (payment_id, order_id, account_id),
             ).fetchone()
-            current = int(row["value"]) if row else PLAN_PRICING["starter"]["credits"]
-            conn.execute(
-                "INSERT INTO settings (account_id, key, value) VALUES (?, 'credits_total', ?) "
-                "ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value",
-                (account_id, str(current + credits)),
-            )
+            if row is None:
+                return None
+            invoice = dict(row)
+            granted = int(invoice["credits"] or 0) + int(invoice.get("bonus_credits") or 0)
+            invoice["creditsTotal"] = _adjust_credits_total(conn, account_id, granted)
+    finally:
+        conn.close()
+    try:
+        ensure_invoice_number(invoice["id"])
+    except Exception:
+        logger.exception("could not number invoice %s; it will be numbered when first opened", invoice["id"])
+    return invoice
+
+
+def refund_topup(payment_id: str) -> dict | None:
+    """A Razorpay refund of a paid top-up: the invoice keeps its number and
+    becomes `refunded`, and the credits it granted come back off the balance
+    (never below 0). Returns the invoice, or None for an unknown or already
+    refunded payment."""
+    if not payment_id:
+        return None
+    conn = _connect()
+    try:
+        with conn:
+            row = conn.execute(
+                f"UPDATE invoices SET status = 'refunded', refunded_at = {_NOW} "
+                "WHERE razorpay_payment_id = ? AND kind = 'topup' AND status = 'paid' RETURNING *",
+                (payment_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            invoice = dict(row)
+            granted = int(invoice["credits"] or 0) + int(invoice.get("bonus_credits") or 0)
+            invoice["creditsTotal"] = _adjust_credits_total(conn, invoice["account_id"], -granted)
+            return invoice
+    finally:
+        conn.close()
+
+
+def invoice_account_for_order(razorpay_order_id: str) -> int | None:
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT account_id FROM invoices WHERE razorpay_order_id = ? LIMIT 1", (razorpay_order_id,)
+        ).fetchone()
+        return row["account_id"] if row else None
+    finally:
+        conn.close()
+
+
+def list_topups(account_id: int, limit: int = 20) -> list[dict]:
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, created_at, credits, bonus_credits, amount_inr, status, invoice_number "
+            "FROM invoices WHERE account_id = ? AND kind = 'topup' ORDER BY id DESC LIMIT ?",
+            (account_id, limit),
+        ).fetchall()
+        return [
+            {
+                "id": r["id"], "createdAt": r["created_at"], "credits": int(r["credits"] or 0),
+                "bonusCredits": int(r["bonus_credits"] or 0), "amountInr": float(r["amount_inr"]),
+                "status": r["status"], "invoiceNumber": r["invoice_number"],
+            }
+            for r in rows
+        ]
     finally:
         conn.close()
 
@@ -9273,7 +9407,7 @@ def add_topup_credits(account_id: int, credits: int) -> None:
 def reset_plan_credits(account_id: int, plan: str) -> None:
     """Start a paid billing period with exactly that plan's allowance.
 
-    Top-ups are added during the period by ``add_topup_credits`` and are
+    Top-ups are added during the period by ``mark_topup_paid_and_credit`` and are
     therefore part of that period's allowance.  A renewal begins a fresh
     allowance; carrying the previous period's top-ups forward would grant
     them repeatedly.
@@ -9449,6 +9583,7 @@ def record_invoice(
     credits: int | None = None,
     notes: str = "",
     gst_inr: float = 0,
+    bonus_credits: int = 0,
 ) -> int:
     """amount_inr is the TOTAL actually charged (GST included, if any) —
     gst_inr is just the tax portion within it, for display (see with_gst)."""
@@ -9457,11 +9592,11 @@ def record_invoice(
         with conn:
             cur = conn.execute(
                 "INSERT INTO invoices (account_id, kind, amount_inr, status, razorpay_order_id, "
-                "razorpay_payment_id, period_start, period_end, credits, notes, gst_inr) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "razorpay_payment_id, period_start, period_end, credits, notes, gst_inr, bonus_credits) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                 (
                     account_id, kind, amount_inr, status, razorpay_order_id,
-                    razorpay_payment_id, period_start, period_end, credits, notes, gst_inr,
+                    razorpay_payment_id, period_start, period_end, credits, notes, gst_inr, bonus_credits,
                 ),
             )
             new_id = cur.lastrowid
@@ -9603,6 +9738,22 @@ def mark_subscription_cancel_requested(account_id: int, reason: str = "") -> Non
                 f"updated_at = {_NOW} WHERE account_id = ?",
                 ((reason or "")[:500], account_id),
             )
+    finally:
+        conn.close()
+
+
+def resume_subscription(account_id: int) -> bool:
+    """Undoes a scheduled cancellation while the paid period is still running.
+    Returns whether a pending cancellation was actually cleared."""
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                f"UPDATE subscriptions SET cancel_at_period_end = 0, cancel_requested_at = NULL, cancel_reason = '', "
+                f"updated_at = {_NOW} WHERE account_id = ? AND cancel_at_period_end = 1",
+                (account_id,),
+            )
+            return cur.rowcount > 0
     finally:
         conn.close()
 

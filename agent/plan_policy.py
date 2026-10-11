@@ -9,6 +9,16 @@ PLANS = {
     "growth": {"price_inr": 5999, "credits": 1000, "agents": 5, "concurrency": 15, "knowledge_bases": 5, "storage_gb": 25},
     "scale": {"price_inr": 12999, "credits": 2500, "agents": 20, "concurrency": 30, "knowledge_bases": 15, "storage_gb": 100},
 }
+# One-off credit top-ups. Price = the account's plan rate per credit × base credits (+ GST);
+# the bonus is granted on top but never invoiced. Mirrors web-demo/src/lib/plans.ts TOPUP_PACKS.
+TOPUP_PACKS = {
+    "100": {"credits": 100, "bonus_pct": 0},
+    "250": {"credits": 250, "bonus_pct": 5},
+    "500": {"credits": 500, "bonus_pct": 10},
+    "1000": {"credits": 1000, "bonus_pct": 15},
+}
+TOPUP_MIN_CREDITS = 50
+TOPUP_MAX_CREDITS = 10000
 # Call-recording storage included in each plan, in GB. PLACEHOLDER amounts: a recording
 # averages about 4 MB (measured on 734 live recordings, Oct 2026), so 5 GB is roughly
 # 1,200 calls. Change the numbers here; the API, the sidebar warning and any gate read
