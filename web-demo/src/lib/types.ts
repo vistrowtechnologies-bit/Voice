@@ -543,6 +543,8 @@ export interface BillingSummary {
   subscriptionStatus: 'inactive' | 'created' | 'active' | 'cancelled' | string
   /** A cancellation is scheduled: the plan runs to currentPeriodEnd and then does not renew. */
   cancelAtPeriodEnd?: boolean
+  /** Why the owner cancelled (empty unless a cancellation is pending). */
+  cancelReason?: string
   billingCycle: 'monthly' | 'annual'
   currentPeriodStart: string | null
   currentPeriodEnd: string | null
@@ -599,6 +601,8 @@ export interface Invoice {
   period_start: string | null
   period_end: string | null
   credits: number | null
+  /** Top-up pack bonus, granted on top of credits but not invoiced. */
+  bonus_credits?: number
   notes: string
   created_at: string
   paid_at: string | null
@@ -606,6 +610,28 @@ export interface Invoice {
   invoice_number?: string | null
 }
 
+/** POST /billing/topup - what Razorpay Checkout opens against. */
+export interface TopupSession {
+  razorpayKeyId: string
+  orderId: string
+  amountInr: number
+  baseInr: number
+  gstInr: number
+  credits: number
+  bonusCredits: number
+  prefill: { name: string; email: string }
+}
+
+/** POST /billing/verify-payment - credits is base + bonus; alreadyApplied when the webhook won the race. */
+export interface TopupResult {
+  ok: boolean
+  credits?: number
+  alreadyApplied?: boolean
+  creditsRemaining: number
+  invoiceId: number
+}
+
+/** GET /billing/topups */
 export interface TelephonyStatus {
   provider: string
   connected: boolean

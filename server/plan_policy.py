@@ -7,6 +7,9 @@ _policy = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_policy)
 PLANS = _policy.PLANS
 FEATURE_MIN_PLAN = _policy.FEATURE_MIN_PLAN
+TOPUP_PACKS = _policy.TOPUP_PACKS
+TOPUP_MIN_CREDITS = _policy.TOPUP_MIN_CREDITS
+TOPUP_MAX_CREDITS = _policy.TOPUP_MAX_CREDITS
 EntitlementError = _policy.EntitlementError
 allowed = _policy.allowed
 account_policy = _policy.account_policy

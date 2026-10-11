@@ -332,6 +332,14 @@ def account_detail(account_id: int) -> dict | None:
                 (account_id,),
             ).fetchall()
         ]
+        invoices = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT id, kind, amount_inr, status, credits, bonus_credits, invoice_number, created_at, paid_at "
+                "FROM invoices WHERE account_id = ? ORDER BY id DESC LIMIT 10",
+                (account_id,),
+            ).fetchall()
+        ]
 
         import calls_db  # local import: avoids a cycle at module load
 
@@ -350,6 +358,7 @@ def account_detail(account_id: int) -> dict | None:
             "integrations": integrations,
             "calls": calls,
             "audit": audit,
+            "invoices": invoices,
         }
     finally:
         conn.close()

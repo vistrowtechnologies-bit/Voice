@@ -25,6 +25,8 @@ import type {
   LaunchReadiness,
   ApiKey,
   Invoice,
+  TopupResult,
+  TopupSession,
   KnowledgeBase,
   PhoneNumber,
   ProjectListingsResponse,
@@ -528,13 +530,15 @@ export const startCheckout = (plan: string, billingCycle: 'monthly' | 'annual') 
     { plan, billingCycle },
   )
 
-export const startTopup = (credits: number) =>
-  send<{ razorpayKeyId: string; orderId: string; amountInr: number; credits: number }>('POST', '/billing/topup', {
-    credits,
-  })
+export const startTopup = (choice: { pack: string } | { credits: number }) =>
+  send<TopupSession>('POST', '/billing/topup', choice)
 
 export const verifyTopupPayment = (razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string) =>
-  send<{ ok: boolean }>('POST', '/billing/verify-payment', { razorpayOrderId, razorpayPaymentId, razorpaySignature })
+  send<TopupResult>('POST', '/billing/verify-payment', { razorpayOrderId, razorpayPaymentId, razorpaySignature })
+
+
+export const resumeSubscription = () =>
+  send<{ ok: boolean; alreadyActive: boolean }>('POST', '/billing/subscription/resume', {})
 
 // ---------------------------------------------------------- website widget
 
