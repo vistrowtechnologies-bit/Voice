@@ -5,6 +5,7 @@ import os
 import random
 import re
 import secrets
+import sys
 import threading
 import time
 import unicodedata
@@ -57,6 +58,7 @@ from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarv
 # construct EarlyFlushTTS until that completeness test passes reliably.
 
 import db
+import worker_heartbeat
 from contact_notes import build_contact_notes
 import numpy as np
 import recording
@@ -8940,6 +8942,11 @@ if __name__ == "__main__":
     # isolated from autoscaling driven by tenant call volume.
     agent_name = os.environ.get("LIVEKIT_AGENT_NAME", "")
     shutdown_process_timeout = float(os.environ.get("LIVEKIT_SHUTDOWN_PROCESS_TIMEOUT", "60"))
+    # Here, in the worker's main process, so it runs once per worker (job
+    # subprocesses never execute this block). Only for `start` (the Docker
+    # CMD), so a `dev`/`console` run on a laptop can't fake a live worker.
+    if sys.argv[1:2] == ["start"]:
+        worker_heartbeat.start()
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,

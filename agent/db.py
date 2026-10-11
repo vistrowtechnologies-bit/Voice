@@ -132,6 +132,22 @@ def log_platform_error(message: str, *, source: str = "agent", level: str = "err
         logger.exception("log_platform_error: failed to write error_events row")
 
 
+def write_worker_heartbeat(name: str, value: str) -> None:
+    """settings(0, 'worker_heartbeat.<name>') — read by the admin System
+    Health page (server/admin_db.worker_statuses). Raises on failure; the
+    caller (worker_heartbeat.py) logs and keeps going."""
+    conn = dbconn.connect()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO settings (account_id, key, value) VALUES (0, ?, ?) "
+                "ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value",
+                (f"worker_heartbeat.{name}", value),
+            )
+    finally:
+        conn.close()
+
+
 def _trial_credits_exhausted(conn, account_id: int) -> bool:
     """Fail closed for exhausted unpaid/trial workspaces.
 
