@@ -9,7 +9,7 @@ import { PLANS, SHARED_PLAN_FEATURES, planHighlights } from '../../lib/plans'
 const FAQ = [
   {
     q: 'What is a credit?',
-    a: 'At the default rate, browser and phone calls both use 1 credit per minute — telephony is billed separately by whichever provider you connect. Economy, standard, and premium voice tiers apply 0.75×, 1×, and 2× multipliers, and the LLM you pick applies its own. Both channels draw from the same monthly pool.',
+    a: 'A credit pays for conversation time. With the AI models you can choose today (Vistrow Bharat and Vistrow Swift) and a Standard voice, one minute of a call uses 2 credits, on the browser widget and on phone calls alike — telephony is billed separately by whichever provider you connect. A Standard voice is the baseline; an Economy voice uses 0.75× of that and a Premium voice 2×. Both channels draw from the same monthly pool.',
   },
   {
     q: 'Which languages are supported?',
