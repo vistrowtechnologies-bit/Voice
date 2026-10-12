@@ -616,12 +616,40 @@ export interface DemoCall {
   outcome: string
   transcript: Array<{ speaker: 'Agent' | 'Caller'; text: string }>
   fields: Array<{ label: string; value: string }>
+  /** What the caller hears and does, step by step, for this sample. */
+  callerExperience: Array<{ title: string; body: string }>
+  /** One paragraph on why this call type is worth automating - no stats. */
+  whyItMatters: string
+  /** What an operator sets up in the dashboard to run a call like this. */
+  configure: Array<{ title: string; body: string; to?: string; link?: string }>
+  /** Registered pages that go deeper on this scenario. */
+  related: Array<{ to: string; label: string; body: string }>
   faqs: Faq[]
 }
 
 export const DEMO_CALLS: DemoCall[] = [
   {
     slug: 'hindi-real-estate-lead-qualification',
+    callerExperience: [
+      { title: '1. The agent opens with the reason for the call', body: 'It refers to the Khopoli project the person enquired about, then asks one question: investment or self-use. Purpose usually decides which plots an advisor offers, so it comes first.' },
+      { title: '2. Questions follow the caller', body: 'The caller answers in Hinglish and the agent keeps going in the same mix, asking for a rough plot size and a budget range without a form or a menu.' },
+      { title: '3. Pricing is not made up', body: 'When the caller asks for pricing, the agent says the sales team will confirm exact availability and price. It only quotes what your knowledge base contains, and strict mode keeps it to approved answers.' },
+      { title: '4. The call ends with a clear note', body: 'The agent says back what it recorded, an investment enquiry for a larger plot, so the caller knows what will happen next.' },
+    ],
+    whyItMatters:
+      'Plot enquiries often arrive without a budget or a purpose attached. Asking for both while the person is still on the line means your sales advisor opens the lead already knowing whether it is an investor or a family planning to build, and does not start with the same questions.',
+    configure: [
+      { title: 'Project facts', body: 'Upload the brochure and plot-size list as a knowledge base, or add the plots to the live catalog, and attach it to the agent.' },
+      { title: 'Hindi voice and greeting', body: 'Choose a Hindi voice and write the welcome line. The agent follows the caller into English words without switching voice.' },
+      { title: 'Fields to capture', body: 'Set post-call fields such as purpose, plot size and budget so each is saved on the call, ready for your CRM.' },
+      { title: 'Where the lead goes', body: 'Send it to Zoho CRM, ArthaLeads, Google Sheets, Slack or any webhook, with the transcript attached.' },
+    ],
+    related: [
+      { to: '/languages/hindi', label: 'Hindi AI voice calling agent', body: 'Hindi and Hinglish support, voices and use cases.' },
+      { to: '/solutions/real-estate', label: 'Real estate calling workflow', body: 'Qualification, site visits and follow-up for property teams.' },
+      { to: '/solutions/real-estate/hindi-ai-calling-agent-real-estate', label: 'Hindi real estate calls', body: 'The local Hindi page for property conversations.' },
+      { to: '/integrations', label: 'Integrations', body: 'How leads and transcripts reach your CRM.' },
+    ],
     title: 'Hindi Real Estate Lead Qualification Demo Call',
     description:
       'See how Vistrow Voice qualifies a Hindi real estate lead, captures budget and plot size, summarizes the call, and prepares CRM-ready data.',
@@ -645,10 +673,33 @@ export const DEMO_CALLS: DemoCall[] = [
       { q: 'Is this a real customer recording?', a: 'This page shows a representative demo transcript. Real customer recordings should only be shown with consent and according to your retention policy.' },
       { q: 'Can this transcript be pushed to CRM?', a: 'Yes. Vistrow Voice prepares the transcript, summary, captured fields, outcome, and recording link for CRM/webhook delivery.' },
       { q: 'Can the same flow work in other Indian languages?', a: 'Yes. The same qualification structure can run in Marathi, Kannada, Telugu, Gujarati, and other supported languages.' },
+      { q: 'What does the sales team see after a call like this?', a: 'The call record holds the transcript, the summary, the recording if recording is on, and the fields the agent saved, such as purpose and plot size. Your connected tools receive the same lead.' },
+      { q: 'Will the agent quote prices it was not given?', a: 'It is set up not to. With the knowledge base or live catalog attached and strict mode on, it answers from approved material and says it will check with the team for anything else.' },
+      { q: 'Can I run this on outbound calls to new enquiries?', a: 'Yes. Instant lead follow-up queues a call to a new lead within about 15 to 30 seconds, subject to your calling window and Do-Not-Call rules.' },
     ],
   },
   {
     slug: 'marathi-site-visit-booking',
+    callerExperience: [
+      { title: '1. The agent confirms the enquiry', body: 'It opens in Marathi, mentions the project enquiry and asks whether the caller wants to schedule a site visit.' },
+      { title: '2. A day, then a part of the day', body: 'The caller prefers Saturday. The agent notes the day, then narrows it with one question: morning or afternoon.' },
+      { title: '3. A clear next step', body: 'In this sample the agent captures the preference and says the sales team will confirm the exact slot and send details on WhatsApp. It does not promise a time it has not booked.' },
+      { title: '4. Booking directly, if you set it up', body: 'With scheduling configured, the agent can instead offer real free slots and confirm only once the booking has saved. It can also take a callback request if no slot suits.' },
+    ],
+    whyItMatters:
+      'Site visits are where many property enquiries either move forward or stall. Taking the preferred day and time during the first call, in the language the buyer is comfortable with, gives your team a concrete visit to confirm rather than a vague interest to chase.',
+    configure: [
+      { title: 'Bookable hours', body: 'Set business hours per day, slot length from 15 to 60 minutes, timezone and blackout dates under Settings, Scheduling.' },
+      { title: 'Appointments calendar', body: 'Visits appear in Appointments, where your team can reschedule them or mark them confirmed, completed, cancelled or no-show.' },
+      { title: 'WhatsApp follow-up', body: 'Connect your WhatsApp provider’s send endpoint and write the message the caller should receive after the call.' },
+      { title: 'Marathi and Hindi', body: 'The agent can follow a caller who moves between Marathi, Hindi and English mid-call.' },
+    ],
+    related: [
+      { to: '/languages/marathi', label: 'Marathi AI voice calling agent', body: 'Marathi voices, code-switching and use cases.' },
+      { to: '/solutions/real-estate/marathi-ai-calling-agent-mumbai-real-estate', label: 'Marathi real estate calls', body: 'The local Marathi page for property conversations.' },
+      { to: '/help/appointments/manage-appointments', label: 'Bookings and availability', body: 'How slots, hours and appointment statuses work.' },
+      { to: '/solutions/real-estate', label: 'Real estate calling workflow', body: 'Qualification, site visits and follow-up.' },
+    ],
     title: 'Marathi Site Visit Booking Demo Call',
     description:
       'A Marathi real estate demo call showing how an AI voice agent confirms buyer interest, preferred time, and site-visit next steps.',
@@ -669,13 +720,36 @@ export const DEMO_CALLS: DemoCall[] = [
       { label: 'Next step', value: 'Confirm slot and send details' },
     ],
     faqs: [
-      { q: 'Can Vistrow book directly on a calendar?', a: 'Yes, where a calendar integration is configured. Otherwise it can capture the preferred slot and hand it to the sales team.' },
+      { q: 'Can Vistrow book directly on a calendar?', a: 'Yes. Agents book into the Appointments calendar built into Vistrow Voice, using the hours, slot length and blackout dates you set. If you have not set scheduling up, the agent can capture the preferred slot and hand it to the sales team, as in this sample.' },
       { q: 'Can the caller switch to Hindi?', a: 'Yes. The agent can follow mixed Marathi, Hindi, and English depending on the configured voice pipeline.' },
       { q: 'What does the sales team receive?', a: 'They receive the caller details, transcript, summary, preferred slot, and lead outcome.' },
+      { q: 'What if the caller cannot make any offered time?', a: 'The agent takes a callback request with the caller’s preferred date and time, so the call still ends with a next step for your team.' },
+      { q: 'Does the agent really book, or just note a preference?', a: 'It depends on how you configure it. This sample shows a preference being captured. With scheduling set up, the agent offers real free slots and confirms only after the booking has saved.' },
+      { q: 'How does the buyer get the details afterwards?', a: 'You can connect WhatsApp through your provider, which sends the message you wrote once the call ends. Which messages are allowed depends on your provider’s rules.' },
     ],
   },
   {
     slug: 'kannada-inbound-property-enquiry',
+    callerExperience: [
+      { title: '1. The call is answered at once', body: 'The agent greets the caller in Kannada and English and asks whether they are looking for investment or self-use, instead of putting them on hold or into a menu.' },
+      { title: '2. Mixed Kannada and English is normal', body: 'The caller asks for location and price details in a Kannada and English mix. The agent follows without asking them to pick a language.' },
+      { title: '3. Availability is not guessed', body: 'The agent notes the requirement and says the team will confirm exact price and availability. It asks for a budget range so the follow-up has something to work with.' },
+      { title: '4. The enquiry is summarised', body: 'It repeats what it recorded, a self-use enquiry with a budget of about one crore, so the caller can correct it before the call ends.' },
+    ],
+    whyItMatters:
+      'Inbound calls come at any hour, including when your sales team is away from the phone. An agent that answers, asks the basics and records them means a call at night is waiting as a qualified enquiry in the morning rather than a missed number.',
+    configure: [
+      { title: 'An inbound number', body: 'Connect an EnableX number under Phone Numbers, choose the agent that answers it, and use Test call to check it. Set hours, days and limits under Inbound.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
+      { title: 'Project knowledge', body: 'Add project facts to the knowledge base, so questions about location are answered from approved information.' },
+      { title: 'Strict mode', body: 'Keep the agent to your approved answers so it does not invent price or inventory.' },
+      { title: 'Kannada voice', body: 'Choose a voice and default language, then test mixed Kannada and English calls on your own agent before going live.' },
+    ],
+    related: [
+      { to: '/languages/kannada', label: 'Kannada AI voice calling agent', body: 'Kannada voices, mixed-language calls and use cases.' },
+      { to: '/solutions/real-estate/kannada-ai-voice-bot-bangalore-real-estate', label: 'Kannada real estate calls', body: 'The local Kannada page for Bengaluru property enquiries.' },
+      { to: '/product/inbound', label: 'Inbound call answering', body: 'How a phone number is routed to an agent.' },
+      { to: '/solutions/real-estate', label: 'Real estate calling workflow', body: 'Qualification, site visits and follow-up.' },
+    ],
     title: 'Kannada Inbound Property Enquiry Demo Call',
     description:
       'A Kannada inbound real estate call demo showing project questions, budget capture, and a clean sales handoff.',
@@ -699,10 +773,33 @@ export const DEMO_CALLS: DemoCall[] = [
       { q: 'Does Vistrow handle Kannada-English mixed calls?', a: 'Yes. Mixed-language behavior should be tested on your exact agent, but the product is designed for multilingual Indian calls.' },
       { q: 'Can it answer project questions?', a: 'Yes, if project facts are added to the knowledge base. The agent should avoid inventing pricing or inventory.' },
       { q: 'Can it create a CRM lead?', a: 'Yes. The final call payload can include caller data, requirement, transcript, summary, and recording link.' },
+      { q: 'Can the agent answer calls outside office hours?', a: 'Yes. Inbound settings let you choose the hours and days the agent answers, so you can cover evenings and weekends as well as busy periods.' },
+      { q: 'How do I check how it handles Kannada before launch?', a: 'Use the Testing Lab and a test call on your own agent. Scenarios cover interruptions, language switching and unsupported questions, and you can review the results before publishing.' },
+      { q: 'What if the caller wants a person?', a: 'Set a transfer phone number and the agent can dial a colleague into the call and stay on until they answer.' },
     ],
   },
   {
     slug: 'telugu-website-widget-call',
+    callerExperience: [
+      { title: '1. The visitor taps the button', body: 'On a project page, a visitor taps the call button. The call runs in the browser using their microphone, so there is no number to dial and nothing to install.' },
+      { title: '2. A short greeting, then a question', body: 'The agent greets them in Telugu and asks what they want: pricing, availability or a site visit.' },
+      { title: '3. It asks only what it needs', body: 'The visitor wants pricing and location details and says the interest is investment. The agent records that and does not push for more than the call needs.' },
+      { title: '4. The page comes with the lead', body: 'The call record shows the website and the exact page the call started from, so the team knows which project the visitor was reading.' },
+    ],
+    whyItMatters:
+      'A visitor who has a question but not enough patience to fill in a form often leaves. A voice button lets them ask in their own language at the moment they are interested, and the lead that results arrives with the page they were on.',
+    configure: [
+      { title: 'Add the website', body: 'In Website Widget, name the site, pick the agent, the corner and the button label, then paste the script tag or use the WordPress plugin.', to: '/help/website-widget/add-widget', link: 'Add the call button' },
+      { title: 'Ask before starting', body: 'For name, phone and email choose Don’t ask, Optional or Required. With all three off the call starts on a single tap.' },
+      { title: 'Page rules', body: 'Send visitors on a particular page to a different agent with its own greeting, for example one project page to an agent that knows only that project.', to: '/help/website-widget/page-rules', link: 'Page rules' },
+      { title: 'Voice, chat or both', body: 'Offer voice, text chat only, or let the visitor choose. Microphone permission comes from the visitor’s browser.' },
+    ],
+    related: [
+      { to: '/languages/telugu', label: 'Telugu AI voice calling agent', body: 'Telugu voices, mixed-language calls and use cases.' },
+      { to: '/solutions/real-estate/telugu-ai-calling-agent-hyderabad-real-estate', label: 'Telugu real estate calls', body: 'The local Telugu page for Hyderabad property enquiries.' },
+      { to: '/product/widget', label: 'Website voice widget', body: 'How the website call button is set up and configured.' },
+      { to: '/solutions/real-estate', label: 'Real estate calling workflow', body: 'Qualification, site visits and follow-up.' },
+    ],
     title: 'Telugu Website Widget Voice Call Demo',
     description:
       'See how a Telugu-speaking website visitor can start a voice conversation in the browser and become a structured lead record.',
@@ -726,6 +823,9 @@ export const DEMO_CALLS: DemoCall[] = [
       { q: 'Does the website visitor need a phone number?', a: 'No. The website widget starts a browser voice conversation. You can still collect name and phone before or during the call.' },
       { q: 'Can the page URL be sent to CRM?', a: 'Yes. Vistrow can include the website and page path in the call record and webhook payload.' },
       { q: 'Can widget calls be recorded?', a: 'Yes, where recording is enabled and compliant with your consent and retention policy.' },
+      { q: 'Does the widget work on a phone browser?', a: 'Yes. It works in desktop and mobile browsers. The browser asks the visitor for microphone permission before the call begins.' },
+      { q: 'Can different pages use different agents?', a: 'Yes. Page rules route visitors on matching pages to a different agent, with its own greeting and avatar.' },
+      { q: 'Can a visitor type instead of speaking?', a: 'Yes, if you enable chat. The widget can be voice, text chat only, or let the visitor choose.' },
     ],
   },
 ]
