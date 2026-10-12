@@ -443,3 +443,11 @@ Branch `claude/voices-row-play`. Owner requests:
 
 Verified in the local app with a mock API (real catalog, owner session): play, pause, resume, switching while playing, and pausing from the big button. On the Realtime tab: 30 voices, the Female/Male filters, the preview request goes to `voice=google38:achernar`, and Achernar maps to Myra HD. `npm run build` passes.
 Not verified: real Gemini preview audio. How close Gemini TTS sounds to the Live model is unmeasured.
+
+### Claude — 2026-10-12 — help videos embedded (branch claude/help-videos)
+
+Changed: 8 new how-to videos (Riya / ElevenLabs Eleven v4 narration, captions burnt in) added as `web-demo/public/media/help/<slug>.mp4` (1080p, 4.3–6.4 MB each, 47 MB total) + `.jpg` posters (33–85 KB). New `lib/helpVideos.ts` (video list + route map) and `components/HelpVideo.tsx` (poster-only until play; "Watch how" header button opening a dialog). `HelpArticle.video` field; videos shown above 9 articles (public /help and in-app Support). New articles `build-with-ai` (Agents) and `copilot` (Help & Support), written from the real screens. `DashboardLayout` PageHeader shows "Watch how" on /dashboard, /agents, /agents/new, /testing, /knowledge, /numbers, /inbound, /website-widget, /support.
+
+Verified: help tests 38 passed; production build incl. icon check, prerender and SEO audit (115 routes) passes; headless Chrome on the built site: article page requests no help MP4 before click (only the existing site-wide agent-orb.mp4), plays the 1920x1080 file after click, no horizontal overflow at 390 px. Not verified: the dashboard "Watch how" button in a logged-in browser (needs an account); Safari/real phones.
+
+Masters (4K) and the pipeline live outside git in `marketing-video/help/` (untracked). Known follow-ups: Integrations page still lists WhatsApp/Facebook Lead Ads as "Coming soon"; help articles for create-and-edit-agent, testing-lab, get-started describe some UI that has moved.

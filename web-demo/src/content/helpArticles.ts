@@ -12,6 +12,7 @@ export const HELP_TOPICS: HelpTopic[] = [
    {
     "slug": "get-started",
     "title": "Get started with Vistrow Voice",
+    "video": "get-started",
     "summary": "What the platform does and the order to set it up in.",
     "body": "Vistrow Voice gives your business AI voice agents that answer and place calls in Indian languages, capture leads, book appointments, and log every call with a transcript.\n\n## Set up in this order\n1. **Agents** — open your agent and set its persona, voice, default language and welcome message.\n2. **Knowledge Base** — add your brochure, price list or FAQs so the agent answers from your facts.\n3. **Testing Lab** — run a few test conversations in the browser before real callers hear it.\n4. **Website Widget** or **Phone Numbers** — put the agent where your customers are.\n5. **Integrations** — send every qualified lead to your CRM, Slack or Google Sheets.\n\n## Where things are\n- The sidebar groups pages by Platform, Campaigns, Management and Operations; **Help & Support** is pinned at the bottom.\n- Close the sidebar with the panel button next to the logo, or press **⌘B / Ctrl+B**; press it again to bring it back.\n- Press **⌘K / Ctrl+K** to search every page from anywhere."
    },
@@ -30,8 +31,16 @@ export const HELP_TOPICS: HelpTopic[] = [
   "route": "/dashboard/agents",
   "articles": [
    {
+    "slug": "build-with-ai",
+    "title": "Build an agent with AI",
+    "video": "build-with-ai",
+    "summary": "Describe your business in plain words and get a ready-to-edit agent.",
+    "body": "Go to **Agents** → **New Agent** and choose **Build with AI**. Nothing is saved until you click **Create agent**, so you can try it freely.\n\n## 1. Describe your business\nWrite who calls you (or who you call), what they ask, which languages they speak, and what the agent should collect or book — up to 4,000 characters. Not sure what to write? Pick a card under **Or start from an example**. Add your **Business name** and **Website** if you like, then click **Draft my agent** (or press ⌘ + Enter).\n\n## 2. Answer a few quick questions\nIf something isn't clear, the builder asks a few short questions. Tap an answer or type your own. If your description already covers everything, this step is skipped.\n\n## 3. Review the draft\nThe builder writes the instructions, chooses a voice and sets up the fields to fill after every call. Review each section — **Basics**, **Voice & language**, **Instructions**, **Conversation & tools** and **After the call** — edit anything, or click **Regenerate** on one section. Click **Hear the greeting** to listen to the first thing callers hear.\n\n## 4. Create the agent\nClick **Create agent**. Then **Run a test call** to talk to it straight away, or **Open agent** to fine-tune it. Plan limits, voice tiers and models are checked when you create the agent."
+   },
+   {
     "slug": "create-and-edit-agent",
     "title": "Create and edit an agent",
+    "video": "create-and-edit-agent",
     "summary": "Set an agent's voice, language, prompt and greeting.",
     "body": "Go to **Agents** and click **New Agent**, or **Edit** on an existing card. Every setting lives on the agent's own page; click **Save changes** at the bottom. Changes apply from the next call — no redeploy.\n\n## The main settings\n- **Model** — the AI that holds the conversation. Vistrow Bharat handles Hindi, English and other Indian languages. With a Standard or HD voice it uses 1 credit per minute.\n- **Voice** — only voices added under **Voices** appear here.\n- **Default language** — the language the agent opens in. It follows the caller if they switch.\n- **Welcome message** — separate lines for inbound and outbound calls. Use {{name}}-style variables to personalise them.\n- **System prompt** — the agent's instructions. Leave it blank to use the built-in assistant prompt.\n- **Who speaks first**, **voice delivery**, **emotion intensity**, **noise suppression** and **background ambience** tune how the call sounds.\n\n## Agent readiness\nEach card shows a readiness score such as 5/6 with the next step to finish, like adding a knowledge base or assigning a number."
    },
@@ -58,6 +67,7 @@ export const HELP_TOPICS: HelpTopic[] = [
    {
     "slug": "run-a-test",
     "title": "Test an agent before customers do",
+    "video": "testing-lab",
     "summary": "Run realistic caller scenarios and read the checks.",
     "body": "**Testing Lab** runs a live conversation with your agent's real configuration in the browser — you play the caller.\n\n1. Pick a situation such as Impatient customer, Angry customer, Silent caller, Hindi-English switching, Noisy background, Booking conflict, Transfer unavailable or Voicemail.\n2. Choose the **Agent under test** and read the caller instructions and expected behaviour.\n3. Click **Start live test** and speak, or type in \"Or type here instead\".\n4. Review **Latest test result** — opening quality, response length, one question at a time, repeated responses, tool accuracy and cost.\n\nSave your own scenario with **Custom regression** to re-run it after every prompt change."
    },
@@ -92,6 +102,7 @@ export const HELP_TOPICS: HelpTopic[] = [
    {
     "slug": "add-knowledge",
     "title": "Give your agent your facts",
+    "video": "knowledge-base",
     "summary": "Upload documents, approve Q&A pairs and use strict mode.",
     "body": "1. Go to **Knowledge Base** and click **Create Knowledge Base**.\n2. **Add source** — upload a brochure, price sheet or handbook, or paste text.\n3. Click **Auto-extract Q&A** to turn it into question–answer pairs, then review and edit them. You can also **Add Q&A pair** by hand.\n4. Attach the knowledge base to an agent under **Agents → Knowledge base**.\n\n## Good to know\n- Only the first **8,000 characters** reach the agent on a call; the bar under each knowledge base shows how much is used. Approved Q&A pairs are included first.\n- **Strict mode** makes the agent quote your approved answers instead of improvising facts, and say it will check with the team when something isn't covered."
    },
@@ -112,6 +123,7 @@ export const HELP_TOPICS: HelpTopic[] = [
    {
     "slug": "route-inbound-calls",
     "title": "Route incoming calls to an agent",
+    "video": "connect-a-number",
     "summary": "Link a number to an agent with hours, days and limits.",
     "body": "Go to **Inbound**, pick the number under **Incoming calls to** and the agent under **Routed to agent**, then **Create Route**. The route is live immediately.\n\n## Schedule & rules\n- **Timezone**, **Start date** and **End date**.\n- **Call window start / end** — leave blank to answer at any time.\n- **Active days** — for example Mon–Sat only.\n- **Max concurrent calls** — how many calls this number takes at once.\n\nCalls outside the window or days, or beyond the limit, are not answered by the agent. Edit or delete a route under **Saved routes**."
    }
@@ -208,6 +220,7 @@ export const HELP_TOPICS: HelpTopic[] = [
    {
     "slug": "add-widget",
     "title": "Add the call button to your website",
+    "video": "website-widget",
     "summary": "Create a site, pick an agent, and embed the widget.",
     "body": "1. Go to **Website Widget** → **Add your website**. Name it, pick the **Agent**, the corner, and the button label.\n2. Copy the embed snippet (or use the WordPress plugin) onto your site.\n3. Visitors click the button and talk to your agent in the browser — no phone needed.\n\nEach site has its own key and its own call history; filter the Calls page by site. **Regenerate key** if a key is exposed.\n\n## Avatar\nChoose the animated **Orb** or **Artha**, the waving presenter, as the button's face."
    },
@@ -228,6 +241,7 @@ export const HELP_TOPICS: HelpTopic[] = [
    {
     "slug": "connect-a-number",
     "title": "Connect a phone number",
+    "video": "connect-a-number",
     "summary": "Register an EnableX number and route it to an agent.",
     "body": "Today numbers come from **EnableX** (Twilio, Exotel and Plivo are coming soon).\n\n1. Provision the number in your EnableX portal.\n2. Go to **Phone Numbers**, connect EnableX with the App ID and key from EnableX → Project Settings → API Credentials.\n3. **Add a virtual number** in full international format (e.g. +917713128715) with an optional label.\n4. Pick the agent next to the number, and use **Test call** to check it.\n\nSet hours, days and limits for incoming calls under **Inbound**."
    }
@@ -299,6 +313,13 @@ export const HELP_TOPICS: HelpTopic[] = [
   "icon": "support_agent",
   "route": "/dashboard/support",
   "articles": [
+   {
+    "slug": "copilot",
+    "title": "Ask Artha Copilot",
+    "video": "copilot",
+    "summary": "Ask questions about your workspace, or have it make a change after you confirm.",
+    "body": "Click the **Artha** button in the bottom-right corner of any dashboard page. **Artha Copilot** reads your live workspace — calls, leads, agents, bookings, credits and integrations. Tap a suggested question or type your own, for example **Who are my hottest leads right now?** (it lists your most recent qualified calls).\n\n## Ask it to make a change\nOn Growth plans, Copilot can also act for you. It prepares the action and shows a **Needs your confirmation** card — nothing changes until you click **Confirm**. **Cancel** leaves everything as it is.\n\nIt can:\n- Pause an agent or put it live\n- Change an agent's name, language or welcome message\n- Book a callback or an appointment\n- Choose which integrations an agent sends leads to\n- Route a phone number to an agent (admins)\n\n## Good to know\n- Click **Larger** for a bigger panel.\n- Use the thumbs or **Report** under a reply to tell us how it did."
+   },
    {
     "slug": "contact-support",
     "title": "Contact support and track your request",

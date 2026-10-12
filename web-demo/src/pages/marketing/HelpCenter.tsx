@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { HelpArticleBody } from '../../components/HelpArticleBody'
+import { HelpVideoPlayer } from '../../components/HelpVideo'
 import { Icon } from '../../components/Icon'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
@@ -150,6 +151,7 @@ function ArticlePage({ topicSlug, articleSlug }: { topicSlug: string; articleSlu
           <article className="rounded-2xl border border-border bg-surface px-6 py-8 sm:px-10 sm:py-10">
             <h1 className="text-3xl font-semibold tracking-tight">{article.title}</h1>
             <p className="mb-6 mt-2 text-text-muted">{article.summary}</p>
+            {article.video && <div className="mb-8"><HelpVideoPlayer slug={article.video} /></div>}
             <HelpArticleBody body={article.body} />
           </article>
           <aside className="flex flex-col gap-5">

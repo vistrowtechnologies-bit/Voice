@@ -886,6 +886,8 @@ export interface HelpArticle {
   title: string
   summary: string
   body: string
+  /** A how-to video in lib/helpVideos.ts, shown above the article. */
+  video?: string
 }
 
 export interface HelpTopic {

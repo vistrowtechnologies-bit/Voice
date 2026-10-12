@@ -21,6 +21,7 @@ TOPICS: list[dict] = [
             {
                 "slug": "get-started",
                 "title": "Get started with Vistrow Voice",
+                "video": "get-started",
                 "summary": "What the platform does and the order to set it up in.",
                 "body": """Vistrow Voice gives your business AI voice agents that answer and place calls in Indian languages, capture leads, book appointments, and log every call with a transcript.
 
@@ -59,8 +60,28 @@ The cards at the top flag things that affect customers: a CRM that stopped recei
         "route": "/dashboard/agents",
         "articles": [
             {
+                "slug": "build-with-ai",
+                "title": "Build an agent with AI",
+                "video": "build-with-ai",
+                "summary": "Describe your business in plain words and get a ready-to-edit agent.",
+                "body": """Go to **Agents** → **New Agent** and choose **Build with AI**. Nothing is saved until you click **Create agent**, so you can try it freely.
+
+## 1. Describe your business
+Write who calls you (or who you call), what they ask, which languages they speak, and what the agent should collect or book — up to 4,000 characters. Not sure what to write? Pick a card under **Or start from an example**. Add your **Business name** and **Website** if you like, then click **Draft my agent** (or press ⌘ + Enter).
+
+## 2. Answer a few quick questions
+If something isn't clear, the builder asks a few short questions. Tap an answer or type your own. If your description already covers everything, this step is skipped.
+
+## 3. Review the draft
+The builder writes the instructions, chooses a voice and sets up the fields to fill after every call. Review each section — **Basics**, **Voice & language**, **Instructions**, **Conversation & tools** and **After the call** — edit anything, or click **Regenerate** on one section. Click **Hear the greeting** to listen to the first thing callers hear.
+
+## 4. Create the agent
+Click **Create agent**. Then **Run a test call** to talk to it straight away, or **Open agent** to fine-tune it. Plan limits, voice tiers and models are checked when you create the agent.""",
+            },
+            {
                 "slug": "create-and-edit-agent",
                 "title": "Create and edit an agent",
+                "video": "create-and-edit-agent",
                 "summary": "Set an agent's voice, language, prompt and greeting.",
                 "body": """Go to **Agents** and click **New Agent**, or **Edit** on an existing card. Every setting lives on the agent's own page; click **Save changes** at the bottom. Changes apply from the next call — no redeploy.
 
@@ -116,6 +137,7 @@ Turn on **Memory** and the agent remembers returning callers by phone number —
             {
                 "slug": "run-a-test",
                 "title": "Test an agent before customers do",
+                "video": "testing-lab",
                 "summary": "Run realistic caller scenarios and read the checks.",
                 "body": """**Testing Lab** runs a live conversation with your agent's real configuration in the browser — you play the caller.
 
@@ -170,6 +192,7 @@ Click **Add to my voices**. Only added voices appear in an agent's **Voice** pic
             {
                 "slug": "add-knowledge",
                 "title": "Give your agent your facts",
+                "video": "knowledge-base",
                 "summary": "Upload documents, approve Q&A pairs and use strict mode.",
                 "body": """1. Go to **Knowledge Base** and click **Create Knowledge Base**.
 2. **Add source** — upload a brochure, price sheet or handbook, or paste text.
@@ -199,6 +222,7 @@ Only agents you explicitly enable can use the catalog.""",
             {
                 "slug": "route-inbound-calls",
                 "title": "Route incoming calls to an agent",
+                "video": "connect-a-number",
                 "summary": "Link a number to an agent with hours, days and limits.",
                 "body": """Go to **Inbound**, pick the number under **Incoming calls to** and the agent under **Routed to agent**, then **Create Route**. The route is live immediately.
 
@@ -341,6 +365,7 @@ It works with any source that can send a webhook: a form on your website, your C
             {
                 "slug": "add-widget",
                 "title": "Add the call button to your website",
+                "video": "website-widget",
                 "summary": "Create a site, pick an agent, and embed the widget.",
                 "body": """1. Go to **Website Widget** → **Add your website**. Name it, pick the **Agent**, the corner, and the button label.
 2. Copy the embed snippet (or use the WordPress plugin) onto your site.
@@ -370,6 +395,7 @@ Each rule saves the moment you click **Add rule**. **Save changes** lower on the
             {
                 "slug": "connect-a-number",
                 "title": "Connect a phone number",
+                "video": "connect-a-number",
                 "summary": "Register an EnableX number and route it to an agent.",
                 "body": """Today numbers come from **EnableX** (Twilio, Exotel and Plivo are coming soon).
 
@@ -476,6 +502,27 @@ Change your password and review account protection.
         "icon": "support_agent",
         "route": "/dashboard/support",
         "articles": [
+            {
+                "slug": "copilot",
+                "title": "Ask Artha Copilot",
+                "video": "copilot",
+                "summary": "Ask questions about your workspace, or have it make a change after you confirm.",
+                "body": """Click the **Artha** button in the bottom-right corner of any dashboard page. **Artha Copilot** reads your live workspace — calls, leads, agents, bookings, credits and integrations. Tap a suggested question or type your own, for example **Who are my hottest leads right now?** (it lists your most recent qualified calls).
+
+## Ask it to make a change
+On Growth plans, Copilot can also act for you. It prepares the action and shows a **Needs your confirmation** card — nothing changes until you click **Confirm**. **Cancel** leaves everything as it is.
+
+It can:
+- Pause an agent or put it live
+- Change an agent's name, language or welcome message
+- Book a callback or an appointment
+- Choose which integrations an agent sends leads to
+- Route a phone number to an agent (admins)
+
+## Good to know
+- Click **Larger** for a bigger panel.
+- Use the thumbs or **Report** under a reply to tell us how it did.""",
+            },
             {
                 "slug": "contact-support",
                 "title": "Contact support and track your request",
