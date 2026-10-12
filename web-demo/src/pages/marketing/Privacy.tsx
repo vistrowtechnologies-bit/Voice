@@ -32,7 +32,7 @@ export function Privacy() {
       <LegalSection title="2. What we collect">
         <p><b>Account data</b> - name, email, phone, password hash (or OAuth identity if you sign in with Google, GitHub, or Slack), workspace/company name, and role.</p>
         <p><b>Call data</b> - audio, live transcripts, call metadata (duration, timestamps, channel), and any structured fields your AI agent is configured to extract (e.g. name, budget, appointment time).</p>
-        <p><b>Connected-integration data</b> - if you connect Google Calendar, Slack, WhatsApp, or a CRM webhook, we store the minimum needed to operate that connection (an OAuth token, a webhook URL) and the data your agent sends through it (e.g. a calendar event, a lead notification).</p>
+        <p><b>Connected-integration data</b> - if you connect Google Calendar, Slack, Google Sheets, or a CRM webhook, we store the minimum needed to operate that connection (an OAuth token, a webhook URL) and the data your agent sends through it (e.g. a calendar event, a lead notification).</p>
         <p><b>Usage data</b> - pages visited in the dashboard, API requests, and error logs, used to keep the product working and secure.</p>
         <p><b>Payment data</b> - online checkout is not enabled during public testing, so the platform does not collect or store card numbers.</p>
       </LegalSection>
@@ -84,7 +84,7 @@ export function Privacy() {
           <li><b>Call recording storage</b> - Backblaze B2 (audio recordings, hosted in the United States).</li>
           <li><b>Email delivery</b> - Resend, to send account and notification emails.</li>
           <li><b>Usage analytics</b> - Google Analytics, Microsoft Clarity and Vercel Web Analytics, to understand how the website and app are used (see section 9).</li>
-          <li><b>Integrations you connect</b> - Google Calendar, Slack, WhatsApp providers, or a CRM you configure - only the data needed for that specific integration to work, and only while it's connected.</li>
+          <li><b>Integrations you connect</b> - Google Calendar, Slack, Google Sheets, or a CRM you configure - only the data needed for that specific integration to work, and only while it's connected.</li>
         </ul>
         <p>Each of these processes data under its own privacy commitments; we choose providers that meet industry-standard security practices.</p>
       </LegalSection>

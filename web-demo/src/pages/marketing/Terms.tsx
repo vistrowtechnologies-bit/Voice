@@ -51,7 +51,7 @@ export function Terms() {
 
       <LegalSection title="5. Third-party integrations">
         <p>
-          Connecting Google Calendar, Slack, WhatsApp, or any other integration is optional and
+          Connecting Google Calendar, Slack, Google Sheets, or any other integration is optional and
           governed by that provider's own terms in addition to ours. You authorize {BRAND.name} to
           access those services only for the purpose you connected them for (e.g. booking a
           calendar event, sending a notification), as described in our{' '}
