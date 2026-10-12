@@ -27,7 +27,7 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
   {
     icon: 'badge',
     title: 'Role-based access',
-    body: 'Team members are invited into your workspace with a role. Only owners can change billing, compliance settings, and destructive configuration.',
+    body: 'Team members are invited into your workspace with a role. Compliance settings, API keys, integrations and team management need an admin or owner role.',
   },
   {
     icon: 'block',
@@ -47,7 +47,7 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
   {
     icon: 'link',
     title: 'Recording access control',
-    body: 'Call recordings are not publicly addressable. Playback goes through short-lived signed URLs issued only to authenticated members of the owning workspace.',
+    body: 'Recordings sit in private storage with no public address. Dashboard playback uses one-hour signed URLs issued to signed-in members of the owning workspace. Recording links sent to a connected CRM or spreadsheet are long-lived links that work for anyone who holds them.',
   },
   {
     icon: 'visibility_off',
@@ -57,7 +57,7 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
   {
     icon: 'credit_card',
     title: 'No card data',
-    body: 'Online checkout is not enabled during public testing. The platform therefore does not collect or store full card numbers.',
+    body: 'Card details are entered with Razorpay, our payment provider. We store only invoice and payment identifiers, never card numbers.',
   },
 ]
 

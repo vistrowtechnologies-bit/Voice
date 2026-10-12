@@ -9,7 +9,7 @@ export function Terms() {
     <LegalLayout
       eyebrow="Legal"
       title="Terms of Service"
-      updated="10 August 2026"
+      updated="12 October 2026"
       path="/terms"
       description="The terms that govern business use of Vistrow Voice, including acceptable use, billing, data, and compliance responsibilities."
       intro={`These terms govern your use of ${BRAND.name}, the AI voice-agent platform operated by Vistrow Technologies ("we", "us"). By creating an account or using the service, you agree to them.`}
@@ -51,10 +51,10 @@ export function Terms() {
 
       <LegalSection title="5. Third-party integrations">
         <p>
-          Connecting Google Calendar, Slack, Google Sheets, or any other integration is optional and
+          Connecting Google Sheets, Slack, Zoho CRM, a webhook, or any other integration is optional and
           governed by that provider's own terms in addition to ours. You authorize {BRAND.name} to
-          access those services only for the purpose you connected them for (e.g. booking a
-          calendar event, sending a notification), as described in our{' '}
+          access those services only for the purpose you connected them for (e.g. adding a lead to a
+          spreadsheet, sending a notification), as described in our{' '}
           <Link to="/privacy">Privacy Policy</Link>. You can disconnect an integration at any time
           from the dashboard.
         </p>
@@ -81,7 +81,7 @@ export function Terms() {
       </LegalSection>
 
       <LegalSection title="11. Termination">
-        <p>You may request cancellation or account deletion by emailing <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. We may suspend or terminate accounts for violating these terms, non-payment, or extended inactivity. On termination, your data is retained per our <Link to="/privacy">Privacy Policy</Link> and then deleted or anonymized, except where we're required to keep it longer by law.</p>
+        <p>You may request cancellation or account deletion from Settings in the dashboard or by emailing <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. We may suspend or terminate accounts for violating these terms, non-payment, or extended inactivity. On termination, your data is retained per our <Link to="/privacy">Privacy Policy</Link> and then deleted or anonymized, except where we're required to keep it longer by law.</p>
       </LegalSection>
 
       <LegalSection title="12. Governing law">
