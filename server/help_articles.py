@@ -431,9 +431,9 @@ Click **Save rules** after changing anything.""",
                 "slug": "plans",
                 "title": "Plans",
                 "summary": "What Starter, Growth and Scale include.",
-                "body": """- **Starter** — ₹2,999/month + GST: 300 credits, 1 AI agent, a knowledge base with approved answers.
-- **Growth** — ₹5,999/month: 750 credits, 5 AI agents, inbound + outbound campaigns, CRM webhook integration, agent-assigned live catalog.
-- **Scale** — ₹12,999/month: 1,750 credits, 20 AI agents, full API access.
+                "body": """- **Starter** — ₹2,999/month + GST: 350 credits, 1 AI agent, a knowledge base with approved answers.
+- **Growth** — ₹5,999/month: 850 credits, 5 AI agents, inbound + outbound campaigns, CRM webhook integration, agent-assigned live catalog.
+- **Scale** — ₹12,999/month: 2,000 credits, 20 AI agents, full API access.
 
 Online payments and self-service plan changes aren't available yet — contact us to change plans or add credits.""",
             },

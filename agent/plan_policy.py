@@ -5,16 +5,16 @@ the LiveKit image ships it alongside db.py. Unknown plans fail closed.
 """
 
 PLANS = {
-    "starter": {"price_inr": 2999, "credits": 300, "agents": 1, "concurrency": 5, "knowledge_bases": 1, "storage_gb": 5},
-    "growth": {"price_inr": 5999, "credits": 750, "agents": 5, "concurrency": 15, "knowledge_bases": 5, "storage_gb": 25},
-    "scale": {"price_inr": 12999, "credits": 1750, "agents": 20, "concurrency": 30, "knowledge_bases": 15, "storage_gb": 100},
+    "starter": {"price_inr": 2999, "credits": 350, "agents": 1, "concurrency": 5, "knowledge_bases": 1, "storage_gb": 5},
+    "growth": {"price_inr": 5999, "credits": 850, "agents": 5, "concurrency": 15, "knowledge_bases": 5, "storage_gb": 25},
+    "scale": {"price_inr": 12999, "credits": 2000, "agents": 20, "concurrency": 30, "knowledge_bases": 15, "storage_gb": 100},
 }
 # One credit = one minute of the default stack (Sarvam STT + Sarvam 105B +
 # Chirp 3 HD). Measured worst-case cost of that minute, Oct 2026 bills: STT
 # 0.31 + LLM 1.70 + TTS 0.13 + LiveKit 0.85 + EnableX SIP 0.25 = Rs 3.24.
 # Plan prices exclude GST, so price/credits is our net rate per minute;
 # test_plan_policy keeps every plan at or above 2x this (>= 50% margin).
-COST_PER_DEFAULT_MINUTE_INR = 3.25
+COST_PER_DEFAULT_MINUTE_INR = 3.24
 # One-off credit top-ups. Price = the account's plan rate per credit × base credits (+ GST);
 # the bonus is granted on top but never invoiced. Mirrors web-demo/src/lib/plans.ts TOPUP_PACKS.
 TOPUP_PACKS = {

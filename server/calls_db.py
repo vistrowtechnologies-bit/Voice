@@ -8719,7 +8719,7 @@ def model_tier(model: str | None) -> str:
         return "standard"
     # Sarvam ("Vistrow Bharat") is the default model and bills standard: since
     # 2026-10-12 a credit is priced on one minute of the default stack
-    # (Sarvam STT + Sarvam 105B + Chirp 3 HD), worst case ~Rs 3.25/min with
+    # (Sarvam STT + Sarvam 105B + Chirp 3 HD), worst case ~Rs 3.24/min with
     # LiveKit and telephony (plan_policy.COST_PER_DEFAULT_MINUTE_INR), so 1x
     # already carries the margin. It used to bill 2x because credits were
     # priced on gpt-4o-mini, which made the default minute cost 2 credits.
