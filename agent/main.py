@@ -1855,10 +1855,14 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
         # Google owns native turn detection. Keep Hindi pause protection,
         # but tune 2.5 independently of the already-tested 3.1 profile.
         realtime_input_config=realtime_config.activity_detection(name),
-        # Verified on 3.1 only (10 Oct 2026); 2.5 could not be tested.
+        # Verified on 3.1 (10 Oct 2026); 3.8 is its GA successor on the same
+        # Live API. 2.5 could not be tested.
         **({"context_window_compression": realtime_config.context_compression(instructions)}
-           if name == realtime_config.MODEL_31 else {}),
+           if name in (realtime_config.MODEL_31, realtime_config.MODEL_38) else {}),
     )
+
+
+_FALLBACK_LLM_MODEL = "gpt-4o-mini"
 
 
 def _build_llm(model: str, *, max_output_tokens: int = 220):
@@ -1877,10 +1881,14 @@ def _build_llm(model: str, *, max_output_tokens: int = 220):
         # low-latency mode for chat/voice; the 3.5 Flash-Lite model already
         # defaults to it, but setting it explicitly keeps every Gemini voice
         # model on the same latency budget.
+        # Gemini 2.5 rejects thinking_level with 400 "Thinking level is not
+        # supported for this model" (verified 2026-10-12), which left 2.5
+        # Flash agents silent; 2.5 turns thinking off with a zero budget.
+        thinking = {"thinking_budget": 0} if "2.5" in model else {"thinking_level": "MINIMAL"}
         return google.LLM(
             model=model,
             api_key=api_key,
-            thinking_config={"thinking_level": "MINIMAL"},
+            thinking_config=thinking,
             max_output_tokens=max_output_tokens,
         )
     if model.startswith("groq/"):
@@ -1932,13 +1940,33 @@ def _build_llm(model: str, *, max_output_tokens: int = 220):
         # hit; that was not reproducible. Kept because it is harmless and
         # costs nothing if Sarvam starts honouring it; raise caching on
         # -conversations with Sarvam rather than changing code here.
-        return openai.LLM(
+        sarvam_llm = openai.LLM(
             model=model.split("/", 1)[1],
             api_key=api_key,
             base_url="https://api.sarvam.ai/v1",
             max_completion_tokens=max_output_tokens,
             prompt_cache_key="vistrow-voice-agent-v1",
         )
+        # Automatic failover: Sarvam is the only LLM vendor on the default
+        # stack, so an outage there used to fail every call. If Sarvam errors
+        # or sends nothing within LLM_FALLBACK_TIMEOUT_S, the same turn is
+        # retried on gpt-4o-mini (real calls 2026-10-12: 1.45 s turn, correct
+        # Hindi, about half Sarvam's per-token cost). Billing stays on the
+        # agent's configured model. LLM_FALLBACK=0 turns it off.
+        if os.environ.get("LLM_FALLBACK", "1") != "0" and os.environ.get("OPENAI_API_KEY"):
+            return llm.FallbackAdapter(
+                [
+                    sarvam_llm,
+                    openai.LLM(
+                        model=_FALLBACK_LLM_MODEL,
+                        max_completion_tokens=max_output_tokens,
+                        prompt_cache_key="vistrow-voice-agent-v1",
+                    ),
+                ],
+                attempt_timeout=float(os.environ.get("LLM_FALLBACK_TIMEOUT_S", "4.0")),
+                max_retry_per_llm=0,
+            )
+        return sarvam_llm
     # Bound spoken replies and give OpenAI a stable cache-routing key.  The
     # exact prompt prefix still has to match before it can be reused, so this
     # does not mix one tenant's instructions or KB with another tenant's.
@@ -2163,14 +2191,15 @@ def _build_stt(speech_context: str | None = None, reply_language: str | None = N
             # endpointing sensitivity. Pin the known agent language: Google
             # accepts one locale here, while auto-detection across a broad
             # language set caused the same cross-script errors we removed
-            # from the Sarvam path. asia-southeast1 is GA and is the nearest
-            # GA region to our India worker; it remains env-overridable.
+            # from the Sarvam path. The region is env-overridable.
             google_language = to_google_code(reply_language or "hi-IN")
             return google.STT(
                 languages=[google_language],
                 detect_language=False,
                 model="chirp_3",
-                location=os.environ.get("GOOGLE_SPEECH_LOCATION", "asia-southeast1"),
+                # chirp_3 hi-IN now 403s in asia-southeast1 and asia-south1 ("no
+                # longer generally available", verified 2026-10-12); "us" works.
+                location=os.environ.get("GOOGLE_SPEECH_LOCATION", "us"),
                 endpointing_sensitivity="ENDPOINTING_SENSITIVITY_SHORT",
                 enable_voice_activity_events=True,
                 credentials_info=_GOOGLE_CREDENTIALS,

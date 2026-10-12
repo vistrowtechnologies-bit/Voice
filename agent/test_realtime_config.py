@@ -49,6 +49,8 @@ def test_native_thinking_profiles_do_not_mix_parameters(model):
     if model == config.DEFAULT_MODEL:
         assert options.thinking_budget == 0
         assert options.thinking_level is None
+    elif model == config.MODEL_38:
+        assert options.thinking_level is None and options.thinking_budget is None
     else:
         assert options.thinking_level.value == "MINIMAL"
         assert options.thinking_budget is None

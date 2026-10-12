@@ -29,9 +29,10 @@ class GoogleChirp3Stt(unittest.TestCase):
         self.assertIn('detect_language=False', build)
         self.assertIn('endpointing_sensitivity="ENDPOINTING_SENSITIVITY_SHORT"', build)
 
-    def test_india_near_ga_region_is_the_default(self):
+    def test_a_region_that_still_serves_hindi_is_the_default(self):
+        # chirp_3 hi-IN 403s in asia-southeast1/asia-south1 since Oct 2026.
         build = function_source("_build_stt")
-        self.assertIn('GOOGLE_SPEECH_LOCATION", "asia-southeast1"', build)
+        self.assertIn('GOOGLE_SPEECH_LOCATION", "us"', build)
 
     def test_agent_config_reaches_the_provider_factory(self):
         init = method_source("RealEstateAgent", "__init__")

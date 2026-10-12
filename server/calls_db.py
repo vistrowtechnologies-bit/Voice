@@ -8730,7 +8730,9 @@ def model_tier(model: str | None) -> str:
     # billed per audio token. Oct 6-9 bill: 3.1 ~Rs 16.8/min, 2.5 ~Rs 4.6/min.
     # Unlisted, both fell through to 1x - a loss on every 3.1 minute.
     if name.startswith("gemini-live"):
-        return "realtime_plus" if "3.1" in name else "premium"
+        # Only the 2.5 default ("gemini-live", or an explicit 2.5 model) is
+        # the cheap one; 3.1 and its GA successor 3.8 cost the same.
+        return "premium" if name == "gemini-live" or "2.5" in name else "realtime_plus"
     if name in _PREMIUM_PLUS_MODELS:
         return "premium_plus"
     if name in _PREMIUM_MODELS:

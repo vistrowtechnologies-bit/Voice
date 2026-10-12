@@ -307,6 +307,7 @@ export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: s
   // this owner-only: prior calls showed slower audio and turn-handling errors.
   { value: 'gemini-live', label: 'Gemini Live 2.5 · realtime', tag: 'Owner-only · replies in about 2-3 s · about a third of the cost of 3.1' },
   { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Gemini Live 3.1 · realtime', tag: 'Owner-only · fastest speech-to-speech (about 1-2 s) · recommended for Gemini voice' },
+  { value: 'gemini-live:gemini-3.8-live', label: 'Gemini Live 3.8 · realtime', tag: 'Owner-only · GA successor to 3.1, same price · in testing' },
 ]
 
 /** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */
