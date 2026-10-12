@@ -189,6 +189,22 @@ _SUPPORT_BLOCKED_PATHS = re.compile(
 # but never for account control: admin, keys, team, billing, profile, auth.
 _API_KEY_BLOCKED_PATHS = re.compile(r"^/(admin|api-keys|team|billing|profile|auth)(/|$)|^/help/chat/confirm$")
 
+# What each API key scope (calls_db.API_KEY_SCOPES) may change. "read" allows
+# every GET/HEAD, "full" allows everything not blocked above, and any other
+# write through an API key is refused (default deny).
+_API_KEY_SCOPE_WRITES = {
+    "calls": re.compile(r"^/(calls|campaigns|contacts|appointments)(/|$)|^/telephony/test-call$"),
+    "agents": re.compile(r"^/(agents|knowledge-bases|knowledge-sources|kb-qa|testing)(/|$)"),
+}
+
+
+def _api_key_allows(scopes, method: str, path: str) -> bool:
+    if "full" in scopes:
+        return True
+    if method in ("GET", "HEAD"):
+        return "read" in scopes
+    return any(scope in scopes and pattern.match(path) for scope, pattern in _API_KEY_SCOPE_WRITES.items())
+
 
 def support_session_blocks(method: str, path: str) -> bool:
     if method in ("GET", "HEAD", "OPTIONS"):
@@ -271,8 +287,9 @@ async def require_session(request: Request, call_next):
     # handlers that read user_id keep working.
     api_key = request.headers.get("X-Api-Key")
     if api_key:
-        account_id = calls_db.resolve_api_key(api_key)
-        if account_id is not None:
+        resolved = calls_db.resolve_api_key_with_scopes(api_key)
+        if resolved is not None:
+            account_id, scopes = resolved
             request.state.account_id = account_id
             request.state.user_id = calls_db.account_owner_user_id(account_id)
             request.state.impersonator_id = None
@@ -280,6 +297,10 @@ async def require_session(request: Request, call_next):
             request.state.mfa = None
             if _API_KEY_BLOCKED_PATHS.match(path):
                 return JSONResponse({"detail": "API keys can't be used for this. Sign in to the dashboard."}, status_code=403)
+            if not _api_key_allows(scopes, request.method, path):
+                return JSONResponse({"detail": "This API key doesn't have permission for this. "
+                                               "Create a key with the needed permission in the dashboard."},
+                                    status_code=403)
             return await call_next(request)
     return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
@@ -1747,7 +1768,7 @@ def auth_login(req: LoginRequest, response: Response, request: Request) -> dict:
         raise HTTPException(401, "Incorrect email or password")
     if not user.get("email_verified_at"):
         raise HTTPException(403, "Verify your email before signing in. You can request a new code from the verification page")
-    _login_failures.pop(email, None)
+    _clear_login_failures(email)
     if _needs_mfa(user["id"]):
         _set_mfa_pending(response, user["id"], user["account_id"], "password")
         return {"ok": True, "mfaRequired": True}
@@ -1776,7 +1797,7 @@ def auth_login_mfa(req: MfaLoginRequest, response: Response, request: Request) -
         _note_login_failure(lock_key)
         calls_db.record_security_event(pending["uid"], "mfa_failed", pending["prov"], request.headers.get("user-agent", ""))
         raise HTTPException(401, "That code didn't work. Check your authenticator app and try again.")
-    _login_failures.pop(lock_key, None)
+    _clear_login_failures(lock_key)
     response.delete_cookie(_MFA_PENDING_COOKIE, path="/")
     _set_session_cookie(response, pending["uid"], pending["aid"], request, pending["prov"],
                         mfa_at=int(time.time()), new_sign_in=True)
@@ -1785,7 +1806,9 @@ def auth_login_mfa(req: MfaLoginRequest, response: Response, request: Request) -
 
 
 # Per-account sign-in failures (on top of the per-IP limit): 10 in 15 min
-# locks that email for the rest of the window. In memory, like the IP limit.
+# locks that email (or "mfa:<uid>") for the rest of the window. Kept in
+# Postgres so a restart or a second instance doesn't reset it; the in-memory
+# dict is only the fallback when the database can't be reached.
 _LOGIN_FAIL_WINDOW_S = 15 * 60
 _LOGIN_FAIL_MAX = 10
 _login_failures: dict[str, list[float]] = {}
@@ -1793,6 +1816,10 @@ _DUMMY_PASSWORD_HASH = auth.hash_password(secrets.token_urlsafe(16))
 
 
 def _login_locked(key: str) -> bool:
+    try:
+        return calls_db.rate_limit_count("login-fail", key, _LOGIN_FAIL_WINDOW_S) >= _LOGIN_FAIL_MAX
+    except Exception as exc:
+        logger.warning("rate limit store unavailable, using in-memory lockout: %s", exc)
     now = time.monotonic()
     recent = [t for t in _login_failures.get(key, []) if now - t < _LOGIN_FAIL_WINDOW_S]
     if recent:
@@ -1803,7 +1830,20 @@ def _login_locked(key: str) -> bool:
 
 
 def _note_login_failure(key: str) -> None:
+    try:
+        calls_db.rate_limit_record("login-fail", key)
+        return
+    except Exception as exc:
+        logger.warning("rate limit store unavailable, using in-memory lockout: %s", exc)
     _login_failures.setdefault(key, []).append(time.monotonic())
+
+
+def _clear_login_failures(key: str) -> None:
+    _login_failures.pop(key, None)
+    try:
+        calls_db.rate_limit_clear("login-fail", key)
+    except Exception as exc:
+        logger.warning("rate limit store unavailable, could not clear lockout: %s", exc)
 
 
 # ------------------------------------------------- two-step login (MFA)
@@ -2681,6 +2721,7 @@ def complete_tour(user: dict = Depends(current_user)) -> dict:
 
 class CreateApiKeyRequest(BaseModel):
     name: str = "API key"
+    scopes: list[str] = list(calls_db.DEFAULT_API_KEY_SCOPES)
 
 
 @app.get("/api-keys")
@@ -2696,8 +2737,12 @@ def create_api_key(req: CreateApiKeyRequest, user: dict = Depends(require_role("
     # Platform owner bypasses, same as every other plan gate in this file.
     if not calls_db.is_platform_owner(user["account_id"]) and calls_db.get_account_plan(user["account_id"]) != "scale":
         raise HTTPException(403, "API access is available on the Scale plan - upgrade to create API keys.")
+    try:
+        scopes = calls_db.normalize_api_key_scopes(req.scopes)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     # Returns the full key exactly once; the client must copy it immediately.
-    return calls_db.create_api_key(user["account_id"], req.name)
+    return calls_db.create_api_key(user["account_id"], req.name, scopes)
 
 
 @app.delete("/api-keys/{key_id}")
@@ -6927,8 +6972,8 @@ def delete_site(site_id: int, user: dict = Depends(require_role("member"))) -> d
 # /auth/request-password-reset: password brute-forcing, signup spam, and
 # password-reset email-bombing are the same "unauthenticated form, cheap to
 # script" abuse shape, so one bucket per IP across all three is simpler than
-# three separate ones and strictly more conservative. Same
-# resets-on-restart/not-distributed caveat as the widget limiter below.
+# three separate ones and strictly more conservative. Stored in Postgres like
+# _limited below; the dicts here are only the database-down fallback.
 _AUTH_WINDOW_SECONDS = 60
 _AUTH_MAX_PER_WINDOW = 8
 _auth_calls: dict[str, list[float]] = {}
@@ -6938,8 +6983,14 @@ _limit_hits: dict[tuple[str, object], list[float]] = {}
 
 
 def _limited(bucket: str, key, max_hits: int, window_s: int) -> bool:
-    """In-memory sliding window per (bucket, key) — the same first line of
-    defence as the IP limits below, for costly or email-sending routes."""
+    """Sliding window per (bucket, key) for costly or email-sending routes.
+    Kept in Postgres (shared by every instance, survives restarts); if the
+    database can't be reached it falls back to this process's memory rather
+    than refusing everyone."""
+    try:
+        return calls_db.rate_limit_hit(bucket, key, max_hits, window_s)
+    except Exception as exc:
+        logger.warning("rate limit store unavailable, using in-memory limit for %s: %s", bucket, exc)
     now = time.monotonic()
     hits = [t for t in _limit_hits.get((bucket, key), []) if now - t < window_s]
     if len(hits) >= max_hits:
@@ -6951,8 +7002,13 @@ def _limited(bucket: str, key, max_hits: int, window_s: int) -> bool:
 
 
 def _auth_rate_limited(client_ip: str) -> bool:
-    import time
-
+    # Every attempt counts, refused ones too (as before), so a script that
+    # keeps hammering stays locked out.
+    try:
+        return calls_db.rate_limit_hit("auth-ip", client_ip, _AUTH_MAX_PER_WINDOW, _AUTH_WINDOW_SECONDS,
+                                       count_refused=True)
+    except Exception as exc:
+        logger.warning("rate limit store unavailable, using in-memory auth limit: %s", exc)
     now = time.monotonic()
     calls = [t for t in _auth_calls.get(client_ip, []) if now - t < _AUTH_WINDOW_SECONDS]
     calls.append(now)

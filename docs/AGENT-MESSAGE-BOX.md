@@ -320,3 +320,24 @@ Owner action after deploy:
 - Settings → Sign-in & security → Two-step login → Turn on, or `/admin` stays locked.
 - EnableX webhook credentials are not set.
 - Set `ORIGIN_CHECK=enforce` once the logs are clean.
+
+### Claude — 2026-10-12 — Security hardening part 2 (branch claude/security-hardening-2)
+
+Branch `claude/security-hardening-2` from origin/main `12a9038`. Not merged, not deployed, no PR. Details in `docs/SECURITY-AUDIT-2026-10-12.md` rows 20-23.
+- **Persistent rate limits:** new table `rate_limit_hits` and `calls_db.rate_limit_hit/count/record/clear`. `token_api.py` `_limited`, `_auth_rate_limited`, `_login_locked`, `_note_login_failure` and the new `_clear_login_failures` use it. If the DB fails they log a warning and use the old in-memory limit. The widget/token limiters stay in memory.
+- **DNS-rebinding fix:** `kb_crawl.safe_opener()` resolves once per connection and per redirect hop, refuses private IPs, and connects to the checked IP. TLS SNI and the certificate still use the hostname. Used by the crawler and `integrations_dispatch._post_json`.
+- **CSP:** `web-demo/vercel.json` adds a report-only CSP, plus HSTS and Permissions-Policy.
+- **API key scopes:** new column `api_keys.scopes`. Existing keys are `["full"]`; new keys default to `read` + `calls`. The middleware map is `_API_KEY_SCOPE_WRITES` / `_api_key_allows`. The `POST /api-keys` body takes `scopes`, and the list returns them. The frontend `types.ts`/`api.ts` were updated, but there is no API keys screen (removed in `b3983301`), so no checkboxes.
+
+Verified:
+- Server suite: 611 passed. New tests are in `server/test_security_hardening_2.py`, and the DB-backed rate-limit and scope tests ran against the local Postgres.
+- Web: tsc and build pass.
+- Real fetches through the pinned opener worked: https://example.com, and `_post_json` to httpbin returned 200. localhost was refused.
+- Built dist was served locally with the vercel.json headers: no CSP reports on `/`, `/pricing` or `/login`.
+
+Not verified:
+- CSP sources for LiveKit calls, Razorpay checkout, Clarity (it only runs on real hosts), Backblaze recordings, and the orchestrator websocket (`wss://*.up.railway.app` is assumed).
+- Postgres `hashtextextended` needs PG 11+ (assumed on Railway).
+- `graphify update .` was not run.
+
+Next: review, merge with the other claimed branches, deploy (Railway + Vercel, no LiveKit change), then check the console for CSP reports before enforcing.

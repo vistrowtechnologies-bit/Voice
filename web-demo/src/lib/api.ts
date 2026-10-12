@@ -29,6 +29,7 @@ import type {
   Integration,
   LaunchReadiness,
   ApiKey,
+  ApiKeyScope,
   Invoice,
   TopupResult,
   TopupSession,
@@ -257,7 +258,8 @@ export const fetchTestRuns = () => get<CallRecord[]>('/testing/runs')
 // -------------------------------------------------------------- api keys
 
 export const fetchApiKeys = () => get<ApiKey[]>('/api-keys')
-export const createApiKey = (name: string) => send<ApiKey & { key: string }>('POST', '/api-keys', { name })
+export const createApiKey = (name: string, scopes: ApiKeyScope[] = ['read', 'calls']) =>
+  send<ApiKey & { key: string }>('POST', '/api-keys', { name, scopes })
 export const deleteApiKey = (id: number) => send('DELETE', `/api-keys/${id}`)
 
 // -------------------------------------------------------------- contacts

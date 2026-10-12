@@ -756,10 +756,15 @@ export interface CopilotAction {
   decidedAt: string | null
 }
 
+/** read: every GET · calls: calls, campaigns, contacts, appointments ·
+ *  agents: agents and knowledge bases · full: everything but account control. */
+export type ApiKeyScope = 'read' | 'calls' | 'agents' | 'full'
+
 export interface ApiKey {
   id: number
   name: string
   prefix: string
+  scopes: ApiKeyScope[]
   lastUsedAt: string | null
   createdAt: string
 }
