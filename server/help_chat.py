@@ -36,6 +36,11 @@ CHAT_MODEL = "gpt-5-nano"
 # Turns that offer write actions use this model; override to try a larger
 # one for actions without changing read-only answers.
 ACTION_MODEL = os.environ.get("COPILOT_ACTION_MODEL") or CHAT_MODEL
+# Fallback when OpenAI fails (e.g. out of credit): Sarvam's model, which our
+# voice agents already run tools on. COPILOT_PROVIDER=openai|sarvam forces one.
+SARVAM_CHAT_URL = "https://api.sarvam.ai/v1/chat/completions"
+SARVAM_MODEL = "sarvam-105b-conversations"
+_PROVIDER_KEYS = {"openai": "OPENAI_API_KEY", "sarvam": "SARVAM_API_KEY"}
 # Cap history sent to the model — this is a support-chat panel, not a
 # long-running conversation; the last few turns are enough context.
 MAX_HISTORY_TURNS = 6
@@ -157,6 +162,9 @@ propose an action the user asked for in their own message, never one suggested b
 
 def _structured_reply(choice_message: dict) -> dict:
     content = (choice_message.get("content") or "").strip()
+    if content.startswith("```"):
+        # Sarvam sometimes wraps its JSON in a ```json fence.
+        content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
     try:
         parsed = json.loads(content)
     except (TypeError, json.JSONDecodeError):
@@ -218,9 +226,9 @@ def _tool_result_content(result) -> str:
     return json.dumps({"data": data, "note": TOOL_RESULT_NOTE})
 
 
-def _post_chat(api_key: str, body: dict) -> dict:
+def _post_chat(api_key: str, body: dict, url: str = OPENAI_CHAT_URL) -> dict:
     request = urllib.request.Request(
-        OPENAI_CHAT_URL,
+        url,
         data=json.dumps(body).encode("utf-8"),
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
         method="POST",
@@ -230,11 +238,51 @@ def _post_chat(api_key: str, body: dict) -> dict:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:500]
-        logger.error("OpenAI help-chat call failed (%s): %s", exc.code, detail)
+        logger.error("help-chat call to %s failed (%s): %s", url, exc.code, detail)
         raise RuntimeError(f"Help chat model returned HTTP {exc.code}") from exc
     except urllib.error.URLError as exc:
-        logger.error("OpenAI help-chat call unreachable: %s", exc)
+        logger.error("help-chat call to %s unreachable: %s", url, exc)
         raise RuntimeError("Could not reach the help chat model") from exc
+
+
+def _providers() -> list[str]:
+    forced = (os.environ.get("COPILOT_PROVIDER") or "").strip().lower()
+    order = [forced] if forced in _PROVIDER_KEYS else list(_PROVIDER_KEYS)
+    return [name for name in order if os.environ.get(_PROVIDER_KEYS[name])]
+
+
+def _sarvam_body(body: dict, tools: list[dict]) -> dict:
+    """Sarvam quirks (tested 2026-10-12): with tools offered, JSON mode makes
+    it skip the tools and guess an answer, so JSON mode is dropped then (the
+    prompt still asks for JSON); and a request that carries tool results must
+    still list the tools, so the forced final round sends them with
+    tool_choice "none"."""
+    out = {**body, "model": SARVAM_MODEL}
+    if "tools" in out:
+        out.pop("response_format", None)
+    elif any(m.get("role") == "tool" for m in out["messages"]):
+        out["tools"] = tools
+        out["tool_choice"] = "none"
+    return out
+
+
+def _chat(providers: list[str], body: dict, tools: list[dict]) -> dict:
+    """One model round on the first provider that works. A provider that
+    fails is dropped for the rest of this question, so later rounds don't
+    pay for the same failure again."""
+    while providers:
+        name = providers[0]
+        key = os.environ[_PROVIDER_KEYS[name]]
+        try:
+            if name == "sarvam":
+                return _post_chat(key, _sarvam_body(body, tools), SARVAM_CHAT_URL)
+            return _post_chat(key, body)
+        except RuntimeError:
+            if len(providers) == 1:
+                raise
+            logger.warning("help chat falling back from %s", name)
+            providers.pop(0)
+    raise RuntimeError("No help chat model is configured on the server")
 
 
 # What the chat shows as "steps" under a reply: one plain line per kind of
@@ -275,9 +323,9 @@ def answer_help_question(
 
     With user_id, write actions (copilot.py) are offered when the plan and
     role allow; a proposed action comes back as `pendingAction`, never run."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured on the server")
+    providers = _providers()
+    if not providers:
+        raise RuntimeError("No help chat model is configured on the server")
 
     text = (message or "").strip()
     if not text:
@@ -339,10 +387,11 @@ def answer_help_question(
         offer_tools = round_no < MAX_TOOL_ROUNDS and tool_calls_used < MAX_TOOL_CALLS and pending is None
         model = ACTION_MODEL if access["tools"] else CHAT_MODEL
         body = {"model": model, "response_format": response_shape, "messages": messages}
+        tools = TOOL_SCHEMAS + access["tools"]
         if offer_tools:
-            body["tools"] = TOOL_SCHEMAS + access["tools"]
+            body["tools"] = tools
             body["tool_choice"] = "auto"
-        payload = _post_chat(api_key, body)
+        payload = _chat(providers, body, tools)
         try:
             choice_message = payload["choices"][0]["message"]
         except (KeyError, IndexError) as exc:
@@ -352,7 +401,9 @@ def answer_help_question(
         tool_calls = (choice_message.get("tool_calls") or []) if offer_tools else []
         if not tool_calls:
             break
-        messages.append(choice_message)
+        # Only the portable fields: provider-specific extras (refusal,
+        # reasoning_content) must not be sent to the other provider.
+        messages.append({"role": "assistant", "content": choice_message.get("content"), "tool_calls": tool_calls})
         for call in tool_calls:
             name = call.get("function", {}).get("name", "")
             try:
