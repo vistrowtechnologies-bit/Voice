@@ -293,6 +293,8 @@ export interface AgentVariable {
 
 export interface AgentConfig {
   id: number
+  // 10-digit Agent ID for mapping in ArthaLeads and other platforms.
+  publicId?: string
   name: string
   description: string
   model: string

@@ -197,6 +197,7 @@ def _body_for(key: str, config: dict, lead: dict) -> dict | None:
             "channel": lead.get("channel") or "",
             "language": lead.get("language") or "",
             "agent_name": lead.get("agent_name") or "",
+            "agent_id": lead.get("agent_id") or "",
             "page_path": lead.get("page_path") or "",
             "call_id": lead.get("call_id"),
             "recording_url": lead.get("recording_url") or "",
@@ -370,7 +371,7 @@ _INTEGRATION_FIELDS = {
     "email": ("email",),
     "company": ("company",),
     "channel": ("channel",),
-    "agent": ("agent_name",),
+    "agent": ("agent_name", "agent_id"),
     "language": ("language",),
     "duration": ("duration_seconds",),
     "details": ("extracted_data", "summary", "use_case", "message"),
@@ -422,6 +423,7 @@ def test_integration(account_id: int, key: str) -> tuple[bool, str]:
         "channel": "Website Widget",
         "language": "en",
         "agent_name": "Test Agent",
+        "agent_id": "1000000001",
     }
     if key == "sheets" and (integ.get("config") or {}).get("mode") == "oauth":
         # A real row lands in the owner's sheet, so make it obviously deletable.
@@ -497,6 +499,7 @@ def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
         "channel": call.get("channel") or "",
         "language": call.get("replyLanguage") or "",
         "agent_name": call.get("agent") or "",
+        "agent_id": calls_db.agent_public_id(call.get("agentId")),
         "page_path": call.get("pagePath") or "",
         "call_id": call_id,
         "recording_url": recording_url,

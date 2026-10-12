@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { BrowserTestModal } from '../components/AgentTestCall'
+import { AgentIdChip } from '../components/AgentIdChip'
 import { AmbiencePreviewButton } from '../components/AmbiencePreviewButton'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -103,16 +104,17 @@ export function AgentDetail() {
   return (
     <DashboardLayout>
       <PageHeader title={agent.name} subtitle={agent.description || 'No description yet'}>
+        <AgentIdChip publicId={agent.publicId ?? ''} />
         <Link
           to="/dashboard/agents"
-          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-text-muted hover:border-primary hover:text-text"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-muted hover:border-primary hover:text-text"
         >
           <Icon name="arrow_back" className="text-[15px]" />
           Back to agents
         </Link>
         <Link
           to="/dashboard/testing"
-          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
         >
           <Icon name="science" className="text-[15px]" />
           Test agent
