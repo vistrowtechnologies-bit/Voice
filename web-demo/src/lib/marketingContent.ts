@@ -636,7 +636,6 @@ export interface LanguagePage {
   /** One-line positioning for the landing page hero. */
   blurb: string
   /** Search-intent phrase this page should visibly answer. */
-  searchIntent?: string
   /** Local business contexts where this language matters most. */
   localUseCases?: string[]
   /** Practical call behaviors that make the language support feel real. */
@@ -671,7 +670,6 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'North & Central India',
     greeting: 'नमस्ते',
     blurb: 'The default for most Indian call flows - including the everyday Hinglish your customers actually speak, not textbook Hindi.',
-    searchIntent: 'best AI voice phone calling agent in Hindi',
     localUseCases: [
       'Real estate enquiries from Hindi and Hinglish-speaking buyers',
       'Support calls where customers switch between Hindi and English',
@@ -713,7 +711,6 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Maharashtra',
     greeting: 'नमस्कार',
     blurb: 'Answer Pune and Mumbai callers in Marathi instead of defaulting them into Hindi or English.',
-    searchIntent: 'Marathi AI voice calling agent for Maharashtra businesses',
     localUseCases: [
       'Pune, Mumbai, Nashik, and Nagpur property enquiries',
       'Local support calls where Marathi builds trust faster than English',
@@ -738,7 +735,6 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Andhra Pradesh & Telangana',
     greeting: 'నమస్కారం',
     blurb: 'Handle Hyderabad and coastal Andhra call volume in Telugu, around the clock.',
-    searchIntent: 'Telugu voice agent for customer calls',
     localUseCases: [
       'Hyderabad real estate, education, healthcare, and service enquiries',
       'Inbound calls from Andhra Pradesh and Telangana customers',
@@ -781,7 +777,6 @@ export const LANGUAGES: LanguagePage[] = [
     region: 'Karnataka',
     greeting: 'ನಮಸ್ಕಾರ',
     blurb: 'Serve Bengaluru and wider Karnataka in Kannada, with English code-switching where it feels natural.',
-    searchIntent: 'best AI voice calling agent in Kannada',
     localUseCases: [
       'Bengaluru and Karnataka property enquiries where English-only calling loses context',
       'Support and booking calls for local customers who prefer Kannada',

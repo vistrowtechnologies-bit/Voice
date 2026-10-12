@@ -100,9 +100,9 @@ export function LanguageDetail() {
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
           <div className="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/[0.12] via-surface to-surface p-7 sm:p-8">
-            <SectionEyebrow>Search fit</SectionEyebrow>
+            <SectionEyebrow>Who it&rsquo;s for</SectionEyebrow>
             <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">
-              Built for people searching “{lang.searchIntent ?? `${lang.name} AI voice agent`}”.
+              Built for teams that take calls in {lang.name}.
             </h2>
             <p className="mt-4 leading-relaxed text-text-muted">
               This page is for teams that need a real {lang.name} voice agent on live calls — not a
