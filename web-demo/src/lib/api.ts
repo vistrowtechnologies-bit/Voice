@@ -686,3 +686,11 @@ export const LANGUAGE_NAMES: Record<string, string> = {
   'pa-IN': 'Punjabi',
   'od-IN': 'Odia',
 }
+
+/** Fired by the help chat after a confirmed copilot action, so pages showing
+ * the changed data reload it instead of going stale. */
+export const COPILOT_CHANGED_EVENT = 'vv:copilot-changed'
+export function onCopilotChange(callback: () => void): () => void {
+  window.addEventListener(COPILOT_CHANGED_EVENT, callback)
+  return () => window.removeEventListener(COPILOT_CHANGED_EVENT, callback)
+}

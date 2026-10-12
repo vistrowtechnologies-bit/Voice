@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import arthaAvatar from '../assets/artha-avatar.webp'
-import { cancelCopilotAction, confirmCopilotAction, fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
+import { cancelCopilotAction, confirmCopilotAction, COPILOT_CHANGED_EVENT, fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { HelpChatMessage, HelpFaq } from '../lib/types'
 import { ExpandGlyph, RichText, SuccessCheck, ThinkingIndicator, TypedText } from './CopilotParts'
@@ -206,6 +206,11 @@ export function HelpChatWidget() {
 
   useEffect(() => {
     if (open) window.setTimeout(() => inputRef.current?.focus(), 80)
+    // The website voice widget's launcher and toast sit in the same corner
+    // and cover the copilot's input on phones; hide it while we're open.
+    if (open) document.documentElement.dataset.copilotOpen = '1'
+    else delete document.documentElement.dataset.copilotOpen
+    return () => { delete document.documentElement.dataset.copilotOpen }
   }, [open])
 
   // Grow the input with its text, up to about four lines.
@@ -287,6 +292,7 @@ export function HelpChatWidget() {
     try {
       const result = await (decision === 'confirm' ? confirmCopilotAction(token) : cancelCopilotAction(token))
       setActions((current) => ({ ...current, [index]: { done: decision } }))
+      if (decision === 'confirm') window.dispatchEvent(new CustomEvent(COPILOT_CHANGED_EVENT))
       setMessages((current) => {
         setTypingIndex(current.length)
         return [...current, { role: 'assistant', content: result.message, suggestTicket: false, comingSoon: false }]

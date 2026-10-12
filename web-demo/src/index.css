@@ -661,6 +661,10 @@ html:not(.vv-icons-ready) .material-symbols-outlined {
 .help-avatar-thinking { animation: help-avatar-thinking 1.1s ease-in-out infinite; }
 .help-close-pop { animation: help-close-pop 220ms ease-out both; }
 
+/* The voice widget shares the bottom-right corner; it steps aside while the
+   copilot is open (HelpChatWidget sets data-copilot-open on <html>). */
+html[data-copilot-open] #vistrow-voice-widget-host { display: none !important; }
+
 /* Copilot thread: messages rise in, steps tick in one after another, the
    action card pops, a confirmed action draws its check, and a shimmer runs
    under the header while the copilot works. */

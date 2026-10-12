@@ -4,7 +4,7 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { IntegrationLogo } from '../components/IntegrationLogo'
 import { Card } from '../components/ui/Card'
-import { fetchIntegrations, fetchLeadWebhook, formatRelativeTime } from '../lib/api'
+import { fetchIntegrations, fetchLeadWebhook, formatRelativeTime, onCopilotChange } from '../lib/api'
 import type { Integration } from '../lib/types'
 import { StatusPill, integrationSummary, utcTime } from '../components/IntegrationBits'
 
@@ -26,6 +26,10 @@ export function Integrations() {
     fetchIntegrations().then((list) => setIntegrations(sortIntegrations(list))).catch(() => setIntegrations([]))
     fetchLeadWebhook().then((r) => setLeadWebhookUrl(r.url)).catch(() => setLeadWebhookUrl(null))
   }, [])
+
+  useEffect(() => onCopilotChange(() => {
+    fetchIntegrations().then((list) => setIntegrations(sortIntegrations(list))).catch(() => {})
+  }), [])
 
   const copyLeadWebhook = async () => {
     if (!leadWebhookUrl) return
