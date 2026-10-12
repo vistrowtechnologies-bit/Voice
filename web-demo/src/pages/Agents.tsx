@@ -90,32 +90,33 @@ export function Agents() {
     fetchLaunchReadiness().then(setReadiness).catch(() => setReadiness(null))
   }, [])
 
+  // ?new=1 (the sidebar's "+ New Agent" and the command menu) opens the
+  // chooser; the param is cleared at once so a remount doesn't reopen it.
+  const [chooserOpen, setChooserOpen] = useState(false)
   useEffect(() => {
     if (searchParams.get('new') === '1') {
-      // Confirmed real bug: this had no .catch at all - a rejected create
-      // (the agent-limit gate added today) was an unhandled promise
-      // rejection, and ?new=1 stayed in the URL so a remount would just
-      // retry the same failing create in a loop. Clear the param
-      // unconditionally and surface plan-limit rejections through the
-      // same upgrade modal every other gate uses (detected by the
-      // "upgrade" wording every plan-gate error message deliberately
-      // includes - see server/token_api.py's AgentLimitError handling).
-      createAgent({ name: 'New agent' })
-        .then((agent) => {
-          setSearchParams({})
-          navigate(`/dashboard/agents/${agent.id}`)
-        })
-        .catch((e: unknown) => {
-          setSearchParams({})
-          const msg = e instanceof Error ? e.message : 'Could not create agent'
-          if (msg.toLowerCase().includes('upgrade')) {
-            setUpgradeMessage(msg)
-          } else {
-            alert(msg)
-          }
-        })
+      setSearchParams({})
+      setChooserOpen(true)
     }
-  }, [searchParams, setSearchParams, navigate])
+  }, [searchParams, setSearchParams])
+
+  const startFromScratch = () => {
+    setChooserOpen(false)
+    // Plan-limit rejections go through the same upgrade modal every other
+    // gate uses (detected by the "upgrade" wording every plan-gate error
+    // message deliberately includes - see server/token_api.py's
+    // AgentLimitError handling).
+    createAgent({ name: 'New agent' })
+      .then((agent) => navigate(`/dashboard/agents/${agent.id}`))
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : 'Could not create agent'
+        if (msg.toLowerCase().includes('upgrade')) {
+          setUpgradeMessage(msg)
+        } else {
+          alert(msg)
+        }
+      })
+  }
 
   const togglePause = async (agent: AgentConfig) => {
     await updateAgent(agent.id, { status: agent.status === 'live' ? 'paused' : 'live' })
@@ -357,6 +358,14 @@ export function Agents() {
           <BrowserTestModal agent={browserTestAgent} onClose={() => setBrowserTestAgent(null)} />
         )}
 
+        {chooserOpen && (
+          <NewAgentChooser
+            onAi={() => navigate('/dashboard/agents/new')}
+            onScratch={startFromScratch}
+            onClose={() => setChooserOpen(false)}
+          />
+        )}
+
         {upgradeMessage && (
           <UpgradeRequiredModal message={upgradeMessage} onClose={() => setUpgradeMessage(null)} />
         )}
@@ -373,6 +382,63 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
         {label}
       </span>
       <span className="truncate font-semibold">{value}</span>
+    </div>
+  )
+}
+
+function NewAgentChooser({ onAi, onScratch, onClose }: { onAi: () => void; onScratch: () => void; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-agent-title"
+        className="w-full max-w-lg rounded-xl border border-border bg-surface p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 id="new-agent-title" className="text-base font-bold">Create a new agent</h3>
+            <p className="mt-0.5 text-sm text-text-muted">How would you like to start?</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="bg-transparent text-text-muted hover:text-text">
+            <Icon name="close" className="text-[20px]" />
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={onAi}
+            autoFocus
+            className="flex flex-col items-start gap-2 rounded-xl border-2 border-primary bg-primary/5 p-4 text-left transition-colors hover:bg-primary/10"
+          >
+            <span className="flex w-full items-center justify-between gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <Icon name="auto_awesome" className="text-[20px]" />
+              </span>
+              <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-bg">Recommended</span>
+            </span>
+            <span className="text-sm font-bold">Build with AI</span>
+            <span className="text-xs text-text-muted">Describe your business and we'll set it up.</span>
+          </button>
+          <button
+            type="button"
+            onClick={onScratch}
+            className="flex flex-col items-start gap-2 rounded-xl border-2 border-border bg-surface p-4 text-left transition-colors hover:border-primary"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-high text-text-muted">
+              <Icon name="edit_note" className="text-[20px]" />
+            </span>
+            <span className="text-sm font-bold">Start from scratch</span>
+            <span className="text-xs text-text-muted">Open a blank agent and fill in every setting yourself.</span>
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

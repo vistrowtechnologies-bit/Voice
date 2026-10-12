@@ -64,6 +64,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default:
 const Agents = lazy(() => import('./pages/Agents').then((m) => ({ default: m.Agents })))
 const TestingLab = lazy(() => import('./pages/TestingLab').then((m) => ({ default: m.TestingLab })))
 const AgentDetail = lazy(() => import('./pages/AgentDetail').then((m) => ({ default: m.AgentDetail })))
+const AgentBuilder = lazy(() => import('./pages/AgentBuilder').then((m) => ({ default: m.AgentBuilder })))
 const Voices = lazy(() => import('./pages/Voices').then((m) => ({ default: m.Voices })))
 const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage').then((m) => ({ default: m.KnowledgeBasePage })))
 const Inbound = lazy(() => import('./pages/Inbound').then((m) => ({ default: m.Inbound })))
@@ -195,6 +196,7 @@ function App() {
         {/* Auth-gated dashboard */}
         <Route path="/dashboard" element={guard(<Dashboard />)} />
         <Route path="/dashboard/agents" element={guard(<Agents />)} />
+        <Route path="/dashboard/agents/new" element={guard(<AgentBuilder />)} />
         <Route path="/dashboard/agents/:id" element={guard(<AgentDetail />)} />
         <Route path="/dashboard/testing" element={guard(<TestingLab />)} />
         <Route path="/dashboard/voices" element={guard(<Voices />)} />
