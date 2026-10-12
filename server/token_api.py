@@ -17,6 +17,7 @@ import urllib.request
 from pathlib import Path
 
 import admin_db
+import agent_builder
 import auth
 import call_intelligence
 import calls_db
@@ -3251,6 +3252,16 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
         return calls_db.create_agent(data, user["account_id"])
     except calls_db.AgentLimitError as e:
         raise HTTPException(status_code=400, detail=e.message) from e
+
+
+@app.post("/agents/draft")
+def draft_agent(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
+    """"Build with AI": questions or a validated draft. Never writes an agent;
+    the dashboard saves the reviewed draft through POST/PATCH /agents."""
+    try:
+        return agent_builder.draft(data, user["account_id"], user["user_id"])
+    except agent_builder.BuilderError as exc:
+        raise HTTPException(exc.status, exc.detail) from exc
 
 
 @app.patch("/agents/{agent_id}")
