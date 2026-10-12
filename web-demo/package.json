@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-icons.mjs && tsc -b && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && tsx scripts/prerender.mjs",
+    "build": "node scripts/check-icons.mjs && tsc -b && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && tsx scripts/prerender.mjs && tsx scripts/check-seo-pages.mts",
     "generate:og": "tsx scripts/generate-og-images.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "test:seo": "node scripts/test-language-seo.mjs",
+    "check:seo-pages": "tsx scripts/check-seo-pages.mts",
     "test:menu": "tsx scripts/test-command-menu.mts",
     "test:import": "tsx scripts/test-contact-import.mts",
     "test:leads": "tsx scripts/test-lead-details.mts"
