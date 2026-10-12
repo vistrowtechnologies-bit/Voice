@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { AuthContext, apiLogin, apiLogout, apiMe, apiSignup } from '../lib/auth'
+import { AuthContext, apiLogin, apiLoginMfa, apiLogout, apiMe, apiSignup } from '../lib/auth'
 import type { AuthUser } from '../lib/auth'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -42,7 +42,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const { user } = await apiLogin(email, password)
+    const { user, mfaRequired } = await apiLogin(email, password)
+    if (mfaRequired || !user) return { mfaRequired: true }
+    setUser(user)
+    return {}
+  }, [setUser])
+
+  const verifyMfa = useCallback(async (code: string) => {
+    const { user } = await apiLoginMfa(code)
     setUser(user)
   }, [setUser])
 
@@ -70,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, refresh, setUser }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyMfa, signup, logout, refresh, setUser }}>
       {children}
     </AuthContext.Provider>
   )

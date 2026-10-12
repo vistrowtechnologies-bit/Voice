@@ -24,8 +24,10 @@ _FUNCTIONS = (
     "support_session_blocks", "guard_support_session", "require_session", "current_user", "require_platform_owner",
     "_set_session_cookie", "_me_payload", "auth_me", "_iso_utc", "admin_impersonate", "admin_impersonate_exit",
     "auth_logout", "sign_out_other_sessions", "_admin_reason",
+    "_origin_allowed", "_dashboard_origins", "_support_admin_still_signed_in", "_session_mfa",
 )
-_ASSIGNS = ("_SUPPORT_BLOCKED_PATHS", "_PUBLIC_PATHS", "_PUBLIC_PREFIXES", "_DEVICE_COOKIE_NAME")
+_ASSIGNS = ("_SUPPORT_BLOCKED_PATHS", "_PUBLIC_PATHS", "_PUBLIC_PREFIXES", "_DEVICE_COOKIE_NAME",
+            "_API_KEY_BLOCKED_PATHS", "_STATIC_DASHBOARD_ORIGINS", "ADMIN_MFA_SETUP_REQUIRED", "ADMIN_MFA_SIGNIN_REQUIRED")
 
 
 def load_token_api(namespace: dict) -> dict:
@@ -98,7 +100,10 @@ class SupportSessionTests(unittest.TestCase):
         conn = calls_db._connect()
         with conn:
             conn.execute("UPDATE accounts SET is_platform_owner = 1 WHERE id = ?", (admin["account_id"],))
+            # The admin panel needs two-step login (security audit 2026-10-12).
+            conn.execute("UPDATE users SET mfa_enabled_at = '2026-10-12 00:00:00' WHERE id = ?", (admin["user_id"],))
         conn.close()
+        cls.admin_aid = admin["account_id"]
         cls.admin_uid, cls.admin_email = admin["user_id"], f"admin-{stamp}@example.com"
         cls.tenant_aid, cls.owner_uid = tenant["account_id"], tenant["user_id"]
 
@@ -129,19 +134,45 @@ class SupportSessionTests(unittest.TestCase):
             getattr(app, method)(path)(ok)
         cls.app, cls.ns = app, ns
 
-    def login(self, uid: int, aid: int) -> Client:
+    def login(self, uid: int, aid: int, mfa_at: int | None = None) -> Client:
         client = Client(self.app)
         from fastapi import Response
         response = Response()
-        self.ns["_set_session_cookie"](response, uid, aid, None, "password")
+        self.ns["_set_session_cookie"](response, uid, aid, None, "password", mfa_at=mfa_at)
         client.cookies[self.auth.COOKIE_NAME] = response.headers["set-cookie"].split(";")[0].split("=", 1)[1]
         return client
 
     def view_as(self) -> Client:
-        client = self.login(self.admin_uid, self.db.get_user_by_id(self.admin_uid)["account_id"])
+        client = self.login(self.admin_uid, self.admin_aid, mfa_at=int(time.time()))
         status, _ = client.request("POST", f"/admin/impersonate/{self.tenant_aid}")
         self.assertEqual(status, 200)
         return client
+
+    def test_admin_needs_a_session_that_passed_two_step_login(self):
+        client = self.login(self.admin_uid, self.admin_aid)
+        status, body = client.request("POST", f"/admin/impersonate/{self.tenant_aid}")
+        self.assertEqual((status, body["detail"]), (403, self.ns["ADMIN_MFA_SIGNIN_REQUIRED"]))
+
+    def test_a_teammate_in_the_owner_workspace_is_not_an_admin(self):
+        stamp = os.urandom(3).hex()
+        conn = self.db._connect()
+        with conn:
+            mate = conn.execute(
+                "INSERT INTO users (account_id, email, name, password_hash, role, email_verified_at) "
+                "VALUES (?, ?, 'Mate', 'h', 'admin', '2026-10-12') RETURNING id",
+                (self.admin_aid, f"mate-{stamp}@example.com"),
+            ).fetchone()["id"]
+        conn.close()
+        client = self.login(mate, self.admin_aid, mfa_at=int(time.time()))
+        self.assertEqual(client.request("POST", f"/admin/impersonate/{self.tenant_aid}")[0], 404)
+
+    def test_support_session_ends_when_the_admin_signs_out_everywhere(self):
+        client = self.view_as()
+        self.assertEqual(client.request("GET", "/contacts")[0], 200)
+        self.db.invalidate_other_sessions(self.admin_uid)
+        self.assertEqual(client.request("GET", "/contacts")[0], 401)
+        status, _ = client.request("POST", "/admin/impersonate/exit")
+        self.assertEqual(status, 401, "a dead support cookie can't be swapped for an admin session")
 
     def audit_rows(self, action: str) -> list[dict]:
         conn = self.db._connect()

@@ -54,7 +54,8 @@ class RouteEndpoints(unittest.TestCase):
             "calls_db": db, "voice_routing": __import__("voice_routing"),
             "os": os, "json": json, "HTTPException": self.HTTPError,
             "Body": lambda *args: None, "Depends": lambda *args: None,
-            "current_user": object(), "logger": Mock(),
+            "current_user": object(), "require_role": lambda role: object(), "logger": Mock(),
+            "_limited": lambda *args: False,
             "_orchestrator_headers": Mock(return_value={}),
             "urllib": SimpleNamespace(request=SimpleNamespace(Request=Mock(), urlopen=opening)),
         }

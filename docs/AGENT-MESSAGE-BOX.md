@@ -291,3 +291,32 @@ Branch `claude/privacy-policy-update` (from origin/main `94283ef`). Files: `web-
 Key finding: the old policy described a Google Calendar integration and `calendar.events` scope that the code does not have. The only Google scopes are sign-in (`openid email profile`) and Sheets (`drive.file`). Recording links in CRM/Sheet payloads are permanent bearer-token URLs, which the Security page had described as short-lived.
 
 Verified: web-demo build, `test:seo`, `check-blog-seo.ts` pass; prerendered /privacy contains the Limited Use text; table screenshotted locally. Not verified: sub-processor regions, `AUTH_COOKIE_SECURE` in production, anything legal. Next step: owner reviews the "Needs legal/owner confirmation" checklist in the PR; do not merge before that. Marketing copy only, no deploy beyond Vercel.
+
+### Claude — 2026-10-12 — Security audit and fixes (branch claude/security-hardening)
+
+Findings and status: `docs/SECURITY-AUDIT-2026-10-12.md`. Shipped in one batch:
+- **Three P0 cross-tenant fixes:** widget site agent, inbound route number, Zoho host / client secret.
+- **Owner-only `/admin`:** owner role only, no API keys, and two-step login required.
+- **Two-step login (`server/mfa.py`):** TOTP plus recovery codes, covering password, Google and GitHub sign-in.
+- **Other fixes:**
+  - Google/GitHub pre-registration takeover.
+  - Support cookie tied to the admin's session.
+  - Webhook SSRF.
+  - HTML escaping in emails.
+  - Role checks and rate limits.
+  - Per-email lockout.
+  - Single-use reset links.
+  - New-device sign-in email.
+  - Origin check (report-only).
+
+The agent worker's `db.py` (route lookup scoped to the number's owner) and `tools.py` (Zoho allowlist) also changed, so both LiveKit workers were redeployed.
+
+Verified:
+- 593 server tests (new `test_security_hardening.py`) and 689 agent-worker tests.
+- Local preview end to end: admin blocked without two-step login → set up (QR, recovery codes) → admin opens → sign out → password → code step (a reused code was refused, a fresh one worked).
+- The scoped route SQL was proven against Postgres.
+
+Owner action after deploy:
+- Settings → Sign-in & security → Two-step login → Turn on, or `/admin` stays locked.
+- EnableX webhook credentials are not set.
+- Set `ORIGIN_CHECK=enforce` once the logs are clean.

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
+import { TwoStepLoginCard } from '../components/TwoStepLogin'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { StorageSettings } from '../components/StorageSettings'
@@ -531,6 +532,7 @@ function SecurityTab() {
           {msg.text}
         </p>
       )}
+      <TwoStepLoginCard />
       <SettingsCard
         title={hasPassword ? 'Password' : 'Create a password'}
         subtitle={hasPassword ? 'Change the password used to sign in.' : `You currently sign in with ${user?.authProvider || 'your connected account'}. Create a password to also sign in with email.`}

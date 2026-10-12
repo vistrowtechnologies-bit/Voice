@@ -161,6 +161,7 @@ class Callback(unittest.TestCase):
               "_app_base_url": lambda r: "https://app.vistrowvoice.com",
               "_GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE": "vv_gs",
               "auth": mock.Mock(COOKIE_NAME="vv_session", read_session_token=lambda t: {"uid": 1, "aid": 5} if session else None),
+              "_live_session": lambda request: {"uid": 1, "aid": 5} if session else None,
               "plan_policy": mock.Mock(EntitlementError=type("EntitlementError", (Exception,), {}))}
         exec(function_source("auth_oauth_google_sheets_callback"), ns)
         return ns["auth_oauth_google_sheets_callback"]

@@ -697,8 +697,13 @@ def get_inbound_route(number: str) -> dict | None:
         row = conn.execute(
             "SELECT id, account_id, phone_number, agent_id, timezone, max_concurrent, "
             "start_date, end_date, window_start, window_end, active_days, status "
-            "FROM inbound_routes WHERE phone_number = ? ORDER BY id DESC LIMIT 1",
-            (key,),
+            "FROM inbound_routes WHERE phone_number = ? "
+            # Only the account that owns the number may route it (security
+            # audit 2026-10-12: a route on someone else's number could hang
+            # up their callers).
+            "AND account_id = (SELECT account_id FROM phone_numbers WHERE number = ?) "
+            "ORDER BY id DESC LIMIT 1",
+            (key, key),
         ).fetchone()
         return dict(row) if row else None
     except psycopg.Error:

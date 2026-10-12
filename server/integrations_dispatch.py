@@ -14,6 +14,9 @@ email_sender — a broken integration must never break a call.
 """
 
 import json
+import re
+
+import kb_crawl
 import logging
 import os
 import time
@@ -32,6 +35,12 @@ _ARTHALEADS_URL = "https://api.arthaleads.com/webhook/lead"
 
 
 def _post_json(url: str, payload: dict, timeout: int = 8) -> tuple[bool, str]:
+    # Tenants type these URLs: never let one reach an internal address
+    # (cloud metadata, *.railway.internal, localhost), directly or by redirect.
+    try:
+        kb_crawl._assert_public_url(url)
+    except (ValueError, RuntimeError) as e:
+        return False, str(e)
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
         url,
@@ -40,7 +49,7 @@ def _post_json(url: str, payload: dict, timeout: int = 8) -> tuple[bool, str]:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.build_opener(kb_crawl._SafeRedirectHandler).open(req, timeout=timeout) as resp:
             return (200 <= resp.status < 300), f"HTTP {resp.status}"
     except urllib.error.HTTPError as e:
         # Keep the receiver's own error text: "HTTP 500" alone told us nothing
@@ -223,6 +232,20 @@ def _body_for(key: str, config: dict, lead: dict) -> dict | None:
     return {"_url": url, **lead}
 
 
+# Zoho is regional; only its real hosts may receive the platform's client
+# secret or a tenant's tokens. A stored value comes from the OAuth callback,
+# but is checked here too so an edited config can never redirect them
+# (security audit 2026-10-12).
+_ZOHO_REGIONS = r"(com|in|eu|com\.au|jp|com\.cn|sa|ca|uk)"
+_ZOHO_ACCOUNTS_RE = re.compile(rf"^https://accounts\.zoho\.{_ZOHO_REGIONS}$")
+_ZOHO_API_RE = re.compile(rf"^https://(www\.)?zohoapis\.{_ZOHO_REGIONS}$")
+
+
+def _zoho_host(value, pattern, default: str) -> str:
+    value = (value or "").strip().rstrip("/")
+    return value if pattern.match(value) else default
+
+
 def _zoho_refresh_access_token(config: dict) -> tuple[str, dict] | None:
     """Exchanges the stored refresh_token for a fresh access_token. Returns
     (access_token, updated_config) on success, or None on failure — callers
@@ -231,7 +254,7 @@ def _zoho_refresh_access_token(config: dict) -> tuple[str, dict] | None:
     client_id = os.environ.get("ZOHO_OAUTH_CLIENT_ID")
     client_secret = os.environ.get("ZOHO_OAUTH_CLIENT_SECRET")
     refresh_token = config.get("refresh_token")
-    accounts_base = config.get("accounts_base") or "https://accounts.zoho.com"
+    accounts_base = _zoho_host(config.get("accounts_base"), _ZOHO_ACCOUNTS_RE, "https://accounts.zoho.com")
     if not client_id or not client_secret or not refresh_token:
         return None
     body = urllib.parse.urlencode(
@@ -276,7 +299,7 @@ def _zoho_lead_body(lead: dict) -> dict:
 
 def _deliver_zoho_crm(account_id: int, config: dict, lead: dict) -> tuple[bool, str]:
     access_token = config.get("access_token")
-    api_domain = (config.get("api_domain") or "https://www.zohoapis.com").rstrip("/")
+    api_domain = _zoho_host(config.get("api_domain"), _ZOHO_API_RE, "https://www.zohoapis.com")
     if not access_token or not config.get("refresh_token"):
         return False, "not configured"
 

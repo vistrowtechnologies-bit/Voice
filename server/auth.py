@@ -97,17 +97,25 @@ def make_session_token(
     session_version: int = 1,
     session_id: str | None = None,
     ttl_seconds: int = SESSION_TTL_SECONDS,
+    claims: dict | None = None,
 ) -> str:
     """`impersonator_id`, when set, marks this as a super-admin support session:
     uid/aid point at the TARGET tenant (so every tenant route works unchanged),
     while `imp` records the real platform-owner user driving it. read_session_token
-    surfaces it so /auth/me can show the support banner and gate the exit."""
+    surfaces it so /auth/me can show the support banner and gate the exit.
+
+    `claims` adds signed extras: "mfa" (when two-step login was passed), and
+    on a support session "isv"/"imfa" (the admin's own session_version and
+    mfa time), so the admin signing out everywhere also ends it."""
     now = int(time.time())
     payload = {"uid": user_id, "aid": account_id, "sv": session_version, "iat": now, "exp": now + ttl_seconds}
     if impersonator_id is not None:
         payload["imp"] = impersonator_id
     if session_id is not None:
         payload["sid"] = session_id
+    for key in ("mfa", "isv", "imfa"):
+        if claims and claims.get(key) is not None:
+            payload[key] = claims[key]
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
     sig = _b64(hmac.new(_secret(), body.encode(), hashlib.sha256).digest())
     return f"{body}.{sig}"
@@ -136,6 +144,9 @@ def read_session_token(token: str | None) -> dict | None:
         "sid": payload.get("sid"),
         "iat": payload.get("iat"),
         "exp": payload.get("exp"),
+        "mfa": payload.get("mfa"),
+        "isv": payload.get("isv"),
+        "imfa": payload.get("imfa"),
     }
 
 
