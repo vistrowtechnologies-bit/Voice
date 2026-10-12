@@ -76,7 +76,7 @@ interface Tab {
 
 function VoicesSkeleton() {
   return (
-    <div className="grid animate-pulse gap-5 lg:grid-cols-[minmax(0,1fr)_380px]" aria-hidden="true">
+    <div className="grid animate-pulse gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_460px]" aria-hidden="true">
       <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
         <div className="h-10 rounded-xl bg-surface-high" />
         <div className="h-8 w-2/3 rounded-lg bg-surface-high" />
@@ -481,7 +481,7 @@ export function Voices() {
         </div>
       </PageHeader>
 
-      <div className="flex w-full max-w-6xl flex-col gap-4 p-4 sm:p-6">
+      <div className="flex w-full flex-col gap-4 p-4 sm:p-6">
         {!data ? (
           <VoicesSkeleton />
         ) : (
@@ -510,7 +510,7 @@ export function Voices() {
               <div className="rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">{error}</div>
             )}
 
-            <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
               <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
                 <div className="flex flex-col gap-3 border-b border-border p-4">
                   <label className="flex items-center gap-2 rounded-xl border border-border bg-surface-high/40 px-3 py-2 focus-within:border-primary">
