@@ -162,6 +162,19 @@ Not verified / assumptions: nothing opened in a browser (backend not ready). Eve
 
 Next: merge with the backend branch, then preview `/admin`, `/admin/health`, `/admin/calls?outcome=failed&hours=1`, an account's View-as + exit, and trunk-sync confirm at desktop and 375 px.
 
+### Claude — 2026-10-12 — SEO P1
+
+Branch `claude/seo-p1` (worktree `.claude/worktrees/agent-a3c2e7cfa56c67944`, based on origin/main `9ff7f62`; not pushed, no PR). Commits `31d5173` (/ai-ivr), `46815a7` (/vs-ivr), `a0949ab` (Kannada/Telugu/Hindi), plus this note. Follows `docs/SEO-AUDIT-AND-IMPLEMENTATION-PLAN.md` P1.
+
+Files: new `web-demo/src/pages/marketing/AiIvr.tsx`; `src/App.tsx` (route `/ai-ivr` before the `/:slug` catch-all), `src/lib/seoPages.ts` (new `/ai-ivr` entry, kind product + optional `serviceType`; reuses the `vs-ivr` OG image; new `/vs-ivr`, Hindi, Kannada, Telugu titles/descriptions), `src/components/SeoRelatedLinks.tsx`, `src/lib/marketingContent.ts` (nav + footer "AI IVR"; `sampleExchange`/`codeMixing`/`regionalCalls` for hi/kn/te; `INDIAN_LANGUAGE_VOICES`), `src/pages/marketing/CompareIvr.tsx`, `LanguageDetail.tsx` (reads titles from the registry; new sections render only when the fields exist), `ProductOverview.tsx` (AI IVR card), `scripts/test-language-seo.mjs` (new titles + section phrases).
+
+Verified: `npm run build` passes (icons, tsc, vite, prerender, check-seo-pages: 113 indexable routes, unique titles/descriptions, one H1, canonical, inbound links); `npm run test:seo` passes; `check-blog-seo.ts` passes. Prerendered `/ai-ivr`, `/vs-ivr`, `/product`, `/languages/{kannada,telugu,hindi}` inspected: titles/descriptions/canonical correct, single H1, JSON-LD parses (`/ai-ivr`: BreadcrumbList + Service + FAQPage with visible FAQ), sitemap includes `/ai-ivr`. Marathi/Odia main content unchanged (diff shows only the new footer/nav link and React ids). Main-content words: /vs-ivr 521→1224, kannada 529→840, telugu 519→831, hindi 543→879, /ai-ivr 1391.
+
+Not verified / left out: not opened in a browser (the Browser preview reads the main checkout's launch.json, which this task must not touch) — eyeball `/ai-ivr`, `/vs-ivr` and the three language pages at desktop and 375 px before or after deploy. Chirp 3 HD voice names left off the language pages because Google billing for Chirp 3 was blocked on 2026-09-14 and I could not confirm it is back; only the Sarvam Standard voices are named. Language samples were written by Claude (labelled as samples); a native speaker should read the Kannada and Telugu lines. "Keep your number" wording follows the pricing page ("compatible provider once we confirm the connection setup"), not an unconditional promise. `graphify update .` not run (no graph in this worktree; run it in the main folder after merge). No `[CLAIM]`/`[DONE]` posted to issue #2 (task said no push/PR; mirror this note there when the branch is pushed).
+
+Owner actions after deploy: Search Console (`vistrowai@gmail.com`, property `https://www.vistrowvoice.com/`) → URL Inspection → Request indexing for `/ai-ivr`, `/vs-ivr`, `/languages/kannada`, `/languages/telugu`, `/languages/hindi`; re-submit `/sitemap.xml`.
+
+Next step: review, push branch, open PR, merge (Vercel deploys the marketing site; no server or LiveKit deploy needed), then the indexing requests above. Re-check these queries in Search Console after 2–4 weeks.
 ### Claude — 2026-10-12 — copilot phase 2
 
 Branch `claude/copilot-phase2` (worktree, based on main `013fabc`; not pushed, no PR). Confirmed write actions for the dashboard copilot per `docs/COPILOT-ACTIONS-PLAN-2026-10-10.md` (Phase 2 decisions of 2026-10-12).

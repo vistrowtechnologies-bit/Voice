@@ -9,6 +9,7 @@ import { pathBucket, hostBucket, BUCKET_HOST } from '../lib/hostBuckets'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import vistrowMark from '../assets/vistrow-mark.png'
 import { Tooltip } from './ui/Tooltip'
+import { SeoRelatedLinks } from './SeoRelatedLinks'
 
 // The official logo mark - used everywhere the brand appears (marketing
 // site, dashboard, auth pages) for one consistent visual identity.
@@ -402,6 +403,7 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-bg text-text">
       <Header />
       <main>{children}</main>
+      <SeoRelatedLinks />
       <Footer />
     </div>
   )

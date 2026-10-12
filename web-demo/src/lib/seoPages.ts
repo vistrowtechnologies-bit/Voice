@@ -31,6 +31,8 @@ export interface SeoPage {
   /** Human-readable label used in breadcrumb structured data. */
   label: string
   noindex?: boolean
+  /** Service schema type, when the default `AI voice <label>` reads wrong. */
+  serviceType?: string
 }
 
 export interface OgCardSpec {
@@ -81,19 +83,19 @@ const LANGUAGE_PAGES = [
 
 const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { title: string; description: string }>> = {
   hindi: {
-    title: 'Hindi AI Voice Calling Agent for Phone & Web | Vistrow Voice',
+    title: 'Hindi AI Voice Calling Agent with Hinglish | Vistrow Voice',
     description:
-      'Build a Hindi and Hinglish AI voice calling agent for inbound calls, outbound campaigns, website conversations, lead qualification, and appointment booking.',
+      'Hindi and Hinglish AI voice calling agent for inbound calls, payment reminders and website voice calls. Qualifies leads, books visits, logs every call.',
   },
   kannada: {
-    title: 'Kannada AI Voice Calling Agent for Customer Calls | Vistrow Voice',
+    title: 'Kannada AI Voice Calling Agent for Karnataka | Vistrow Voice',
     description:
-      'Use a Kannada AI voice calling agent for Bengaluru and Karnataka customer calls, with Kannada-English code-switching, lead qualification, transcripts, and CRM-ready records.',
+      'Kannada AI voice calling agent for Bengaluru and Karnataka businesses. Follows Kannada-English switching, qualifies leads, books visits, records calls.',
   },
   telugu: {
-    title: 'Telugu AI Voice Agent for Phone & Website Calls | Vistrow Voice',
+    title: 'Telugu AI Voice Calling Agent for Phone & Web | Vistrow Voice',
     description:
-      'Handle Telugu customer calls across phone and website conversations. Artha qualifies leads, answers approved questions, books next steps, and records every call.',
+      'Telugu AI voice calling agent for Hyderabad, Andhra Pradesh and Telangana. Answers phone and website calls, books appointments and logs every call.',
   },
   marathi: {
     title: 'Marathi AI Voice Calling Agent for Maharashtra | Vistrow Voice',
@@ -268,14 +270,26 @@ export const SEO_PAGES: SeoPage[] = [
     'collection',
     'Integrations',
   ),
+  {
+    ...page(
+      '/ai-ivr',
+      'AI IVR for India: Replace Press-1 Menus | Vistrow Voice',
+      'An AI-based IVR: callers say what they need in Hindi, English or 9 other Indian languages and get an answer, a booking or a transfer. Keep your number.',
+      'vs-ivr',
+      'A press-1 phone menu replaced by a conversational Vistrow Voice AI IVR',
+      'product',
+      'AI IVR',
+    ),
+    serviceType: 'AI IVR (conversational IVR replacement)',
+  },
   page(
     '/vs-ivr',
-    'AI Voice Agent vs IVR: Full Comparison | Vistrow Voice',
-    'Compare AI voice agents with traditional IVR phone menus across caller experience, language support, availability, records, handoff, and scale.',
+    'AI Voice Agent vs Traditional IVR vs Chatbot | Vistrow Voice',
+    'IVR, IVA, AI voice agent, chatbot or receptionist? Plain definitions, a side-by-side table, which fits when, and how to replace a menu IVR step by step.',
     'vs-ivr',
     'Traditional IVR keypad compared with a conversational Vistrow Voice AI orb',
     'page',
-    'AI Voice vs IVR',
+    'AI Voice Agent vs IVR',
   ),
   ...COMPARE_VENDORS.map((vendor) =>
     page(
@@ -533,7 +547,7 @@ export function baseStructuredData(entry: SeoPage): object[] {
       url: pageUrl,
       provider: { '@id': `${SEO_ORIGIN}/#organization` },
       areaServed: 'Worldwide',
-      serviceType: entry.kind === 'solution' ? `${entry.label} AI voice agent` : `AI voice ${entry.label}`,
+      serviceType: entry.serviceType ?? (entry.kind === 'solution' ? `${entry.label} AI voice agent` : `AI voice ${entry.label}`),
     })
   } else if (entry.kind === 'collection') {
     schemas.push({
