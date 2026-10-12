@@ -189,3 +189,15 @@ Verified: server suite 515 passed (+136 subtests) against local `vv_inttest`, in
 Not verified / assumptions: nothing opened in a browser and no real LLM call made, so prompt quality is unmeasured. Every real Premium voice is currently hidden or owner-only preview, so tenants only get Standard/Lite voices from the builder (tests use a stand-in Premium entry). No agent-count pre-check before drafting (entitlements do not expose the limit); the limit shows at Create via the upgrade modal. The "+ Add field" button in the reused post-call editor still gets the global purple gradient (pre-existing on the agent page). `graphify update .` not run (no graph in the worktree).
 
 Next: owner preview at desktop and 375 px with real `OPENAI_API_KEY`/`GEMINI_API_KEY`; try the five example chips and judge the prompts; then push, PR, merge (Railway server deploy only; no LiveKit deploy needed).
+
+### Claude — 2026-10-12 — Build with AI: review, Sarvam provider, PR #35
+
+PR https://github.com/vistrowtechnologies-bit/Voice/pull/35 (branch `claude/agent-ai-builder`). Added commit `ffaca14`: the builder now tries Sarvam `sarvam-105b-conversations` first, then OpenAI, then Gemini (`AGENT_BUILDER_PROVIDER=sarvam|openai|gemini` forces one), and fenced JSON is stripped. Why: on 2026-10-12 the production and staging server keys returned OpenAI 429 `credit_balance_exhausted` and Gemini 402 `RESOURCE_EXHAUSTED` (prepaid credits depleted), so every draft returned the 503.
+
+Verified:
+- Real Sarvam call from the staging container with the builder prompt: questions in 1.2 s, full draft in 2.5 s, valid shape.
+- Local preview (simulated model) end to end: chooser → description → 3 questions → review (all 5 sections) → Create → `/dashboard/agents/9?drafted=1` banner. The DB row has every drafted field (voice, language, tone, tools, max duration, post-call fields, Devanagari welcome).
+- Checked at 375 px.
+- 20 builder tests; full suite 515 passed.
+
+Open, for the owner: Gemini prepaid credit is depleted on the server key. Production calls in the last 48 h were all Sarvam (12, 0 failed); not checked whether the LiveKit workers' Google key is the same project, so Gemini Live/TTS agents may fail until it is topped up.
