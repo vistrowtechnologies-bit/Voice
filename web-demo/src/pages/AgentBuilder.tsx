@@ -75,7 +75,7 @@ export function AgentBuilder() {
   const [answers, setAnswers] = useState<Record<string, string> | null>(null)
   const [draft, setDraft] = useState<AgentDraft | null>(null)
   const [busy, setBusy] = useState<null | 'draft' | 'create' | AgentDraftSection>(null)
-  const [created, setCreated] = useState(false)
+  const [createdId, setCreatedId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null)
   const [myVoices, setMyVoices] = useState<VoiceEntry[]>([])
@@ -133,9 +133,7 @@ export function AgentBuilder() {
     try {
       agentId = (await createAgent(draft)).id
       await updateAgent(agentId, draft)
-      setCreated(true)
-      const id = agentId
-      window.setTimeout(() => navigate(`/dashboard/agents/${id}?drafted=1`), 1100)
+      setCreatedId(agentId)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not create the agent. Please try again.'
       if (msg.toLowerCase().includes('upgrade') && agentId === null) setUpgradeMessage(msg)
@@ -148,7 +146,7 @@ export function AgentBuilder() {
   const set = <K extends keyof AgentDraft>(key: K, value: AgentDraft[K]) =>
     setDraft((d) => (d ? { ...d, [key]: value } : d))
 
-  const stepIndex = created ? 3 : step === 'describe' ? 0 : step === 'questions' ? 1 : 2
+  const stepIndex = createdId !== null ? 3 : step === 'describe' ? 0 : step === 'questions' ? 1 : 2
   const canDraft = description.trim().length >= 10
 
   return (
@@ -430,7 +428,13 @@ export function AgentBuilder() {
           </p>
         )}
       </section>
-      {created && draft && <CreatedOverlay name={draft.name} />}
+      {createdId !== null && draft && (
+        <CreatedOverlay
+          draft={draft}
+          voiceName={myVoices.find((v) => v.value === draft.voice)?.name ?? voiceLabel(draft.voice)}
+          onOpen={(test) => navigate(`/dashboard/agents/${createdId}?drafted=1${test ? '&test=1' : ''}`)}
+        />
+      )}
       {upgradeMessage && <UpgradeRequiredModal message={upgradeMessage} onClose={() => setUpgradeMessage(null)} />}
     </DashboardLayout>
   )
@@ -684,16 +688,112 @@ function PromptSections({ value, onChange }: { value: string; onChange: (v: stri
   )
 }
 
-/** A short "it's ready" moment before the agent page opens. */
-function CreatedOverlay({ name }: { name: string }) {
+const OPEN_AFTER_MS = 4500
+// Confetti burst: angle (deg), distance (px), colour, delay (ms).
+const CONFETTI = Array.from({ length: 14 }, (_, i) => ({
+  angle: (360 / 14) * i + (i % 2 ? 9 : -6),
+  distance: 70 + (i % 3) * 22,
+  color: ['var(--color-primary)', 'var(--color-cyan)', 'var(--color-success)', '#f59e0b'][i % 4],
+  delay: (i % 4) * 40,
+}))
+
+/** "Meet <agent>": the agent sends out voice ripples while confetti bursts,
+ * its greeting shows in a speech bubble, and the agent opens on its own
+ * after a short countdown (or straight away from either button). A bottom
+ * sheet on phones, a card on larger screens. */
+function CreatedOverlay({ draft, voiceName, onOpen }: { draft: AgentDraft; voiceName: string; onOpen: (test: boolean) => void }) {
+  const opened = useRef(false)
+  const open = (test: boolean) => {
+    if (opened.current) return
+    opened.current = true
+    onOpen(test)
+  }
+  const openRef = useRef(open)
+  openRef.current = open
+  useEffect(() => {
+    const timer = window.setTimeout(() => openRef.current(false), OPEN_AFTER_MS)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') openRef.current(false) }
+    window.addEventListener('keydown', onKey)
+    // The voice widget sits above everything; it steps aside for this moment.
+    document.documentElement.dataset.focusMoment = '1'
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('keydown', onKey)
+      delete document.documentElement.dataset.focusMoment
+    }
+  }, [])
+  const language = LANGUAGES.find(([code]) => code === draft.language)?.[1] ?? draft.language
+  const greeting = (draft.welcomeMessage || draft.welcomeMessageOutbound).trim()
+  const initials = draft.name.replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || 'AI'
   return (
-    <div role="status" aria-live="polite" className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4 backdrop-blur-sm">
-      <div className="help-card-pop flex flex-col items-center gap-3 rounded-2xl border border-primary/25 bg-surface px-10 py-8 text-center shadow-2xl shadow-primary/20">
-        <span className="scale-[2.2] py-3">
-          <SuccessCheck />
-        </span>
-        <p className="text-lg font-bold">{name || 'Your agent'} is ready</p>
-        <p className="text-sm text-text-muted">Opening it so you can run a test call…</p>
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-bg/75 backdrop-blur-md sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="agent-ready-title">
+      <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 h-[28rem] w-[28rem] max-w-full -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/25 blur-3xl" />
+      <div className="vv-sheet-in relative w-full overflow-hidden rounded-t-3xl border border-primary/25 bg-surface shadow-2xl shadow-primary/25 sm:max-w-md sm:rounded-3xl">
+        <div aria-hidden="true" className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-border sm:hidden" />
+        <div className="relative flex h-44 items-center justify-center overflow-hidden bg-gradient-to-br from-primary/15 via-surface to-cyan/10">
+          {CONFETTI.map((c, i) => (
+            <span
+              key={i}
+              aria-hidden="true"
+              className="vv-confetti absolute left-1/2 top-1/2 h-2 w-1.5 rounded-sm"
+              style={{
+                background: c.color,
+                animationDelay: `${260 + c.delay}ms`,
+                ['--vv-x' as string]: `${Math.cos((c.angle * Math.PI) / 180) * c.distance}px`,
+                ['--vv-y' as string]: `${Math.sin((c.angle * Math.PI) / 180) * c.distance}px`,
+                ['--vv-r' as string]: `${c.angle * 2}deg`,
+              }}
+            />
+          ))}
+          <span aria-hidden="true" className="vv-ring absolute h-20 w-20 rounded-3xl border-2 border-primary/50" />
+          <span aria-hidden="true" className="vv-ring absolute h-20 w-20 rounded-3xl border-2 border-primary/40" style={{ animationDelay: '1100ms' }} />
+          <span className="vv-pop relative flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-primary to-primary-dark text-2xl font-extrabold text-white shadow-xl shadow-primary/40">
+            {initials}
+            <span className="absolute -bottom-1.5 -right-1.5 rounded-full border-4 border-surface bg-surface">
+              <SuccessCheck />
+            </span>
+          </span>
+        </div>
+        <div className="flex flex-col gap-4 px-5 pb-5 pt-1 sm:px-7 sm:pb-7">
+          <div className="flex flex-col items-center gap-1 text-center">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Agent created</span>
+            <h2 id="agent-ready-title" className="text-xl font-bold tracking-tight sm:text-2xl">Meet {draft.name || 'your agent'}</h2>
+            <p className="text-xs text-text-muted">{[draft.businessName, voiceName, language].filter(Boolean).join(' · ')}</p>
+          </div>
+          {greeting && (
+            <div className="vv-bubble-in relative rounded-2xl rounded-tl-md bg-primary/10 px-4 py-3">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">
+                <span className="flex h-3 items-end gap-[2px]" aria-hidden="true">
+                  {[0, 1, 2, 3].map((b) => (
+                    <span key={b} className="vv-eq w-[3px] rounded-full bg-primary" style={{ animationDelay: `${b * 120}ms` }} />
+                  ))}
+                </span>
+                Greets every caller with
+              </div>
+              <p className="line-clamp-3 text-sm leading-relaxed">“{greeting}”</p>
+            </div>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button type="button" autoFocus onClick={() => open(true)} className={`${primaryBtn} flex-1`}>
+              <Icon name="mic" className="text-[18px]" />
+              Run a test call
+            </button>
+            <button
+              type="button"
+              onClick={() => open(false)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-bold text-text transition hover:border-primary"
+            >
+              Open agent
+              <Icon name="arrow_forward" className="text-[16px]" />
+            </button>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="h-1 overflow-hidden rounded-full bg-surface-high" aria-hidden="true">
+              <div className="vv-countdown h-full rounded-full bg-gradient-to-r from-primary to-cyan" style={{ animationDuration: `${OPEN_AFTER_MS}ms` }} />
+            </div>
+            <p className="text-center text-[11px] text-text-muted">Opening your agent…</p>
+          </div>
+        </div>
       </div>
     </div>
   )

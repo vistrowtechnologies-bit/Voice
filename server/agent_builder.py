@@ -243,7 +243,7 @@ Return ONLY a JSON object, no prose.
 
 A draft has exactly these keys:
 - "name": short agent name, max 40 chars (e.g. "Riya · Site visits").
-- "businessName": the business name.
+- "businessName": the business name exactly as the customer gave it, or "" if they did not give one. Never invent a placeholder such as "Unnamed developer".
 - "description": one line, max 120 chars, what the agent does.
 - "model": "{default_model}" unless the customer explicitly asks for another; the only other allowed value is "gpt-4.1-mini".
 - "language": the main language code, one of: {languages}.
@@ -267,7 +267,7 @@ systemPrompt rules:
 - Keep it under 6000 characters.
 """
 
-_MODE_FIRST = """If the description leaves out something that changes the setup a lot — whether the agent takes inbound calls, makes outbound calls, or both; whether it books appointments or callbacks; which details it must collect — return {"questions": [...]} with 1 to 3 short questions, each {"id": "snake_case_id", "question": "...", "options": ["2 to 4 short one-tap answers"]}. Do not ask about anything already stated.
+_MODE_FIRST = """If the description leaves out something that changes the setup a lot — whether the agent takes inbound calls, makes outbound calls, or both; whether it books appointments or callbacks; which details it must collect — return {"questions": [...]} with 1 to 3 short questions, each {"id": "snake_case_id", "question": "...", "options": ["2 to 4 short one-tap answers"]}. Do not ask about anything already stated. Never ask for the business name, phone numbers, addresses, websites or other contact details: the customer fills those in themselves.
 Otherwise return {"draft": {...}}."""
 
 _MODE_DRAFT = """Return {"draft": {...}}. Do not ask questions; use sensible defaults for anything not stated."""
