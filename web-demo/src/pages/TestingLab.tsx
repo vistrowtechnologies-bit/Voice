@@ -288,7 +288,7 @@ export function TestingLab() {
               {BUILTIN_SCENARIOS.map((scenario) => {
                 const isSelected = selected.source === 'builtin' && selected.key === scenario.key
                 return (
-                  <button key={scenario.key} onClick={() => setSelected({ source: 'builtin', ...scenario })} className={`rounded-xl border p-3 text-left transition-colors ${isSelected ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50 hover:bg-surface-high'}`}>
+                  <button key={scenario.key} onClick={() => setSelected({ source: 'builtin', ...scenario })} className={`rounded-xl border p-3 text-left transition-colors ${isSelected ? 'border-primary bg-primary/10' : 'border-border bg-transparent hover:border-primary/50 hover:bg-surface-high'}`}>
                     <span className="flex items-center gap-2 text-sm font-semibold"><Icon name={scenario.icon} className="text-[18px] text-primary" />{scenario.name}</span>
                     <span className="mt-1 block text-[10px] font-bold uppercase tracking-widest text-text-muted">{scenario.category}</span>
                   </button>

@@ -837,7 +837,7 @@ function PageRoutes({
                     type="button"
                     onClick={() => setNewAvatar('')}
                     className={`rounded-lg border px-2 py-1.5 text-[11px] font-semibold ${
-                      newAvatar === '' ? 'border-primary text-primary' : 'border-border text-text-muted hover:text-text'
+                      newAvatar === '' ? 'border-primary text-primary' : 'border-border bg-transparent text-text-muted hover:text-text'
                     }`}
                   >
                     Site default

@@ -271,7 +271,7 @@ export function Dashboard() {
                     <Link
                       key={check.key}
                       to={check.to}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${check.complete ? 'border-success/30 bg-success/5 text-text-muted' : 'border-border hover:border-primary'}`}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${check.complete ? 'border-success/30 bg-success/5 text-text-muted' : 'border-border bg-transparent hover:border-primary'}`}
                     >
                       <Icon name={check.complete ? 'check_circle' : 'radio_button_unchecked'} className={`text-[18px] ${check.complete ? 'text-success' : 'text-primary'}`} />
                       <span className={check.complete ? 'line-through' : ''}>{check.label}</span>

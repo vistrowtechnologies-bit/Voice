@@ -361,3 +361,27 @@ Branch `claude/batch-2026-10-12b` (merges claude/security-hardening-2, claude/ad
 - **Build with AI:** prompt no longer presents Vistrow Voice as the customer's business, names the agent, requires a field per requested detail plus an outcome field, and drops direction questions the description already answers. Re-run on all 5 examples: clean.
 
 Verified on the batch: 617 server tests, 693 agent tests, tsc + build. Spend on Gemini tests today ≈ ₹30 of the ₹50 cap.
+
+### Claude — 2026-10-12 — toggle chips no longer read inverted
+
+Branch `claude/toggle-chip-gradient-leak` (PR, not merged). Owner saw Inbound "Active days" chips inverted: unselected days were solid purple, so with Mon–Sat on only Sun looked "on".
+
+Cause (verified): the `index.css` rule that paints `button`/`a` with `border-border`/`border-cyan` and no `bg-*` class in the brand gradient also matched the unselected branch of toggle chips. The selected branch has a `bg-*` class, so it escaped the rule and looked plainer than the unselected one.
+
+Fix (className only, same approach as efae355c "+ Add field"): `bg-transparent` on the unselected/static classes in Inbound (day chips; selected now `border-primary bg-primary/10 text-primary`, same as Outbound's day chips), Outbound (day chips), Support (rating), TestingLab (scenario cards), WebsiteWidget ("Site default" avatar), Dashboard (incomplete readiness checks), KnowledgeBasePage (catalog header when open). `index.css` unchanged.
+
+Verified: `npm run build` (tsc + vite + prerender + SEO audit) passes. Local dev server with a mock API: Inbound chips with Mon–Sat on show six purple-tinted chips and a plain Sun, in light and dark theme; computed styles confirm no gradient on unselected. For the other six pages, real-stylesheet computed-style test of each exact class string: new = plain, old = gradient. Not verified: visually on those six pages (needed data/wizard steps), or on production.
+
+Next: owner reviews/merges the PR; web-only (Vercel), no worker deploy.
+
+### Claude — 2026-10-12 — WordPress plugin: admin notices no longer land inside the header
+
+Branch `claude/wp-plugin-notices` (PR, not merged). On shaporjipallonji.com the plugin settings page showed four other plugins' notices (FluentSMTP, Essential Addons, Backuply ×2) inside the purple header, between the title and tagline, with washed-out text.
+
+Cause (verified live in the owner's Chrome, WP 7.1.3): core `wp-admin/js/common.js` moves every `div.notice/.updated/.error` after `.wp-header-end`, or, if the page has none, after the first `.wrap h1`. Our h1 is inside `.vvw-header`, and `.vvw-header p` gave the notices' text the pale header colour.
+
+Fix: `<hr class="wp-header-end">` right after the header; plugin 1.7.1; `server/static/vistrow-voice-widget.zip` rebuilt (the old zip matched main's PHP exactly before rebuilding).
+
+Verified: on the live page, adding the marker and re-running core's own relocation line put all four notices below the header with dark text and the header back to one row (DOM-only simulation, nothing installed on the site). Not verified: the new zip installed on a real site; no PHP linter on this machine (change is HTML only).
+
+Next: merge (needs a Railway deploy to serve the new zip), then the site owner uploads/updates the plugin in WP Admin → Plugins.

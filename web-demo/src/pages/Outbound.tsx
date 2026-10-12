@@ -862,7 +862,7 @@ export function Outbound() {
                             })
                           }
                           className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                            on ? 'border-primary bg-primary/10 text-primary' : 'border-border text-text-muted hover:border-primary'
+                            on ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-transparent text-text-muted hover:border-primary'
                           }`}
                         >
                           {day}
