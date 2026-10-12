@@ -421,3 +421,14 @@ Not verified: real Google/Sarvam preview audio on production. `server/calls_db.p
 ### Claude — 2026-10-12 — Voices page uses full width
 
 Owner noticed empty space on the right of the new Voices page. Removed its `max-w-6xl` cap, which no other dashboard page has. The spotlight column is now 380 / 420 / 460 px at lg / xl / 2xl. Verified at 2000 px in the local app: content ends at the normal 24 px page padding, and `npm run build` passes. Also seen: production now serves #59 and #60 (the owner's screenshot shows the new page live), so the earlier Vercel rate limit has cleared.
+
+### Claude — 2026-10-12 — combo tests and new pricing (PR #62, not merged)
+
+Real test calls on the production phone worker (synthetic Hindi caller, account 2, temp agents deleted). Worker-measured turn / LLM first token / TTS first audio:
+- Sarvam 105B + Chirp 3: 737–779 ms / 200–206 ms / 169–204 ms.
+- Sarvam 105B + pooja: 674–706 ms / 139–218 ms / 186–193 ms.
+- gpt-4.1-nano + Chirp 3: 1,634–2,326 ms / 914–1,804 ms (one reply started with a stray "अकेले आप कह रहे हैं").
+- gpt-4.1-mini + Chirp 3: 1,651–1,756 ms / 988–1,159 ms (one reply said "अपराह्न दस बजे", i.e. 10 pm).
+- gemini-2.5-flash: no reply. The Gemini API project is at its monthly spend cap (429 RESOURCE_EXHAUSTED, verified from the production server). Gemini Live agents 4 and 26 (Vistrow's own) cannot answer until the cap is raised; no customer agent uses Gemini.
+
+PR #62 makes Sarvam STT + Sarvam 105B + Chirp 3 HD the default for new tenants, prices 1 credit = 1 default minute (Sarvam 1x, Gemini Live 3.1 6x, 2.5 2x) and sets Growth 750 / Scale 1,750 credits at unchanged prices. Waiting for the owner to confirm prices before merging.

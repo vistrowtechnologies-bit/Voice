@@ -284,7 +284,7 @@ _BASE_TIERS = {"lite", "standard"}
 # (console.cloud.google.com/billing) and it is confirmed reachable again -
 # see test_tenant_defaults.py, which pins this and the other three places
 # that must agree with it.
-DEFAULT_ACCOUNT_VOICES = ["pooja", "shubh", "priya", "google:chirp3:Aoede"]
+DEFAULT_ACCOUNT_VOICES = ["google:chirp3:Achernar", "google:chirp3:Aoede", "pooja", "shubh", "priya"]
 
 # Fixed audition script, per language. Because it's fixed, each voice is
 # synthesized at most once per language ever (then cached in Postgres) — see

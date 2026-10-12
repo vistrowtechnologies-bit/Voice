@@ -8,6 +8,7 @@ _spec.loader.exec_module(_policy)
 PLANS = _policy.PLANS
 FEATURE_MIN_PLAN = _policy.FEATURE_MIN_PLAN
 TOPUP_PACKS = _policy.TOPUP_PACKS
+COST_PER_DEFAULT_MINUTE_INR = _policy.COST_PER_DEFAULT_MINUTE_INR
 TOPUP_MIN_CREDITS = _policy.TOPUP_MIN_CREDITS
 TOPUP_MAX_CREDITS = _policy.TOPUP_MAX_CREDITS
 EntitlementError = _policy.EntitlementError

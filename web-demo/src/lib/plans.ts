@@ -63,8 +63,8 @@ export const PLANS: Plan[] = [
     price: '₹2,999',
     description: 'For trying voice AI on one real use case before you scale it up.',
     priceInr: 2999,
-    creditsNum: 300,
-    credits: '300 credits/mo',
+    creditsNum: 350,
+    credits: '350 credits/mo',
     tag: null,
     features: [
       '1 AI agent',
@@ -89,8 +89,8 @@ export const PLANS: Plan[] = [
     price: '₹5,999',
     description: 'For teams automating inbound and outbound campaigns.',
     priceInr: 5999,
-    creditsNum: 1000,
-    credits: '1,000 credits/mo',
+    creditsNum: 850,
+    credits: '850 credits/mo',
     tag: 'Recommended',
     features: [
       '5 AI agents',
@@ -118,8 +118,8 @@ export const PLANS: Plan[] = [
     price: '₹12,999',
     description: 'Full API access and integrations, built for production volume.',
     priceInr: 12999,
-    creditsNum: 2500,
-    credits: '2,500 credits/mo',
+    creditsNum: 2000,
+    credits: '2,000 credits/mo',
     tag: 'Most Popular',
     features: [
       '20 AI agents',

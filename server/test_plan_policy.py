@@ -262,3 +262,12 @@ class EntitlementsStorageTests(unittest.TestCase):
     def test_unreadable_usage_is_reported_as_unknown(self):
         result, _ = self._entitlements("growth", 0, None)
         self.assertEqual(result["storage"], {"usedBytes": None, "limitBytes": 25 * self.GB})
+
+
+class PlansKeepTheirMargin(unittest.TestCase):
+    def test_every_plan_earns_at_least_twice_the_default_minute_cost(self):
+        # A credit is one minute of the default stack; prices exclude GST.
+        for key, plan in plan_policy.PLANS.items():
+            per_minute = plan["price_inr"] / plan["credits"]
+            self.assertGreaterEqual(per_minute, 2 * plan_policy.COST_PER_DEFAULT_MINUTE_INR, key)
+
