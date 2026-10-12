@@ -301,8 +301,8 @@ export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: s
   { value: 'gpt-5-nano', label: 'Vistrow Nano Lab', tag: 'Experimental · lowest OpenAI cost; measure quality before rollout' },
   // Re-listed at the platform owner's request for a controlled retest. Keep
   // this owner-only: prior calls showed slower audio and turn-handling errors.
-  { value: 'gemini-live', label: 'Gemini Live 2.5 · realtime', tag: 'Owner-only retest · earlier calls had slower audio and turn errors' },
-  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Gemini Live 3.1 · realtime', tag: 'Speech-to-speech test · newer, preview' },
+  { value: 'gemini-live', label: 'Gemini Live 2.5 · realtime', tag: 'Owner-only · replies in about 2-3 s · about a third of the cost of 3.1' },
+  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Gemini Live 3.1 · realtime', tag: 'Owner-only · fastest speech-to-speech (about 1-2 s) · recommended for Gemini voice' },
 ]
 
 /** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */

@@ -15,7 +15,7 @@ import sys
 import unittest
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("LIVEKIT_URL", "ws://x")
@@ -170,9 +170,12 @@ class RealtimeGreetingLifecycle(unittest.IsolatedAsyncioTestCase):
             _reply_language="hi-IN", _warm_llm_prompt_cache=Mock(),
             _await_own_audio_track=AsyncMock(), _direction="inbound",
             _HELD_OPENING_HARD_CAP_S=8.0,
+            _realtime_model_name=main.realtime_config.MODEL_31,
         )
         agent._speak_realtime_greeting = lambda *a, **k: main.RealEstateAgent._speak_realtime_greeting(
             agent, *a, **k)
+        agent._realtime_wants_tts_greeting = lambda: main.RealEstateAgent._realtime_wants_tts_greeting(agent)
+        agent._say_opener_with_tts = lambda *a, **k: main.RealEstateAgent._say_opener_with_tts(agent, *a, **k)
         agent._release_held_opening_if_unheard = lambda: main.RealEstateAgent._release_held_opening_if_unheard(
             agent)
         return agent
@@ -189,6 +192,58 @@ class RealtimeGreetingLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertIn("just answered", agent.session.generate_reply.call_args.kwargs["instructions"])
         self.assertNotIn("outbound_opening_pending", agent.session.userdata)
         self.assertTrue(agent.session.userdata["greeting_played"])
+
+    def agent_25(self, playout=None):
+        agent = self.agent(playout or AsyncMock())
+        agent._realtime_model_name = main.realtime_config.DEFAULT_MODEL
+        agent._voice_value = "google:kore"
+        agent._greeting_tts_args = dict(reply_language="hi-IN", speaker="google:kore", tone={}, tone_name="balanced", is_phone=True)
+        agent.session.say = Mock(side_effect=lambda *a, **k: asyncio.sleep(0))
+        return agent
+
+    @staticmethod
+    def fake_tts():
+        async def synthesize(text):
+            yield SimpleNamespace(frame=f"frame<{text}>")
+        return SimpleNamespace(synthesize=synthesize), "google"
+
+    async def test_25_opener_is_spoken_by_tts_not_the_model(self):
+        # Gemini 2.5 stalls on the caller's first turn after greeting itself
+        # (12 Oct 2026); the opener is said with Chirp 3 HD in its persona.
+        agent = self.agent_25()
+        with patch.object(main, "_build_tts", return_value=self.fake_tts()) as build:
+            await main.RealEstateAgent.on_enter(agent)
+        agent.session.generate_reply.assert_not_called()
+        self.assertEqual(build.call_args.kwargs["speaker"], "google:chirp3:Kore")
+        self.assertEqual(build.call_args.kwargs["is_phone"], True)
+        self.assertEqual(agent.session.say.call_args.args[0], "Namaste, main Artha bol rahi hoon.")
+        self.assertIn("audio", agent.session.say.call_args.kwargs)
+        self.assertTrue(agent.session.userdata["greeting_played"])
+        self.assertFalse(agent.session.userdata["realtime_greeting_pending"])
+
+    async def test_25_without_an_opener_lets_the_model_greet(self):
+        agent = self.agent_25()
+        agent._welcome_message = ""
+        with patch.object(main, "_build_tts") as build:
+            await main.RealEstateAgent.on_enter(agent)
+        build.assert_not_called()
+        agent.session.generate_reply.assert_called_once()
+
+    async def test_25_tts_failure_falls_back_to_the_model_greeting(self):
+        agent = self.agent_25()
+        with patch.object(main, "_build_tts", side_effect=RuntimeError("no creds")):
+            await main.RealEstateAgent.on_enter(agent)
+        agent.session.say.assert_not_called()
+        agent.session.generate_reply.assert_called_once()
+        self.assertTrue(agent.session.userdata["greeting_played"])
+
+    async def test_31_keeps_greeting_itself(self):
+        agent = self.agent_25()
+        agent._realtime_model_name = main.realtime_config.MODEL_31
+        with patch.object(main, "_build_tts") as build:
+            await main.RealEstateAgent.on_enter(agent)
+        build.assert_not_called()
+        agent.session.generate_reply.assert_called_once()
 
     async def test_realtime_inbound_keeps_the_inbound_wording(self):
         agent = self.agent(AsyncMock())
