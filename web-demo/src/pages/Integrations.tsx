@@ -9,12 +9,15 @@ import type { Integration } from '../lib/types'
 import { StatusPill, integrationSummary, isUnavailableForNew, utcTime } from '../components/IntegrationBits'
 
 // The API returns integrations in undefined DB row order - pin a deliberate
-// display order instead (ArthaLeads first, since it's the flagship CRM;
-// Facebook right after it, then the rest; Facebook and WhatsApp are no
-// longer offered for new connections) rather than leaving card position to chance.
+// display order instead (ArthaLeads first, since it's the flagship CRM)
+// rather than leaving card position to chance. Facebook Lead Ads and WhatsApp
+// are no longer offered: their cards only appear for an account that already
+// has one connected, so it can still manage or disconnect it.
 const DISPLAY_ORDER = ['arthaleads', 'zoho_crm', 'facebook', 'webhook', 'slack', 'whatsapp', 'sheets']
 const sortIntegrations = (list: Integration[]) =>
-  [...list].sort((a, b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key))
+  list
+    .filter((i) => !isUnavailableForNew(i) || i.status === 'connected')
+    .sort((a, b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key))
 
 export function Integrations() {
   const [integrations, setIntegrations] = useState<Integration[] | null>(null)
@@ -39,7 +42,7 @@ export function Integrations() {
   }
 
   const list = integrations ?? []
-  const available = list.filter((i) => isUnavailableForNew(i) ? i.status === 'connected' : true).length
+  const available = list.length
   const connected = list.filter((i) => i.status === 'connected').length
   const failing = list.filter((i) => i.status === 'connected' && i.lastError).length
 
@@ -63,30 +66,6 @@ export function Integrations() {
           {integrations === null && <p className="text-xs text-text-muted">Loading integrations…</p>}
           {list.map((integration) => {
             const isConnected = integration.status === 'connected'
-            if (isUnavailableForNew(integration) && !isConnected) {
-              return (
-                <Card key={integration.key} className="flex h-full flex-col opacity-70" aria-disabled="true">
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <IntegrationLogo integrationKey={integration.key} />
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold">{integration.name}</p>
-                        <p className="text-[11px] text-text-muted">{integration.category}</p>
-                      </div>
-                    </div>
-                    <span className="flex shrink-0 items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-muted">
-                      Coming soon
-                    </span>
-                  </div>
-                  <p className="mb-4 text-xs text-text-muted">
-                    {integration.key === 'facebook'
-                      ? 'Not available yet. To call new leads from Facebook ads today, use the Instant Lead Follow-up webhook below.'
-                      : 'Not available yet.'}
-                  </p>
-                  <div className="mt-auto flex items-center border-t border-border pt-3 text-xs text-text-muted">Coming soon</div>
-                </Card>
-              )
-            }
             return (
               <Link
                 key={integration.key}

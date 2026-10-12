@@ -476,3 +476,9 @@ Changed: 8 new how-to videos (Riya / ElevenLabs Eleven v4 narration, captions bu
 Verified: help tests 38 passed; production build incl. icon check, prerender and SEO audit (115 routes) passes; headless Chrome on the built site: article page requests no help MP4 before click (only the existing site-wide agent-orb.mp4), plays the 1920x1080 file after click, no horizontal overflow at 390 px. Not verified: the dashboard "Watch how" button in a logged-in browser (needs an account); Safari/real phones.
 
 Masters (4K) and the pipeline live outside git in `marketing-video/help/` (untracked). Known follow-ups: Integrations page still lists WhatsApp/Facebook Lead Ads as "Coming soon"; help articles for create-and-edit-agent, testing-lab, get-started describe some UI that has moved.
+
+### Claude — 2026-10-12 — Integrations: WhatsApp and Facebook Lead Ads cards removed
+
+Branch `claude/integrations-hide-wa-fb` (owner request). `Integrations.tsx` no longer shows the Facebook Lead Ads and WhatsApp cards unless the account already has one connected (then it stays a normal Manage card so it can be disconnected). The "Coming soon" card branch is gone. Help article `connect-integrations` drops the coming-soon paragraph; help bot context says the cards are not shown. Server guard on new connections (f6eb4853) unchanged.
+
+Verified: help + integration tests 46 passed; build incl. SEO audit; local real-page capture: default account shows 5 cards (no WhatsApp/Facebook, no "Coming soon"), an account with WhatsApp connected shows it as Connected/Manage with Facebook still hidden, no overflow at 390 px.

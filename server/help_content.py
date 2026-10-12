@@ -67,8 +67,9 @@ text.
   and booking rules live under Settings > Scheduling.
 - **Integrations** — connect ArthaLeads CRM, Zoho CRM, Slack, a generic
   CRM/webhook, or Google Sheets. Facebook Lead Ads and WhatsApp are NOT
-  available yet (shown as "Coming soon"; never tell a customer they can
-  connect them; an account that already had one connected keeps it working).
+  offered (not shown on the page; never tell a customer they can connect
+  them; an account that already had one connected still sees it and keeps it
+  working until it disconnects).
   Connected
   lead-delivery integrations receive every qualified lead in real time.
   ArthaLeads receives the full transcript and captured website page path;

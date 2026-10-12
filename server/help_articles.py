@@ -341,7 +341,7 @@ Agents only offer slots inside your hours. Set business hours per day, slot leng
 - **CRM / Webhook** — every lead posted as JSON to any URL (Zapier, n8n, Make).
 - **Slack** and **Google Sheets** — alerts and a lead sheet.
 
-**Facebook Lead Ads** and **WhatsApp** are coming soon and cannot be connected right now. If your workspace already had one connected, it keeps working until you disconnect it. To call leads from Facebook ads today, send them to the **Instant Lead Follow-up** webhook (see "Call new leads within seconds").
+To call new leads from ad forms the moment they arrive, send them to the **Instant Lead Follow-up** webhook (see "Call new leads within seconds").
 
 ## Check it's working
 Each card shows its status, last sync and any error; use **Send test** where offered. If deliveries start failing, the Dashboard flags it and — if enabled in your preferences — you get an email.""",
