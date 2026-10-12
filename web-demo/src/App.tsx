@@ -25,7 +25,6 @@ import { LanguagesOverview } from './pages/marketing/LanguagesOverview'
 import { LanguageDetail } from './pages/marketing/LanguageDetail'
 import { CompareIvr } from './pages/marketing/CompareIvr'
 import { AiIvr } from './pages/marketing/AiIvr'
-import { AiVoiceBotPricing } from './pages/marketing/AiVoiceBotPricing'
 import { CompareVendor } from './pages/marketing/CompareVendor'
 import { BuyerGuide } from './pages/marketing/BuyerGuide'
 import { LocalRealEstate } from './pages/marketing/LocalRealEstate'
@@ -169,7 +168,6 @@ function App() {
         <Route path="/integrations" element={<IntegrationsDirectory />} />
         <Route path="/vs-ivr" element={<CompareIvr />} />
         <Route path="/ai-ivr" element={<AiIvr />} />
-        <Route path="/ai-voice-bot-pricing-india" element={<AiVoiceBotPricing />} />
         <Route path="/compare/:slug" element={<CompareVendor />} />
         <Route path="/:slug" element={<BuyerGuide />} />
         <Route path="/solutions/real-estate/:slug" element={<LocalRealEstate />} />
