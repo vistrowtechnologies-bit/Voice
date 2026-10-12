@@ -83,6 +83,25 @@ class VendorHealthTests(unittest.TestCase):
                 self.assertEqual(vendor_health._elevenlabs(), "10/1,000 characters used")
 
 
+    def test_resend_send_only_key_and_orchestrator_without_health_route(self):
+        def fake(status, body):
+            def urlopen(request, timeout=0):
+                raise urllib.error.HTTPError(request.full_url, status, "x", {}, io.BytesIO(json.dumps(body).encode()))
+            return urlopen
+
+        env = {"RESEND_API_KEY": "re_x", "ORCHESTRATOR_URL": "https://orch.example"}
+        with mock.patch.dict(vendor_health.os.environ, env):
+            with mock.patch("urllib.request.urlopen", fake(403, {"statusCode": 403, "name": "restricted_api_key"})):
+                self.assertEqual(vendor_health._resend(), "sending key ok")
+            with mock.patch("urllib.request.urlopen", fake(403, {"statusCode": 403, "name": "invalid_api_key"})):
+                with self.assertRaises(vendor_health._Fail):
+                    vendor_health._resend()
+            with mock.patch("urllib.request.urlopen", fake(404, {})):
+                self.assertEqual(vendor_health._orchestrator(), "reachable (HTTP 404)")
+            with mock.patch("urllib.request.urlopen", fake(502, {})):
+                with self.assertRaises(vendor_health._Fail):
+                    vendor_health._orchestrator()
+
     def test_unconfigured_b2_is_skipped_not_failed(self):
         with mock.patch("storage.b2_client", return_value=(None, None)):
             with self.assertRaises(LookupError):
