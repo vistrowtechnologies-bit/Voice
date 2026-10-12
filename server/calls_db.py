@@ -1359,6 +1359,16 @@ def init_tables() -> None:
                 ("variables", "TEXT DEFAULT '[]'"),
             ):
                 conn.execute(f"ALTER TABLE agents ADD COLUMN IF NOT EXISTS {column} {coltype}")
+            # Public Agent ID: a random 10-digit number customers copy into
+            # ArthaLeads or any other platform to recognise the agent. The
+            # column default fills it for every insert path, and adding the
+            # column gives each existing row its own value. agents.id stays
+            # the internal key; nothing that already maps it changes.
+            conn.execute(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS public_id TEXT "
+                "DEFAULT (((floor(random() * 9000000000) + 1000000000)::bigint)::text)"
+            )
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS agents_public_id_unique ON agents (public_id)")
             # Generic display price for live-catalog feeds (for example
             # "$49/month" or "Contact us"). price_from remains for backwards
             # compatibility with the original real-estate feed.
@@ -3684,6 +3694,7 @@ def _row_get(row, key, default=None):
 def _agent_dict(row: dict) -> dict:
     return {
         "id": row["id"],
+        "publicId": _row_get(row, "public_id") or "",
         "name": row["name"],
         "description": row["description"],
         "model": row["model"],
@@ -3959,6 +3970,18 @@ def update_agent(agent_id: int, data: dict, account_id: int) -> dict | None:
             )
         row = conn.execute("SELECT * FROM agents WHERE id = ? AND account_id = ?", (agent_id, account_id)).fetchone()
         return _agent_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def agent_public_id(agent_id: int | None) -> str:
+    """The 10-digit Agent ID shown on the dashboard ("" if unknown)."""
+    if not agent_id:
+        return ""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT public_id FROM agents WHERE id = ?", (agent_id,)).fetchone()
+        return (row["public_id"] or "") if row else ""
     finally:
         conn.close()
 
