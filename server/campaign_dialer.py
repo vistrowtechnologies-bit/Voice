@@ -33,6 +33,7 @@ import urllib.request
 import calls_db
 import campaign_window
 import plan_policy
+import worker_leader
 
 logger = logging.getLogger("vistrow-dialer")
 
@@ -367,6 +368,10 @@ def _loop() -> None:
     logger.info("campaign dialer started (tick=%ss)", _TICK_SECONDS)
     while True:
         try:
+            # Overlapping deploys: only the leader process dials (worker_leader.py).
+            if not worker_leader.is_leader():
+                time.sleep(_TICK_SECONDS)
+                continue
             promoted = calls_db.promote_due_scheduled_campaigns()
             if promoted:
                 logger.info("promoted %s scheduled campaign(s) to running", promoted)
