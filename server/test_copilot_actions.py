@@ -184,6 +184,13 @@ class CopilotActions(unittest.TestCase):
         self.assertNotIn("tools", fake.requests[-1], "after a proposal the next round must answer")
         self.assertIn("confirmation card", fake.requests[0]["messages"][0]["content"])
 
+    def test_reply_under_a_proposal_never_claims_it_is_done(self):
+        fake = FakeOpenAI([[("set_agent_status", {"agent_id": self.agent, "status": "paused"})]],
+                          final={"reply": "Pausing agent 'Real estate agent' now.", "suggestTicket": False,
+                                 "comingSoon": False, "articleSlug": ""})
+        result = self.ask(fake)
+        self.assertEqual(result["reply"], self.help_chat.CONFIRM_REPLY)
+
     def test_only_one_action_per_reply(self):
         fake = FakeOpenAI([[("set_agent_status", {"agent_id": self.agent, "status": "paused"}),
                             ("book_callback", {"name": "Abhishek", "phone": "+919800000001", "date": "2026-11-02", "time": "15:00"})]])
