@@ -283,3 +283,11 @@ Branch `claude/seo-remove-unavailable-integrations` (from origin/main). Owner sa
 Verified: build (icon check, tsc, prerender, route audit), `test:seo`, `check-blog-seo.ts` pass; marketing HTML has no WhatsApp/Facebook except the items below.
 
 Left alone, needs an owner decision: `web-demo/src/content/helpArticles.ts` (public /help pages: connect-integrations and instant-lead-follow-up still describe WhatsApp and Facebook, likely generated from `help_articles.py`), `Privacy.tsx` and `Terms.tsx` (mention WhatsApp as a possible integration), dashboard integration pages and server code (still ship the connectors). `Signup.tsx` "Facebook Ad" is a lead-source dropdown, not an integration claim. Next step: review PR, merge, then decide on help articles and legal pages.
+
+### Claude — 2026-10-12 — Privacy Policy rewritten from a code audit
+
+Branch `claude/privacy-policy-update` (from origin/main `94283ef`). Files: `web-demo/src/pages/marketing/Privacy.tsx` (rewritten: controller/processor split, AI disclosure, recordings, sub-processor table, Google Limited Use, retention, security and support access, rights and grievance, cookies, children), `Terms.tsx` (integrations clause no longer names Google Calendar; deletion can be requested in Settings), `Security.tsx` (roles, recording-link and card-data wording corrected), new `docs/PRIVACY-AUDIT-2026-10-12.md` (fact table with file references and the gaps list).
+
+Key finding: the old policy described a Google Calendar integration and `calendar.events` scope that the code does not have. The only Google scopes are sign-in (`openid email profile`) and Sheets (`drive.file`). Recording links in CRM/Sheet payloads are permanent bearer-token URLs, which the Security page had described as short-lived.
+
+Verified: web-demo build, `test:seo`, `check-blog-seo.ts` pass; prerendered /privacy contains the Limited Use text; table screenshotted locally. Not verified: sub-processor regions, `AUTH_COOKIE_SECURE` in production, anything legal. Next step: owner reviews the "Needs legal/owner confirmation" checklist in the PR; do not merge before that. Marketing copy only, no deploy beyond Vercel.
