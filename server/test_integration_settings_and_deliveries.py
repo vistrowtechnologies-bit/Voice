@@ -50,6 +50,18 @@ class IntegrationSettingsAndDeliveries(unittest.TestCase):
         db.init_tables()
         self.assertEqual({i["key"]: i["name"] for i in db.list_integrations(self.a)}["webhook"], "CRM / Webhook")
 
+    def test_new_connections_unavailable_but_existing_kept(self):
+        db = self.db
+        flags = {i["key"]: i["newConnectionsUnavailable"] for i in db.list_integrations(self.b)}
+        self.assertTrue(flags["whatsapp"] and flags["facebook"])
+        self.assertFalse(flags["slack"])
+        self.assertFalse(db.integration_accepts_connect(self.b, "whatsapp"))
+        self.assertTrue(db.integration_accepts_connect(self.b, "slack"))
+        db.update_integration("whatsapp", "connected", {"url": "https://w.test"}, self.b)  # existing tenant
+        self.assertTrue(db.integration_accepts_connect(self.b, "whatsapp"))
+        db.update_integration("whatsapp", "not_connected", {}, self.b)
+        self.assertFalse(db.integration_accepts_connect(self.b, "whatsapp"), "once disconnected it cannot be re-added")
+
     def test_settings_validation(self):
         db = self.db
         db.update_integration("whatsapp", "connected", {"url": "https://w.test"}, self.a)

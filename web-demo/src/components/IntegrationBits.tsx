@@ -10,6 +10,11 @@ export function utcTime(value: string): string {
   return /[zZ]|[+-]\d\d:?\d\d$/.test(value) ? value : `${value.replace(' ', 'T')}Z`
 }
 
+/** Facebook Lead Ads and WhatsApp are not offered for new connections. The
+ * server flags them; the key list is a fallback for an older server. */
+export const isUnavailableForNew = (i: Integration) =>
+  i.newConnectionsUnavailable ?? ['facebook', 'whatsapp'].includes(i.key)
+
 /** One line for the list card: what this connection points at. */
 export function integrationSummary(i: Integration): string {
   if (isSheetsOauth(i)) return i.config.google_email || 'Google Sheets'

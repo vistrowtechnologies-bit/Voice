@@ -194,6 +194,9 @@ def _describe_integrations(account_id: int, args: dict) -> str:
         return f"Send agent '{agent['name']}' leads to every integration"
     if keys == ["none"]:
         return f"Stop sending agent '{agent['name']}' leads to any integration"
+    for k in keys:
+        if not calls_db.integration_accepts_connect(account_id, k):
+            raise ActionError(f"{k.title()} is not available yet, so it cannot be chosen.")
     names = _integration_names(account_id)
     return f"Send agent '{agent['name']}' leads only to: " + ", ".join(names.get(k, k) for k in keys)
 
