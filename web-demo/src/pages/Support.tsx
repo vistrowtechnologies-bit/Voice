@@ -405,7 +405,7 @@ function RateRequest({ ticket, onRated }: { ticket: SupportTicket; onRated: (t: 
             key={r}
             onClick={() => setChoice(r)}
             aria-pressed={choice === r}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold ${choice === r ? 'border-primary bg-primary/10 text-primary' : 'border-border text-text-muted hover:border-primary/50'}`}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold ${choice === r ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-transparent text-text-muted hover:border-primary/50'}`}
           >
             <Icon name={r === 'good' ? 'thumb_up' : 'thumb_down'} className="text-[17px]" /> {r === 'good' ? 'Good' : 'Not good'}
           </button>

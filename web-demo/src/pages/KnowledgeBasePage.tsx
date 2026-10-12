@@ -394,7 +394,7 @@ export function KnowledgeBasePage() {
             type="button"
             onClick={() => setCatalogOpen((open) => !open)}
             aria-expanded={catalogOpen}
-            className={`flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-high/40 ${catalogOpen ? 'border-b border-border' : ''}`}
+            className={`flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 bg-transparent text-left transition-colors hover:bg-surface-high/40 ${catalogOpen ? 'border-b border-border' : ''}`}
           >
             <div className="flex min-w-0 items-center gap-3">
               <Icon name="inventory_2" className="shrink-0 text-[18px] text-text-muted" />
