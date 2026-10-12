@@ -65,7 +65,7 @@ The cards at the top flag things that affect customers: a CRM that stopped recei
                 "body": """Go to **Agents** and click **New Agent**, or **Edit** on an existing card. Every setting lives on the agent's own page; click **Save changes** at the bottom. Changes apply from the next call — no redeploy.
 
 ## The main settings
-- **Model** — the AI that holds the conversation. Vistrow Bharat is built for Indian languages and Vistrow Swift is best for English. With a Standard or HD voice, Bharat uses 1 credit per minute and Swift uses 2.
+- **Model** — the AI that holds the conversation. Vistrow Bharat handles Hindi, English and other Indian languages. With a Standard or HD voice it uses 1 credit per minute.
 - **Voice** — only voices added under **Voices** appear here.
 - **Default language** — the language the agent opens in. It follows the caller if they switch.
 - **Welcome message** — separate lines for inbound and outbound calls. Use {{name}}-style variables to personalise them.

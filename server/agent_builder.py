@@ -46,7 +46,7 @@ DAILY_GREETING_LIMIT = 40
 
 DEFAULT_MODEL = "sarvam/sarvam-105b-conversations"  # "Vistrow Bharat"
 # Tenant-selectable models (web-demo/src/lib/agentOptions.ts MODEL_OPTIONS).
-ALLOWED_MODELS = (DEFAULT_MODEL, "gpt-4.1-mini")
+ALLOWED_MODELS = (DEFAULT_MODEL,)  # Swift left the picker 2026-10-12
 DEFAULT_VOICE = "google:chirp3:Achernar"  # Myra HD; default stack since 2026-10-12 (was pooja)
 DEFAULT_LANGUAGE = "hi-IN"
 # The optional built-ins agent/main.py's _build_tools toggles; "" = all on
@@ -255,7 +255,7 @@ A draft has exactly these keys:
 - The agent has a human first name that fits the voice's gender (e.g. Riya, Neha, Arjun). This platform is called Vistrow Voice: NEVER present "Vistrow Voice" (or "Vistrow") as the customer's business or say the agent is calling from it, unless the customer's business really is Vistrow.
 - "businessName": the business name exactly as the customer gave it, or "" if they did not give one. Never invent a placeholder such as "Unnamed developer".
 - "description": one line, max 120 chars, what the agent does.
-- "model": "{default_model}" unless the customer explicitly asks for another; the only other allowed value is "gpt-4.1-mini".
+- "model": always "{default_model}".
 - "language": the main language code, one of: {languages}.
 - "voice": one value from this list (value | name | gender): {voices}. Use "{default_voice}" unless the customer asks for a male voice or names a voice.
 - "tone": one of "professional", "balanced", "casual".

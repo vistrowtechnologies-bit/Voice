@@ -193,8 +193,12 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
 // backwards.
 export const MODEL_OPTIONS = [
   { value: 'sarvam/sarvam-105b-conversations', label: 'Vistrow Bharat', tag: 'Recommended · fastest, built for Indian languages' },
-  { value: 'gpt-4.1-mini', label: 'Vistrow Swift', tag: 'Most accurate in testing · best for English' },
 ] as const
+// 2026-10-12: Vistrow Swift (gpt-4.1-mini) left the tenant picker. Real test
+// calls on the production worker, same question, Chirp 3 voice: Sarvam's turn
+// was 0.6-0.9 s against Swift's 1.65-2.8 s in both Hindi and English, Swift
+// said "10 pm" for 10 am in Hindi, and it bills 2 credits a minute against 1.
+// It is in RETIRED_MODELS so existing agents keep their label and keep working.
 // 2026-10-08: only the models that pass the speed and accuracy bar are offered.
 // Measured on production calls (docs/INTERNATIONAL-EXPANSION-PLAN-2026-10-07.md
 // section 8.1): Sarvam 105B answers in about 0.5 s, gpt-4.1-mini in about 1.1 s.
@@ -345,6 +349,7 @@ export const modelOptionsFor = (isPlatformOwner: boolean) =>
 // and the call history starts printing "gpt-4.1" at a tenant — the exact
 // vendor-name leak calls_db guards against everywhere else.
 const RETIRED_MODELS = [
+  { value: 'gpt-4.1-mini', label: 'Vistrow Swift' },
   { value: 'gpt-4.1', label: 'Vistrow Prime' },
   { value: 'gpt-4o', label: 'Vistrow Pro' },
   { value: 'gemini-3.6-flash', label: 'Vistrow Flash' },

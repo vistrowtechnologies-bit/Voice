@@ -9,7 +9,7 @@ import { PLANS, SHARED_PLAN_FEATURES, planHighlights } from '../../lib/plans'
 const FAQ = [
   {
     q: 'What is a credit?',
-    a: 'A credit pays for one minute of conversation. With Vistrow Bharat (the default model) and a Standard or HD voice, one minute of a call uses 1 credit, on the browser widget and on phone calls alike — telephony is billed separately by whichever provider you connect. Vistrow Swift and Premium voices use 2 credits a minute; an Economy voice uses 0.75. Both channels draw from the same monthly pool.',
+    a: 'A credit pays for one minute of conversation. With Vistrow Bharat (the default model) and a Standard or HD voice, one minute of a call uses 1 credit, on the browser widget and on phone calls alike — telephony is billed separately by whichever provider you connect. Premium voices use 2 credits a minute; an Economy voice uses 0.75. Both channels draw from the same monthly pool.',
   },
   {
     q: 'Which languages are supported?',
