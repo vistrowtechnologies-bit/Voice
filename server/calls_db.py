@@ -1363,6 +1363,8 @@ def init_tables() -> None:
             # "$49/month" or "Contact us"). price_from remains for backwards
             # compatibility with the original real-estate feed.
             conn.execute("ALTER TABLE project_listings ADD COLUMN IF NOT EXISTS price_label TEXT DEFAULT ''")
+            # "Build with AI" greeting plays have their own daily cap.
+            conn.execute("ALTER TABLE agent_drafts ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'draft'")
             # Per-number monthly line item — EnableX charges Vistrow for every
             # provisioned number, previously absorbed with nothing passed to
             # the tenant. Existing rows backfill to PHONE_NUMBER_MONTHLY_FEE_INR
@@ -3961,25 +3963,27 @@ def update_agent(agent_id: int, data: dict, account_id: int) -> dict | None:
         conn.close()
 
 
-def count_agent_drafts(account_id: int) -> int:
-    """AI agent drafts this account requested in the last 24 hours."""
+def count_agent_drafts(account_id: int, kind: str = "draft") -> int:
+    """AI agent drafts (or, kind="greeting", greeting plays) this account
+    requested in the last 24 hours."""
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT COUNT(*) c FROM agent_drafts WHERE account_id = ? "
+            "SELECT COUNT(*) c FROM agent_drafts WHERE account_id = ? AND COALESCE(kind, 'draft') = ? "
             "AND created_at::timestamp > (now() AT TIME ZONE 'UTC') - interval '24 hours'",
-            (account_id,),
+            (account_id, kind),
         ).fetchone()
         return row["c"] if row else 0
     finally:
         conn.close()
 
 
-def record_agent_draft(account_id: int, user_id: int | None) -> None:
+def record_agent_draft(account_id: int, user_id: int | None, kind: str = "draft") -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("INSERT INTO agent_drafts (account_id, user_id) VALUES (?, ?)", (account_id, user_id))
+            conn.execute("INSERT INTO agent_drafts (account_id, user_id, kind) VALUES (?, ?, ?)",
+                         (account_id, user_id, kind))
     finally:
         conn.close()
 

@@ -223,6 +223,22 @@ export const draftAgent = (body: {
   section?: AgentDraftSection
   current?: AgentDraft
 }) => send<{ questions?: AgentDraftQuestion[]; draft?: AgentDraft }>('POST', '/agents/draft', body)
+// The drafted welcome line spoken in the chosen voice ("Hear the greeting").
+export async function draftGreetingAudio(body: { voice: string; language: string; text: string }): Promise<Blob> {
+  const res = await fetch('/api/agents/draft/greeting', {
+    method: 'POST',
+    credentials: 'include',
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (res.status === 401) onUnauthorized()
+  if (!res.ok) {
+    const detail = await res.json().then((j) => (typeof j?.detail === 'string' ? j.detail : null)).catch(() => null)
+    throw new Error(detail || 'Could not play the greeting.')
+  }
+  return res.blob()
+}
 
 // ------------------------------------------ conversation testing lab
 
