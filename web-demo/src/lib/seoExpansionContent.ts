@@ -409,7 +409,7 @@ export const COMPARE_EXTRAS: Record<string, CompareExtra> = {
     extraFaqs: [
       { q: 'Does Vistrow Voice respect Do-Not-Call lists and calling hours?', a: 'Yes. Every outbound dial is checked against your Do-Not-Call list and, with the calling window enforced, your allowed hours and days. Blocked contacts are counted, not called. Consent obligations remain with your business.' },
       { q: 'How large should the first outbound test be?', a: 'Small. Start with a short list, review the calls, and talk to us before running a large campaign. The outbound page explains pace, retries and the channel limit.' },
-      { q: 'Can the agent follow up on a new lead quickly?', a: 'Yes. Facebook Lead Ads, and any source that can send a webhook, can queue a call within roughly 15 to 30 seconds, subject to your compliance rules.' },
+      { q: 'Can the agent follow up on a new lead quickly?', a: 'Yes. Leads pushed from ArthaLeads, and any source that can send a webhook, can queue a call within roughly 15 to 30 seconds, subject to your compliance rules.' },
     ],
     related: [R_OUTBOUND, R_INBOUND, R_WIDGET, R_INTEG, R_LANG, R_PRICING],
   },
@@ -683,7 +683,7 @@ export const DEMO_CALLS: DemoCall[] = [
     callerExperience: [
       { title: '1. The agent confirms the enquiry', body: 'It opens in Marathi, mentions the project enquiry and asks whether the caller wants to schedule a site visit.' },
       { title: '2. A day, then a part of the day', body: 'The caller prefers Saturday. The agent notes the day, then narrows it with one question: morning or afternoon.' },
-      { title: '3. A clear next step', body: 'In this sample the agent captures the preference and says the sales team will confirm the exact slot and send details on WhatsApp. It does not promise a time it has not booked.' },
+      { title: '3. A clear next step', body: 'In this sample the agent captures the preference and says the sales team will confirm the exact slot and send the details. It does not promise a time it has not booked.' },
       { title: '4. Booking directly, if you set it up', body: 'With scheduling configured, the agent can instead offer real free slots and confirm only once the booking has saved. It can also take a callback request if no slot suits.' },
     ],
     whyItMatters:
@@ -691,7 +691,7 @@ export const DEMO_CALLS: DemoCall[] = [
     configure: [
       { title: 'Bookable hours', body: 'Set business hours per day, slot length from 15 to 60 minutes, timezone and blackout dates under Settings, Scheduling.' },
       { title: 'Appointments calendar', body: 'Visits appear in Appointments, where your team can reschedule them or mark them confirmed, completed, cancelled or no-show.' },
-      { title: 'WhatsApp follow-up', body: 'Connect your WhatsApp provider’s send endpoint and write the message the caller should receive after the call.' },
+      { title: 'Team follow-up', body: 'Send the call summary and the caller’s preference to your team through Slack, your CRM or a webhook, so they can confirm the visit.' },
       { title: 'Marathi and Hindi', body: 'The agent can follow a caller who moves between Marathi, Hindi and English mid-call.' },
     ],
     related: [
@@ -711,7 +711,7 @@ export const DEMO_CALLS: DemoCall[] = [
       { speaker: 'Caller', text: 'Ho, Saturday la possible aahe ka?' },
       { speaker: 'Agent', text: 'Saturday preference note karto. Morning ki afternoon convenient aahe?' },
       { speaker: 'Caller', text: 'Afternoon.' },
-      { speaker: 'Agent', text: 'Perfect. Sales team exact slot confirm karun tumhala WhatsApp var details pathavel.' },
+      { speaker: 'Agent', text: 'Perfect. Sales team exact slot confirm karun tumhala details pathavel.' },
     ],
     fields: [
       { label: 'Language', value: 'Marathi' },
@@ -725,7 +725,7 @@ export const DEMO_CALLS: DemoCall[] = [
       { q: 'What does the sales team receive?', a: 'They receive the caller details, transcript, summary, preferred slot, and lead outcome.' },
       { q: 'What if the caller cannot make any offered time?', a: 'The agent takes a callback request with the caller’s preferred date and time, so the call still ends with a next step for your team.' },
       { q: 'Does the agent really book, or just note a preference?', a: 'It depends on how you configure it. This sample shows a preference being captured. With scheduling set up, the agent offers real free slots and confirms only after the booking has saved.' },
-      { q: 'How does the buyer get the details afterwards?', a: 'You can connect WhatsApp through your provider, which sends the message you wrote once the call ends. Which messages are allowed depends on your provider’s rules.' },
+      { q: 'How does the buyer get the details afterwards?', a: 'The agent tells them the sales team will send the details. You can send the call summary to your team through Slack, your CRM or a webhook so they follow up promptly.' },
     ],
   },
   {

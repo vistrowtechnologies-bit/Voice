@@ -256,7 +256,7 @@ export const PRODUCT_DETAIL: Record<
       { q: 'Can I schedule a campaign for later?', a: 'Yes - set a start time and the campaign launches automatically, with progress shown per campaign as it runs.' },
       { q: 'Does it respect Do-Not-Call and calling hours?', a: 'Yes. Every dial is checked against your Do-Not-Call list and, with the calling window enforced, your allowed hours and days before it goes out. Blocked contacts are counted, not called.' },
       { q: 'What happens when nobody answers?', a: 'The contact is retried according to the maximum attempts and gap you set, with separate rules available for busy lines and voicemail.' },
-      { q: 'Can it call new leads as soon as they arrive?', a: 'Yes. Facebook Lead Ads and any source that can send a webhook can queue a call within about 15 to 30 seconds. Your compliance rules still apply.' },
+      { q: 'Can it call new leads as soon as they arrive?', a: 'Yes. Leads pushed from ArthaLeads, or from any source that can send a webhook, can queue a call within about 15 to 30 seconds. Your compliance rules still apply.' },
     ],
   },
   '/product/knowledge-base': {
@@ -372,7 +372,7 @@ export const PRODUCT_DETAIL: Record<
     features: [
       { icon: 'webhook', title: 'Webhooks', body: 'Fire a structured payload to any endpoint the moment a call completes.' },
       { icon: 'contacts', title: 'CRM sync', body: 'Create and update contacts and leads automatically in your CRM.' },
-      { icon: 'chat', title: 'Messaging', body: 'Trigger a WhatsApp follow-up off the back of a call outcome.' },
+      { icon: 'notifications_active', title: 'Team alerts', body: 'Send a Slack alert to your team off the back of a call outcome.' },
       { icon: 'api', title: 'Full API', body: 'Programmatic access to agents, calls, and analytics for custom workflows.' },
     ],
     guideSections: [
@@ -393,8 +393,8 @@ export const PRODUCT_DETAIL: Record<
           { icon: 'contacts', title: 'Zoho CRM and ArthaLeads', body: 'Leads go straight into your CRM.' },
           { icon: 'webhook', title: 'CRM or webhook', body: 'Every lead is posted as JSON to any URL, which covers CRMs and automation tools that accept a webhook.' },
           { icon: 'table_chart', title: 'Google Sheets', body: 'Keep a lead sheet your team can open without logging in to a CRM.' },
-          { icon: 'chat', title: 'Slack and WhatsApp', body: 'Alerts for your team and follow-ups to the customer.' },
-          { icon: 'ads_click', title: 'Facebook Lead Ads', body: 'New form leads are queued for a call within seconds.', to: '/help/integrations/instant-lead-follow-up', link: 'Instant lead follow-up' },
+          { icon: 'chat', title: 'Slack alerts', body: 'Alerts for your team the moment a qualified lead comes in.' },
+          { icon: 'ads_click', title: 'Instant lead follow-up', body: 'New leads pushed from ArthaLeads or a webhook are queued for a call within seconds.', to: '/help/integrations/instant-lead-follow-up', link: 'Instant lead follow-up' },
           { icon: 'route', title: 'Per-agent routing', body: 'By default an agent delivers to every connected integration. Limit one agent to specific ones, or give it its own webhook URL.', to: '/help/agents/agent-webhook-crm-memory', link: 'Webhook and CRM routing' },
         ],
       },
@@ -415,7 +415,7 @@ export const PRODUCT_DETAIL: Record<
       { q: 'How fast does a lead reach my CRM?', a: 'In real time - when a qualified call ends, its data is sent to every connected integration. Each integration card shows its last sync and any error.' },
       { q: 'What if a delivery fails?', a: 'The dashboard flags it, and if enabled in your preferences you also get an email. You can re-send a delivery from the call’s details once the destination is fixed.' },
       { q: 'Can different agents send leads to different places?', a: 'Yes. Under CRM routing, limit an agent to specific integrations, or give it its own webhook URL for its lead, appointment and callback events.' },
-      { q: 'Can a lead from my ads trigger a call?', a: 'Yes. Facebook Lead Ads, or any source that can post to the Instant Lead Follow-up URL, queues a call within about 15 to 30 seconds, subject to your calling window and Do-Not-Call rules.' },
+      { q: 'Can a lead from my ads trigger a call?', a: 'Yes. A lead pushed from ArthaLeads, or from any source that can post to the Instant Lead Follow-up URL, queues a call within about 15 to 30 seconds, subject to your calling window and Do-Not-Call rules.' },
     ],
   },
 }
@@ -498,7 +498,7 @@ export const SOLUTIONS: Solution[] = [
       { icon: 'fact_check', title: 'Manual qualification', body: 'No more re-asking budget and location - Artha saves each detail as a lead field during the call.' },
       { icon: 'schedule', title: 'Slow follow-up', body: 'Every qualified lead syncs to your CRM instantly, so agents follow up while it’s hot.' },
     ],
-    features: ['Budget, location & configuration qualification', 'Site visits booked on your calendar', 'Call-back to new leads within seconds', 'CRM, WhatsApp & webhook delivery', '24/7 multilingual pickup'],
+    features: ['Budget, location & configuration qualification', 'Site visits booked on your calendar', 'Call-back to new leads within seconds', 'CRM, Slack & webhook delivery', '24/7 multilingual pickup'],
     scenarios: [
       { label: 'New buyer enquiry', callerLine: '“Baner में two BHK चाहिए, budget करीब one crore है.”', agentAction: 'Captures configuration, budget, preferred location and purchase timeline without turning the call into a form.', outcome: 'Qualified buyer lead, ready for the right sales advisor.' },
       { label: 'Project comparison', callerLine: '“Aarohan Crest और nearby options में फर्क क्या है?”', agentAction: 'Answers only from approved project knowledge and records the exact comparison the buyer wants.', outcome: 'A focused follow-up request with no invented inventory or pricing.' },
@@ -520,14 +520,14 @@ export const SOLUTIONS: Solution[] = [
     integrations: [
       { icon: 'hub', title: 'CRM lead routing', body: 'Send budget, location, timeline and transcript to your CRM immediately.' },
       { icon: 'calendar_month', title: 'Site-visit calendar', body: 'Offer only genuinely open appointments and prevent double booking.' },
-      { icon: 'forum', title: 'WhatsApp follow-up', body: 'Trigger a project brochure or visit confirmation after the call.' },
+      { icon: 'forum', title: 'Team follow-up alert', body: 'Alert your sales team in Slack or your CRM so they send the brochure or visit confirmation after the call.' },
     ],
     guardrails: ['Never invent project inventory, price, possession date or approval status.', 'Never call an enquiry qualified until the buyer has shared meaningful intent.', 'Never claim a site visit is confirmed until the calendar booking succeeds.'],
     faqs: [
       { q: 'What does an AI calling agent for real estate actually do?', a: 'It answers your enquiry line and calls new leads back, asks the qualifying questions your sales team would ask - budget, preferred location, configuration, timeline and purpose - answers project questions from your approved material, and books a site visit or passes the lead on with the full transcript.' },
       { q: 'Can it book site visits automatically?', a: 'Yes. It offers free slots from the built-in calendar, inside the business hours and slot length you set, and confirms a visit only after the booking succeeds. If nothing suits the buyer, it takes a callback request instead. Your team can reschedule a visit or mark it completed or no-show.' },
       { q: 'How does it qualify property buyer enquiries?', a: 'Through the conversation, not a form. As the buyer mentions budget, preferred areas, property type, configuration, timeline and whether it is for investment or self-use, the agent saves each detail as a lead field. If a buyer names two areas, both are kept.' },
-      { q: 'Can it call new Facebook leads straight away?', a: 'Yes. Connect your Facebook Page and each new Lead Ads submission is queued for a call within about 15-30 seconds. Leads pushed from ArthaLeads, or from any source that can send a webhook, are queued the same way. Your calling window and Do-Not-Call list still apply.' },
+      { q: 'Can it call new leads straight away?', a: 'Yes. Leads pushed from ArthaLeads, or from any source that can send a webhook, are queued for a call within about 15-30 seconds. Your calling window and Do-Not-Call list still apply.' },
       { q: 'Does it handle Hindi, Marathi, Kannada and other regional callers?', a: 'Yes. Hindi (including everyday Hinglish), Marathi, Gujarati, Kannada, Telugu, Tamil and the other supported Indian languages, plus English. It switches mid-call when the buyer does.' },
       { q: 'Will it make up prices or availability?', a: 'It is set up not to. Answers come from your knowledge base, or from a live catalog of listings that the agent looks up when a buyer asks. With strict mode on, it quotes your approved answers and says it will check with the team when something is not covered.' },
     ],
@@ -559,7 +559,7 @@ export const SOLUTIONS: Solution[] = [
         eyebrow: 'Follow-up',
         title: 'Call new leads while they still remember enquiring.',
         items: [
-          { icon: 'bolt', title: 'Instant call-back', body: 'Connect Facebook Lead Ads, push leads from ArthaLeads, or send them from any source by webhook, and a call is queued within about 15-30 seconds of the lead arriving.', to: '/help/integrations/instant-lead-follow-up', link: 'How instant lead follow-up works' },
+          { icon: 'bolt', title: 'Instant call-back', body: 'Push leads from ArthaLeads, or send them from any source by webhook, and a call is queued within about 15-30 seconds of the lead arriving.', to: '/help/integrations/instant-lead-follow-up', link: 'How instant lead follow-up works' },
           { icon: 'campaign', title: 'Follow-up campaigns', body: 'Re-call older enquiries, brochure downloads or missed visits as an outbound campaign, with retries, a calling window and Do-Not-Call checks before every dial.', to: '/product/outbound', link: 'Outbound campaigns' },
           { icon: 'hub', title: 'Leads where your team works', body: 'Qualified leads go to ArthaLeads, Zoho CRM, Google Sheets, Slack or any webhook, with the transcript and the fields captured on the call.', to: '/product/integrations', link: 'CRM and webhook integrations' },
         ],
@@ -667,7 +667,7 @@ export const SOLUTIONS: Solution[] = [
         items: [
           { icon: 'schedule', title: 'Bookable hours', body: 'Business hours per day, slot length from 15 to 60 minutes, timezone and blackout dates, set under Settings, Scheduling.' },
           { icon: 'menu_book', title: 'Clinic knowledge', body: 'Upload the fee sheet, doctor list or visit instructions, review the extracted question and answer pairs, then attach the knowledge base to the agent.', to: '/help/knowledge-base/add-knowledge', link: 'Give your agent your facts' },
-          { icon: 'fact_check', title: 'Post-call details', body: 'Pick the fields pulled from every transcript, such as the visit reason, and send each call to your team through a webhook, Slack, Google Sheets or WhatsApp.', to: '/integrations', link: 'Integrations' },
+          { icon: 'fact_check', title: 'Post-call details', body: 'Pick the fields pulled from every transcript, such as the visit reason, and send each call to your team through a webhook, Slack, Google Sheets or your CRM.', to: '/integrations', link: 'Integrations' },
           { icon: 'record_voice_over', title: 'Consent, recording and retention', body: 'Switch on spoken consent so the agent asks before details are collected, choose whether calls are recorded, and set how long records are kept.', to: '/help/compliance/consent-recording-retention', link: 'Consent, recording and retention' },
         ],
         note: 'Whether and how to record patient calls, and what patients are told, is the clinic’s responsibility; Vistrow Voice provides the controls above. The security page lists what is in place today and what is not, and we make no medical-compliance or certification claims.',
@@ -678,7 +678,7 @@ export const SOLUTIONS: Solution[] = [
       { q: 'Is patient information kept confidential?', a: 'Yes - call data is tenant-isolated to your clinic account and only accessible to your team.' },
       { q: 'Can one agent handle multiple clinic locations?', a: 'Yes - build a separate agent per location, or one agent that routes based on what the caller needs.' },
       { q: 'Does it give medical advice?', a: 'No. It answers administrative questions from the information you provide, does not diagnose or suggest treatment, and directs possible emergencies to immediate human or emergency care.' },
-      { q: 'Does it work with our existing appointment software?', a: 'Agents book into the Appointments calendar built into Vistrow Voice. To pass bookings to another system, send the appointment-booked event to a webhook, Slack, Google Sheets or WhatsApp. There is no connector for a specific hospital system.' },
+      { q: 'Does it work with our existing appointment software?', a: 'Agents book into the Appointments calendar built into Vistrow Voice. To pass bookings to another system, send the appointment-booked event to a webhook, Slack, Google Sheets or your CRM. There is no connector for a specific hospital system.' },
       { q: 'Can it answer in Hindi and regional languages?', a: 'Yes. Hindi, including everyday Hinglish, Marathi, Gujarati, Kannada, Telugu, Tamil and the other supported Indian languages, plus English.' },
       { q: 'Are calls recorded?', a: 'Recording and spoken consent are settings on the Compliance page, so you decide. With consent required, the agent asks first and discards the recording if the caller declines. Your clinic decides what it records and tells patients.' },
       { q: 'Can I try it before going live?', a: 'Yes. Call the clinic demo above to hear a made-up clinic answered live, then use the Testing Lab on your own agent to run scenarios before any real patient calls.' },
@@ -1069,7 +1069,7 @@ export const HERO_STATS = [
  * a demo call), and a marketing page that lists them defeats that entirely.
  * It's also the more useful answer: a buyer is asking "does this fit my
  * stack?", not "what's under the hood?". */
-export const WORKS_WITH = ['Slack', 'WhatsApp', 'Google Sheets', 'Zapier', 'Any CRM']
+export const WORKS_WITH = ['Slack', 'Zoho CRM', 'Google Sheets', 'Zapier', 'Any CRM']
 
 // ---- Languages (feed /languages overview + per-language landing pages) ----
 //
@@ -1431,7 +1431,7 @@ export const LANGUAGES: LanguagePage[] = [
     callBehaviors: [
       'Opens in Gujarati and follows the caller into Hindi or English without restarting the call',
       'Captures the promised payment date or the preferred visit time as a field',
-      'Saves the recording, transcript and summary, and can send a WhatsApp or CRM update',
+      'Saves the recording, transcript and summary, and can send a Slack or CRM update',
     ],
     seoFaq: {
       q: 'Is this a Gujarati voice bot or a real AI calling agent?',
@@ -1467,7 +1467,7 @@ export const LANGUAGES: LanguagePage[] = [
     related: [
       { to: '/demo-calls/hindi-real-estate-lead-qualification', label: 'Sample qualification call (Hindi)' },
       { to: '/product/outbound', label: 'Outbound campaigns' },
-      { to: '/product/integrations', label: 'CRM and WhatsApp integrations' },
+      { to: '/product/integrations', label: 'CRM and Slack integrations' },
       { to: '/compare/knowlarity', label: 'Compare with Knowlarity' },
       { to: '/languages/hindi', label: 'Hindi and Hinglish calling' },
       { to: '/ai-ivr', label: 'AI IVR replacement' },
@@ -1521,11 +1521,11 @@ export const LANGUAGES: LanguagePage[] = [
     guide: [
       { title: 'Script', body: 'Malayalam script has many joined letters, so long words are easy to garble in a pasted prompt. Write the welcome message in Malayalam, keep sentences short, and read the transcript of your first test calls to check the spelling came out as intended.' },
       { title: 'Regional speech', body: 'Spoken Malayalam differs between Malabar, central Kerala and the south, in vocabulary and speed. Test with callers from each region you serve, and put local place names, hospital names and project names in the knowledge base.' },
-      { title: 'Callers from abroad', body: 'Callers outside Kerala may ring at odd local hours and want a visit on specific dates. Capture those dates and the contact preference as post-call fields, and send a WhatsApp or CRM follow-up so the team can reply when they are back.' },
+      { title: 'Callers from abroad', body: 'Callers outside Kerala may ring at odd local hours and want a visit on specific dates. Capture those dates and the contact preference as post-call fields, and send a Slack or CRM follow-up so the team can reply when they are back.' },
     ],
     related: [
       { to: '/product/widget', label: 'Website voice widget' },
-      { to: '/product/integrations', label: 'CRM and WhatsApp integrations' },
+      { to: '/product/integrations', label: 'CRM and Slack integrations' },
       { to: '/product/knowledge-base', label: 'Knowledge base' },
       { to: '/compare/exotel', label: 'Compare with Exotel' },
       { to: '/languages/tamil', label: 'Tamil calling agent' },
@@ -1839,9 +1839,7 @@ export const INTEGRATION_DIRECTORY: IntegrationEntry[] = [
   { name: 'ArthaLeads CRM', category: 'CRM', desc: 'Native connector. Every qualified lead, with the full transcript, pushed on call end - paste a connection key, no URL setup.' },
   { name: 'Zoho CRM', category: 'CRM', desc: 'Native connector. Connect with Zoho and each caller who leaves a phone or email becomes a lead in your Leads module; repeat callers update their lead.' },
   { name: 'Slack', category: 'Notifications', desc: 'Native connector. Choose a Slack channel once, then receive every qualified lead with the transcript.' },
-  { name: 'WhatsApp', category: 'Messaging', desc: 'Native connector. Fire a WhatsApp follow-up after a call through your provider’s send webhook.' },
   { name: 'Google Sheets', category: 'Reporting', desc: 'Native connector. Sign in with Google and every caller who leaves a phone or email becomes a row in a leads sheet created in your Drive.' },
-  { name: 'Facebook Lead Ads', category: 'Lead source', desc: 'Native connector. Connect your Page and each new Lead Ads submission is queued for a call within about 15 to 30 seconds.' },
   { name: 'CRM / Webhook', category: 'Developer', desc: 'Native connector. Post every call event as JSON to any URL you control, with an optional token.' },
   { name: 'Zapier', category: 'Automation', desc: 'Point the lead webhook at a Zapier catch hook to pass calls on to the apps Zapier connects to.', viaWebhook: true },
   { name: 'n8n', category: 'Automation', desc: 'Self-hosted automation - same JSON payload, your own infrastructure.', viaWebhook: true },
@@ -1871,22 +1869,21 @@ export const INTEGRATIONS_PAGE: { guideSections: GuideSection[]; faqs: Faq[] } =
     },
     {
       eyebrow: 'What each integration does',
-      title: 'Seven connections you can set up today.',
+      title: 'Five connections you can set up today.',
       intro: 'Each card on this page is a real connection in the dashboard. Others are reached through the generic webhook, and labelled that way above.',
       items: [
         { icon: 'contacts', title: 'ArthaLeads CRM', body: 'Paste the connection key from ArthaLeads. One complete record per call arrives when the call ends, with transcript and recording. It needs a name and a phone number, and you can also choose which new ArthaLeads leads your agents should call.' },
         { icon: 'contacts', title: 'Zoho CRM', body: 'Connect with a Zoho CRM admin account and approve access to Leads. Each caller who leaves a phone or email becomes a lead, matched on phone first and then email, so a repeat caller updates their existing lead.' },
         { icon: 'table_chart', title: 'Google Sheets', body: 'Sign in with Google and a sheet called Vistrow Voice, Leads is created in your Drive, one tab per agent. Access is limited to files Vistrow Voice created, not the rest of your Drive. You can hide columns such as the recording.' },
         { icon: 'chat', title: 'Slack', body: 'Click Connect Slack, choose the channel, and lead alerts post there. You choose which events post and which fields are included.' },
-        { icon: 'forum', title: 'WhatsApp', body: 'Paste your provider’s send endpoint, which must accept a recipient and a message, and write the message the caller should receive, using their name if you like. By default the caller gets one message when the call ends. Delivery rules, such as the 24-hour window, are your provider’s.' },
-        { icon: 'ads_click', title: 'Facebook Lead Ads', body: 'Connect Facebook and choose the Page running your ads. Each new lead is added to Contacts and called by your instant follow-up campaign, within your calling window and Do-Not-Call rules.', to: '/help/integrations/instant-lead-follow-up', link: 'Instant lead follow-up' },
+        { icon: 'bolt', title: 'Instant lead follow-up', body: 'Push new leads from ArthaLeads, or post them from any source to your Instant Lead Follow-up URL. Each lead is added to Contacts and called by your instant follow-up campaign, within your calling window and Do-Not-Call rules.', to: '/help/integrations/instant-lead-follow-up', link: 'Instant lead follow-up' },
         { icon: 'webhook', title: 'CRM or webhook', body: 'Paste any URL that accepts a JSON POST. An optional token is sent in the body. The receiver has about five seconds to answer, so respond quickly and do heavy work afterwards.' },
       ],
     },
     {
       eyebrow: 'What gets sent',
       title: 'You choose the events and the fields.',
-      intro: 'Webhook, Slack, WhatsApp and a sheet connected by Apps Script URL can send up to four events; WhatsApp sends only the end-of-call message unless you choose more. Zoho, ArthaLeads and the Sign in with Google sheet always send one record per caller at the end of the call.',
+      intro: 'Webhook, Slack and a sheet connected by Apps Script URL can send up to four events. Zoho, ArthaLeads and the Sign in with Google sheet always send one record per caller at the end of the call.',
       items: [
         { icon: 'call_end', title: 'End of call', body: 'One record when the call ends, with the summary, details and recording link.' },
         { icon: 'edit_note', title: 'Lead details during the call', body: 'Each time the agent saves new details, such as name, need or budget, while the caller is still on the line.' },
@@ -1908,12 +1905,12 @@ export const INTEGRATIONS_PAGE: { guideSections: GuideSection[]; faqs: Faq[] } =
     },
   ],
   faqs: [
-    { q: 'Which tools have a native connection?', a: 'ArthaLeads CRM, Zoho CRM, Slack, WhatsApp through your provider, Google Sheets, Facebook Lead Ads and a generic webhook. Zapier, n8n, Make, Salesforce and HubSpot are reached through that webhook or the API.' },
+    { q: 'Which tools have a native connection?', a: 'ArthaLeads CRM, Zoho CRM, Slack, Google Sheets and a generic webhook. Zapier, n8n, Make, Salesforce and HubSpot are reached through that webhook or the API.' },
     { q: 'Is there a Google Calendar integration?', a: 'No. Agents book appointments in the calendar built into Vistrow Voice, using the hours, slot length and blackout dates you set. To pass a booking elsewhere, send the appointment-booked event to a webhook.' },
     { q: 'Does Google Sheets get access to my whole Drive?', a: 'No. The connection is limited to files Vistrow Voice creates, which is the one leads sheet, not your other spreadsheets or documents.' },
     { q: 'Can I choose which fields are shared?', a: 'Yes for webhook, Slack and Sheets. Leave out any field except that at least one of name, phone or email must stay.' },
     { q: 'What happens if my CRM is down?', a: 'The failure shows on the integration card and the dashboard flags it. You get an email too if you enabled that in your preferences. Re-send the delivery from the call’s details once it is fixed.' },
-    { q: 'Do I need a developer?', a: 'Not for Slack, Sheets, Zoho, ArthaLeads or Facebook, which are sign-in or paste-a-key setups. A webhook needs an endpoint that accepts JSON, which a developer or an automation tool can provide.' },
+    { q: 'Do I need a developer?', a: 'Not for Slack, Sheets, Zoho or ArthaLeads, which are sign-in or paste-a-key setups. A webhook needs an endpoint that accepts JSON, which a developer or an automation tool can provide.' },
   ],
 }
 
