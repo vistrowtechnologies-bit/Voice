@@ -105,7 +105,7 @@ export function LanguageDetail() {
               Built for teams that take calls in {lang.name}.
             </h2>
             <p className="mt-4 leading-relaxed text-text-muted">
-              This page is for teams that need a real {lang.name} voice agent on live calls — not a
+              This page is for teams that need a real {lang.name} AI voice calling agent on live calls — not a
               translated chatbot, not an IVR recording, and not a human queue that only works during office hours.
             </p>
           </div>

@@ -20,7 +20,7 @@ const pages = [
   {
     slug: 'telugu',
     title: 'Telugu AI Voice Calling Agent for Phone & Web | Vistrow Voice',
-    phrases: ['Telugu voice agent for customer calls', 'Andhra Pradesh & Telangana', 'Hyderabad real estate', 'Example conversation', 'Tenglish is the normal case'],
+    phrases: ['Telugu AI voice calling agent', 'Andhra Pradesh & Telangana', 'Hyderabad real estate', 'Example conversation', 'Tenglish is the normal case'],
     demo: 'telugu-website-widget-call',
   },
   {
