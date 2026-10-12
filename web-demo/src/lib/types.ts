@@ -346,6 +346,22 @@ export interface AgentConfig {
   updatedAt: string
 }
 
+/** "Build with AI" draft - exactly the keys server/agent_builder.py returns,
+ * already validated, saved as-is through POST then PATCH /agents. */
+export type AgentDraft = Pick<
+  AgentConfig,
+  | 'name' | 'description' | 'model' | 'language' | 'voice' | 'tone' | 'firstSpeaker'
+  | 'welcomeMessage' | 'systemPrompt' | 'enabledFunctions' | 'maxCallDurationS' | 'postCallFields'
+> & { businessName: string; welcomeMessageOutbound: string }
+
+export type AgentDraftSection = 'basics' | 'voice' | 'instructions' | 'conversation' | 'after'
+
+export interface AgentDraftQuestion {
+  id: string
+  question: string
+  options: string[]
+}
+
 export interface Contact {
   id: number
   name: string

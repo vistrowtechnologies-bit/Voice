@@ -1,6 +1,9 @@
 import type {
   ActiveCallInfo,
   AgentConfig,
+  AgentDraft,
+  AgentDraftQuestion,
+  AgentDraftSection,
   SupportTicket,
   HelpTopic,
   HelpSearchHit,
@@ -211,6 +214,15 @@ export const createAgent = (data: Partial<AgentConfig>) => send<AgentConfig>('PO
 export const updateAgent = (id: number, data: Partial<AgentConfig>) =>
   send<AgentConfig>('PATCH', `/agents/${id}`, data)
 export const deleteAgent = (id: number) => send('DELETE', `/agents/${id}`)
+// "Build with AI": follow-up questions or a validated draft. Never saves.
+export const draftAgent = (body: {
+  description: string
+  businessName?: string
+  website?: string
+  answers?: Record<string, string>
+  section?: AgentDraftSection
+  current?: AgentDraft
+}) => send<{ questions?: AgentDraftQuestion[]; draft?: AgentDraft }>('POST', '/agents/draft', body)
 
 // ------------------------------------------ conversation testing lab
 
