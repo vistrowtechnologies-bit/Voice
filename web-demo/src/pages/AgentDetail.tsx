@@ -228,9 +228,9 @@ function AgentEditorForm({
         const live = geminiLiveVoiceName(v.value)!
         const gender = v.gender === 'female' ? 'Female' : v.gender === 'male' ? 'Male' : 'Neutral'
         const tone = style.get(live.toLowerCase())
-        return { value: v.value, label: `${live} · ${gender}${tone ? ` · ${tone}` : ''} (${v.name})`, live }
+        return { value: v.value, label: `${v.name} · ${gender}${tone ? ` · ${tone}` : ''} (Gemini ${live})`, name: v.name }
       })
-      .sort((a, b) => a.live.localeCompare(b.live))
+      .sort((a, b) => a.name.localeCompare(b.name))
   }, [catalog])
   useEffect(() => {
     fetchMyVoices().then(setMyVoices).catch(() => setMyVoices([]))

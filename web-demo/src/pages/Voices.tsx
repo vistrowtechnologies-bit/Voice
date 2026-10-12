@@ -4,7 +4,7 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { useVoicePreview } from '../components/VoicePreviewButton'
 import { addVoice, fetchVoiceCatalog, removeVoice } from '../lib/api'
-import { ADMIN_ONLY_MODELS } from '../lib/agentOptions'
+import { ADMIN_ONLY_MODELS, geminiLiveVoiceName } from '../lib/agentOptions'
 import { useAuth } from '../lib/auth'
 import type { VoiceCatalog, VoiceEntry } from '../lib/types'
 
@@ -243,7 +243,7 @@ function Spotlight({
           {entry.name}
         </h2>
         <p className="mt-1 text-sm text-text-muted">
-          {GENDER_LABEL[entry.gender]} · {realtime ? 'Gemini Live voice' : entry.tierLabel}
+          {GENDER_LABEL[entry.gender]} · {realtime ? `Gemini voice ${geminiLiveVoiceName(entry.value) ?? ''}` : entry.tierLabel}
         </p>
         {entry.note && (
           <p className="mx-auto mt-3 w-fit max-w-full rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{entry.note}</p>
@@ -289,7 +289,7 @@ function Spotlight({
                     On the agent, set <span className="font-bold text-text">Model</span> to {realtimeModelLabel ?? 'a Gemini Live model'}.
                   </li>
                   <li>
-                    Set its <span className="font-bold text-text">Voice</span> to {realtimeHd.name}. Calls then speak as {entry.name}.
+                    Set its <span className="font-bold text-text">Voice</span> to {realtimeHd.name}. Calls then speak with Google's {geminiLiveVoiceName(entry.value)} voice.
                   </li>
                 </ol>
                 <p className="mt-2 text-xs">
@@ -482,13 +482,17 @@ export function Voices() {
         const persona = v.value.slice('google38:'.length)
         const hd = all.find((h) => h.value.toLowerCase() === `google:chirp3:${persona}`)
         if (hd) hdFor.set(v.value, hd)
+        const gemini = persona.charAt(0).toUpperCase() + persona.slice(1)
         return {
           ...v,
-          name: persona.charAt(0).toUpperCase() + persona.slice(1),
-          note: `${v.note.split(' · ')[0]} voice${hd ? ` · ${hd.name}` : ''}`,
+          // Lead with the Indian name the agent picker uses (Myra), and keep
+          // Google's voice name (Achernar) as the detail.
+          name: hd ? hd.name.replace(/ HD$/, '') : gemini,
+          note: `${gemini} · ${v.note.split(' · ')[0]} voice`,
           selected: hd?.selected,
         }
       })
+      .sort((a, b) => a.name.localeCompare(b.name))
     return { realtimeVoices: list, realtimeHdFor: hdFor }
   }, [data])
 
@@ -594,7 +598,7 @@ export function Voices() {
                 <span className="text-primary">{preview.state === 'playing' ? 'Playing' : 'Paused'}</span> · {current.name}
               </p>
               <p className="truncate text-xs text-text-muted">
-                {GENDER_LABEL[current.gender]} · {realtimeActive ? `Gemini Live voice${currentHd ? ` · pick ${currentHd.name}` : ''}` : current.tierLabel}
+                {GENDER_LABEL[current.gender]} · {realtimeActive ? `Gemini voice ${geminiLiveVoiceName(current.value) ?? ''}${currentHd ? ` · pick ${currentHd.name}` : ''}` : current.tierLabel}
               </p>
               <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-high">
                 <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${Math.round(preview.progress * 100)}%` }} />
