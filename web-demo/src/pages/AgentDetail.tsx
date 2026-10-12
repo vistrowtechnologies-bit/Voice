@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { BrowserTestModal } from '../components/AgentTestCall'
 import { AmbiencePreviewButton } from '../components/AmbiencePreviewButton'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -57,6 +58,10 @@ export function AgentDetail() {
   const [agent, setAgent] = useState<AgentConfig | null>(null)
   const [kbs, setKbs] = useState<KnowledgeBase[]>([])
   const [loaded, setLoaded] = useState(false)
+  // ?drafted=1 - arrived from "Build with AI" (AgentBuilder.tsx).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const drafted = searchParams.get('drafted') === '1'
+  const [testing, setTesting] = useState(false)
 
   useEffect(() => {
     setLoaded(false)
@@ -113,6 +118,29 @@ export function AgentDetail() {
         </Link>
       </PageHeader>
       <section className="p-4 sm:p-6">
+        {drafted && (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+            <Icon name="auto_awesome" className="text-[18px] text-primary" />
+            <span className="min-w-0 flex-1">Drafted with AI — review the instructions and run a test call.</span>
+            <button
+              type="button"
+              onClick={() => setTesting(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-bg hover:opacity-90"
+            >
+              <Icon name="mic" className="text-[15px]" />
+              Test call
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchParams({}, { replace: true })}
+              aria-label="Dismiss"
+              className="bg-transparent text-text-muted hover:text-text"
+            >
+              <Icon name="close" className="text-[18px]" />
+            </button>
+          </div>
+        )}
+        {testing && <BrowserTestModal agent={agent} onClose={() => setTesting(false)} />}
         <AgentEditorForm
           agent={agent}
           kbs={kbs}
@@ -1089,7 +1117,7 @@ function ParamsEditor({
   )
 }
 
-function PostCallFieldsEditor({
+export function PostCallFieldsEditor({
   value,
   onChange,
   inputCls,
@@ -1106,7 +1134,7 @@ function PostCallFieldsEditor({
         After each call, the agent reads the transcript and fills these fields - shown on the call record.
       </p>
       {value.map((f, i) => (
-        <div key={i} className="flex items-center gap-1.5">
+        <div key={i} className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap">
           <input
             value={f.key}
             onChange={(e) => update(i, { key: e.target.value.replace(/[^a-zA-Z0-9_]/g, '_') })}
@@ -1122,7 +1150,7 @@ function PostCallFieldsEditor({
             value={f.description}
             onChange={(e) => update(i, { description: e.target.value })}
             placeholder="What to extract, e.g. the caller's order number"
-            className={`${inputCls} flex-1`}
+            className={`${inputCls} min-w-[10rem] flex-1`}
           />
           <button onClick={() => onChange(value.filter((_, idx) => idx !== i))} aria-label="Remove field" className="text-text-muted hover:text-destructive">
             <Icon name="close" className="text-[14px]" />
