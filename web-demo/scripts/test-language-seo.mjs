@@ -7,20 +7,20 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url)) + '/..'
 const pages = [
   {
     slug: 'hindi',
-    title: 'Hindi AI Voice Calling Agent for Phone & Web | Vistrow Voice',
-    phrases: ['Hinglish AI voice calling agent', 'real AI phone calling agent', 'North & Central India'],
+    title: 'Hindi AI Voice Calling Agent with Hinglish | Vistrow Voice',
+    phrases: ['Hinglish AI voice calling agent', 'real AI phone calling agent', 'North & Central India', 'Example conversation', 'Hinglish is the normal case'],
     demo: 'hindi-real-estate-lead-qualification',
   },
   {
     slug: 'kannada',
-    title: 'Kannada AI Voice Calling Agent for Customer Calls | Vistrow Voice',
-    phrases: ['best AI voice calling agent in Kannada', 'Bengaluru and Karnataka', 'Kannada-English code-switching'],
+    title: 'Kannada AI Voice Calling Agent for Karnataka | Vistrow Voice',
+    phrases: ['best AI voice calling agent in Kannada', 'Bengaluru and Karnataka', 'Kannada-English code-switching', 'Example conversation', 'Kanglish is the normal case'],
     demo: 'kannada-inbound-property-enquiry',
   },
   {
     slug: 'telugu',
-    title: 'Telugu AI Voice Agent for Phone & Website Calls | Vistrow Voice',
-    phrases: ['Telugu voice agent for customer calls', 'Andhra Pradesh & Telangana', 'Hyderabad real estate'],
+    title: 'Telugu AI Voice Calling Agent for Phone & Web | Vistrow Voice',
+    phrases: ['Telugu voice agent for customer calls', 'Andhra Pradesh & Telangana', 'Hyderabad real estate', 'Example conversation', 'Tenglish is the normal case'],
     demo: 'telugu-website-widget-call',
   },
   {

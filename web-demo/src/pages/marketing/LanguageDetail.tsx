@@ -4,30 +4,8 @@ import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
 import { Seo } from '../../components/Seo'
 import { CTABand, PageHero, SectionEyebrow } from '../../components/MarketingBits'
-import { LANGUAGES, SOLUTIONS } from '../../lib/marketingContent'
-
-const LANGUAGE_SEO_META: Record<string, { title: string; description: string }> = {
-  hindi: {
-    title: 'Hindi AI Voice Calling Agent for Phone & Web | Vistrow Voice',
-    description:
-      'Build a Hindi and Hinglish AI voice calling agent for inbound calls, outbound campaigns, website conversations, lead qualification, and appointment booking.',
-  },
-  kannada: {
-    title: 'Kannada AI Voice Calling Agent for Customer Calls | Vistrow Voice',
-    description:
-      'Use a Kannada AI voice calling agent for Bengaluru and Karnataka customer calls, with Kannada-English code-switching, lead qualification, transcripts, and CRM-ready records.',
-  },
-  telugu: {
-    title: 'Telugu AI Voice Agent for Phone & Website Calls | Vistrow Voice',
-    description:
-      'Handle Telugu customer calls across phone and website conversations. Artha qualifies leads, answers approved questions, books next steps, and records every call.',
-  },
-  marathi: {
-    title: 'Marathi AI Voice Calling Agent for Maharashtra | Vistrow Voice',
-    description:
-      'Answer Pune, Mumbai, and Maharashtra customer calls with a Marathi AI voice agent that can switch to Hindi or English and save structured call outcomes.',
-  },
-}
+import { INDIAN_LANGUAGE_VOICES, LANGUAGES, SOLUTIONS } from '../../lib/marketingContent'
+import { seoForPath } from '../../lib/seoPages'
 
 // Give high-intent language landing pages a clear next step into a useful,
 // matching example. These are explicitly labelled as representative samples
@@ -47,9 +25,11 @@ export function LanguageDetail() {
   const { slug } = useParams()
   const lang = LANGUAGES.find((l) => l.slug === slug)
   if (!lang) return <Navigate to="/languages" replace />
-  const seoMeta = LANGUAGE_SEO_META[lang.slug] ?? {
+  // Titles and descriptions live in the SEO registry (seoPages.ts), which
+  // <Seo> prefers anyway; reading them here keeps a single source.
+  const seoMeta = seoForPath(`/languages/${lang.slug}`) ?? {
     title: `${lang.name} AI Voice Agent for Customer Calls | Vistrow Voice`,
-    description: `Handle inbound, outbound, and website customer conversations with a ${lang.name} AI voice agent that supports natural English code-switching and 24/7 availability.`,
+    description: `Handle inbound, outbound, and website customer conversations with a ${lang.name} AI voice agent.`,
   }
   const demoCall = LANGUAGE_DEMO_CALLS[lang.slug]
 
@@ -165,6 +145,82 @@ export function LanguageDetail() {
           </div>
         </div>
       </section>
+
+      {lang.sampleExchange && (
+        <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
+            <figure className="rounded-3xl border border-border bg-surface p-6 sm:p-8">
+              <SectionEyebrow>Example conversation</SectionEyebrow>
+              <figcaption className="mt-3">
+                <h2 className="font-display text-2xl font-bold tracking-tight">{lang.sampleExchange.context}, in {lang.name}.</h2>
+                <p className="mt-2 text-sm text-text-muted">
+                  A short written sample to show the style of call, with an English gloss under each line. It is not a
+                  recording of a customer call.
+                </p>
+              </figcaption>
+              <ol className="mt-6 space-y-4">
+                {lang.sampleExchange.turns.map((turn, i) => (
+                  <li
+                    key={i}
+                    className={`rounded-2xl border p-4 ${turn.speaker === 'Agent' ? 'border-primary/25 bg-primary/[0.06]' : 'border-border bg-surface-high/60'}`}
+                  >
+                    <p className="text-xs font-bold uppercase tracking-widest text-text-muted">
+                      {turn.speaker === 'Agent' ? 'AI agent' : 'Caller'}
+                    </p>
+                    <p lang={lang.code} className="mt-1.5 text-base leading-relaxed text-text">{turn.native}</p>
+                    <p className="mt-1 text-sm italic leading-relaxed text-text-muted">{turn.gloss}</p>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-5 flex gap-2 text-sm leading-relaxed text-text-muted">
+                <Icon name="task_alt" className="mt-0.5 shrink-0 text-[16px] text-cyan" />
+                <span>{lang.sampleExchange.outcome}</span>
+              </p>
+            </figure>
+
+            <div className="grid gap-5">
+              {lang.codeMixing && (
+                <div className="rounded-2xl border border-border bg-surface p-6">
+                  <h2 className="font-display text-lg font-semibold">{lang.codeMixing.name} is the normal case</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-text-muted">{lang.codeMixing.body}</p>
+                </div>
+              )}
+              <div className="rounded-2xl border border-border bg-surface p-6">
+                <h2 className="font-display text-lg font-semibold">Voices that speak {lang.name}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">
+                  These Standard voices in the agent picker speak {lang.name} and keep the same voice if the caller
+                  moves to English or another Indian language: {INDIAN_LANGUAGE_VOICES.female.join(', ')} (female) and{' '}
+                  {INDIAN_LANGUAGE_VOICES.male.join(', ')} (male).
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {lang.regionalCalls && (
+        <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+          <div className="mb-8 max-w-2xl">
+            <SectionEyebrow>{`${lang.region} calls`}</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Where {lang.name} calls matter most.</h2>
+          </div>
+          <div className="grid gap-5 md:grid-cols-3">
+            {lang.regionalCalls.map((call) => (
+              <div key={call.title} className="rounded-2xl border border-border bg-surface p-6">
+                <h3 className="font-display text-lg font-semibold">{call.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">{call.body}</p>
+                <Link
+                  to={call.to}
+                  className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                >
+                  {call.link}
+                  <Icon name="arrow_forward" className="text-[16px]" />
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
         <div className="mb-10 text-center">

@@ -643,6 +643,23 @@ export interface LanguagePage {
   callBehaviors?: string[]
   /** Extra FAQ tuned to the language's highest search opportunity. */
   seoFaq?: { q: string; a: string }
+  /** A short written sample exchange (native script + English gloss). Labelled
+   * on the page as a written example, never as a recorded customer call. */
+  sampleExchange?: { context: string; turns: { speaker: 'Caller' | 'Agent'; native: string; gloss: string }[]; outcome: string }
+  /** How callers of this language actually mix in English, and what the agent does. */
+  codeMixing?: { name: string; body: string }
+  /** Regional call types, each linked to an existing page that goes deeper. */
+  regionalCalls?: { title: string; body: string; to: string; link: string }[]
+}
+
+/** Voices that speak every one of the ten Indian languages and keep the same
+ * voice when the caller switches language. These are the Standard-tier voices
+ * offered in the agent picker (agent/voice_catalog.py: Sarvam bulbul:v3
+ * speakers, whose languages_for() covers all eleven native codes). Update this
+ * if that catalog changes. */
+export const INDIAN_LANGUAGE_VOICES = {
+  female: ['Pooja', 'Priya', 'Kavya', 'Ritu', 'Simran', 'Ishita'],
+  male: ['Shubh', 'Aditya', 'Rohan', 'Amit'],
 }
 
 export const LANGUAGES: LanguagePage[] = [
@@ -669,6 +686,24 @@ export const LANGUAGES: LanguagePage[] = [
       q: 'Is this a Hindi voice bot or a real AI phone calling agent?',
       a: 'It is a real AI phone calling agent: it speaks, listens, qualifies the caller, answers approved questions, and logs the conversation. It is not just a recorded Hindi IVR or a translated chatbot.',
     },
+    sampleExchange: {
+      context: 'An outbound EMI reminder call',
+      turns: [
+        { speaker: 'Agent', native: 'नमस्ते राहुल जी, मैं Artha बोल रही हूँ। आपकी इस महीने की EMI 15 तारीख़ को due है, बस याद दिलाने के लिए कॉल किया।', gloss: 'Hello Rahul ji, this is Artha. Your EMI for this month is due on the 15th; I’m just calling to remind you.' },
+        { speaker: 'Caller', native: 'हाँ, पता है। Salary 12 को आएगी, तो 13 तक payment कर दूँगा।', gloss: 'Yes, I know. My salary comes on the 12th, so I’ll pay by the 13th.' },
+        { speaker: 'Agent', native: 'ठीक है, मैंने 13 तारीख़ नोट कर ली है। और कोई सवाल हो तो बताइए।', gloss: 'Okay, I’ve noted the 13th. Let me know if you have any other question.' },
+      ],
+      outcome: 'With a post-call field set up for it, the promised date is pulled from the transcript for your collections team.',
+    },
+    codeMixing: {
+      name: 'Hinglish',
+      body: 'Most Hindi calls are Hinglish: “EMI”, “due date”, “payment”, “site visit” and numbers often come in English inside a Hindi sentence. The agent keeps replying in Hindi while understanding those English words, and switches fully to English if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Payment and EMI reminders', body: 'Polite outbound reminders across the Hindi belt, inside the permitted calling window and checked against your Do-Not-Call list.', to: '/solutions/finance', link: 'Finance and collections calls' },
+      { title: 'Property enquiries', body: 'Buyers in Delhi NCR, Lucknow, Jaipur or Indore asking about budget, location and site visits, mostly in Hinglish.', to: '/solutions/real-estate/hindi-ai-calling-agent-real-estate', link: 'Hindi real estate calling' },
+      { title: 'Order and delivery calls', body: 'Where-is-my-order, return and COD confirmation calls for online sellers whose customers prefer Hindi.', to: '/solutions/ecommerce', link: 'E-commerce support calls' },
+    ],
   },
   {
     slug: 'marathi',
@@ -718,6 +753,25 @@ export const LANGUAGES: LanguagePage[] = [
       q: 'Can Artha handle Telugu callers on both phone and website calls?',
       a: 'Yes. The same Telugu AI voice agent can answer phone calls and website voice-widget conversations, then save the transcript, summary, and lead details for your team.',
     },
+    sampleExchange: {
+      context: 'An inbound call to a clinic’s appointment line',
+      turns: [
+        { speaker: 'Caller', native: 'హలో, రేపు డాక్టర్ గారి appointment దొరుకుతుందా?', gloss: 'Hello, can I get an appointment with the doctor tomorrow?' },
+        { speaker: 'Agent', native: 'నమస్కారం! రేపు సాయంత్రం 5 గంటలకు slot ఖాళీగా ఉంది. మీ పేరు చెప్తారా?', gloss: 'Hello! There’s a free slot tomorrow at 5 p.m. Could you tell me your name?' },
+        { speaker: 'Caller', native: 'లక్ష్మి. Evening 5 okay.', gloss: 'Lakshmi. Evening 5 is okay.' },
+        { speaker: 'Agent', native: 'సరే లక్ష్మి గారు, రేపు సాయంత్రం 5 గంటలకు మీ appointment book అయింది.', gloss: 'Okay Lakshmi garu, your appointment is booked for 5 p.m. tomorrow.' },
+      ],
+      outcome: 'The booking appears in Appointments, inside the clinic’s bookable hours, and the transcript is in Calls history.',
+    },
+    codeMixing: {
+      name: 'Tenglish',
+      body: 'Telugu callers in Hyderabad often switch to English for words like “appointment”, “slot”, “EMI” or a flat size. The agent understands those terms without asking the caller to repeat them in Telugu, keeps replying in Telugu, and moves to English if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Clinic and diagnostic bookings', body: 'Appointment and timing calls for clinics in Andhra Pradesh and Telangana, where many patients would rather not navigate an English menu.', to: '/solutions/healthcare', link: 'AI receptionist for clinics' },
+      { title: 'Hyderabad property enquiries', body: 'Buyer calls about projects, budgets and site visits, qualified in Telugu before your sales team calls back.', to: '/solutions/real-estate/telugu-ai-calling-agent-hyderabad-real-estate', link: 'Telugu real estate calling' },
+      { title: 'Admissions and service enquiries', body: 'Course, fee and timing questions answered from your approved information, around the clock.', to: '/product/inbound', link: 'Inbound call answering' },
+    ],
   },
   {
     slug: 'kannada',
@@ -742,6 +796,25 @@ export const LANGUAGES: LanguagePage[] = [
       q: 'Why use a Kannada AI voice calling agent instead of an English bot?',
       a: 'Kannada callers explain needs more clearly when the call starts in Kannada. Artha keeps the conversation local, then captures structured lead data for your team.',
     },
+    sampleExchange: {
+      context: 'An inbound property enquiry in Bengaluru',
+      turns: [
+        { speaker: 'Caller', native: 'ಹಲೋ, Whitefield ಹತ್ತಿರ 2BHK flat ಇದೆಯಾ?', gloss: 'Hello, is there a 2BHK flat near Whitefield?' },
+        { speaker: 'Agent', native: 'ನಮಸ್ಕಾರ! ಹೌದು, Whitefield ಹತ್ತಿರ 2BHK ಆಯ್ಕೆಗಳಿವೆ. ನಿಮ್ಮ budget ಎಷ್ಟು ಅಂತ ಹೇಳ್ತೀರಾ?', gloss: 'Hello! Yes, there are 2BHK options near Whitefield. Could you tell me your budget?' },
+        { speaker: 'Caller', native: 'ಸುಮಾರು 80 lakh ಒಳಗೆ. Weekend site visit ಮಾಡಬಹುದಾ?', gloss: 'Under about 80 lakh. Can I do a site visit at the weekend?' },
+        { speaker: 'Agent', native: 'ಖಂಡಿತ. ಶನಿವಾರ ಬೆಳಿಗ್ಗೆ 11 ಗಂಟೆಗೆ slot ಖಾಲಿ ಇದೆ, book ಮಾಡ್ಲಾ?', gloss: 'Of course. There’s a free slot on Saturday at 11 a.m. Shall I book it?' },
+      ],
+      outcome: 'Budget, location and the site-visit slot are saved on the call and can be sent to your CRM.',
+    },
+    codeMixing: {
+      name: 'Kanglish',
+      body: 'Bengaluru callers mix Kannada and English constantly: “2BHK”, “budget”, “site visit”, “EMI” and area names usually stay in English. The agent follows that mix, keeps replying in Kannada, and switches to English if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Bengaluru property enquiries', body: 'Buyer calls about projects, budgets and site visits in Whitefield, Sarjapur or Hebbal, answered in Kannada.', to: '/solutions/real-estate/kannada-ai-voice-bot-bangalore-real-estate', link: 'Kannada real estate calling' },
+      { title: 'Clinic and service bookings', body: 'Appointment calls for clinics and service centres across Karnataka, booked into your real availability.', to: '/solutions/healthcare', link: 'AI receptionist for clinics' },
+      { title: 'Support lines', body: 'Status and how-to calls from customers who would rather not switch to English, with a transfer when a person is needed.', to: '/solutions/support', link: 'Customer support calls' },
+    ],
   },
   { slug: 'bengali', name: 'Bengali', native: 'বাংলা', code: 'bn-IN', region: 'West Bengal', greeting: 'নমস্কার', blurb: 'Kolkata and West Bengal callers, answered in Bengali on the first ring.' },
   { slug: 'gujarati', name: 'Gujarati', native: 'ગુજરાતી', code: 'gu-IN', region: 'Gujarat', greeting: 'નમસ્તે', blurb: 'Built for Gujarat’s business-heavy call patterns - enquiries, follow-ups, and payment reminders in Gujarati.' },

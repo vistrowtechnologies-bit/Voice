@@ -83,19 +83,19 @@ const LANGUAGE_PAGES = [
 
 const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { title: string; description: string }>> = {
   hindi: {
-    title: 'Hindi AI Voice Calling Agent for Phone & Web | Vistrow Voice',
+    title: 'Hindi AI Voice Calling Agent with Hinglish | Vistrow Voice',
     description:
-      'Build a Hindi and Hinglish AI voice calling agent for inbound calls, outbound campaigns, website conversations, lead qualification, and appointment booking.',
+      'Hindi and Hinglish AI voice calling agent for inbound calls, payment reminders and website voice calls. Qualifies leads, books visits, logs every call.',
   },
   kannada: {
-    title: 'Kannada AI Voice Calling Agent for Customer Calls | Vistrow Voice',
+    title: 'Kannada AI Voice Calling Agent for Karnataka | Vistrow Voice',
     description:
-      'Use a Kannada AI voice calling agent for Bengaluru and Karnataka customer calls, with Kannada-English code-switching, lead qualification, transcripts, and CRM-ready records.',
+      'Kannada AI voice calling agent for Bengaluru and Karnataka businesses. Follows Kannada-English switching, qualifies leads, books visits, records calls.',
   },
   telugu: {
-    title: 'Telugu AI Voice Agent for Phone & Website Calls | Vistrow Voice',
+    title: 'Telugu AI Voice Calling Agent for Phone & Web | Vistrow Voice',
     description:
-      'Handle Telugu customer calls across phone and website conversations. Artha qualifies leads, answers approved questions, books next steps, and records every call.',
+      'Telugu AI voice calling agent for Hyderabad, Andhra Pradesh and Telangana. Answers phone and website calls, books appointments and logs every call.',
   },
   marathi: {
     title: 'Marathi AI Voice Calling Agent for Maharashtra | Vistrow Voice',
