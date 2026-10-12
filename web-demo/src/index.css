@@ -129,6 +129,25 @@ body {
   }
 }
 
+/* Voices page waveform: bars sit still at reduced opacity and only move while
+   a preview is actually playing. */
+.vv-wave-bar {
+  opacity: 0.3;
+  transform-origin: center;
+  transition: opacity 200ms ease;
+}
+.vv-wave-bar.is-playing {
+  opacity: 1;
+  animation: vv-wave 1s ease-in-out infinite;
+}
+@keyframes vv-wave {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vv-wave-bar.is-playing { animation: none; }
+}
+
 /* One place to make every solid-primary button (dashboard AND the public
    marketing site both build from this same stylesheet) use the brand's
    diagonal violet gradient instead of a flat fill, matching the gradient

@@ -385,3 +385,24 @@ Fix: `<hr class="wp-header-end">` right after the header; plugin 1.7.1; `server/
 Verified: on the live page, adding the marker and re-running core's own relocation line put all four notices below the header with dark text and the header back to one row (DOM-only simulation, nothing installed on the site). Not verified: the new zip installed on a real site; no PHP linter on this machine (change is HTML only).
 
 Next: merge (needs a Railway deploy to serve the new zip), then the site owner uploads/updates the plugin in WP Admin → Plugins.
+
+### Claude — 2026-10-12 — Voices page redesign ("Spotlight", owner-chosen)
+
+Branch `claude/voices-page-redesign`. The owner picked style B from two mockups (`design/voices_preview/index.html`, local only, not committed).
+
+Changes:
+- `web-demo/src/pages/Voices.tsx` rewritten as a list plus a sticky spotlight panel. The panel has a large orb, a waveform and a big play button. While the audio plays, the real audition sentence lights up word by word. It also shows stat tiles (languages, live/fixed switch, credit multiplier), language chips, and Add / Added (Remove on hover) / Upgrade.
+- List rows have a small play button; playing one also selects it. New filters: All / Added / Female / Male. "Added" and search look across all tabs.
+- A "N voices in your agents' picker" pill with avatars opens the Added filter.
+- `VoicePreviewButton.tsx`: playback moved into `useVoicePreview(voice, lang)` returning `{state, progress, toggle}`. The button is unchanged for its other users.
+- `server/calls_db.py` `voice_catalog_for_account` returns `sampleTexts` (hi/en × female/male, via `voice_catalog.sample_text`).
+- `index.css`: `.vv-wave-bar` animation, which respects reduced motion.
+- The HD tab note no longer hardcodes "ten Indian languages". Language text comes from the data, so PR #59's Voices.tsx hunk is no longer needed.
+
+Verified (local dev server with a mock API serving the real `voice_catalog.CATALOG` + a 5 s WAV):
+- Row play selects the voice and plays; the waveform animates and words light in step (12/33 at 2 s).
+- Add updates the count, the row badge and the CTA. The Added filter works across tabs, and the Standard tab is fine.
+- Light and dark at 1440 px; 375 px has no horizontal scroll, the panel is compact, and the list starts on the first screen.
+- `npm run build` passes.
+
+Not verified: real Google/Sarvam preview audio on production. `server/calls_db.py` was only syntax-checked (no Postgres here).

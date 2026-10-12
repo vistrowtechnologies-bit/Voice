@@ -809,6 +809,8 @@ export interface VoiceEntry {
 export interface VoiceCatalog {
   voices: VoiceEntry[]
   selectedCount: number
+  // Audition line per preview language and speaker gender (Hindi marks gender).
+  sampleTexts?: Record<string, { female?: string | null; male?: string | null }>
 }
 
 // One item in the derived attention feed (GET /notifications). Computed
