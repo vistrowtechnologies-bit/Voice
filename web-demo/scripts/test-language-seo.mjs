@@ -26,8 +26,9 @@ const pages = [
   {
     slug: 'marathi',
     title: 'Marathi AI Voice Calling Agent for Maharashtra | Vistrow Voice',
-    phrases: ['Marathi AI voice calling agent', 'Pune, Mumbai', 'Maharashtra'],
+    phrases: ['Marathi AI voice calling agent', 'Pune, Mumbai', 'Maharashtra', 'Example conversation', 'Marathi-Hindi-English mixing is the normal case', 'Marathi call notes'],
     demo: 'marathi-site-visit-booking',
+    links: ['/solutions/real-estate/marathi-ai-calling-agent-mumbai-real-estate', '/demo-calls/marathi-site-visit-booking'],
   },
   // No Punjabi or Tamil demo-call page exists, so these two link out to the
   // solution pages their regional call types point at instead.
@@ -42,6 +43,30 @@ const pages = [
     title: 'Tamil AI Voice Calling Agent for Tamil Nadu | Vistrow Voice',
     phrases: ['Tamil AI voice calling agent', 'Chennai and Tamil Nadu', 'Example conversation', 'Tanglish is the normal case', 'Voices that speak Tamil'],
     links: ['/solutions/real-estate', '/solutions/healthcare'],
+  },
+  {
+    slug: 'odia',
+    title: 'Odia AI Voice Agent for Customer Calls | Vistrow Voice',
+    phrases: ['Odia', 'Bhubaneswar', 'Example conversation', 'Odia-English mixing is the normal case', 'Odia call notes', 'Voices that speak Odia'],
+    links: ['/ai-ivr', '/vs-ivr', '/languages/bengali'],
+  },
+  {
+    slug: 'malayalam',
+    title: 'Malayalam AI Voice Agent for Customer Calls | Vistrow Voice',
+    phrases: ['Malayalam', 'Kochi', 'Example conversation', 'Manglish is the normal case', 'Malayalam call notes', 'Voices that speak Malayalam'],
+    links: ['/compare/exotel', '/product/widget', '/solutions/real-estate'],
+  },
+  {
+    slug: 'gujarati',
+    title: 'Gujarati AI Voice Agent for Customer Calls | Vistrow Voice',
+    phrases: ['Gujarati', 'Surat', 'Example conversation', 'Gujarati-Hindi-English mixing is the normal case', 'Gujarati call notes', 'Voices that speak Gujarati'],
+    links: ['/solutions/real-estate/gujarati-ai-calling-agent-ahmedabad-real-estate', '/compare/knowlarity', '/solutions/finance'],
+  },
+  {
+    slug: 'bengali',
+    title: 'Bengali AI Voice Agent for Customer Calls | Vistrow Voice',
+    phrases: ['Bengali', 'Kolkata', 'Example conversation', 'Banglish is the normal case', 'Bengali call notes', 'Voices that speak Bengali'],
+    links: ['/compare/ozonetel', '/solutions/ecommerce', '/languages/odia'],
   },
 ]
 

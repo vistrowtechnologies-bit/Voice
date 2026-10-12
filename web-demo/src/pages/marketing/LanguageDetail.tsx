@@ -35,6 +35,7 @@ export function LanguageDetail() {
 
   const faqs = [
     ...(lang.seoFaq ? [lang.seoFaq] : []),
+    ...(lang.extraFaqs ?? []),
     {
       q: `Can the AI agent handle a full call in ${lang.name}?`,
       a: `Yes - Artha answers, qualifies, and books entirely in ${lang.name}, including numbers, dates, and Indian names. It isn't a translation layer bolted onto an English agent.`,
@@ -222,6 +223,25 @@ export function LanguageDetail() {
         </section>
       )}
 
+      {lang.guide && (
+        <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+          <div className="mb-8 max-w-2xl">
+            <SectionEyebrow>{`${lang.name} call notes`}</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">
+              What to get right before you go live in {lang.name}.
+            </h2>
+          </div>
+          <div className="grid gap-5 md:grid-cols-3">
+            {lang.guide.map((note) => (
+              <div key={note.title} className="rounded-2xl border border-border bg-surface p-6">
+                <h3 className="font-display text-lg font-semibold">{note.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">{note.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
         <div className="mb-10 text-center">
           <SectionEyebrow>Where teams use it</SectionEyebrow>
@@ -276,6 +296,28 @@ export function LanguageDetail() {
       )}
 
       <FaqSection items={faqs} />
+
+      {lang.related && (
+        <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
+          <div className="rounded-2xl border border-border bg-surface/50 px-6 py-7">
+            <p className="text-center text-xs font-bold uppercase tracking-widest text-text-muted">
+              {`Related to ${lang.name} calls`}
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {lang.related.map((r) => (
+                <Link
+                  key={r.to}
+                  to={r.to}
+                  className="inline-flex items-center gap-1 rounded-full border border-border px-4 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
+                >
+                  {r.label}
+                  <Icon name="arrow_forward" className="text-[14px]" />
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
         <div className="rounded-2xl border border-border bg-surface/50 px-6 py-7">
