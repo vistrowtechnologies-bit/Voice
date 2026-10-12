@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vistrow Voice Widget
  * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.7.0
+ * Version: 1.7.1
  * Author: Vistrow Voice
  */
 
@@ -248,14 +248,19 @@ function vistrow_voice_render_settings_page() {
                 <span class="dot"></span><?php echo $connected ? 'Connected' : 'Not connected'; ?>
             </span>
         </div>
+        <?php
+        // Marker for WP core's common.js, which moves every admin notice
+        // (other plugins' nags included) to just after .wp-header-end, or,
+        // without one, after the first .wrap h1 - which is inside the purple
+        // header above, so notices landed between our title and tagline and
+        // inherited its pale text colour.
+        ?>
+        <hr class="wp-header-end">
 
         <?php
-        // Deliberately NOT using add_settings_error()/settings_errors() here:
-        // WP core's common.js relocates any .notice/.updated/.error element to
-        // sit right after the page's first <h1>, and our <h1> lives inside the
-        // purple .vvw-header box above — so the "Settings saved" banner would
-        // get yanked into the middle of that header instead of staying here.
-        // A plain div with no WP notice classes is immune to that relocation.
+        // A plain div rather than settings_errors(): WP notices are relocated
+        // by common.js (see .wp-header-end above), and this keeps the
+        // "Settings saved" banner in our own style, exactly here.
         if (isset($_GET['settings-updated'])) :
         ?>
             <div class="vvw-saved-notice" id="vvw-saved-notice">
