@@ -23,6 +23,8 @@ import call_intelligence
 import calls_db
 import plan_policy
 import campaign_dialer
+import copilot
+import copilot_tools
 import db_backup
 import email_sender
 import disposable_email
@@ -168,11 +170,12 @@ async def no_store_api_responses(request: Request, call_next):
 # "View as" (a super-admin support session) can look at everything and fix
 # a customer's setup, but never touch what is the customer's own: keys,
 # billing, team, profile and sign-in, recordings, numbers, integration
-# disconnects, account deletion. Any DELETE is refused too.
+# disconnects, account deletion, copilot actions. Any DELETE is refused too.
 _SUPPORT_BLOCKED_PATHS = re.compile(
     r"^/(api-keys|billing|team|profile|auth|telephony/numbers|storage/recordings)(/|$)"
     r"|^/calls/[^/]+/recording"
     r"|^/integrations/[^/]+/disconnect$"
+    r"|^/help/chat/confirm$"
 )
 
 
@@ -249,6 +252,7 @@ async def require_session(request: Request, call_next):
             request.state.account_id = account_id
             request.state.user_id = calls_db.account_owner_user_id(account_id)
             request.state.impersonator_id = None
+            request.state.via_api_key = True
             return await call_next(request)
     return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
@@ -3264,17 +3268,19 @@ def draft_agent(data: dict = Body(...), user: dict = Depends(require_role("membe
         raise HTTPException(exc.status, exc.detail) from exc
 
 
-@app.patch("/agents/{agent_id}")
-def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def _guard_agent_patch(data: dict, account_id: int, agent_id: int) -> dict:
+    """Every check an agent edit goes through, shared by PATCH /agents/{id}
+    and the copilot's agent actions (copilot_tools.AGENT_PATCH_GUARD).
+    Raises HTTPException; returns the data with owner-only fields dropped."""
     _guard_stt_provider(data)
-    _guard_voice_tier(data, user["account_id"])
-    _guard_realtime_voice(data, user["account_id"], agent_id)
-    _guard_admin_only_model(data, user["account_id"])
+    _guard_voice_tier(data, account_id)
+    _guard_realtime_voice(data, account_id, agent_id)
+    _guard_admin_only_model(data, account_id)
     for fields, feature in ((('kbId', 'kb_id'), 'knowledge'),
                             (('liveCatalogEnabled', 'live_catalog_enabled'), 'live_catalog')):
         if any(data.get(field) for field in fields):
             try:
-                calls_db.require_feature(user["account_id"], feature)
+                calls_db.require_feature(account_id, feature)
             except plan_policy.EntitlementError as exc:
                 raise HTTPException(403, str(exc)) from exc
     # Both of these decide what the PUBLIC marketing site talks to, so only
@@ -3287,10 +3293,17 @@ def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(cur
     _OWNER_ONLY_AGENT_FIELDS = (
         "isPlatformDemo", "is_platform_demo", "publicDemoSlug", "public_demo_slug",
     )
-    if any(f in data for f in _OWNER_ONLY_AGENT_FIELDS) and not calls_db.is_platform_owner(
-        user["account_id"]
-    ):
+    if any(f in data for f in _OWNER_ONLY_AGENT_FIELDS) and not calls_db.is_platform_owner(account_id):
         data = {k: v for k, v in data.items() if k not in _OWNER_ONLY_AGENT_FIELDS}
+    return data
+
+
+copilot_tools.AGENT_PATCH_GUARD = _guard_agent_patch
+
+
+@app.patch("/agents/{agent_id}")
+def update_agent(agent_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+    data = _guard_agent_patch(data, user["account_id"], agent_id)
     agent = calls_db.update_agent(agent_id, data, user["account_id"])
     if agent is None:
         raise HTTPException(404, "Agent not found")
@@ -3823,21 +3836,62 @@ def _help_chat_rate_limited(user_id: int, now: float | None = None) -> bool:
 
 
 @app.post("/help/chat")
-def help_chat_message(req: HelpChatRequest, user: dict = Depends(current_user)) -> dict:
+def help_chat_message(req: HelpChatRequest, request: Request, user: dict = Depends(current_user)) -> dict:
     if _help_chat_rate_limited(user["user_id"]):
         raise HTTPException(429, "You've sent a lot of help messages — please wait a little, or open a support ticket.")
     try:
         preferences = calls_db.get_user_preferences(user["user_id"])
+        member = calls_db.get_user_by_id(user["user_id"]) or {}
         result = help_chat.answer_help_question(
             req.message,
             [turn.model_dump() for turn in req.history],
             account_id=user["account_id"],
             current_page=req.currentPage,
             timezone_name=preferences.get("timezone") or "Asia/Kolkata",
+            user_id=user["user_id"],
+            role=member.get("role"),
+            impersonating=bool(getattr(request.state, "impersonator_id", None)),
         )
     except RuntimeError as exc:
         raise HTTPException(502, str(exc)) from exc
     return result
+
+
+class CopilotActionRequest(BaseModel):
+    token: str
+
+
+def _copilot_decision(fn, req: CopilotActionRequest, user: dict) -> dict:
+    try:
+        return fn(req.token, user["account_id"], user["user_id"])
+    except copilot.ConfirmError as exc:
+        raise HTTPException(exc.status, exc.detail) from exc
+
+
+@app.post("/help/chat/confirm")
+def help_chat_confirm(req: CopilotActionRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+    """Runs one action the copilot proposed (copilot.confirm re-checks the
+    signature, expiry, session, role, plan and daily cap). Refused during
+    "View as" (here and by guard_support_session) and for API-key requests,
+    which would otherwise be recorded as the account owner."""
+    try:
+        return copilot.confirm(
+            req.token, user["account_id"], user["user_id"],
+            impersonating=bool(getattr(request.state, "impersonator_id", None)),
+            via_api_key=bool(getattr(request.state, "via_api_key", False)),
+        )
+    except copilot.ConfirmError as exc:
+        raise HTTPException(exc.status, exc.detail) from exc
+
+
+@app.post("/help/chat/cancel")
+def help_chat_cancel(req: CopilotActionRequest, user: dict = Depends(current_user)) -> dict:
+    return _copilot_decision(copilot.cancel, req, user)
+
+
+@app.get("/help/copilot/actions")
+def list_copilot_actions(user: dict = Depends(current_user)) -> list[dict]:
+    return calls_db.list_copilot_actions(user["account_id"], limit=50)
 
 
 @app.post("/help/tickets")

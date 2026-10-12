@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import arthaAvatar from '../assets/artha-avatar.webp'
-import { fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
+import { cancelCopilotAction, confirmCopilotAction, COPILOT_CHANGED_EVENT, fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { HelpChatMessage, HelpFaq } from '../lib/types'
+import { ExpandGlyph, RichText, SuccessCheck, ThinkingIndicator, TypedText } from './CopilotParts'
 import { Icon } from './Icon'
 import { Tooltip } from './ui/Tooltip'
 
@@ -51,7 +52,7 @@ const PAGE_SUGGESTIONS: Record<string, PageHelp> = {
   },
   '/dashboard/appointments': {
     label: 'Appointments',
-    questions: ["What's booked this week?", 'Where do I manage appointment availability?', 'How do I reschedule an appointment?'],
+    questions: ["What's booked this week?", 'Book a callback', 'Where do I manage appointment availability?'],
   },
   '/dashboard/integrations': {
     label: 'Integrations',
@@ -63,7 +64,7 @@ const PAGE_SUGGESTIONS: Record<string, PageHelp> = {
   },
   '/dashboard/agents': {
     label: 'Agents',
-    questions: ['Which of my agents are live?', "How do I edit an agent's settings?", 'How do I connect a knowledge base?'],
+    questions: ['Which of my agents are live?', 'Pause an agent', "How do I edit an agent's settings?"],
   },
   '/dashboard/testing': {
     label: 'Testing Lab',
@@ -152,7 +153,16 @@ export function HelpChatWidget() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [ratings, setRatings] = useState<Record<number, 'up' | 'down'>>({})
+  // Per assistant message index: the state of its confirmation card.
+  const [actions, setActions] = useState<Record<number, { busy?: 'confirm' | 'cancel'; done?: 'confirm' | 'cancel'; error?: string }>>({})
+  const decidingRef = useRef(new Set<number>())
   const threadRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const [expanded, setExpanded] = useState(false)
+  // The newest assistant reply types itself in; its cards and chips appear
+  // once it has finished, so the answer arrives in order.
+  const [typingIndex, setTypingIndex] = useState<number | null>(null)
+  const [pendingQuestion, setPendingQuestion] = useState('')
   const { user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
@@ -178,7 +188,38 @@ export function HelpChatWidget() {
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, sending])
+  }, [messages, sending, typingIndex])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
+        event.preventDefault()
+        setShowHint(false)
+        setOpen((v) => !v)
+      } else if (event.key === 'Escape' && open) {
+        setOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
+  useEffect(() => {
+    if (open) window.setTimeout(() => inputRef.current?.focus(), 80)
+    // The website voice widget's launcher and toast sit in the same corner
+    // and cover the copilot's input on phones; hide it while we're open.
+    if (open) document.documentElement.dataset.copilotOpen = '1'
+    else delete document.documentElement.dataset.copilotOpen
+    return () => { delete document.documentElement.dataset.copilotOpen }
+  }, [open])
+
+  // Grow the input with its text, up to about four lines.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 96)}px`
+  }, [input])
 
   useEffect(() => {
     if (open) {
@@ -215,6 +256,7 @@ export function HelpChatWidget() {
     const history = messages
     const next: HelpChatMessage[] = [...history, { role: 'user', content: trimmed }]
     setMessages(next)
+    setPendingQuestion(trimmed)
     setSending(true)
     try {
       const result = await sendHelpChatMessage(trimmed, history, `${location.pathname}${location.search}`)
@@ -226,12 +268,40 @@ export function HelpChatWidget() {
           suggestTicket: result.suggestTicket,
           comingSoon: result.comingSoon,
           article: result.article,
+          pendingAction: result.pendingAction ?? null,
+          upgrade: result.upgrade ?? false,
+          steps: result.steps ?? [],
         },
       ])
+      setTypingIndex(next.length)
     } catch {
       setError("Couldn't reach the help assistant - try again in a moment.")
     } finally {
       setSending(false)
+    }
+  }
+
+  // Confirm/Cancel on a proposed action. Nothing changes until the server
+  // confirms; a failure (expired, already decided, daily limit) closes the
+  // card with the server's reason.
+  const decideAction = async (index: number, token: string, decision: 'confirm' | 'cancel') => {
+    // A ref, not state: two clicks before React re-renders must not both send.
+    if (decidingRef.current.has(index) || actions[index]?.done) return
+    decidingRef.current.add(index)
+    setActions((current) => ({ ...current, [index]: { busy: decision } }))
+    try {
+      const result = await (decision === 'confirm' ? confirmCopilotAction(token) : cancelCopilotAction(token))
+      setActions((current) => ({ ...current, [index]: { done: decision } }))
+      if (decision === 'confirm') window.dispatchEvent(new CustomEvent(COPILOT_CHANGED_EVENT))
+      setMessages((current) => {
+        setTypingIndex(current.length)
+        return [...current, { role: 'assistant', content: result.message, suggestTicket: false, comingSoon: false }]
+      })
+    } catch (err) {
+      setActions((current) => ({
+        ...current,
+        [index]: { done: decision, error: err instanceof Error ? err.message : 'That action could not be completed.' },
+      }))
     }
   }
 
@@ -248,6 +318,8 @@ export function HelpChatWidget() {
   const closeChat = () => {
     setOpen(false)
     setMessages([])
+    setActions({}); decidingRef.current.clear()
+    setTypingIndex(null)
     setInput('')
     setError('')
     setShowFaqs(false)
@@ -271,8 +343,17 @@ export function HelpChatWidget() {
     // needs it.
     <div className="fixed bottom-3 right-3 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
       {open && (
-        <div className="help-chat-panel-in flex h-[min(640px,calc(100dvh-6rem))] w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl sm:w-[420px]">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div
+          className={`help-chat-panel-in help-panel-size flex w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl ${
+            expanded ? 'h-[min(820px,calc(100dvh-6rem))] sm:w-[min(720px,calc(100vw-3rem))]' : 'h-[min(640px,calc(100dvh-6rem))] sm:w-[420px]'
+          }`}
+        >
+          <div className="relative flex items-center justify-between border-b border-border px-4 py-3">
+            {sending && (
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden" aria-hidden="true">
+                <span className="help-progress-bar block h-full w-2/5 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+              </span>
+            )}
             <div className="flex items-center gap-2">
               <div className="relative h-8 w-8 shrink-0">
                 <img
@@ -283,13 +364,21 @@ export function HelpChatWidget() {
                 <span className="pulse-dot absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-surface bg-green-500" />
               </div>
               <div>
-                <div className="text-sm font-semibold">Artha - Help Assistant</div>
+                <div className="text-sm font-semibold">Artha Copilot</div>
                 <div className="flex items-center gap-1 text-[11px] font-medium text-primary">
-                  <Icon name="bolt" className="text-[13px]" /> Copilot - {page?.label || 'Vistrow Voice'}
+                  <Icon name="bolt" className="text-[13px]" />
+                  {sending ? 'Working on it…' : `Reads your live workspace · ${page?.label || 'Vistrow Voice'}`}
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <Tooltip content={expanded ? 'Smaller' : 'Larger'}><button
+                onClick={() => setExpanded((v) => !v)}
+                className="hidden h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text sm:flex"
+                aria-label={expanded ? 'Make the copilot smaller' : 'Make the copilot larger'}
+              >
+                <ExpandGlyph expanded={expanded} />
+              </button></Tooltip>
               {location.pathname !== '/dashboard' && (
                 <Tooltip content="Open dashboard"><button
                   onClick={() => navigate('/dashboard')}
@@ -303,6 +392,7 @@ export function HelpChatWidget() {
                 <Tooltip content="Back to FAQs"><button
                   onClick={() => {
                     setMessages([])
+                    setActions({}); decidingRef.current.clear()
                     setError('')
                   }}
                   className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text"
@@ -324,21 +414,22 @@ export function HelpChatWidget() {
           <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-3">
             {messages.length === 0 ? (
               <div className="flex flex-col gap-3">
-                <div className="flex items-start gap-2">
+                <div className="help-msg-in flex items-start gap-2">
                   <img src={arthaAvatar} alt="Artha" className="mt-0.5 h-7 w-7 shrink-0 rounded-full object-cover" />
                   <p className="rounded-xl border border-border bg-surface-high px-3 py-2 text-xs leading-relaxed text-text">
-                    Hi {firstName}!{page ? ` I can see you're on ${page.label}.` : ''} I have page guidance and live
-                    account data ready - tap a question below or ask me anything.
+                    Hi {firstName}!{page ? ` I can see you're on ${page.label}.` : ''} I can look things up in your
+                    live workspace and, on Growth plans, make changes for you after you confirm. Try one of these:
                   </p>
                 </div>
 
                 {questions.length > 0 && (
                   <div className="flex flex-col gap-2">
-                    {questions.map((q) => (
+                    {questions.map((q, qi) => (
                       <button
                         key={q}
                         onClick={() => send(q)}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-left text-xs font-medium text-text transition-colors hover:border-primary"
+                        style={{ animationDelay: `${120 + qi * 70}ms` }}
+                        className="help-msg-in group flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-left text-xs font-medium text-text transition-all hover:-translate-y-px hover:border-primary hover:shadow-sm"
                       >
                         {q}
                         <Icon name="arrow_forward" className="shrink-0 text-[14px] text-primary" />
@@ -349,7 +440,7 @@ export function HelpChatWidget() {
 
                 <button
                   onClick={() => setShowFaqs((v) => !v)}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-left text-xs font-semibold text-text-muted transition-colors hover:text-text"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border bg-transparent px-3 py-2 text-left text-xs font-semibold text-text-muted transition-colors hover:text-text"
                 >
                   Common questions
                   <Icon name={showFaqs ? 'expand_less' : 'expand_more'} className="text-[16px]" />
@@ -372,15 +463,83 @@ export function HelpChatWidget() {
               <div className="flex flex-col gap-3">
                 {messages.map((m, i) =>
                   m.role === 'assistant' ? (
-                    <div key={i} className="mr-auto flex max-w-[90%] items-start gap-2">
+                    <div key={i} className="help-msg-in mr-auto flex max-w-[90%] items-start gap-2">
                       <img src={arthaAvatar} alt="Artha" className="mt-0.5 h-6 w-6 shrink-0 rounded-full object-cover" />
-                      <div>
+                      <div className="min-w-0">
+                        {!!m.steps?.length && (
+                          <ul className="mb-1.5 flex flex-wrap gap-1" aria-label="What the copilot checked">
+                            {m.steps.map((step, si) => (
+                              <li
+                                key={step}
+                                style={{ animationDelay: `${si * 90}ms` }}
+                                className="help-step-in flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-medium text-success"
+                              >
+                                <Icon name="check" className="text-[11px]" /> {step}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                         <div className="rounded-xl border border-border bg-surface-high px-3 py-2 text-xs leading-relaxed text-text">
-                          {m.content}
+                          {i === typingIndex ? (
+                            <TypedText text={m.content} animate onDone={() => setTypingIndex((t) => (t === i ? null : t))} />
+                          ) : (
+                            <RichText text={m.content} />
+                          )}
                         </div>
+                        {i !== typingIndex && (<>
                         {m.article && (
                           <button type="button" onClick={() => navigate(`/dashboard/support?article=${m.article!.slug}`)} className="mt-1.5 flex items-center gap-1 rounded-md border border-primary/30 px-2 py-1 text-[10px] font-semibold text-primary hover:bg-primary/5">
                             <Icon name="article" className="text-[12px]" /> Read: {m.article.title}
+                          </button>
+                        )}
+                        {m.pendingAction && (() => {
+                          const action = m.pendingAction
+                          const state = actions[i] || {}
+                          return (
+                            <div className={`mt-1.5 rounded-lg border p-2.5 ${state.done && !state.error ? 'border-border bg-surface' : 'help-card-pop border-primary/40 bg-primary/5'}`}>
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                {state.done === 'confirm' && !state.error ? 'Done' : state.done === 'cancel' && !state.error ? 'Cancelled' : 'Needs your confirmation'}
+                              </p>
+                              <p className="mt-1 flex items-start gap-1.5 text-[11px] font-semibold text-text">
+                                {state.done === 'confirm' && !state.error ? (
+                                  <SuccessCheck />
+                                ) : (
+                                  <Icon name="bolt" className="mt-px shrink-0 text-[13px] text-primary" />
+                                )}
+                                <span className={state.done === 'cancel' && !state.error ? 'text-text-muted line-through' : ''}>{action.label}</span>
+                              </p>
+                              {state.error ? (
+                                <p className="mt-1.5 text-[11px] text-destructive">{state.error}</p>
+                              ) : state.done ? null : (
+                                <div className="mt-2 flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={!!state.busy}
+                                    onClick={() => decideAction(i, action.token, 'confirm')}
+                                    className="rounded-md bg-primary px-3 py-1 text-[11px] font-semibold text-bg hover:opacity-90 disabled:opacity-50"
+                                  >
+                                    {state.busy === 'confirm' ? 'Applying…' : 'Confirm'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={!!state.busy}
+                                    onClick={() => decideAction(i, action.token, 'cancel')}
+                                    className="rounded-md border border-border bg-surface px-3 py-1 text-[11px] font-semibold text-text-muted hover:text-text disabled:opacity-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+                        {m.upgrade && (
+                          <button
+                            type="button"
+                            onClick={() => navigate('/dashboard/settings?tab=billing')}
+                            className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/10"
+                          >
+                            <Icon name="workspace_premium" className="text-[12px]" /> Available on Growth
                           </button>
                         )}
                         {m.comingSoon && (
@@ -429,30 +588,19 @@ export function HelpChatWidget() {
                             <Icon name="confirmation_number" className="text-[12px]" /> Submit a request
                           </button>
                         )}
+                        </>)}
                       </div>
                     </div>
                   ) : (
-                    <div key={i} className="ml-auto max-w-[85%] rounded-xl bg-primary px-3 py-2 text-xs leading-relaxed text-bg">
+                    <div key={i} className="help-msg-in ml-auto max-w-[85%] whitespace-pre-wrap rounded-xl bg-primary px-3 py-2 text-xs leading-relaxed text-bg">
                       {m.content}
                     </div>
                   )
                 )}
                 {sending && (
-                  <div className="mr-auto flex max-w-[85%] items-start gap-2">
-                    <img src={arthaAvatar} alt="Artha" className="mt-0.5 h-6 w-6 shrink-0 rounded-full object-cover" />
-                    <div className="rounded-xl border border-border bg-surface-high px-3 py-2 text-xs text-text-muted">
-                      Thinking…
-                    </div>
-                  </div>
-                )}
-                {!sending && page && (
-                  <div className="mt-1 flex flex-col gap-1.5 border-t border-border pt-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Suggested on {page.label}</p>
-                    {questions.map((question) => (
-                      <button key={question} type="button" onClick={() => send(question)} className="flex items-center justify-between rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-left text-[11px] text-text hover:border-primary">
-                        {question}<Icon name="arrow_forward" className="shrink-0 text-[13px] text-primary" />
-                      </button>
-                    ))}
+                  <div className="help-msg-in mr-auto flex max-w-[85%] items-start gap-2">
+                    <img src={arthaAvatar} alt="Artha" className="help-avatar-thinking mt-0.5 h-6 w-6 shrink-0 rounded-full object-cover" />
+                    <ThinkingIndicator question={pendingQuestion} />
                   </div>
                 )}
               </div>
@@ -473,18 +621,27 @@ export function HelpChatWidget() {
                 e.preventDefault()
                 send(input)
               }}
-              className="flex items-center gap-2 border-t border-border p-3"
+              className="flex items-end gap-2 border-t border-border p-3"
             >
-              <input
+              <textarea
+                ref={inputRef}
+                rows={1}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask anything about your account…"
-                className="flex-1 rounded-lg border border-border bg-surface-high px-3 py-2 text-xs outline-none focus:border-primary"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    send(input)
+                  }
+                }}
+                placeholder="Ask or tell the copilot what to do…"
+                aria-label="Message the copilot"
+                className="max-h-24 flex-1 resize-none rounded-lg border border-border bg-surface-high px-3 py-2 text-xs leading-relaxed outline-none transition-colors focus:border-primary"
               />
               <button
                 type="submit"
                 disabled={sending || !input.trim()}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-bg transition-all hover:opacity-90 active:scale-90 disabled:opacity-50"
                 aria-label="Send"
               >
                 <Icon name="arrow_upward" className="text-[16px]" />

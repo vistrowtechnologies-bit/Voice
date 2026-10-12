@@ -517,6 +517,7 @@ def phone_numbers(account_id: int, **_ignored) -> dict:
         "found": bool(numbers),
         "numbers": [
             {
+                "numberId": n["id"],
                 "number": n["number"],
                 "label": n["label"],
                 "status": n["status"],

@@ -14,6 +14,7 @@ import {
   fetchPhoneNumbers,
   fetchTelephonyStatus,
   placeTestCall,
+  onCopilotChange,
 } from '../lib/api'
 import { COMMON_DIAL_CODES, composeE164, isE164, useAccountDialCode } from '../lib/phone'
 import type { AgentConfig, PhoneNumber, TelephonyStatus } from '../lib/types'
@@ -119,6 +120,8 @@ function EnableXPanel() {
     reloadNumbers()
     fetchAgents().then(setAgents).catch(() => setAgents([]))
   }, [])
+
+  useEffect(() => onCopilotChange(() => { reloadNumbers() }), [])
 
   const handleConnect = async () => {
     setError('')

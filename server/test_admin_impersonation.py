@@ -124,7 +124,8 @@ class SupportSessionTests(unittest.TestCase):
         for method, path in (("get", "/contacts"), ("post", "/contacts"), ("delete", "/contacts/{x}"),
                              ("post", "/api-keys"), ("patch", "/profile"), ("post", "/billing/topup"),
                              ("patch", "/team/members/{x}"), ("post", "/telephony/numbers"),
-                             ("post", "/integrations/google_sheets/disconnect"), ("post", "/profile/request-account-deletion")):
+                             ("post", "/integrations/google_sheets/disconnect"), ("post", "/profile/request-account-deletion"),
+                             ("post", "/help/chat/confirm")):
             getattr(app, method)(path)(ok)
         cls.app, cls.ns = app, ns
 
@@ -155,7 +156,7 @@ class SupportSessionTests(unittest.TestCase):
         for method, path in (("DELETE", "/contacts/1"), ("POST", "/api-keys"), ("PATCH", "/profile"),
                              ("POST", "/billing/topup"), ("PATCH", "/team/members/3"), ("POST", "/telephony/numbers"),
                              ("POST", "/integrations/google_sheets/disconnect"), ("POST", "/profile/request-account-deletion"),
-                             ("POST", "/profile/sign-out-others")):
+                             ("POST", "/profile/sign-out-others"), ("POST", "/help/chat/confirm")):
             status, body = client.request(method, path)
             self.assertEqual((status, body), (403, {"detail": "Not allowed while viewing as a customer."}), path)
 

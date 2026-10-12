@@ -14,6 +14,7 @@ import {
   fetchPhoneNumbers,
   formatDateTime,
   updateAgent,
+  onCopilotChange,
 } from '../lib/api'
 import type { AgentConfig, KnowledgeBase, PhoneNumber, LaunchReadiness } from '../lib/types'
 import { modelLabel, voiceLabel } from '../lib/agentOptions'
@@ -89,6 +90,12 @@ export function Agents() {
     fetchPhoneNumbers().then(setNumbers).catch(() => setNumbers([]))
     fetchLaunchReadiness().then(setReadiness).catch(() => setReadiness(null))
   }, [])
+
+  useEffect(() => onCopilotChange(() => {
+    fetchAgents().then(setAgents).catch(() => {})
+    fetchPhoneNumbers().then(setNumbers).catch(() => {})
+    fetchLaunchReadiness().then(setReadiness).catch(() => {})
+  }), [])
 
   // ?new=1 (the sidebar's "+ New Agent" and the command menu) opens the
   // chooser; the param is cleared at once so a remount doesn't reopen it.

@@ -175,6 +175,20 @@ Not verified / left out: not opened in a browser (the Browser preview reads the 
 Owner actions after deploy: Search Console (`vistrowai@gmail.com`, property `https://www.vistrowvoice.com/`) → URL Inspection → Request indexing for `/ai-ivr`, `/vs-ivr`, `/languages/kannada`, `/languages/telugu`, `/languages/hindi`; re-submit `/sitemap.xml`.
 
 Next step: review, push branch, open PR, merge (Vercel deploys the marketing site; no server or LiveKit deploy needed), then the indexing requests above. Re-check these queries in Search Console after 2–4 weeks.
+### Claude — 2026-10-12 — copilot phase 2
+
+Branch `claude/copilot-phase2` (worktree, based on main `013fabc`; not pushed, no PR). Confirmed write actions for the dashboard copilot per `docs/COPILOT-ACTIONS-PLAN-2026-10-10.md` (Phase 2 decisions of 2026-10-12).
+
+Changed: `agent/plan_policy.py` (`FEATURE_MIN_PLAN["copilot_actions"] = "growth"`), new `server/copilot_tools.py` (7 write tools: set_agent_status, update_agent_basics, set_agent_integrations, book_callback, book_appointment, assign_number_to_agent, set_integration_events; each with schema/clean/describe/fn/min_role/features; ids re-scoped by the session account), new `server/copilot.py` (propose, HMAC token `{i,a,u,t,x,e}` keyed by `auth._secret()` with a copilot prefix, 10 min; confirm/cancel; caps 150 proposals + 40 confirmed writes per account per rolling 24 h), `server/help_chat.py` (write tools offered only with plan + role + not impersonating; a write call is proposed, never run; one per reply; `pendingAction`/`upgrade` in the reply; `COPILOT_ACTION_MODEL` env, default gpt-5-nano), `server/calls_db.py` (`copilot_actions` table + helpers, `account_features`), `server/token_api.py` (`_guard_agent_patch` extracted from PATCH /agents and shared with the copilot; `POST /help/chat/confirm`, `POST /help/chat/cancel`, `GET /help/copilot/actions`; confirm added to the View-as block list), `server/admin_db.py` (`copilotActions` in account detail), `server/help_tools.py` (`phone_numbers` returns `numberId`). Frontend: `HelpChatWidget.tsx` (Confirm/Cancel card, "Available on Growth" chip, "Pause an agent"/"Book a callback" suggestions; history now sends only role/content), Settings > Data & privacy "Copilot actions" list, admin account "Copilot" tab, types in `types.ts`/`api.ts`/`adminApi.ts`.
+
+Verified: server suite 521 passed (+136 subtests; baseline 497) against local `vv_inttest`, incl. new `test_copilot_actions.py` (23 tests: proposed-not-executed, tamper/expiry/cross-user/cross-account, viewer and demoted-member denied, starter gets no write tools + upgrade, confirm once then 409, cancel, caps, foreign agent id not found, describe names, `['none']` sentinel, allowlist, callback conflict, assign needs admin + LiveKit sync called, admin detail) and the impersonation middleware test now covering `/help/chat/confirm`; `tsc --noEmit` clean; `npm run build` passes (icon check).
+
+Not verified / assumptions: no live OpenAI call (fake responder only), nothing opened in a browser, nothing deployed. "150 copilot messages with tools" is implemented as 150 proposed actions per rolling 24 h (when reached, write tools are withdrawn and reads keep working), not as a cap on chat messages. Callback length 30 min. Any confirm failure closes the card with the server's detail (no retry on the same token). `upgrade` shows only when the model sets it in its JSON for a non-Growth account. graphify-out absent in the worktree, so `graphify update .` was not run. No claim comment was posted on issue #2 from this worktree.
+
+Deploy notes: server (Railway; the `copilot_actions` table is created by `init_tables` on start) + dashboard only. No LiveKit worker deploy (`agent/plan_policy.py` gained a key the worker never reads).
+
+Next: review + PR + merge + deploy, then a live check on staging (Growth account: "pause <agent>" → card → Confirm; starter account → chip). Then Phase 3 guided agent builder (`server/copilot_builder.py`).
+
 
 ### Claude — 2026-10-12 — Build with AI (agent builder)
 

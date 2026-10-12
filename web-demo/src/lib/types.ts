@@ -722,6 +722,33 @@ export interface HelpChatMessage {
   comingSoon?: boolean
   /** A help-centre article the bot answered from (only real slugs). */
   article?: { slug: string; title: string } | null
+  /** A write the copilot proposed; runs only after POST /help/chat/confirm. */
+  pendingAction?: CopilotPendingAction | null
+  /** The user asked for a change their plan doesn't include. */
+  upgrade?: boolean
+  /** Plain lines for the lookups the copilot ran ("Looked at your agents"). */
+  steps?: string[]
+}
+
+export interface CopilotPendingAction {
+  token: string
+  label: string
+  tool: string
+}
+
+export type CopilotActionStatus = 'proposed' | 'confirmed' | 'cancelled' | 'failed' | 'expired'
+
+export interface CopilotAction {
+  id: number
+  userId: number | null
+  userName?: string
+  tool: string
+  args: Record<string, unknown>
+  label: string
+  status: CopilotActionStatus
+  result: string
+  createdAt: string
+  decidedAt: string | null
 }
 
 export interface ApiKey {

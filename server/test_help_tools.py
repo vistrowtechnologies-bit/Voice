@@ -270,7 +270,7 @@ class CopilotReadToolsTests(unittest.TestCase):
 
         list_phone_numbers.assert_called_once_with(7)
         list_agents.assert_called_once_with(7)
-        self.assertEqual(result["numbers"], [{"number": "+912212345678", "label": "Main", "status": "active", "agent": "Siya KHOPOLI"}])
+        self.assertEqual(result["numbers"], [{"numberId": 1, "number": "+912212345678", "label": "Main", "status": "active", "agent": "Siya KHOPOLI"}])
 
     def test_every_tool_schema_has_a_function_and_never_takes_account_id(self):
         names = {s["function"]["name"] for s in help_tools.TOOL_SCHEMAS}

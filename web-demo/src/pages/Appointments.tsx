@@ -13,7 +13,7 @@ import { TimeGrid } from '../components/calendar/TimeGrid'
 import { DataTable } from '../components/ui/DataTable'
 import type { DataTableColumn } from '../components/ui/DataTable'
 import { StatTile } from '../components/ui/StatTile'
-import { fetchAppointments, formatTime12h, updateAppointmentStatus } from '../lib/api'
+import { fetchAppointments, formatTime12h, updateAppointmentStatus, onCopilotChange } from '../lib/api'
 import { STATUS_META, groupByDate, parseDateStr, rangeForMonth, step, toDateStr, weekDays } from '../lib/calendar'
 import type { Appointment, AppointmentStatus } from '../lib/types'
 
@@ -69,6 +69,7 @@ export function Appointments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthKey, statusFilter, search])
   useEffect(() => { void reload() }, [reload])
+  useEffect(() => onCopilotChange(() => { void reload() }), [reload])
 
   // The command menu links here with ?new=1 (open the booking form) or
   // ?date=YYYY-MM-DD&id=N (jump to that day and open that booking).

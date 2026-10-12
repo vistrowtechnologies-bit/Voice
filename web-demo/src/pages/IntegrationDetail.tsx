@@ -23,6 +23,7 @@ import {
   updateIntegration,
   updateIntegrationSettings,
   zohoIntegrationStartUrl,
+  onCopilotChange,
 } from '../lib/api'
 import type { FacebookLead, IntegrationDeliveries } from '../lib/api'
 import type { AgentConfig, Integration } from '../lib/types'
@@ -144,6 +145,8 @@ export function IntegrationDetail() {
     if (oauthResult) window.history.replaceState(null, '', window.location.pathname)
     reload()
   }, [reload, oauthResult])
+
+  useEffect(() => onCopilotChange(reload), [reload])
 
   useEffect(() => {
     if (oauthResult === 'connected') setNotice({ tone: 'ok', text: 'Connected. Send a test to check that everything arrives.' })

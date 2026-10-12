@@ -36,8 +36,8 @@ import {
   type TeamMember,
   type UserPreferences,
 } from '../lib/auth'
-import { fetchAvailabilitySettings, formatDateTime, updateAvailabilitySettings } from '../lib/api'
-import type { AvailabilityConfig } from '../lib/types'
+import { fetchAvailabilitySettings, fetchCopilotActions, formatDateTime, updateAvailabilitySettings } from '../lib/api'
+import type { AvailabilityConfig, CopilotAction } from '../lib/types'
 import { COUNTRY_OPTIONS, countryName, dialCodeFor } from '../lib/phone'
 import { PREFS_CHANGED_EVENT, desktopAlertsSupported, playChime, requestDesktopPermission, showDesktopAlert } from '../lib/alerts'
 
@@ -50,6 +50,45 @@ function SettingsCard({ title, subtitle, children }: { title: string; subtitle: 
       </div>
       {children}
     </Card>
+  )
+}
+
+const COPILOT_STATUS: Record<CopilotAction['status'], { label: string; className: string }> = {
+  proposed: { label: 'Awaiting confirm', className: 'text-text-muted' },
+  confirmed: { label: 'Done', className: 'text-success' },
+  cancelled: { label: 'Cancelled', className: 'text-text-muted' },
+  failed: { label: 'Failed', className: 'text-destructive' },
+  expired: { label: 'Expired', className: 'text-text-muted' },
+}
+
+/** What the help copilot proposed or changed in this workspace, newest first. */
+function CopilotActionsCard() {
+  const [actions, setActions] = useState<CopilotAction[] | null>(null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => { fetchCopilotActions().then(setActions).catch(() => setFailed(true)) }, [])
+
+  return (
+    <SettingsCard title="Copilot actions" subtitle="Changes the help copilot proposed in this workspace. Nothing runs until a teammate presses Confirm.">
+      {failed ? (
+        <p className="text-xs text-destructive">Could not load copilot actions.</p>
+      ) : actions === null ? (
+        <div className="h-16 animate-pulse rounded-lg bg-surface-high" />
+      ) : actions.length === 0 ? (
+        <p className="text-xs text-text-muted">No copilot actions yet.</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+          {actions.map((action) => (
+            <li key={action.id} className="flex flex-col gap-0.5 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold">{action.label}</p>
+                <p className="text-[11px] text-text-muted">{action.userName || 'Unknown teammate'} · {formatDateTime(action.createdAt)}{action.status === 'failed' && action.result ? ` · ${action.result}` : ''}</p>
+              </div>
+              <span className={`shrink-0 text-[11px] font-semibold ${COPILOT_STATUS[action.status]?.className ?? 'text-text-muted'}`}>{COPILOT_STATUS[action.status]?.label ?? action.status}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </SettingsCard>
   )
 }
 
@@ -743,6 +782,8 @@ function DataPrivacyTab() {
       )}
       <p className="text-[11px] text-text-muted">You can cancel a pending request here. Once processing begins, contact support@vistrowvoice.com and reference the receipt sent to your email.</p>
     </SettingsCard>
+
+    <CopilotActionsCard />
 
     {message && <p role="status" className={`rounded-lg border border-border bg-surface px-3 py-2 text-xs ${message.type === 'ok' ? 'text-success' : 'text-destructive'}`}>{message.text}</p>}
 

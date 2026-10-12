@@ -1,4 +1,4 @@
-import type { SupportTicket } from './types'
+import type { CopilotAction, SupportTicket } from './types'
 
 // Super-admin (platform owner) API client. Mirrors the /admin/* backend, which
 // is gated by require_platform_owner (404 to everyone else). Same credentials-
@@ -171,6 +171,8 @@ export interface AdminAccountDetail {
     agent_id: number | null
   }[]
   audit: { action: string; actor_email: string; detail: string; created_at: string }[]
+  /** Last 10 actions the help copilot proposed in this workspace. */
+  copilotActions?: CopilotAction[]
   health: AccountHealth
 }
 

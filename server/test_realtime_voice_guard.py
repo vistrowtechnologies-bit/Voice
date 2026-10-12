@@ -71,8 +71,10 @@ class RealtimeVoiceGuard(unittest.TestCase):
         guard({"voice": "shubh"}, 7, agent_id=5)  # saved model ignored: not this account's agent
 
     def test_both_routes_run_the_guard(self):
-        for route in ("create_agent", "update_agent"):
+        # update_agent (and the copilot's agent actions) go through _guard_agent_patch.
+        for route in ("create_agent", "_guard_agent_patch"):
             self.assertIn("_guard_realtime_voice(", ast.get_source_segment(SOURCE, node(route)))
+        self.assertIn("_guard_agent_patch(", ast.get_source_segment(SOURCE, node("update_agent")))
 
 
 if __name__ == "__main__":
