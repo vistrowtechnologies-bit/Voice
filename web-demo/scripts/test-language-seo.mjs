@@ -29,6 +29,20 @@ const pages = [
     phrases: ['Marathi AI voice calling agent', 'Pune, Mumbai', 'Maharashtra'],
     demo: 'marathi-site-visit-booking',
   },
+  // No Punjabi or Tamil demo-call page exists, so these two link out to the
+  // solution pages their regional call types point at instead.
+  {
+    slug: 'punjabi',
+    title: 'Punjabi AI Voice Calling Agent for Punjab | Vistrow Voice',
+    phrases: ['Punjabi AI voice calling agent', 'Chandigarh and Delhi NCR', 'Example conversation', 'Punjabi-English mixing is the normal case', 'Voices that speak Punjabi'],
+    links: ['/solutions/finance', '/solutions/real-estate'],
+  },
+  {
+    slug: 'tamil',
+    title: 'Tamil AI Voice Calling Agent for Tamil Nadu | Vistrow Voice',
+    phrases: ['Tamil AI voice calling agent', 'Chennai and Tamil Nadu', 'Example conversation', 'Tanglish is the normal case', 'Voices that speak Tamil'],
+    links: ['/solutions/real-estate', '/solutions/healthcare'],
+  },
 ]
 
 function assert(condition, message) {
@@ -46,7 +60,10 @@ for (const page of pages) {
   assert(html.includes('FAQPage'), `${page.slug}: expected FAQPage schema`)
   assert(html.includes('Built for teams that take calls in'), `${page.slug}: expected who-it-is-for section`)
   assert(!/searching \u201c|\bbest AI voice/i.test(html), `${page.slug}: must not quote search queries or claim "best" in visible copy`)
-  assert(html.includes(`/demo-calls/${page.demo}`), `${page.slug}: missing relevant call-example link`)
+  if (page.demo) assert(html.includes(`/demo-calls/${page.demo}`), `${page.slug}: missing relevant call-example link`)
+  for (const link of page.links ?? []) {
+    assert(html.includes(`href="${link}"`), `${page.slug}: missing link to ${link}`)
+  }
   assert(rawHtml.length > 20_000, `${page.slug}: prerendered HTML looks too thin`)
   for (const phrase of page.phrases) {
     assert(html.includes(phrase), `${page.slug}: missing SEO phrase "${phrase}"`)

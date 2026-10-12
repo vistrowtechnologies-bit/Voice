@@ -97,6 +97,16 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
     description:
       'Telugu AI voice calling agent for Hyderabad, Andhra Pradesh and Telangana. Answers phone and website calls, books appointments and logs every call.',
   },
+  tamil: {
+    title: 'Tamil AI Voice Calling Agent for Tamil Nadu | Vistrow Voice',
+    description:
+      'Tamil AI voice calling agent for Chennai and Tamil Nadu. Follows Tamil-English switching, qualifies leads, books visits and appointments, logs every call.',
+  },
+  punjabi: {
+    title: 'Punjabi AI Voice Calling Agent for Punjab | Vistrow Voice',
+    description:
+      'Punjabi AI voice calling agent for Punjab, Chandigarh and Delhi NCR. Follows Punjabi, Hindi and English in one call, books appointments, logs every call.',
+  },
   marathi: {
     title: 'Marathi AI Voice Calling Agent for Maharashtra | Vistrow Voice',
     description:
@@ -188,8 +198,8 @@ export const SEO_PAGES: SeoPage[] = [
   ),
   page(
     '/solutions/real-estate',
-    'AI Voice Agents for Real Estate | Vistrow Voice',
-    'Answer property enquiries, qualify buyer budget and location, answer approved project questions, and book real site visits around the clock.',
+    'AI Calling Agent for Real Estate in India | Vistrow Voice',
+    'AI calling agent for real estate: qualifies buyer enquiries on budget and location, books site visits on your calendar, calls new leads in seconds.',
     'solution-real-estate',
     'Warm amber Vistrow Voice property agent orb for real-estate buyer enquiries',
     'solution',
@@ -215,8 +225,8 @@ export const SEO_PAGES: SeoPage[] = [
   ),
   page(
     '/solutions/finance',
-    'AI Voice Agents for Finance & Collections | Vistrow Voice',
-    'Run respectful multilingual payment reminders and finance support conversations with approved information, logged outcomes, and compliance controls.',
+    'AI Collections & EMI Reminder Voice Agent | Vistrow Voice',
+    'AI voice agent for loan collections and EMI reminders in India: calling-hour limits, Do-Not-Call checks, promised dates captured, every call logged.',
     'solution-finance',
     'Green and amber Vistrow Voice finance agent orb for respectful collection calls',
     'solution',
