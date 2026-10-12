@@ -175,3 +175,29 @@ Not verified / left out: not opened in a browser (the Browser preview reads the 
 Owner actions after deploy: Search Console (`vistrowai@gmail.com`, property `https://www.vistrowvoice.com/`) → URL Inspection → Request indexing for `/ai-ivr`, `/vs-ivr`, `/languages/kannada`, `/languages/telugu`, `/languages/hindi`; re-submit `/sitemap.xml`.
 
 Next step: review, push branch, open PR, merge (Vercel deploys the marketing site; no server or LiveKit deploy needed), then the indexing requests above. Re-check these queries in Search Console after 2–4 weeks.
+
+### Claude — 2026-10-12 — Build with AI (agent builder)
+
+Branch `claude/agent-ai-builder` (worktree `.claude/worktrees/agent-aed2143763bd98bb5`, based on origin/main `32dc5fd`; not pushed, no PR). Commits `38727c3` (backend), `a4c4ca2` (frontend), plus this note. Did not touch HelpChatWidget / help_chat / copilot files (PR #34).
+
+Backend: new `server/agent_builder.py`; `POST /agents/draft` in `server/token_api.py` (member+, any plan) returns `{questions:[{id,question,options}]}` (max 3, 2–4 options each) or `{draft:{name,businessName,description,model,language,voice,tone,firstSpeaker,welcomeMessage,welcomeMessageOutbound,systemPrompt,enabledFunctions,maxCallDurationS,postCallFields}}`; `section` (basics|voice|instructions|conversation|after) + `current` regenerates only that section's keys. Never writes an agent. Every field validated: voice from the account's own menu filtered by `allowed_tiers_for_plan` (no hidden/preview voices for tenants; fallback `pooja`), language from `voice_catalog.LANGUAGE_LABELS` (fallback hi-IN), model Bharat or Swift (default `sarvam/sarvam-105b-conversations`), tools from end_call/transfer_call/web_search/send_dtmf ("" = all on), lengths clamped, unknown keys dropped. LLM: OpenAI `gpt-4.1-mini` JSON mode, then Gemini `gemini-2.5-flash` (`responseMimeType: application/json`, thinking off) on any failure; `AGENT_BUILDER_PROVIDER=openai|gemini` forces one; both fail → friendly 503. Cap: 30 per account per 24 h via new `agent_drafts` table (in `_SCHEMA`), friendly 429 (`calls_db.count_agent_drafts` / `record_agent_draft`).
+
+Frontend: `Agents.tsx` `?new=1` (sidebar "+ New Agent", command menu) opens a chooser (Build with AI · Recommended / Start from scratch = old flow incl. upgrade modal). New lazy guarded route `/dashboard/agents/new` → `pages/AgentBuilder.tsx` (description + 5 example chips + optional business name/website → optional questions → editable review grouped like the agent tabs, per-section Regenerate → Create = `createAgent(draft)` then `updateAgent(id, draft)` → `/dashboard/agents/:id?drafted=1`). `AgentDetail.tsx`: dismissible "Drafted with AI" banner with Test call (BrowserTestModal); `PostCallFieldsEditor` exported for reuse and its rows now wrap below `sm` (375 px).
+
+Verified: server suite 515 passed (+136 subtests) against local `vv_inttest`, incl. new `test_agent_builder.py` (18 tests; fake urlopen only, never a real provider); `tsc --noEmit -p tsconfig.app.json` clean; `npm run build` passes. One earlier full run had 5 `DeadlockDetected` errors in `test_usage.py` setup; two reruns were clean (likely a concurrent run on the same DB).
+
+Not verified / assumptions: nothing opened in a browser and no real LLM call made, so prompt quality is unmeasured. Every real Premium voice is currently hidden or owner-only preview, so tenants only get Standard/Lite voices from the builder (tests use a stand-in Premium entry). No agent-count pre-check before drafting (entitlements do not expose the limit); the limit shows at Create via the upgrade modal. The "+ Add field" button in the reused post-call editor still gets the global purple gradient (pre-existing on the agent page). `graphify update .` not run (no graph in the worktree).
+
+Next: owner preview at desktop and 375 px with real `OPENAI_API_KEY`/`GEMINI_API_KEY`; try the five example chips and judge the prompts; then push, PR, merge (Railway server deploy only; no LiveKit deploy needed).
+
+### Claude — 2026-10-12 — Build with AI: review, Sarvam provider, PR #35
+
+PR https://github.com/vistrowtechnologies-bit/Voice/pull/35 (branch `claude/agent-ai-builder`). Added commit `ffaca14`: the builder now tries Sarvam `sarvam-105b-conversations` first, then OpenAI, then Gemini (`AGENT_BUILDER_PROVIDER=sarvam|openai|gemini` forces one), and fenced JSON is stripped. Why: on 2026-10-12 the production and staging server keys returned OpenAI 429 `credit_balance_exhausted` and Gemini 402 `RESOURCE_EXHAUSTED` (prepaid credits depleted), so every draft returned the 503.
+
+Verified:
+- Real Sarvam call from the staging container with the builder prompt: questions in 1.2 s, full draft in 2.5 s, valid shape.
+- Local preview (simulated model) end to end: chooser → description → 3 questions → review (all 5 sections) → Create → `/dashboard/agents/9?drafted=1` banner. The DB row has every drafted field (voice, language, tone, tools, max duration, post-call fields, Devanagari welcome).
+- Checked at 375 px.
+- 20 builder tests; full suite 515 passed.
+
+Open, for the owner: Gemini prepaid credit is depleted on the server key. Production calls in the last 48 h were all Sarvam (12, 0 failed); not checked whether the LiveKit workers' Google key is the same project, so Gemini Live/TTS agents may fail until it is topped up.
