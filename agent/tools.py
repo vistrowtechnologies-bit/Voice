@@ -756,11 +756,25 @@ def _zoho_lead_body(lead: dict) -> dict:
     }
 
 
+# Zoho is regional; only its real hosts may receive the platform's client
+# secret or a tenant's tokens. A stored value comes from the OAuth callback,
+# but is checked here too so an edited config can never redirect them
+# (security audit 2026-10-12).
+_ZOHO_REGIONS = r"(com|in|eu|com\.au|jp|com\.cn|sa|ca|uk)"
+_ZOHO_ACCOUNTS_RE = re.compile(rf"^https://accounts\.zoho\.{_ZOHO_REGIONS}$")
+_ZOHO_API_RE = re.compile(rf"^https://(www\.)?zohoapis\.{_ZOHO_REGIONS}$")
+
+
+def _zoho_host(value, pattern, default: str) -> str:
+    value = (value or "").strip().rstrip("/")
+    return value if pattern.match(value) else default
+
+
 async def _zoho_refresh_access_token(http: aiohttp.ClientSession, config: dict) -> tuple[str, dict] | None:
     client_id = os.environ.get("ZOHO_OAUTH_CLIENT_ID")
     client_secret = os.environ.get("ZOHO_OAUTH_CLIENT_SECRET")
     refresh_token = config.get("refresh_token")
-    accounts_base = config.get("accounts_base") or "https://accounts.zoho.com"
+    accounts_base = _zoho_host(config.get("accounts_base"), _ZOHO_ACCOUNTS_RE, "https://accounts.zoho.com")
     if not client_id or not client_secret or not refresh_token:
         return None
     try:
@@ -791,7 +805,7 @@ async def _deliver_zoho_crm_lead(http: aiohttp.ClientSession, account_id: int | 
     process (agent/, not server/) with its own venv and its own DB
     connection — the two can't share a Python module directly."""
     access_token = config.get("access_token")
-    api_domain = (config.get("api_domain") or "https://www.zohoapis.com").rstrip("/")
+    api_domain = _zoho_host(config.get("api_domain"), _ZOHO_API_RE, "https://www.zohoapis.com")
     if not access_token or not config.get("refresh_token"):
         logger.warning("zoho_crm: config missing token fields, keys=%s", sorted(config.keys()))
         return False

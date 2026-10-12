@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { AuthShell } from '../pages/AuthShell'
+import { Icon } from './Icon'
 import { AdminLayout } from './AdminLayout'
 import { AppLoadingScreen } from './AppLoadingScreen'
 
@@ -19,6 +21,42 @@ export function RequireOwner({ children }: { children: ReactNode }) {
 
   if (!user) return <Navigate to="/login" replace />
   if (!user.isPlatformOwner) return <Navigate to="/dashboard" replace />
+  // The server refuses /admin without two-step login (security audit
+  // 2026-10-12); say what to do instead of showing a page of errors.
+  if (!user.mfaEnabled || !user.mfaVerified) return <AdminNeedsTwoStep enabled={!!user.mfaEnabled} />
 
   return <AdminLayout>{children}</AdminLayout>
+}
+
+function AdminNeedsTwoStep({ enabled }: { enabled: boolean }) {
+  const { logout } = useAuth()
+  return (
+    <AuthShell
+      title={enabled ? 'Sign in again with your code' : 'Turn on two-step login'}
+      subtitle={
+        enabled
+          ? 'This browser signed in before two-step login was on. Sign out and back in with your authenticator code to open the admin panel.'
+          : 'The admin panel can change every workspace, so it needs a code from an authenticator app as well as your password.'
+      }
+      headline={<>Admin access is <span className="text-primary">protected.</span></>}
+      features={['A stolen password alone can’t open admin', 'Codes come from your phone', 'Recovery codes if you lose it']}
+    >
+      <div className="flex flex-col gap-3">
+        {enabled ? (
+          <button
+            type="button"
+            onClick={() => void logout().then(() => { window.location.href = '/login' })}
+            className="flex items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-bg hover:opacity-90"
+          >
+            <Icon name="logout" className="text-[18px]" /> Sign out and sign back in
+          </button>
+        ) : (
+          <Link to="/dashboard/settings?tab=security" className="flex items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-bg hover:opacity-90">
+            <Icon name="lock" className="text-[18px]" /> Set up two-step login
+          </Link>
+        )}
+        <Link to="/dashboard" className="text-center text-sm font-semibold text-cyan hover:underline">Back to my dashboard</Link>
+      </div>
+    </AuthShell>
+  )
 }

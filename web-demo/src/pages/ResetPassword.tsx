@@ -26,7 +26,12 @@ export function ResetPassword() {
     }
     setBusy(true)
     try {
-      await apiResetPassword(token, password)
+      const result = await apiResetPassword(token, password)
+      if (result.signInRequired) {
+        // Two-step login is on: an emailed link alone doesn't sign anyone in.
+        navigate('/login?reset=1', { replace: true })
+        return
+      }
       // The endpoint signs us in on success; refresh the auth state, go home.
       await refresh()
       navigate('/dashboard', { replace: true })

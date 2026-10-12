@@ -11,7 +11,7 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
 }
 
 export function Login() {
-  const { login } = useAuth()
+  const { login, verifyMfa } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -25,14 +25,81 @@ export function Login() {
     oauthError ? OAUTH_ERROR_MESSAGES[oauthError] || 'Sign-in failed. Please try again.' : null
   )
   const [busy, setBusy] = useState(false)
+  // Two-step login: after the password (or ?mfa=1 back from Google/GitHub).
+  const [mfaStep, setMfaStep] = useState(searchParams.get('mfa') === '1')
+  const [code, setCode] = useState('')
+  const notice = searchParams.get('reset') === '1'
+    ? 'Your password is changed. Sign in with it and your two-step code.'
+    : null
   const shake = useShake(error)
+
+  const submitCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setBusy(true)
+    try {
+      await verifyMfa(code.trim())
+      navigate(from, { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That code didn’t work.')
+      if (err instanceof Error && /timed out|sign in again/i.test(err.message)) setMfaStep(false)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (mfaStep) {
+    return (
+      <AuthShell
+        title="Enter your code"
+        subtitle="Open your authenticator app and type the 6-digit code for Vistrow Voice."
+        headline={<>One more step to <span className="text-primary">stay safe.</span></>}
+        features={['Codes change every 30 seconds', 'Lost your phone? Use a recovery code', 'Each code works only once']}
+      >
+        <form onSubmit={submitCode} className={`flex flex-col gap-4 ${shake ? 'auth-shake' : ''}`}>
+          {error && (
+            <div className="flex items-center gap-2 rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">
+              <Icon name="error" className="text-[16px] text-destructive" />
+              {error}
+            </div>
+          )}
+          <AuthInput
+            label="Authentication code"
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            autoFocus
+            autoComplete="one-time-code"
+            inputMode={/[a-z]/i.test(code) ? 'text' : 'numeric'}
+            maxLength={12}
+            error={!!error}
+          />
+          <p className="-mt-2 text-xs text-text-muted">No phone? Type one of your recovery codes instead (like abcd-efgh).</p>
+          <button
+            type="submit"
+            disabled={busy || code.trim().length < 6}
+            className="mt-1 flex items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-bg transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-50"
+          >
+            {busy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-bg border-t-transparent" /> : 'Verify and sign in'}
+          </button>
+          <button type="button" onClick={() => { setMfaStep(false); setCode(''); setError(null) }} className="bg-transparent text-sm font-semibold text-text-muted hover:text-text">
+            Back to sign in
+          </button>
+        </form>
+      </AuthShell>
+    )
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setBusy(true)
     try {
-      await login(email, password)
+      const result = await login(email, password)
+      if (result.mfaRequired) {
+        setMfaStep(true)
+        return
+      }
       navigate(from, { replace: true })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed'
@@ -58,6 +125,12 @@ export function Login() {
       features={['Answer & qualify calls 24/7', '10 Indian languages + English', 'Every call logged & analyzed']}
     >
       <form onSubmit={submit} className={`flex flex-col gap-4 ${shake ? 'auth-shake' : ''}`}>
+        {notice && !error && (
+          <div className="flex items-center gap-2 rounded-lg border-l-[3px] border-success bg-surface-high px-3 py-2 text-sm text-text">
+            <Icon name="check_circle" className="text-[16px] text-success" />
+            {notice}
+          </div>
+        )}
         {error && (
           <div className="flex items-center gap-2 rounded-lg border-l-[3px] border-destructive bg-surface-high px-3 py-2 text-sm text-text">
             <Icon name="error" className="text-[16px] text-destructive" />

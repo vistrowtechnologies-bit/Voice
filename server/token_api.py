@@ -18,6 +18,7 @@ from pathlib import Path
 
 import admin_db
 import agent_builder
+import mfa
 import vendor_health
 import auth
 import call_intelligence
@@ -177,7 +178,16 @@ _SUPPORT_BLOCKED_PATHS = re.compile(
     r"|^/calls/[^/]+/recording"
     r"|^/integrations/[^/]+/disconnect$"
     r"|^/help/chat/confirm$"
+    # Security audit 2026-10-12: more writes to the customer's own setup.
+    r"|^/integrations/[^/]+$"
+    r"|^/telephony/(connect|disconnect)$"
+    r"|^/widget/sites/[^/]+/regenerate-key$"
+    r"|^/calls/[^/]+/push-to-arthaleads$"
 )
+
+# An API key works for the product API (agents, calls, contacts, campaigns...)
+# but never for account control: admin, keys, team, billing, profile, auth.
+_API_KEY_BLOCKED_PATHS = re.compile(r"^/(admin|api-keys|team|billing|profile|auth)(/|$)|^/help/chat/confirm$")
 
 
 def support_session_blocks(method: str, path: str) -> bool:
@@ -226,6 +236,15 @@ async def require_session(request: Request, call_next):
         return await call_next(request)
     session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
     if session is not None:
+        if not _origin_allowed(request):
+            # Report-only until ORIGIN_CHECK=enforce: SameSite=Lax already
+            # stops classic CSRF, and a white-label domain we haven't listed
+            # must not lose its writes on day one.
+            enforce = (os.environ.get("ORIGIN_CHECK") or "").strip().lower() == "enforce"
+            logger.warning("%s cross-site %s %s from origin %s", "blocked" if enforce else "would block",
+                           request.method, path, request.headers.get("origin"))
+            if enforce:
+                return JSONResponse({"detail": "This request came from another website and was blocked."}, status_code=403)
         profile = calls_db.get_user_by_id(session["uid"])
         if profile is None or int(profile.get("session_version") or 1) != int(session.get("sv") or 1):
             return JSONResponse({"detail": "Session expired — please sign in again"}, status_code=401)
@@ -233,6 +252,8 @@ async def require_session(request: Request, call_next):
             return JSONResponse({"detail": "This device was signed out"}, status_code=401)
         if session.get("imp") and not session.get("sid"):
             # A support cookie from before support sessions were revocable.
+            return JSONResponse({"detail": "Support session expired — please sign in again"}, status_code=401)
+        if session.get("imp") and not _support_admin_still_signed_in(session):
             return JSONResponse({"detail": "Support session expired — please sign in again"}, status_code=401)
         # Stash for downstream handlers/dependencies (Phase 3 scopes queries by it).
         request.state.user_id = session["uid"]
@@ -242,6 +263,8 @@ async def require_session(request: Request, call_next):
         # platform-owner user id so admin routes can attribute audit entries to
         # them even while uid/aid point at the tenant being viewed.
         request.state.impersonator_id = session.get("imp")
+        # When two-step login was passed (the admin's, in a support session).
+        request.state.mfa = session.get("imfa") if session.get("imp") else session.get("mfa")
         return await call_next(request)
     # No session cookie — accept a programmatic API key instead. The key maps
     # to a tenant account; we give the request that account's owner user so
@@ -254,6 +277,9 @@ async def require_session(request: Request, call_next):
             request.state.user_id = calls_db.account_owner_user_id(account_id)
             request.state.impersonator_id = None
             request.state.via_api_key = True
+            request.state.mfa = None
+            if _API_KEY_BLOCKED_PATHS.match(path):
+                return JSONResponse({"detail": "API keys can't be used for this. Sign in to the dashboard."}, status_code=403)
             return await call_next(request)
     return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
@@ -322,11 +348,74 @@ def require_platform_owner(request: Request) -> dict:
     impersonator, so an admin can't be locked out of admin routes while viewing
     a tenant. Returns 404 (not 403) to non-owners so the panel's existence
     isn't disclosed to regular tenants poking at URLs."""
+    if getattr(request.state, "via_api_key", False):
+        raise HTTPException(404, "Not found")
     acting_uid = getattr(request.state, "impersonator_id", None) or request.state.user_id
     user = calls_db.get_user_by_id(acting_uid)
-    if user is None or not user["is_platform_owner"]:
+    # The flag is on the workspace, so only its owner (not a teammate) is
+    # the platform admin (security audit 2026-10-12).
+    if user is None or not user["is_platform_owner"] or user["role"] != "owner":
         raise HTTPException(404, "Not found")
+    if not user.get("mfa_enabled_at"):
+        raise HTTPException(403, ADMIN_MFA_SETUP_REQUIRED)
+    if not getattr(request.state, "mfa", None):
+        raise HTTPException(403, ADMIN_MFA_SIGNIN_REQUIRED)
     return {"user_id": acting_uid, "email": user["email"]}
+
+
+ADMIN_MFA_SETUP_REQUIRED = "Two-step login is required for the admin panel. Turn it on in Settings, then sign in again."
+ADMIN_MFA_SIGNIN_REQUIRED = "Sign out and sign back in with your two-step code to open the admin panel."
+
+
+_STATIC_DASHBOARD_ORIGINS = {"https://app.vistrowvoice.com", "https://www.vistrowvoice.com", "https://vistrowvoice.com"}
+
+
+def _dashboard_origins() -> set[str]:
+    origins = set(_STATIC_DASHBOARD_ORIGINS)
+    for env in ("APP_BASE_URL", "PUBLIC_BASE_URL"):
+        parsed = urllib.parse.urlparse((os.environ.get(env) or "").strip())
+        if parsed.scheme and parsed.netloc:
+            origins.add(f"{parsed.scheme}://{parsed.netloc}")
+    origins.update(o.strip().rstrip("/") for o in (os.environ.get("EXTRA_ALLOWED_ORIGINS") or "").split(",") if o.strip())
+    return origins
+
+
+def _origin_allowed(request: Request) -> bool:
+    """CSRF backstop on top of SameSite=Lax: a cookie-authenticated write must
+    come from our own dashboard. No Origin header (server-to-server, old
+    browsers on same-origin requests) is allowed, as are localhost ports."""
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return True
+    origin = (request.headers.get("origin") or "").rstrip("/")
+    if not origin:
+        return True
+    host = urllib.parse.urlparse(origin).hostname or ""
+    if host in ("localhost", "127.0.0.1"):
+        return True
+    return origin in _dashboard_origins()
+
+
+def _support_admin_still_signed_in(session: dict) -> bool:
+    """A support cookie lives only while the admin's own sessions do: signing
+    out everywhere (or a password change) ends it too."""
+    admin = calls_db.get_user_by_id(session.get("imp"))
+    return admin is not None and session.get("isv") is not None and int(admin.get("session_version") or 1) == int(session["isv"])
+
+
+def _live_session(request: Request) -> dict | None:
+    """The session cookie, but only if it is still current (not signed out,
+    not revoked) — for the few public routes that read it themselves."""
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    if session is None:
+        return None
+    profile = calls_db.get_user_by_id(session["uid"])
+    if profile is None or int(profile.get("session_version") or 1) != int(session.get("sv") or 1):
+        return None
+    if session.get("sid") and not calls_db.validate_user_session(session["sid"], session["uid"]):
+        return None
+    if session.get("imp") and not _support_admin_still_signed_in(session):
+        return None
+    return session
 
 
 # Wildcard is required, not a placeholder: the widget (/widget/*, /token) is
@@ -508,7 +597,7 @@ _BUILTIN_TEST_SCENARIOS = {
 def _session_owns_agent(request: Request, agent_id: int) -> bool:
     """/token is public, so it reads the session cookie itself: a valid,
     current session whose workspace owns this agent."""
-    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    session = _live_session(request)
     if session is None:
         return False
     profile = calls_db.get_user_by_id(session["uid"])
@@ -710,11 +799,23 @@ def _set_session_cookie(
     account_id: int,
     request: Request | None = None,
     provider: str = "",
+    mfa_at: int | None = None,
+    new_sign_in: bool = False,
 ) -> str:
+    """mfa_at: when two-step login was passed for this session (carried over
+    when a session is re-issued). new_sign_in: a real sign-in, so a new
+    device gets a security email."""
     profile = calls_db.get_user_by_id(user_id)
     device_id = request.cookies.get(_DEVICE_COOKIE_NAME, "") if request is not None else ""
     if not re.fullmatch(r"[A-Za-z0-9_-]{20,160}", device_id):
         device_id = secrets.token_urlsafe(32)
+    if new_sign_in and profile is not None:
+        try:
+            has_history, known_here = calls_db.user_knows_device(user_id, device_id)
+            if has_history and not known_here:
+                _email_new_sign_in(profile, request, provider)
+        except Exception:
+            logger.warning("new-device check failed", exc_info=True)
     session_id = calls_db.create_user_session(
         user_id,
         device_id,
@@ -729,6 +830,7 @@ def _set_session_cookie(
             account_id,
             session_version=int((profile or {}).get("session_version") or 1),
             session_id=session_id,
+            claims={"mfa": mfa_at},
         ),
         max_age=auth.SESSION_TTL_SECONDS,
         httponly=True,
@@ -772,6 +874,7 @@ def _me_payload(user_id: int, impersonator_id: int | None = None) -> dict:
         "impersonating": False,
         "authProvider": user.get("auth_provider") or "password",
         "passwordSet": bool(user.get("password_set", True)),
+        "mfaEnabled": bool(user.get("mfa_enabled_at")),
         # The database holds an opaque object-storage key, never a direct
         # storage URL. The dashboard fetches it through an authenticated API
         # route, keeping account photos private.
@@ -813,6 +916,14 @@ def _oauth_or_create_user(email: str, name: str, provider: str = "password") -> 
     email = email.lower()
     user = calls_db.get_user_by_email(email)
     if user is not None:
+        if not user.get("email_verified_at"):
+            # Someone signed up with this address and never proved they own
+            # it. Google/GitHub just did prove it: whatever password that
+            # sign-up set (maybe an attacker's) must not keep working.
+            calls_db.update_user_profile(
+                user["id"], password_hash=auth.hash_password(secrets.token_urlsafe(32)), password_set=False,
+            )
+            calls_db.invalidate_other_sessions(user["id"])
         calls_db.mark_user_email_verified(user["id"])
         calls_db.record_login(user["id"], provider)
         return {"user_id": user["id"], "account_id": user["account_id"]}
@@ -856,7 +967,7 @@ def auth_oauth_google_callback(request: Request, code: str | None = None, state:
     if error or not code:
         return RedirectResponse(f"{base_url}/login?error=oauth_failed")
     expected_state = request.cookies.get(_OAUTH_STATE_COOKIE)
-    if not expected_state or state != expected_state:
+    if not expected_state or not secrets.compare_digest(state or "", expected_state):
         return RedirectResponse(f"{base_url}/login?error=oauth_failed")
 
     client_id = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
@@ -905,7 +1016,11 @@ def auth_oauth_google_callback(request: Request, code: str | None = None, state:
     account = _oauth_or_create_user(email, userinfo.get("name", ""), provider="google")
     redirect = RedirectResponse(f"{base_url}/dashboard")
     redirect.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
-    _set_session_cookie(redirect, account["user_id"], account["account_id"], request, "google")
+    if _needs_mfa(account["user_id"]):
+        _set_mfa_pending(redirect, account["user_id"], account["account_id"], "google")
+        redirect.headers["location"] = f"{base_url}/login?mfa=1"
+        return redirect
+    _set_session_cookie(redirect, account["user_id"], account["account_id"], request, "google", new_sign_in=True)
     return redirect
 
 
@@ -918,7 +1033,7 @@ def auth_oauth_slack_callback(
 ) -> RedirectResponse:
     base_url = _app_base_url(request)
     if request.cookies.get(_SLACK_INTEGRATION_STATE_COOKIE):
-        session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+        session = _live_session(request)
         user = {"user_id": session["uid"], "account_id": session["aid"]} if session else None
         return _complete_slack_integration_oauth(request, code, state, error, user)
 
@@ -1100,7 +1215,7 @@ def auth_oauth_zoho_callback(
         response.delete_cookie(_ZOHO_INTEGRATION_STATE_COOKIE, path="/")
         return response
 
-    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    session = _live_session(request)
     if error or not code or not expected_state or not secrets.compare_digest(state or "", expected_state) or not session:
         return _finish("?zoho=failed")
 
@@ -1208,7 +1323,7 @@ def auth_oauth_google_sheets_callback(
         response.delete_cookie(_GOOGLE_SHEETS_INTEGRATION_STATE_COOKIE, path="/")
         return response
 
-    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    session = _live_session(request)
     if error or not code or not expected_state or not secrets.compare_digest(state or "", expected_state) or not session:
         return _finish("?sheets=failed")
 
@@ -1446,7 +1561,7 @@ def auth_oauth_github_callback(request: Request, code: str | None = None, state:
     if error or not code:
         return RedirectResponse(f"{base_url}/login?error=oauth_failed")
     expected_state = request.cookies.get(_OAUTH_STATE_COOKIE)
-    if not expected_state or state != expected_state:
+    if not expected_state or not secrets.compare_digest(state or "", expected_state):
         return RedirectResponse(f"{base_url}/login?error=oauth_failed")
 
     client_id = os.environ.get("GITHUB_OAUTH_CLIENT_ID")
@@ -1503,7 +1618,11 @@ def auth_oauth_github_callback(request: Request, code: str | None = None, state:
     account = _oauth_or_create_user(primary["email"], gh_user.get("name") or gh_user.get("login") or "", provider="github")
     redirect = RedirectResponse(f"{base_url}/dashboard")
     redirect.delete_cookie(_OAUTH_STATE_COOKIE, path="/")
-    _set_session_cookie(redirect, account["user_id"], account["account_id"], request, "github")
+    if _needs_mfa(account["user_id"]):
+        _set_mfa_pending(redirect, account["user_id"], account["account_id"], "github")
+        redirect.headers["location"] = f"{base_url}/login?mfa=1"
+        return redirect
+    _set_session_cookie(redirect, account["user_id"], account["account_id"], request, "github", new_sign_in=True)
     return redirect
 
 
@@ -1540,7 +1659,7 @@ def auth_signup(req: SignupRequest, request: Request) -> dict:
         preheader="Verify your Vistrow Voice email",
         heading="Verify your email",
         body_html=(
-            f"Hi {user['name'] if user else req.name.strip()}, use this code to finish creating your account: "
+            f"Hi {html.escape(user['name'] if user else req.name.strip())}, use this code to finish creating your account: "
             f"<div style='margin:24px 0;padding:18px 16px;border:1px solid #e4d5fa;border-radius:12px;"
             f"background:#faf7ff;text-align:center;font-size:34px;font-weight:800;letter-spacing:9px;color:#7c3aed;'>{code}</div>"
             "This code expires in 10 minutes. If you did not start this signup, you can ignore this email."
@@ -1598,7 +1717,7 @@ def auth_resend_email_verification(req: ResendEmailVerificationRequest, request:
         preheader="Your new Vistrow Voice verification code",
         heading="Verify your email",
         body_html=(
-            f"Hi {user['name']}, your new verification code is: "
+            f"Hi {html.escape(user['name'])}, your new verification code is: "
             f"<div style='margin:24px 0;padding:18px 16px;border:1px solid #e4d5fa;border-radius:12px;"
             f"background:#faf7ff;text-align:center;font-size:34px;font-weight:800;letter-spacing:9px;color:#7c3aed;'>{code}</div>"
             "This code expires in 10 minutes."
@@ -1613,15 +1732,161 @@ def auth_resend_email_verification(req: ResendEmailVerificationRequest, request:
 def auth_login(req: LoginRequest, response: Response, request: Request) -> dict:
     if _auth_rate_limited(_client_ip(request)):
         raise HTTPException(429, "Too many attempts — please wait a minute and try again.")
-    user = calls_db.get_user_by_email(req.email.strip().lower())
-    if user is None or not auth.verify_password(req.password, user["password_hash"]):
+    email = req.email.strip().lower()
+    if _login_locked(email):
+        raise HTTPException(429, "Too many failed sign-ins for this account. Wait 15 minutes or reset your password.")
+    user = calls_db.get_user_by_email(email)
+    if user is None:
+        auth.verify_password(req.password, _DUMMY_PASSWORD_HASH)  # same time as a real check
+        _note_login_failure(email)
+        raise HTTPException(401, "Incorrect email or password")
+    if not auth.verify_password(req.password, user["password_hash"]):
         # Same message either way — don't reveal which emails are registered.
+        _note_login_failure(email)
+        calls_db.record_security_event(user["id"], "login_failed", "password", request.headers.get("user-agent", ""))
         raise HTTPException(401, "Incorrect email or password")
     if not user.get("email_verified_at"):
         raise HTTPException(403, "Verify your email before signing in. You can request a new code from the verification page")
-    _set_session_cookie(response, user["id"], user["account_id"], request, "password")
+    _login_failures.pop(email, None)
+    if _needs_mfa(user["id"]):
+        _set_mfa_pending(response, user["id"], user["account_id"], "password")
+        return {"ok": True, "mfaRequired": True}
+    _set_session_cookie(response, user["id"], user["account_id"], request, "password", new_sign_in=True)
     calls_db.record_login(user["id"])
     return {"ok": True, "user": _me_payload(user["id"])}
+
+
+class MfaLoginRequest(BaseModel):
+    code: str
+
+
+@app.post("/auth/login/mfa")
+def auth_login_mfa(req: MfaLoginRequest, response: Response, request: Request) -> dict:
+    """Second step of a sign-in: the authenticator code (or a recovery code)
+    for the user whose password / Google / GitHub step set the pending cookie."""
+    if _auth_rate_limited(_client_ip(request)):
+        raise HTTPException(429, "Too many attempts — please wait a minute and try again.")
+    pending = _read_mfa_pending(request.cookies.get(_MFA_PENDING_COOKIE))
+    if pending is None:
+        raise HTTPException(401, "Your sign-in timed out. Please sign in again.")
+    lock_key = f"mfa:{pending['uid']}"
+    if _login_locked(lock_key):
+        raise HTTPException(429, "Too many wrong codes. Wait 15 minutes and sign in again.")
+    if _verify_mfa_code(pending["uid"], req.code) is None:
+        _note_login_failure(lock_key)
+        calls_db.record_security_event(pending["uid"], "mfa_failed", pending["prov"], request.headers.get("user-agent", ""))
+        raise HTTPException(401, "That code didn't work. Check your authenticator app and try again.")
+    _login_failures.pop(lock_key, None)
+    response.delete_cookie(_MFA_PENDING_COOKIE, path="/")
+    _set_session_cookie(response, pending["uid"], pending["aid"], request, pending["prov"],
+                        mfa_at=int(time.time()), new_sign_in=True)
+    calls_db.record_login(pending["uid"])
+    return {"ok": True, "user": _me_payload(pending["uid"])}
+
+
+# Per-account sign-in failures (on top of the per-IP limit): 10 in 15 min
+# locks that email for the rest of the window. In memory, like the IP limit.
+_LOGIN_FAIL_WINDOW_S = 15 * 60
+_LOGIN_FAIL_MAX = 10
+_login_failures: dict[str, list[float]] = {}
+_DUMMY_PASSWORD_HASH = auth.hash_password(secrets.token_urlsafe(16))
+
+
+def _login_locked(key: str) -> bool:
+    now = time.monotonic()
+    recent = [t for t in _login_failures.get(key, []) if now - t < _LOGIN_FAIL_WINDOW_S]
+    if recent:
+        _login_failures[key] = recent
+    else:
+        _login_failures.pop(key, None)
+    return len(recent) >= _LOGIN_FAIL_MAX
+
+
+def _note_login_failure(key: str) -> None:
+    _login_failures.setdefault(key, []).append(time.monotonic())
+
+
+# ------------------------------------------------- two-step login (MFA)
+
+_MFA_PENDING_COOKIE = "vv_mfa_pending"
+_MFA_PENDING_TTL_S = 5 * 60
+
+
+def _needs_mfa(user_id: int) -> bool:
+    user = calls_db.get_user_by_id(user_id)
+    return bool(user and user.get("mfa_enabled_at"))
+
+
+def _mfa_pending_sig(body: str) -> str:
+    key = hashlib.sha256(auth._secret() + b"|mfa-pending-v1").digest()
+    return auth._b64(hmac.new(key, body.encode(), hashlib.sha256).digest())
+
+
+def _set_mfa_pending(response: Response, user_id: int, account_id: int, provider: str) -> None:
+    """Password (or Google/GitHub) checked; the code is still owed. Its own
+    cookie and signing key, so it can never pass as a session."""
+    body = auth._b64(json.dumps({"uid": user_id, "aid": account_id, "prov": provider,
+                                 "exp": int(time.time()) + _MFA_PENDING_TTL_S}).encode())
+    response.set_cookie(_MFA_PENDING_COOKIE, f"{body}.{_mfa_pending_sig(body)}", max_age=_MFA_PENDING_TTL_S,
+                        httponly=True, secure=_COOKIE_SECURE, samesite="lax", path="/")
+
+
+def _read_mfa_pending(token: str | None) -> dict | None:
+    if not token or "." not in token:
+        return None
+    body, _, sig = token.partition(".")
+    if not hmac.compare_digest(sig, _mfa_pending_sig(body)):
+        return None
+    try:
+        payload = json.loads(auth._unb64(body))
+    except (ValueError, TypeError):
+        return None
+    if payload.get("exp", 0) < int(time.time()):
+        return None
+    return payload
+
+
+def _verify_mfa_code(user_id: int, code: str) -> str | None:
+    """"totp" or "recovery" when the code is good (and now used up), else None."""
+    state = calls_db.get_user_mfa(user_id)
+    if not state or not state["secret_enc"]:
+        return None
+    if mfa.looks_like_recovery_code(code):
+        left = calls_db.consume_recovery_code(user_id, mfa.hash_recovery_code(code))
+        if left is None:
+            return None
+        calls_db.record_security_event(user_id, "mfa_recovery_code_used")
+        return "recovery"
+    step = mfa.matching_step(mfa.decrypt_secret(state["secret_enc"]), code, state["last_step"])
+    if step is None or not calls_db.claim_mfa_step(user_id, step):
+        return None
+    return "totp"
+
+
+def _session_mfa(request: Request) -> int | None:
+    session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    return session.get("mfa") if session else None
+
+
+def _email_new_sign_in(profile: dict, request: Request | None, provider: str) -> None:
+    """Security email for a sign-in from a device this user hasn't used."""
+    agent = _device_summary(request.headers.get("user-agent", "") if request is not None else "")
+    when = time.strftime("%d %b %Y, %H:%M UTC", time.gmtime())
+    method = {"google": "Google", "github": "GitHub"}.get(provider, "email and password")
+    ip = _client_ip(request) if request is not None else ""
+    body = (
+        f"<p>Hi {html.escape(profile.get('name') or 'there')},</p>"
+        "<p>Your Vistrow Voice account was just signed in to from a new device:</p>"
+        f"<p style='margin:4px 0'><strong>When:</strong> {html.escape(when)}</p>"
+        f"<p style='margin:4px 0'><strong>Device:</strong> {html.escape(agent['browser'])} on {html.escape(agent['operatingSystem'])}</p>"
+        f"<p style='margin:4px 0'><strong>Signed in with:</strong> {html.escape(method)}</p>"
+        + (f"<p style='margin:4px 0'><strong>IP address:</strong> {html.escape(ip)}</p>" if ip else "")
+        + "<p>If this was you, there's nothing to do. If it wasn't, reset your password now and "
+        "sign out other devices from Settings.</p>"
+    )
+    subject = "New sign-in to your Vistrow Voice account"
+    html_body = email_sender.render_email(preheader=subject, heading="New sign-in", body_html=body)
+    threading.Thread(target=email_sender.send_email, args=(profile["email"], subject, html_body), daemon=True).start()
 
 
 class ContactRequest(BaseModel):
@@ -1663,7 +1928,7 @@ def public_contact(req: ContactRequest, request: Request) -> dict:
     # different follow-up speed) - phone number lets sales call back directly
     # for a calling product, rather than starting the relationship over email.
     details = "".join(
-        f"<p style='margin:4px 0;'><strong>{label}:</strong> {value}</p>"
+        f"<p style='margin:4px 0;'><strong>{label}:</strong> {html.escape(str(value))}</p>"
         for label, value in [
             ("Name", name),
             ("Email", email),
@@ -1723,7 +1988,7 @@ def auth_request_password_reset(req: RequestResetRequest, request: Request) -> d
             preheader="Reset your Vistrow Voice password",
             heading="Reset your password",
             body_html=(
-                f"Hi {user['name']}, we received a request to reset your Vistrow Voice password. "
+                f"Hi {html.escape(user['name'])}, we received a request to reset your Vistrow Voice password. "
                 "Click below to choose a new one — this link is valid for 1 hour. "
                 "If you didn't request this, you can safely ignore this email."
             ),
@@ -1734,7 +1999,7 @@ def auth_request_password_reset(req: RequestResetRequest, request: Request) -> d
         if not sent:
             # Email delivery isn't set up yet — surface the link in the server
             # log so the operator can still complete a reset during setup.
-            logger.info("password reset link for %s (email not configured): %s", user["email"], link)
+            logger.info("password reset requested for user %s but email is not configured; link not sent", user["id"])
     return {"ok": True}
 
 
@@ -1748,8 +2013,11 @@ def auth_reset_password(req: ResetPasswordRequest, response: Response, request: 
     calls_db.update_user_profile(user_id, password_hash=auth.hash_password(req.password))
     calls_db.invalidate_other_sessions(user_id)
     calls_db.record_security_event(user_id, "password_reset")
-    # Log them straight in on success.
+    # Log them straight in on success — unless two-step login is on, when an
+    # emailed link alone must not be enough.
     user = calls_db.get_user_by_id(user_id)
+    if user is not None and user.get("mfa_enabled_at"):
+        return {"ok": True, "signInRequired": True}
     if user is not None:
         _set_session_cookie(response, user["id"], user["account_id"], request, "password")
         return {"ok": True, "user": _me_payload(user_id)}
@@ -1819,6 +2087,8 @@ def auth_me(request: Request, response: Response) -> dict:
         # Transparently upgrade pre-device-management cookies after deploy.
         _set_session_cookie(response, session["uid"], session["aid"], request)
     payload = _me_payload(session["uid"], session.get("imp"))
+    # This browser passed two-step login (the admin's, in a support session).
+    payload["mfaVerified"] = bool(session.get("imfa") if session.get("imp") else session.get("mfa"))
     if session.get("imp"):
         admin = calls_db.get_user_by_id(session["imp"]) or {}
         payload["impersonating"] = {
@@ -1876,7 +2146,7 @@ def update_profile(req: UpdateProfileRequest, response: Response, request: Reque
     if password_hash is not None:
         calls_db.invalidate_other_sessions(user["user_id"])
         calls_db.record_security_event(user["user_id"], "password_changed")
-        _set_session_cookie(response, user["user_id"], user["account_id"], request, "password")
+        _set_session_cookie(response, user["user_id"], user["account_id"], request, "password", mfa_at=_session_mfa(request))
     return {"user": _me_payload(user["user_id"])}
 
 
@@ -1983,6 +2253,8 @@ class EmailChangeRequest(BaseModel):
 
 @app.post("/profile/request-email-change")
 def request_email_change(req: EmailChangeRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+    if _limited("email-change", user["user_id"], 5, 3600):
+        raise HTTPException(429, "Too many requests. Try again in an hour.")
     new_email = req.email.strip().lower()
     if "@" not in new_email or "." not in new_email.rsplit("@", 1)[-1]:
         raise HTTPException(400, "Enter a valid email address")
@@ -2004,7 +2276,7 @@ def request_email_change(req: EmailChangeRequest, request: Request, user: dict =
         preheader="Confirm your new Vistrow Voice sign-in email",
         heading="Confirm your new email",
         body_html=(
-            f"Hi {profile['name']}, confirm <b>{new_email}</b> as your new Vistrow Voice sign-in email. "
+            f"Hi {html.escape(profile['name'])}, confirm <b>{html.escape(new_email)}</b> as your new Vistrow Voice sign-in email. "
             "This link is valid for one hour. If you did not request this change, you can ignore this email."
         ),
         cta_label="Confirm new email",
@@ -2029,6 +2301,8 @@ def confirm_email_change(token: str, response: Response, request: Request) -> di
     calls_db.update_user_email(user_id, email)
     calls_db.invalidate_other_sessions(user_id)
     calls_db.record_security_event(user_id, "email_changed")
+    if profile.get("mfa_enabled_at"):
+        return {"ok": True, "signInRequired": True}
     _set_session_cookie(response, user_id, profile["account_id"], request)
     return {"ok": True, "user": _me_payload(user_id)}
 
@@ -2121,7 +2395,7 @@ def profile_devices(request: Request, response: Response, user: dict = Depends(c
     session = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
     current_session_id = session.get("sid") if session else None
     if not current_session_id:
-        current_session_id = _set_session_cookie(response, user["user_id"], user["account_id"], request)
+        current_session_id = _set_session_cookie(response, user["user_id"], user["account_id"], request, mfa_at=_session_mfa(request))
 
     # Several sign-ins from one browser intentionally collapse into one device.
     grouped: dict[str, dict] = {}
@@ -2163,11 +2437,100 @@ def sign_out_device(device_id: str, request: Request, response: Response, user: 
     return {"ok": True, "signedOutCurrent": signed_out_current}
 
 
+class MfaCodeRequest(BaseModel):
+    code: str
+
+
+@app.get("/profile/mfa")
+def profile_mfa(user: dict = Depends(current_user)) -> dict:
+    state = calls_db.get_user_mfa(user["user_id"]) or {}
+    profile = calls_db.get_user_by_id(user["user_id"]) or {}
+    return {
+        "enabled": bool(state.get("enabled_at")),
+        "enabledAt": state.get("enabled_at"),
+        "recoveryCodesLeft": len(state.get("recovery") or []),
+        # The platform owner can't open the admin panel without it.
+        "required": bool(profile.get("is_platform_owner")) and profile.get("role") == "owner",
+    }
+
+
+@app.post("/profile/mfa/setup")
+def profile_mfa_setup(user: dict = Depends(current_user)) -> dict:
+    """Start (or restart) setup: a new secret for the authenticator app.
+    Nothing changes until /profile/mfa/enable confirms a code from it."""
+    state = calls_db.get_user_mfa(user["user_id"]) or {}
+    if state.get("enabled_at"):
+        raise HTTPException(400, "Two-step login is already on.")
+    profile = calls_db.get_user_by_id(user["user_id"]) or {}
+    secret = mfa.new_secret()
+    calls_db.set_mfa_pending(user["user_id"], mfa.encrypt_secret(secret))
+    return {"secret": secret, "otpauthUrl": mfa.otpauth_url(secret, profile.get("email") or "")}
+
+
+@app.post("/profile/mfa/enable")
+def profile_mfa_enable(req: MfaCodeRequest, response: Response, request: Request, user: dict = Depends(current_user)) -> dict:
+    state = calls_db.get_user_mfa(user["user_id"]) or {}
+    if not state.get("pending_enc"):
+        raise HTTPException(400, "Start the setup again: scan a new code first.")
+    step = mfa.matching_step(mfa.decrypt_secret(state["pending_enc"]), req.code)
+    if step is None:
+        raise HTTPException(400, "That code didn't match. Check the time on your phone and try the newest code.")
+    codes = mfa.new_recovery_codes()
+    if not calls_db.enable_mfa(user["user_id"], [mfa.hash_recovery_code(c) for c in codes], step):
+        raise HTTPException(400, "Start the setup again: scan a new code first.")
+    # Every other session was signed in without the code: end them, and
+    # keep this one, now marked as having passed two-step login.
+    calls_db.invalidate_other_sessions(user["user_id"])
+    calls_db.record_security_event(user["user_id"], "mfa_enabled", user_agent=request.headers.get("user-agent", ""))
+    _set_session_cookie(response, user["user_id"], user["account_id"], request, mfa_at=int(time.time()))
+    _email_security_notice(user["user_id"], "Two-step login is on",
+                           "Two-step login was turned on for your Vistrow Voice account. Signing in now needs a code "
+                           "from your authenticator app. Other devices were signed out.")
+    return {"ok": True, "recoveryCodes": codes, "user": _me_payload(user["user_id"])}
+
+
+@app.post("/profile/mfa/disable")
+def profile_mfa_disable(req: MfaCodeRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+    if _limited("mfa-manage", user["user_id"], 10, 900):
+        raise HTTPException(429, "Too many attempts. Wait 15 minutes and try again.")
+    if _verify_mfa_code(user["user_id"], req.code) is None:
+        raise HTTPException(400, "That code didn't work.")
+    calls_db.disable_mfa(user["user_id"])
+    calls_db.record_security_event(user["user_id"], "mfa_disabled", user_agent=request.headers.get("user-agent", ""))
+    _email_security_notice(user["user_id"], "Two-step login is off",
+                           "Two-step login was turned off for your Vistrow Voice account. If this wasn't you, reset "
+                           "your password and turn it back on in Settings.")
+    return {"ok": True, "user": _me_payload(user["user_id"])}
+
+
+@app.post("/profile/mfa/recovery-codes")
+def profile_mfa_recovery_codes(req: MfaCodeRequest, request: Request, user: dict = Depends(current_user)) -> dict:
+    """Replace every recovery code (the old ones stop working)."""
+    if _limited("mfa-manage", user["user_id"], 10, 900):
+        raise HTTPException(429, "Too many attempts. Wait 15 minutes and try again.")
+    if _verify_mfa_code(user["user_id"], req.code) is None:
+        raise HTTPException(400, "That code didn't work.")
+    codes = mfa.new_recovery_codes()
+    calls_db.set_recovery_codes(user["user_id"], [mfa.hash_recovery_code(c) for c in codes])
+    calls_db.record_security_event(user["user_id"], "mfa_recovery_codes_reset", user_agent=request.headers.get("user-agent", ""))
+    return {"ok": True, "recoveryCodes": codes}
+
+
+def _email_security_notice(user_id: int, heading: str, text: str) -> None:
+    profile = calls_db.get_user_by_id(user_id)
+    if not profile or not profile.get("email"):
+        return
+    body = f"<p>Hi {html.escape(profile.get('name') or 'there')},</p><p>{html.escape(text)}</p>"
+    html_body = email_sender.render_email(preheader=heading, heading=heading, body_html=body)
+    threading.Thread(target=email_sender.send_email, args=(profile["email"], f"Vistrow Voice: {heading}", html_body),
+                     daemon=True).start()
+
+
 @app.post("/profile/sign-out-others")
 def sign_out_other_sessions(response: Response, request: Request, user: dict = Depends(current_user)) -> dict:
     calls_db.invalidate_other_sessions(user["user_id"])
     calls_db.record_security_event(user["user_id"], "signed_out_other_sessions", user_agent=request.headers.get("user-agent", ""))
-    _set_session_cookie(response, user["user_id"], user["account_id"], request)
+    _set_session_cookie(response, user["user_id"], user["account_id"], request, mfa_at=_session_mfa(request))
     return {"ok": True, "user": _me_payload(user["user_id"])}
 
 
@@ -2364,6 +2727,8 @@ def team_invites(user: dict = Depends(require_role("admin"))) -> list[dict]:
 
 @app.post("/team/invite")
 def team_invite(req: InviteMemberRequest, request: Request, user: dict = Depends(require_role("admin"))) -> dict:
+    if _limited("invite", user["account_id"], 30, 24 * 3600):
+        raise HTTPException(429, "Too many invites today. Try again tomorrow.")
     email = req.email.strip().lower()
     name = req.name.strip()
     role = req.role if req.role in ("admin", "member", "viewer") else "member"
@@ -2380,8 +2745,8 @@ def team_invite(req: InviteMemberRequest, request: Request, user: dict = Depends
         preheader=f"{inviter['name']} invited you to join {inviter['account_name']} on Vistrow Voice",
         heading="You're invited",
         body_html=(
-            f"Hi {name}, {inviter['name']} invited you to join "
-            f"<strong style=\"color:{email_sender.TEXT}\">{inviter['account_name']}</strong> on Vistrow Voice as "
+            f"Hi {html.escape(name)}, {html.escape(inviter['name'])} invited you to join "
+            f"<strong style=\"color:{email_sender.TEXT}\">{html.escape(inviter['account_name'])}</strong> on Vistrow Voice as "
             f"a <strong style=\"color:{email_sender.TEXT}\">{role}</strong>. This invite is valid for 7 days."
         ),
         cta_label="Accept invite",
@@ -2389,7 +2754,7 @@ def team_invite(req: InviteMemberRequest, request: Request, user: dict = Depends
     )
     sent = email_sender.send_email(email, f"You're invited to join {inviter['account_name']} on Vistrow Voice", html, email_sender.FROM_INVITES)
     if not sent:
-        logger.info("invite link for %s (email not configured): %s", email, link)
+        logger.info("invite created for account %s but email is not configured; link not sent", user["account_id"])
     return {"ok": True, "emailSent": sent, "inviteLink": link}
 
 
@@ -2800,7 +3165,7 @@ def admin_reset_password(account_id: int, request: Request, admin: dict = Depend
         preheader="Reset your Vistrow Voice password",
         heading="Reset your password",
         body_html=(
-            f"Hi {user['name']}, a Vistrow Voice support agent started a password reset for your account. "
+            f"Hi {html.escape(user['name'])}, a Vistrow Voice support agent started a password reset for your account. "
             "Click below to set a new password — this link is valid for 1 hour."
         ),
         cta_label="Reset password",
@@ -2836,6 +3201,8 @@ def admin_impersonate(account_id: int, request: Request, response: Response, adm
             owner_uid, account_id, impersonator_id=admin["user_id"],
             session_version=int(owner.get("session_version") or 1), session_id=session_id,
             ttl_seconds=auth.IMPERSONATION_TTL_SECONDS,
+            claims={"isv": int((calls_db.get_user_by_id(admin["user_id"]) or {}).get("session_version") or 1),
+                    "imfa": getattr(request.state, "mfa", None)},
         ),
         max_age=auth.IMPERSONATION_TTL_SECONDS, httponly=True, secure=_COOKIE_SECURE, samesite="lax", path="/",
     )
@@ -2850,11 +3217,18 @@ def admin_impersonate_exit(request: Request, response: Response) -> dict:
     if session is None or not session.get("imp"):
         raise HTTPException(400, "Not in a support session")
     owner = calls_db.get_user_by_id(session["imp"])
-    if owner is None or not owner["is_platform_owner"]:
+    if owner is None or not owner["is_platform_owner"] or owner["role"] != "owner":
         raise HTTPException(403, "Not permitted")
+    # A stolen support cookie must not become a fresh admin session after
+    # the admin signed out everywhere.
+    if not _support_admin_still_signed_in(session) or (
+        session.get("sid") and not calls_db.validate_user_session(session["sid"], session["uid"])
+    ):
+        response.delete_cookie(auth.COOKIE_NAME, path="/")
+        raise HTTPException(401, "Support session expired — please sign in again")
     if session.get("sid"):
         calls_db.revoke_user_session(session["sid"], session["uid"])
-    _set_session_cookie(response, owner["id"], owner["account_id"], request)
+    _set_session_cookie(response, owner["id"], owner["account_id"], request, mfa_at=session.get("imfa"))
     admin_db.write_audit(owner["id"], owner["email"], "impersonate_exit", session["aid"], session["uid"], detail="ended support session")
     return {"ok": True}
 
@@ -2884,7 +3258,7 @@ def list_calls(
 
 
 @app.get("/calls/export.csv", response_class=PlainTextResponse)
-def export_calls_csv(user: dict = Depends(current_user)) -> PlainTextResponse:
+def export_calls_csv(user: dict = Depends(require_role("member"))) -> PlainTextResponse:
     return PlainTextResponse(
         calls_db.calls_csv(user["account_id"]),
         media_type="text/csv",
@@ -3085,13 +3459,16 @@ def download_call_recording(call_id: int, user: dict = Depends(current_user)) ->
 def analyze_call(call_id: int, user: dict = Depends(require_role("member"))) -> dict:
     """Run (or re-run) conversation intelligence on one call and cache it on
     the row. Returns the intelligence object."""
+    if _limited("analyze", user["account_id"], 60, 3600):
+        raise HTTPException(429, "Too many analyses this hour. Try again later.")
     transcript = calls_db.get_call_transcript(call_id, user["account_id"])
     if transcript is None:
         raise HTTPException(404, "Call not found")
     try:
         data = call_intelligence.analyze_transcript(transcript)
     except RuntimeError as exc:
-        raise HTTPException(502, str(exc))
+        logger.warning("call %s analysis failed: %s", call_id, exc)
+        raise HTTPException(502, "The analysis couldn't run right now. Please try again in a minute.") from exc
     calls_db.save_call_intelligence(call_id, user["account_id"], data)
     return data
 
@@ -3407,6 +3784,8 @@ def call_contact_now(contact_id: int, data: dict = Body(...), user: dict = Depen
     name/company/custom context. This is separate from campaign state, so it
     cannot double-claim or mutate a paused campaign queue row.
     """
+    if _limited("contact-call", user["account_id"], 60, 3600):
+        raise HTTPException(429, "Too many calls started this hour. Try again later.")
     contact = calls_db.contact_detail(contact_id, user["account_id"])
     if contact is None:
         raise HTTPException(404, "Contact not found")
@@ -3484,7 +3863,7 @@ def delete_all_contacts(user: dict = Depends(current_user)) -> dict:
 
 
 @app.get("/contacts/export.csv", response_class=PlainTextResponse)
-def export_contacts_csv(user: dict = Depends(current_user)) -> PlainTextResponse:
+def export_contacts_csv(user: dict = Depends(require_role("member"))) -> PlainTextResponse:
     return PlainTextResponse(
         calls_db.contacts_csv(user["account_id"]),
         media_type="text/csv",
@@ -3727,10 +4106,12 @@ def delete_kb_qa(qa_id: int, user: dict = Depends(current_user)) -> dict:
 
 
 @app.post("/knowledge-sources/{source_id}/extract-qa")
-def extract_qa_from_source(source_id: int, user: dict = Depends(current_user)) -> dict:
+def extract_qa_from_source(source_id: int, user: dict = Depends(require_role("member"))) -> dict:
     """LLM-drafts Q&A pairs from one uploaded source. Returns drafts only —
     nothing is saved until the operator reviews and POSTs them to /qa/bulk,
     so a misread price never reaches a live agent unreviewed."""
+    if _limited("extract-qa", user["account_id"], 30, 3600):
+        raise HTTPException(429, "Too many extractions this hour. Try again later.")
     source = calls_db.get_knowledge_source_content(source_id, user["account_id"])
     if source is None:
         raise HTTPException(404, "Source not found")
@@ -3928,6 +4309,8 @@ def list_copilot_actions(user: dict = Depends(current_user)) -> list[dict]:
 def create_help_ticket(
     req: HelpTicketRequest, request: Request, background_tasks: BackgroundTasks, user: dict = Depends(current_user)
 ) -> dict:
+    if _limited("ticket", user["account_id"], 20, 3600):
+        raise HTTPException(429, "Too many tickets this hour. Try again later.")
     user = _ticket_author(user)
     subject = req.subject.strip()[:160]
     detail = req.detail.strip()[:5_000]
@@ -4351,9 +4734,19 @@ async def _sync_inbound_route_agent(phone_number: str | None, agent_id: int | No
     return await _sync_dispatch_rule(number_row["id"], account_id)
 
 
+def _require_own_number(phone_number, account_id: int) -> None:
+    """Only the workspace that owns a number may route it (security audit
+    2026-10-12: a route on someone else's number could hang up their calls)."""
+    row = calls_db.get_phone_number_by_number(str(phone_number or ""))
+    if row is None or row.get("accountId", row.get("account_id")) != account_id:
+        raise HTTPException(404, "That number isn't in this workspace")
+
+
 @app.post("/inbound-routes")
-async def create_inbound_route(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+async def create_inbound_route(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     phone_number = data.get("phoneNumber")
+    _require_own_number(phone_number, user["account_id"])
+    _require_own_agent(data.get("agentId"), user["account_id"])
     if phone_number and calls_db.inbound_route_exists_for_number(phone_number, user["account_id"]):
         raise HTTPException(400, "This number already has an active route. Edit the existing one instead.")
     calls_db.create_inbound_route(data, user["account_id"])
@@ -4362,8 +4755,12 @@ async def create_inbound_route(data: dict = Body(...), user: dict = Depends(curr
 
 
 @app.patch("/inbound-routes/{route_id}")
-async def update_inbound_route(route_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+async def update_inbound_route(route_id: int, data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     phone_number = data.get("phoneNumber")
+    if phone_number:
+        _require_own_number(phone_number, user["account_id"])
+    if "agentId" in data:
+        _require_own_agent(data.get("agentId"), user["account_id"])
     if phone_number and calls_db.inbound_route_exists_for_number(phone_number, user["account_id"], exclude_route_id=route_id):
         raise HTTPException(400, "This number already has a different active route.")
     calls_db.update_inbound_route(route_id, data, user["account_id"])
@@ -4587,14 +4984,32 @@ def list_integrations(user: dict = Depends(current_user)) -> list[dict]:
 def update_integration(key: str, data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
     if data.get("status", "not_connected") == "connected":
         _require_integration_connectable(user["account_id"], key)
+    config = data.get("config") or {}
+    if not isinstance(config, dict):
+        raise HTTPException(400, "config must be an object")
+    # Tokens and provider hosts come only from our OAuth callbacks. Keep the
+    # stored ones; never take them from the browser (security audit
+    # 2026-10-12: a typed accounts_base received the Zoho client secret).
+    stored = next((i.get("config") or {} for i in calls_db.list_integrations(user["account_id"]) if i.get("key") == key), {})
+    keep_stored = data.get("status", "not_connected") == "connected"
+    for server_key in _SERVER_MANAGED_INTEGRATION_KEYS:
+        config.pop(server_key, None)
+        if keep_stored and server_key in stored:
+            config[server_key] = stored[server_key]
     calls_db.update_integration(
         key,
         data.get("status", "not_connected"),
-        data.get("config", {}),
+        config,
         user["account_id"],
         name=data.get("name"),
     )
     return {"ok": True}
+
+
+_SERVER_MANAGED_INTEGRATION_KEYS = (
+    "accounts_base", "api_domain", "access_token", "refresh_token", "expires_at",
+    "bot_token", "pageAccessToken",
+)
 
 
 @app.post("/integrations/{key}/test")
@@ -4727,7 +5142,7 @@ def telephony_status(user: dict = Depends(current_user)) -> dict:
 
 
 @app.post("/telephony/connect")
-def telephony_connect(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def telephony_connect(data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
     app_id = (data.get("appId") or "").strip()
     app_key = (data.get("appKey") or "").strip()
     if not app_id or not app_key:
@@ -4737,7 +5152,7 @@ def telephony_connect(data: dict = Body(...), user: dict = Depends(current_user)
 
 
 @app.post("/telephony/disconnect")
-def telephony_disconnect(user: dict = Depends(current_user)) -> dict:
+def telephony_disconnect(user: dict = Depends(require_role("admin"))) -> dict:
     calls_db.disconnect_enablex(user["account_id"])
     return {"ok": True}
 
@@ -4777,7 +5192,7 @@ def get_sip_auth(user: dict = Depends(require_role("admin"))) -> dict:
 
 
 @app.post("/telephony/numbers")
-async def add_phone_number(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+async def add_phone_number(data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
     number = (data.get("number") or "").strip()
     if not number:
         raise HTTPException(400, "A phone/virtual number is required")
@@ -4795,7 +5210,7 @@ async def add_phone_number(data: dict = Body(...), user: dict = Depends(current_
 
 
 @app.patch("/telephony/numbers/{number_id}")
-async def assign_phone_number(number_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+async def assign_phone_number(number_id: int, data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     if not calls_db.assign_phone_number(number_id, data.get("agentId"), user["account_id"]):
         raise HTTPException(400, "Agent not found")
     lk_sync_error = await _sync_dispatch_rule(number_id, user["account_id"])
@@ -4803,7 +5218,7 @@ async def assign_phone_number(number_id: int, data: dict = Body(...), user: dict
 
 
 @app.delete("/telephony/numbers/{number_id}")
-async def delete_phone_number(number_id: int, user: dict = Depends(current_user)) -> dict:
+async def delete_phone_number(number_id: int, user: dict = Depends(require_role("admin"))) -> dict:
     row = calls_db.get_phone_number(number_id, user["account_id"])
     if row is not None and row.get("lkDispatchRuleId"):
         try:
@@ -4820,7 +5235,9 @@ async def delete_phone_number(number_id: int, user: dict = Depends(current_user)
 
 
 @app.post("/telephony/test-call")
-def telephony_test_call(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def telephony_test_call(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
+    if _limited("test-call", user["account_id"], 20, 3600):
+        raise HTTPException(429, "Too many test calls this hour. Try again later.")
     from_number = (data.get("from") or "").strip()
     to_number = (data.get("to") or "").strip()
     if not from_number or not to_number:
@@ -6087,7 +6504,7 @@ async def webhooks_meta_event(request: Request) -> dict:
 
 
 @app.get("/integrations/lead-webhook")
-def integrations_lead_webhook(user: dict = Depends(current_user)) -> dict:
+def integrations_lead_webhook(user: dict = Depends(require_role("admin"))) -> dict:
     """The URL + token an operator pastes into a Zapier 'Webhooks by Zapier'
     step (or any other lead source) so POSTing to it queues an instant call.
     Session-authenticated, unlike the webhook route itself — this is read by
@@ -6279,11 +6696,25 @@ def list_sites(user: dict = Depends(current_user)) -> list[dict]:
     return calls_db.list_sites(user["account_id"])
 
 
+def _require_own_agent(agent_id, account_id: int) -> None:
+    """A caller-supplied agentId must be one of this workspace's agents
+    (security audit 2026-10-12: sites and inbound routes accepted any id)."""
+    if agent_id in (None, ""):
+        return
+    try:
+        agent_id = int(agent_id)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Unknown agent") from None
+    if not calls_db.agent_belongs_to_account(agent_id, account_id):
+        raise HTTPException(404, "Agent not found")
+
+
 @app.post("/widget/sites")
-def create_site(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def create_site(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     name = (data.get("name") or "").strip()
     if not name:
         raise HTTPException(400, "A site name is required")
+    _require_own_agent(data.get("agentId"), user["account_id"])
     return calls_db.create_site(
         name,
         data.get("agentId"),
@@ -6380,7 +6811,9 @@ def widget_site_config(siteKey: str, path: str = "") -> dict:
 
 
 @app.patch("/widget/sites/{site_id}")
-def update_site(site_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def update_site(site_id: int, data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
+    if "agentId" in data:
+        _require_own_agent(data.get("agentId"), user["account_id"])
     site = calls_db.update_site(site_id, data, user["account_id"])
     if site is None:
         raise HTTPException(404, "Site not found")
@@ -6388,7 +6821,7 @@ def update_site(site_id: int, data: dict = Body(...), user: dict = Depends(curre
 
 
 @app.post("/widget/sites/{site_id}/regenerate-key")
-def regenerate_site_key(site_id: int, user: dict = Depends(current_user)) -> dict:
+def regenerate_site_key(site_id: int, user: dict = Depends(require_role("member"))) -> dict:
     site = calls_db.regenerate_site_key(site_id, user["account_id"])
     if site is None:
         raise HTTPException(404, "Site not found")
@@ -6406,7 +6839,7 @@ def list_site_seen_paths(site_id: int, user: dict = Depends(current_user)) -> li
 
 
 @app.post("/widget/sites/{site_id}/sync-wp-pages")
-def sync_wp_pages_from_dashboard(site_id: int, user: dict = Depends(current_user)) -> dict:
+def sync_wp_pages_from_dashboard(site_id: int, user: dict = Depends(require_role("member"))) -> dict:
     """Dashboard-triggered counterpart to the WordPress plugin's own push
     (POST /widget/wp-pages) — pulls the page list directly from the site's
     public WP REST API instead, so an operator who wants to manage
@@ -6464,7 +6897,7 @@ def sync_wp_pages(req: WpPagesSyncRequest) -> dict:
 
 
 @app.post("/widget/sites/{site_id}/routes")
-def create_site_page_route(site_id: int, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def create_site_page_route(site_id: int, data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     route = calls_db.create_site_page_route(
         site_id,
         user["account_id"],
@@ -6479,13 +6912,13 @@ def create_site_page_route(site_id: int, data: dict = Body(...), user: dict = De
 
 
 @app.delete("/widget/sites/{site_id}/routes/{route_id}")
-def delete_site_page_route(site_id: int, route_id: int, user: dict = Depends(current_user)) -> dict:
+def delete_site_page_route(site_id: int, route_id: int, user: dict = Depends(require_role("member"))) -> dict:
     calls_db.delete_site_page_route(route_id, user["account_id"])
     return {"ok": True}
 
 
 @app.delete("/widget/sites/{site_id}")
-def delete_site(site_id: int, user: dict = Depends(current_user)) -> dict:
+def delete_site(site_id: int, user: dict = Depends(require_role("member"))) -> dict:
     calls_db.delete_site(site_id, user["account_id"])
     return {"ok": True}
 
@@ -6499,6 +6932,22 @@ def delete_site(site_id: int, user: dict = Depends(current_user)) -> dict:
 _AUTH_WINDOW_SECONDS = 60
 _AUTH_MAX_PER_WINDOW = 8
 _auth_calls: dict[str, list[float]] = {}
+
+
+_limit_hits: dict[tuple[str, object], list[float]] = {}
+
+
+def _limited(bucket: str, key, max_hits: int, window_s: int) -> bool:
+    """In-memory sliding window per (bucket, key) — the same first line of
+    defence as the IP limits below, for costly or email-sending routes."""
+    now = time.monotonic()
+    hits = [t for t in _limit_hits.get((bucket, key), []) if now - t < window_s]
+    if len(hits) >= max_hits:
+        _limit_hits[(bucket, key)] = hits
+        return True
+    hits.append(now)
+    _limit_hits[(bucket, key)] = hits
+    return False
 
 
 def _auth_rate_limited(client_ip: str) -> bool:
@@ -6848,7 +7297,9 @@ class WidgetTelemetryRequest(BaseModel):
 
 
 @app.post("/widget/feedback")
-def widget_feedback(req: WidgetFeedbackRequest) -> dict:
+def widget_feedback(req: WidgetFeedbackRequest, request: Request) -> dict:
+    if _limited("widget-feedback", _client_ip(request), 30, 3600):
+        raise HTTPException(429, "Too many requests")
     site = calls_db.get_site_by_key(req.siteKey)
     if site is None:
         raise HTTPException(404, "Unknown site key")
@@ -6883,7 +7334,9 @@ def demo_feedback(req: DemoFeedbackRequest) -> dict:
 
 
 @app.post("/widget/telemetry")
-def widget_telemetry(req: WidgetTelemetryRequest) -> dict:
+def widget_telemetry(req: WidgetTelemetryRequest, request: Request) -> dict:
+    if _limited("widget-telemetry", _client_ip(request), 240, 3600):
+        raise HTTPException(429, "Too many requests")
     site = calls_db.get_site_by_key(req.siteKey)
     if site is None:
         raise HTTPException(404, "Unknown site key")

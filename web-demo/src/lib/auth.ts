@@ -22,12 +22,18 @@ export interface AuthUser {
   authProvider: string
   passwordSet: boolean
   avatarUrl: string
+  /** Two-step login (authenticator app) is on for this user. */
+  mfaEnabled?: boolean
+  /** This browser's session passed two-step login (needed for /admin). */
+  mfaVerified?: boolean
 }
 
 export interface AuthState {
   user: AuthUser | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
+  /** Resolves to { mfaRequired: true } when a two-step code is still owed. */
+  login: (email: string, password: string) => Promise<{ mfaRequired?: boolean }>
+  verifyMfa: (code: string) => Promise<void>
   signup: (data: {
     name: string
     company: string
@@ -69,7 +75,18 @@ async function authFetch<T>(path: string, body?: unknown, method?: string): Prom
 
 export const apiMe = () => authFetch<{ user: AuthUser }>('/auth/me')
 export const apiLogin = (email: string, password: string) =>
-  authFetch<{ user: AuthUser }>('/auth/login', { email, password })
+  authFetch<{ user?: AuthUser; mfaRequired?: boolean }>('/auth/login', { email, password })
+export const apiLoginMfa = (code: string) => authFetch<{ user: AuthUser }>('/auth/login/mfa', { code })
+
+// --- two-step login (Settings → Security) ---
+export interface MfaStatus { enabled: boolean; enabledAt: string | null; recoveryCodesLeft: number; required: boolean }
+export const apiMfaStatus = () => authFetch<MfaStatus>('/profile/mfa')
+export const apiMfaSetup = () => authFetch<{ secret: string; otpauthUrl: string }>('/profile/mfa/setup', {})
+export const apiMfaEnable = (code: string) =>
+  authFetch<{ ok: boolean; recoveryCodes: string[]; user: AuthUser }>('/profile/mfa/enable', { code })
+export const apiMfaDisable = (code: string) => authFetch<{ ok: boolean; user: AuthUser }>('/profile/mfa/disable', { code })
+export const apiMfaNewRecoveryCodes = (code: string) =>
+  authFetch<{ ok: boolean; recoveryCodes: string[] }>('/profile/mfa/recovery-codes', { code })
 export const apiSignup = (data: {
   name: string
   company: string
@@ -102,7 +119,7 @@ export const apiUpdateProfileAvatar = async (image: File) => {
 }
 export const apiRemoveProfileAvatar = () => authFetch<{ user: AuthUser }>('/profile/avatar', undefined, 'DELETE')
 export const apiRequestEmailChange = (email: string) => authFetch<{ ok: boolean }>('/profile/request-email-change', { email })
-export const apiConfirmEmailChange = (token: string) => authFetch<{ ok: boolean; user: AuthUser }>(`/auth/confirm-email-change?token=${encodeURIComponent(token)}`)
+export const apiConfirmEmailChange = (token: string) => authFetch<{ ok: boolean; user?: AuthUser; signInRequired?: boolean }>(`/auth/confirm-email-change?token=${encodeURIComponent(token)}`)
 export interface UserPreferences {
   timezone: string
   language: 'en' | 'hi'
@@ -179,7 +196,7 @@ export const apiAuthConfig = () => authFetch<AuthConfig>('/auth/config')
 export const apiRequestPasswordReset = (email: string) =>
   authFetch<{ ok: boolean }>('/auth/request-password-reset', { email })
 export const apiResetPassword = (token: string, password: string) =>
-  authFetch<{ ok: boolean; user?: AuthUser }>('/auth/reset-password', { token, password })
+  authFetch<{ ok: boolean; user?: AuthUser; signInRequired?: boolean }>('/auth/reset-password', { token, password })
 
 // --- team & invites ---------------------------------------------------
 

@@ -19,9 +19,12 @@ class HTTPException(Exception):
 def load(*names):
     nodes = [n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name in names]
     assert len(nodes) == len(names)
+    nodes += [n for n in TREE.body if isinstance(n, ast.Assign)
+              and any(getattr(t, "id", None) == "_SERVER_MANAGED_INTEGRATION_KEYS" for t in n.targets)]
     for n in nodes:
         n.decorator_list = []
     calls_db = mock.Mock()
+    calls_db.list_integrations.return_value = []
     ns = {"HTTPException": HTTPException, "calls_db": calls_db, "Body": lambda *a, **k: None,
           "RedirectResponse": object, "Depends": lambda *a, **k: None, "require_role": lambda r: None}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), "token_api.py", "exec"), ns)
@@ -49,6 +52,21 @@ class NewConnectionGuard(unittest.TestCase):
         db.integration_accepts_connect.return_value = False
         ns["update_integration"]("facebook", {"status": "not_connected", "config": {}}, {"account_id": 1})
         db.update_integration.assert_called_once()
+
+    def test_browser_cannot_set_tokens_or_provider_hosts(self):
+        """Security audit 2026-10-12: a typed accounts_base received the Zoho
+        client secret. Stored values are kept on a connected update and
+        dropped on disconnect; the browser's are always ignored."""
+        ns, db = load("_require_integration_connectable", "update_integration")
+        db.integration_accepts_connect.return_value = True
+        db.list_integrations.return_value = [{"key": "zoho_crm", "config": {
+            "accounts_base": "https://accounts.zoho.in", "refresh_token": "real"}}]
+        evil = {"accounts_base": "https://attacker.test", "api_domain": "https://attacker.test", "refresh_token": "x"}
+        ns["update_integration"]("zoho_crm", {"status": "connected", "config": dict(evil)}, {"account_id": 1})
+        saved = db.update_integration.call_args[0][2]
+        self.assertEqual(saved, {"accounts_base": "https://accounts.zoho.in", "refresh_token": "real"})
+        ns["update_integration"]("zoho_crm", {"status": "not_connected", "config": dict(evil)}, {"account_id": 1})
+        self.assertEqual(db.update_integration.call_args[0][2], {})
 
     def test_settings_on_unconnected_whatsapp_rejected(self):
         ns, db = load("_require_integration_connectable", "update_integration_settings")

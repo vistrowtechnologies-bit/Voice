@@ -14,7 +14,7 @@ export function ConfirmEmailChange() {
     const token = params.get('token')
     if (!token) { setState('error'); setError('This confirmation link is incomplete.'); return }
     apiConfirmEmailChange(token)
-      .then(({ user }) => { setUser(user); setState('success') })
+      .then(({ user }) => { if (user) setUser(user); setState('success') })
       .catch((err) => { setError(err instanceof Error ? err.message : 'Could not confirm your new email.'); setState('error') })
   }, [params, setUser])
 

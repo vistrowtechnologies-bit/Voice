@@ -1506,6 +1506,17 @@ def init_tables() -> None:
                     "UPDATE users SET password_set = 0 WHERE auth_provider IN ('google', 'github', 'slack')"
                 )
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''")
+            # Two-step login (mfa.py): encrypted TOTP secret, a pending one
+            # during setup, the last used time step (no code reuse) and
+            # hashed one-time recovery codes.
+            for column, coltype in (
+                ("mfa_secret_enc", "TEXT"),
+                ("mfa_pending_enc", "TEXT"),
+                ("mfa_enabled_at", "TEXT"),
+                ("mfa_last_step", "BIGINT"),
+                ("mfa_recovery_json", "TEXT DEFAULT '[]'"),
+            ):
+                conn.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER DEFAULT 1")
             # NULL until the first-run dashboard tour is finished or skipped.
             # Per-user (not per-account like onboarded_at above) so a
@@ -1927,6 +1938,7 @@ def get_user_by_id(user_id: int) -> dict | None:
             """
             SELECT u.id, u.email, u.name, u.phone, u.role, u.account_id, u.tour_completed_at,
                    u.auth_provider, u.password_set, u.avatar_url, u.session_version, u.email_verified_at,
+                   u.mfa_enabled_at,
                    a.name AS account_name, a.plan AS account_plan,
                    a.is_platform_owner, a.onboarded_at
             FROM users u JOIN accounts a ON a.id = u.account_id
@@ -4236,20 +4248,142 @@ def create_password_reset(user_id: int) -> str:
 
 def consume_password_reset(token: str) -> int | None:
     """Validate + burn a reset token, returning the user_id if it's valid,
-    unexpired, and unused; otherwise None."""
+    unexpired, and unused; otherwise None. One conditional UPDATE, so two
+    simultaneous requests can't both use it, and every other outstanding
+    link for that user dies with it (security audit 2026-10-12)."""
     if not token:
         return None
     conn = _connect()
     try:
-        row = conn.execute(
-            "SELECT id, user_id, expires_at, used FROM password_resets WHERE token_hash = ?",
-            (_hash_api_key(token),),
-        ).fetchone()
-        if row is None or row["used"] or row["expires_at"] < int(time.time()):
-            return None
         with conn:
-            conn.execute("UPDATE password_resets SET used = 1 WHERE id = ?", (row["id"],))
+            row = conn.execute(
+                "UPDATE password_resets SET used = 1 WHERE token_hash = ? AND used = 0 AND expires_at >= ? "
+                "RETURNING user_id",
+                (_hash_api_key(token), int(time.time())),
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute("UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0", (row["user_id"],))
         return row["user_id"]
+    finally:
+        conn.close()
+
+
+# ------------------------------------------------------- two-step login
+
+
+def get_user_mfa(user_id: int) -> dict | None:
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT mfa_secret_enc, mfa_pending_enc, mfa_enabled_at, mfa_last_step, mfa_recovery_json "
+            "FROM users WHERE id = ?", (user_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            recovery = json.loads(row["mfa_recovery_json"] or "[]")
+        except ValueError:
+            recovery = []
+        return {
+            "secret_enc": row["mfa_secret_enc"], "pending_enc": row["mfa_pending_enc"],
+            "enabled_at": row["mfa_enabled_at"], "last_step": row["mfa_last_step"], "recovery": recovery,
+        }
+    finally:
+        conn.close()
+
+
+def set_mfa_pending(user_id: int, secret_enc: str) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("UPDATE users SET mfa_pending_enc = ? WHERE id = ?", (secret_enc, user_id))
+    finally:
+        conn.close()
+
+
+def enable_mfa(user_id: int, recovery_hashes: list[str], step: int) -> bool:
+    """Promote the pending secret. False if there was none (setup expired)."""
+    conn = _connect()
+    try:
+        with conn:
+            row = conn.execute(
+                f"UPDATE users SET mfa_secret_enc = mfa_pending_enc, mfa_pending_enc = NULL, "
+                f"mfa_enabled_at = {_NOW}, mfa_last_step = ?, mfa_recovery_json = ? "
+                "WHERE id = ? AND mfa_pending_enc IS NOT NULL RETURNING id",
+                (step, json.dumps(recovery_hashes), user_id),
+            ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def disable_mfa(user_id: int) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE users SET mfa_secret_enc = NULL, mfa_pending_enc = NULL, mfa_enabled_at = NULL, "
+                "mfa_last_step = NULL, mfa_recovery_json = '[]' WHERE id = ?", (user_id,),
+            )
+    finally:
+        conn.close()
+
+
+def claim_mfa_step(user_id: int, step: int) -> bool:
+    """Record a used code's time step. False when it (or a later one) was
+    already used: the same code can't sign in twice."""
+    conn = _connect()
+    try:
+        with conn:
+            row = conn.execute(
+                "UPDATE users SET mfa_last_step = ? WHERE id = ? AND (mfa_last_step IS NULL OR mfa_last_step < ?) "
+                "RETURNING id", (step, user_id, step),
+            ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def consume_recovery_code(user_id: int, code_hash: str) -> int | None:
+    """Burn one recovery code; returns how many are left, or None if it
+    wasn't valid. Row-locked so a code works once even under races."""
+    conn = _connect()
+    try:
+        with conn:
+            row = conn.execute("SELECT mfa_recovery_json FROM users WHERE id = ? FOR UPDATE", (user_id,)).fetchone()
+            try:
+                codes = json.loads(row["mfa_recovery_json"] or "[]") if row else []
+            except ValueError:
+                codes = []
+            if code_hash not in codes:
+                return None
+            codes.remove(code_hash)
+            conn.execute("UPDATE users SET mfa_recovery_json = ? WHERE id = ?", (json.dumps(codes), user_id))
+        return len(codes)
+    finally:
+        conn.close()
+
+
+def set_recovery_codes(user_id: int, recovery_hashes: list[str]) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("UPDATE users SET mfa_recovery_json = ? WHERE id = ?", (json.dumps(recovery_hashes), user_id))
+    finally:
+        conn.close()
+
+
+def user_knows_device(user_id: int, device_id: str) -> tuple[bool, bool]:
+    """(has signed in before at all, has signed in from this device before)."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN device_id = ? THEN 1 ELSE 0 END), 0) AS here "
+            "FROM user_sessions WHERE user_id = ? AND provider <> 'support'",
+            (device_id, user_id),
+        ).fetchone()
+        return bool(row["n"]), bool(row["here"])
     finally:
         conn.close()
 

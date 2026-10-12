@@ -45,7 +45,10 @@ SESSION = {"uid": 3, "aid": 7, "sv": 1, "sid": "s1"}
 
 class SessionOwnsAgent(unittest.TestCase):
     def owns(self, request, session, db):
-        return load("_session_owns_agent", auth=fake_auth(session), calls_db=db)(request, 42)
+        namespace = {"Request": object, "auth": fake_auth(session), "calls_db": db}
+        for name in ("_support_admin_still_signed_in", "_live_session", "_session_owns_agent"):
+            exec(function_source(name), namespace)
+        return namespace["_session_owns_agent"](request, 42)
 
     def test_anonymous_caller_cannot_use_a_raw_agent_id(self):
         self.assertFalse(self.owns(FakeRequest(), None, fake_db(owner_of_agent=7)))
