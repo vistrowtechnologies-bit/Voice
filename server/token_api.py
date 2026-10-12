@@ -1294,8 +1294,17 @@ _FACEBOOK_INTEGRATION_STATE_COOKIE = "vv_facebook_integration_state"
 _META_GRAPH_VERSION = "v25.0"  # v20.0 sunsets 2026-09-24; stay current explicitly rather than drift.
 
 
+def _require_integration_connectable(account_id: int, key: str) -> None:
+    """New Facebook Lead Ads / WhatsApp connections are switched off; an
+    account that already has one connected can still update it."""
+    if not calls_db.integration_accepts_connect(account_id, key):
+        label = "Facebook Lead Ads" if key == "facebook" else "WhatsApp"
+        raise HTTPException(400, f"{label} is not available yet. New connections are turned off for now.")
+
+
 @app.get("/integrations/facebook/start")
 def integration_facebook_start(user: dict = Depends(require_role("admin"))) -> RedirectResponse:
+    _require_integration_connectable(user["account_id"], "facebook")
     """Same shape as Slack's start route: redirect to the provider's own
     OAuth screen, no form on our side. Scopes are the minimum Meta requires
     to list a Page and subscribe it to lead-gen events — pages_show_list to
@@ -1402,6 +1411,8 @@ def integration_facebook_callback(
         logger.exception("Facebook page webhook subscription failed for page %s", page_id)
         return _finish("?facebook=subscribe_failed")
 
+    if not calls_db.integration_accepts_connect(user["account_id"], "facebook"):
+        return _finish("?facebook=unavailable")
     calls_db.update_integration(
         "facebook", "connected",
         {"pageId": page_id, "pageName": str(page.get("name") or ""), "pageAccessToken": page_access_token},
@@ -4566,6 +4577,8 @@ def list_integrations(user: dict = Depends(current_user)) -> list[dict]:
 
 @app.patch("/integrations/{key}")
 def update_integration(key: str, data: dict = Body(...), user: dict = Depends(require_role("admin"))) -> dict:
+    if data.get("status", "not_connected") == "connected":
+        _require_integration_connectable(user["account_id"], key)
     calls_db.update_integration(
         key,
         data.get("status", "not_connected"),
@@ -4597,6 +4610,7 @@ def update_integration_settings(key: str, data: dict = Body(...), user: dict = D
     if fields is not None and not isinstance(fields, list):
         raise HTTPException(400, "fields must be a list")
     account_id = user["account_id"]
+    _require_integration_connectable(account_id, key)
     try:
         saved = calls_db.update_integration_settings(account_id, key, events=events, template=template, fields=fields)
     except ValueError as e:

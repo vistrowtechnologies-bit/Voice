@@ -959,7 +959,7 @@ _SEED_INTEGRATIONS = [
         "whatsapp",
         "WhatsApp",
         "Messaging",
-        "Fire a WhatsApp follow-up after a call via your provider's send webhook.",
+        "Not available right now. Accounts that already connected it keep working; new connections are turned off.",
     ),
     (
         "sheets",
@@ -971,8 +971,8 @@ _SEED_INTEGRATIONS = [
         "facebook",
         "Facebook Lead Ads",
         "Lead Sources",
-        "Connect your Facebook Page and every new Lead Ads submission is queued for a call within "
-        "about 15-30 seconds. Click Connect and choose your Page - no webhook URLs to configure.",
+        "Not available right now. Accounts that already connected a Page keep working; new connections are turned off. "
+        "To call new leads from any source, use the Instant Lead Follow-up webhook.",
     ),
     (
         "zoho_crm",
@@ -7083,6 +7083,27 @@ def mark_support_ticket_emailed(ticket_id: int, account_id: int) -> None:
         conn.close()
 
 
+# Integrations the owner has switched off for NEW connections. Accounts that
+# already have one connected keep it (delivery is unchanged) and can still
+# update or disconnect it; once disconnected it cannot be connected again.
+NEW_CONNECTIONS_UNAVAILABLE = frozenset({"facebook", "whatsapp"})
+
+
+def integration_accepts_connect(account_id: int, key: str) -> bool:
+    """False when `key` is turned off for new connections and this account
+    does not already have it connected."""
+    if key not in NEW_CONNECTIONS_UNAVAILABLE:
+        return True
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT status FROM integrations WHERE account_id = ? AND key = ?", (account_id, key)
+        ).fetchone()
+        return bool(row and row["status"] == "connected")
+    finally:
+        conn.close()
+
+
 def list_integrations(account_id: int) -> list[dict]:
     conn = _connect()
     try:
@@ -7096,6 +7117,9 @@ def list_integrations(account_id: int) -> list[dict]:
                 "config": json.loads(r["config_json"] or "{}"),
                 "lastSync": r["last_sync"],
                 "lastError": r["last_error"],
+                # Tells the dashboard to show a "Coming soon" card instead of
+                # a connect flow (connected rows stay manageable).
+                "newConnectionsUnavailable": r["key"] in NEW_CONNECTIONS_UNAVAILABLE,
             }
             for r in conn.execute("SELECT * FROM integrations WHERE account_id = ?", (account_id,)).fetchall()
         ]

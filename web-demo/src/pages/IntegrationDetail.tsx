@@ -28,7 +28,7 @@ import {
 import type { FacebookLead, IntegrationDeliveries } from '../lib/api'
 import type { AgentConfig, Integration } from '../lib/types'
 import { hasRole, useAuth } from '../lib/auth'
-import { StatusPill, hostOf, utcTime } from '../components/IntegrationBits'
+import { StatusPill, hostOf, isUnavailableForNew, utcTime } from '../components/IntegrationBits'
 
 // ------------------------------------------------------------ shared rules
 
@@ -176,6 +176,29 @@ export function IntegrationDetail() {
   }
 
   const connected = integration.status === 'connected'
+  const noNewConnections = isUnavailableForNew(integration)
+
+  if (noNewConnections && !connected) {
+    return (
+      <DashboardLayout>
+        <PageHeader title={integration.name} subtitle={integration.category} />
+        <section className="flex flex-col gap-4 p-4 sm:p-6">
+          <Link to="/dashboard/integrations" className="flex w-fit items-center gap-1 text-xs font-semibold text-text-muted hover:text-text">
+            <Icon name="arrow_back" className="text-[15px]" /> All integrations
+          </Link>
+          <Card>
+            <div className="flex min-w-0 items-center gap-4">
+              <IntegrationLogo integrationKey={key} size="lg" />
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold">{integration.name}</h2>
+                <p className="mt-1 text-xs text-text-muted">Coming soon. This integration is not available yet.</p>
+              </div>
+            </div>
+          </Card>
+        </section>
+      </DashboardLayout>
+    )
+  }
 
   const startOAuth = () => {
     const url =
@@ -326,6 +349,13 @@ export function IntegrationDetail() {
             <button onClick={() => setNotice(null)} aria-label="Dismiss" className="opacity-70 hover:opacity-100">
               <Icon name="close" className="text-[15px]" />
             </button>
+          </p>
+        )}
+
+        {noNewConnections && (
+          <p className="flex items-start gap-2 rounded-lg border border-border bg-surface-high/40 p-3 text-xs text-text-muted">
+            <Icon name="info" className="text-[15px]" />
+            <span>No longer offered for new connections. Your existing connection keeps working until you disconnect it; after that it cannot be connected again.</span>
           </p>
         )}
 

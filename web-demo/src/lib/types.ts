@@ -542,6 +542,9 @@ export interface Integration {
   config: Record<string, any>
   lastSync: string | null
   lastError: string | null
+  // True for integrations switched off for new connections (Facebook Lead
+  // Ads, WhatsApp): shown as "Coming soon" unless already connected.
+  newConnectionsUnavailable?: boolean
 }
 
 export interface BillingSummary {

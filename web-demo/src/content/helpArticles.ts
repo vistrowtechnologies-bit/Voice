@@ -188,14 +188,14 @@ export const HELP_TOPICS: HelpTopic[] = [
    {
     "slug": "connect-integrations",
     "title": "Send leads to your CRM and tools",
-    "summary": "Connect Zoho, ArthaLeads, Slack, Sheets, WhatsApp or a webhook.",
-    "body": "Go to **Integrations** and click **Connect** on a card. Connected integrations receive every qualified lead in real time.\n\n- **Zoho CRM** and **ArthaLeads CRM** — leads go straight into your CRM.\n- **Facebook Lead Ads** — new form leads are queued for a call within seconds.\n- **CRM / Webhook** — every lead posted as JSON to any URL (Zapier, n8n, Make).\n- **Slack**, **WhatsApp**, **Google Sheets** — alerts, follow-ups and a lead sheet.\n\n## Check it's working\nEach card shows its status, last sync and any error; use **Send test** where offered. If deliveries start failing, the Dashboard flags it and — if enabled in your preferences — you get an email."
+    "summary": "Connect Zoho, ArthaLeads, Slack, Sheets or a webhook.",
+    "body": "Go to **Integrations** and click **Connect** on a card. Connected integrations receive every qualified lead in real time.\n\n- **Zoho CRM** and **ArthaLeads CRM** — leads go straight into your CRM.\n- **CRM / Webhook** — every lead posted as JSON to any URL (Zapier, n8n, Make).\n- **Slack** and **Google Sheets** — alerts and a lead sheet.\n\n**Facebook Lead Ads** and **WhatsApp** are coming soon and cannot be connected right now. If your workspace already had one connected, it keeps working until you disconnect it. To call leads from Facebook ads today, send them to the **Instant Lead Follow-up** webhook (see \"Call new leads within seconds\").\n\n## Check it's working\nEach card shows its status, last sync and any error; use **Send test** where offered. If deliveries start failing, the Dashboard flags it and — if enabled in your preferences — you get an email."
    },
    {
     "slug": "instant-lead-follow-up",
     "title": "Call new leads within seconds",
     "summary": "Use the Instant Lead Follow-up webhook.",
-    "body": "**Integrations → Instant Lead Follow-up** gives you a private URL. POST a lead to it and a call is queued within about 15–30 seconds.\n\nIt works with Zapier's \"Webhooks by Zapier\" step (e.g. from Facebook Lead Ads) or any source that can send a webhook. Every queued call still follows your Compliance rules — Do-Not-Call and calling window."
+    "body": "**Integrations → Instant Lead Follow-up** gives you a private URL. POST a lead to it and a call is queued within about 15–30 seconds.\n\nIt works with any source that can send a webhook: a form on your website, your CRM, or an automation tool such as Zapier, Make or n8n. Every queued call still follows your Compliance rules — Do-Not-Call and calling window."
    }
   ]
  },

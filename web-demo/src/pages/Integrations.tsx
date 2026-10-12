@@ -6,12 +6,12 @@ import { IntegrationLogo } from '../components/IntegrationLogo'
 import { Card } from '../components/ui/Card'
 import { fetchIntegrations, fetchLeadWebhook, formatRelativeTime, onCopilotChange } from '../lib/api'
 import type { Integration } from '../lib/types'
-import { StatusPill, integrationSummary, utcTime } from '../components/IntegrationBits'
+import { StatusPill, integrationSummary, isUnavailableForNew, utcTime } from '../components/IntegrationBits'
 
 // The API returns integrations in undefined DB row order - pin a deliberate
 // display order instead (ArthaLeads first, since it's the flagship CRM;
-// Facebook right after it since it's a lead SOURCE, not a delivery target
-// like the rest of this list) rather than leaving card position to chance.
+// Facebook right after it, then the rest; Facebook and WhatsApp are no
+// longer offered for new connections) rather than leaving card position to chance.
 const DISPLAY_ORDER = ['arthaleads', 'zoho_crm', 'facebook', 'webhook', 'slack', 'whatsapp', 'sheets']
 const sortIntegrations = (list: Integration[]) =>
   [...list].sort((a, b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key))
@@ -39,6 +39,7 @@ export function Integrations() {
   }
 
   const list = integrations ?? []
+  const available = list.filter((i) => isUnavailableForNew(i) ? i.status === 'connected' : true).length
   const connected = list.filter((i) => i.status === 'connected').length
   const failing = list.filter((i) => i.status === 'connected' && i.lastError).length
 
@@ -49,7 +50,7 @@ export function Integrations() {
       <section className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard icon="link" label="Connected Integrations" value={String(connected)} hint={connected === 0 ? 'None connected' : 'live and syncing'} />
-          <StatCard icon="apps" label="Available Integrations" value={String(list.length)} hint="Open one to set it up" />
+          <StatCard icon="apps" label="Available Integrations" value={String(available)} hint="Open one to set it up" />
           <StatCard
             icon={failing ? 'error' : 'monitoring'}
             label="Sync Status"
@@ -62,6 +63,30 @@ export function Integrations() {
           {integrations === null && <p className="text-xs text-text-muted">Loading integrations…</p>}
           {list.map((integration) => {
             const isConnected = integration.status === 'connected'
+            if (isUnavailableForNew(integration) && !isConnected) {
+              return (
+                <Card key={integration.key} className="flex h-full flex-col opacity-70" aria-disabled="true">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <IntegrationLogo integrationKey={integration.key} />
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{integration.name}</p>
+                        <p className="text-[11px] text-text-muted">{integration.category}</p>
+                      </div>
+                    </div>
+                    <span className="flex shrink-0 items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-text-muted">
+                      Coming soon
+                    </span>
+                  </div>
+                  <p className="mb-4 text-xs text-text-muted">
+                    {integration.key === 'facebook'
+                      ? 'Not available yet. To call new leads from Facebook ads today, use the Instant Lead Follow-up webhook below.'
+                      : 'Not available yet.'}
+                  </p>
+                  <div className="mt-auto flex items-center border-t border-border pt-3 text-xs text-text-muted">Coming soon</div>
+                </Card>
+              )
+            }
             return (
               <Link
                 key={integration.key}
@@ -80,7 +105,11 @@ export function Integrations() {
                     </div>
                     <StatusPill connected={isConnected} />
                   </div>
-                  <p className="mb-4 text-xs text-text-muted">{integration.description}</p>
+                  <p className="mb-4 text-xs text-text-muted">
+                    {isUnavailableForNew(integration)
+                      ? 'No longer offered for new connections. Your existing connection keeps working until you disconnect it.'
+                      : integration.description}
+                  </p>
                   <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-3 text-xs">
                     {isConnected && integration.lastError ? (
                       <span className="flex min-w-0 items-center gap-1 font-semibold text-destructive">
@@ -119,8 +148,8 @@ export function Integrations() {
           </div>
           <p className="mb-4 text-xs text-text-muted">
             POST a lead to this URL and it's queued for a call within about 15-30 seconds - no dashboard action
-            needed. Works with Facebook Lead Ads via a Zapier "Webhooks by Zapier" step (its native "New Lead"
-            trigger needs no approval process on our end), or any other source that can send a webhook. Every
+            needed. Works with any source that can send a webhook: a form, your website, a CRM, or an automation tool
+            such as Zapier, Make or n8n. Every
             queued call still goes through your compliance settings - DNC and calling-window rules apply exactly
             as they do for a regular campaign.
           </p>

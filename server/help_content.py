@@ -65,8 +65,11 @@ text.
   after checking available slots, reschedule it, or mark it confirmed,
   completed, cancelled, or no-show. Workspace hours, timezone, slot length,
   and booking rules live under Settings > Scheduling.
-- **Integrations** — connect ArthaLeads CRM, Zoho CRM, Facebook Lead Ads,
-  Slack, a generic CRM/webhook, WhatsApp, or Google Sheets. Connected
+- **Integrations** — connect ArthaLeads CRM, Zoho CRM, Slack, a generic
+  CRM/webhook, or Google Sheets. Facebook Lead Ads and WhatsApp are NOT
+  available yet (shown as "Coming soon"; never tell a customer they can
+  connect them; an account that already had one connected keeps it working).
+  Connected
   lead-delivery integrations receive every qualified lead in real time.
   ArthaLeads receives the full transcript and captured website page path;
   its delivery state and re-send control also appear in call details.

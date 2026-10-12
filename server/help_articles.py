@@ -310,13 +310,14 @@ Agents only offer slots inside your hours. Set business hours per day, slot leng
             {
                 "slug": "connect-integrations",
                 "title": "Send leads to your CRM and tools",
-                "summary": "Connect Zoho, ArthaLeads, Slack, Sheets, WhatsApp or a webhook.",
+                "summary": "Connect Zoho, ArthaLeads, Slack, Sheets or a webhook.",
                 "body": """Go to **Integrations** and click **Connect** on a card. Connected integrations receive every qualified lead in real time.
 
 - **Zoho CRM** and **ArthaLeads CRM** — leads go straight into your CRM.
-- **Facebook Lead Ads** — new form leads are queued for a call within seconds.
 - **CRM / Webhook** — every lead posted as JSON to any URL (Zapier, n8n, Make).
-- **Slack**, **WhatsApp**, **Google Sheets** — alerts, follow-ups and a lead sheet.
+- **Slack** and **Google Sheets** — alerts and a lead sheet.
+
+**Facebook Lead Ads** and **WhatsApp** are coming soon and cannot be connected right now. If your workspace already had one connected, it keeps working until you disconnect it. To call leads from Facebook ads today, send them to the **Instant Lead Follow-up** webhook (see "Call new leads within seconds").
 
 ## Check it's working
 Each card shows its status, last sync and any error; use **Send test** where offered. If deliveries start failing, the Dashboard flags it and — if enabled in your preferences — you get an email.""",
@@ -327,7 +328,7 @@ Each card shows its status, last sync and any error; use **Send test** where off
                 "summary": "Use the Instant Lead Follow-up webhook.",
                 "body": """**Integrations → Instant Lead Follow-up** gives you a private URL. POST a lead to it and a call is queued within about 15–30 seconds.
 
-It works with Zapier's "Webhooks by Zapier" step (e.g. from Facebook Lead Ads) or any source that can send a webhook. Every queued call still follows your Compliance rules — Do-Not-Call and calling window.""",
+It works with any source that can send a webhook: a form on your website, your CRM, or an automation tool such as Zapier, Make or n8n. Every queued call still follows your Compliance rules — Do-Not-Call and calling window.""",
             },
         ],
     },
