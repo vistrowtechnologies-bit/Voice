@@ -39,7 +39,8 @@ def _http(url: str, *, headers: dict | None = None, body: dict | None = None) ->
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(
         url, data=data, method="POST" if data is not None else "GET",
-        headers={"Content-Type": "application/json", **(headers or {})},
+        # Cloudflare-fronted APIs (Resend) refuse Python's default agent.
+        headers={"Content-Type": "application/json", "User-Agent": "Vistrow-Voice-HealthCheck/1.0", **(headers or {})},
     )
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:
@@ -54,12 +55,15 @@ def _http(url: str, *, headers: dict | None = None, body: dict | None = None) ->
 def _provider_code(exc: urllib.error.HTTPError) -> str:
     """The provider's machine-readable error code, never its message text."""
     try:
-        error = json.loads(exc.read().decode("utf-8", "replace")).get("error")
+        payload = json.loads(exc.read().decode("utf-8", "replace"))
+        error = payload.get("error")
     except Exception:
         return ""
+    if not isinstance(error, dict):
+        error = payload  # Resend: {"statusCode", "name": "restricted_api_key", ...}
     if isinstance(error, dict):
         # OpenAI: code "credit_balance_exhausted"; Google: status "RESOURCE_EXHAUSTED".
-        for field in ("code", "status", "type"):
+        for field in ("code", "status", "type", "name"):
             code = error.get(field)
             if isinstance(code, str) and 0 < len(code) < 60:
                 return f" {code}"
@@ -176,7 +180,13 @@ def _b2() -> str:
 
 
 def _resend() -> str:
-    _http("https://api.resend.com/domains", headers={"Authorization": f"Bearer {_key('RESEND_API_KEY')}"})
+    try:
+        _http("https://api.resend.com/domains", headers={"Authorization": f"Bearer {_key('RESEND_API_KEY')}"})
+    except _Fail as exc:
+        # A sending-only key may not list domains, but it is a valid key.
+        if "restricted_api_key" in str(exc):
+            return "sending key ok"
+        raise
     return "API key ok"
 
 
@@ -184,8 +194,15 @@ def _orchestrator() -> str:
     url = (os.environ.get("ORCHESTRATOR_URL") or "").strip().rstrip("/")
     if not url:
         raise LookupError("ORCHESTRATOR_URL not set")
-    _http(f"{url}/health")
-    return "health ok"
+    # It has no health route: any answer below 500 means it is up.
+    try:
+        _http(url)
+    except _Fail as exc:
+        code = str(exc).split()[1] if str(exc).startswith("HTTP ") else ""
+        if not (code.isdigit() and int(code) < 500):
+            raise
+        return f"reachable (HTTP {code})"
+    return "reachable"
 
 
 PROBES: tuple[tuple[str, callable], ...] = (
