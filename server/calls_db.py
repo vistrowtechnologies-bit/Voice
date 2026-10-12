@@ -8865,6 +8865,12 @@ def voice_catalog_for_account(account_id: int) -> dict:
         # historically selected an admin-preview voice must not get a badge
         # count that disagrees with the visible menu after the preview gate.
         "selectedCount": sum(1 for voice in voices if voice["selected"]),
+        # The audition line each preview speaks, so the Voices page can show
+        # the words while the audio plays. Same source as voice_preview.
+        "sampleTexts": {
+            lang: {g: voice_catalog.sample_text(lang, g) for g in ("female", "male")}
+            for lang in ("hi", "en")
+        },
     }
 
 

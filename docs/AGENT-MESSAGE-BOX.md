@@ -396,3 +396,24 @@ Branch `claude/api-keys-screen` (commit 1fcf47a4, PR to follow, merged and deplo
 
 Verified: 693 agent tests, 87 voice/plan server tests, tsc + vite build. Local preview: HD tab shows 30 voices labelled "52 languages"; a local key created with calls + agents shows both scopes.
 Not verified yet: production behaviour after deploy (Sarvam test call planned).
+
+### Claude — 2026-10-12 — Voices page redesign ("Spotlight", owner-chosen)
+
+Branch `claude/voices-page-redesign`. The owner picked style B from two mockups (`design/voices_preview/index.html`, local only, not committed).
+
+Changes:
+- `web-demo/src/pages/Voices.tsx` rewritten as a list plus a sticky spotlight panel. The panel has a large orb, a waveform and a big play button. While the audio plays, the real audition sentence lights up word by word. It also shows stat tiles (languages, live/fixed switch, credit multiplier), language chips, and Add / Added (Remove on hover) / Upgrade.
+- List rows have a small play button; playing one also selects it. New filters: All / Added / Female / Male. "Added" and search look across all tabs.
+- A "N voices in your agents' picker" pill with avatars opens the Added filter.
+- `VoicePreviewButton.tsx`: playback moved into `useVoicePreview(voice, lang)` returning `{state, progress, toggle}`. The button is unchanged for its other users.
+- `server/calls_db.py` `voice_catalog_for_account` returns `sampleTexts` (hi/en × female/male, via `voice_catalog.sample_text`).
+- `index.css`: `.vv-wave-bar` animation, which respects reduced motion.
+- The HD tab note no longer hardcodes "ten Indian languages". Language text comes from the data, so PR #59's Voices.tsx hunk is no longer needed.
+
+Verified (local dev server with a mock API serving the real `voice_catalog.CATALOG` + a 5 s WAV):
+- Row play selects the voice and plays; the waveform animates and words light in step (12/33 at 2 s).
+- Add updates the count, the row badge and the CTA. The Added filter works across tabs, and the Standard tab is fine.
+- Light and dark at 1440 px; 375 px has no horizontal scroll, the panel is compact, and the list starts on the first screen.
+- `npm run build` passes.
+
+Not verified: real Google/Sarvam preview audio on production. `server/calls_db.py` was only syntax-checked (no Postgres here).

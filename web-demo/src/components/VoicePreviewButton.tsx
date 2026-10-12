@@ -17,20 +17,16 @@ function announceStart(id: symbol) {
   PREVIEW_BUS.dispatchEvent(new CustomEvent(STARTED, { detail: id }))
 }
 
+export type PreviewState = State
+
 // Plays a voice's cached Vistrow audition line. The first play of a given
 // (voice, lang) triggers server-side synthesis (a second or two); every later
 // play is a free cached read. Fetched as a blob so we can show a real loading
 // state and surface errors, and so the httpOnly session cookie is sent.
-export function VoicePreviewButton({
-  voice,
-  lang,
-  className = '',
-}: {
-  voice: string
-  lang: string
-  className?: string
-}) {
+// `progress` (0-1) follows the audio so a caller can track the spoken words.
+export function useVoicePreview(voice: string, lang: string) {
   const [state, setState] = useState<State>('idle')
+  const [progress, setProgress] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const urlRef = useRef<string | null>(null)
   const idRef = useRef(Symbol('preview'))
@@ -47,14 +43,19 @@ export function VoicePreviewButton({
   }
 
   // Stop + revoke on unmount, and whenever the voice/lang changes.
-  useEffect(() => cleanup, [voice, lang])
+  useEffect(() => {
+    setState('idle')
+    setProgress(0)
+    return cleanup
+  }, [voice, lang])
 
-  // Any other button starting playback stops this one.
+  // Any other preview starting playback stops this one.
   useEffect(() => {
     const onStart = (e: Event) => {
       if ((e as CustomEvent).detail !== idRef.current) {
         cleanup()
         setState('idle')
+        setProgress(0)
       }
     }
     PREVIEW_BUS.addEventListener(STARTED, onStart)
@@ -65,6 +66,7 @@ export function VoicePreviewButton({
     if (state === 'playing') {
       cleanup()
       setState('idle')
+      setProgress(0)
       return
     }
     setState('loading')
@@ -77,15 +79,34 @@ export function VoicePreviewButton({
       urlRef.current = url
       const audio = new Audio(url)
       audioRef.current = audio
-      audio.onended = () => setState('idle')
+      audio.onended = () => {
+        setState('idle')
+        setProgress(0)
+      }
       audio.onerror = () => setState('error')
+      audio.ontimeupdate = () => audio.duration > 0 && setProgress(audio.currentTime / audio.duration)
       announceStart(idRef.current) // stop any other playing preview first
+      setProgress(0)
       await audio.play()
       setState('playing')
     } catch {
       setState('error')
     }
   }
+
+  return { state, progress, toggle }
+}
+
+export function VoicePreviewButton({
+  voice,
+  lang,
+  className = '',
+}: {
+  voice: string
+  lang: string
+  className?: string
+}) {
+  const { state, toggle } = useVoicePreview(voice, lang)
 
   const icon =
     state === 'loading'
