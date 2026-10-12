@@ -482,3 +482,12 @@ Masters (4K) and the pipeline live outside git in `marketing-video/help/` (untra
 Branch `claude/integrations-hide-wa-fb` (owner request). `Integrations.tsx` no longer shows the Facebook Lead Ads and WhatsApp cards unless the account already has one connected (then it stays a normal Manage card so it can be disconnected). The "Coming soon" card branch is gone. Help article `connect-integrations` drops the coming-soon paragraph; help bot context says the cards are not shown. Server guard on new connections (f6eb4853) unchanged.
 
 Verified: help + integration tests 46 passed; build incl. SEO audit; local real-page capture: default account shows 5 cards (no WhatsApp/Facebook, no "Coming soon"), an account with WhatsApp connected shows it as Connected/Manage with Facebook still hidden, no overflow at 390 px.
+
+### Claude — 2026-10-12 — Live voices lead with the Indian name
+
+Branch `claude/live-indian-names`. Owner request.
+- **Voices page, Live tabs:** each row's title is now the HD voice's Indian name without " HD" (Myra). Google's voice name and style are the detail ("Female · Achernar · Soft voice"). The list is sorted by the Indian name.
+- **Spotlight:** the subtitle reads "Gemini voice Achernar", and the steps end "Calls then speak with Google's Achernar voice".
+- **Agent editor, realtime voice dropdown:** "Myra HD · Female · Soft (Gemini Achernar)", sorted the same way.
+
+Verified in the local app (mock API, owner). `npm run build` passes.
