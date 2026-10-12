@@ -491,3 +491,16 @@ Branch `claude/live-indian-names`. Owner request.
 - **Agent editor, realtime voice dropdown:** "Myra HD · Female · Soft (Gemini Achernar)", sorted the same way.
 
 Verified in the local app (mock API, owner). `npm run build` passes.
+
+### Claude — 2026-10-12 — Railway volume detach prepared (branch claude/railway-volume-detach)
+
+Problem: each production deploy took api.vistrowvoice.com down for 3–6 min, because Railway won't overlap deploys for a service with a volume (`voice-volume` at `/data`).
+
+Verified facts:
+- `/data` contains only `calls.db` (229,376 B, last written 2026-07-09 16:22 UTC, the pre-Postgres SQLite file) and an empty `lost+found`. No code in server/agent/orchestrator/Dockerfile/start.sh references `/data` or `CALLS_DB_PATH`. The production variable `CALLS_DB_PATH=/data/calls.db` is still set but nothing reads it.
+- Every SQLite row was compared with production Postgres by ID and timestamp (no content printed). All calls (69), contacts, agents, accounts and users are present. 13 rows are absent: KBs 1 and 3, sources 1 and 5, kb_qa 17–19, inbound route 1, phone number 1, the calcom integration, and the enablex_app_id/key settings. They were migrated and later deleted: the migration is a single transaction and the Postgres ID sequences start past the SQLite IDs. Not restored.
+- Archived to B2 at `volume-archive/voice-data-2026-10-12/calls.db`. SHA-256 85c149e4e753… matches the source, re-checked in a separate process.
+- Code: `server/worker_leader.py` is a Postgres session advisory lock on a dedicated connection. The dialer, notification, ops-alert and backup loops run only in the leader, so overlapping containers can't exceed the outbound channel budget or double-send email. Tests: `test_worker_leader.py` uses real separate processes on local Postgres, and fails when the guard or lock is removed. Full server suite: 620 passed, 1 failed (`test_topup_flow` pack price, which also fails on unmodified main).
+- Staging (no volume, so deploys already overlap) is on commit 1454f147. Redeploy handoff: new container up 18:42:21.7 UTC, old shut down 18:42:27.2, new became leader 18:42:36.7. Staging `/healthz` was 200 on 147/147 polls across both deploys.
+
+Not done (owner-only, changes Railway settings): detach `voice-volume` and delete `CALLS_DB_PATH`. Steps are in `docs/RAILWAY-VOLUME-DETACH-2026-10-12.md`. Zero downtime in production is unverified until the volume is detached and a deploy is measured.
