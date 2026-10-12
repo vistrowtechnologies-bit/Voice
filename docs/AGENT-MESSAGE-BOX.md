@@ -444,6 +444,31 @@ Branch `claude/voices-row-play`. Owner requests:
 Verified in the local app with a mock API (real catalog, owner session): play, pause, resume, switching while playing, and pausing from the big button. On the Realtime tab: 30 voices, the Female/Male filters, the preview request goes to `voice=google38:achernar`, and Achernar maps to Myra HD. `npm run build` passes.
 Not verified: real Gemini preview audio. How close Gemini TTS sounds to the Live model is unmeasured.
 
+### Claude — 2026-10-12 — Realtime voice picking on agents, now-playing bar, 3.8 vs Live labels
+
+Branch `claude/voices-now-playing`.
+
+**Agent editor (`AgentDetail.tsx`), realtime models:**
+- Owner report: "can't select the voice in realtime". On the live agent 4, choosing a voice did work, but the dropdown listed only the realtime-capable voices already in the account's picker (5 of them).
+- The dropdown now lists all 30 Gemini Live voices, labelled `Aoede · Female · Breezy (Kiara HD)`. Data comes from `/voices/catalog`, fetched for the platform owner only; the server accepts any catalog voice on an agent, per `_guard_voice_tier`.
+- The account's other voices are shown but disabled under "Not available on realtime" (owner request).
+- A voice outside the picker shows its catalog name, not the raw value.
+
+**Voices page:**
+- A sticky now-playing bar sits under the dashboard header while the spotlight's voice name is out of view: name, gender, progress, waveform, play/pause, and View.
+- The spotlight now sticks below the measured header height; it used to slide under it.
+- Tab renamed "Gemini 3.8 TTS", with the note "text-to-speech for normal agents · not the realtime Live models". The Realtime tab is now "Realtime Live", noting that each voice works on Live 2.5 and 3.1 (same `_gemini_live_voice` mapping for both models).
+- The realtime spotlight gives three setup steps and an "Open agents" link.
+
+**Verified:** in the local app with a mock API (real catalog, owner session):
+- 30-voice optgroup plus the disabled group;
+- picking Puck, which is outside the picker;
+- a normal model brings back the usual list;
+- the now-playing bar appears after scrolling at 1500×620;
+- the tab labels.
+
+`npm run build` passes. On production I only inspected agent 4's dropdown; nothing was saved there.
+
 ### Claude — 2026-10-12 — help videos embedded (branch claude/help-videos)
 
 Changed: 8 new how-to videos (Riya / ElevenLabs Eleven v4 narration, captions burnt in) added as `web-demo/public/media/help/<slug>.mp4` (1080p, 4.3–6.4 MB each, 47 MB total) + `.jpg` posters (33–85 KB). New `lib/helpVideos.ts` (video list + route map) and `components/HelpVideo.tsx` (poster-only until play; "Watch how" header button opening a dialog). `HelpArticle.video` field; videos shown above 9 articles (public /help and in-app Support). New articles `build-with-ai` (Agents) and `copilot` (Help & Support), written from the real screens. `DashboardLayout` PageHeader shows "Watch how" on /dashboard, /agents, /agents/new, /testing, /knowledge, /numbers, /inbound, /website-widget, /support.
