@@ -74,10 +74,24 @@ export const PRODUCT_PAGES: NavLink[] = [
   },
 ]
 
-/** Detail-page content per product, keyed by route. */
+/** A deeper content section on a product page: titled cards, each optionally linking on. */
+export interface GuideSection {
+  eyebrow: string
+  title: string
+  intro?: string
+  /** A short boxed note under the items, e.g. a limit or regulatory pointer. */
+  note?: string
+  items: Array<{ icon: string; title: string; body: string; to?: string; link?: string }>
+}
+
+/** Detail-page content per product, keyed by route.
+ *
+ * Every claim in `guideSections` and `faqs` must match the dashboard: check
+ * server/help_articles.py and the dashboard page before adding or changing one.
+ * No prices or credit figures here - those live on /pricing. */
 export const PRODUCT_DETAIL: Record<
   string,
-  { eyebrow: string; headline: string; subhead: string; features: FeatureRow[]; faqs: Faq[] }
+  { eyebrow: string; headline: string; subhead: string; features: FeatureRow[]; guideSections: GuideSection[]; faqs: Faq[] }
 > = {
   '/product/agents': {
     eyebrow: 'Product · Voice Agents',
@@ -90,10 +104,49 @@ export const PRODUCT_DETAIL: Record<
       { icon: 'swap_calls', title: 'Human handoff', body: 'Escalates to a live person with full context when a call needs a human touch.' },
       { icon: 'analytics', title: 'Analytics & transcripts', body: 'Every call is transcribed, scored, and searchable across channels and agents.' },
     ],
+    guideSections: [
+      {
+        eyebrow: 'How it works',
+        title: 'From a blank page to a live agent.',
+        intro: 'Every setting lives on the agent’s own page, and changes apply from the next call with no redeploy.',
+        items: [
+          { icon: 'edit_note', title: '1. Create the agent', body: 'Start from scratch, or describe your business and let the AI builder draft an agent that you review and edit before it is saved.', to: '/help/agents/create-and-edit-agent', link: 'Create and edit an agent' },
+          { icon: 'tune', title: '2. Set voice, language and prompt', body: 'Pick the model, a voice you have added from the Voices page, the language the agent opens in, a welcome message and the system prompt that tells it how to behave.' },
+          { icon: 'science', title: '3. Test it', body: 'Talk to the agent in the browser with its real configuration, or have it ring your phone. The Testing Lab plays situations such as an impatient caller or Hindi-English switching and checks the result.', to: '/help/testing-lab/run-a-test', link: 'Test an agent' },
+          { icon: 'rocket_launch', title: '4. Put it where callers are', body: 'Attach a phone number for inbound calls, add the website widget, or use it in a campaign. Each agent card shows a readiness score and the next step to finish.', to: '/product/inbound', link: 'Inbound calling' },
+        ],
+      },
+      {
+        eyebrow: 'What you can configure',
+        title: 'The controls behind each agent.',
+        items: [
+          { icon: 'record_voice_over', title: 'Voice and delivery', body: 'Choose who speaks first, voice delivery, emotion intensity, noise suppression and background ambience. Preview voices in Hindi or English before you add them.', to: '/help/voices/choose-voices', link: 'Choose voices' },
+          { icon: 'extension', title: 'Functions', body: 'Booking appointments, callback requests, lead capture and “do not call me again” are always available. End call, web search and keypad tones can be switched on or off.', to: '/help/agents/agent-functions-and-transfer', link: 'Functions and transfer' },
+          { icon: 'swap_calls', title: 'Transfer to a person', body: 'Set a transfer phone number and the agent can dial your colleague into a phone call and stay on until they answer. Web calls cannot be transferred to a phone.' },
+          { icon: 'data_object', title: 'Variables and extraction', body: 'Define {{variable}} names with fallback values for prompts and greetings, and list the fields to pull from every transcript, such as budget or location.' },
+          { icon: 'psychology', title: 'Memory', body: 'Turn on memory and the agent recognises returning callers by phone number, using a short summary of past calls.' },
+          { icon: 'route', title: 'Webhook and CRM routing', body: 'Post one agent’s lead and appointment events to its own URL, or limit it to specific integrations instead of all of them.', to: '/help/agents/agent-webhook-crm-memory', link: 'Webhook and CRM routing' },
+        ],
+      },
+      {
+        eyebrow: 'Who it is for',
+        title: 'One agent per job, not one agent for everything.',
+        intro: 'Teams usually run several focused agents rather than one that tries to do it all.',
+        items: [
+          { icon: 'support_agent', title: 'A front-desk agent', body: 'Answers the business number, handles common questions and books appointments for clinics, coaching centres and service businesses.', to: '/solutions/healthcare', link: 'Healthcare' },
+          { icon: 'apartment', title: 'A lead-qualification agent', body: 'Asks the questions your sales team would ask and saves each answer as a lead field, for example in property enquiries.', to: '/solutions/real-estate', link: 'Real estate' },
+          { icon: 'translate', title: 'A regional-language agent', body: 'Opens in Hindi, Marathi, Tamil or another supported language and follows the caller if they switch.', to: '/languages', link: 'Supported languages' },
+        ],
+        note: 'Plans decide how many agents and minutes you get. The pricing page lists what each plan includes.',
+      },
+    ],
     faqs: [
       { q: 'Do I need to write code to build an agent?', a: 'No - the builder is entirely no-code. Set the persona, prompt, voice, and language, then publish.' },
       { q: 'Which voices can my agent use?', a: 'A curated set of Sarvam and ElevenLabs voices across Indian languages and English, previewable before you publish.' },
-      { q: 'Can I test the agent before it goes live?', a: 'Yes - talk to any agent in the browser instantly, with the exact prompt and voice it will use on real calls.' },
+      { q: 'Can I test the agent before it goes live?', a: 'Yes - talk to any agent in the browser instantly, with the exact prompt and voice it will use on real calls. The Testing Lab also runs scenarios such as an angry caller, a silent caller or a booking conflict and shows checks like opening quality and tool accuracy.' },
+      { q: 'What happens when I change the prompt?', a: 'Changes apply from the next call; there is nothing to redeploy. You can save a scenario as a custom regression test in the Testing Lab and re-run it after each prompt change.' },
+      { q: 'Can the agent hand a call to a person?', a: 'Yes, on phone calls. Set a transfer number on the agent and it can dial that person into the call on request. Web calls cannot be transferred to a phone.' },
+      { q: 'Can the agent remember a returning caller?', a: 'Yes, if you turn on Memory for that agent. It recognises the caller by phone number and uses a short summary of past calls.' },
     ],
   },
   '/product/inbound': {
@@ -103,31 +156,107 @@ export const PRODUCT_DETAIL: Record<
       'Point your number at Vistrow and Artha picks up on the first ring - qualifying, answering, and routing without hold music.',
     features: [
       { icon: 'schedule', title: '24/7 pickup', body: 'No missed calls, no voicemail - every caller reaches a helpful agent instantly.' },
-      { icon: 'fact_check', title: 'Auto-qualification', body: 'Captures intent, budget, and contact details, then scores the lead automatically.' },
+      { icon: 'fact_check', title: 'Auto-qualification', body: 'Captures intent, budget, and contact details as lead fields, ready for your team.' },
       { icon: 'route', title: 'Smart routing', body: 'Sends the right calls to the right team or agent based on what the caller needs.' },
       { icon: 'sync', title: 'Instant CRM sync', body: 'Pushes every qualified lead to your CRM the moment the call ends.' },
     ],
+    guideSections: [
+      {
+        eyebrow: 'How it works',
+        title: 'What happens when a customer rings your number.',
+        items: [
+          { icon: 'dialpad', title: '1. Connect a number', body: 'Provision the number with your telephony provider (EnableX today), connect it under Phone Numbers in full international format, and run a test call.', to: '/help/phone-numbers/connect-a-number', link: 'Connect a phone number' },
+          { icon: 'route', title: '2. Route it to an agent', body: 'On the Inbound page, pick the number and the agent and create the route. It is live immediately.', to: '/help/inbound/route-inbound-calls', link: 'Route incoming calls' },
+          { icon: 'record_voice_over', title: '3. The agent takes the call', body: 'It opens with the welcome line you wrote for inbound calls, answers from your knowledge base, follows the caller if they change language, and can book an appointment or take a callback request.' },
+          { icon: 'receipt_long', title: '4. You get the record', body: 'Each call has a transcript, the lead fields captured, CRM delivery status and, if recording is on, the audio. Earlier calls from the same number sit alongside.', to: '/help/calls/find-a-call', link: 'Find a call or transcript' },
+        ],
+      },
+      {
+        eyebrow: 'What you can configure',
+        title: 'Hours, limits and what happens at the edges.',
+        items: [
+          { icon: 'schedule', title: 'Call window and days', body: 'Set a timezone, start and end dates, a daily window and active days, for example Monday to Saturday only. Leave the window blank to answer at any time.' },
+          { icon: 'call_split', title: 'Concurrent-call limit', body: 'Choose how many calls a number takes at once. Calls outside the window or days, or beyond the limit, are not answered by the agent.' },
+          { icon: 'swap_calls', title: 'Transfer to a person', body: 'With a transfer number set, the agent can dial a colleague into the call and stay on until they answer.', to: '/help/agents/agent-functions-and-transfer', link: 'Functions and transfer' },
+          { icon: 'event_available', title: 'Bookings and callbacks', body: 'The agent offers slots inside the business hours and slot length you set under Settings, and takes a callback request when nothing fits.', to: '/help/appointments/manage-appointments', link: 'Bookings and availability' },
+          { icon: 'verified_user', title: 'Consent and recording', body: 'Require spoken consent, switch call recording on or off, and set how many days transcripts and recordings are kept.', to: '/help/compliance/consent-recording-retention', link: 'Consent and retention' },
+          { icon: 'psychology', title: 'Returning callers', body: 'Turn on memory and the agent greets repeat callers using a short summary of their earlier calls.' },
+        ],
+      },
+      {
+        eyebrow: 'Who it is for',
+        title: 'Businesses where a missed call is a missed customer.',
+        items: [
+          { icon: 'health_and_safety', title: 'Clinics and appointment businesses', body: 'Booking requests, timing questions and callbacks handled outside reception hours.', to: '/solutions/healthcare', link: 'Healthcare' },
+          { icon: 'apartment', title: 'Property and sales enquiries', body: 'Budget, location and timeline captured while the buyer is still on the line.', to: '/solutions/real-estate', link: 'Real estate' },
+          { icon: 'support_agent', title: 'Support lines', body: 'Common questions answered first, with a clear route to a person for the rest.', to: '/solutions/support', link: 'Customer support' },
+          { icon: 'dialpad', title: 'Teams replacing a press-1 menu', body: 'Callers say what they need instead of choosing a number.', to: '/ai-ivr', link: 'AI IVR' },
+        ],
+        note: 'Comparing options? See how Vistrow differs from telephony platforms such as Exotel and Knowlarity in the comparison pages, or read why an AI agent is not the same as an IVR.',
+      },
+    ],
     faqs: [
-      { q: 'Do I need a new phone number?', a: 'No - point your existing business number at Vistrow, or get a new one from us if you prefer.' },
-      { q: 'What happens if the agent can’t help a caller?', a: 'It hands off to a human with full context, or takes a message - never a dead end or hold music.' },
-      { q: 'Is every call recorded and transcribed?', a: 'Yes - every inbound call is transcribed, scored, and searchable in your dashboard by default.' },
+      { q: 'Do I need a new phone number?', a: 'Not necessarily. Numbers are connected through your telephony provider (EnableX today) and then routed to an agent on the Inbound page. The connect-a-number guide in the help centre lists the steps.' },
+      { q: 'What happens if the agent can’t help a caller?', a: 'On phone calls it can transfer to a person if you have set a transfer number, or take a callback request - never a dead end or hold music.' },
+      { q: 'Is every call recorded and transcribed?', a: 'Every call gets a transcript. Audio recording is a setting you can turn on or off under Compliance, along with spoken consent and how long data is kept.' },
+      { q: 'Can I limit when the agent answers?', a: 'Yes. Set a call window, active days and a maximum number of concurrent calls per number. Calls outside those rules are not answered by the agent.' },
+      { q: 'Which languages can it answer in?', a: 'Ten Indian languages plus English, including Hinglish, and it follows the caller if they switch mid-call. See the languages page for each one.' },
+      { q: 'How is this different from an IVR?', a: 'An IVR asks the caller to press keys through a fixed menu. The agent understands what the caller says, answers from your knowledge base and completes the next step such as a booking.' },
     ],
   },
   '/product/outbound': {
     eyebrow: 'Product · Outbound Campaigns',
     headline: 'Reach every contact at scale.',
     subhead:
-      'Launch reminder, follow-up, and collection campaigns that run consistent, polite, fully-logged calls to thousands of contacts.',
+      'Launch reminder, follow-up, and collection campaigns that run consistent, polite, fully-logged calls to the contact lists you choose.',
     features: [
-      { icon: 'groups', title: 'Bulk campaigns', body: 'Upload a contact list and let Artha work through it - no manual dialing.' },
+      { icon: 'groups', title: 'Bulk campaigns', body: 'Upload a contact list and let Artha work through it in batches you control.' },
       { icon: 'event_repeat', title: 'Reminders & follow-ups', body: 'Appointment reminders, renewals, and nudges that never slip through the cracks.' },
       { icon: 'volunteer_activism', title: 'Polite collections', body: 'Consistent, compliant reminder calls with every conversation recorded.' },
       { icon: 'monitoring', title: 'Live campaign metrics', body: 'Track pickup, completion, and outcome rates as the campaign runs.' },
     ],
+    guideSections: [
+      {
+        eyebrow: 'How it works',
+        title: 'From a contact list to a finished campaign.',
+        intro: 'Outbound is the part of the platform we suggest approaching step by step: start with a small list, listen to the calls, and talk to us before scaling up.',
+        items: [
+          { icon: 'contacts', title: '1. Add contacts', body: 'Import a CSV, add contacts by hand, or paste one per line in international format. Numbers typed without a country code are read in your workspace’s country.', to: '/help/contacts/manage-contacts', link: 'Manage contacts' },
+          { icon: 'campaign', title: '2. Set up the campaign', body: 'Pick the number, the agent and the audience, which can be a segment or a tag. Choose to launch on demand or schedule a start time.', to: '/help/outbound/run-a-campaign', link: 'Run an outbound campaign' },
+          { icon: 'shield', title: '3. Compliance checks run first', body: 'Every dial is checked against your Do-Not-Call list and calling window before it goes out. Blocked contacts are counted, not called.', to: '/help/compliance/calling-rules', link: 'Calling window and Do-Not-Call' },
+          { icon: 'monitoring', title: '4. Watch the outcomes', body: 'Progress shows per campaign: connected, calling, pending, no answer, failed and blocked. Every call has a transcript you can open.' },
+        ],
+      },
+      {
+        eyebrow: 'What you can configure',
+        title: 'Pace, retries and personalisation.',
+        items: [
+          { icon: 'event_repeat', title: 'Retries', body: 'Set a maximum number of attempts and a gap between them, with separate rules for busy lines and voicemail if you want them.' },
+          { icon: 'speed', title: 'Concurrency and pace', body: 'Choose how many calls run at once and an optional limit on attempts per minute. The channel limit on your telephony account is the real ceiling.' },
+          { icon: 'schedule', title: 'Calling window', body: 'TRAI norms limit unsolicited calls to 9am to 9pm, Monday to Saturday. With the calling window enforced, dials outside your hours and days are blocked in the callee’s timezone.' },
+          { icon: 'data_object', title: 'Variables', body: 'Use {{name}}-style variables in the welcome message and prompt so each call carries the contact’s own details.' },
+          { icon: 'block', title: 'Do-Not-Call', body: 'Add numbers by hand or in bulk. When a caller asks not to be called again, the agent adds them itself.' },
+          { icon: 'bolt', title: 'Instant lead follow-up', body: 'A private webhook queues a call within about 15 to 30 seconds of a new lead arriving, still subject to your compliance rules.', to: '/help/integrations/instant-lead-follow-up', link: 'How it works' },
+        ],
+      },
+      {
+        eyebrow: 'Use cases',
+        title: 'Calls that are expected, not cold.',
+        items: [
+          { icon: 'event_repeat', title: 'Appointment and visit reminders', body: 'Confirm or reschedule bookings so fewer slots go unused.', to: '/solutions/healthcare', link: 'Healthcare' },
+          { icon: 'account_balance', title: 'EMI and payment reminders', body: 'Polite, consistent reminders to customers who already owe a payment, with every call logged.', to: '/solutions/finance', link: 'Finance and collections' },
+          { icon: 'apartment', title: 'Follow-up on property enquiries', body: 'Call back brochure downloads and missed site visits.', to: '/solutions/real-estate', link: 'Real estate' },
+        ],
+        note: 'Only call people you are permitted to call. Consent and regulatory obligations remain yours; Vistrow enforces the calling window and Do-Not-Call list you configure.',
+      },
+    ],
     faqs: [
-      { q: 'How large a contact list can I run?', a: 'Campaigns scale from a handful of contacts to thousands - upload a CSV and Artha works through the whole list.' },
+      { q: 'How large a contact list can I run?', a: 'That depends on your plan and the telephony channels provisioned for your account. We recommend starting with a small list, reviewing the calls, and speaking to us before running a large one.' },
       { q: 'Can each call be personalized?', a: 'Yes - use {{variables}} like name or due date so every call sounds tailored, not scripted.' },
-      { q: 'Can I schedule a campaign for later?', a: 'Yes - set a start time and Artha runs the calls automatically, with live pickup and outcome metrics as it goes.' },
+      { q: 'Can I schedule a campaign for later?', a: 'Yes - set a start time and the campaign launches automatically, with progress shown per campaign as it runs.' },
+      { q: 'Does it respect Do-Not-Call and calling hours?', a: 'Yes. Every dial is checked against your Do-Not-Call list and, with the calling window enforced, your allowed hours and days before it goes out. Blocked contacts are counted, not called.' },
+      { q: 'What happens when nobody answers?', a: 'The contact is retried according to the maximum attempts and gap you set, with separate rules available for busy lines and voicemail.' },
+      { q: 'Can it call new leads as soon as they arrive?', a: 'Yes. Facebook Lead Ads and any source that can send a webhook can queue a call within about 15 to 30 seconds. Your compliance rules still apply.' },
     ],
   },
   '/product/knowledge-base': {
@@ -141,10 +270,45 @@ export const PRODUCT_DETAIL: Record<
       { icon: 'search', title: 'Retrieval-grounded', body: 'Every answer is backed by a retrieved source, so responses stay accurate and on-brand.' },
       { icon: 'update', title: 'Always current', body: 'Update a document and the agent uses the new information on the very next call.' },
     ],
+    guideSections: [
+      {
+        eyebrow: 'How it works',
+        title: 'From a brochure to answers your agent can quote.',
+        items: [
+          { icon: 'upload_file', title: '1. Add a source', body: 'Upload a .txt, .md, .csv, .pdf or .docx file, paste text, or scan your website and choose which pages to import.', to: '/help/knowledge-base/add-knowledge', link: 'Give your agent your facts' },
+          { icon: 'auto_awesome', title: '2. Extract question-and-answer pairs', body: 'Auto-extract turns the source into Q&A pairs. Review and edit each one, or add pairs by hand.' },
+          { icon: 'link', title: '3. Attach it to an agent', body: 'Choose the knowledge base on the agent’s page, and the agent uses it from its next call.', to: '/product/agents', link: 'Voice agents' },
+          { icon: 'record_voice_over', title: '4. The agent answers from it', body: 'Approved Q&A pairs are included first on every call. With strict mode, the agent quotes them instead of improvising.' },
+        ],
+      },
+      {
+        eyebrow: 'What you can configure',
+        title: 'Control what the agent knows, and how far it can stray.',
+        items: [
+          { icon: 'lock', title: 'Strict mode', body: 'The agent quotes your approved answers and says it will check with the team when something is not covered, rather than guessing.' },
+          { icon: 'rule', title: 'Editable wording', body: 'Edit any extracted pair so the agent says it the way you would, and add pairs by hand for the questions your callers ask most.' },
+          { icon: 'inventory_2', title: 'Live catalog', body: 'For products, property listings, menus or plans, a structured catalog is looked up on demand, so a large list does not slow the call. Only agents you enable can use it.', to: '/help/knowledge-base/live-catalog', link: 'Live catalog' },
+          { icon: 'speed', title: 'Usage meter', body: 'Only the first 8,000 characters reach the agent on a call. A bar under each knowledge base shows how much is used, so you can trim and prioritise.' },
+        ],
+        note: 'Strict mode reduces improvised answers but cannot guarantee a perfect one. Test the questions your callers really ask in the Testing Lab before you publish.',
+      },
+      {
+        eyebrow: 'Who it is for',
+        title: 'Anyone whose callers ask the same questions all day.',
+        items: [
+          { icon: 'apartment', title: 'Property teams', body: 'Project facts, configurations and possession details answered consistently, with the live catalog for listings.', to: '/solutions/real-estate', link: 'Real estate' },
+          { icon: 'shopping_bag', title: 'E-commerce and retail', body: 'Return, delivery and policy questions answered the same way every time.', to: '/solutions/ecommerce', link: 'E-commerce' },
+          { icon: 'health_and_safety', title: 'Clinics and services', body: 'Timings, fees and preparation instructions from your own material.', to: '/solutions/healthcare', link: 'Healthcare' },
+        ],
+      },
+    ],
     faqs: [
-      { q: 'What file types can I upload?', a: 'PDFs and documents today - we auto-extract them into clean Q&A pairs your agent can retrieve from.' },
-      { q: 'What is strict mode?', a: 'It restricts the agent to only answer from your uploaded knowledge base, so it never invents information.' },
-      { q: 'How fast do updates take effect?', a: 'Immediately - update a document and the agent uses the new answer on its very next call.' },
+      { q: 'What file types can I upload?', a: 'Text, Markdown, CSV, PDF and Word (.docx) files, or pasted text. You can also scan your website and pick the pages to import. Each source is extracted into Q&A pairs your agent can use.' },
+      { q: 'What is strict mode?', a: 'It makes the agent quote your approved answers instead of improvising facts, and say it will check with the team when something is not covered.' },
+      { q: 'How fast do updates take effect?', a: 'On the next call - update a document or Q&A pair and the agent uses the new answer without a redeploy.' },
+      { q: 'Is there a limit to how much the agent can use on a call?', a: 'Yes. Only the first 8,000 characters reach the agent on a call, with approved Q&A pairs included first. For large product or listing lists, use the live catalog, which is looked up on demand.' },
+      { q: 'Can I write answers myself instead of uploading a file?', a: 'Yes. Add Q&A pairs by hand, and edit any auto-extracted pair so the wording matches how you want the agent to speak.' },
+      { q: 'Does it work in Indian languages?', a: 'The agent can answer in any supported language. Write answers in the language your callers use, or in English, and test the replies in the Testing Lab before going live.' },
     ],
   },
   '/product/widget': {
@@ -158,10 +322,46 @@ export const PRODUCT_DETAIL: Record<
       { icon: 'badge', title: 'Lead capture gate', body: 'Collects name and phone before the call so every conversation is a real lead.' },
       { icon: 'palette', title: 'On-brand', body: 'Position, label, and colours match your site - it feels native, not bolted on.' },
     ],
+    guideSections: [
+      {
+        eyebrow: 'How it works',
+        title: 'From the dashboard to a live button in four steps.',
+        items: [
+          { icon: 'add', title: '1. Add your website', body: 'Name the site, pick the agent, the corner of the screen, the button label and an optional greeting bubble. Each site gets its own key.', to: '/help/website-widget/add-widget', link: 'Add the call button' },
+          { icon: 'code', title: '2. Install it', body: 'Copy the script tag onto your pages, or install the WordPress plugin and paste your site key.' },
+          { icon: 'mic', title: '3. A visitor taps and talks', body: 'The call runs in the browser with the visitor’s microphone, so there is no phone number to dial and nothing to install.' },
+          { icon: 'history', title: '4. Review the call', body: 'Filter the Calls page by site to read the transcript, see captured lead fields, and see which page the call started from.', to: '/help/calls/find-a-call', link: 'Find a call' },
+        ],
+      },
+      {
+        eyebrow: 'What you can configure',
+        title: 'Make it behave the way your site does.',
+        items: [
+          { icon: 'forum', title: 'Voice, chat or both', body: 'Offer a voice call that visitors can also type into, let them choose between voice and chat, or run text chat only.' },
+          { icon: 'badge', title: 'Ask before starting', body: 'For name, phone number and email, choose Don’t ask, Optional or Required. With all three off the call starts on a single tap.' },
+          { icon: 'palette', title: 'Look and feel', body: 'Choose the animated orb or the Artha presenter as the button’s face, set the avatar colour, the corner and the label.' },
+          { icon: 'route', title: 'Page rules', body: 'Send visitors on matching pages to a different agent, with its own greeting and avatar, for example a single listing page routed to an agent that knows only that listing.', to: '/help/website-widget/page-rules', link: 'Different agents on different pages' },
+          { icon: 'key', title: 'Per-site keys', body: 'Every site has its own key and call history. Regenerate the key if one is ever exposed.' },
+        ],
+      },
+      {
+        eyebrow: 'Who it is for',
+        title: 'Sites where a visitor has a question and no patience for a form.',
+        items: [
+          { icon: 'apartment', title: 'Property and project pages', body: 'A visitor on a project page asks about the project, and the lead lands with their details and the page they were on.', to: '/solutions/real-estate', link: 'Real estate' },
+          { icon: 'shopping_bag', title: 'Online stores', body: 'Delivery and return questions answered at the moment a shopper hesitates.', to: '/solutions/ecommerce', link: 'E-commerce' },
+          { icon: 'translate', title: 'Regional-language audiences', body: 'A visitor can speak in their own language without leaving the page.', to: '/languages/hindi', link: 'Hindi voice agent' },
+        ],
+        note: 'The call needs microphone permission from the visitor’s browser. Chat-only mode is there for visitors who prefer to type.',
+      },
+    ],
     faqs: [
-      { q: 'Do visitors need to download anything?', a: 'No - it’s a real-time browser call. Visitors just tap the button and talk, nothing to install.' },
+      { q: 'Do visitors need to download anything?', a: 'No - it’s a real-time browser call. Visitors just tap the button and talk, nothing to install. The browser asks for microphone permission first.' },
       { q: 'How do I install it on WordPress?', a: 'Use our WordPress plugin - activate it, paste your site key, and the call button appears automatically.' },
       { q: 'Does it work on mobile browsers?', a: 'Yes - the widget is fully responsive and works on mobile and desktop browsers alike.' },
+      { q: 'Can I show a different agent on different pages?', a: 'Yes. Page rules send visitors on matching pages to a different agent with its own greeting and avatar.' },
+      { q: 'Can I ask visitors for their details first?', a: 'Yes. For name, phone number and email you choose Don’t ask, Optional or Required, so conversations can arrive as real leads.' },
+      { q: 'Can I use it for text chat instead of voice?', a: 'Yes. The widget can be voice, text chat only, or let the visitor choose.' },
     ],
   },
   '/product/integrations': {
@@ -175,10 +375,47 @@ export const PRODUCT_DETAIL: Record<
       { icon: 'chat', title: 'Messaging', body: 'Trigger a WhatsApp follow-up off the back of a call outcome.' },
       { icon: 'api', title: 'Full API', body: 'Programmatic access to agents, calls, and analytics for custom workflows.' },
     ],
+    guideSections: [
+      {
+        eyebrow: 'How it works',
+        title: 'From the end of a call to the tool your team already uses.',
+        items: [
+          { icon: 'extension', title: '1. Connect a tool', body: 'On the Integrations page, click Connect on a card. Connected integrations receive every qualified lead in real time.', to: '/help/integrations/connect-integrations', link: 'Send leads to your CRM' },
+          { icon: 'call_end', title: '2. A call finishes', body: 'The agent has saved the lead fields it captured, and the transcript is ready.' },
+          { icon: 'send', title: '3. The lead is delivered', body: 'Each connected integration gets the lead. A webhook receives it as JSON, so Zapier, n8n or Make can take it from there.' },
+          { icon: 'verified', title: '4. Check it arrived', body: 'Each card shows its status, last sync and any error. Use Send test where offered, and re-send a delivery from the call’s details.' },
+        ],
+      },
+      {
+        eyebrow: 'What you can connect',
+        title: 'The destinations available today.',
+        items: [
+          { icon: 'contacts', title: 'Zoho CRM and ArthaLeads', body: 'Leads go straight into your CRM.' },
+          { icon: 'webhook', title: 'CRM or webhook', body: 'Every lead is posted as JSON to any URL, which covers CRMs and automation tools that accept a webhook.' },
+          { icon: 'table_chart', title: 'Google Sheets', body: 'Keep a lead sheet your team can open without logging in to a CRM.' },
+          { icon: 'chat', title: 'Slack and WhatsApp', body: 'Alerts for your team and follow-ups to the customer.' },
+          { icon: 'ads_click', title: 'Facebook Lead Ads', body: 'New form leads are queued for a call within seconds.', to: '/help/integrations/instant-lead-follow-up', link: 'Instant lead follow-up' },
+          { icon: 'route', title: 'Per-agent routing', body: 'By default an agent delivers to every connected integration. Limit one agent to specific ones, or give it its own webhook URL.', to: '/help/agents/agent-webhook-crm-memory', link: 'Webhook and CRM routing' },
+        ],
+      },
+      {
+        eyebrow: 'Who it is for',
+        title: 'Teams that already know where leads should land.',
+        items: [
+          { icon: 'apartment', title: 'Sales teams', body: 'Budget, location, timeline and transcript arrive in the CRM before the advisor picks up the phone.', to: '/solutions/real-estate', link: 'Real estate' },
+          { icon: 'support_agent', title: 'Support teams', body: 'Post call outcomes into the tools that already track tickets and follow-ups.', to: '/solutions/support', link: 'Customer support' },
+          { icon: 'hub', title: 'Everyone else', body: 'Use the integrations directory for the full list and how each one is set up.', to: '/integrations', link: 'All integrations' },
+        ],
+        note: 'If deliveries start failing, the dashboard flags it and, if enabled in your preferences, you get an email. The security page explains how call data is handled.',
+      },
+    ],
     faqs: [
-      { q: 'Which CRMs can I connect?', a: 'Any CRM or tool that accepts a webhook, plus a dedicated ArthaLeads integration - no code required to set up.' },
+      { q: 'Which CRMs can I connect?', a: 'Zoho CRM and ArthaLeads have their own integrations. Any other CRM or tool that accepts a webhook, or works through Zapier, n8n or Make, can receive every lead as JSON.' },
       { q: 'Is there a public API?', a: 'Yes - a full API for agents, calls, and analytics, so you can build custom workflows on top of Vistrow.' },
-      { q: 'How fast does a lead reach my CRM?', a: 'Instantly - the moment a qualified call ends, its data fires to every connected integration.' },
+      { q: 'How fast does a lead reach my CRM?', a: 'In real time - when a qualified call ends, its data is sent to every connected integration. Each integration card shows its last sync and any error.' },
+      { q: 'What if a delivery fails?', a: 'The dashboard flags it, and if enabled in your preferences you also get an email. You can re-send a delivery from the call’s details once the destination is fixed.' },
+      { q: 'Can different agents send leads to different places?', a: 'Yes. Under CRM routing, limit an agent to specific integrations, or give it its own webhook URL for its lead, appointment and callback events.' },
+      { q: 'Can a lead from my ads trigger a call?', a: 'Yes. Facebook Lead Ads, or any source that can post to the Instant Lead Follow-up URL, queues a call within about 15 to 30 seconds, subject to your calling window and Do-Not-Call rules.' },
     ],
   },
 }

@@ -20,6 +20,42 @@ const FAQ = [
     q: 'Can I try the platform before I build anything?',
     a: 'Yes - talk to Artha live in your browser right now on this page, no signup or credit card required.',
   },
+  {
+    q: 'How is an AI voice agent different from an IVR menu?',
+    a: 'An IVR makes the caller press keys through a fixed menu. A Vistrow agent understands what the caller says, answers from your knowledge base and completes the next step, such as booking an appointment or capturing a lead. The AI IVR and IVR comparison pages go into the differences.',
+  },
+  {
+    q: 'Which languages does the platform support?',
+    a: 'Ten Indian languages plus English, including natural Hinglish, with the agent switching when the caller does. Each language has its own page.',
+  },
+  {
+    q: 'What happens to the calls and leads afterwards?',
+    a: 'Every call has a transcript and the lead fields the agent captured, searchable in the dashboard. Qualified leads can be sent to Zoho CRM, ArthaLeads, Slack, WhatsApp, Google Sheets or any webhook.',
+  },
+  {
+    q: 'Where do I find the pricing?',
+    a: 'On the pricing page, which lists each plan and what it includes.',
+  },
+]
+
+// What a call passes through, in order. Every step maps to a dashboard page;
+// check the help articles before changing a claim here.
+const CALL_FLOW = [
+  { icon: 'dialpad', title: 'A call or a visit starts', body: 'A customer rings a connected number, a visitor taps the website widget, or a campaign dials a contact.', to: '/product/inbound', link: 'Inbound calling' },
+  { icon: 'smart_toy', title: 'An agent takes it', body: 'The agent you configured greets the caller in its default language and follows them if they switch.', to: '/product/agents', link: 'Voice agents' },
+  { icon: 'menu_book', title: 'It answers from your facts', body: 'Answers come from your knowledge base, and strict mode keeps the agent to approved answers.', to: '/product/knowledge-base', link: 'Knowledge base' },
+  { icon: 'event_available', title: 'It completes a next step', body: 'Book an appointment, take a callback request, capture lead details, or transfer a phone call to a person.' },
+  { icon: 'hub', title: 'Your team gets the result', body: 'The transcript and lead fields reach your CRM, Slack, Google Sheets or webhook, and every call stays searchable in the dashboard.', to: '/product/integrations', link: 'Integrations' },
+]
+
+// Starting points by goal, each pointing at the page that covers it.
+const START_HERE = [
+  { icon: 'call_received', title: 'Stop missing calls', body: 'Answer the business number around the clock, inside the hours and limits you set.', to: '/product/inbound', link: 'Inbound calling' },
+  { icon: 'graphic_eq', title: 'Talk to website visitors', body: 'Add a call button so a visitor can ask a question by voice, with no phone number.', to: '/product/widget', link: 'Website call widget' },
+  { icon: 'campaign', title: 'Follow up with contacts', body: 'Reminders and follow-ups to a contact list, with Do-Not-Call and calling-window checks before every dial.', to: '/product/outbound', link: 'Outbound campaigns' },
+  { icon: 'translate', title: 'Serve regional-language callers', body: 'Ten Indian languages plus English, with each language page covering how callers actually speak.', to: '/languages', link: 'Languages' },
+  { icon: 'apartment', title: 'Fit it to your industry', body: 'See the flows for real estate, healthcare, e-commerce, finance and support.', to: '/solutions', link: 'Solutions' },
+  { icon: 'payments', title: 'Check what a plan includes', body: 'Plans and what they include are on the pricing page, and our team can walk you through them.', to: '/pricing', link: 'Pricing' },
 ]
 
 // Answer-engine-friendly (AEO/GEO): FAQPage structured data lets Google,
@@ -76,6 +112,61 @@ export function ProductOverview() {
                 <Icon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-1" />
               </span>
             </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+        <div className="mb-8 max-w-2xl">
+          <SectionEyebrow>Follow one call</SectionEyebrow>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">What happens from first ring to your CRM.</h2>
+          <p className="mt-3 text-text-muted">
+            The six products are parts of one flow. Each step below is a page in the dashboard, and each links to the product page that covers it.
+          </p>
+        </div>
+        <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+          {CALL_FLOW.map((step, i) => (
+            <li key={step.title} className="flex flex-col rounded-2xl border border-border bg-surface p-6">
+              <span className="flex items-center justify-between">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Icon name={step.icon} className="text-[22px]" />
+                </span>
+                <span className="font-display text-2xl font-bold text-border">{`0${i + 1}`}</span>
+              </span>
+              <h3 className="mt-5 font-display text-lg font-semibold">{step.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
+              {step.to && step.link && (
+                <Link to={step.to} className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-primary underline-offset-4 hover:underline">
+                  {step.link}
+                  <Icon name="arrow_forward" className="text-[16px]" />
+                </Link>
+              )}
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+        <div className="mb-8 max-w-2xl">
+          <SectionEyebrow>Where to start</SectionEyebrow>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Pick the problem you have today.</h2>
+          <p className="mt-3 text-text-muted">
+            Most teams begin with one channel, usually inbound calls or the website widget, get that agent right in the Testing Lab, and add the rest later.
+          </p>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {START_HERE.map((item) => (
+            <div key={item.title} className="flex flex-col rounded-2xl border border-border bg-surface p-6">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Icon name={item.icon} className="text-[22px]" />
+              </span>
+              <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
+              <Link to={item.to} className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-primary underline-offset-4 hover:underline">
+                {item.link}
+                <Icon name="arrow_forward" className="text-[16px]" />
+              </Link>
+            </div>
           ))}
         </div>
       </section>
