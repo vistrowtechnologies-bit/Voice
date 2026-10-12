@@ -219,6 +219,26 @@ export interface Solution extends NavLink {
   resultFields: Array<{ label: string; value: string }>
   integrations: FeatureRow[]
   guardrails: string[]
+  /** Deeper sections for industry pages that answer a specific search cluster
+   * (finance: collections/EMI reminders; real estate: qualification and site
+   * visits). Every claim must be a dashboard capability - check the help
+   * articles and the code before adding one. */
+  guideSections?: Array<{
+    eyebrow: string
+    title: string
+    intro?: string
+    /** A short boxed note under the items, e.g. a regulatory pointer. */
+    note?: string
+    items: Array<{ icon: string; title: string; body: string; to?: string; link?: string }>
+  }>
+  /** A written sample exchange, labelled on the page as not a recording. */
+  sampleExchange?: {
+    context: string
+    langCode: string
+    langLabel: string
+    turns: { speaker: 'Caller' | 'Agent'; native: string; gloss: string }[]
+    outcome: string
+  }
 }
 
 export const SOLUTIONS: Solution[] = [
@@ -233,15 +253,15 @@ export const SOLUTIONS: Solution[] = [
     to: '/solutions/real-estate',
     icon: 'apartment',
     desc: 'Qualify buyers and book site visits - 24/7, in any language.',
-    headline: 'Never miss a buyer enquiry again.',
+    headline: 'AI calling agent for real estate enquiries and site visits.',
     subhead:
-      'Artha answers every call, qualifies budget, location and timeline, and books site visits - round the clock, in Hindi or English.',
+      'Artha answers property enquiries and calls new leads back within seconds, in Hindi, English or 9 other Indian languages. It qualifies budget, location, configuration, timeline and purpose, and books site visits on your calendar, day or night.',
     pains: [
       { icon: 'phone_missed', title: 'Missed calls', body: 'After-hours enquiries go to voicemail and buyers move on. Artha picks up every time.' },
-      { icon: 'fact_check', title: 'Manual qualification', body: 'No more re-asking budget and location - Artha captures and scores it automatically.' },
+      { icon: 'fact_check', title: 'Manual qualification', body: 'No more re-asking budget and location - Artha saves each detail as a lead field during the call.' },
       { icon: 'schedule', title: 'Slow follow-up', body: 'Every qualified lead syncs to your CRM instantly, so agents follow up while it’s hot.' },
     ],
-    features: ['Budget & location qualification', 'Site-visit booking', 'WhatsApp / CRM webhook', '24/7 multilingual pickup'],
+    features: ['Budget, location & configuration qualification', 'Site visits booked on your calendar', 'Call-back to new leads within seconds', 'CRM, WhatsApp & webhook delivery', '24/7 multilingual pickup'],
     scenarios: [
       { label: 'New buyer enquiry', callerLine: '“Baner में two BHK चाहिए, budget करीब one crore है.”', agentAction: 'Captures configuration, budget, preferred location and purchase timeline without turning the call into a form.', outcome: 'Qualified buyer lead, ready for the right sales advisor.' },
       { label: 'Project comparison', callerLine: '“Aarohan Crest और nearby options में फर्क क्या है?”', agentAction: 'Answers only from approved project knowledge and records the exact comparison the buyer wants.', outcome: 'A focused follow-up request with no invented inventory or pricing.' },
@@ -267,10 +287,70 @@ export const SOLUTIONS: Solution[] = [
     ],
     guardrails: ['Never invent project inventory, price, possession date or approval status.', 'Never call an enquiry qualified until the buyer has shared meaningful intent.', 'Never claim a site visit is confirmed until the calendar booking succeeds.'],
     faqs: [
-      { q: 'Can Artha book site visits automatically?', a: 'Yes - it checks real availability and books a site visit directly on the call, no back-and-forth needed.' },
-      { q: 'Does it qualify budget and location before booking?', a: 'Yes - it captures budget, preferred location, and timeline, and scores the lead before handing it to your team.' },
-      { q: 'Does it handle Hindi-speaking callers?', a: 'Yes - Artha speaks Hindi natively, including everyday Hinglish code-switching, plus 10 other Indian languages, switching mid-call to match the caller.' },
+      { q: 'What does an AI calling agent for real estate actually do?', a: 'It answers your enquiry line and calls new leads back, asks the qualifying questions your sales team would ask - budget, preferred location, configuration, timeline and purpose - answers project questions from your approved material, and books a site visit or passes the lead on with the full transcript.' },
+      { q: 'Can it book site visits automatically?', a: 'Yes. It offers free slots from the built-in calendar, inside the business hours and slot length you set, and confirms a visit only after the booking succeeds. If nothing suits the buyer, it takes a callback request instead. Your team can reschedule a visit or mark it completed or no-show.' },
+      { q: 'How does it qualify property buyer enquiries?', a: 'Through the conversation, not a form. As the buyer mentions budget, preferred areas, property type, configuration, timeline and whether it is for investment or self-use, the agent saves each detail as a lead field. If a buyer names two areas, both are kept.' },
+      { q: 'Can it call new Facebook leads straight away?', a: 'Yes. Connect your Facebook Page and each new Lead Ads submission is queued for a call within about 15-30 seconds. Leads pushed from ArthaLeads, or from any source that can send a webhook, are queued the same way. Your calling window and Do-Not-Call list still apply.' },
+      { q: 'Does it handle Hindi, Marathi, Kannada and other regional callers?', a: 'Yes. Hindi (including everyday Hinglish), Marathi, Gujarati, Kannada, Telugu, Tamil and the other supported Indian languages, plus English. It switches mid-call when the buyer does.' },
+      { q: 'Will it make up prices or availability?', a: 'It is set up not to. Answers come from your knowledge base, or from a live catalog of listings that the agent looks up when a buyer asks. With strict mode on, it quotes your approved answers and says it will check with the team when something is not covered.' },
     ],
+    guideSections: [
+      {
+        eyebrow: 'Qualifying buyer enquiries',
+        title: 'What the agent asks, and what it saves.',
+        intro: 'The agent gathers these across a normal conversation, in whatever order the buyer brings them up, and saves each one as a lead field on the call, ready for your CRM.',
+        items: [
+          { icon: 'payments', title: 'Budget', body: 'A range or a ceiling, in lakh or crore, as the buyer says it. A correction later in the call replaces the earlier figure.' },
+          { icon: 'location_city', title: 'Location', body: 'Preferred areas or projects. If the buyer names two, “Baner or Kharadi”, both are kept.' },
+          { icon: 'apartment', title: 'Property type and configuration', body: 'Flat, villa or plot; 2BHK, 3BHK or a plot size.' },
+          { icon: 'timer', title: 'Timeline', body: 'When the buyer plans to buy or move, so your team knows who to call first.' },
+          { icon: 'flag', title: 'Purpose', body: 'Self-use or investment, which usually changes which projects your advisor suggests.' },
+          { icon: 'person', title: 'Name and phone', body: 'Confirmed on the call, so the lead reaches your team with a number that works.' },
+        ],
+      },
+      {
+        eyebrow: 'Site visits',
+        title: 'Site visits booked on your own calendar.',
+        intro: 'Booking uses the appointments calendar built into Vistrow Voice, so no outside calendar has to be connected first.',
+        items: [
+          { icon: 'event_available', title: 'Only real free slots', body: 'The agent offers slots inside the business hours, slot length (15 to 60 minutes), timezone and blackout dates you set, and confirms only once the booking succeeds.' },
+          { icon: 'phone_callback', title: 'A callback when nothing fits', body: 'If no slot suits the buyer, it takes a callback request with their preferred date and time instead of ending the call empty-handed.' },
+          { icon: 'calendar_month', title: 'Your team stays in charge', body: 'Visits appear in Appointments, in calendar or list view, where your team can reschedule them or mark them confirmed, completed, cancelled or no-show.', to: '/help/appointments/manage-appointments', link: 'Bookings and availability' },
+        ],
+      },
+      {
+        eyebrow: 'Follow-up',
+        title: 'Call new leads while they still remember enquiring.',
+        items: [
+          { icon: 'bolt', title: 'Instant call-back', body: 'Connect Facebook Lead Ads, push leads from ArthaLeads, or send them from any source by webhook, and a call is queued within about 15-30 seconds of the lead arriving.', to: '/help/integrations/instant-lead-follow-up', link: 'How instant lead follow-up works' },
+          { icon: 'campaign', title: 'Follow-up campaigns', body: 'Re-call older enquiries, brochure downloads or missed visits as an outbound campaign, with retries, a calling window and Do-Not-Call checks before every dial.', to: '/product/outbound', link: 'Outbound campaigns' },
+          { icon: 'hub', title: 'Leads where your team works', body: 'Qualified leads go to ArthaLeads, Zoho CRM, Google Sheets, Slack or any webhook, with the transcript and the fields captured on the call.', to: '/product/integrations', link: 'CRM and webhook integrations' },
+        ],
+      },
+      {
+        eyebrow: 'More markets',
+        title: 'Property calls in more Indian languages.',
+        intro: 'The local pages above cover Hindi, Marathi, Kannada, Telugu and Gujarati markets. The same agent also takes property calls in these languages:',
+        items: [
+          { icon: 'translate', title: 'Chennai and Tamil Nadu', body: 'Tamil and Tanglish enquiries about projects on OMR or in Porur and Tambaram.', to: '/languages/tamil', link: 'Tamil AI voice calling agent' },
+          { icon: 'translate', title: 'Mohali, Zirakpur and Ludhiana', body: 'Punjabi enquiries that slip into Hindi or English halfway through.', to: '/languages/punjabi', link: 'Punjabi AI voice calling agent' },
+          { icon: 'translate', title: 'Every supported language', body: 'Bengali, Malayalam and Odia too, plus English, with the agent switching when the buyer does.', to: '/languages', link: 'All languages' },
+        ],
+      },
+    ],
+    sampleExchange: {
+      context: 'A call-back to a new website enquiry',
+      langCode: 'hi-IN',
+      langLabel: 'Hindi and Hinglish',
+      turns: [
+        { speaker: 'Agent', native: 'नमस्ते अमित जी, मैं Aarohan Homes से Artha बोल रही हूँ। आपने अभी Baner project के लिए enquiry की थी, दो मिनट बात कर सकते हैं?', gloss: 'Hello Amit ji, this is Artha from Aarohan Homes. You just made an enquiry about the Baner project; can we talk for two minutes?' },
+        { speaker: 'Caller', native: 'हाँ, बताइए। 2BHK चाहिए, budget around 1 crore है।', gloss: 'Yes, go ahead. I want a 2BHK; the budget is around 1 crore.' },
+        { speaker: 'Agent', native: 'ठीक है। आप खुद रहने के लिए देख रहे हैं या investment के लिए? और कब तक लेने का plan है?', gloss: 'Okay. Are you looking to live in it or as an investment? And when do you plan to buy?' },
+        { speaker: 'Caller', native: 'खुद के लिए, तीन-चार महीने में। Sunday को site visit हो सकती है?', gloss: 'For myself, in three or four months. Can I do a site visit on Sunday?' },
+        { speaker: 'Agent', native: 'हाँ, Sunday सुबह 11 बजे का slot खाली है। book कर दूँ?', gloss: 'Yes, Sunday 11 a.m. is free. Shall I book it?' },
+      ],
+      outcome: 'Aarohan Homes is the made-up demo business. Budget, configuration, location, purpose and timeline are saved as lead fields, and the visit appears in Appointments only once the booking succeeds.',
+    },
   },
   {
     demoSlug: 'healthcare',
@@ -385,16 +465,16 @@ export const SOLUTIONS: Solution[] = [
     label: 'Finance & Collections',
     to: '/solutions/finance',
     icon: 'account_balance',
-    desc: 'Run polite, compliant reminder and collection calls at scale.',
-    headline: 'Collections calls, done right.',
+    desc: 'Run polite EMI reminder and collection calls inside your calling rules.',
+    headline: 'AI voice agent for loan collections and EMI reminders.',
     subhead:
-      'Artha runs polite, consistent, fully-logged reminder and collection calls at scale - with every conversation recorded and searchable.',
+      'Artha calls borrowers about an upcoming or missed EMI in Hindi, English or 9 other Indian languages, notes what they say - paid, a promised date, a dispute, a callback - and passes sensitive cases to your team. Every call is transcribed and summarised.',
     pains: [
-      { icon: 'currency_rupee', title: 'Manual dialing', body: 'Agents burn hours on repetitive reminder calls. Artha runs them at scale.' },
-      { icon: 'gavel', title: 'Compliance risk', body: 'Consistent, scripted, recorded conversations keep every call compliant.' },
-      { icon: 'insights', title: 'No visibility', body: 'Track promise-to-pay and outcomes across every call in one place.' },
+      { icon: 'currency_rupee', title: 'Manual dialing', body: 'Collectors spend hours on repetitive reminder calls. Artha runs them as a campaign from your number.' },
+      { icon: 'gavel', title: 'Inconsistent calls', body: 'Every collector words the reminder differently. Artha follows the same approved script on every call, and each call can be reviewed afterwards.' },
+      { icon: 'insights', title: 'No visibility', body: 'Promised dates and outcomes end up in notebooks. Artha saves them as fields on each call, in one list.' },
     ],
-    features: ['Payment reminders', 'Promise-to-pay capture', 'Full call recording', 'Outcome analytics'],
+    features: ['EMI and payment reminders', 'Promised-date capture', 'Calling window and Do-Not-Call checks', 'Recording, transcript and summary'],
     scenarios: [
       { label: 'Payment reminder', callerLine: '“मेरी due date और amount confirm कर दीजिए.”', agentAction: 'Uses approved account context, communicates the reminder calmly and records the caller’s response.', outcome: 'Verified reminder outcome without pressure.' },
       { label: 'Payment difficulty', callerLine: '“इस महीने payment करना मुश्किल है.”', agentAction: 'Responds without judgment, captures the situation and offers only approved next steps or a human callback.', outcome: 'Hardship context routed safely to the right team.' },
@@ -420,10 +500,73 @@ export const SOLUTIONS: Solution[] = [
     ],
     guardrails: ['No threats, humiliation, coercion or fabricated consequences.', 'No sensitive account disclosure before the required verification flow.', 'No payment promise is recorded unless the caller clearly states the amount or date.'],
     faqs: [
-      { q: 'Is this compliant with collection call regulations?', a: 'Every call runs a consistent, scripted flow with full recording and logging, built for compliant collections outreach.' },
-      { q: 'Can it capture a promise-to-pay commitment?', a: 'Yes - Artha captures promise-to-pay commitments on the call and logs them to your outcome analytics.' },
-      { q: 'Are all calls recorded for audit?', a: 'Yes - every reminder and collection call is recorded and searchable, so it’s fully auditable.' },
+      { q: 'Can the AI agent make EMI reminder calls in Hindi and regional languages?', a: 'Yes. Each campaign uses an agent with a default language - Hindi, English or any of the other nine supported Indian languages - and the agent switches if the borrower answers in a different one, including everyday Hinglish.' },
+      { q: 'Can it record a promise-to-pay date?', a: 'Yes, once you set it up. Add a post-call data extraction field such as “promised payment date” or “promised amount”, and it is pulled from each call’s transcript, so your team gets a list of who promised what, and when.' },
+      { q: 'Does it follow RBI guidance on recovery call timings?', a: 'RBI guidance limits recovery calls to between 8 am and 7 pm. Vistrow Voice lets you set the calling hours, active days and timezone, and blocks dials outside them, so you can set the window to match. Which rules apply to your loans is for your compliance team to confirm.' },
+      { q: 'What happens if a borrower asks not to be called again?', a: 'The agent adds the number to your Do-Not-Call list itself, and every later dial is checked against that list before it goes out. You can also block numbers by hand or bulk-import a list.' },
+      { q: 'Can a borrower speak to a person?', a: 'Yes. Set a transfer number and the agent dials your colleague into the call and stays on until they answer. It can also take a callback request with a preferred time, for disputes or hardship cases you want a person to handle.' },
+      { q: 'Which plan do I need for collections campaigns?', a: 'Outbound campaigns are included on the Growth and Scale plans. Calls use credits by the minute; the AI voice bot pricing guide works through an example.' },
     ],
+    guideSections: [
+      {
+        eyebrow: 'On a reminder call',
+        title: 'What the agent does on an EMI reminder or collections call.',
+        intro: 'A campaign dials a list of borrowers from your number with the agent you choose. On each call:',
+        items: [
+          { icon: 'campaign', title: 'It opens with the borrower’s own details', body: 'The fields you import with each contact - name, due date, amount, loan reference - are passed into the call, so the greeting and the reminder use them.' },
+          { icon: 'translate', title: 'It talks in the borrower’s language', body: 'It starts in the agent’s default language and follows the borrower into Hindi, English or another supported Indian language mid-call.' },
+          { icon: 'task_alt', title: 'It records the outcome', body: 'Post-call fields you define - paid, promised date, promised amount, dispute, wrong number - are pulled from every call’s transcript.' },
+          { icon: 'call_split', title: 'It hands over what it should not handle', body: 'Disputes, hardship and anything outside your approved script go to a person, by live transfer or by a callback request with the borrower’s preferred time.' },
+        ],
+      },
+      {
+        eyebrow: 'Respectful calling controls',
+        title: 'Rules that decide who gets called, and when.',
+        intro: 'These are dashboard settings checked before every dial, not lines in a script.',
+        note: 'RBI guidance limits recovery calls to between 8 am and 7 pm. The default calling window is 9 am to 9 pm, Monday to Saturday, so a collections team would end it at 7 pm. Vistrow Voice applies the window you set; which rules apply to your loans is for your compliance team to confirm.',
+        items: [
+          { icon: 'schedule', title: 'Calling window and days', body: 'Set the hours, active days and timezone outbound calls may go out in. With the window enforced, dials outside it are blocked. Each campaign can also have its own schedule and end date.', to: '/help/compliance/calling-rules', link: 'Calling window and Do-Not-Call' },
+          { icon: 'block', title: 'Do-Not-Call list', body: 'Every dial is checked against your Do-Not-Call list first. When a borrower asks not to be called again, the agent adds them itself. Blocked contacts are counted, not called.' },
+          { icon: 'event_repeat', title: 'Attempts and retries', body: 'Choose how many times to retry, how long to wait between attempts, and separate retry rules for busy lines, voicemail and very short calls. Pace dials per minute and cap concurrent calls.' },
+          { icon: 'verified_user', title: 'Consent basis on every campaign', body: 'Each campaign records why its contacts may be called - they enquired, existing customer, opted in, or a third-party list - and stores it with every contact.' },
+          { icon: 'shield', title: 'Recording consent and retention', body: 'Optionally ask for spoken consent at the start of the call, choose whether calls are recorded, and set how many days transcripts and recordings are kept.' },
+        ],
+      },
+      {
+        eyebrow: 'After the call',
+        title: 'Every call leaves a record your team can check.',
+        items: [
+          { icon: 'description', title: 'Transcript and summary', body: 'Each call is saved with its full transcript and a short summary in Calls history, searchable by name or number.' },
+          { icon: 'graphic_eq', title: 'Recording', body: 'With recording on, the audio is stored with the call for playback and download, for quality review and disputes.' },
+          { icon: 'hub', title: 'Outcomes into your systems', body: 'Captured fields and the transcript can be posted to your loan or CRM system by webhook, or sent to Zoho CRM, ArthaLeads, Google Sheets or Slack.' },
+          { icon: 'fact_check', title: 'Campaign progress', body: 'Each campaign shows connected, calling, pending, no-answer, failed and blocked counts while it runs.', to: '/help/outbound/run-a-campaign', link: 'Run an outbound campaign' },
+        ],
+      },
+      {
+        eyebrow: 'Languages',
+        title: 'Reminders in the language the borrower answers in.',
+        items: [
+          { icon: 'translate', title: 'Hindi and Hinglish', body: 'Where most reminder calls start. The Hindi page has a written sample of an upcoming-EMI reminder.', to: '/languages/hindi', link: 'Hindi AI voice calling agent' },
+          { icon: 'translate', title: 'Tamil and Punjabi', body: 'Reminders that open in the borrower’s own language and follow the English words they mix in.', to: '/languages/tamil', link: 'Tamil AI voice calling agent' },
+          { icon: 'translate', title: 'Every supported language', body: 'Marathi, Telugu, Kannada, Bengali, Gujarati, Malayalam, Odia and Punjabi too, plus English.', to: '/languages', link: 'All languages' },
+          { icon: 'payments', title: 'What it costs', body: 'Calls are billed in credits by the minute. See plans, credits per minute and a worked example.', to: '/ai-voice-bot-pricing-india', link: 'AI voice bot pricing guide' },
+        ],
+      },
+    ],
+    sampleExchange: {
+      context: 'A missed-EMI follow-up call',
+      langCode: 'hi-IN',
+      langLabel: 'Hindi and Hinglish',
+      turns: [
+        { speaker: 'Agent', native: 'नमस्ते, क्या मेरी बात सुनीता शर्मा जी से हो रही है?', gloss: 'Hello, am I speaking with Sunita Sharma ji?' },
+        { speaker: 'Caller', native: 'हाँ, बोलिए।', gloss: 'Yes, go ahead.' },
+        { speaker: 'Agent', native: 'मैं Saarthi Finance की तरफ़ से Artha बोल रही हूँ। आपकी 5 तारीख़ वाली EMI अभी pending दिख रही है।', gloss: 'This is Artha calling on behalf of Saarthi Finance. Your EMI due on the 5th still shows as pending.' },
+        { speaker: 'Caller', native: 'हाँ, इस महीने थोड़ी problem है। 20 तारीख़ तक कर दूँगी, पर late fee के बारे में किसी से बात करनी है।', gloss: 'Yes, there’s a bit of a problem this month. I’ll pay by the 20th, but I need to talk to someone about the late fee.' },
+        { speaker: 'Agent', native: 'ठीक है, मैंने 20 तारीख़ नोट कर ली है। late fee के लिए हमारी team आपको call करेगी, आपके लिए कौन सा समय ठीक रहेगा?', gloss: 'Okay, I’ve noted the 20th. Our team will call you about the late fee; what time suits you?' },
+        { speaker: 'Caller', native: 'शाम 5 से 6 के बीच।', gloss: 'Between 5 and 6 in the evening.' },
+      ],
+      outcome: 'Saarthi Finance is the made-up demo business. With a post-call field set up for it, the promised date is saved on the call; the callback request reaches your team with her preferred time and the transcript.',
+    },
   },
   {
     demoSlug: 'support',

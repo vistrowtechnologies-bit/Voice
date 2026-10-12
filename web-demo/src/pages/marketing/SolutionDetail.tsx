@@ -201,6 +201,80 @@ export function SolutionDetail() {
         </div>
       </section>
 
+      {/* Page-specific depth (finance, real estate): what the agent does,
+          the controls that exist, and a written sample. Other industries
+          render exactly as before. */}
+      {solution.guideSections?.map((section) => (
+        <section key={section.title} className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+          <div className="mb-8 max-w-2xl">
+            <SectionEyebrow>{section.eyebrow}</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">{section.title}</h2>
+            {section.intro && <p className="mt-3 text-text-muted">{section.intro}</p>}
+          </div>
+          <div className={`grid gap-5 sm:grid-cols-2 ${section.items.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+            {section.items.map((item) => (
+              <div key={item.title} className="flex flex-col rounded-2xl border border-border bg-surface p-6">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Icon name={item.icon} className="text-[22px]" />
+                </span>
+                <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
+                {item.to && item.link && (
+                  <Link
+                    to={item.to}
+                    className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                  >
+                    {item.link}
+                    <Icon name="arrow_forward" className="text-[16px]" />
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+          {section.note && (
+            <p className="mt-5 flex gap-3 rounded-2xl border border-cyan/30 bg-cyan/[0.06] p-5 text-sm leading-relaxed text-text">
+              <Icon name="info" className="mt-0.5 shrink-0 text-[18px] text-cyan" />
+              <span>{section.note}</span>
+            </p>
+          )}
+        </section>
+      ))}
+
+      {solution.sampleExchange && (
+        <section className="mx-auto max-w-4xl px-5 py-12 md:px-8">
+          <figure className="rounded-3xl border border-border bg-surface p-6 sm:p-8">
+            <SectionEyebrow>Example conversation</SectionEyebrow>
+            <figcaption className="mt-3">
+              <h2 className="font-display text-2xl font-bold tracking-tight">
+                {solution.sampleExchange.context}, in {solution.sampleExchange.langLabel}.
+              </h2>
+              <p className="mt-2 text-sm text-text-muted">
+                A short written sample to show the style of call, with an English gloss under each line. It is not a
+                recording of a customer call.
+              </p>
+            </figcaption>
+            <ol className="mt-6 space-y-4">
+              {solution.sampleExchange.turns.map((turn, i) => (
+                <li
+                  key={i}
+                  className={`rounded-2xl border p-4 ${turn.speaker === 'Agent' ? 'border-primary/25 bg-primary/[0.06]' : 'border-border bg-surface-high/60'}`}
+                >
+                  <p className="text-xs font-bold uppercase tracking-widest text-text-muted">
+                    {turn.speaker === 'Agent' ? 'AI agent' : 'Caller'}
+                  </p>
+                  <p lang={solution.sampleExchange!.langCode} className="mt-1.5 text-base leading-relaxed text-text">{turn.native}</p>
+                  <p className="mt-1 text-sm italic leading-relaxed text-text-muted">{turn.gloss}</p>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-5 flex gap-2 text-sm leading-relaxed text-text-muted">
+              <Icon name="task_alt" className="mt-0.5 shrink-0 text-[16px] text-cyan" />
+              <span>{solution.sampleExchange.outcome}</span>
+            </p>
+          </figure>
+        </section>
+      )}
+
       {/* Pain → outcome */}
       <section className="border-y border-border bg-surface-high/50">
         <div className="mx-auto max-w-7xl px-5 py-12 md:px-8 lg:py-16">
