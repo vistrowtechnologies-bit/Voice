@@ -105,8 +105,9 @@ Bharat"), STT sarvam, language `hi-IN`. **Backend default voice is `pooja`**
 - Default voice for built agents: `pooja` for now.
 - Build Phase 1 first (branch `claude/copilot-phase1`).
 
-## Open questions for the owner (remaining)
-1. Keep read-only copilot answers on Starter, gating only writes?
-2. "Book a callback" = appointment with purpose "Callback"?
-3. `gpt-4.1-mini` for action turns, or stay on `gpt-5-nano`?
-4. Block copilot writes during super-admin impersonation? (recommended)
+## Phase 2 decisions (2026-10-12, plan defaults, changeable later)
+1. Read-only copilot answers stay on every plan; write actions need `growth`+.
+2. "Book a callback" = appointment with purpose "Callback".
+3. Model stays `gpt-5-nano`, overridable with `COPILOT_ACTION_MODEL`.
+4. Copilot writes are refused during super-admin "View as" (the
+   impersonation guard blocks `/help/chat/confirm`).
