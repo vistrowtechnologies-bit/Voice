@@ -320,3 +320,15 @@ Owner action after deploy:
 - Settings → Sign-in & security → Two-step login → Turn on, or `/admin` stays locked.
 - EnableX webhook credentials are not set.
 - Set `ORIGIN_CHECK=enforce` once the logs are clean.
+
+### Claude — 2026-10-12 — toggle chips no longer read inverted
+
+Branch `claude/toggle-chip-gradient-leak` (PR, not merged). Owner saw Inbound "Active days" chips inverted: unselected days were solid purple, so with Mon–Sat on only Sun looked "on".
+
+Cause (verified): the `index.css` rule that paints `button`/`a` with `border-border`/`border-cyan` and no `bg-*` class in the brand gradient also matched the unselected branch of toggle chips. The selected branch has a `bg-*` class, so it escaped the rule and looked plainer than the unselected one.
+
+Fix (className only, same approach as efae355c "+ Add field"): `bg-transparent` on the unselected/static classes in Inbound (day chips; selected now `border-primary bg-primary/10 text-primary`, same as Outbound's day chips), Outbound (day chips), Support (rating), TestingLab (scenario cards), WebsiteWidget ("Site default" avatar), Dashboard (incomplete readiness checks), KnowledgeBasePage (catalog header when open). `index.css` unchanged.
+
+Verified: `npm run build` (tsc + vite + prerender + SEO audit) passes. Local dev server with a mock API: Inbound chips with Mon–Sat on show six purple-tinted chips and a plain Sun, in light and dark theme; computed styles confirm no gradient on unselected. For the other six pages, real-stylesheet computed-style test of each exact class string: new = plain, old = gradient. Not verified: visually on those six pages (needed data/wizard steps), or on production.
+
+Next: owner reviews/merges the PR; web-only (Vercel), no worker deploy.

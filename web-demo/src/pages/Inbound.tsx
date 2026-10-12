@@ -244,8 +244,8 @@ export function Inbound() {
                     onClick={() => toggleDay(d)}
                     className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
                       activeDays.includes(d)
-                        ? 'border-cyan/40 bg-cyan/10 text-cyan'
-                        : 'border-border text-text-muted hover:border-primary'
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border bg-transparent text-text-muted hover:border-primary'
                     }`}
                   >
                     {d}
