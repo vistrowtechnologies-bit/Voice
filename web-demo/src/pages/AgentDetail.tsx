@@ -61,7 +61,8 @@ export function AgentDetail() {
   // ?drafted=1 - arrived from "Build with AI" (AgentBuilder.tsx).
   const [searchParams, setSearchParams] = useSearchParams()
   const drafted = searchParams.get('drafted') === '1'
-  const [testing, setTesting] = useState(false)
+  // ?test=1: "Run a test call" on the Build with AI success screen.
+  const [testing, setTesting] = useState(searchParams.get('test') === '1')
 
   useEffect(() => {
     setLoaded(false)
