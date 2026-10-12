@@ -22,7 +22,8 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
     title: 'Insight',
     items: [
       { to: '/admin/analytics', label: 'Analytics', icon: 'monitoring' },
-      { to: '/admin/billing', label: 'Billing', icon: 'payments' },
+      { to: '/admin/finance', label: 'Finance', icon: 'payments' },
+      { to: '/admin/usage', label: 'Usage & cost', icon: 'insights' },
     ],
   },
   {

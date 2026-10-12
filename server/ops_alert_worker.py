@@ -7,6 +7,8 @@ opening System Health (admin audit, 2026-10-11). Checked every 10 minutes:
 - new error-level error_events, batched (one email listing up to 20);
 - an invoice turning failed;
 - an account with at least one live agent and no credits left;
+- an account with a live agent running LOW on credits (admin_db.is_low_credit:
+  under ~3 days of its own average use, floor 50), once per 24 hours each;
 - a database backup failure;
 - 5 or more failed calls across the platform in the last hour;
 - a worker heartbeat older than 5 minutes;
@@ -38,6 +40,7 @@ logger = logging.getLogger("vistrow-ops-alerts")
 
 _CHECK_INTERVAL_S = 10 * 60
 _REPEAT_S = 6 * 3600
+_LOW_CREDIT_REPEAT_S = 24 * 3600
 _MARK = "ops_alert."  # + alert key; value = epoch seconds it was emailed
 _ERRORS_MARK = "ops_alert_errors_last_id"
 _MAX_ERRORS_PER_EMAIL = 20
@@ -149,6 +152,28 @@ def _zero_balance_live() -> list[dict]:
     ]
 
 
+def _app_url() -> str:
+    return (os.environ.get("APP_BASE_URL") or "https://app.vistrowvoice.com").rstrip("/")
+
+
+def _low_credit_live() -> list[dict]:
+    alerts = []
+    for p in admin_db.low_credit_accounts():
+        days = f"about {p['daysLeft']:g} days" if p["daysLeft"] is not None else "unknown (no use in the last 14 days)"
+        link = f"{_app_url()}/admin/accounts/{p['accountId']}"
+        alerts.append(_alert(
+            f"low_credit:{p['accountId']}", f"Low on credits: {p['name'] or 'account ' + str(p['accountId'])}",
+            f"<p>{html.escape(p['name'] or '')} (account {p['accountId']}) has {p['liveAgents']} live agent(s) "
+            f"and is running low on credits.</p><ul>"
+            f"<li>Credits left: <b>{p['remaining']:g}</b></li>"
+            f"<li>Average daily use (last {admin_db.LOW_CREDIT_LOOKBACK_DAYS} days): {p['avgDaily']:g}</li>"
+            f"<li>Estimated days left: {days}</li></ul>"
+            f"<p><a href=\"{html.escape(link)}\">Open the account in the admin panel</a></p>",
+            repeat_s=_LOW_CREDIT_REPEAT_S,
+        ))
+    return alerts
+
+
 def _backup_failures() -> list[dict]:
     conn = calls_db._connect()
     try:
@@ -240,7 +265,7 @@ def _vendor_health(now: float) -> list[dict]:
 
 def gather(now: float) -> list[dict]:
     alerts: list[dict] = []
-    for check in (_error_events, _failed_invoices, _zero_balance_live, _backup_failures, _failed_calls):
+    for check in (_error_events, _failed_invoices, _zero_balance_live, _low_credit_live, _backup_failures, _failed_calls):
         try:
             alerts += check()
         except Exception:

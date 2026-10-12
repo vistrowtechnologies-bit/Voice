@@ -214,6 +214,15 @@ def validate_draft(raw, options: dict, *, business_name: str = "", description: 
     }
 
 
+_INBOUND_WORDS = re.compile(r"\b(answer|answers|take|takes|handle|handles|receive|receives|pick up)\b[^.]{0,40}\bcalls?\b|\binbound\b", re.I)
+_OUTBOUND_WORDS = re.compile(r"\b(call back|calls? (?:back|customers|students|leads|people)|make|makes)\b[^.]{0,40}\bcalls?\b|\bcall back\b|\boutbound\b|\bremind\b|\breach out\b", re.I)
+_DIRECTION_QUESTION = re.compile(r"inbound|outbound|make calls|take calls|incoming|outgoing", re.I)
+
+
+def _direction_stated(description: str) -> bool:
+    return bool(_INBOUND_WORDS.search(description or "") or _OUTBOUND_WORDS.search(description or ""))
+
+
 def _questions(raw) -> list[dict]:
     if not isinstance(raw, list):
         return []
@@ -243,6 +252,7 @@ Return ONLY a JSON object, no prose.
 
 A draft has exactly these keys:
 - "name": short agent name, max 40 chars (e.g. "Riya · Site visits").
+- The agent has a human first name that fits the voice's gender (e.g. Riya, Neha, Arjun). This platform is called Vistrow Voice: NEVER present "Vistrow Voice" (or "Vistrow") as the customer's business or say the agent is calling from it, unless the customer's business really is Vistrow.
 - "businessName": the business name exactly as the customer gave it, or "" if they did not give one. Never invent a placeholder such as "Unnamed developer".
 - "description": one line, max 120 chars, what the agent does.
 - "model": "{default_model}" unless the customer explicitly asks for another; the only other allowed value is "gpt-4.1-mini".
@@ -250,12 +260,12 @@ A draft has exactly these keys:
 - "voice": one value from this list (value | name | gender): {voices}. Use "{default_voice}" unless the customer asks for a male voice or names a voice.
 - "tone": one of "professional", "balanced", "casual".
 - "firstSpeaker": "agent" (greets first, normal for phone calls) or "user".
-- "welcomeMessage": the first line on an inbound call, max 200 chars, in the agent's language and script (Hindi in Devanagari). Natural and short: greet, say the business name and the agent's name, invite the caller to speak. "" if the agent only makes outbound calls.
-- "welcomeMessageOutbound": the first line on an outbound call, max 200 chars: introduce yourself and the business and state the reason for calling in one breath. "" if the agent only takes inbound calls.
+- "welcomeMessage": the first line on an inbound call, max 200 chars, in the agent's language and script (Hindi in Devanagari). Natural and short: greet, give the agent's first name and the business name, invite the caller to speak. With no business name, say what kind of business it is in plain words ("हमारे dental clinic से", "our coaching institute") — never a made-up label like "Baner flats enquiry". "" if the agent only makes outbound calls.
+- "welcomeMessageOutbound": the first line on an outbound call, max 200 chars: the agent's first name, the business (or its kind, as above), and the reason for calling in one breath, ending with a short question such as whether it is a good time. "" if the agent only takes inbound calls.
 - "systemPrompt": the agent's instructions (rules below).
 - "enabledFunctions": array of tools to switch on, from: "end_call" (hang up politely when done, almost always on), "transfer_call" (transfer to a human; only if the customer mentions handing over to staff), "web_search" (only if the agent must look up public information), "send_dtmf" (only for outbound calls that may hit phone menus).
 - "maxCallDurationS": max call length in seconds (300-900 is typical), or 0 for the platform default.
-- "postCallFields": 3-8 fields extracted from each call transcript afterwards, each {{"key": "snake_case", "type": "string"|"number"|"boolean", "description": "what to extract"}} (e.g. caller name, budget, preferred date, interested yes/no).
+- "postCallFields": 3-8 fields extracted from each call transcript afterwards, each {{"key": "snake_case", "type": "string"|"number"|"boolean", "description": "what to extract"}}. Always include the caller's name, one field for EVERY detail the customer said the agent must collect, and one outcome field that fits the goal (e.g. site_visit_booked, appointment_booked, issue_resolved, wants_to_renew, callback_requested).
 
 systemPrompt rules:
 - Write it in English with these markdown sections, in this order: "# Role", "# Goal", "# Call flow", "# Qualifying questions", "# Common questions & answers", "# Booking / callback rules", "# Tone", "# Never do".
@@ -267,7 +277,7 @@ systemPrompt rules:
 - Keep it under 6000 characters.
 """
 
-_MODE_FIRST = """If the description leaves out something that changes the setup a lot — whether the agent takes inbound calls, makes outbound calls, or both; whether it books appointments or callbacks; which details it must collect — return {"questions": [...]} with 1 to 3 short questions, each {"id": "snake_case_id", "question": "...", "options": ["2 to 4 short one-tap answers"]}. Do not ask about anything already stated. Never ask for the business name, phone numbers, addresses, websites or other contact details: the customer fills those in themselves.
+_MODE_FIRST = """If the description leaves out something that changes the setup a lot — whether the agent takes inbound calls, makes outbound calls, or both; whether it books appointments or callbacks; which details it must collect — return {"questions": [...]} with 1 to 3 short questions, each {"id": "snake_case_id", "question": "...", "options": ["2 to 4 short one-tap answers"]}. Do not ask about anything already stated. The call direction IS stated when the description says the agent answers, takes or handles calls (inbound) or calls, calls back, reminds or reaches out to people (outbound) — then do not ask it. Every option must fit this kind of business (never offer "site visits" to a shop, a clinic or a support desk). If nothing important is missing, return the draft instead of asking. Never ask for the business name, phone numbers, addresses, websites or other contact details: the customer fills those in themselves.
 Otherwise return {"draft": {...}}."""
 
 _MODE_DRAFT = """Return {"draft": {...}}. Do not ask questions; use sensible defaults for anything not stated."""
@@ -463,6 +473,9 @@ def draft(body: dict, account_id: int, user_id: int) -> dict:
 
     if section is None and answers is None:
         questions = _questions(result.get("questions"))
+        if _direction_stated(description):
+            # The model keeps asking this even when the description says it.
+            questions = [q for q in questions if not _DIRECTION_QUESTION.search(q["question"])]
         if questions and not isinstance(result.get("draft"), dict):
             calls_db.record_agent_draft(account_id, user_id)
             return {"questions": questions}

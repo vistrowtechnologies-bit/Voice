@@ -37,9 +37,11 @@ _ARTHALEADS_URL = "https://api.arthaleads.com/webhook/lead"
 def _post_json(url: str, payload: dict, timeout: int = 8) -> tuple[bool, str]:
     # Tenants type these URLs: never let one reach an internal address
     # (cloud metadata, *.railway.internal, localhost), directly or by redirect.
+    # The DNS check is done by the connection itself (kb_crawl.safe_opener),
+    # which then connects to that same checked IP.
     try:
         kb_crawl._assert_public_url(url)
-    except (ValueError, RuntimeError) as e:
+    except ValueError as e:
         return False, str(e)
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
@@ -49,7 +51,7 @@ def _post_json(url: str, payload: dict, timeout: int = 8) -> tuple[bool, str]:
         method="POST",
     )
     try:
-        with urllib.request.build_opener(kb_crawl._SafeRedirectHandler).open(req, timeout=timeout) as resp:
+        with kb_crawl.safe_opener().open(req, timeout=timeout) as resp:
             return (200 <= resp.status < 300), f"HTTP {resp.status}"
     except urllib.error.HTTPError as e:
         # Keep the receiver's own error text: "HTTP 500" alone told us nothing
@@ -59,7 +61,7 @@ def _post_json(url: str, payload: dict, timeout: int = 8) -> tuple[bool, str]:
         except Exception:
             body = ""
         return False, f"HTTP {e.code}: {body}" if body else f"HTTP {e.code}"
-    except (urllib.error.URLError, TimeoutError, ValueError) as e:
+    except (urllib.error.URLError, TimeoutError, ValueError, RuntimeError) as e:
         return False, str(e)
 
 

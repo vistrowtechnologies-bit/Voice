@@ -93,8 +93,14 @@ class PendingCookieTests(unittest.TestCase):
 
 class LockoutTests(unittest.TestCase):
     def test_ten_failures_lock_that_email(self):
+        # Database down: the in-memory fallback still locks (fail open only
+        # means "don't refuse everyone", not "no limit at all").
+        def offline(*_args, **_kwargs):
+            raise OSError("db offline")
+
         ns = load("_login_locked", "_note_login_failure", "_LOGIN_FAIL_WINDOW_S", "_LOGIN_FAIL_MAX", time=time,
-                  _login_failures={})
+                  _login_failures={}, logger=__import__("logging").getLogger("test"),
+                  calls_db=types.SimpleNamespace(rate_limit_count=offline, rate_limit_record=offline))
         for _ in range(9):
             ns["_note_login_failure"]("a@x.test")
         self.assertFalse(ns["_login_locked"]("a@x.test"))

@@ -6,7 +6,13 @@
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" },
+        { "key": "Permissions-Policy", "value": "camera=(), geolocation=(), microphone=(self)" },
+        {
+          "key": "Content-Security-Policy-Report-Only",
+          "value": "default-src 'self'; script-src 'self' 'sha256-XpfwZSdH07t1gUHZXin8iaYi8NJ0qUYZKb3FoHCoa5s=' 'sha256-Vob3g7sPh4ErJ6kBjH43LzInpsKIQF7/+62sA0Aqryw=' https://www.googletagmanager.com https://www.clarity.ms https://scripts.clarity.ms https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.google-analytics.com https://*.googletagmanager.com https://*.clarity.ms https://c.bing.com https://*.razorpay.com; font-src 'self' data:; media-src 'self' blob: data: https://*.backblazeb2.com; connect-src 'self' https://*.livekit.cloud wss://*.livekit.cloud wss://*.up.railway.app https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.clarity.ms https://c.bing.com https://*.razorpay.com; frame-src https://*.razorpay.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        }
       ]
     },
     {
