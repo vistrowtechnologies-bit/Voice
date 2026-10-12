@@ -123,14 +123,15 @@ function VoiceRow({
   active,
   playing,
   loading,
-  onSelect,
   onPlay,
+  detail,
 }: {
   entry: VoiceEntry
+  // Replaces the languages line (realtime voices show style and HD voice).
+  detail?: string
   active: boolean
   playing: boolean
   loading: boolean
-  onSelect: () => void
   onPlay: () => void
 }) {
   return (
@@ -138,11 +139,11 @@ function VoiceRow({
       role="button"
       tabIndex={0}
       aria-pressed={active}
-      onClick={onSelect}
+      onClick={onPlay}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
-          onSelect()
+          onPlay()
         }
       }}
       className={`flex cursor-pointer items-center gap-3 border-l-[3px] px-4 py-2.5 transition-colors ${
@@ -153,8 +154,8 @@ function VoiceRow({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold">{entry.name}</p>
         <p className="truncate text-xs text-text-muted">
-          {GENDER_LABEL[entry.gender]} · {languageSummary(entry)}
-          {entry.canSwitchLanguage && <span className="text-cyan"> · switches live</span>}
+          {GENDER_LABEL[entry.gender]} · {detail ?? languageSummary(entry)}
+          {!detail && entry.canSwitchLanguage && <span className="text-cyan"> · switches live</span>}
         </p>
       </div>
       {entry.selected ? (
@@ -171,13 +172,13 @@ function VoiceRow({
           event.stopPropagation()
           onPlay()
         }}
-        aria-label={playing ? `Stop ${entry.name}` : `Play ${entry.name}`}
+        aria-label={playing ? `Pause ${entry.name}` : `Play ${entry.name}`}
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${
           playing ? 'border-primary bg-primary text-white' : 'border-border bg-surface text-primary hover:border-primary'
         }`}
       >
         <Icon
-          name={loading ? 'progress_activity' : playing ? 'stop' : 'play_arrow'}
+          name={loading ? 'progress_activity' : playing ? 'pause' : 'play_arrow'}
           className={`text-[19px] ${loading ? 'animate-spin' : ''}`}
         />
       </button>
@@ -194,10 +195,13 @@ function Spotlight({
   onPlay,
   onAdd,
   onRemove,
+  realtimeHd,
 }: {
   entry: VoiceEntry
+  // Set for a Gemini Live voice: the HD voice an agent picks to speak with it.
+  realtimeHd?: VoiceEntry | null
   sample: string
-  playState: 'idle' | 'loading' | 'playing' | 'error'
+  playState: 'idle' | 'loading' | 'playing' | 'paused' | 'error'
   progress: number
   busy: boolean
   onPlay: () => void
@@ -205,9 +209,14 @@ function Spotlight({
   onRemove: (v: string) => void
 }) {
   const playing = playState === 'playing'
+  // Paused keeps the words already spoken lit, so resuming picks up visibly.
+  const started = playing || playState === 'paused'
   const words = sample ? sample.split(/\s+/) : []
-  const lit = playing ? Math.ceil(progress * words.length) : 0
+  const lit = started ? Math.ceil(progress * words.length) : 0
   const moreLangs = Math.max(0, entry.languageCount - Math.min(entry.languageLabels.length, LANG_CHIPS))
+  const realtime = realtimeHd !== undefined
+  // The add/remove action always targets a voice that can sit in the picker.
+  const target = realtime ? realtimeHd : entry
 
   return (
     <aside className="order-first overflow-hidden rounded-3xl border border-border bg-surface shadow-[0_18px_44px_-24px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] lg:sticky lg:top-6 lg:order-none">
@@ -218,22 +227,22 @@ function Spotlight({
         </div>
         <h2 className="font-display text-xl font-semibold tracking-tight lg:text-2xl">{entry.name}</h2>
         <p className="mt-1 text-sm text-text-muted">
-          {GENDER_LABEL[entry.gender]} · {entry.tierLabel}
+          {GENDER_LABEL[entry.gender]} · {realtime ? 'Gemini Live voice' : entry.tierLabel}
         </p>
         {entry.note && (
           <p className="mx-auto mt-3 w-fit max-w-full rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{entry.note}</p>
         )}
         {/* Phones show the waveform and words only while playing, to keep the list in view. */}
-        <Waveform playing={playing} bars={28} className={`mt-3 h-7 lg:mt-4 lg:h-9 ${playing ? '' : 'max-lg:hidden'}`} />
+        <Waveform playing={playing} bars={28} className={`mt-3 h-7 lg:mt-4 lg:h-9 ${started ? '' : 'max-lg:hidden'}`} />
         <button
           type="button"
           onClick={onPlay}
           disabled={playState === 'loading'}
-          aria-label={playing ? 'Stop preview' : `Play ${entry.name}`}
+          aria-label={playing ? 'Pause preview' : `Play ${entry.name}`}
           className="mx-auto mt-3 flex h-14 w-14 items-center lg:h-16 lg:w-16 justify-center rounded-full bg-primary text-white shadow-[0_10px_28px_-8px_var(--color-primary)] transition-transform hover:scale-105 disabled:opacity-70"
         >
           <Icon
-            name={playState === 'loading' ? 'progress_activity' : playing ? 'stop' : 'play_arrow'}
+            name={playState === 'loading' ? 'progress_activity' : playing ? 'pause' : 'play_arrow'}
             className={`text-[30px] ${playState === 'loading' ? 'animate-spin' : ''}`}
           />
         </button>
@@ -242,7 +251,7 @@ function Spotlight({
 
       <div className="flex flex-col gap-4 px-5 pb-5 pt-1">
         {sample && (
-          <p className={`font-display text-sm leading-relaxed lg:text-[15px] ${playing ? '' : 'max-lg:hidden'}`} aria-label={sample}>
+          <p className={`font-display text-sm leading-relaxed lg:text-[15px] ${started ? '' : 'max-lg:hidden'}`} aria-label={sample}>
             {words.map((word, i) => (
               <span key={i} className={`transition-colors duration-200 ${i < lit ? 'text-text' : 'text-text-muted/70'}`}>
                 {word}{' '}
@@ -251,6 +260,19 @@ function Spotlight({
           </p>
         )}
 
+        {realtime ? (
+          <div className="rounded-xl bg-surface-high px-4 py-3 text-sm leading-relaxed text-text-muted">
+            {realtimeHd ? (
+              <>
+                A Gemini Live agent speaks in this voice when its voice is{' '}
+                <span className="font-bold text-text">{realtimeHd.name}</span>.
+              </>
+            ) : (
+              'No HD voice maps to this Gemini voice yet.'
+            )}{' '}
+            The preview is Gemini TTS in the same voice, so a live call can sound slightly different.
+          </div>
+        ) : (
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="rounded-xl bg-surface-high px-2 py-2.5">
             <p className="font-display text-base font-semibold">{entry.languageCount}</p>
@@ -267,8 +289,9 @@ function Spotlight({
             <p className="text-[11px] font-bold text-text-muted">Credits</p>
           </div>
         </div>
+        )}
 
-        <div className="hidden flex-wrap gap-1.5 lg:flex">
+        <div className={`hidden flex-wrap gap-1.5 ${realtime ? '' : 'lg:flex'}`}>
           {entry.languageLabels.slice(0, LANG_CHIPS).map((label) => (
             <span key={label} className="rounded-md bg-surface-high px-2 py-0.5 text-[11px] font-bold text-text-muted">
               {label}
@@ -279,21 +302,21 @@ function Spotlight({
           )}
         </div>
 
-        {entry.selected ? (
+        {!target ? null : target.selected ? (
           <button
             type="button"
-            onClick={() => onRemove(entry.value)}
+            onClick={() => onRemove(target.value)}
             disabled={busy}
             className="group flex h-11 items-center justify-center gap-1.5 rounded-xl border border-success/40 bg-success/10 text-sm font-extrabold text-success transition-colors hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
           >
             <Icon name="check" className="text-[18px] group-hover:hidden" />
-            <span className="group-hover:hidden">Added to your picker</span>
-            <span className="hidden group-hover:inline">Remove from picker</span>
+            <span className="group-hover:hidden">{realtime ? `${target.name} is in your picker` : 'Added to your picker'}</span>
+            <span className="hidden group-hover:inline">{realtime ? `Remove ${target.name}` : 'Remove from picker'}</span>
           </button>
-        ) : !entry.addable ? (
+        ) : !target.addable ? (
           <Link
             to="/dashboard/billing"
-            title={entry.lockedReason}
+            title={target.lockedReason}
             className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-border bg-surface-high text-sm font-extrabold text-text-muted transition-colors hover:border-primary hover:text-primary"
           >
             <Icon name="lock" className="text-[17px]" />
@@ -302,12 +325,12 @@ function Spotlight({
         ) : (
           <button
             type="button"
-            onClick={() => onAdd(entry.value)}
+            onClick={() => onAdd(target.value)}
             disabled={busy}
             className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-primary text-sm font-extrabold text-white transition hover:brightness-105 disabled:opacity-50"
           >
             <Icon name="add" className="text-[18px]" />
-            Add to your picker
+            {realtime ? `Add ${target.name} to your picker` : 'Add to your picker'}
           </button>
         )}
       </div>
@@ -416,6 +439,28 @@ export function Voices() {
     return list.filter((t) => t.voices.length > 0)
   }, [data])
 
+  // Gemini Live speaks with the Gemini voice named like the agent's HD voice
+  // (agent/main.py _gemini_live_voice). The catalog's Gemini 3.8 Flash-Lite
+  // entries carry each voice's gender and Google's style word, and preview it.
+  const { realtimeVoices, realtimeHdFor } = useMemo(() => {
+    const all = data?.voices ?? []
+    const hdFor = new Map<string, VoiceEntry>()
+    const list = all
+      .filter((v) => v.value.startsWith('google38:'))
+      .map((v) => {
+        const persona = v.value.slice('google38:'.length)
+        const hd = all.find((h) => h.value.toLowerCase() === `google:chirp3:${persona}`)
+        if (hd) hdFor.set(v.value, hd)
+        return {
+          ...v,
+          name: persona.charAt(0).toUpperCase() + persona.slice(1),
+          note: `${v.note.split(' · ')[0]} voice${hd ? ` · ${hd.name}` : ''}`,
+          selected: hd?.selected,
+        }
+      })
+    return { realtimeVoices: list, realtimeHdFor: hdFor }
+  }, [data])
+
   const query = search.trim().toLowerCase()
   const matches = (voice: VoiceEntry) =>
     [voice.name, voice.note, voice.tierLabel, ...voice.languageLabels].filter(Boolean).some((value) => value.toLowerCase().includes(query))
@@ -426,16 +471,22 @@ export function Voices() {
   const activeTab = realtimeActive ? undefined : (tabs.find((t) => t.key === tab) ?? tabs[0])
   // Search and the "Added" filter look across every category, not just the open tab.
   const everyVoice = tabs.flatMap((t) => t.voices)
-  const base = query ? everyVoice.filter(matches) : filter === 'added' ? everyVoice : (activeTab?.voices ?? [])
+  const base = realtimeActive
+    ? realtimeVoices
+    : query
+      ? everyVoice.filter(matches)
+      : filter === 'added'
+        ? everyVoice
+        : (activeTab?.voices ?? [])
   const shown = base.filter(passesFilter)
-  const visible = query || expanded || filter === 'added' ? shown : shown.slice(0, PAGE_SIZE)
+  const visible = query || expanded || (filter === 'added' && !realtimeActive) ? shown : shown.slice(0, PAGE_SIZE)
   const addedVoices = (data?.voices ?? []).filter((v) => v.selected)
 
   // The spotlight follows the chosen voice while it stays in view, else the
   // first one listed, so the panel is never empty when the list is not.
   const current = shown.find((v) => v.value === selectedValue) ?? shown[0]
   const previewLang = current ? current.forceLang || lang : lang
-  const preview = useVoicePreview(current?.value ?? '', previewLang)
+  const preview = useVoicePreview(current?.value ?? '', previewLang, { pausable: true })
   const sampleSet = data?.sampleTexts?.[previewLang]
   const sample = current ? (sampleSet?.[current.gender === 'female' ? 'female' : 'male'] ?? '') : ''
 
@@ -464,22 +515,7 @@ export function Voices() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Voices" subtitle="Pick a voice to hear it. Add the ones your agents should use.">
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5" aria-label="Preview language">
-          {PREVIEW_LANGS.map((l) => (
-            <button
-              key={l.code}
-              onClick={() => setLang(l.code)}
-              aria-pressed={lang === l.code}
-              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-                lang === l.code ? 'bg-primary text-white' : 'bg-transparent text-text-muted hover:text-text'
-              }`}
-            >
-              {l.label}
-            </button>
-          ))}
-        </div>
-      </PageHeader>
+      <PageHeader title="Voices" subtitle="Pick a voice to hear it. Add the ones your agents should use." />
 
       <div className="flex w-full flex-col gap-4 p-4 sm:p-6">
         {!data ? (
@@ -503,7 +539,24 @@ export function Voices() {
                 </span>
                 {data.selectedCount} {data.selectedCount === 1 ? 'voice' : 'voices'} in your agents' picker
               </button>
-              <p className="text-xs text-text-muted">Only added voices appear in the agent voice picker.</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-xs text-text-muted">Only added voices appear in the agent voice picker.</p>
+                {/* Preview language lives here, not in the header, so the header matches every other page. */}
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5" aria-label="Preview language">
+                  {PREVIEW_LANGS.map((l) => (
+                    <button
+                      key={l.code}
+                      onClick={() => setLang(l.code)}
+                      aria-pressed={lang === l.code}
+                      className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                        lang === l.code ? 'bg-primary text-white' : 'bg-transparent text-text-muted hover:text-text'
+                      }`}
+                    >
+                      {l.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {error && (
@@ -533,7 +586,7 @@ export function Voices() {
                     )}
                   </label>
 
-                  {!query && filter !== 'added' && (
+                  {!query && (filter !== 'added' || realtimeActive) && (
                     <div
                       role="tablist"
                       aria-label="Voice categories"
@@ -561,13 +614,13 @@ export function Voices() {
                             realtimeActive ? 'bg-primary/10 text-primary' : 'bg-transparent text-text-muted hover:text-text'
                           }`}
                         >
-                          Realtime <span className="text-[11px] font-medium opacity-70">{REALTIME_MODELS.length}</span>
+                          Realtime <span className="text-[11px] font-medium opacity-70">{realtimeVoices.length || REALTIME_MODELS.length}</span>
                         </button>
                       )}
                     </div>
                   )}
 
-                  {!realtimeActive && (
+                  {(!realtimeActive || realtimeVoices.length > 0) && (
                     <div className="flex flex-wrap items-center gap-1.5">
                       {FILTERS.map((f) => (
                         <button
@@ -585,21 +638,17 @@ export function Voices() {
                         </button>
                       ))}
                       {!query && filter !== 'added' && activeTab && <span className="ml-auto text-[11px] text-text-muted">{activeTab.note}</span>}
+                      {realtimeActive && <span className="ml-auto text-[11px] text-text-muted">Speech-to-speech models · owner only · set per agent</span>}
                     </div>
-                  )}
-                  {realtimeActive && (
-                    <p className="text-[11px] text-text-muted">Speech-to-speech test models · owner only · chosen per agent, not added here</p>
                   )}
                 </div>
 
-                {realtimeActive ? (
-                  <div className="flex flex-col gap-2 p-4">
-                    <div className="rounded-xl border border-border bg-surface-high/40 px-4 py-3 text-sm leading-relaxed text-text-muted">
-                      Realtime is a <span className="font-semibold text-text">model</span>, not a voice. It listens and speaks directly, so it
-                      replaces speech recognition, the AI model and the voice on that agent. It speaks with the Gemini voice that has the same
-                      name as the agent's selected voice. To use it, open an agent and pick it under{' '}
-                      <span className="font-semibold text-text">Model</span>.
-                    </div>
+                {realtimeActive && (
+                  <div className="flex flex-col gap-2 border-b border-border p-4">
+                    <p className="text-sm leading-relaxed text-text-muted">
+                      Realtime is a <span className="font-semibold text-text">model</span>, picked under Model on an agent. It speaks with the
+                      Gemini voice named like the agent's HD voice. Listen to them below.
+                    </p>
                     {REALTIME_MODELS.map((model) => (
                       <div key={model.value} className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3">
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -618,7 +667,8 @@ export function Voices() {
                       </div>
                     ))}
                   </div>
-                ) : (
+                )}
+                {(!realtimeActive || realtimeVoices.length > 0) && (
                   <div className="divide-y divide-border/60 py-1">
                     {visible.map((entry) => (
                       <VoiceRow
@@ -630,8 +680,8 @@ export function Voices() {
                           (entry.value === current?.value && preview.state === 'loading') ||
                           (playRequest === entry.value && entry.value !== current?.value)
                         }
-                        onSelect={() => setSelectedValue(entry.value)}
                         onPlay={() => playFromRow(entry.value)}
+                        detail={realtimeActive ? entry.note : undefined}
                       />
                     ))}
                     {shown.length === 0 && (
@@ -642,7 +692,7 @@ export function Voices() {
                   </div>
                 )}
 
-                {!realtimeActive && !query && filter !== 'added' && shown.length > PAGE_SIZE && (
+                {!query && (filter !== 'added' || realtimeActive) && shown.length > PAGE_SIZE && (
                   <div className="flex justify-center border-t border-border p-3">
                     <button
                       type="button"
@@ -655,13 +705,14 @@ export function Voices() {
                 )}
               </section>
 
-              {current && !realtimeActive && (
+              {current && (
                 <Spotlight
                   entry={current}
+                  realtimeHd={realtimeActive ? (realtimeHdFor.get(current.value) ?? null) : undefined}
                   sample={sample}
                   playState={preview.state}
                   progress={preview.progress}
-                  busy={busyVoice === current.value}
+                  busy={busyVoice === (realtimeActive ? realtimeHdFor.get(current.value)?.value : current.value)}
                   onPlay={preview.toggle}
                   onAdd={onAdd}
                   onRemove={onRemove}
