@@ -270,3 +270,11 @@ Vistrow claims reused only from existing product-page copy (verified earlier aga
 Verified: build (icon check, tsc, prerender, route audit 113 routes), `test:seo`, `check-blog-seo.ts` pass. Prerendered main-content words: exotel 1012, knowlarity 934, ozonetel 913, sarvam-ai 971, elevenlabs 947, retell-ai 918, bland-ai 930, synthflow 935, hub 1291 (before: roughly 350-450 each). All internal hrefs resolve to prerendered routes.
 
 Not verified: no browser visual check (reused card/table classes); pre-existing table cells about named vendors were reworded only at column-header level; `graphify update .` not run. Next step: review PR, merge (Vercel only), request indexing for `/best-ai-voice-calling-software-india` and `/compare/sarvam-ai`.
+
+### Claude — 2026-10-12 — Remove Facebook Lead Ads and WhatsApp claims from the public marketing site
+
+Branch `claude/seo-remove-unavailable-integrations` (from origin/main). Owner said Facebook Lead Ads and WhatsApp are not available, so public marketing copy no longer claims them. Files: `web-demo/src/lib/marketingContent.ts` (WORKS_WITH, INTEGRATION_DIRECTORY entries removed, integration guide "Seven connections" now five plus an "Instant lead follow-up" card via ArthaLeads/webhook, FAQs, solution and language copy, related-link labels), `web-demo/src/lib/seoExpansionContent.ts` (FAQ, Marathi sample line and notes reworded to "send the details"), `web-demo/src/lib/seoPages.ts` (meta description and proof string), `web-demo/src/pages/marketing/{IntegrationsDirectory,ProductOverview,Docs}.tsx`.
+
+Verified: build (icon check, tsc, prerender, route audit), `test:seo`, `check-blog-seo.ts` pass; marketing HTML has no WhatsApp/Facebook except the items below.
+
+Left alone, needs an owner decision: `web-demo/src/content/helpArticles.ts` (public /help pages: connect-integrations and instant-lead-follow-up still describe WhatsApp and Facebook, likely generated from `help_articles.py`), `Privacy.tsx` and `Terms.tsx` (mention WhatsApp as a possible integration), dashboard integration pages and server code (still ship the connectors). `Signup.tsx` "Facebook Ad" is a lead-source dropdown, not an integration claim. Next step: review PR, merge, then decide on help articles and legal pages.

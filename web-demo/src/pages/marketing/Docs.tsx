@@ -39,7 +39,7 @@ const QUICKSTART: Step[] = [
   {
     n: '05',
     title: 'Send the results somewhere',
-    body: 'Dashboard → Integrations. Connect a CRM, Slack, WhatsApp, Sheets, or any webhook so qualified leads and transcripts land where your team already works.',
+    body: 'Dashboard → Integrations. Connect a CRM, Slack, Sheets, or any webhook so qualified leads and transcripts land where your team already works.',
   },
 ]
 

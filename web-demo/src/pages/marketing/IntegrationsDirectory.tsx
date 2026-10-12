@@ -19,7 +19,7 @@ export function IntegrationsDirectory() {
     <MarketingLayout>
       <Seo
         title="Integrations - Vistrow Voice"
-        description="Connect Vistrow Voice to your CRM, Slack, WhatsApp, Google Sheets, Zapier, n8n, Make, or any endpoint that accepts a webhook. Every qualified lead and transcript, delivered automatically."
+        description="Connect Vistrow Voice to your CRM, Slack, Google Sheets, Zapier, n8n, Make, or any endpoint that accepts a webhook. Every qualified lead and transcript, delivered automatically."
         path="/integrations"
         jsonLd={{
           '@context': 'https://schema.org',

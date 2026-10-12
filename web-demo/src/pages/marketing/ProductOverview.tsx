@@ -30,7 +30,7 @@ const FAQ = [
   },
   {
     q: 'What happens to the calls and leads afterwards?',
-    a: 'Every call has a transcript and the lead fields the agent captured, searchable in the dashboard. Qualified leads can be sent to Zoho CRM, ArthaLeads, Slack, WhatsApp, Google Sheets or any webhook.',
+    a: 'Every call has a transcript and the lead fields the agent captured, searchable in the dashboard. Qualified leads can be sent to Zoho CRM, ArthaLeads, Slack, Google Sheets or any webhook.',
   },
   {
     q: 'Where do I find the pricing?',
