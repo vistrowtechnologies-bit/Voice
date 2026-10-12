@@ -922,6 +922,16 @@ CREATE TABLE IF NOT EXISTS agent_drafts (
     created_at TEXT DEFAULT {_NOW}
 );
 CREATE INDEX IF NOT EXISTS idx_agent_drafts_account ON agent_drafts(account_id, created_at);
+
+-- Security rate limits (sign-in, two-step codes, auth forms, costly routes)
+-- that must survive a restart and be shared by every server instance. One
+-- row per counted hit; rows older than a day are pruned (no window is longer).
+CREATE TABLE IF NOT EXISTS rate_limit_hits (
+    bucket TEXT NOT NULL,
+    key TEXT NOT NULL,
+    hit_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_hits ON rate_limit_hits(bucket, key, hit_at);
 """
 
 # EnableX Voice API. Outbound calls authenticate with HTTP Basic using
@@ -1375,6 +1385,9 @@ def init_tables() -> None:
             conn.execute("ALTER TABLE project_listings ADD COLUMN IF NOT EXISTS price_label TEXT DEFAULT ''")
             # "Build with AI" greeting plays have their own daily cap.
             conn.execute("ALTER TABLE agent_drafts ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'draft'")
+            # API key permissions (JSON list, see API_KEY_SCOPES). Keys made
+            # before scopes existed keep full access so nothing breaks.
+            conn.execute("""ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS scopes TEXT NOT NULL DEFAULT '["full"]'""")
             # Per-number monthly line item — EnableX charges Vistrow for every
             # provisioned number, previously absorbed with nothing passed to
             # the tenant. Existing rows backfill to PHONE_NUMBER_MONTHLY_FEE_INR
@@ -4136,9 +4149,33 @@ def _hash_api_key(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
 
 
-def create_api_key(account_id: int, name: str) -> dict:
+# What a key may do (enforced in token_api.require_session). "full" is the
+# pre-scopes behaviour: everything except account control.
+API_KEY_SCOPES = ("read", "calls", "agents", "full")
+DEFAULT_API_KEY_SCOPES = ("read", "calls")
+
+
+def normalize_api_key_scopes(scopes) -> list[str]:
+    """Known scopes only, in a fixed order; raises ValueError if none remain."""
+    unknown = set(scopes or ()) - set(API_KEY_SCOPES)
+    picked = [s for s in API_KEY_SCOPES if s in set(scopes or ())]
+    if unknown or not picked:
+        raise ValueError("Choose at least one permission: " + ", ".join(API_KEY_SCOPES))
+    return picked
+
+
+def _api_key_scopes(raw) -> list[str]:
+    try:
+        scopes = json.loads(raw or "[]")
+    except (TypeError, ValueError):
+        return []
+    return [s for s in API_KEY_SCOPES if isinstance(scopes, list) and s in scopes]
+
+
+def create_api_key(account_id: int, name: str, scopes=DEFAULT_API_KEY_SCOPES) -> dict:
     """Mint a new key for the account. The full key is returned ONCE here and
     never stored — only its SHA-256 and a display prefix persist."""
+    scopes = normalize_api_key_scopes(scopes)
     secret = secrets.token_urlsafe(24)
     full_key = _API_KEY_PREFIX + secret
     prefix = full_key[: len(_API_KEY_PREFIX) + 6]  # e.g. vv_live_ab12cd
@@ -4146,14 +4183,15 @@ def create_api_key(account_id: int, name: str) -> dict:
     try:
         with conn:
             cur = conn.execute(
-                "INSERT INTO api_keys (account_id, name, prefix, key_hash) VALUES (?, ?, ?, ?) RETURNING id",
-                (account_id, name.strip() or "API key", prefix, _hash_api_key(full_key)),
+                "INSERT INTO api_keys (account_id, name, prefix, key_hash, scopes) VALUES (?, ?, ?, ?, ?) RETURNING id",
+                (account_id, name.strip() or "API key", prefix, _hash_api_key(full_key), json.dumps(scopes)),
             )
         row = conn.execute("SELECT * FROM api_keys WHERE id = ?", (cur.lastrowid,)).fetchone()
         return {
             "id": row["id"],
             "name": row["name"],
             "prefix": row["prefix"],
+            "scopes": _api_key_scopes(row["scopes"]),
             "createdAt": row["created_at"],
             # The one and only time the caller sees the full key.
             "key": full_key,
@@ -4170,6 +4208,7 @@ def list_api_keys(account_id: int) -> list[dict]:
                 "id": r["id"],
                 "name": r["name"],
                 "prefix": r["prefix"],
+                "scopes": _api_key_scopes(r["scopes"]),
                 "lastUsedAt": r["last_used_at"],
                 "createdAt": r["created_at"],
             }
@@ -4192,13 +4231,20 @@ def delete_api_key(key_id: int, account_id: int) -> None:
 
 def resolve_api_key(full_key: str) -> int | None:
     """Account id a raw API key belongs to (and bump last_used), or None if it
-    isn't a valid key. Constant-time-ish: we look up by hash, not by scanning."""
+    isn't a valid key."""
+    resolved = resolve_api_key_with_scopes(full_key)
+    return resolved[0] if resolved else None
+
+
+def resolve_api_key_with_scopes(full_key: str) -> tuple[int, list[str]] | None:
+    """(account id, scopes) for a raw API key (and bump last_used), or None if
+    it isn't a valid key. Constant-time-ish: we look up by hash, not by scanning."""
     if not full_key or not full_key.startswith(_API_KEY_PREFIX):
         return None
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT id, account_id FROM api_keys WHERE key_hash = ?", (_hash_api_key(full_key),)
+            "SELECT id, account_id, scopes FROM api_keys WHERE key_hash = ?", (_hash_api_key(full_key),)
         ).fetchone()
         if row is None:
             return None
@@ -4206,7 +4252,7 @@ def resolve_api_key(full_key: str) -> int | None:
             return None
         with conn:
             conn.execute(f"UPDATE api_keys SET last_used_at = {_NOW} WHERE id = ?", (row["id"],))
-        return row["account_id"]
+        return row["account_id"], _api_key_scopes(row.get("scopes"))
     finally:
         conn.close()
 
@@ -4221,6 +4267,77 @@ def account_owner_user_id(account_id: int) -> int | None:
             (account_id,),
         ).fetchone()
         return row["id"] if row else None
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------- rate limits
+# Shared, restart-proof sliding windows for the security-relevant limits in
+# token_api.py. Each check runs in one transaction under an advisory lock on
+# (bucket, key), so two concurrent requests can't both see "one slot left".
+
+_RATE_LIMIT_RETENTION = "1 day"  # longest window in use is 24 h
+
+
+def _rate_limit_lock(conn: dbconn.Conn, bucket: str, key: str) -> None:
+    conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", (f"{bucket}\x1f{key}",))
+
+
+def _rate_limit_count(conn: dbconn.Conn, bucket: str, key: str, window_s: int) -> int:
+    return conn.execute(
+        "SELECT COUNT(*) AS n FROM rate_limit_hits WHERE bucket = ? AND key = ? "
+        "AND hit_at > now() - make_interval(secs => ?)",
+        (bucket, key, window_s),
+    ).fetchone()["n"]
+
+
+def _rate_limit_prune(conn: dbconn.Conn) -> None:
+    # Opportunistic: about one write in a hundred clears expired rows.
+    if secrets.randbelow(100) == 0:
+        conn.execute(f"DELETE FROM rate_limit_hits WHERE hit_at < now() - interval '{_RATE_LIMIT_RETENTION}'")
+
+
+def rate_limit_hit(bucket: str, key, max_hits: int, window_s: int, count_refused: bool = False) -> bool:
+    """True when (bucket, key) already has max_hits in the last window_s
+    seconds. Otherwise this hit is recorded and False is returned. With
+    count_refused, a refused hit is recorded too (it keeps the window full)."""
+    key = str(key)
+    conn = _connect()
+    try:
+        with conn:
+            _rate_limit_lock(conn, bucket, key)
+            limited = _rate_limit_count(conn, bucket, key, window_s) >= max_hits
+            if not limited or count_refused:
+                conn.execute("INSERT INTO rate_limit_hits (bucket, key) VALUES (?, ?)", (bucket, key))
+                _rate_limit_prune(conn)
+        return limited
+    finally:
+        conn.close()
+
+
+def rate_limit_count(bucket: str, key, window_s: int) -> int:
+    conn = _connect()
+    try:
+        return _rate_limit_count(conn, bucket, str(key), window_s)
+    finally:
+        conn.close()
+
+
+def rate_limit_record(bucket: str, key) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("INSERT INTO rate_limit_hits (bucket, key) VALUES (?, ?)", (bucket, str(key)))
+            _rate_limit_prune(conn)
+    finally:
+        conn.close()
+
+
+def rate_limit_clear(bucket: str, key) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("DELETE FROM rate_limit_hits WHERE bucket = ? AND key = ?", (bucket, str(key)))
     finally:
         conn.close()
 

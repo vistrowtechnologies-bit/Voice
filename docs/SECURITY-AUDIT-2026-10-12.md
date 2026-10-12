@@ -27,13 +27,24 @@ Production was checked before fixing. No signs of abuse: 0 widget sites using an
 | 17 | P2 | "View as" could disconnect integrations, change telephony, regenerate site keys and push leads | Added to the support-session blocklist |
 | 18 | P2 | Reset and invite links logged when email is off; the analysis error echoed internal text | Links are no longer logged; a generic error message is shown |
 | 19 | New | No alert on sign-in from a new device | Security email on sign-in from an unseen device |
+| 20 | P2 | Rate limits and sign-in lockouts lived in memory, so a restart or a second instance reset them | Table `rate_limit_hits` (`calls_db.rate_limit_*`, one transaction under an advisory lock per bucket/key). Used for the per-IP auth limit, per-email and two-step-code lockouts, and every `_limited` bucket. If Postgres can't be reached it logs a warning and falls back to the old in-memory limit (fails open). Rows older than a day are pruned on about 1 write in 100. The widget/token per-IP limiters stay in memory |
+| 21 | P2 | DNS rebinding: the KB crawler and webhooks checked the host's IP, then urllib resolved it again | `kb_crawl.safe_opener()`: each connection (and each redirect hop) resolves once, refuses any private/internal answer, and connects to that IP. HTTPS keeps the hostname for SNI and certificate checks; environment proxies are ignored. Used by the crawler and `integrations_dispatch._post_json` |
+| 22 | P2 | No Content-Security-Policy, HSTS or Permissions-Policy on the website/dashboard | `web-demo/vercel.json` adds HSTS (1 year, subdomains), `Permissions-Policy: camera=(), geolocation=(), microphone=(self)`, and a CSP that is **report-only** for now (see below) |
+| 23 | P2 | An API key could do everything the account owner can (except account control) | API keys have scopes: `read` (every GET), `calls` (writes to calls, campaigns, contacts, appointments, and `/telephony/test-call`), `agents` (writes to agents, knowledge bases/sources, kb-qa, test scenarios), `full` (old behaviour). Any other API-key write is refused. Keys made before this have `full`; new keys default to `read` + `calls` |
+
+### Turning the CSP on
+
+The CSP ships as `Content-Security-Policy-Report-Only`, so it only logs. To enforce it:
+1. After deploy, open the marketing site, `/login`, the dashboard (browser test call, a recording, Billing → top-up checkout) and, on `app.`, a page with Clarity running. In the browser console look for "[Report Only] Refused to ..." messages.
+2. Add any real source those messages name to the matching directive in `web-demo/vercel.json`.
+3. Rename the header key to `Content-Security-Policy` and deploy; check the same pages again.
+
+The two `sha256-...` values in `script-src` are the two inline scripts in `web-demo/index.html` (gtag setup and the widget loader). Editing either script changes its hash: the console message prints the new one, and it must be updated in `vercel.json` before the CSP is enforcing.
 
 ## Open (owner actions or later work)
 - **EnableX webhook auth:** `ENABLEX_WEBHOOK_USER` / `ENABLEX_WEBHOOK_PASS` are not set in production, so EnableX callbacks are not authenticated. Set matching credentials in the EnableX portal and on Railway, then make `_verify_enablex_webhook` refuse unauthenticated calls.
 - **Origin check:** once the logs show no "would block" from a real dashboard domain, set `ORIGIN_CHECK=enforce` on Railway.
+- **CSP:** report-only until checked in the browser console (see "Turning the CSP on").
+- **API key scopes in the dashboard:** there is no API keys screen (it was removed from Settings in `b3983301`), so scopes can only be chosen through `POST /api-keys`. Rebuild the screen if customers should create keys themselves.
 - **Hardening still to do:**
-  - DNS rebinding in the KB crawler and webhook check (the IP is checked, then resolved again); pin the checked IP.
-  - A Content-Security-Policy for the dashboard.
-  - Scoped API keys.
-  - A persistent (shared) rate limiter instead of in-memory.
   - Platform owner set by a hardcoded email at boot (`calls_db.py` ~937); move it to an explicit flag.

@@ -320,3 +320,44 @@ Owner action after deploy:
 - Settings → Sign-in & security → Two-step login → Turn on, or `/admin` stays locked.
 - EnableX webhook credentials are not set.
 - Set `ORIGIN_CHECK=enforce` once the logs are clean.
+
+### Claude — 2026-10-12 — Security hardening part 2 (branch claude/security-hardening-2)
+
+Branch `claude/security-hardening-2` from origin/main `12a9038`. Not merged, not deployed, no PR. Details in `docs/SECURITY-AUDIT-2026-10-12.md` rows 20-23.
+- **Persistent rate limits:** new table `rate_limit_hits` and `calls_db.rate_limit_hit/count/record/clear`. `token_api.py` `_limited`, `_auth_rate_limited`, `_login_locked`, `_note_login_failure` and the new `_clear_login_failures` use it. If the DB fails they log a warning and use the old in-memory limit. The widget/token limiters stay in memory.
+- **DNS-rebinding fix:** `kb_crawl.safe_opener()` resolves once per connection and per redirect hop, refuses private IPs, and connects to the checked IP. TLS SNI and the certificate still use the hostname. Used by the crawler and `integrations_dispatch._post_json`.
+- **CSP:** `web-demo/vercel.json` adds a report-only CSP, plus HSTS and Permissions-Policy.
+- **API key scopes:** new column `api_keys.scopes`. Existing keys are `["full"]`; new keys default to `read` + `calls`. The middleware map is `_API_KEY_SCOPE_WRITES` / `_api_key_allows`. The `POST /api-keys` body takes `scopes`, and the list returns them. The frontend `types.ts`/`api.ts` were updated, but there is no API keys screen (removed in `b3983301`), so no checkboxes.
+
+Verified:
+- Server suite: 611 passed. New tests are in `server/test_security_hardening_2.py`, and the DB-backed rate-limit and scope tests ran against the local Postgres.
+- Web: tsc and build pass.
+- Real fetches through the pinned opener worked: https://example.com, and `_post_json` to httpbin returned 200. localhost was refused.
+- Built dist was served locally with the vercel.json headers: no CSP reports on `/`, `/pricing` or `/login`.
+
+Not verified:
+- CSP sources for LiveKit calls, Razorpay checkout, Clarity (it only runs on real hosts), Backblaze recordings, and the orchestrator websocket (`wss://*.up.railway.app` is assumed).
+- Postgres `hashtextextended` needs PG 11+ (assumed on Railway).
+- `graphify update .` was not run.
+
+Next: review, merge with the other claimed branches, deploy (Railway + Vercel, no LiveKit change), then check the console for CSP reports before enforcing.
+
+### Claude — 2026-10-12 — Admin finance: usage & cost, Finance page, low-credit alerts (branch claude/admin-finance)
+
+Branch `claude/admin-finance` from origin/main `12a9038`; pushed, no PR. Audit P1 items from `docs/ADMIN-DASHBOARD-AUDIT-2026-10-11.md`.
+- **Usage & cost:** `GET /admin/usage?from&to|days&account_id` (owner-only). Per account it returns calls, minutes, credits, revenue and an ESTIMATED vendor cost. Credits use `calls_db.credits_for_call` plus the test-overage add-on, and a test checks them against `usage_report`. Revenue is ex-GST: invoices paid in range minus refunds made in range. Vendor cost covers all minutes, test calls included. All cost rates live in ONE table, `admin_db.VENDOR_COST_RATES`, with a source per rate: Gemini 3.1 ₹16.8/min and 2.5 ₹4.6/min (Google bill 6–9 Oct), pipeline ₹2.7/min (`docs/REALTIME-VS-CASCADED-COST-2026-10-05.md`), LiveKit ₹0.957/min on every call, EnableX ₹0.25/min on phone calls. New page `/admin/usage` has a date range, a sortable table with totals, CSV export and a rates panel. The account detail Billing tab shows a 30-day usage & cost block.
+- **Finance:** `GET /admin/finance` returns 6 months of revenue (`_revenue_months`; `_revenue_mtd` now reuses it), failed payments in the last 30 days, and MTD revenue vs estimated cost. `GET /admin/invoices?status=` lists invoices. `AdminBilling.tsx` was extended into the Finance page: route `/admin/finance`, `/admin/billing` still works, sidebar label "Finance".
+- **Low credit:** `admin_db.low_credit_threshold`/`is_low_credit`. Low means at least one live agent and 0 < remaining < max(50, 3 × 14-day average daily use). The ops worker sends `low_credit:<id>` alerts, at most one per account per 24 h, with a link to `/admin/accounts/<id>`. The overview's `creditsLowAccounts` now uses the same rule (it was ≤20% of the allowance, any account) and gains `creditsLowList`.
+
+Verified: new `server/test_admin_finance.py`, updated p0/ops tests and the full server suite against local Postgres; web-demo tsc and build pass. Pages were checked in a browser against the real admin_db functions on local `vv_inttest` (desktop and 375 px, no page-level horizontal scroll; sort, status filter and PDF links work). Not verified: real production numbers; cost rates are averages, not per-call measurements; no alert email was actually sent. Next step: review, fold into the combined PR, deploy to Railway + Vercel (no LiveKit deploy needed).
+
+### Claude — 2026-10-12 — Batch: Gemini 2.5 greeting fix, admin finance, security round 2, builder quality
+
+Branch `claude/batch-2026-10-12b` (merges claude/security-hardening-2, claude/admin-finance, claude/builder-quality + a realtime commit). One PR, one deploy; both LiveKit workers already deployed from 1c4d33a3 (tenant chimRJmTFZWe, platform-demo 4oPZT887GJ6g).
+
+- **Gemini 2.5 Live:** `docs/GEMINI-LIVE-25-LATENCY-2026-10-12.md`. 2.5 stalls the caller's first turn after a generate_reply greeting (needs the plugin's "." placeholder); the opener is now spoken by Chirp 3 HD in the Gemini persona via `session.say(audio=...)` (`REALTIME_25_TTS_GREETING=0` reverts). Verified: empty generation gone; one synthetic-caller call still 7.5 s (Gemini first audio 4.65 s after its first server event). Direct probes rule out prompt size, tools, idle time, chunk size, noise, VAD profile (all 1.8–2.6 s). Remaining gap is 2.5-on-LiveKit-Cloud only (python-genai #2117); 3.1 is 2.4 s in the same worker. Next: one real browser test call on a 2.5 agent and read `[latency] realtime caller-stop-to-playback`.
+- **Admin:** Usage & cost per account (`GET /admin/usage`), Finance page (`/admin/finance`, invoices list), low-credit owner alerts (`ops_alert_worker`). Vendor cost rates in `admin_db.VENDOR_COST_RATES`, marked estimated.
+- **Security:** Postgres-backed rate limits (`rate_limit_hits`, fail-open), pinned-IP fetches for the KB crawler and webhooks, report-only CSP + HSTS + Permissions-Policy in `web-demo/vercel.json`, API key scopes (read/calls/agents/full; existing keys = full). Origin check stays report-only: 2 h of production logs showed 0 would-blocks over only 8 writes, and a second Vercel project (prophunt-dashboard) may call the API from another origin — confirm its domain before `ORIGIN_CHECK=enforce`.
+- **Build with AI:** prompt no longer presents Vistrow Voice as the customer's business, names the agent, requires a field per requested detail plus an outcome field, and drops direction questions the description already answers. Re-run on all 5 examples: clean.
+
+Verified on the batch: 617 server tests, 693 agent tests, tsc + build. Spend on Gemini tests today ≈ ₹30 of the ₹50 cap.

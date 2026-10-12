@@ -3732,6 +3732,13 @@ class RealEstateAgent(Agent):
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         if _rt_selected:
             tts, tts_provider = None, "realtime"
+            # Gemini 2.5 breaks on its own greeting (see
+            # _speak_realtime_greeting): the opener is spoken by Chirp 3 HD in
+            # the same persona instead, built on demand from these.
+            self._greeting_tts_args = dict(
+                reply_language=reply_language, speaker=voice_value, tone=base_tone,
+                tone_name=tone_name, is_phone=(call_type or "") == "phone",
+            )
         else:
             tts, tts_provider = _build_tts(
                 reply_language, voice_value, base_tone, tone_name,
@@ -4212,6 +4219,48 @@ class RealEstateAgent(Agent):
         except Exception:
             logger.exception("could not release the held outbound opening")
 
+    def _realtime_wants_tts_greeting(self) -> bool:
+        """Gemini 2.5 native audio mishandles the caller's first turn after a
+        generate_reply greeting: direct probes (12 Oct 2026) got no reply
+        within 15 s, and in calls an empty generation came first and the real
+        answer 7-9 s after the caller stopped. The greeting needs the
+        plugin's "." user placeholder on 2.5, and that turn is what leaves the
+        session in that state. A line the model only hears about
+        (say(audio=...) appends it to the context) keeps the first reply at
+        the model's own 2-3 s. 3.1 greets itself fine, so it keeps doing so.
+        REALTIME_25_TTS_GREETING=0 restores the old behaviour."""
+        return (
+            getattr(self, "_realtime_model_name", "") == realtime_config.DEFAULT_MODEL
+            and bool(getattr(self, "_greeting_tts_args", None))
+            and os.environ.get("REALTIME_25_TTS_GREETING", "1") != "0"
+        )
+
+    async def _say_opener_with_tts(self, opener: str, dispatch_t0: float | None) -> bool:
+        """Speak the operator's opener with Chirp 3 HD in the agent's Gemini
+        persona (Kore -> hi-IN-Chirp3-HD-Kore). True once it has played."""
+        args = dict(self._greeting_tts_args)
+        persona = _gemini_live_voice(getattr(self, "_voice_value", "") or "")
+        args["speaker"] = f"{voice_catalog.CHIRP3_PERSONA_PREFIX}{persona}"
+        try:
+            tts, _provider = _build_tts(**args)
+
+            async def _frames():
+                async for ev in tts.synthesize(opener):
+                    yield ev.frame
+
+            handle = self.session.say(opener, audio=_frames())
+            if dispatch_t0 is not None:
+                logger.info(
+                    "[latency] realtime opener via TTS (%s) requested at +%.2fs",
+                    persona, time.monotonic() - dispatch_t0,
+                )
+            await handle
+            self.session.userdata["greeting_played"] = True
+            return True
+        except Exception:
+            logger.exception("TTS opener failed; the model will speak the greeting")
+            return False
+
     async def _speak_realtime_greeting(self, dispatch_t0: float | None = None, answered: bool = False) -> None:
         """The realtime model's opening line. `answered` is the held outbound
         release: the recipient has picked up, so the line must say who is
@@ -4252,6 +4301,14 @@ class RealEstateAgent(Agent):
             )
         if _opener:
             _greet += f" Open with this line, or as close to it as reads naturally: {_opener}"
+        if _opener and self._realtime_wants_tts_greeting():
+            self.session.userdata["realtime_greeting_pending"] = True
+            try:
+                if await self._say_opener_with_tts(_opener, dispatch_t0):
+                    return
+            finally:
+                self.session.userdata["realtime_greeting_pending"] = False
+            # TTS failed: the model speaks the greeting itself, as before.
         self.session.userdata["realtime_greeting_pending"] = True
         try:
             speech = self.session.generate_reply(instructions=_greet)

@@ -24,10 +24,10 @@ _FUNCTIONS = (
     "support_session_blocks", "guard_support_session", "require_session", "current_user", "require_platform_owner",
     "_set_session_cookie", "_me_payload", "auth_me", "_iso_utc", "admin_impersonate", "admin_impersonate_exit",
     "auth_logout", "sign_out_other_sessions", "_admin_reason",
-    "_origin_allowed", "_dashboard_origins", "_support_admin_still_signed_in", "_session_mfa",
+    "_origin_allowed", "_dashboard_origins", "_support_admin_still_signed_in", "_session_mfa", "_api_key_allows",
 )
 _ASSIGNS = ("_SUPPORT_BLOCKED_PATHS", "_PUBLIC_PATHS", "_PUBLIC_PREFIXES", "_DEVICE_COOKIE_NAME",
-            "_API_KEY_BLOCKED_PATHS", "_STATIC_DASHBOARD_ORIGINS", "ADMIN_MFA_SETUP_REQUIRED", "ADMIN_MFA_SIGNIN_REQUIRED")
+            "_API_KEY_BLOCKED_PATHS", "_API_KEY_SCOPE_WRITES", "_STATIC_DASHBOARD_ORIGINS", "ADMIN_MFA_SETUP_REQUIRED", "ADMIN_MFA_SIGNIN_REQUIRED")
 
 
 def load_token_api(namespace: dict) -> dict:

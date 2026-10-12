@@ -14,6 +14,8 @@ import {
   type AdminAccountDetail as Detail,
   type HealthLevel,
   adminInvoicePdfUrl,
+  adminUsage,
+  type AdminUsageRow,
 } from '../../lib/adminApi'
 import { AdminCard, EmptyState, ErrorState, fmtDate, fmtDateTime, fmtDuration, Pill, PlanPill, StatusPill, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
@@ -724,10 +726,60 @@ const KIND_LABELS: Record<string, string> = {
   phone_number: 'Phone number',
 }
 
+/** Last 30 days from /admin/usage: the same row the Usage & cost page shows. */
+function UsageCost({ accountId }: { accountId: number }) {
+  const [row, setRow] = useState<AdminUsageRow | null | undefined>(undefined)
+  const [error, setError] = useState(false)
+  useEffect(() => {
+    adminUsage({ days: 30, accountId })
+      .then((u) => setRow(u.accounts[0] ?? null))
+      .catch(() => setError(true))
+  }, [accountId])
+  const n = (v: number) => v.toLocaleString('en-IN', { maximumFractionDigits: 1 })
+  const inr = (v: number) => (v < 0 ? '-₹' : '₹') + Math.abs(Math.round(v)).toLocaleString('en-IN')
+  const cells: [string, string, boolean?][] = row
+    ? [
+        ['Calls', n(row.calls)],
+        ['Minutes', n(row.minutes)],
+        ['Credits used', n(row.credits)],
+        ['Revenue (ex-GST)', inr(row.revenueInr)],
+        ['Est. vendor cost', '~' + inr(row.estCostInr)],
+        ['Est. margin', '~' + inr(row.marginInr), row.marginInr < 0],
+      ]
+    : []
+  return (
+    <div className="mb-4 rounded-xl border border-border bg-surface p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Usage & cost · last 30 days</h3>
+        <Link to="/admin/usage" className="text-xs font-semibold text-primary hover:underline">All accounts</Link>
+      </div>
+      {error ? (
+        <p className="text-sm text-destructive">Couldn't load usage.</p>
+      ) : row === undefined ? (
+        <div className="h-12 animate-pulse rounded-lg bg-surface-high" />
+      ) : row === null ? (
+        <p className="text-sm text-text-muted">No calls or payments in the last 30 days.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {cells.map(([label, value, negative]) => (
+            <div key={label}>
+              <div className="text-[10px] uppercase tracking-wide text-text-muted">{label}</div>
+              <div className={`font-display text-lg font-bold tabular-nums ${negative ? 'text-destructive' : ''}`}>{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="mt-2 text-[11px] text-text-muted">Vendor cost is an estimate from average per-minute rates (see Usage & cost).</p>
+    </div>
+  )
+}
+
 /** The tenant's invoices and top-ups (last 10), with the same PDF the tenant downloads. */
 function BillingTab({ d }: { d: Detail }) {
   const rows = d.invoices ?? []
   return (
+    <>
+    <UsageCost accountId={d.account.id} />
     <div className="rounded-xl border border-border bg-surface p-4">
       <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-text-muted">Invoices & top-ups</h3>
       {rows.length === 0 ? (
@@ -772,5 +824,6 @@ function BillingTab({ d }: { d: Detail }) {
         </div>
       )}
     </div>
+    </>
   )
 }
