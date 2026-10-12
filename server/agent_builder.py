@@ -12,9 +12,11 @@ voice_catalog.LANGUAGE_LABELS, models from the tenant-selectable list, tools
 from the optional built-ins agent/main.py knows. A bad field is replaced with
 the default, never surfaced as an error.
 
-LLM: same stdlib-urllib style as call_intelligence/kb_extract. OpenAI
-gpt-4.1-mini (JSON mode) first, Gemini 2.5 Flash (JSON mime type) when OpenAI
-fails for any reason. AGENT_BUILDER_PROVIDER=openai|gemini forces one.
+LLM: same stdlib-urllib style as call_intelligence/kb_extract. Sarvam
+sarvam-105b-conversations first (the platform's own model, fastest here:
+~1-3 s per draft), then OpenAI gpt-4.1-mini (JSON mode), then Gemini 2.5
+Flash (JSON mime type), each tried when the one before fails for any reason.
+AGENT_BUILDER_PROVIDER=sarvam|openai|gemini forces one.
 """
 
 from __future__ import annotations
@@ -31,6 +33,8 @@ import voice_catalog
 
 logger = logging.getLogger("agent-builder")
 
+SARVAM_CHAT_URL = "https://api.sarvam.ai/v1/chat/completions"
+SARVAM_MODEL = "sarvam-105b-conversations"
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 OPENAI_MODEL = "gpt-4.1-mini"
 GEMINI_MODEL = "gemini-2.5-flash"
@@ -279,6 +283,35 @@ def _post_json(url: str, body: dict, headers: dict) -> dict:
         raise _ProviderFailed(str(exc)) from exc
 
 
+def _json_text(text: str) -> dict:
+    """The object in a reply that may be wrapped in a ```json fence."""
+    text = (text or "").strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+        text = text.rsplit("```", 1)[0]
+    return json.loads(text)
+
+
+def _sarvam(system: str, user: str) -> dict:
+    key = os.environ.get("SARVAM_API_KEY")
+    if not key:
+        raise _ProviderFailed("SARVAM_API_KEY not set")
+    payload = _post_json(
+        SARVAM_CHAT_URL,
+        {
+            "model": SARVAM_MODEL,
+            "temperature": 0.4,
+            "max_tokens": 6000,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        },
+        {"Authorization": f"Bearer {key}"},
+    )
+    try:
+        return _json_text(payload["choices"][0]["message"]["content"])
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        raise _ProviderFailed("unexpected Sarvam response") from exc
+
+
 def _openai(system: str, user: str) -> dict:
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
@@ -323,12 +356,12 @@ def _gemini(system: str, user: str) -> dict:
         raise _ProviderFailed("unexpected Gemini response") from exc
 
 
-_PROVIDERS = {"openai": _openai, "gemini": _gemini}
+_PROVIDERS = {"sarvam": _sarvam, "openai": _openai, "gemini": _gemini}
 
 
 def _ask(system: str, user: str) -> dict:
     forced = (os.environ.get("AGENT_BUILDER_PROVIDER") or "").strip().lower()
-    order = [forced] if forced in _PROVIDERS else ["openai", "gemini"]
+    order = [forced] if forced in _PROVIDERS else list(_PROVIDERS)
     for name in order:
         try:
             result = _PROVIDERS[name](system, user)

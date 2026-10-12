@@ -59,12 +59,13 @@ class FakeNet:
     """Scripted responses per provider: a dict = 200 with that JSON body,
     an int = that HTTP error status, "timeout" = a socket timeout."""
 
-    def __init__(self, openai=(), gemini=()):
-        self.queues = {"openai": list(openai), "gemini": list(gemini)}
+    def __init__(self, openai=(), gemini=(), sarvam=()):
+        self.queues = {"openai": list(openai), "gemini": list(gemini), "sarvam": list(sarvam)}
         self.calls = []
 
     def __call__(self, request, timeout=None):
-        provider = "openai" if "openai.com" in request.full_url else "gemini"
+        url = request.full_url
+        provider = "openai" if "openai.com" in url else "sarvam" if "sarvam.ai" in url else "gemini"
         self.calls.append((provider, json.loads(request.data)))
         if not self.queues[provider]:
             raise AssertionError(f"unexpected {provider} call")
@@ -94,6 +95,8 @@ class BuilderUnitTests(unittest.TestCase):
             patch.object(calls_db, "record_agent_draft", lambda a, u: self.recorded.append((a, u))),
         ]
         os.environ.pop("AGENT_BUILDER_PROVIDER", None)
+        # No Sarvam key: these tests start at OpenAI (Sarvam has its own below).
+        patches.append(patch.dict(os.environ, {"SARVAM_API_KEY": ""}))
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
@@ -177,6 +180,21 @@ class BuilderUnitTests(unittest.TestCase):
         out = self.run_draft(FakeNet(openai=[{"choices": [{"message": {"content": "not json"}}]}],
                                      gemini=[gemini_body({"draft": GOOD_DRAFT})]), answers={})
         self.assertEqual(out["draft"]["voice"], "shubh")
+
+    def test_sarvam_first_and_fenced_json(self):
+        fenced = "```json\n" + json.dumps({"draft": GOOD_DRAFT}) + "\n```"
+        with patch.dict(os.environ, {"SARVAM_API_KEY": "s-test"}):
+            net = FakeNet(sarvam=[{"choices": [{"message": {"content": fenced}}]}])
+            out = self.run_draft(net, answers={})
+        self.assertEqual(out["draft"]["name"], GOOD_DRAFT["name"])
+        self.assertEqual([c[0] for c in net.calls], ["sarvam"])
+        self.assertEqual(net.calls[0][1]["model"], "sarvam-105b-conversations")
+
+    def test_sarvam_failure_falls_back_to_openai(self):
+        with patch.dict(os.environ, {"SARVAM_API_KEY": "s-test"}):
+            net = FakeNet(sarvam=[500], openai=[openai_body({"draft": GOOD_DRAFT})])
+            self.run_draft(net, answers={})
+        self.assertEqual([c[0] for c in net.calls], ["sarvam", "openai"])
 
     def test_forced_provider(self):
         with patch.dict(os.environ, {"AGENT_BUILDER_PROVIDER": "gemini"}):
