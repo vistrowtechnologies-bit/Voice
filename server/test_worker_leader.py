@@ -26,6 +26,9 @@ _CHILD = textwrap.dedent("""
     import sys, time
     sys.path.insert(0, %r)
     import worker_leader
+    # Own key: a test that imports token_api starts the real workers in the
+    # pytest process, and they hold the production key.
+    worker_leader._LOCK_KEY = 0x56535754
     while True:
         print("leader" if worker_leader.is_leader() else "follower", flush=True)
         time.sleep(0.2)
