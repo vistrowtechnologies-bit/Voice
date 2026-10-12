@@ -117,9 +117,9 @@ text.
 # Plans (quote these exact figures, nothing else)
 - Starter — Rs 2,999/month: 300 credits, 1 AI agent, web calling widget,
   call history & analytics.
-- Growth — Rs 5,999/month: 1,000 credits, 5 AI agents, inbound + outbound
+- Growth — Rs 5,999/month: 750 credits, 5 AI agents, inbound + outbound
   campaigns, CRM webhook integration, priority support.
-- Scale — Rs 12,999/month: 2,500 credits, 20 AI agents, full API access,
+- Scale — Rs 12,999/month: 1,750 credits, 20 AI agents, full API access,
   knowledge base (RAG), dedicated success manager.
 If asked about a custom/enterprise deal or something outside these three
 tiers, say the team will follow up on that directly rather than guessing.

@@ -65,7 +65,7 @@ The cards at the top flag things that affect customers: a CRM that stopped recei
                 "body": """Go to **Agents** and click **New Agent**, or **Edit** on an existing card. Every setting lives on the agent's own page; click **Save changes** at the bottom. Changes apply from the next call — no redeploy.
 
 ## The main settings
-- **Model** — the AI that holds the conversation. Vistrow Bharat is built for Indian languages and Vistrow Swift is best for English. Both use 2 credits per minute with a Standard voice.
+- **Model** — the AI that holds the conversation. Vistrow Bharat is built for Indian languages and Vistrow Swift is best for English. With a Standard or HD voice, Bharat uses 1 credit per minute and Swift uses 2.
 - **Voice** — only voices added under **Voices** appear here.
 - **Default language** — the language the agent opens in. It follows the caller if they switch.
 - **Welcome message** — separate lines for inbound and outbound calls. Use {{name}}-style variables to personalise them.
@@ -432,8 +432,8 @@ Click **Save rules** after changing anything.""",
                 "title": "Plans",
                 "summary": "What Starter, Growth and Scale include.",
                 "body": """- **Starter** — ₹2,999/month + GST: 300 credits, 1 AI agent, a knowledge base with approved answers.
-- **Growth** — ₹5,999/month: 1,000 credits, 5 AI agents, inbound + outbound campaigns, CRM webhook integration, agent-assigned live catalog.
-- **Scale** — ₹12,999/month: 2,500 credits, 20 AI agents, full API access.
+- **Growth** — ₹5,999/month: 750 credits, 5 AI agents, inbound + outbound campaigns, CRM webhook integration, agent-assigned live catalog.
+- **Scale** — ₹12,999/month: 1,750 credits, 20 AI agents, full API access.
 
 Online payments and self-service plan changes aren't available yet — contact us to change plans or add credits.""",
             },

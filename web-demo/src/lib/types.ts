@@ -123,7 +123,7 @@ export interface CallRecord {
   creditsUsed?: number
   creditsPerMinute?: number
   voiceTier?: 'economy' | 'standard' | 'premium'
-  modelTier?: 'standard' | 'premium' | 'premium_plus'
+  modelTier?: 'standard' | 'premium' | 'premium_plus' | 'realtime_plus'
   // Present on the single-call detail response. `diagnosticsCaptured` is
   // false for historical calls whose limited milestones are reconstructed
   // only from the older measured latency columns.
@@ -558,7 +558,7 @@ export interface BillingSummary {
   creditRates: Partial<Record<'browser' | 'widget' | 'phone', number>>
   minutesByVoiceTier: Partial<Record<'economy' | 'standard' | 'premium', number>>
   voiceTierRates: Partial<Record<'economy' | 'standard' | 'premium', number>>
-  modelTierRates?: Partial<Record<'standard' | 'premium' | 'premium_plus', number>>
+  modelTierRates?: Partial<Record<'standard' | 'premium' | 'premium_plus' | 'realtime_plus', number>>
   plan: string
   planPriceInr: number
   subscriptionStatus: 'inactive' | 'created' | 'active' | 'cancelled' | string

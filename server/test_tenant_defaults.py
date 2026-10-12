@@ -6,7 +6,11 @@ tools, it is equal on quality - 9/12 each on the grounding benchmark - at
 roughly half the time to first token: 450-500ms median on live calls
 against 1,058ms over eight comparable ones.
 
-The TTS voice is pooja (Sarvam), not Chirp 3 HD, as of 2026-09-14. Chirp 3
+The TTS voice is Chirp 3 HD (google:chirp3:Achernar, "Myra HD") again as of
+2026-10-12: real test calls that day put its first audio at ~190 ms, the same
+as Sarvam pooja, at ~Rs 0.13/min against pooja's ~Rs 1.2/min, and every live
+customer agent already runs on it. History: pooja was the default from
+2026-09-14. Chirp 3
 measured fastest of the TTS options on real calls and was the default until
 then - see google_tts_streaming_patch.py and the latency notes for those
 numbers, which still stand. It was moved off default because Google Cloud's
@@ -28,7 +32,7 @@ import os, re, sys, unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import voice_catalog
 
-EXPECTED_VOICE = "pooja"   # Sarvam bulbul:v3 - see module docstring for why
+EXPECTED_VOICE = "google:chirp3:Achernar"   # Myra HD - see module docstring
 EXPECTED_MODEL = "sarvam/sarvam-105b-conversations"   # Vistrow Bharat
 _DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calls_db.py")
 
@@ -105,32 +109,22 @@ if __name__ == "__main__":
 
 
 class TheDefaultModelBillsCorrectly(unittest.TestCase):
-    """A model that is not listed falls through to "standard" = 1x credits.
+    """Since 2026-10-12 a credit is priced on one minute of the default stack
+    (plan_policy.COST_PER_DEFAULT_MINUTE_INR), so the default model bills 1x.
+    Before that credits were priced on gpt-4o-mini and Sarvam billed 2x.
+    Other Sarvam models are matched by prefix so none can fall through
+    unclassified; Gemini Live is billed for what it costs."""
 
-    Vistrow Bharat shipped that way and it was materially wrong. Measured on
-    this product's real 10k-token prompt, a Bharat turn costs ~Rs 0.299 against
-    Vistrow Swift's ~Rs 0.101: Sarvam does not cache the prompt (usage returns
-    prompt_tokens_details=None with all 10,018 tokens billed every turn) while
-    OpenAI caches 9,600 of 9,757 at a quarter rate. Billing it at 1x while
-    Swift bills 2x charged tenants half for the option costing us triple.
-    """
-
-    def test_the_default_model_is_not_billed_as_standard(self):
+    def test_the_default_model_bills_one_credit_per_minute(self):
         import calls_db
-        self.assertNotEqual(
-            calls_db.model_tier(EXPECTED_MODEL), "standard",
-            "the default model falls through to 1x credits — check model_tier",
-        )
+        self.assertEqual(calls_db.model_tier(EXPECTED_MODEL), "standard")
 
-    def test_it_bills_the_same_tier_as_vistrow_swift(self):
+    def test_a_future_sarvam_model_is_classified_by_prefix(self):
         import calls_db
-        self.assertEqual(
-            calls_db.model_tier(EXPECTED_MODEL),
-            calls_db.model_tier("gpt-4.1-mini"),
-        )
+        self.assertEqual(calls_db.model_tier("sarvam/sarvam-999b-future"), "standard")
 
-    def test_a_future_sarvam_model_cannot_silently_bill_at_1x(self):
-        # Matched by prefix, not by name, so adding a model to the picker
-        # cannot quietly halve what it earns.
+    def test_gemini_live_is_not_billed_as_standard(self):
         import calls_db
-        self.assertEqual(calls_db.model_tier("sarvam/sarvam-999b-future"), "premium")
+        self.assertEqual(calls_db.model_tier("gemini-live:gemini-3.1-flash-live-preview"), "realtime_plus")
+        self.assertEqual(calls_db.model_tier("gemini-live"), "premium")
+        self.assertEqual(calls_db._MODEL_TIER_MULTIPLIERS["realtime_plus"], 6.0)

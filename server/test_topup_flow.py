@@ -24,7 +24,7 @@ class TopupQuoteTests(unittest.TestCase):
         self.assertEqual((q["credits"], q["bonusCredits"], q["perCreditInr"]), (500, 50, 10.0))
         self.assertEqual((q["baseInr"], q["gstInr"], q["totalInr"]), (5000.0, 900.0, 5900.0))
         self.assertEqual(calls_db.topup_quote("growth", pack_key="1000")["bonusCredits"], 150)
-        self.assertEqual(calls_db.topup_quote("scale", 50)["baseInr"], 260.0)
+        self.assertEqual(calls_db.topup_quote("scale", 50)["baseInr"], 371.5)  # 12,999 / 1,750 = 7.43 per credit
 
     def test_unknown_plan_uses_the_starter_rate(self):
         import calls_db

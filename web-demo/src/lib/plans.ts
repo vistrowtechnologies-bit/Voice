@@ -89,8 +89,8 @@ export const PLANS: Plan[] = [
     price: '₹5,999',
     description: 'For teams automating inbound and outbound campaigns.',
     priceInr: 5999,
-    creditsNum: 1000,
-    credits: '1,000 credits/mo',
+    creditsNum: 750,
+    credits: '750 credits/mo',
     tag: 'Recommended',
     features: [
       '5 AI agents',
@@ -118,8 +118,8 @@ export const PLANS: Plan[] = [
     price: '₹12,999',
     description: 'Full API access and integrations, built for production volume.',
     priceInr: 12999,
-    creditsNum: 2500,
-    credits: '2,500 credits/mo',
+    creditsNum: 1750,
+    credits: '1,750 credits/mo',
     tag: 'Most Popular',
     features: [
       '20 AI agents',

@@ -47,7 +47,7 @@ DAILY_GREETING_LIMIT = 40
 DEFAULT_MODEL = "sarvam/sarvam-105b-conversations"  # "Vistrow Bharat"
 # Tenant-selectable models (web-demo/src/lib/agentOptions.ts MODEL_OPTIONS).
 ALLOWED_MODELS = (DEFAULT_MODEL, "gpt-4.1-mini")
-DEFAULT_VOICE = "pooja"  # owner decision 2026-10-12
+DEFAULT_VOICE = "google:chirp3:Achernar"  # Myra HD; default stack since 2026-10-12 (was pooja)
 DEFAULT_LANGUAGE = "hi-IN"
 # The optional built-ins agent/main.py's _build_tools toggles; "" = all on
 # (AgentDetail.tsx OPTIONAL_FUNCTIONS).

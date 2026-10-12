@@ -139,7 +139,7 @@ class BuilderUnitTests(unittest.TestCase):
                "postCallFields": [{"key": "Budget Range!", "type": "date", "description": "x" * 500}, {"key": "budget_range"}, "junk"]}
         out = self.run_draft(FakeNet(openai=[openai_body({"draft": bad})]), answers={})["draft"]
         self.assertEqual((out["voice"], out["language"], out["model"], out["tone"], out["firstSpeaker"]),
-                         ("pooja", "hi-IN", "sarvam/sarvam-105b-conversations", "balanced", "agent"))
+                         (agent_builder.DEFAULT_VOICE, "hi-IN", "sarvam/sarvam-105b-conversations", "balanced", "agent"))
         self.assertEqual(out["enabledFunctions"], "")  # all four on == the agent page's ""
         self.assertEqual(out["maxCallDurationS"], 0)
         self.assertTrue(out["systemPrompt"].startswith("# Role"))
@@ -147,7 +147,7 @@ class BuilderUnitTests(unittest.TestCase):
 
     def test_premium_voice_replaced_on_starter_plan(self):
         out = self.run_draft(FakeNet(openai=[openai_body({"draft": {**GOOD_DRAFT, "voice": PREMIUM}})]), answers={})
-        self.assertEqual(out["draft"]["voice"], "pooja")
+        self.assertEqual(out["draft"]["voice"], agent_builder.DEFAULT_VOICE)
         self.plan = "scale"
         out = self.run_draft(FakeNet(openai=[openai_body({"draft": {**GOOD_DRAFT, "voice": PREMIUM}})]), answers={})
         self.assertEqual(out["draft"]["voice"], PREMIUM)
@@ -333,7 +333,7 @@ class BuilderDatabaseTests(unittest.TestCase):
 
     def test_plan_lookup_is_scoped_to_the_callers_account(self):
         self.assertEqual(self.run_draft(self.a)["draft"]["voice"], PREMIUM)
-        self.assertEqual(self.run_draft(self.b)["draft"]["voice"], "pooja")
+        self.assertEqual(self.run_draft(self.b)["draft"]["voice"], agent_builder.DEFAULT_VOICE)
 
     def test_daily_cap_counts_only_this_account(self):
         conn = calls_db._connect()

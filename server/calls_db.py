@@ -209,7 +209,7 @@ CREATE TABLE IF NOT EXISTS agents (
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
     model TEXT DEFAULT 'sarvam/sarvam-105b-conversations',
-    voice TEXT DEFAULT 'pooja',  -- 2026-09-14: Chirp3 blocked by GCP billing, see history
+    voice TEXT DEFAULT 'google:chirp3:Achernar',  -- 2026-10-12: default stack is Sarvam STT + Sarvam 105B + Chirp 3 HD
     -- Speech recognition is independent from the LLM and TTS. Keep Sarvam
     -- as the default for Indian names/code-mixing; Google Chirp 3 is an
     -- explicit comparison/alternative selected from the agent editor.
@@ -1103,7 +1103,7 @@ def _ensure_industry_demo_agents(conn: dbconn.Conn) -> None:
         (account_id,),
     ).fetchone()
     model = source["model"] if source else "sarvam/sarvam-105b-conversations"
-    voice = source["voice"] if source else "pooja"
+    voice = source["voice"] if source else "google:chirp3:Achernar"
     language = source["language"] if source else "hi-IN"
     tone = source["tone"] if source else "casual"
 
@@ -1490,7 +1490,7 @@ def init_tables() -> None:
             # that billing account at all. Revert once Chirp3 is confirmed
             # working again (add a payment method on the "Main" billing
             # account, console.cloud.google.com/billing).
-            conn.execute("ALTER TABLE agents ALTER COLUMN voice SET DEFAULT 'pooja'")
+            conn.execute("ALTER TABLE agents ALTER COLUMN voice SET DEFAULT 'google:chirp3:Achernar'")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS stt_provider TEXT DEFAULT 'sarvam'")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TEXT")
             conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'password'")
@@ -3930,7 +3930,7 @@ def create_agent(data: dict, account_id: int) -> dict:
                     # method is added - see docs/... latency notes. Sarvam
                     # has no billing dependency on that account, so it's the
                     # default until Chirp3 is confirmed working again.
-                    data.get("voice", "pooja"),
+                    data.get("voice", "google:chirp3:Achernar"),
                     data.get("sttProvider", "sarvam"),
                     data.get("language", "hi-IN"),
                     data.get("systemPrompt", ""),
@@ -8697,7 +8697,7 @@ _STANDARD_VOICE_PREFIXES = ("google:chirp3:",)
 # rather than to bill them punitively. These recover the bulk of the spread
 # while staying legible to an operator; revisit alongside any change to the
 # offered model list.
-_MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0}
+_MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0, "realtime_plus": 6.0}
 # Anything unlisted bills at "standard" - the same don't-guess default
 # voice_tier() uses, so a newly added model can never silently bill as free.
 _PREMIUM_MODELS = {"gpt-4.1-mini", "gemini-3.5-flash-lite", "gemini-3.6-flash"}
@@ -8717,21 +8717,20 @@ def model_tier(model: str | None) -> str:
     # testing, so it must never bill a tenant at a premium rate.
     if name.startswith("groq/"):
         return "standard"
-    # Sarvam ("Vistrow Bharat") bills premium, matching Vistrow Swift.
-    #
-    # Prefixed rather than named, because falling through to "standard" is
-    # what happened when it shipped and that was materially wrong: measured on
-    # this product's real 10k-token prompt, a Bharat turn costs ~Rs 0.299
-    # against Swift's ~Rs 0.101. Sarvam does not cache the prompt — usage
-    # comes back with prompt_tokens_details=None and all 10,018 tokens billed
-    # on every turn, where OpenAI caches 9,600 of 9,757 at a quarter rate — so
-    # the vendor cost is roughly 3x Swift's despite lower headline rates.
-    # Billing it at 1x while Swift bills 2x meant charging tenants half for the
-    # option that costs us triple.
-    #
-    # A prefix also means the next Sarvam model cannot silently bill at 1x.
+    # Sarvam ("Vistrow Bharat") is the default model and bills standard: since
+    # 2026-10-12 a credit is priced on one minute of the default stack
+    # (Sarvam STT + Sarvam 105B + Chirp 3 HD), worst case ~Rs 3.25/min with
+    # LiveKit and telephony (plan_policy.COST_PER_DEFAULT_MINUTE_INR), so 1x
+    # already carries the margin. It used to bill 2x because credits were
+    # priced on gpt-4o-mini, which made the default minute cost 2 credits.
+    # Prefixed so the next Sarvam model is classified deliberately too.
     if name.startswith("sarvam/"):
-        return "premium"
+        return "standard"
+    # Gemini Live (speech-to-speech) replaces STT+LLM+TTS with one model
+    # billed per audio token. Oct 6-9 bill: 3.1 ~Rs 16.8/min, 2.5 ~Rs 4.6/min.
+    # Unlisted, both fell through to 1x - a loss on every 3.1 minute.
+    if name.startswith("gemini-live"):
+        return "realtime_plus" if "3.1" in name else "premium"
     if name in _PREMIUM_PLUS_MODELS:
         return "premium_plus"
     if name in _PREMIUM_MODELS:
@@ -9154,7 +9153,7 @@ def billing_summary(account_id: int) -> dict:
 # credits_for_call, cut by the caller's local calendar days.
 
 _USAGE_MAX_DAYS = 366
-_MODEL_TIER_LABELS = {"standard": "Standard", "premium": "Premium", "premium_plus": "Premium Plus"}
+_MODEL_TIER_LABELS = {"standard": "Standard", "premium": "Premium", "premium_plus": "Premium Plus", "realtime_plus": "Realtime"}
 _DIRECTION_LABELS = {"inbound": "Inbound", "outbound": "Outbound", "web": "Web / widget", "phone": "Phone (direction unknown)"}
 
 

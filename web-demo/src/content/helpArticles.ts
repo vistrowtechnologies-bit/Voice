@@ -33,7 +33,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     "slug": "create-and-edit-agent",
     "title": "Create and edit an agent",
     "summary": "Set an agent's voice, language, prompt and greeting.",
-    "body": "Go to **Agents** and click **New Agent**, or **Edit** on an existing card. Every setting lives on the agent's own page; click **Save changes** at the bottom. Changes apply from the next call — no redeploy.\n\n## The main settings\n- **Model** — the AI that holds the conversation. Vistrow Bharat is built for Indian languages and Vistrow Swift is best for English. Both use 2 credits per minute with a Standard voice.\n- **Voice** — only voices added under **Voices** appear here.\n- **Default language** — the language the agent opens in. It follows the caller if they switch.\n- **Welcome message** — separate lines for inbound and outbound calls. Use {{name}}-style variables to personalise them.\n- **System prompt** — the agent's instructions. Leave it blank to use the built-in assistant prompt.\n- **Who speaks first**, **voice delivery**, **emotion intensity**, **noise suppression** and **background ambience** tune how the call sounds.\n\n## Agent readiness\nEach card shows a readiness score such as 5/6 with the next step to finish, like adding a knowledge base or assigning a number."
+    "body": "Go to **Agents** and click **New Agent**, or **Edit** on an existing card. Every setting lives on the agent's own page; click **Save changes** at the bottom. Changes apply from the next call — no redeploy.\n\n## The main settings\n- **Model** — the AI that holds the conversation. Vistrow Bharat is built for Indian languages and Vistrow Swift is best for English. With a Standard or HD voice, Bharat uses 1 credit per minute and Swift uses 2.\n- **Voice** — only voices added under **Voices** appear here.\n- **Default language** — the language the agent opens in. It follows the caller if they switch.\n- **Welcome message** — separate lines for inbound and outbound calls. Use {{name}}-style variables to personalise them.\n- **System prompt** — the agent's instructions. Leave it blank to use the built-in assistant prompt.\n- **Who speaks first**, **voice delivery**, **emotion intensity**, **noise suppression** and **background ambience** tune how the call sounds.\n\n## Agent readiness\nEach card shows a readiness score such as 5/6 with the next step to finish, like adding a knowledge base or assigning a number."
    },
    {
     "slug": "agent-functions-and-transfer",
@@ -269,7 +269,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     "slug": "plans",
     "title": "Plans",
     "summary": "What Starter, Growth and Scale include.",
-    "body": "- **Starter** — ₹2,999/month + GST: 300 credits, 1 AI agent, a knowledge base with approved answers.\n- **Growth** — ₹5,999/month: 1,000 credits, 5 AI agents, inbound + outbound campaigns, CRM webhook integration, agent-assigned live catalog.\n- **Scale** — ₹12,999/month: 2,500 credits, 20 AI agents, full API access.\n\nOnline payments and self-service plan changes aren't available yet — contact us to change plans or add credits."
+    "body": "- **Starter** — ₹2,999/month + GST: 300 credits, 1 AI agent, a knowledge base with approved answers.\n- **Growth** — ₹5,999/month: 750 credits, 5 AI agents, inbound + outbound campaigns, CRM webhook integration, agent-assigned live catalog.\n- **Scale** — ₹12,999/month: 1,750 credits, 20 AI agents, full API access.\n\nOnline payments and self-service plan changes aren't available yet — contact us to change plans or add credits."
    }
   ]
  },
