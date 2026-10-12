@@ -244,3 +244,10 @@ Verified: build (icon check, tsc, prerender, check-seo-pages: 113 routes), `test
 Not verified: no browser visual check at 375 px (same card grid as the solution pages); the dashboard "Required" gate and widget chat-only mode were confirmed in code, not on a live site; native-language and vendor mentions in older FAQ text (Sarvam/ElevenLabs voices on agents) left as they were. `graphify update .` not run.
 
 Next step: review and merge PR (Vercel only), then request indexing for `/product/inbound`, `/product`, `/product/agents` in Search Console.
+### Claude — 2026-10-12 — SEO P3 language pages
+
+Branch `claude/seo-p3-languages` (based on origin/main `c47bc9d`). Deepened `/languages/{marathi,odia,malayalam,gujarati,bengali}`: per-language use cases, a labelled written sample exchange with English gloss, code-mixing note, regional call types, three "call notes" cards, extra FAQs and a related-links strip (solutions, product, compare, AI IVR, demo-call pages, neighbouring languages). Titles, descriptions and H1 unchanged. Files: `web-demo/src/lib/marketingContent.ts` (new optional `guide`, `extraFaqs`, `related` fields plus content), `web-demo/src/pages/marketing/LanguageDetail.tsx` (renders them), `web-demo/scripts/test-language-seo.mjs` (covers all ten language pages). `seoPages.ts` and `seoExpansionContent.ts` untouched (all links already registered).
+
+Verified: `npm run build` (icon check, tsc, prerender, route audit 113 routes), `npm run test:seo` (10 languages), `check-blog-seo.ts` pass. Main-content words before to after: marathi 530 to 1197, odia 449 to 1141, malayalam 448 to 1135, gujarati 449 to 1097, bengali 448 to 1098 (includes shared template text). No prices, credit figures or quoted queries added.
+
+Not verified: native-speaker review of the Marathi, Odia, Malayalam, Gujarati and Bengali sample lines and "call notes" dialect remarks (written by Claude; sample is labelled as a written example). Not viewed in a browser. Next step: review and merge (Vercel only), then request indexing for the five URLs.

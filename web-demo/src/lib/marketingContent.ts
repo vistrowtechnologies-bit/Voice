@@ -1029,6 +1029,12 @@ export interface LanguagePage {
   codeMixing?: { name: string; body: string }
   /** Regional call types, each linked to an existing page that goes deeper. */
   regionalCalls?: { title: string; body: string; to: string; link: string }[]
+  /** Practical notes on script, dialect, numbers and testing for this language. */
+  guide?: { title: string; body: string }[]
+  /** Further FAQs, appended after seoFaq. */
+  extraFaqs?: { q: string; a: string }[]
+  /** Links to registered pages that go deeper (solutions, compare, product, demo calls). */
+  related?: { to: string; label: string }[]
 }
 
 /** Voices that speak every one of the ten Indian languages and keep the same
@@ -1105,6 +1111,42 @@ export const LANGUAGES: LanguagePage[] = [
       q: 'Can one agent handle Marathi plus Hindi or English?',
       a: 'Yes. Many Maharashtra calls naturally mix Marathi with Hindi or English. Artha can keep the same call going and match the caller instead of transferring them to another bot.',
     },
+    extraFaqs: [
+      { q: 'Does the agent understand Marathi spoken the way Pune and Mumbai callers speak it?', a: 'It follows everyday spoken Marathi, including English words inside a sentence. Regional speech differs across Maharashtra, so run test calls with callers from the regions you serve before launch and tighten the prompt where the agent mishears.' },
+      { q: 'Can the agent read out phone numbers, pin codes and amounts in Marathi?', a: 'Yes, and you decide the style in the prompt. Many callers say numbers in English even when the rest of the call is Marathi, so most teams let the agent repeat digits back in whichever language the caller used.' },
+    ],
+    sampleExchange: {
+      context: 'An inbound call to a Pune diagnostic lab',
+      turns: [
+        { speaker: 'Caller', native: 'नमस्कार, उद्या सकाळी घरी blood test साठी sample collection होईल का?', gloss: 'Hello, can a sample be collected at home tomorrow morning for a blood test?' },
+        { speaker: 'Agent', native: 'नमस्कार! हो, उद्या सकाळी 7 ते 9 चा slot उपलब्ध आहे. तुमचा पत्ता आणि पिन कोड सांगाल का?', gloss: 'Hello! Yes, a 7 to 9 a.m. slot is free tomorrow. Could you tell me your address and pin code?' },
+        { speaker: 'Caller', native: 'कोथरूड, पिन कोड 411038. Fasting लागेल का?', gloss: 'Kothrud, pin code 411038. Is fasting needed?' },
+        { speaker: 'Agent', native: 'त्या test साठी लॅबच्या सूचनेनुसार fasting लागेल. मी उद्याचा 7 ते 9 चा slot बुक केला आहे.', gloss: 'For that test, fasting is needed as per the lab’s instructions. I have booked tomorrow’s 7 to 9 a.m. slot.' },
+      ],
+      outcome: 'The fasting instruction comes from the lab’s own knowledge base rather than being guessed. The address, pin code and slot are saved on the call for the collection team.',
+    },
+    codeMixing: {
+      name: 'Marathi-Hindi-English mixing',
+      body: 'Mumbai and Pune callers often move between Marathi, Hindi and English inside one call: the sentence is Marathi, while “appointment”, “site visit”, “EMI” and numbers arrive in English or Hindi. The agent understands that mix, keeps replying in Marathi, and switches to Hindi or English if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Mumbai and Pune property enquiries', body: 'Buyer calls about projects, budgets and site visits, qualified in Marathi before your sales team calls back.', to: '/solutions/real-estate/marathi-ai-calling-agent-mumbai-real-estate', link: 'Marathi real estate calling' },
+      { title: 'Clinics, labs and home-service bookings', body: 'Appointment and slot calls for clinics, diagnostic labs and service providers across Maharashtra, booked inside your real availability.', to: '/solutions/healthcare', link: 'AI receptionist for clinics' },
+      { title: 'Payment, renewal and EMI reminders', body: 'Outbound reminders in Marathi, inside your calling window and checked against your Do-Not-Call list.', to: '/solutions/finance', link: 'Collections and EMI reminder calls' },
+    ],
+    guide: [
+      { title: 'Script and spelling', body: 'Marathi uses the Devanagari script, the same as Hindi, so welcome lines and prompts can look similar on the page. Write the welcome message in proper Marathi rather than reusing the Hindi one: “नमस्कार” opens the call, and verb endings differ from Hindi in ways callers notice immediately.' },
+      { title: 'Regional speech', body: 'Spoken Marathi changes between Mumbai, Pune, Nashik, Nagpur and Marathwada, and urban callers lean on Hindi and English words. Test with a few callers from each region you serve, and add the local place names and project names to the knowledge base so the agent recognises them.' },
+      { title: 'Where to start', body: 'Pick one call type, such as site-visit booking or appointment slots, and run 20 to 30 test calls with noisy audio and interruptions before real traffic. Add a transfer to a person for anything the agent should not answer, and review the first week of transcripts.' },
+    ],
+    related: [
+      { to: '/demo-calls/marathi-site-visit-booking', label: 'Marathi site-visit demo call' },
+      { to: '/product/inbound', label: 'Inbound call answering' },
+      { to: '/product/outbound', label: 'Outbound campaigns' },
+      { to: '/product/knowledge-base', label: 'Knowledge base' },
+      { to: '/languages/hindi', label: 'Hindi and Hinglish calling' },
+      { to: '/ai-ivr', label: 'AI IVR replacement' },
+    ],
   },
   {
     slug: 'tamil',
@@ -1233,9 +1275,181 @@ export const LANGUAGES: LanguagePage[] = [
       { title: 'Support lines', body: 'Status and how-to calls from customers who would rather not switch to English, with a transfer when a person is needed.', to: '/solutions/support', link: 'Customer support calls' },
     ],
   },
-  { slug: 'bengali', name: 'Bengali', native: 'বাংলা', code: 'bn-IN', region: 'West Bengal', greeting: 'নমস্কার', blurb: 'Kolkata and West Bengal callers, answered in Bengali on the first ring.' },
-  { slug: 'gujarati', name: 'Gujarati', native: 'ગુજરાતી', code: 'gu-IN', region: 'Gujarat', greeting: 'નમસ્તે', blurb: 'Built for Gujarat’s business-heavy call patterns - enquiries, follow-ups, and payment reminders in Gujarati.' },
-  { slug: 'malayalam', name: 'Malayalam', native: 'മലയാളം', code: 'ml-IN', region: 'Kerala', greeting: 'നമസ്കാരം', blurb: 'Answer Kerala enquiries in Malayalam instead of routing them to an English-only queue.' },
+  {
+    slug: 'bengali',
+    name: 'Bengali',
+    native: 'বাংলা',
+    code: 'bn-IN',
+    region: 'West Bengal',
+    greeting: 'নমস্কার',
+    blurb: 'Kolkata and West Bengal callers, answered in Bengali on the first ring.',
+    localUseCases: [
+      'Kolkata, Howrah, Siliguri and West Bengal enquiries answered in Bengali',
+      'Order-status, delivery and support calls for sellers whose customers expect Bengali',
+      'Clinic and coaching lines, plus reminders and follow-ups, outside office hours',
+    ],
+    callBehaviors: [
+      'Opens in Bengali and follows the caller into English or Hindi mid-call',
+      'Answers from your approved information and offers a callback when it should not guess',
+      'Saves the recording, transcript and summary, and passes lead details to your CRM',
+    ],
+    seoFaq: {
+      q: 'Is this a Bengali voice bot or a real AI calling agent?',
+      a: 'A real AI calling agent. It listens, understands the request in Bengali, answers from your approved information, books or transfers the call, and logs everything. It is not a recorded Bengali IVR menu.',
+    },
+    extraFaqs: [
+      { q: 'Is this Bengali as spoken in West Bengal?', a: 'This page covers Bengali for calls in India, mainly West Bengal. If your callers speak a particular regional variety, test with those callers first and put local terms in the knowledge base.' },
+      { q: 'Can the agent look up an order or a booking?', a: 'It can, where your order or booking system is connected through a webhook or integration. Without that connection it answers from your approved knowledge base and takes the details for your team.' },
+    ],
+    sampleExchange: {
+      context: 'An inbound order-status call to an online seller',
+      turns: [
+        { speaker: 'Caller', native: 'হ্যালো, আমার অর্ডারটা কবে আসবে? অর্ডার নম্বর 5821।', gloss: 'Hello, when will my order arrive? Order number 5821.' },
+        { speaker: 'Agent', native: 'নমস্কার! একটু দেখে নিচ্ছি। আপনার অর্ডারটা আজ বিকেল পাঁচটার মধ্যে পৌঁছানোর কথা। ডেলিভারি পার্টনারের নম্বর কি SMS-এ পাঠিয়ে দেব?', gloss: 'Hello! Let me check. Your order is due to arrive by 5 p.m. today. Shall I send the delivery partner’s number by SMS?' },
+        { speaker: 'Caller', native: 'হ্যাঁ, পাঠিয়ে দিন। ধন্যবাদ।', gloss: 'Yes, please send it. Thank you.' },
+      ],
+      outcome: 'This sample assumes the seller’s order system is connected, so the status is read from it rather than guessed. The call and the follow-up request are saved on the call.',
+    },
+    codeMixing: {
+      name: 'Banglish',
+      body: 'Kolkata callers mix English into Bengali all the time: “order”, “appointment”, “delivery”, “EMI” and most numbers. Hindi also appears, especially with callers who grew up elsewhere. The agent understands those words inside a Bengali sentence, keeps replying in Bengali, and switches to English or Hindi if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Order and delivery calls', body: 'Where-is-my-order, return and COD confirmation calls for online sellers whose customers prefer Bengali.', to: '/solutions/ecommerce', link: 'E-commerce support calls' },
+      { title: 'Clinic and diagnostic bookings', body: 'Appointment and timing calls for clinics and diagnostic centres in Kolkata and across West Bengal, booked inside your bookable hours.', to: '/solutions/healthcare', link: 'AI receptionist for clinics' },
+      { title: 'Property enquiries', body: 'Buyer calls about projects, budgets and site visits in and around Kolkata, qualified before your sales team calls back.', to: '/solutions/real-estate', link: 'AI calling for real estate' },
+    ],
+    guide: [
+      { title: 'Script and tone', body: 'Bengali has its own script, and the register matters: “আপনি” is the polite default for a business call. Write the welcome message in Bengali in that register, keep it short, and avoid reusing a Hindi line as the starting point.' },
+      { title: 'Busy seasons', body: 'Festival periods such as Durga Puja can bring a spike in order, delivery and booking calls. Plan your knowledge base for those questions in advance, and set a transfer or callback for anything the agent should not answer.' },
+      { title: 'Connect the data first', body: 'Order-status and booking calls are only useful if the agent can read your system. Connect the webhook or integration before launch, then test with real order numbers and with numbers that do not exist, to see how the agent behaves.' },
+    ],
+    related: [
+      { to: '/product/integrations', label: 'Integrations and webhooks' },
+      { to: '/product/widget', label: 'Website voice widget' },
+      { to: '/compare/ozonetel', label: 'Compare with Ozonetel' },
+      { to: '/vs-ivr', label: 'AI voice agent vs IVR' },
+      { to: '/languages/odia', label: 'Odia calling agent' },
+      { to: '/solutions/support', label: 'Customer support calls' },
+    ],
+  },
+  {
+    slug: 'gujarati',
+    name: 'Gujarati',
+    native: 'ગુજરાતી',
+    code: 'gu-IN',
+    region: 'Gujarat',
+    greeting: 'નમસ્તે',
+    blurb: 'Built for Gujarat’s business-heavy call patterns - enquiries, follow-ups, and payment reminders in Gujarati.',
+    localUseCases: [
+      'Ahmedabad, Surat, Vadodara and Rajkot property and business enquiries',
+      'Outstanding-invoice and payment reminders between traders and small businesses',
+      'Clinic, school and service calls that arrive in a mix of Gujarati, Hindi and English',
+    ],
+    callBehaviors: [
+      'Opens in Gujarati and follows the caller into Hindi or English without restarting the call',
+      'Captures the promised payment date or the preferred visit time as a field',
+      'Saves the recording, transcript and summary, and can send a WhatsApp or CRM update',
+    ],
+    seoFaq: {
+      q: 'Is this a Gujarati voice bot or a real AI calling agent?',
+      a: 'A real AI calling agent. It listens, understands the request in Gujarati, answers from your approved information, books or transfers the call, and logs everything. It is not a recorded Gujarati IVR menu.',
+    },
+    extraFaqs: [
+      { q: 'Can it follow a call that moves between Gujarati, Hindi and English?', a: 'Yes. Gujarat has many callers who switch between all three in a single call. The agent keeps replying in Gujarati and switches to Hindi or English when the caller does.' },
+      { q: 'Does it help with payment follow-ups between businesses?', a: 'Yes. An outbound campaign can remind each contact about a due date, record the date they promise, and respect your calling window and Do-Not-Call list. Your team still decides which reminders to send and what to say.' },
+    ],
+    sampleExchange: {
+      context: 'An outbound invoice reminder to a trader in Surat',
+      turns: [
+        { speaker: 'Agent', native: 'નમસ્તે મહેશભાઈ, હું Artha બોલું છું. Invoice નંબર 1042નું payment 20 તારીખે due છે, એની યાદ અપાવવા ફોન કર્યો છે.', gloss: 'Hello Maheshbhai, this is Artha. The payment for invoice number 1042 is due on the 20th; I’m calling to remind you.' },
+        { speaker: 'Caller', native: 'હા, ખબર છે. સોમવાર સુધીમાં transfer કરી દઈશ.', gloss: 'Yes, I know. I’ll transfer it by Monday.' },
+        { speaker: 'Agent', native: 'સારું, હું સોમવારની તારીખ નોંધી લઉં છું. બીજું કંઈ જોઈએ તો કહો.', gloss: 'Fine, I’m noting Monday. Tell me if you need anything else.' },
+      ],
+      outcome: 'With a post-call field set up for it, the promised date is pulled from the transcript for your accounts team.',
+    },
+    codeMixing: {
+      name: 'Gujarati-Hindi-English mixing',
+      body: 'Gujarati callers, especially in Surat and Ahmedabad, often move between Gujarati, Hindi and English in one call. Words like “invoice”, “payment”, “booking” and most numbers arrive in English. The agent keeps replying in Gujarati, follows the mix, and switches fully to Hindi or English if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Ahmedabad property enquiries', body: 'Buyer calls about projects, budgets and site visits, qualified in Gujarati before your sales team calls back.', to: '/solutions/real-estate/gujarati-ai-calling-agent-ahmedabad-real-estate', link: 'Gujarati real estate calling' },
+      { title: 'Payment and invoice reminders', body: 'Outbound reminders for traders, lenders and service businesses, inside your calling window and checked against your Do-Not-Call list.', to: '/solutions/finance', link: 'Collections and EMI reminder calls' },
+      { title: 'Order and delivery calls', body: 'Where-is-my-order and return calls for sellers whose customers prefer Gujarati.', to: '/solutions/ecommerce', link: 'E-commerce support calls' },
+    ],
+    guide: [
+      { title: 'Script and politeness', body: 'Gujarati has its own script, and address matters: “ભાઈ”, “બેન” and “સાહેબ” after a name are normal. Write that politeness into the prompt, and keep the welcome message in Gujarati rather than copying the Hindi one.' },
+      { title: 'Business-style calls', body: 'Many Gujarat calls are between businesses, so they are short and numbers-heavy: invoice numbers, dates, amounts. Tell the agent how to repeat numbers back, and capture the outcome, such as the promised payment date, as a post-call field.' },
+      { title: 'Calling windows and scope', body: 'Set the calling window and Do-Not-Call handling before any outbound run, and keep the agent to your approved facts. Decide which calls transfer to a person, then review the first batch of transcripts before you scale up.' },
+    ],
+    related: [
+      { to: '/demo-calls/hindi-real-estate-lead-qualification', label: 'Sample qualification call (Hindi)' },
+      { to: '/product/outbound', label: 'Outbound campaigns' },
+      { to: '/product/integrations', label: 'CRM and WhatsApp integrations' },
+      { to: '/compare/knowlarity', label: 'Compare with Knowlarity' },
+      { to: '/languages/hindi', label: 'Hindi and Hinglish calling' },
+      { to: '/ai-ivr', label: 'AI IVR replacement' },
+    ],
+  },
+  {
+    slug: 'malayalam',
+    name: 'Malayalam',
+    native: 'മലയാളം',
+    code: 'ml-IN',
+    region: 'Kerala',
+    greeting: 'നമസ്കാരം',
+    blurb: 'Answer Kerala enquiries in Malayalam instead of routing them to an English-only queue.',
+    localUseCases: [
+      'Kochi, Thiruvananthapuram, Kozhikode and Thrissur enquiries answered in Malayalam',
+      'Calls from family members abroad who ask about property, a clinic or a service on behalf of someone in Kerala',
+      'Appointment, admission and follow-up calls that arrive outside office hours',
+    ],
+    callBehaviors: [
+      'Opens in Malayalam and follows the caller into English mid-call',
+      'Captures budget, location, timeline and preferred visit dates as lead fields',
+      'Saves the recording, transcript and summary and passes the lead on to your CRM',
+    ],
+    seoFaq: {
+      q: 'Is this a Malayalam voice bot or a real AI calling agent?',
+      a: 'A real AI calling agent. It listens, understands the request in Malayalam, answers from your approved information, books or transfers the call, and logs everything. It is not a recorded Malayalam IVR menu.',
+    },
+    extraFaqs: [
+      { q: 'Can the agent handle callers who speak fast, regional Malayalam?', a: 'Spoken Malayalam varies a lot between north Kerala, Kochi and the south. Run test calls with callers from the regions you serve, and add local names and terms to the prompt or knowledge base where the agent mishears.' },
+      { q: 'Can it call or answer calls from overseas numbers?', a: 'That depends on the phone number and telephony provider you connect, not on the language. Check international calling support with your provider, and use the website voice widget for callers who prefer to talk from a browser.' },
+    ],
+    sampleExchange: {
+      context: 'An inbound property call from a caller abroad',
+      turns: [
+        { speaker: 'Caller', native: 'ഹലോ, കൊച്ചിയിൽ 2BHK flat ഉണ്ടോ? ഞാൻ ദുബായിൽ നിന്നാണ് വിളിക്കുന്നത്.', gloss: 'Hello, is there a 2BHK flat in Kochi? I’m calling from Dubai.' },
+        { speaker: 'Agent', native: 'നമസ്കാരം! ഉണ്ട്, കാക്കനാട് ഭാഗത്ത് 2BHK ഓപ്ഷനുകളുണ്ട്. നിങ്ങളുടെ budget എത്രയാണ്?', gloss: 'Hello! Yes, there are 2BHK options in the Kakkanad area. What is your budget?' },
+        { speaker: 'Caller', native: 'ഏകദേശം 70 lakh. അടുത്ത മാസം നാട്ടിൽ വരുന്നുണ്ട്, അപ്പോൾ site visit നടക്കുമോ?', gloss: 'About 70 lakh. I’m coming home next month; can we do a site visit then?' },
+        { speaker: 'Agent', native: 'തീർച്ചയായും. ഏത് തീയതികളിൽ നാട്ടിൽ ഉണ്ടാകും എന്ന് പറയാമോ? ആ ദിവസങ്ങളിലെ slot ഞാൻ നോക്കാം.', gloss: 'Certainly. Could you tell me which dates you will be in Kerala? I’ll check the slots on those days.' },
+      ],
+      outcome: 'Budget, location and the dates the caller will be in Kerala are saved on the call, so the sales team can book a visit that fits the trip.',
+    },
+    codeMixing: {
+      name: 'Manglish',
+      body: 'Malayalam callers mix in English constantly: “flat”, “budget”, “site visit”, “appointment” and nearly every number. The agent understands those English words inside a Malayalam sentence, keeps replying in Malayalam, and switches to English if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Property enquiries from Kerala and abroad', body: 'Buyer calls about flats and villas, qualified on budget, location and travel dates before your sales team calls back.', to: '/solutions/real-estate', link: 'AI calling for real estate' },
+      { title: 'Clinic and hospital appointments', body: 'Appointment and timing calls for clinics and diagnostic centres, booked into your real availability.', to: '/solutions/healthcare', link: 'AI receptionist for clinics' },
+      { title: 'Support and service lines', body: 'Status and how-to calls from customers who would rather not switch to English, with a transfer to a person when needed.', to: '/solutions/support', link: 'Customer support calls' },
+    ],
+    guide: [
+      { title: 'Script', body: 'Malayalam script has many joined letters, so long words are easy to garble in a pasted prompt. Write the welcome message in Malayalam, keep sentences short, and read the transcript of your first test calls to check the spelling came out as intended.' },
+      { title: 'Regional speech', body: 'Spoken Malayalam differs between Malabar, central Kerala and the south, in vocabulary and speed. Test with callers from each region you serve, and put local place names, hospital names and project names in the knowledge base.' },
+      { title: 'Callers from abroad', body: 'Callers outside Kerala may ring at odd local hours and want a visit on specific dates. Capture those dates and the contact preference as post-call fields, and send a WhatsApp or CRM follow-up so the team can reply when they are back.' },
+    ],
+    related: [
+      { to: '/product/widget', label: 'Website voice widget' },
+      { to: '/product/integrations', label: 'CRM and WhatsApp integrations' },
+      { to: '/product/knowledge-base', label: 'Knowledge base' },
+      { to: '/compare/exotel', label: 'Compare with Exotel' },
+      { to: '/languages/tamil', label: 'Tamil calling agent' },
+      { to: '/solutions', label: 'All industries' },
+    ],
+  },
   {
     slug: 'punjabi',
     name: 'Punjabi',
@@ -1278,7 +1492,65 @@ export const LANGUAGES: LanguagePage[] = [
       { title: 'Property enquiries', body: 'Buyer calls about projects in Mohali, Zirakpur or Ludhiana, qualified on budget, location and timeline before your sales team calls back.', to: '/solutions/real-estate', link: 'AI calling for real estate' },
     ],
   },
-  { slug: 'odia', name: 'Odia', native: 'ଓଡ଼ିଆ', code: 'od-IN', region: 'Odisha', greeting: 'ନମସ୍କାର', blurb: 'Odia coverage, so Odisha callers aren’t the ones who always get the English fallback.' },
+  {
+    slug: 'odia',
+    name: 'Odia',
+    native: 'ଓଡ଼ିଆ',
+    code: 'od-IN',
+    region: 'Odisha',
+    greeting: 'ନମସ୍କାର',
+    blurb: 'Odia coverage, so Odisha callers aren’t the ones who always get the English fallback.',
+    localUseCases: [
+      'Bhubaneswar, Cuttack and Odisha enquiries from callers who would rather speak Odia than navigate an English or Hindi menu',
+      'Admissions, coaching and clinic lines that get calls in the evening and on weekends',
+      'Outbound reminders and follow-ups for lenders, service providers and local businesses',
+    ],
+    callBehaviors: [
+      'Opens in Odia and follows the caller into English or Hindi mid-call',
+      'Answers from your approved information and takes a callback request when it should not guess',
+      'Saves the recording, transcript, summary and any fields you ask it to capture',
+    ],
+    seoFaq: {
+      q: 'Is this an Odia voice bot or a real AI calling agent?',
+      a: 'A real AI calling agent. It listens, understands the request in Odia, answers from your approved information, books or transfers the call, and logs everything. It is not a recorded Odia IVR menu.',
+    },
+    extraFaqs: [
+      { q: 'Does Odia work on both phone calls and the website widget?', a: 'Yes. The same agent can answer phone calls and website voice-widget conversations in Odia, and each conversation is saved with its transcript and summary.' },
+      { q: 'What if the agent should not answer a question?', a: 'Keep the agent to your approved knowledge base and set it to offer a callback or a transfer to a person for anything outside it. Check these cases in test calls before launch.' },
+    ],
+    sampleExchange: {
+      context: 'An inbound call to a coaching institute in Bhubaneswar',
+      turns: [
+        { speaker: 'Caller', native: 'ନମସ୍କାର, ଆପଣଙ୍କ ଇନଷ୍ଟିଚ୍ୟୁଟରେ ନୂଆ batch କେବେ ଆରମ୍ଭ ହେବ?', gloss: 'Hello, when does the new batch start at your institute?' },
+        { speaker: 'Agent', native: 'ନମସ୍କାର! ନୂଆ batch ଆସନ୍ତା ସୋମବାରରୁ ଆରମ୍ଭ ହେବ। ଆପଣ କେଉଁ class ପାଇଁ ପଚାରୁଛନ୍ତି?', gloss: 'Hello! The new batch starts from next Monday. Which class are you asking about?' },
+        { speaker: 'Caller', native: 'Class 10 ପାଇଁ। Demo class ଅଛି କି?', gloss: 'For class 10. Is there a demo class?' },
+        { speaker: 'Agent', native: 'ହଁ, ଆସନ୍ତାକାଲି ସକାଳ 10ଟାରେ demo class ଅଛି। ଆପଣଙ୍କ ନାମ କହିବେ, ମୁଁ book କରିଦେବି।', gloss: 'Yes, there is a demo class tomorrow at 10 a.m. Tell me your name and I will book it.' },
+      ],
+      outcome: 'The class, the demo slot and the caller’s name are saved on the call, so the admissions team can follow up with the right batch details.',
+    },
+    codeMixing: {
+      name: 'Odia-English mixing',
+      body: 'Odia callers often drop English words into a call: “batch”, “class”, “appointment”, “EMI” and most numbers. Hindi also turns up, especially with callers who have worked outside Odisha. The agent understands those words inside an Odia sentence, keeps replying in Odia, and switches to English or Hindi if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Admissions and coaching enquiries', body: 'Batch, fee and timing questions answered from your approved information, with demo classes or counselling booked on the call.', to: '/product/inbound', link: 'Inbound call answering' },
+      { title: 'Clinic and diagnostic bookings', body: 'Appointment and timing calls for clinics in Bhubaneswar, Cuttack and beyond, booked inside your bookable hours.', to: '/solutions/healthcare', link: 'AI receptionist for clinics' },
+      { title: 'Property and project enquiries', body: 'Buyer calls about plots and flats, qualified on budget, location and timeline before your sales team calls back.', to: '/solutions/real-estate', link: 'AI calling for real estate' },
+    ],
+    guide: [
+      { title: 'Script', body: 'Odia has its own rounded script, so a prompt or welcome line pasted from Hindi will not work. Write the welcome message in Odia, keep it short, and check how it reads on the dashboard and in the transcript before a customer hears it.' },
+      { title: 'Dialects across Odisha', body: 'Speech in Sambalpur and western Odisha, coastal Odisha and the south differs in words and rhythm. If your callers come from one region, test with callers from that region and add local place names and product names to the knowledge base.' },
+      { title: 'Plan for a person', body: 'Do not skip test calls for a language your team may not speak itself. Run a set covering noisy audio, interruptions and mixed English, set a transfer or callback for anything the agent cannot answer, and review the first week of transcripts.' },
+    ],
+    related: [
+      { to: '/ai-ivr', label: 'AI IVR for India' },
+      { to: '/vs-ivr', label: 'AI voice agent vs IVR' },
+      { to: '/product/widget', label: 'Website voice widget' },
+      { to: '/product/knowledge-base', label: 'Knowledge base' },
+      { to: '/solutions/support', label: 'Customer support calls' },
+      { to: '/languages/bengali', label: 'Bengali calling agent' },
+    ],
+  },
 ]
 
 // ---- Global languages (feeds /languages) ----
