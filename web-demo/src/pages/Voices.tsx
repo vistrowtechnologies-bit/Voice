@@ -53,7 +53,8 @@ function languageSummary(entry: VoiceEntry): string {
   return entry.canSwitchLanguage ? `${entry.languageCount} languages` : `${entry.languageLabels[0] ?? 'One language'} only`
 }
 
-type TabKey = 'expressive' | 'hd' | 'standard' | 'native' | 'gemini' | 'premium' | 'realtime'
+// Realtime tabs are one per Live model: `rt:<model value>`.
+type TabKey = 'expressive' | 'hd' | 'standard' | 'native' | 'gemini' | 'premium' | `rt:${string}`
 type FilterKey = 'all' | 'added' | 'female' | 'male'
 
 const FILTERS: { key: FilterKey; label: string }[] = [
@@ -66,6 +67,8 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 // Realtime (speech-to-speech) is a model, not a voice: it is chosen on the agent.
 // The tab exists so someone looking for it among the voices is sent to the right place.
 const REALTIME_MODELS = ADMIN_ONLY_MODELS.filter((m) => m.value.startsWith('gemini-live'))
+// "Gemini Live 3.1 · realtime" -> "Live 3.1"
+const shortModelLabel = (label: string) => label.replace(/^Gemini /, '').replace(/ · realtime$/, '')
 
 interface Tab {
   key: TabKey
@@ -196,6 +199,7 @@ function Spotlight({
   onAdd,
   onRemove,
   realtimeHd,
+  realtimeModelLabel,
   stickyTop,
   nameRef,
 }: {
@@ -205,6 +209,8 @@ function Spotlight({
   nameRef: React.RefObject<HTMLHeadingElement | null>
   // Set for a Gemini Live voice: the HD voice an agent picks to speak with it.
   realtimeHd?: VoiceEntry | null
+  // The Live model whose tab is open, named in the setup steps.
+  realtimeModelLabel?: string
   sample: string
   playState: 'idle' | 'loading' | 'playing' | 'paused' | 'error'
   progress: number
@@ -280,14 +286,14 @@ function Spotlight({
                     Add <span className="font-bold text-text">{realtimeHd.name}</span> to your picker (button below).
                   </li>
                   <li>
-                    On the agent, set <span className="font-bold text-text">Model</span> to Gemini Live 2.5 or 3.1.
+                    On the agent, set <span className="font-bold text-text">Model</span> to {realtimeModelLabel ?? 'a Gemini Live model'}.
                   </li>
                   <li>
                     Set its <span className="font-bold text-text">Voice</span> to {realtimeHd.name}. Calls then speak as {entry.name}.
                   </li>
                 </ol>
                 <p className="mt-2 text-xs">
-                  Works the same on Live 2.5 and 3.1. The preview is Gemini TTS in this voice, so a live call can sound slightly different.{' '}
+                  Every Live model uses the same 30 voices. The preview is Gemini TTS in this voice, so a live call can sound slightly different.{' '}
                   <Link to="/dashboard/agents" className="font-bold text-primary hover:underline">
                     Open agents →
                   </Link>
@@ -492,7 +498,8 @@ export function Voices() {
   const passesFilter = (voice: VoiceEntry) =>
     filter === 'all' || (filter === 'added' ? !!voice.selected : voice.gender === filter)
 
-  const realtimeActive = showRealtime && tab === 'realtime' && !query
+  const realtimeModel = REALTIME_MODELS.find((m) => tab === `rt:${m.value}`)
+  const realtimeActive = showRealtime && !!realtimeModel && !query
   const activeTab = realtimeActive ? undefined : (tabs.find((t) => t.key === tab) ?? tabs[0])
   // Search and the "Added" filter look across every category, not just the open tab.
   const everyVoice = tabs.flatMap((t) => t.voices)
@@ -698,18 +705,23 @@ export function Voices() {
                           {t.label} <span className="text-[11px] font-medium opacity-70">{t.voices.length}</span>
                         </button>
                       ))}
-                      {showRealtime && (
-                        <button
-                          role="tab"
-                          aria-selected={realtimeActive}
-                          onClick={() => chooseTab('realtime')}
-                          className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                            realtimeActive ? 'bg-primary/10 text-primary' : 'bg-transparent text-text-muted hover:text-text'
-                          }`}
-                        >
-                          Realtime Live <span className="text-[11px] font-medium opacity-70">{realtimeVoices.length || REALTIME_MODELS.length}</span>
-                        </button>
-                      )}
+                      {showRealtime &&
+                        REALTIME_MODELS.map((m) => {
+                          const on = realtimeActive && realtimeModel?.value === m.value
+                          return (
+                            <button
+                              key={m.value}
+                              role="tab"
+                              aria-selected={on}
+                              onClick={() => chooseTab(`rt:${m.value}`)}
+                              className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                                on ? 'bg-primary/10 text-primary' : 'bg-transparent text-text-muted hover:text-text'
+                              }`}
+                            >
+                              {shortModelLabel(m.label)} <span className="text-[11px] font-medium opacity-70">{realtimeVoices.length}</span>
+                            </button>
+                          )
+                        })}
                     </div>
                   )}
 
@@ -731,7 +743,11 @@ export function Voices() {
                         </button>
                       ))}
                       {!query && filter !== 'added' && activeTab && <span className="ml-auto text-[11px] text-text-muted">{activeTab.note}</span>}
-                      {realtimeActive && <span className="ml-auto text-[11px] text-text-muted">Gemini Live voices · each works on Live 2.5 and 3.1 · owner only</span>}
+                      {realtimeActive && realtimeModel && (
+                        <span className="ml-auto text-[11px] text-text-muted">
+                          Voices for {realtimeModel.label} · owner only
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -739,10 +755,10 @@ export function Voices() {
                 {realtimeActive && (
                   <div className="flex flex-col gap-2 border-b border-border p-4">
                     <p className="text-sm leading-relaxed text-text-muted">
-                      Realtime is a <span className="font-semibold text-text">model</span>, picked under Model on an agent. It speaks with the
-                      Gemini voice named like the agent's HD voice. Listen to them below.
+                      {realtimeModel?.label} is a <span className="font-semibold text-text">model</span>, picked under Model on an agent. It
+                      speaks with the Gemini voice named like the agent's HD voice. These are its voices; the other Live models use the same 30.
                     </p>
-                    {REALTIME_MODELS.map((model) => (
+                    {REALTIME_MODELS.filter((m) => m.value === realtimeModel?.value).map((model) => (
                       <div key={model.value} className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3">
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                           <Icon name="bolt" className="text-[20px]" />
@@ -804,6 +820,7 @@ export function Voices() {
                   stickyTop={headerHeight}
                   nameRef={spotlightNameRef}
                   realtimeHd={realtimeActive ? (realtimeHdFor.get(current.value) ?? null) : undefined}
+                  realtimeModelLabel={realtimeModel?.label}
                   sample={sample}
                   playState={preview.state}
                   progress={preview.progress}

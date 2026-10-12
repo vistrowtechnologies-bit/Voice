@@ -412,7 +412,7 @@ function AgentEditorForm({
                           : ' (not available on realtime, calls use Kore)'}
                       </option>
                     )}
-                    <optgroup label="Gemini Live voices - work on Live 2.5 and 3.1">
+                    <optgroup label={`Voices for ${modelLabel(form.model)} - the same 30 on every Live model`}>
                       {realtimeVoices.map((v) => (
                         <option key={v.value} value={v.value}>
                           {v.label}
