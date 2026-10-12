@@ -432,3 +432,14 @@ Real test calls on the production phone worker (synthetic Hindi caller, account 
 - gemini-2.5-flash: no reply. The Gemini API project is at its monthly spend cap (429 RESOURCE_EXHAUSTED, verified from the production server). Gemini Live agents 4 and 26 (Vistrow's own) cannot answer until the cap is raised; no customer agent uses Gemini.
 
 PR #62 makes Sarvam STT + Sarvam 105B + Chirp 3 HD the default for new tenants, prices 1 credit = 1 default minute (Sarvam 1x, Gemini Live 3.1 6x, 2.5 2x) and sets Growth 750 / Scale 1,750 credits at unchanged prices. Waiting for the owner to confirm prices before merging.
+
+### Claude — 2026-10-12 — Voices: row click plays/pauses, header untouched, realtime voices listenable
+
+Branch `claude/voices-row-play`. Owner requests:
+- **Row click plays and pauses.** Clicking a voice row plays it; clicking again pauses, and again resumes. `useVoicePreview` takes `{ pausable }` and only the Voices page uses it; `VoicePreviewButton` elsewhere still stops.
+- **Fixed a live bug:** clicking a different row while one was playing only selected it and played nothing, because `toggle` read the previous voice's stale `state`. It now decides from the audio element.
+- **Header:** the Hindi/English preview switch moved out of the page header into the body row, next to "Only added voices…". The header now matches other pages.
+- **Realtime tab (owner-only)** lists all 30 Gemini Live voices: gender, Google's style word, and the HD voice that maps to each one (`agent/main.py` `_gemini_live_voice`: persona of the agent's HD voice). Previews play the Gemini 3.8 Flash-Lite TTS version (`google38:<persona>`, owner-only preview). The spotlight says a live call can sound slightly different, and its button adds the mapped HD voice to the picker.
+
+Verified in the local app with a mock API (real catalog, owner session): play, pause, resume, switching while playing, and pausing from the big button. On the Realtime tab: 30 voices, the Female/Male filters, the preview request goes to `voice=google38:achernar`, and Achernar maps to Myra HD. `npm run build` passes.
+Not verified: real Gemini preview audio. How close Gemini TTS sounds to the Live model is unmeasured.

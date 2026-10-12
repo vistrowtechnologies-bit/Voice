@@ -3,7 +3,7 @@ import { Icon } from './Icon'
 import { voicePreviewUrl } from '../lib/api'
 import { Tooltip } from './ui/Tooltip'
 
-type State = 'idle' | 'loading' | 'playing' | 'error'
+type State = 'idle' | 'loading' | 'playing' | 'paused' | 'error'
 
 // Only one preview across the whole app may play at once. A plain module-
 // level EventTarget (not React state) so every mounted VoicePreviewButton -
@@ -24,7 +24,9 @@ export type PreviewState = State
 // play is a free cached read. Fetched as a blob so we can show a real loading
 // state and surface errors, and so the httpOnly session cookie is sent.
 // `progress` (0-1) follows the audio so a caller can track the spoken words.
-export function useVoicePreview(voice: string, lang: string) {
+// With `pausable`, toggling while playing pauses (and the next toggle resumes)
+// instead of stopping.
+export function useVoicePreview(voice: string, lang: string, { pausable = false } = {}) {
   const [state, setState] = useState<State>('idle')
   const [progress, setProgress] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -63,10 +65,28 @@ export function useVoicePreview(voice: string, lang: string) {
   }, [])
 
   async function toggle() {
-    if (state === 'playing') {
-      cleanup()
-      setState('idle')
-      setProgress(0)
+    // Decide from the audio element, not `state`: right after the voice
+    // changes, `state` can still read 'playing' from the previous voice.
+    const current = audioRef.current
+    if (current && !current.paused) {
+      if (pausable) {
+        current.pause()
+        setState('paused')
+      } else {
+        cleanup()
+        setState('idle')
+        setProgress(0)
+      }
+      return
+    }
+    if (current && pausable && current.currentTime > 0 && !current.ended) {
+      announceStart(idRef.current)
+      try {
+        await current.play()
+        setState('playing')
+      } catch {
+        setState('error')
+      }
       return
     }
     setState('loading')
