@@ -5870,6 +5870,9 @@ def leads_inbound_agents(account_id: int, request: Request) -> dict:
             continue
         agents.append({
             "id": str(agent["id"]),
+            # The 10-digit Agent ID shown on the dashboard; also sent as
+            # agent_id with every pushed lead.
+            "agent_id": agent.get("publicId") or "",
             "name": agent.get("name") or "Vistrow agent",
             "knowledge_base": kb_name,
         })

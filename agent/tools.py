@@ -668,6 +668,7 @@ def _integration_body(key: str, config: dict, lead: dict) -> tuple[str, dict] | 
             "channel": _CHANNEL_LABELS.get(lead.get("channel"), lead.get("channel") or ""),
             "language": lead.get("language") or "",
             "agent_name": lead.get("agent_name") or "",
+            "agent_id": lead.get("agent_id") or "",
             "page_path": lead.get("page_path") or "",
             # Stable Vistrow redirect, protected by a per-call opaque token.
             # ArthaLeads stores this URL; it never receives the private B2 key.
@@ -1288,7 +1289,7 @@ _INTEGRATION_FIELDS = {
     "email": ("email",),
     "company": ("company",),
     "channel": ("channel",),
-    "agent": ("agent_name",),
+    "agent": ("agent_name", "agent_id"),
     "language": ("language",),
     "duration": ("duration_seconds",),
     "details": ("extracted_data", "summary", "use_case", "message"),

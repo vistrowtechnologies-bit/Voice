@@ -274,7 +274,7 @@ export const SEO_PAGES: SeoPage[] = [
   page(
     '/integrations',
     'Voice AI Integrations | Vistrow Voice',
-    'Connect Vistrow Voice call leads, transcripts, and outcomes to CRMs, WhatsApp, Slack, Google Sheets, automation platforms, and webhooks.',
+    'Connect Vistrow Voice call leads, transcripts, and outcomes to CRMs, Slack, Google Sheets, automation platforms, and webhooks.',
     'integrations',
     'Vistrow Voice orb connected to CRM, messaging, spreadsheet, and automation tools',
     'collection',
@@ -632,7 +632,7 @@ export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
   'language-punjabi': { eyebrow: 'PUNJABI AI VOICE AGENT', headline: 'ਪੰਜਾਬੀ calls, handled naturally.', proof: 'Punjabi + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'ਪੰਜਾਬੀ' },
   'language-odia': { eyebrow: 'ODIA AI VOICE AGENT', headline: 'ଓଡ଼ିଆ calls, handled naturally.', proof: 'Odia + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'ଓଡ଼ିଆ' },
   pricing: { eyebrow: 'VOICE AI PRICING', headline: 'Start small. Scale every conversation.', proof: 'Phone + Web  \u00b7  Usage visibility  \u00b7  No hidden model names', accent: '#9333ea', hue: '0deg' },
-  integrations: { eyebrow: 'VOICE AI INTEGRATIONS', headline: 'Your calls. Your CRM. Already synced.', proof: 'CRM  \u00b7  WhatsApp  \u00b7  Slack  \u00b7  Sheets  \u00b7  Webhooks', accent: '#0e7490', hue: '-91deg' },
+  integrations: { eyebrow: 'VOICE AI INTEGRATIONS', headline: 'Your calls. Your CRM. Already synced.', proof: 'CRM  \u00b7  Zoho  \u00b7  Slack  \u00b7  Sheets  \u00b7  Webhooks', accent: '#0e7490', hue: '-91deg' },
   'vs-ivr': { eyebrow: 'AI VOICE VS IVR', headline: 'Stop making callers press buttons.', proof: 'Natural answers  \u00b7  Language switching  \u00b7  Complete records', accent: '#b45309', hue: '129deg' },
   ...Object.fromEntries(
     COMPARE_VENDORS.map((vendor) => [

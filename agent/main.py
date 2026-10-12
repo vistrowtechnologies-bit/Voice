@@ -8138,6 +8138,8 @@ async def entrypoint(ctx: JobContext) -> None:
                     "extracted_data": {**_extra_lead_facts(lead_data), **extracted},
                     "language": agent._reply_language,
                     "agent_name": cfg.get("name"),
+                    # The 10-digit Agent ID from the dashboard, for CRM mapping.
+                    "agent_id": cfg.get("public_id") or "",
                     "page_path": call_context.get("visitor_path") or "",
                     "call_id": saved_call_id,
                     "recording_url": (
