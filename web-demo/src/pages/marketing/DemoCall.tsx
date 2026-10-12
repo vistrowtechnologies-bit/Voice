@@ -58,6 +58,7 @@ export function DemoCall() {
 
         <div className="rounded-3xl border border-border bg-surface p-5 sm:p-7">
           <SectionEyebrow>Transcript sample</SectionEyebrow>
+          <p className="mt-2 text-xs text-text-muted">A representative script written for this page. It is not a recording of a real customer.</p>
           <div className="mt-5 space-y-4">
             {call.transcript.map((turn, index) => (
               <div key={`${turn.speaker}-${index}`} className={`flex ${turn.speaker === 'Caller' ? 'justify-end' : 'justify-start'}`}>
@@ -68,6 +69,22 @@ export function DemoCall() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
+        <div className="mb-8 max-w-2xl">
+          <SectionEyebrow>What the caller experiences</SectionEyebrow>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">The call, step by step.</h2>
+          <p className="mt-3 text-text-muted">{call.whyItMatters}</p>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {call.callerExperience.map((step) => (
+            <div key={step.title} className="rounded-2xl border border-border bg-surface p-6">
+              <h3 className="font-display text-lg font-semibold">{step.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-text-muted">{step.body}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -92,6 +109,46 @@ export function DemoCall() {
             <Icon name="info" className="mt-0.5 shrink-0 text-[18px] text-primary" />
             Public demo pages use representative scripts. Real recordings should only be published with consent.
           </p>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
+        <div className="mb-8 max-w-2xl">
+          <SectionEyebrow>What you configure</SectionEyebrow>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Setting up a call like this.</h2>
+          <p className="mt-3 text-text-muted">These are the dashboard settings behind the sample. Your own agent uses your project facts, hours and rules.</p>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {call.configure.map((item) => (
+            <div key={item.title} className="flex flex-col rounded-2xl border border-border bg-surface p-6">
+              <h3 className="font-display text-lg font-semibold">{item.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
+              {item.to && item.link && (
+                <Link to={item.to} className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-primary underline-offset-4 hover:underline">
+                  {item.link}
+                  <Icon name="arrow_forward" className="text-[16px]" />
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
+        <div className="mb-6 max-w-2xl">
+          <SectionEyebrow>Go deeper</SectionEyebrow>
+          <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">Related pages for this scenario.</h2>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {call.related.map((item) => (
+            <Link key={item.to} to={item.to} className="group flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-primary">
+              <span>
+                <span className="block font-semibold text-text">{item.label}</span>
+                <span className="mt-1 block text-sm text-text-muted">{item.body}</span>
+              </span>
+              <Icon name="arrow_forward" className="shrink-0 text-primary transition-transform group-hover:translate-x-1" />
+            </Link>
+          ))}
         </div>
       </section>
 

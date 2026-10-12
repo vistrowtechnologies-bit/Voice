@@ -636,10 +636,52 @@ export const SOLUTIONS: Solution[] = [
       { icon: 'badge', title: 'Clinic CRM', body: 'Send patient-provided contact and visit context to the clinic team.' },
     ],
     guardrails: ['Artha does not diagnose, prescribe medication or promise a clinical outcome.', 'Possible emergencies are directed to immediate local emergency or human care.', 'A booking needs a real patient name, phone number, visit reason and successful calendar response.'],
+    guideSections: [
+      {
+        eyebrow: 'The front-desk calls it takes',
+        title: 'Enquiries, bookings and callbacks, in the caller’s language.',
+        intro: 'This is administrative front-desk work only. The agent never gives medical advice, and the clinic team stays in charge of everything clinical.',
+        items: [
+          { icon: 'quiz', title: 'Clinic information', body: 'Timings, location, doctors, services and how to prepare for a visit, answered from the knowledge base you upload. With strict mode on, it quotes your approved answers and says it will check with the team when something is not covered.', to: '/product/knowledge-base', link: 'Knowledge base' },
+          { icon: 'event_available', title: 'Appointment requests', body: 'It collects the patient’s name, phone number and reason for the visit, offers free slots inside your business hours, and confirms only once the booking has saved. Bookings appear in Appointments, where staff can reschedule them or mark them confirmed, completed, cancelled or no-show.', to: '/help/appointments/manage-appointments', link: 'Bookings and availability' },
+          { icon: 'phone_callback', title: 'Callbacks when no slot fits', body: 'If nothing suits the caller, it records a callback request with their preferred day and time, so the call does not end without a next step.' },
+          { icon: 'swap_calls', title: 'A person when it matters', body: 'Set a transfer phone number and the agent can dial a colleague into the call and stay on until they answer. Worrying symptoms are directed to immediate human or emergency care, not handled by the agent.', to: '/help/agents/agent-functions-and-transfer', link: 'Functions and transfer' },
+          { icon: 'translate', title: 'Hindi, regional languages and English', body: 'Callers can speak Hindi, Marathi, Tamil, Kannada, Telugu and the other supported Indian languages, plus English, and the agent follows when they switch mid-call.', to: '/languages', link: 'Supported languages' },
+          { icon: 'history', title: 'Returning patients', body: 'Turn on Memory and the agent keeps a short summary of earlier calls from the same number, so a returning caller is greeted accordingly.' },
+        ],
+      },
+      {
+        eyebrow: 'Reminders and follow-ups',
+        title: 'Reminder calls run as an outbound campaign.',
+        intro: 'There is no automatic reminder attached to every booking. You choose who to call and when, and the campaign does the dialling.',
+        items: [
+          { icon: 'campaign', title: '1. Choose the contacts', body: 'Import a CSV or add contacts by hand, then pick them or a segment when you create a campaign under Outbound.', to: '/help/outbound/run-a-campaign', link: 'Run a campaign' },
+          { icon: 'edit_note', title: '2. Personalise the call', body: 'Use {{variables}} such as the patient’s name or the appointment date in the agent’s prompt and greeting, with fallback values for blanks.' },
+          { icon: 'rule', title: '3. Calling rules apply', body: 'Every dial is checked against your Do-Not-Call list and calling window first. Blocked contacts are counted, not called.', to: '/help/compliance/calling-rules', link: 'Calling window and Do-Not-Call' },
+          { icon: 'task_alt', title: '4. Staff update the record', body: 'Read the outcome in the call details, then reschedule or cancel in Appointments. The agent can also take a callback request if the patient asks to move the visit.' },
+        ],
+      },
+      {
+        eyebrow: 'What you configure',
+        title: 'Your hours, your information, your rules.',
+        items: [
+          { icon: 'schedule', title: 'Bookable hours', body: 'Business hours per day, slot length from 15 to 60 minutes, timezone and blackout dates, set under Settings, Scheduling.' },
+          { icon: 'menu_book', title: 'Clinic knowledge', body: 'Upload the fee sheet, doctor list or visit instructions, review the extracted question and answer pairs, then attach the knowledge base to the agent.', to: '/help/knowledge-base/add-knowledge', link: 'Give your agent your facts' },
+          { icon: 'fact_check', title: 'Post-call details', body: 'Pick the fields pulled from every transcript, such as the visit reason, and send each call to your team through a webhook, Slack, Google Sheets or WhatsApp.', to: '/integrations', link: 'Integrations' },
+          { icon: 'record_voice_over', title: 'Consent, recording and retention', body: 'Switch on spoken consent so the agent asks before details are collected, choose whether calls are recorded, and set how long records are kept.', to: '/help/compliance/consent-recording-retention', link: 'Consent, recording and retention' },
+        ],
+        note: 'Whether and how to record patient calls, and what patients are told, is the clinic’s responsibility; Vistrow Voice provides the controls above. The security page lists what is in place today and what is not, and we make no medical-compliance or certification claims.',
+      },
+    ],
     faqs: [
-      { q: 'Can it send appointment reminder calls?', a: 'Yes - automated reminder calls run ahead of each appointment, cutting no-shows without staff having to dial out.' },
+      { q: 'Can it send appointment reminder calls?', a: 'Yes, as an outbound campaign. Pick the patients to call, personalise the greeting with their name or appointment date, and the agent dials within your calling window and Do-Not-Call rules. Reminders are not attached to every booking automatically.' },
       { q: 'Is patient information kept confidential?', a: 'Yes - call data is tenant-isolated to your clinic account and only accessible to your team.' },
       { q: 'Can one agent handle multiple clinic locations?', a: 'Yes - build a separate agent per location, or one agent that routes based on what the caller needs.' },
+      { q: 'Does it give medical advice?', a: 'No. It answers administrative questions from the information you provide, does not diagnose or suggest treatment, and directs possible emergencies to immediate human or emergency care.' },
+      { q: 'Does it work with our existing appointment software?', a: 'Agents book into the Appointments calendar built into Vistrow Voice. To pass bookings to another system, send the appointment-booked event to a webhook, Slack, Google Sheets or WhatsApp. There is no connector for a specific hospital system.' },
+      { q: 'Can it answer in Hindi and regional languages?', a: 'Yes. Hindi, including everyday Hinglish, Marathi, Gujarati, Kannada, Telugu, Tamil and the other supported Indian languages, plus English.' },
+      { q: 'Are calls recorded?', a: 'Recording and spoken consent are settings on the Compliance page, so you decide. With consent required, the agent asks first and discards the recording if the caller declines. Your clinic decides what it records and tells patients.' },
+      { q: 'Can I try it before going live?', a: 'Yes. Call the clinic demo above to hear a made-up clinic answered live, then use the Testing Lab on your own agent to run scenarios before any real patient calls.' },
     ],
   },
   {
@@ -844,15 +886,55 @@ export const SOLUTIONS: Solution[] = [
       { label: 'Outcome', value: 'Escalated to account support' },
     ],
     integrations: [
-      { icon: 'confirmation_number', title: 'Ticketing system', body: 'Create or update a ticket with the complete conversation context.' },
+      { icon: 'confirmation_number', title: 'Ticketing via webhook', body: 'Send the complete conversation context to your helpdesk through a webhook or an automation tool.' },
       { icon: 'library_books', title: 'Knowledge base', body: 'Ground answers in your approved support documentation.' },
       { icon: 'swap_calls', title: 'Human handoff', body: 'Transfer or schedule a callback without asking the caller to start again.' },
     ],
     guardrails: ['Never repeat troubleshooting the caller already completed.', 'Never invent account status, billing decisions or a resolution timeline.', 'Escalate when the caller requests a human or the issue leaves approved knowledge.'],
+    guideSections: [
+      {
+        eyebrow: 'What the agent handles',
+        title: 'The repetitive calls that fill a support queue.',
+        items: [
+          { icon: 'menu_book', title: 'How-to and policy questions', body: 'Answers come from the knowledge base you upload: help articles, policy documents or approved question and answer pairs. Strict mode keeps it to that material and has it say it will check with the team when something is missing.', to: '/product/knowledge-base', link: 'Knowledge base' },
+          { icon: 'inventory_2', title: 'Plan and product lookups', body: 'The live catalog holds structured items such as plans, products or services. The agent looks up full details only when a caller asks, which keeps calls quick.' },
+          { icon: 'build', title: 'One step at a time', body: 'It guides the caller through a fix one action at a time, waits for the result, and does not repeat steps the caller says they already tried.' },
+          { icon: 'history', title: 'Returning callers', body: 'With Memory on, the agent recognises a returning phone number and uses a short summary of earlier calls, so people are not asked to start over.' },
+          { icon: 'translate', title: 'Callers in their own language', body: 'Hindi, regional Indian languages and English, with the agent switching when the caller does.', to: '/languages', link: 'Supported languages' },
+          { icon: 'widgets', title: 'Phone and website', body: 'Answer an inbound number, or put a voice and chat button on your help pages so visitors can ask without dialling.', to: '/product/widget', link: 'Website widget' },
+        ],
+      },
+      {
+        eyebrow: 'Handing off',
+        title: 'Escalation that keeps the story.',
+        intro: 'Anything outside approved knowledge, and any caller who asks for a person, should reach one.',
+        items: [
+          { icon: 'swap_calls', title: 'Live transfer', body: 'Set a transfer phone number and the agent dials your colleague into the call, staying on until they answer.', to: '/help/agents/agent-functions-and-transfer', link: 'Functions and transfer' },
+          { icon: 'phone_callback', title: 'Callback request', body: 'When no one is free, the agent records that the caller wants a callback, with their preferred time, and sends it as a callback event.' },
+          { icon: 'description', title: 'Transcript and summary attached', body: 'Open any call to read the full transcript, the summary, the sentiment badge, the recording and the fields captured, so the next person starts informed.', to: '/help/calls/find-a-call', link: 'Find a call' },
+        ],
+      },
+      {
+        eyebrow: 'Where the outcome goes',
+        title: 'Into the tools your team already watches.',
+        intro: 'There is no built-in connector for a specific helpdesk product. Calls reach your team through these routes.',
+        items: [
+          { icon: 'webhook', title: 'Webhook to your helpdesk', body: 'Every call can be posted as JSON to any URL, so a helpdesk that accepts a webhook can create a ticket from it, directly or through Zapier, n8n or Make.', to: '/integrations', link: 'All integrations' },
+          { icon: 'chat', title: 'Slack alerts', body: 'Post each escalation or callback request to the channel your support team watches.' },
+          { icon: 'table_chart', title: 'Google Sheets log', body: 'Keep a running sheet of calls and captured fields for anyone who does not use the helpdesk.' },
+          { icon: 'science', title: 'Test before you go live', body: 'Run built-in Testing Lab scenarios such as impatient callers, interruptions, unsupported questions and transfers, then review the checks before changing a live workflow.', to: '/product/agents', link: 'Voice agents' },
+        ],
+      },
+    ],
     faqs: [
       { q: 'What kind of tickets can it resolve without a human?', a: 'Routine, repetitive questions grounded in your knowledge base - timings, policies, status checks, and the like.' },
       { q: 'How does escalation to a human work?', a: 'Artha hands off with the full transcript and context attached, so your team never has to ask the caller to repeat themselves.' },
       { q: 'Can it be grounded in our existing help docs?', a: 'Yes - upload your docs and Artha answers only from that material when strict mode is on.' },
+      { q: 'Does it connect to Zendesk, Freshdesk or another helpdesk?', a: 'There is no built-in connector for a specific helpdesk. Calls can be posted to any URL that accepts a webhook, or routed through Zapier, n8n or Make, which is how most helpdesks create tickets from outside events.' },
+      { q: 'Does it recognise repeat callers?', a: 'Yes, if Memory is turned on for the agent. It keeps a short summary of earlier calls from the same phone number and uses it to greet them.' },
+      { q: 'Can it transfer a call to a person?', a: 'Yes. Add a transfer phone number to the agent and it dials your colleague into the call, staying on until they answer. If nobody is free it can take a callback request.' },
+      { q: 'How do I check it before real customers call?', a: 'Use the Testing Lab to run scenarios such as an impatient caller, an interruption or an unsupported question, and review the results before you publish.' },
+      { q: 'Is there a support number or a website option?', a: 'Both. Attach a phone number for inbound calls, add the website widget to your help pages, or use the same agent on both.' },
     ],
   },
 ]
@@ -1754,15 +1836,86 @@ export interface IntegrationEntry {
 }
 
 export const INTEGRATION_DIRECTORY: IntegrationEntry[] = [
-  { name: 'ArthaLeads CRM', category: 'CRM', desc: 'Native connector. Every qualified lead, with the full transcript, pushed on call end - paste a token, no URL setup.' },
+  { name: 'ArthaLeads CRM', category: 'CRM', desc: 'Native connector. Every qualified lead, with the full transcript, pushed on call end - paste a connection key, no URL setup.' },
+  { name: 'Zoho CRM', category: 'CRM', desc: 'Native connector. Connect with Zoho and each caller who leaves a phone or email becomes a lead in your Leads module; repeat callers update their lead.' },
   { name: 'Slack', category: 'Notifications', desc: 'Native connector. Choose a Slack channel once, then receive every qualified lead with the transcript.' },
   { name: 'WhatsApp', category: 'Messaging', desc: 'Native connector. Fire a WhatsApp follow-up after a call through your provider’s send webhook.' },
-  { name: 'Google Sheets', category: 'Reporting', desc: 'Native connector. Appends every qualified lead as a row via an Apps Script web-app URL - no OAuth dance.' },
-  { name: 'Zapier', category: 'Automation', desc: 'Point the lead webhook at a Zapier catch hook to reach 6,000+ downstream apps.', viaWebhook: true },
+  { name: 'Google Sheets', category: 'Reporting', desc: 'Native connector. Sign in with Google and every caller who leaves a phone or email becomes a row in a leads sheet created in your Drive.' },
+  { name: 'Facebook Lead Ads', category: 'Lead source', desc: 'Native connector. Connect your Page and each new Lead Ads submission is queued for a call within about 15 to 30 seconds.' },
+  { name: 'CRM / Webhook', category: 'Developer', desc: 'Native connector. Post every call event as JSON to any URL you control, with an optional token.' },
+  { name: 'Zapier', category: 'Automation', desc: 'Point the lead webhook at a Zapier catch hook to pass calls on to the apps Zapier connects to.', viaWebhook: true },
   { name: 'n8n', category: 'Automation', desc: 'Self-hosted automation - same JSON payload, your own infrastructure.', viaWebhook: true },
   { name: 'Make', category: 'Automation', desc: 'Route call outcomes into Make scenarios for multi-step workflows.', viaWebhook: true },
-  { name: 'Salesforce, HubSpot, Zoho', category: 'CRM', desc: 'Any CRM that accepts an inbound webhook - or use the full API for a deeper two-way sync.', viaWebhook: true },
+  { name: 'Salesforce, HubSpot and others', category: 'CRM', desc: 'Any CRM that accepts an inbound webhook - or use the full API for a deeper two-way sync.', viaWebhook: true },
 ]
+
+// ---- /integrations page depth ----
+//
+// Every claim here is checked against server/calls_db.py (_SEED_INTEGRATIONS,
+// INTEGRATION_EVENTS, INTEGRATION_FIELDS), server/integrations_dispatch.py and
+// web-demo/src/pages/IntegrationDetail.tsx. There is no Google Calendar
+// integration - appointments use the calendar built into Vistrow Voice.
+// No prices or credit figures: those live on /pricing.
+
+export const INTEGRATIONS_PAGE: { guideSections: GuideSection[]; faqs: Faq[] } = {
+  guideSections: [
+    {
+      eyebrow: 'How it works',
+      title: 'From the end of a call to a record in your tools.',
+      items: [
+        { icon: 'extension', title: '1. Connect from the dashboard', body: 'Open Integrations, click Connect on a card and follow the steps: sign in with Google or Zoho, pick a Slack channel, or paste a URL or key.', to: '/help/integrations/connect-integrations', link: 'Send leads to your CRM and tools' },
+        { icon: 'send', title: '2. Send a test', body: 'Use Send test where offered. A sheet gets a row marked as a test, Zoho gets a test lead, Slack gets a sample lead, and a webhook receives a sample payload.' },
+        { icon: 'call_end', title: '3. A call finishes', body: 'Every connected integration receives the lead, with the transcript and the fields the agent captured. Callers who left no phone number or email are skipped on purpose.' },
+        { icon: 'verified', title: '4. Check delivery', body: 'Each card shows its status, last sync and any error, and an Activity tab lists recent deliveries. If a destination was down, re-send from the call’s details.', to: '/help/calls/find-a-call', link: 'Find a call' },
+      ],
+    },
+    {
+      eyebrow: 'What each integration does',
+      title: 'Seven connections you can set up today.',
+      intro: 'Each card on this page is a real connection in the dashboard. Others are reached through the generic webhook, and labelled that way above.',
+      items: [
+        { icon: 'contacts', title: 'ArthaLeads CRM', body: 'Paste the connection key from ArthaLeads. One complete record per call arrives when the call ends, with transcript and recording. It needs a name and a phone number, and you can also choose which new ArthaLeads leads your agents should call.' },
+        { icon: 'contacts', title: 'Zoho CRM', body: 'Connect with a Zoho CRM admin account and approve access to Leads. Each caller who leaves a phone or email becomes a lead, matched on phone first and then email, so a repeat caller updates their existing lead.' },
+        { icon: 'table_chart', title: 'Google Sheets', body: 'Sign in with Google and a sheet called Vistrow Voice, Leads is created in your Drive, one tab per agent. Access is limited to files Vistrow Voice created, not the rest of your Drive. You can hide columns such as the recording.' },
+        { icon: 'chat', title: 'Slack', body: 'Click Connect Slack, choose the channel, and lead alerts post there. You choose which events post and which fields are included.' },
+        { icon: 'forum', title: 'WhatsApp', body: 'Paste your provider’s send endpoint, which must accept a recipient and a message, and write the message the caller should receive, using their name if you like. By default the caller gets one message when the call ends. Delivery rules, such as the 24-hour window, are your provider’s.' },
+        { icon: 'ads_click', title: 'Facebook Lead Ads', body: 'Connect Facebook and choose the Page running your ads. Each new lead is added to Contacts and called by your instant follow-up campaign, within your calling window and Do-Not-Call rules.', to: '/help/integrations/instant-lead-follow-up', link: 'Instant lead follow-up' },
+        { icon: 'webhook', title: 'CRM or webhook', body: 'Paste any URL that accepts a JSON POST. An optional token is sent in the body. The receiver has about five seconds to answer, so respond quickly and do heavy work afterwards.' },
+      ],
+    },
+    {
+      eyebrow: 'What gets sent',
+      title: 'You choose the events and the fields.',
+      intro: 'Webhook, Slack, WhatsApp and a sheet connected by Apps Script URL can send up to four events; WhatsApp sends only the end-of-call message unless you choose more. Zoho, ArthaLeads and the Sign in with Google sheet always send one record per caller at the end of the call.',
+      items: [
+        { icon: 'call_end', title: 'End of call', body: 'One record when the call ends, with the summary, details and recording link.' },
+        { icon: 'edit_note', title: 'Lead details during the call', body: 'Each time the agent saves new details, such as name, need or budget, while the caller is still on the line.' },
+        { icon: 'event_available', title: 'Appointment booked', body: 'When the agent books a slot in the Appointments calendar built into Vistrow Voice. There is no separate Google Calendar connection.', to: '/help/appointments/manage-appointments', link: 'Bookings and availability' },
+        { icon: 'phone_callback', title: 'Callback requested', body: 'When the caller asks to be called back later.' },
+        { icon: 'tune', title: 'Fields you can leave out', body: 'For webhook, Slack and Sheets you can drop name, phone, email, company, channel, agent, language, call length, details, transcript, page, recording or call ID. At least one of name, phone or email stays so each lead can be identified.' },
+        { icon: 'route', title: 'Per-agent routing', body: 'By default an agent delivers to every connected integration. Limit one agent to specific ones, or give it its own webhook URL for its lead, appointment and callback events.', to: '/help/agents/agent-webhook-crm-memory', link: 'Webhook and CRM routing' },
+      ],
+      note: 'Integrations that deliver leads automatically depend on your plan. The pricing page lists what each plan includes.',
+    },
+    {
+      eyebrow: 'Choosing one',
+      title: 'Which connection fits your team.',
+      items: [
+        { icon: 'apartment', title: 'Sales teams in a CRM', body: 'Use Zoho CRM or ArthaLeads for a direct connection, or the webhook for any other CRM. Leads arrive with the transcript, so the advisor reads the call before dialling.', to: '/solutions/real-estate', link: 'Real estate' },
+        { icon: 'support_agent', title: 'Support and operations', body: 'Post escalations to Slack, log calls in a sheet, or send each call to a helpdesk that accepts a webhook, directly or through an automation tool.', to: '/solutions/support', link: 'Customer support' },
+        { icon: 'api', title: 'Developers', body: 'Pull agents, calls, contacts and analytics through the API on your own schedule rather than waiting for pushes.', to: '/product/integrations', link: 'Product: integrations' },
+      ],
+    },
+  ],
+  faqs: [
+    { q: 'Which tools have a native connection?', a: 'ArthaLeads CRM, Zoho CRM, Slack, WhatsApp through your provider, Google Sheets, Facebook Lead Ads and a generic webhook. Zapier, n8n, Make, Salesforce and HubSpot are reached through that webhook or the API.' },
+    { q: 'Is there a Google Calendar integration?', a: 'No. Agents book appointments in the calendar built into Vistrow Voice, using the hours, slot length and blackout dates you set. To pass a booking elsewhere, send the appointment-booked event to a webhook.' },
+    { q: 'Does Google Sheets get access to my whole Drive?', a: 'No. The connection is limited to files Vistrow Voice creates, which is the one leads sheet, not your other spreadsheets or documents.' },
+    { q: 'Can I choose which fields are shared?', a: 'Yes for webhook, Slack and Sheets. Leave out any field except that at least one of name, phone or email must stay.' },
+    { q: 'What happens if my CRM is down?', a: 'The failure shows on the integration card and the dashboard flags it. You get an email too if you enabled that in your preferences. Re-send the delivery from the call’s details once it is fixed.' },
+    { q: 'Do I need a developer?', a: 'Not for Slack, Sheets, Zoho, ArthaLeads or Facebook, which are sign-in or paste-a-key setups. A webhook needs an endpoint that accepts JSON, which a developer or an automation tool can provide.' },
+  ],
+}
 
 // ---- Changelog (feeds /changelog) ----
 //
