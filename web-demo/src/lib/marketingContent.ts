@@ -726,7 +726,49 @@ export const LANGUAGES: LanguagePage[] = [
       a: 'Yes. Many Maharashtra calls naturally mix Marathi with Hindi or English. Artha can keep the same call going and match the caller instead of transferring them to another bot.',
     },
   },
-  { slug: 'tamil', name: 'Tamil', native: 'தமிழ்', code: 'ta-IN', region: 'Tamil Nadu', greeting: 'வணக்கம்', blurb: 'Tamil callers rarely accept a Hindi-first IVR. Give them an agent that opens in their own language.' },
+  {
+    slug: 'tamil',
+    name: 'Tamil',
+    native: 'தமிழ்',
+    code: 'ta-IN',
+    region: 'Tamil Nadu',
+    greeting: 'வணக்கம்',
+    blurb: 'Tamil callers rarely accept a Hindi-first IVR. Give them an agent that opens in their own language.',
+    localUseCases: [
+      'Chennai and Tamil Nadu property, clinic and service enquiries answered in Tamil',
+      'Follow-up calls to new enquiries, placed in Tamil shortly after the form arrives',
+      'Reminders and support calls for customers who expect Tamil, not a Hindi-first menu',
+    ],
+    callBehaviors: [
+      'Opens in Tamil and follows Tamil-English switching without restarting the call',
+      'Captures budget, location, purpose and timeline as lead fields',
+      'Saves the recording, transcript and summary, and sends the lead to your CRM',
+    ],
+    seoFaq: {
+      q: 'Is this a Tamil voice bot or a real AI calling agent?',
+      a: 'A real AI calling agent. It listens, understands the request in Tamil, answers from your approved information, books or transfers the call, and logs everything. It is not a recorded Tamil IVR menu.',
+    },
+    sampleExchange: {
+      context: 'A follow-up call to a Chennai property enquiry',
+      turns: [
+        { speaker: 'Agent', native: 'வணக்கம் கார்த்திக், நான் Artha பேசுறேன். நீங்க OMR project பத்தி enquiry பண்ணீங்க, அதுக்காக call பண்றேன்.', gloss: 'Hello Karthik, this is Artha. You made an enquiry about the OMR project, so I’m calling about it.' },
+        { speaker: 'Caller', native: 'ஆமா, 2BHK price என்ன range-ல இருக்கு?', gloss: 'Yes, what range is the 2BHK price in?' },
+        { speaker: 'Agent', native: '2BHK 75 lakh-ல இருந்து ஆரம்பிக்குது. நீங்க சொந்தமா இருக்கவா, investment-க்கா பாக்குறீங்க?', gloss: 'The 2BHK starts from 75 lakh. Are you looking to live in it yourself, or as an investment?' },
+        { speaker: 'Caller', native: 'சொந்தமா இருக்க. Sunday site visit பண்ணலாமா?', gloss: 'To live in. Can I do a site visit on Sunday?' },
+        { speaker: 'Agent', native: 'பண்ணலாம். Sunday காலை 10 மணிக்கு slot free-ஆ இருக்கு, book பண்ணட்டுமா?', gloss: 'Yes. There’s a free slot on Sunday at 10 a.m.; shall I book it?' },
+      ],
+      outcome: 'The price is read from the project’s approved price list, not guessed. Purpose, configuration and the site-visit slot are saved on the call.',
+    },
+    codeMixing: {
+      name: 'Tanglish',
+      body: 'Chennai callers mix Tamil and English freely: “EMI”, “booking”, “site visit”, “2BHK” and most numbers usually stay in English. The agent understands those words inside a Tamil sentence, keeps replying in Tamil, and switches to English if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Chennai property enquiries', body: 'Buyer calls about projects on OMR, in Porur or Tambaram, qualified on budget, location and timeline, with site visits booked on your calendar.', to: '/solutions/real-estate', link: 'AI calling for real estate' },
+      { title: 'Clinic and hospital appointments', body: 'Appointment and timing calls for clinics and diagnostic centres across Tamil Nadu, booked inside your real availability.', to: '/solutions/healthcare', link: 'AI receptionist for clinics' },
+      { title: 'Payment and EMI reminders', body: 'Polite outbound reminders in Tamil, inside your calling window and checked against your Do-Not-Call list.', to: '/solutions/finance', link: 'Collections and EMI reminder calls' },
+    ],
+  },
   {
     slug: 'telugu',
     name: 'Telugu',
@@ -814,7 +856,48 @@ export const LANGUAGES: LanguagePage[] = [
   { slug: 'bengali', name: 'Bengali', native: 'বাংলা', code: 'bn-IN', region: 'West Bengal', greeting: 'নমস্কার', blurb: 'Kolkata and West Bengal callers, answered in Bengali on the first ring.' },
   { slug: 'gujarati', name: 'Gujarati', native: 'ગુજરાતી', code: 'gu-IN', region: 'Gujarat', greeting: 'નમસ્તે', blurb: 'Built for Gujarat’s business-heavy call patterns - enquiries, follow-ups, and payment reminders in Gujarati.' },
   { slug: 'malayalam', name: 'Malayalam', native: 'മലയാളം', code: 'ml-IN', region: 'Kerala', greeting: 'നമസ്കാരം', blurb: 'Answer Kerala enquiries in Malayalam instead of routing them to an English-only queue.' },
-  { slug: 'punjabi', name: 'Punjabi', native: 'ਪੰਜਾਬੀ', code: 'pa-IN', region: 'Punjab', greeting: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ', blurb: 'Punjabi-speaking customers, handled in Punjabi - including mixed Punjabi-Hindi speech.' },
+  {
+    slug: 'punjabi',
+    name: 'Punjabi',
+    native: 'ਪੰਜਾਬੀ',
+    code: 'pa-IN',
+    region: 'Punjab',
+    greeting: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ',
+    blurb: 'Punjabi-speaking customers, handled in Punjabi - including mixed Punjabi-Hindi speech.',
+    localUseCases: [
+      'Enquiry and booking calls from Punjabi-speaking customers in Punjab, Chandigarh and Delhi NCR',
+      'Study-abroad, coaching and clinic appointment lines that fill up outside office hours',
+      'Outbound reminders and follow-ups where the customer answers in Punjabi, Hindi or both',
+    ],
+    callBehaviors: [
+      'Opens in Punjabi and follows the caller into Hindi or English mid-call',
+      'Books appointments inside your bookable hours, or takes a callback request',
+      'Saves the recording, transcript, summary and any fields you ask it to capture',
+    ],
+    seoFaq: {
+      q: 'Is this a Punjabi voice bot or a real AI calling agent?',
+      a: 'A real AI calling agent. It listens, understands the request in Punjabi, answers from your approved information, books or transfers the call, and logs everything. It is not a recorded Punjabi IVR menu.',
+    },
+    sampleExchange: {
+      context: 'An inbound call to a study-abroad consultancy',
+      turns: [
+        { speaker: 'Caller', native: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ ਜੀ, Canada ਦੇ study visa ਲਈ counselling ਕਦੋਂ ਹੋ ਸਕਦੀ ਹੈ?', gloss: 'Sat Sri Akal, when can I get counselling for a Canada study visa?' },
+        { speaker: 'Agent', native: 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਕੱਲ੍ਹ ਸਵੇਰੇ 11 ਵਜੇ ਦਾ slot ਖਾਲੀ ਹੈ। ਤੁਹਾਡਾ IELTS ਹੋ ਗਿਆ ਹੈ?', gloss: 'Sat Sri Akal! There’s a free slot tomorrow at 11 a.m. Have you taken your IELTS?' },
+        { speaker: 'Caller', native: 'ਹਾਂ ਜੀ, 6.5 bands ਆਏ ਨੇ। 11 ਵਜੇ ਠੀਕ ਹੈ।', gloss: 'Yes, I got 6.5 bands. 11 o’clock is fine.' },
+        { speaker: 'Agent', native: 'ਵਧੀਆ। ਆਪਣਾ ਨਾਂ ਦੱਸ ਦਿਓ, ਮੈਂ ਕੱਲ੍ਹ 11 ਵਜੇ ਦੀ counselling book ਕਰ ਦਿੰਦੀ ਹਾਂ।', gloss: 'Great. Tell me your name and I’ll book the counselling for 11 tomorrow.' },
+      ],
+      outcome: 'The appointment lands in Appointments inside the consultancy’s bookable hours. With a post-call field set up for it, the IELTS score is saved for the counsellor.',
+    },
+    codeMixing: {
+      name: 'Punjabi-English mixing',
+      body: 'Punjabi callers carry English words into almost every call: “visa”, “IELTS”, “EMI”, “booking” and numbers. Many also slip into Hindi, especially around Chandigarh and Delhi NCR. The agent understands those words inside a Punjabi sentence, keeps replying in Punjabi, and switches to Hindi or English if the caller does.',
+    },
+    regionalCalls: [
+      { title: 'Study-abroad and coaching enquiries', body: 'Course, intake and counselling questions answered from your approved information, with the appointment booked on the call.', to: '/product/inbound', link: 'Inbound call answering' },
+      { title: 'Payment and EMI reminders', body: 'Outbound reminders for lenders and dealers in Punjab and Chandigarh, inside your calling window and checked against your Do-Not-Call list.', to: '/solutions/finance', link: 'Collections and EMI reminder calls' },
+      { title: 'Property enquiries', body: 'Buyer calls about projects in Mohali, Zirakpur or Ludhiana, qualified on budget, location and timeline before your sales team calls back.', to: '/solutions/real-estate', link: 'AI calling for real estate' },
+    ],
+  },
   { slug: 'odia', name: 'Odia', native: 'ଓଡ଼ିଆ', code: 'od-IN', region: 'Odisha', greeting: 'ନମସ୍କାର', blurb: 'Odia coverage, so Odisha callers aren’t the ones who always get the English fallback.' },
 ]
 

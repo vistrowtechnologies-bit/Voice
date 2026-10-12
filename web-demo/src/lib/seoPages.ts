@@ -97,6 +97,16 @@ const LANGUAGE_SEO_META: Partial<Record<(typeof LANGUAGE_PAGES)[number][0], { ti
     description:
       'Telugu AI voice calling agent for Hyderabad, Andhra Pradesh and Telangana. Answers phone and website calls, books appointments and logs every call.',
   },
+  tamil: {
+    title: 'Tamil AI Voice Calling Agent for Tamil Nadu | Vistrow Voice',
+    description:
+      'Tamil AI voice calling agent for Chennai and Tamil Nadu. Follows Tamil-English switching, qualifies leads, books visits and appointments, logs every call.',
+  },
+  punjabi: {
+    title: 'Punjabi AI Voice Calling Agent for Punjab | Vistrow Voice',
+    description:
+      'Punjabi AI voice calling agent for Punjab, Chandigarh and Delhi NCR. Follows Punjabi, Hindi and English in one call, books appointments, logs every call.',
+  },
   marathi: {
     title: 'Marathi AI Voice Calling Agent for Maharashtra | Vistrow Voice',
     description:
