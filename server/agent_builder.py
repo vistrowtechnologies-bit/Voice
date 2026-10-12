@@ -42,6 +42,7 @@ GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_M
 TIMEOUT_S = 25
 
 DAILY_DRAFT_LIMIT = 30
+DAILY_GREETING_LIMIT = 40
 
 DEFAULT_MODEL = "sarvam/sarvam-105b-conversations"  # "Vistrow Bharat"
 # Tenant-selectable models (web-demo/src/lib/agentOptions.ts MODEL_OPTIONS).
@@ -388,6 +389,31 @@ def _ask(system: str, user: str) -> dict:
         if isinstance(result, dict):
             return result
     raise BuilderError(503, "The AI builder is busy right now. Try again in a minute, or start from scratch.")
+
+
+# ------------------------------------------------------------- greeting
+
+def greeting_audio(body: dict, account_id: int, user_id: int) -> tuple[bytes, str]:
+    """The draft's welcome line spoken in the chosen voice ("Hear the
+    greeting" on the review step). Only voices this account may use."""
+    import voice_preview
+
+    body = body if isinstance(body, dict) else {}
+    text = _text(body.get("text"), 300)
+    if not text:
+        raise BuilderError(400, "Write a welcome message first.")
+    voice = body.get("voice")
+    if not any(v["value"] == voice for v in _account_options(account_id)["voices"]):
+        raise BuilderError(400, "That voice isn't available on your plan.")
+    lang = body.get("language") if body.get("language") in voice_catalog.LANGUAGE_LABELS else DEFAULT_LANGUAGE
+    if calls_db.count_agent_drafts(account_id, "greeting") >= DAILY_GREETING_LIMIT:
+        raise BuilderError(429, "You've played today's greeting previews. Try again tomorrow.")
+    try:
+        audio = voice_preview.synthesize(voice, lang, text)
+    except voice_preview.PreviewError as exc:
+        raise BuilderError(502, exc.message) from exc
+    calls_db.record_agent_draft(account_id, user_id, "greeting")
+    return audio
 
 
 # ----------------------------------------------------------------- entry

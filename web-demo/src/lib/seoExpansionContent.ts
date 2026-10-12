@@ -11,9 +11,13 @@ export interface CompareVendor {
   buyerIntent: string
   rows: Array<{ dimension: string; vendor: string; vistrow: string }>
   faqs: Faq[]
+  scenarios?: Array<{ title: string; body: string }>
+  ask?: string[]
+  steps?: string[]
+  related?: Array<{ to: string; label: string }>
 }
 
-export const COMPARE_VENDORS: CompareVendor[] = [
+const BASE_COMPARE_VENDORS: CompareVendor[] = [
   {
     slug: 'exotel',
     name: 'Exotel',
@@ -29,7 +33,7 @@ export const COMPARE_VENDORS: CompareVendor[] = [
       { dimension: 'Agent setup', vendor: 'Often depends on how your team builds the call flow around the platform.', vistrow: 'No-code agent builder with prompt, voice, language, tools, and knowledge.' },
       { dimension: 'Website voice', vendor: 'Usually not the core buying reason.', vistrow: 'Built-in browser voice widget for website visitors.' },
       { dimension: 'Call record', vendor: 'Call logs and recordings depend on the configured setup.', vistrow: 'Recording, transcript, summary, lead fields, sentiment, and CRM status in one call view.' },
-      { dimension: 'Best fit', vendor: 'Ops teams with telephony-first requirements.', vistrow: 'Sales/support teams that want conversation automation first.' },
+      { dimension: 'Where it fits', vendor: 'Ops teams with telephony-first requirements.', vistrow: 'Sales/support teams that want conversation automation first.' },
     ],
     faqs: [
       { q: 'Is Vistrow Voice a replacement for Exotel?', a: 'Not always. Exotel is commonly considered for telephony infrastructure. Vistrow Voice is built around AI conversations. Some teams may use telephony infrastructure underneath and Vistrow for the agent experience.' },
@@ -52,7 +56,7 @@ export const COMPARE_VENDORS: CompareVendor[] = [
       { dimension: 'Caller experience', vendor: 'Structured call flows and routing logic.', vistrow: 'Natural spoken conversation with knowledge-grounded answers.' },
       { dimension: 'Languages', vendor: 'Depends on the call-flow/agent setup.', vistrow: 'Indian-language and global-language voice options with page-level language selection.' },
       { dimension: 'CRM output', vendor: 'Depends on integration configuration.', vistrow: 'Lead fields, transcript, call outcome, and recording link are prepared for CRM sync.' },
-      { dimension: 'Best fit', vendor: 'Telephony-first teams.', vistrow: 'Teams that want the AI agent to do the first conversation.' },
+      { dimension: 'Where it fits', vendor: 'Telephony-first teams.', vistrow: 'Teams that want the AI agent to do the first conversation.' },
     ],
     faqs: [
       { q: 'What is the main difference?', a: 'The key difference is buying intent: cloud telephony manages calls; Vistrow Voice manages AI conversations on calls.' },
@@ -97,8 +101,8 @@ export const COMPARE_VENDORS: CompareVendor[] = [
       { dimension: 'What you buy', vendor: 'Model, speech, and/or agent capabilities for builders.', vistrow: 'Finished AI voice calling product for business users and operators.' },
       { dimension: 'Control', vendor: 'More low-level flexibility if your engineering team wants to assemble the stack.', vistrow: 'More product defaults: dashboard, calls, recordings, transcripts, integrations, widget.' },
       { dimension: 'Time to launch', vendor: 'Depends on your engineering build.', vistrow: 'Create an agent, connect knowledge/channel, test, and publish.' },
-      { dimension: 'Cost control', vendor: 'Model/API costs depend on usage and architecture.', vistrow: 'Credit-based plans with usage visibility in the dashboard.' },
-      { dimension: 'Best fit', vendor: 'Teams building proprietary voice infrastructure.', vistrow: 'Teams that need working AI calls and CRM outcomes quickly.' },
+      { dimension: 'Cost control', vendor: 'Model/API costs depend on usage and architecture.', vistrow: 'Plans with usage visibility in the dashboard.' },
+      { dimension: 'Where it fits', vendor: 'Teams building proprietary voice infrastructure.', vistrow: 'Teams that need working AI calls and CRM outcomes quickly.' },
     ],
     faqs: [
       { q: 'Is Sarvam AI a competitor or a provider?', a: 'It can be either depending on your architecture. Some teams evaluate model providers while also evaluating full products like Vistrow Voice.' },
@@ -121,7 +125,7 @@ export const COMPARE_VENDORS: CompareVendor[] = [
       { dimension: 'Stack required', vendor: 'Needs surrounding STT, LLM, transport, logging, and integrations for live calls.', vistrow: 'Bundles the call experience and operator dashboard.' },
       { dimension: 'Voice controls', vendor: 'Strong voice styling and generation options.', vistrow: 'Curated voices plus business call controls and records.' },
       { dimension: 'CRM sync', vendor: 'Requires implementation around the model/API.', vistrow: 'Built around sending qualified call outcomes to CRM/webhooks.' },
-      { dimension: 'Best fit', vendor: 'Voice-first media or custom engineering teams.', vistrow: 'Teams buying a business calling agent.' },
+      { dimension: 'Where it fits', vendor: 'Voice-first media or custom engineering teams.', vistrow: 'Teams buying a business calling agent.' },
     ],
     faqs: [
       { q: 'Can Vistrow use ElevenLabs-style premium voices?', a: 'Vistrow Voice supports curated premium voice options where configured, but the product is focused on live business calls rather than standalone audio generation.' },
@@ -138,13 +142,13 @@ export const COMPARE_VENDORS: CompareVendor[] = [
       'Compare Vistrow Voice with Retell AI for teams evaluating AI phone agents, web calling, Indian languages, CRM sync, and business-ready call workflows.',
     bestFor: 'Teams evaluating developer-friendly AI voice agent infrastructure and programmable voice workflows.',
     tradeoff: 'Global voice-agent platforms can be flexible, but Indian-language, CRM, and local workflow fit should be tested with real calls.',
-    buyerIntent: 'Use this when shortlisting voice-agent platforms and testing which one performs best for Indian customer calls.',
+    buyerIntent: 'Use this when shortlisting voice-agent platforms and testing how each performs on Indian customer calls.',
     rows: [
       { dimension: 'Target buyer', vendor: 'Often strong for technical teams building custom agents.', vistrow: 'Designed for Indian businesses that want phone, web, dashboard, and CRM workflow together.' },
       { dimension: 'India language fit', vendor: 'Must be tested per language and voice stack.', vistrow: 'Built around Indian-language and code-switching use cases.' },
       { dimension: 'Website calls', vendor: 'Depends on implementation and product fit.', vistrow: 'Native website widget with lead capture and call records.' },
       { dimension: 'CRM outcome', vendor: 'Implementation-dependent.', vistrow: 'Lead fields, summary, transcript, recording link, and delivery status are first-class.' },
-      { dimension: 'Best fit', vendor: 'Custom programmable agent builds.', vistrow: 'Revenue/support teams wanting faster rollout.' },
+      { dimension: 'Where it fits', vendor: 'Custom programmable agent builds.', vistrow: 'Revenue/support teams wanting faster rollout.' },
     ],
     faqs: [
       { q: 'How should I compare Retell AI and Vistrow Voice?', a: 'Run the same script, same language, same target caller profile, and same phone network. Measure first response, interruption handling, recovery, and CRM output quality.' },
@@ -167,7 +171,7 @@ export const COMPARE_VENDORS: CompareVendor[] = [
       { dimension: 'Local language tests', vendor: 'Test your exact language pair and voice settings.', vistrow: 'Pages, demos, and configuration are centered around Indian-language scenarios.' },
       { dimension: 'Operator UI', vendor: 'Evaluate against your ops workflow.', vistrow: 'Agent builder, calls table, recordings, transcripts, CRM push status, and analytics.' },
       { dimension: 'CRM push', vendor: 'Depends on configured integrations.', vistrow: 'Structured lead payloads and webhook/CRM status are part of the call detail flow.' },
-      { dimension: 'Best fit', vendor: 'Teams comparing programmable AI call automation.', vistrow: 'Teams needing localized AI lead/support calls with business records.' },
+      { dimension: 'Where it fits', vendor: 'Teams comparing programmable AI call automation.', vistrow: 'Teams needing localized AI lead/support calls with business records.' },
     ],
     faqs: [
       { q: 'Is Bland AI only for outbound calls?', a: 'Check the current product documentation before deciding. For Vistrow Voice, both inbound and outbound workflows are part of the product story.' },
@@ -190,7 +194,7 @@ export const COMPARE_VENDORS: CompareVendor[] = [
       { dimension: 'Language fit', vendor: 'Test exact languages before rollout.', vistrow: 'Indian-language use cases and code-switching are core positioning.' },
       { dimension: 'Call channels', vendor: 'Evaluate phone/web support for your workflow.', vistrow: 'Phone calls plus website voice widget.' },
       { dimension: 'Records', vendor: 'Check transcript, recording, and webhook detail.', vistrow: 'Call detail page combines transcript, recording, intelligence, CRM status, and fields.' },
-      { dimension: 'Best fit', vendor: 'Teams comparing no-code global voice builders.', vistrow: 'Teams wanting localized calling plus CRM handoff.' },
+      { dimension: 'Where it fits', vendor: 'Teams comparing no-code global voice builders.', vistrow: 'Teams wanting localized calling plus CRM handoff.' },
     ],
     faqs: [
       { q: 'What should I test in a no-code voice agent?', a: 'Test setup speed, live latency, caller interruptions, multilingual behavior, hallucination controls, CRM payloads, and support for your exact call volume.' },
@@ -199,6 +203,248 @@ export const COMPARE_VENDORS: CompareVendor[] = [
     ],
   },
 ]
+
+export interface CompareExtra {
+  scenarios: Array<{ title: string; body: string }>
+  ask: string[]
+  steps: string[]
+  extraFaqs: Faq[]
+  related: Array<{ to: string; label: string }>
+}
+
+const R_PRODUCT = { to: '/product/agents', label: 'Voice agents' }
+const R_INBOUND = { to: '/product/inbound', label: 'Inbound calling' }
+const R_OUTBOUND = { to: '/product/outbound', label: 'Outbound campaigns' }
+const R_WIDGET = { to: '/product/widget', label: 'Website call widget' }
+const R_KB = { to: '/product/knowledge-base', label: 'Knowledge base' }
+const R_INTEG = { to: '/product/integrations', label: 'Integrations' }
+const R_LANG = { to: '/languages', label: 'Supported languages' }
+const R_IVR = { to: '/ai-ivr', label: 'AI IVR' }
+const R_VSIVR = { to: '/vs-ivr', label: 'Voice agent vs IVR' }
+const R_PRICING = { to: '/pricing', label: 'Pricing' }
+const R_GUIDE = { to: '/best-ai-voice-calling-software-india', label: 'How to choose AI voice calling software' }
+const R_RE = { to: '/solutions/real-estate', label: 'Real estate calling' }
+const R_SUPPORT = { to: '/solutions/support', label: 'Customer support' }
+const R_HINDI = { to: '/languages/hindi', label: 'Hindi voice agent' }
+
+/** Decision-support content per comparison page. Category-level only: no claims
+ * about a named vendor's features, pricing or quality (see SEO plan rules). No
+ * prices or credit figures - those live on /pricing. */
+export const COMPARE_EXTRAS: Record<string, CompareExtra> = {
+  exotel: {
+    scenarios: [
+      { title: 'Telephony first', body: 'Choose a cloud telephony provider when the main need is numbers, call routing, SMS and APIs that your own team builds on. The platform is the foundation, and the conversation logic is yours to design.' },
+      { title: 'Conversation first', body: 'Choose a voice-agent product when the pain is repetitive conversations: qualifying enquiries, answering the same questions, booking appointments. The product runs the conversation itself and returns a finished record.' },
+      { title: 'Layered together', body: 'Some teams keep their number and routing where they are and add an agent layer for the first conversation. Check early whether your existing number can be connected; Vistrow Voice connects numbers through its telephony provider setup, so confirm yours before planning around it.' },
+    ],
+    ask: [
+      'Does the product place and answer calls with an AI agent itself, or provide lines for you to build the agent on?',
+      'Who writes, tests and maintains the conversation logic after launch?',
+      'How are concurrent-call limits, calling hours and Do-Not-Call rules set, and by whom?',
+      'What does a finished call record contain, and how does it reach your CRM?',
+      'How are mixed-language calls tested, and what happens when the automated side cannot help?',
+    ],
+    steps: [
+      'Pick one narrow call type, such as after-hours enquiries or missed-call callbacks, and leave everything else untouched.',
+      'Write 20 realistic test calls, including a wrong number, an interruption and a question the agent should not answer.',
+      'Run the same calls against each option and compare the records, not just the audio.',
+      'Route one line or one time window to the voice agent, keep a transfer number for hand-offs, and read the first week of transcripts before widening.',
+    ],
+    extraFaqs: [
+      { q: 'Can we keep our current telephony provider?', a: 'Often the call infrastructure and the agent layer can be separate decisions. Vistrow Voice connects phone numbers through its own telephony setup, so ask us whether your existing number can be connected before you plan a migration.' },
+      { q: 'Do we need developers to use a voice agent?', a: 'Not to build one in Vistrow Voice: the agent builder is no-code. A telephony platform used as a base usually involves more engineering, which is a reasonable trade when you need custom call flows.' },
+      { q: 'What should we compare besides price?', a: 'Compare the finished outcome of a call: response speed, language handling, the quality of the transcript and lead fields, and how easily your team can change the agent. The pricing page explains what each Vistrow plan includes.' },
+    ],
+    related: [R_INBOUND, R_OUTBOUND, R_INTEG, R_IVR, R_RE, R_PRICING],
+  },
+  knowlarity: {
+    scenarios: [
+      { title: 'Cloud calling and IVR are enough', body: 'If callers only need routing to a few departments, in one or two languages, a cloud telephony menu is simple and familiar. An AI agent adds little when nothing needs to be understood.' },
+      { title: 'Callers ask questions or book', body: 'If callers describe a need, ask about timings or availability, or want an appointment, a conversational agent can resolve many of these calls without a transfer, using your knowledge base.' },
+      { title: 'Modernising in stages', body: 'You do not have to replace a call stack in one move. Start with one line or an after-hours window, keep the existing menu as fallback, and widen only after the transcripts look right.' },
+    ],
+    ask: [
+      'Is the caller asked to press keys, or can they say what they need in their own language?',
+      'How are callers who switch between languages mid-call handled?',
+      'Can the system book appointments or take a callback request on the call itself?',
+      'What is saved after each call: audio, transcript, captured fields, outcome?',
+      'How do you update the answers when a price list, timing or policy changes?',
+    ],
+    steps: [
+      'List the five reasons people call most and note what your team says on each one.',
+      'Turn those answers into a knowledge base and a short agent prompt, then test them in the browser before any number is involved.',
+      'Send a small share of real calls, or after-hours calls only, to the agent while the existing flow keeps handling the rest.',
+      'Review transcripts and transfers weekly, then decide which lines can move.',
+    ],
+    extraFaqs: [
+      { q: 'Is an AI voice agent the same as an IVR?', a: 'No. An IVR routes by keypress. A voice agent understands speech and answers or completes a task. When used to replace a menu, it is often called an AI IVR; see the dedicated page for the call flow.' },
+      { q: 'Can the agent hand over to my team?', a: 'On phone calls, yes: set a transfer number and the agent can dial a colleague into the call, or take a callback request when nobody is free. Web calls cannot be transferred to a phone.' },
+      { q: 'What should a pilot measure?', a: 'Measure how many calls were resolved without a transfer, how accurate the captured details were, how callers reacted, and how many hand-offs arrived with useful context.' },
+    ],
+    related: [R_IVR, R_VSIVR, R_INBOUND, R_KB, R_SUPPORT, R_LANG],
+  },
+  ozonetel: {
+    scenarios: [
+      { title: 'A large human team', body: 'When many people take calls, supervisors need queues, monitoring, dialers and agent desktops. A contact-center suite is built for that operation, and an AI agent does not replace it.' },
+      { title: 'AI takes the first conversation', body: 'When most calls are repetitive and a human is needed only for some, a voice agent can answer, qualify and book first, and pass the rest to your people with a transcript.' },
+      { title: 'Running both', body: 'The two can coexist: the contact-center platform keeps the human queue, while the voice agent handles overflow, after-hours calls or a single use case. This depends on routing, so check the hand-off path before you commit.' },
+    ],
+    ask: [
+      'Is the product designed around human agents, around AI agents, or both?',
+      'How are calls handed from an AI agent to a person, and what context travels with them?',
+      'What reporting exists for AI-handled calls separately from human-handled ones?',
+      'Who administers it day to day: a contact-center operations team or a business owner?',
+      'How long does a first working use case take to go live?',
+    ],
+    steps: [
+      'Choose the one call type that consumes agent time but needs little judgement, such as status checks or enquiry qualification.',
+      'Build that single agent with a clear hand-off rule, and set the transfer number to your existing team.',
+      'Run it on overflow or after-hours first, so your current queue is not at risk.',
+      'Compare handle time, transfers and outcomes against the same period before the pilot.',
+    ],
+    extraFaqs: [
+      { q: 'Does a voice agent replace the call team?', a: 'Usually not. It absorbs repetitive, high-volume calls so people spend their time on conversations that need judgement. Complaints and negotiations are better handled by a person.' },
+      { q: 'What does the human receive after a hand-off?', a: 'The call has a transcript, a summary and the lead fields captured so far, so your colleague does not start from zero. A returning caller can also be recognised if memory is turned on.' },
+      { q: 'Can we limit when the agent answers?', a: 'Yes. For inbound numbers you can set a daily window, active days and a concurrent-call limit; calls outside those rules are not answered by the agent.' },
+    ],
+    related: [R_INBOUND, R_PRODUCT, R_SUPPORT, R_INTEG, R_VSIVR, R_PRICING],
+  },
+  'sarvam-ai': {
+    scenarios: [
+      { title: 'Build on models', body: 'If you have engineers and want full control, building directly on speech and language models gives the most flexibility. You then own the product layer around them: call handling, recordings, logs, dashboards, billing and monitoring.' },
+      { title: 'Buy a finished product', body: 'If the goal is working calls and CRM-ready records without a long build, a finished voice-agent product is the shorter path. You accept its defaults in return for speed.' },
+      { title: 'Provider or product', body: 'These are not always rivals. A product can use model providers underneath, so ask any vendor which speech and language components sit behind the agent and how they are chosen per language.' },
+    ],
+    ask: [
+      'Which parts of the stack do you operate for me: telephony, speech recognition, language model, voice, logs?',
+      'Which Indian languages and mixed-language patterns have been tested on live phone audio?',
+      'How is latency measured, and can I test it on my own network and numbers?',
+      'What records and exports exist for every call, and can I audit them?',
+      'What would my team have to build or maintain after launch?',
+    ],
+    steps: [
+      'Write a short spec of the calls you want handled, the languages and the record your team needs afterwards.',
+      'Estimate honestly what an in-house build would need: telephony, orchestration, a dashboard, call records, monitoring.',
+      'Run the same 20 test calls on a prototype and on a ready product, in your languages, on a phone and in a browser.',
+      'Compare time to a working pilot, caller experience and the maintenance each route leaves with your team.',
+    ],
+    extraFaqs: [
+      { q: 'When does building make more sense?', a: 'When voice is core to your own product, when you need deep control over every component, or when you already have a platform team that will maintain the system.' },
+      { q: 'What does Vistrow Voice already include?', a: 'An agent builder, a knowledge base with strict mode, phone and website channels, call transcripts and recordings, a Testing Lab, and CRM and webhook delivery. See the product pages for each.' },
+      { q: 'Does Vistrow Voice cover Indian languages?', a: 'It supports ten Indian languages plus English, including mixed Hindi-English speech, and keeps the same voice when the caller switches language. The languages page lists each one.' },
+    ],
+    related: [R_PRODUCT, R_LANG, R_HINDI, R_KB, R_INTEG, R_GUIDE],
+  },
+  elevenlabs: {
+    scenarios: [
+      { title: 'Voice is the product', body: 'For narration, dubbing, media or a custom experience where expressive speech is the main output, a voice-generation service is the right focus. You evaluate how the voice sounds.' },
+      { title: 'Calls are the product', body: 'For a phone or website call, speech output is one part of a loop: listening, understanding, answering, handling interruptions and recording the result. Evaluate the whole loop, not one component.' },
+      { title: 'Voice quality inside a calling product', body: 'These can meet: a calling product may offer premium voices as an option. Check which voices are available for your languages and how they behave in a live call, not only in a sample clip.' },
+    ],
+    ask: [
+      'Is the voice available inside a live call loop, or only as generated audio?',
+      'How long after the caller stops speaking does the first audio start, on a phone line?',
+      'How does the voice handle numbers, names and mixed-language sentences?',
+      'What else must I supply: speech recognition, a language model, telephony, call records?',
+      'Can I preview the voices in the language my callers use?',
+    ],
+    steps: [
+      'Shortlist two or three voices you like for your brand, and write a 30-second script using real names, numbers and a switch between languages.',
+      'Listen to each in a live call, not only a sample, and note the pause before the first word.',
+      'Try an interruption and a long answer, since the voice must stop gracefully.',
+      'Decide using the full call experience, then check the transcript and record that comes out of it.',
+    ],
+    extraFaqs: [
+      { q: 'Which voices does Vistrow Voice offer?', a: 'A curated set of voices across Indian languages and English that you can preview from the Voices page before adding them to an agent. Premium options are available where configured.' },
+      { q: 'Does a better voice always mean a better call?', a: 'Not by itself. Callers respond to how quickly the agent answers, whether it understands them and whether it recovers from interruptions. A voice that sounds beautiful but arrives late can feel worse on a call.' },
+      { q: 'Can I change voice delivery on an agent?', a: 'Yes. You can choose who speaks first, voice delivery, emotion intensity, noise suppression and background ambience on the agent’s page, and changes apply from the next call.' },
+    ],
+    related: [R_PRODUCT, R_LANG, R_WIDGET, R_VSIVR, R_GUIDE, R_PRICING],
+  },
+  'retell-ai': {
+    scenarios: [
+      { title: 'Programmable platform', body: 'If your engineers want to assemble custom agents, wire their own tools and control each component, a developer-oriented voice-agent platform offers that flexibility, with the build and upkeep being yours.' },
+      { title: 'Business-ready workflow', body: 'If operators and sales or support managers need to change the agent, read transcripts and see CRM status without engineering help, compare dashboards and records as seriously as the voice itself.' },
+      { title: 'Local fit matters most', body: 'If your callers speak Indian languages, mix them within a sentence or call on noisy lines, the deciding test is a real call in your language, whichever platform you shortlist.' },
+    ],
+    ask: [
+      'Who can change the agent after launch: only developers, or business users too?',
+      'How are phone numbers and website calls both supported?',
+      'What does a failed or interrupted call look like in the logs?',
+      'How are retries and delivery to my CRM handled when something fails?',
+      'Can I test with my own phone numbers and languages before paying for a plan?',
+    ],
+    steps: [
+      'Write one script and one set of caller personas, including a hurried caller and a caller who switches language.',
+      'Build the same agent on each shortlisted platform with identical prompts and knowledge.',
+      'Call each from a phone on the network your customers use, and from a browser if you need website calls.',
+      'Score first-response time, interruption recovery, accuracy of captured details and the usefulness of the final record.',
+    ],
+    extraFaqs: [
+      { q: 'Is a developer platform or a finished product better?', a: 'Neither is better in general. Developer platforms suit teams who want control and have engineers to maintain it; a finished product suits teams who want an agent live quickly and managed from a dashboard.' },
+      { q: 'How do I keep the comparison fair?', a: 'Use identical scripts, knowledge, caller profiles and phone networks, and score on written criteria agreed beforehand rather than first impressions.' },
+      { q: 'Can I test Vistrow Voice before committing?', a: 'Yes. You can talk to an agent in the browser with its real configuration, run the Testing Lab scenarios, and try the live demo on the site.' },
+    ],
+    related: [R_PRODUCT, R_WIDGET, R_INTEG, R_LANG, R_GUIDE, R_PRICING],
+  },
+  'bland-ai': {
+    scenarios: [
+      { title: 'Programmable phone automation', body: 'Teams that want to trigger large numbers of automated calls from their own systems may favour a programmable calling product, accepting that setup and monitoring sit with them.' },
+      { title: 'Calls that are expected', body: 'Outbound works best when callers expect the call: reminders, follow-ups on an enquiry, confirmations. Consent and calling-hour rules matter more than any feature, and remain your business’s responsibility.' },
+      { title: 'Inbound and web as well', body: 'If the same agent should also answer your number and talk to website visitors, check that the product handles all three channels with one set of knowledge and one call record.' },
+    ],
+    ask: [
+      'Does it support inbound, outbound and website calls, or only some?',
+      'How are Do-Not-Call lists, calling windows and consent handled?',
+      'How do retries work when a call is not answered or the line is busy?',
+      'How does the system behave on noisy audio and when the caller talks over the agent?',
+      'What is delivered to my CRM after each call, and what happens if delivery fails?',
+    ],
+    steps: [
+      'Start with a list of 20 to 30 contacts who expect to hear from you, with consent on record.',
+      'Run a small batch, listen to every call and note where the agent stumbled or the caller got confused.',
+      'Adjust the prompt, retry rules and calling window, then run another small batch before scaling.',
+      'Check that every record reached your CRM with usable fields before adding volume.',
+    ],
+    extraFaqs: [
+      { q: 'Does Vistrow Voice respect Do-Not-Call lists and calling hours?', a: 'Yes. Every outbound dial is checked against your Do-Not-Call list and, with the calling window enforced, your allowed hours and days. Blocked contacts are counted, not called. Consent obligations remain with your business.' },
+      { q: 'How large should the first outbound test be?', a: 'Small. Start with a short list, review the calls, and talk to us before running a large campaign. The outbound page explains pace, retries and the channel limit.' },
+      { q: 'Can the agent follow up on a new lead quickly?', a: 'Yes. Facebook Lead Ads, and any source that can send a webhook, can queue a call within roughly 15 to 30 seconds, subject to your compliance rules.' },
+    ],
+    related: [R_OUTBOUND, R_INBOUND, R_WIDGET, R_INTEG, R_LANG, R_PRICING],
+  },
+  synthflow: {
+    scenarios: [
+      { title: 'A no-code builder is the goal', body: 'If non-technical staff should build and edit the agent, a no-code builder is the right category. Differences then come from how deep the controls go and how reliably real calls behave.' },
+      { title: 'Language and market fit', body: 'Builders vary in language quality and local behaviour. The only dependable check is a real call in your language, with your names, numbers and a switch between languages.' },
+      { title: 'Records and follow-up', body: 'An agent that talks well but leaves a thin record creates manual work. Look at what lands in the call view and in your CRM before judging the conversation.' },
+    ],
+    ask: [
+      'Which settings can a business user change without help: prompt, voice, language, functions?',
+      'How can I test an agent before it takes real calls?',
+      'What can the agent do on a call: book, capture fields, transfer, take a callback?',
+      'How are answers kept to approved information, and what happens on an unknown question?',
+      'What does the call record contain, and can it be sent to a webhook or CRM?',
+    ],
+    steps: [
+      'Build the same simple agent on each builder in an afternoon: greeting, three questions, one booking.',
+      'Note how long it took and how many settings were easy to find.',
+      'Run an identical set of test calls, including silence, an angry caller and a language switch.',
+      'Compare the call records, then choose the builder your team will actually keep maintaining.',
+    ],
+    extraFaqs: [
+      { q: 'How do I test an agent before launch in Vistrow Voice?', a: 'Talk to it in the browser with its exact prompt and voice, or have it ring your phone. The Testing Lab replays scenarios such as an impatient caller or Hindi-English switching and checks the result.' },
+      { q: 'Can the agent be limited to approved answers?', a: 'Yes. Strict mode in the knowledge base makes the agent quote your approved answers and say it will check with the team when something is not covered. It reduces improvised answers but cannot guarantee a perfect one, so test it.' },
+      { q: 'Which actions can an agent take on a call?', a: 'Booking appointments, callback requests, lead capture and “do not call me again” are always available; end call, web search and keypad tones can be switched on or off. Phone calls can also be transferred to a person.' },
+    ],
+    related: [R_PRODUCT, R_KB, R_WIDGET, R_LANG, R_INTEG, R_GUIDE],
+  },
+}
+
+export const COMPARE_VENDORS: CompareVendor[] = BASE_COMPARE_VENDORS.map((vendor) => {
+  const extra = COMPARE_EXTRAS[vendor.slug]
+  return extra ? { ...vendor, scenarios: extra.scenarios, ask: extra.ask, steps: extra.steps, related: extra.related, faqs: [...vendor.faqs, ...extra.extraFaqs] } : vendor
+})
 
 export interface BuyerGuide {
   slug: string
@@ -209,18 +455,22 @@ export interface BuyerGuide {
   subhead: string
   sections: Array<{ title: string; body: string; bullets: string[] }>
   faqs: Faq[]
+  approaches?: Array<{ title: string; fits: string; tradeoff: string }>
+  checklist?: Array<{ criterion: string; good: string; test: string }>
+  trial?: string[]
+  related?: Array<{ to: string; label: string }>
 }
 
-export const BUYER_GUIDES: BuyerGuide[] = [
+const BASE_BUYER_GUIDES: BuyerGuide[] = [
   {
     slug: 'best-ai-voice-calling-software-india',
-    title: 'Best AI Voice Calling Software in India | Vistrow Voice',
+    title: 'How to Choose AI Voice Calling Software in India | Vistrow Voice',
     description:
-      'A practical buyer guide to choosing AI voice calling software in India across latency, Indian languages, phone calls, website widgets, CRM sync, recordings, and pricing.',
+      'A selection checklist for AI voice calling software in India: tool categories, latency, Indian languages, phone and website channels, CRM records, compliance and a trial plan.',
     eyebrow: 'Buyer guide',
     headline: 'How to choose AI voice calling software in India.',
     subhead:
-      'The best tool is not the one with the flashiest demo. It is the one that handles your real calls, in your customer’s language, and leaves your team with a useful record.',
+      'The right tool is not the one with the flashiest demo. It is the one that handles your real calls, in your customer’s language, and leaves your team with a useful record.',
     sections: [
       {
         title: 'Start with the real call type',
@@ -244,7 +494,7 @@ export const BUYER_GUIDES: BuyerGuide[] = [
       },
     ],
     faqs: [
-      { q: 'What is the best AI voice calling software in India?', a: 'For most teams, the best option is the one that performs well on their exact language, call type, phone network, and CRM workflow. Vistrow Voice is built specifically around Indian-language phone and website conversations.' },
+      { q: 'How do I choose AI voice calling software in India?', a: 'Choose the option that performs well on your exact language, call type, phone network and CRM workflow, judged by your own test calls rather than a demo. Use the checklist on this page to score each shortlisted product the same way, including Vistrow Voice.' },
       { q: 'Should I prioritize price or latency?', a: 'Prioritize call success first. A cheaper model that causes awkward pauses or bad answers can cost more in lost leads than it saves in API spend.' },
       { q: 'How many test calls should I run before launch?', a: 'Run at least 20–30 test calls across languages, noisy audio, interruptions, failed answers, and CRM delivery before trusting an agent with real leads.' },
     ],
@@ -579,3 +829,75 @@ export const DEMO_CALLS: DemoCall[] = [
     ],
   },
 ]
+
+const HUB_EXTRA: Pick<BuyerGuide, 'approaches' | 'checklist' | 'trial' | 'related'> & { extraFaqs: Faq[] } = {
+  approaches: [
+    {
+      title: 'Cloud telephony and contact-center suites',
+      fits: 'You need numbers, routing, queues, dialers or agent desktops for a human team, and you are comfortable building or buying the automation on top.',
+      tradeoff: 'They provide the lines and the operation, but the AI conversation itself is usually something you assemble or add.',
+    },
+    {
+      title: 'Speech and language model providers',
+      fits: 'You have engineers, want full control of every component and are building a voice product of your own.',
+      tradeoff: 'You also own call handling, logs, dashboards, monitoring and support, which is real ongoing work.',
+    },
+    {
+      title: 'Programmable voice-agent platforms',
+      fits: 'Developers want to assemble custom agents quickly without building the telephony and speech plumbing from scratch.',
+      tradeoff: 'Flexibility comes with build and maintenance effort, and language and CRM fit still need testing for India.',
+    },
+    {
+      title: 'Finished voice-agent products',
+      fits: 'Business teams want an agent live quickly, editable from a dashboard, with transcripts and CRM delivery included.',
+      tradeoff: 'You accept the product’s defaults in return for speed, so check that its controls cover what you need.',
+    },
+    {
+      title: 'Menus, chatbots and receptionists',
+      fits: 'Call volume is low, routing is simple, or customers mostly write instead of phoning.',
+      tradeoff: 'Menus route but do not answer, and chatbots cannot take a phone call. The IVR comparison page covers this in detail.',
+    },
+  ],
+  checklist: [
+    { criterion: 'Languages', good: 'Handles your customers’ real speech, including mixed languages, names and numbers.', test: 'Call in each language you serve and switch language mid-sentence.' },
+    { criterion: 'Response speed', good: 'The pause after the caller stops feels natural and does not vary wildly.', test: 'Time the gap to the first word on a phone line, not only in a browser.' },
+    { criterion: 'Interruptions', good: 'The agent stops talking when the caller speaks and recovers cleanly.', test: 'Interrupt mid-sentence, stay silent, and talk over it.' },
+    { criterion: 'Channels', good: 'Phone and website calls share one agent, one knowledge base and one record.', test: 'Run the same script on both channels.' },
+    { criterion: 'Answer control', good: 'Answers come from approved material, and unknown questions get an honest reply.', test: 'Ask questions that are not in the knowledge base.' },
+    { criterion: 'Call record', good: 'Transcript, summary, captured fields and outcome you can act on.', test: 'Open the record after a test call and see whether your team could follow up from it alone.' },
+    { criterion: 'CRM delivery', good: 'Records arrive in your CRM or webhook, with visible status and a retry when it fails.', test: 'Break the connection on purpose and see what is shown.' },
+    { criterion: 'Compliance controls', good: 'Consent, recording and retention settings, plus calling hours and Do-Not-Call handling for outbound.', test: 'Check the settings exist and that blocked calls are really blocked.' },
+    { criterion: 'Human hand-off', good: 'A transfer or callback path with context travelling to the person.', test: 'Ask for a human on a phone call and see what the colleague receives.' },
+    { criterion: 'Who can change it', good: 'Business users can edit prompts, voices and answers without an engineer.', test: 'Ask a non-technical colleague to change a greeting and re-test it.' },
+  ],
+  trial: [
+    'Write down the call types you want handled, the languages, and the record your team needs afterwards.',
+    'Shortlist two or three options from different categories above, so you learn what the trade-offs are.',
+    'Build the same agent on each with identical prompts and knowledge, then run 20 to 30 scripted calls, including difficult ones.',
+    'Score every option on the checklist with the same people and the same written criteria.',
+    'Pilot one line or an after-hours window, read the transcripts weekly, and widen only when the results hold.',
+  ],
+  related: [
+    { to: '/product/agents', label: 'Voice agents' },
+    { to: '/product/inbound', label: 'Inbound calling' },
+    { to: '/product/widget', label: 'Website call widget' },
+    { to: '/languages', label: 'Supported languages' },
+    { to: '/ai-ivr', label: 'AI IVR' },
+    { to: '/vs-ivr', label: 'Voice agent vs IVR' },
+    { to: '/compare/exotel', label: 'Vistrow Voice vs Exotel' },
+    { to: '/compare/sarvam-ai', label: 'Build or buy voice agents' },
+    { to: '/pricing', label: 'Pricing' },
+  ],
+  extraFaqs: [
+    { q: 'Do I need developers to run an AI voice agent?', a: 'It depends on the category. Programmable platforms and model providers assume engineering. A finished product such as Vistrow Voice has a no-code agent builder, so business teams can set the prompt, voice and language and test it themselves.' },
+    { q: 'Should I start with phone calls or website calls?', a: 'Start where your enquiries already arrive. A website call widget needs no phone number and is quick to test; phone calls matter when most customers ring you. Choose a product that supports both on one agent.' },
+    { q: 'Does an AI voice agent replace a call team?', a: 'Usually not. It takes repetitive, high-volume calls and passes the rest to people with a transcript, so your team spends its time on calls that need judgement.' },
+    { q: 'How do I compare vendors fairly?', a: 'Use the same script, languages, phone network and scoring sheet for every option, and compare finished call records as well as audio. Verify vendor features and plans directly, because products change.' },
+  ],
+}
+
+export const BUYER_GUIDES: BuyerGuide[] = BASE_BUYER_GUIDES.map((guide) =>
+  guide.slug === 'best-ai-voice-calling-software-india'
+    ? { ...guide, approaches: HUB_EXTRA.approaches, checklist: HUB_EXTRA.checklist, trial: HUB_EXTRA.trial, related: HUB_EXTRA.related, faqs: [...guide.faqs, ...HUB_EXTRA.extraFaqs] }
+    : guide,
+)

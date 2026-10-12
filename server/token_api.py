@@ -3258,6 +3258,17 @@ def create_agent(data: dict = Body(...), user: dict = Depends(current_user)) -> 
         raise HTTPException(status_code=400, detail=e.message) from e
 
 
+@app.post("/agents/draft/greeting")
+def draft_greeting_audio(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> Response:
+    """The drafted welcome line spoken in the chosen voice. Never cached:
+    the text is the customer's own draft."""
+    try:
+        audio, content_type = agent_builder.greeting_audio(data, user["account_id"], user["user_id"])
+    except agent_builder.BuilderError as exc:
+        raise HTTPException(exc.status, exc.detail) from exc
+    return Response(content=audio, media_type=content_type, headers={"Cache-Control": "no-store"})
+
+
 @app.post("/agents/draft")
 def draft_agent(data: dict = Body(...), user: dict = Depends(require_role("member"))) -> dict:
     """"Build with AI": questions or a validated draft. Never writes an agent;

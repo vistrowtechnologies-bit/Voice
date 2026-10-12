@@ -972,7 +972,7 @@ export const NAV: NavGroup[] = [
       { label: 'Help Center', to: '/help', icon: 'support_agent', desc: 'Step-by-step guides for every part of the dashboard.' },
       { label: 'Docs', to: 'https://docs.vistrowvoice.com', icon: 'description', desc: 'Set-up guides and how everything fits together.' },
       { label: 'Integrations', to: '/integrations', icon: 'hub', desc: 'Every tool Vistrow Voice connects to.' },
-      { label: 'Best AI calling software', to: '/best-ai-voice-calling-software-india', icon: 'workspace_premium', desc: 'A practical buyer guide for India.' },
+      { label: 'AI calling software buyer guide', to: '/best-ai-voice-calling-software-india', icon: 'workspace_premium', desc: 'A selection checklist for India.' },
       { label: 'AI voice bot pricing', to: '/ai-voice-bot-pricing-india', icon: 'payments', desc: 'What really drives per-minute cost.' },
       { label: 'Vistrow vs Sarvam AI', to: '/compare/sarvam-ai', icon: 'compare_arrows', desc: 'Build-vs-buy comparison for voice agents.' },
       { label: 'Demo call examples', to: '/demo-calls/hindi-real-estate-lead-qualification', icon: 'record_voice_over', desc: 'Transcript and CRM-ready output examples.' },
