@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { TwoStepLoginCard } from '../components/TwoStepLogin'
+import { ApiKeysCard } from '../components/ApiKeysCard'
 import { Icon } from '../components/Icon'
 import { Card } from '../components/ui/Card'
 import { StorageSettings } from '../components/StorageSettings'
@@ -93,7 +94,7 @@ function CopilotActionsCard() {
   )
 }
 
-type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'privacy' | 'team' | 'availability' | 'storage' | 'billing' | 'compliance'
+type Tab = 'general' | 'profile' | 'security' | 'preferences' | 'privacy' | 'team' | 'availability' | 'storage' | 'billing' | 'compliance' | 'apiKeys'
 type TabGroup = { label: string; tabs: { id: Tab; label: string; description: string; icon: string }[] }
 
 const TAB_GROUPS: TabGroup[] = [
@@ -116,6 +117,12 @@ const TAB_GROUPS: TabGroup[] = [
     label: 'Connections',
     tabs: [
       { id: 'compliance', label: 'Calling rules', description: 'Calling hours, consent and Do-Not-Call', icon: 'verified_user' },
+    ],
+  },
+  {
+    label: 'Developer',
+    tabs: [
+      { id: 'apiKeys', label: 'API keys', description: 'Keys for your own systems, with permissions', icon: 'key' },
     ],
   },
   {
@@ -202,6 +209,7 @@ export function Settings() {
           {tab === 'general' && <GeneralTab />}
           {tab === 'profile' && <ProfileTab />}
           {tab === 'security' && <SecurityTab />}
+          {tab === 'apiKeys' && <ApiKeysCard canManage={hasRole(user, 'admin')} plan={user?.plan ?? ''} />}
           {tab === 'preferences' && <PreferencesTab />}
           {tab === 'privacy' && <DataPrivacyTab />}
           {tab === 'team' && <TeamTab canManage={hasRole(user, 'admin')} />}
