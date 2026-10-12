@@ -305,6 +305,9 @@ STEP_LABELS = {
     "phone_numbers": "Looked at your phone numbers",
 }
 ACTION_STEP = "Prepared an action for you to confirm"
+# The reply under a confirm card. Written here, not by the model: models
+# (Sarvam especially) sometimes word a proposal as done ("Pausing agent…").
+CONFIRM_REPLY = "I've set this up, but nothing has changed yet. Press Confirm below to go ahead, or Cancel to leave it as is."
 
 
 def answer_help_question(
@@ -458,6 +461,7 @@ def answer_help_question(
         raise RuntimeError("Help chat model returned an empty reply")
     if pending:
         result["pendingAction"] = pending
+        result["reply"] = CONFIRM_REPLY
     if steps:
         result["steps"] = steps
     if access["upgrade"] and _asked_for_upgrade(choice_message):
