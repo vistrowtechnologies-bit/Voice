@@ -4,325 +4,38 @@
     {
       "name": "leads-dashboard-preview",
       "runtimeExecutable": "python",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8934",
-        "--directory",
-        "design/leads_dashboard_preview"
-      ],
+      "runtimeArgs": ["-m", "http.server", "8934", "--directory", "design/leads_dashboard_preview"],
       "port": 8934
     },
     {
       "name": "web-demo",
       "runtimeExecutable": "/Users/mac15/.local/node/bin/npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--prefix",
-        "web-demo",
-        "--",
-        "--port",
-        "5199",
-        "--strictPort"
-      ],
+      "runtimeArgs": ["run", "dev", "--prefix", "web-demo", "--", "--port", "5199", "--strictPort"],
       "port": 5199
     },
     {
       "name": "token-api",
       "runtimeExecutable": "server/.venv/bin/python",
-      "runtimeArgs": [
-        "-m",
-        "uvicorn",
-        "token_api:app",
-        "--port",
-        "8000",
-        "--app-dir",
-        "server"
-      ],
+      "runtimeArgs": ["-m", "uvicorn", "token_api:app", "--port", "8000", "--app-dir", "server"],
       "port": 8000
     },
     {
       "name": "agent",
       "runtimeExecutable": "agent/.venv/bin/python",
-      "runtimeArgs": [
-        "agent/main.py",
-        "dev"
-      ],
+      "runtimeArgs": ["agent/main.py", "dev"],
       "port": 8081
     },
     {
       "name": "widget-test",
       "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8935",
-        "--directory",
-        "widget"
-      ],
+      "runtimeArgs": ["-m", "http.server", "8935", "--directory", "widget"],
       "port": 8935
     },
     {
       "name": "marketing-site",
       "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8936",
-        "--directory",
-        "marketing-site"
-      ],
+      "runtimeArgs": ["-m", "http.server", "8936", "--directory", "marketing-site"],
       "port": 8936
-    },
-    {
-      "name": "usage-api",
-      "runtimeExecutable": "server/.venv/bin/python",
-      "runtimeArgs": [
-        "/private/tmp/claude-501/-Users-mac15-BRANDS-VISTROW-VOICE/c1351cb7-3e28-41f7-bba4-f6edfd502a95/scratchpad/run_local_api.py",
-        "/Users/mac15/BRANDS/VISTROW VOICE/.claude/worktrees/agent-a869c1a590760c0e8/server",
-        "8791"
-      ],
-      "port": 8791
-    },
-    {
-      "name": "usage-web",
-      "runtimeExecutable": "/Users/mac15/.local/node/bin/npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--prefix",
-        "/Users/mac15/BRANDS/VISTROW VOICE/.claude/worktrees/agent-a869c1a590760c0e8/web-demo",
-        "--",
-        "--config",
-        "vite.preview.config.ts",
-        "--port",
-        "5198",
-        "--strictPort"
-      ],
-      "port": 5198
-    },
-    {
-      "name": "billing-api",
-      "runtimeExecutable": "server/.venv/bin/python",
-      "runtimeArgs": [
-        "/private/tmp/claude-501/-Users-mac15-BRANDS-VISTROW-VOICE/c1351cb7-3e28-41f7-bba4-f6edfd502a95/scratchpad/run_fake_billing_api.py",
-        "/Users/mac15/BRANDS/VISTROW VOICE/.claude/worktrees/agent-abc6d4cee4136b6aa/server",
-        "8792"
-      ],
-      "port": 8792
-    },
-    {
-      "name": "billing-web",
-      "runtimeExecutable": "/Users/mac15/.local/node/bin/npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--prefix",
-        "/Users/mac15/BRANDS/VISTROW VOICE/.claude/worktrees/agent-abc6d4cee4136b6aa/web-demo",
-        "--",
-        "--config",
-        "vite.billing.config.ts",
-        "--port",
-        "5197",
-        "--strictPort"
-      ],
-      "port": 5197
-    },
-    {
-      "name": "tmp-preview",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8937",
-        "--directory",
-        "tmp"
-      ],
-      "port": 8937
-    },
-    {
-      "name": "token-api-local-db",
-      "runtimeExecutable": "server/.venv/bin/python",
-      "runtimeArgs": [
-        "/private/tmp/claude-501/-Users-mac15-BRANDS-VISTROW-VOICE/c1351cb7-3e28-41f7-bba4-f6edfd502a95/scratchpad/run_local_api.py",
-        "server",
-        "8000"
-      ],
-      "port": 8000
-    },
-    {
-      "name": "copilot-api",
-      "runtimeExecutable": "server/.venv/bin/python",
-      "runtimeArgs": [
-        "/private/tmp/claude-501/-Users-mac15-BRANDS-VISTROW-VOICE/c1351cb7-3e28-41f7-bba4-f6edfd502a95/scratchpad/run_local_api_openai.py",
-        "/Users/mac15/BRANDS/VISTROW VOICE/.claude/worktrees/agent-ac2668f5c0b2ccb36/server",
-        "8793"
-      ],
-      "port": 8793
-    },
-    {
-      "name": "copilot-web",
-      "runtimeExecutable": "/Users/mac15/.local/node/bin/npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--prefix",
-        "/Users/mac15/BRANDS/VISTROW VOICE/.claude/worktrees/agent-ac2668f5c0b2ccb36/web-demo",
-        "--",
-        "--config",
-        "vite.copilot.config.ts",
-        "--port",
-        "5196",
-        "--strictPort"
-      ],
-      "port": 5196
-    },
-    {
-      "name": "copilot-api-sim",
-      "runtimeExecutable": "server/.venv/bin/python",
-      "runtimeArgs": [
-        "/private/tmp/claude-501/-Users-mac15-BRANDS-VISTROW-VOICE/c1351cb7-3e28-41f7-bba4-f6edfd502a95/scratchpad/run_local_api_fakellm.py",
-        "/Users/mac15/BRANDS/VISTROW VOICE/.claude/worktrees/agent-ac2668f5c0b2ccb36/server",
-        "8793"
-      ],
-      "port": 8793
-    },
-    {
-      "name": "seo-p1-dist",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8938",
-        "--directory",
-        ".claude/worktrees/agent-a3c2e7cfa56c67944/web-demo/dist"
-      ],
-      "port": 8938
-    },
-    {
-      "name": "builder-api",
-      "runtimeExecutable": "server/.venv/bin/python",
-      "runtimeArgs": [
-        "/private/tmp/claude-501/-Users-mac15-BRANDS-VISTROW-VOICE/c1351cb7-3e28-41f7-bba4-f6edfd502a95/scratchpad/run_local_api_builder.py",
-        "/Users/mac15/BRANDS/VISTROW VOICE/.claude/worktrees/agent-aed2143763bd98bb5/server",
-        "8794"
-      ],
-      "port": 8794
-    },
-    {
-      "name": "builder-web",
-      "runtimeExecutable": "/Users/mac15/.local/node/bin/npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--prefix",
-        "/Users/mac15/BRANDS/VISTROW VOICE/.claude/worktrees/agent-aed2143763bd98bb5/web-demo",
-        "--",
-        "--config",
-        "vite.builder.config.ts",
-        "--port",
-        "5197",
-        "--strictPort"
-      ],
-      "port": 5197
-    },
-    {
-      "name": "builder-api-sim",
-      "runtimeExecutable": "server/.venv/bin/python",
-      "runtimeArgs": [
-        "/private/tmp/claude-501/-Users-mac15-BRANDS-VISTROW-VOICE/c1351cb7-3e28-41f7-bba4-f6edfd502a95/scratchpad/run_local_api_builder_sim.py",
-        "/Users/mac15/BRANDS/VISTROW VOICE/.claude/worktrees/agent-aed2143763bd98bb5/server",
-        "8795"
-      ],
-      "port": 8795
-    },
-    {
-      "name": "seo-p2-dist",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8939",
-        "--directory",
-        ".claude/worktrees/agent-a758883e32f2c1821/web-demo/dist"
-      ],
-      "port": 8939
-    },
-    {
-      "name": "copilot-main-api",
-      "runtimeExecutable": "server/.venv/bin/python",
-      "runtimeArgs": [
-        "/private/tmp/claude-501/-Users-mac15-BRANDS-VISTROW-VOICE/c1351cb7-3e28-41f7-bba4-f6edfd502a95/scratchpad/run_local_api_copilot_main.py",
-        "/Users/mac15/BRANDS/VISTROW VOICE/server",
-        "8796"
-      ],
-      "port": 8796
-    },
-    {
-      "name": "copilot-main-web",
-      "runtimeExecutable": "/Users/mac15/.local/node/bin/npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--prefix",
-        "web-demo",
-        "--",
-        "--config",
-        "vite.copilot.config.ts",
-        "--port",
-        "5195",
-        "--strictPort"
-      ],
-      "port": 5195
-    },
-    {
-      "name": "seo-p3-lang-dist",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8940",
-        "--directory",
-        ".claude/worktrees/agent-a85b929b5c7b484db/web-demo/dist"
-      ],
-      "port": 8940
-    },
-    {
-      "name": "seo-p3-product-dist",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8941",
-        "--directory",
-        ".claude/worktrees/agent-ac952bde8e8321705/web-demo/dist"
-      ],
-      "port": 8941
-    },
-    {
-      "name": "seo-p4-compare-dist",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8942",
-        "--directory",
-        ".claude/worktrees/agent-a061f697189e605dc/web-demo/dist"
-      ],
-      "port": 8942
-    },
-    {
-      "name": "seo-p4-hubs-dist",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8943",
-        "--directory",
-        ".claude/worktrees/agent-a2cc908f81b1cbd6c/web-demo/dist"
-      ],
-      "port": 8943
     }
   ]
 }
