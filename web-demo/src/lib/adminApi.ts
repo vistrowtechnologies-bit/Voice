@@ -111,6 +111,8 @@ export interface AdminOverview {
     integrationFailures24h: number
     workersHealthy: number
     workersExpected: number
+    /** Same rule as the low-credit owner email; up to 10, fewest days left first. */
+    creditsLowList?: AdminLowCreditAccount[]
   }
   revenueMtd?: { capturedInr: number; topupsInr: number; refundsInr: number; netInr: number }
 }
@@ -285,6 +287,68 @@ export interface AdminBilling {
   convert: { id: number; name: string; plan: string; used: number; total: number; pct: number }[]
 }
 
+export interface AdminLowCreditAccount {
+  accountId: number
+  name: string
+  liveAgents: number
+  remaining: number
+  avgDaily: number
+  daysLeft: number | null
+}
+
+/** One account's usage in the range. estCostInr is an ESTIMATE from the
+ * server's VENDOR_COST_RATES table; revenueInr is net of refunds and GST. */
+export interface AdminUsageRow {
+  id: number
+  name: string
+  plan: string
+  calls: number
+  minutes: number
+  credits: number
+  testMinutes: number
+  revenueInr: number
+  estCostInr: number
+  marginInr: number
+}
+
+export interface AdminUsage {
+  range: { from: string; to: string; tz: string }
+  costEstimated: true
+  rates: { key: string; label: string; inrPerMin: number; source: string }[]
+  accounts: AdminUsageRow[]
+  totals: Omit<AdminUsageRow, 'id' | 'name' | 'plan'>
+}
+
+export interface AdminRevenueMonth {
+  month: string
+  capturedInr: number
+  topupsInr: number
+  refundsInr: number
+  netInr: number
+}
+
+export interface AdminInvoice {
+  id: number
+  accountId: number
+  accountName: string
+  kind: string
+  amountInr: number
+  gstInr: number
+  status: string
+  invoiceNumber: string | null
+  credits: number | null
+  createdAt: string | null
+  paidAt: string | null
+  refundedAt: string | null
+}
+
+export interface AdminFinance {
+  months: AdminRevenueMonth[]
+  revenueMtd: AdminRevenueMonth
+  failedPayments30d: AdminInvoice[]
+  costVsRevenueMtd: { from: string; to: string; costEstimated: true; revenueInr: number; estCostInr: number; marginInr: number; minutes: number }
+}
+
 export interface AdminAuditEntry {
   id: number
   actor_email: string
@@ -392,6 +456,10 @@ export const adminCallDetail = (id: number) => aget<AdminCallDetail>(`/calls/${i
 export const adminAnalytics = (days = 30) => aget<AdminAnalytics>(`/analytics${qs({ days })}`)
 
 export const adminBilling = () => aget<AdminBilling>('/billing')
+export const adminUsage = (p: { from?: string; to?: string; days?: number; accountId?: number } = {}) =>
+  aget<AdminUsage>(`/usage${qs({ from: p.from, to: p.to, days: p.days, account_id: p.accountId })}`)
+export const adminFinance = () => aget<AdminFinance>('/finance')
+export const adminInvoices = (status = '') => aget<{ invoices: AdminInvoice[] }>(`/invoices${qs({ status })}`)
 
 export const adminAudit = (p: { action?: string; limit?: number; offset?: number } = {}) =>
   aget<{ entries: AdminAuditEntry[]; total: number }>(`/audit${qs(p)}`)

@@ -110,6 +110,11 @@ class AdminReportTests(unittest.TestCase):
         self.db.end_trial(low)
         self.sql("INSERT INTO settings (account_id, key, value) VALUES (?, 'credits_total', '10') ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value", (low,))
         self.call(low, utc(), duration=9 * 60)  # 9 of 10 credits used
+        self.sql("INSERT INTO agents (account_id, name, status) VALUES (?, 'A', 'live')", (low,))
+        idle = self.account()  # just as low, but no live agent: not counted
+        self.db.end_trial(idle)
+        self.sql("INSERT INTO settings (account_id, key, value) VALUES (?, 'credits_total', '10') ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value", (idle,))
+        self.sql("UPDATE agents SET status = 'draft' WHERE account_id IN (?, ?)", (aid, idle))  # signups get a default agent
         empty = self.account()
         self.db.end_trial(empty)
         self.sql("INSERT INTO settings (account_id, key, value) VALUES (?, 'credits_total', '5') ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value", (empty,))
@@ -123,7 +128,11 @@ class AdminReportTests(unittest.TestCase):
         self.assertIsNone(delta["trialsEnding7d"])
         self.assertEqual(delta["cancellationsPending"], 1)
         self.assertEqual((delta["openTickets"], delta["awaitingUs"]), (2, 1))
-        self.assertEqual((delta["creditsLowAccounts"], delta["zeroBalanceLiveAccounts"]), (2, 1))
+        # Low = a live agent and under the is_low_credit threshold; zero is
+        # counted separately.
+        self.assertEqual((delta["creditsLowAccounts"], delta["zeroBalanceLiveAccounts"]), (1, 1))
+        self.assertLessEqual(len(after["creditsLowList"]), 10)
+        self.assertIn(low, {p["accountId"] for p in self.admin.low_credit_accounts()})
         self.assertEqual(delta["integrationFailures24h"], 1)
         self.assertEqual(after["workersExpected"], 2)
 
