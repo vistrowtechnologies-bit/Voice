@@ -1,4 +1,4 @@
-import { useParams, Navigate } from 'react-router-dom'
+import { useParams, Navigate, Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { FaqSection } from '../../components/FaqSection'
 import { MarketingLayout } from '../../components/MarketingLayout'
@@ -46,6 +46,42 @@ export function ProductDetail() {
           ))}
         </div>
       </section>
+
+      {page.guideSections.map((section) => (
+        <section key={section.title} className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+          <div className="mb-8 max-w-2xl">
+            <SectionEyebrow>{section.eyebrow}</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">{section.title}</h2>
+            {section.intro && <p className="mt-3 text-text-muted">{section.intro}</p>}
+          </div>
+          <div className={`grid gap-5 sm:grid-cols-2 ${section.items.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+            {section.items.map((item) => (
+              <div key={item.title} className="flex flex-col rounded-2xl border border-border bg-surface p-6">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Icon name={item.icon} className="text-[22px]" />
+                </span>
+                <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
+                {item.to && item.link && (
+                  <Link
+                    to={item.to}
+                    className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                  >
+                    {item.link}
+                    <Icon name="arrow_forward" className="text-[16px]" />
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+          {section.note && (
+            <p className="mt-5 flex gap-3 rounded-2xl border border-cyan/30 bg-cyan/[0.06] p-5 text-sm leading-relaxed text-text">
+              <Icon name="info" className="mt-0.5 shrink-0 text-[18px] text-cyan" />
+              <span>{section.note}</span>
+            </p>
+          )}
+        </section>
+      ))}
 
       <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
         <div className="rounded-2xl border border-border bg-surface/50 px-6 py-8 text-center">

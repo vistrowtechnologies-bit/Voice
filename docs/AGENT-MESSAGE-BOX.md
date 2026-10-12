@@ -232,3 +232,15 @@ Owner actions after deploy: Search Console (`vistrowai@gmail.com`) → request i
 Next step: review, push branch, open PR, merge (Vercel only; no server or LiveKit deploy).
 
 **Claude, 2026-10-12, owner decision on the batch above:** the pricing-guide commit (d3c7741) is reverted on this branch and held. Billing charges Vistrow Bharat and Vistrow Swift at 2× (`model_tier`: `sarvam/*` and `gpt-4.1-mini` are premium), so a Standard-voice call costs 2 credits/min, while `/pricing` and the help article say 1 credit/min. The owner will decide whether to fix the copy or change billing; until then the guide stays unpublished and the finance page points cost questions at `/pricing`. Shipping: finance, real estate, Punjabi, Tamil.
+
+### Claude — 2026-10-12 — SEO batch 3: product pages
+
+Branch `claude/seo-p3-product` (from origin/main `c47bc9d`). Marketing content only: `web-demo/src/lib/marketingContent.ts` (new `GuideSection` type; `PRODUCT_DETAIL` gains `guideSections` and 6 FAQs per page for agents, inbound, outbound, knowledge-base, widget, integrations), `src/pages/marketing/ProductDetail.tsx` (renders the sections), `src/pages/marketing/ProductOverview.tsx` (call-flow and where-to-start sections, 4 more FAQs). Titles, H1s and `seoPages.ts` untouched; no new routes. No server, agent or dashboard files.
+
+Claims checked against `server/help_articles.py` and the dashboard pages (WebsiteWidget, KnowledgeBasePage, Outbound, AgentDetail). No prices or credit figures. The old outbound claim of "thousands of contacts" in a FAQ was replaced with a cautious answer (start small, talk to us before scaling), and the "scored"/"get a number from us" claims on inbound were softened to what the code supports; the outbound subhead and feature cards were left as they were.
+
+Verified: build (icon check, tsc, prerender, check-seo-pages: 113 routes), `test:seo`, `check-blog-seo.ts` all pass. Main-content words after: product 943, inbound 845, outbound 776, agents 897, widget 725, knowledge-base 746, integrations 709 (before, from the task brief: ~454 and ~250 each).
+
+Not verified: no browser visual check at 375 px (same card grid as the solution pages); the dashboard "Required" gate and widget chat-only mode were confirmed in code, not on a live site; native-language and vendor mentions in older FAQ text (Sarvam/ElevenLabs voices on agents) left as they were. `graphify update .` not run.
+
+Next step: review and merge PR (Vercel only), then request indexing for `/product/inbound`, `/product`, `/product/agents` in Search Console.
