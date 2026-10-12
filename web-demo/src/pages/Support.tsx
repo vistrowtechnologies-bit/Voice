@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { HelpArticleBody } from '../components/HelpArticleBody'
+import { HelpVideoPlayer } from '../components/HelpVideo'
 import { Icon } from '../components/Icon'
 import { AttachmentPicker, CustomerStatusChip, PriorityChip, TicketThread } from '../components/SupportTicketParts'
 import {
@@ -255,6 +256,7 @@ function ArticleView({ slug, topics }: { slug: string; topics: HelpTopic[] | nul
         <article className={`${card} px-6 py-7 sm:px-10 sm:py-9`}>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{article.title}</h1>
           <p className="mb-5 mt-2 text-sm text-text-muted">{article.summary}</p>
+          {article.video && <div className="mb-6"><HelpVideoPlayer slug={article.video} /></div>}
           <HelpArticleBody body={article.body} />
           <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-border pt-5 text-sm">
             <Link to={topic.route} className="flex items-center gap-1 font-semibold text-primary hover:underline">

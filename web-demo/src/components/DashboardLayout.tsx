@@ -15,6 +15,8 @@ import { useAuth, hasRole, type AuthUser } from '../lib/auth'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { DashboardTour } from './DashboardTour'
 import { HelpChatWidget } from './HelpChatWidget'
+import { WatchHowButton } from './HelpVideo'
+import { helpVideoFor } from '../lib/helpVideos'
 import { Icon } from './Icon'
 import { StorageWarning } from './StorageWarning'
 import { OnboardingModal } from './OnboardingModal'
@@ -471,6 +473,8 @@ function FullPageHeader({
   // Agent creation belongs to the Agents page. Showing it on the overview
   // duplicated Quick actions and displaced dashboard-specific controls.
   const showNewAgent = pathname === '/dashboard/agents'
+  const videoSlug = helpVideoFor(pathname)
+  const watchHow = videoSlug && <WatchHowButton slug={videoSlug} />
 
   // "· Top up" only where it can work: checkout switched on for this
   // deployment and an admin who may pay. Everyone else keeps the plain pill.
@@ -544,6 +548,7 @@ function FullPageHeader({
         </div>
         <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {creditsPill}
+          {watchHow}
           {children}
           {newAgent}
         </div>
@@ -559,6 +564,7 @@ function FullPageHeader({
       </div>
       <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 xl:w-auto">
         <CommandMenuButton />
+        {watchHow}
         {creditsPill}
         <NotificationBell />
         <HeaderAvatarMenu />
