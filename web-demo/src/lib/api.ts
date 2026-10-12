@@ -597,6 +597,7 @@ export const sendHelpChatMessage = (message: string, history: HelpChatMessage[],
     article: { slug: string; title: string } | null
     pendingAction?: CopilotPendingAction
     upgrade?: boolean
+    steps?: string[]
   }>('POST', '/help/chat', { message, history: history.map(({ role, content }) => ({ role, content })), currentPage })
 export const confirmCopilotAction = (token: string) =>
   send<{ ok: boolean; message: string }>('POST', '/help/chat/confirm', { token })

@@ -710,6 +710,8 @@ export interface HelpChatMessage {
   pendingAction?: CopilotPendingAction | null
   /** The user asked for a change their plan doesn't include. */
   upgrade?: boolean
+  /** Plain lines for the lookups the copilot ran ("Looked at your agents"). */
+  steps?: string[]
 }
 
 export interface CopilotPendingAction {

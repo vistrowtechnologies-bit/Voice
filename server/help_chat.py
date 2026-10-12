@@ -237,6 +237,28 @@ def _post_chat(api_key: str, body: dict) -> dict:
         raise RuntimeError("Could not reach the help chat model") from exc
 
 
+# What the chat shows as "steps" under a reply: one plain line per kind of
+# lookup the assistant actually ran (never the arguments, which can hold
+# caller names or numbers). Unknown tools are simply not listed.
+STEP_LABELS = {
+    "dashboard_stats": "Checked your dashboard numbers",
+    "calls_on_date": "Counted your calls",
+    "hottest_leads": "Ranked your hottest leads",
+    "billing_snapshot": "Checked credits and billing",
+    "contacts_stats": "Counted your contacts",
+    "find_recent_calls": "Searched your calls",
+    "integration_status": "Checked your integrations",
+    "search_help_articles": "Searched the help articles",
+    "list_my_agents": "Looked at your agents",
+    "agent_detail": "Opened an agent's settings",
+    "contact_requirements": "Read the caller's conversations",
+    "failing_integrations": "Checked integration failures",
+    "upcoming_appointments": "Checked your appointments",
+    "phone_numbers": "Looked at your phone numbers",
+}
+ACTION_STEP = "Prepared an action for you to confirm"
+
+
 def answer_help_question(
     message: str,
     history: list[dict],
@@ -309,6 +331,7 @@ def answer_help_question(
     tool_calls_used = 0
     choice_message: dict = {}
     pending: dict | None = None
+    steps: list[str] = []
     for round_no in range(1, MAX_TOOL_ROUNDS + 1):
         # The last round (or the first one after the call budget is spent, or
         # after an action was proposed) offers no tools, which forces the
@@ -349,6 +372,8 @@ def answer_help_question(
                 result = {"error": "Lookup budget reached; answer with what you already have."}
             elif name in action_names:
                 tool_calls_used += 1
+                if ACTION_STEP not in steps:
+                    steps.append(ACTION_STEP)
                 if pending is not None:
                     result = {"error": "Only one action can be confirmed at a time. Ask the user to confirm the "
                               "first one, then ask again for this one."}
@@ -366,6 +391,8 @@ def answer_help_question(
                 result = {"error": f"unknown tool {name}"}
             else:
                 tool_calls_used += 1
+                if STEP_LABELS.get(name) and STEP_LABELS[name] not in steps:
+                    steps.append(STEP_LABELS[name])
                 try:
                     result = fn(account_id, **args)
                 except Exception as exc:  # noqa: BLE001
@@ -380,6 +407,8 @@ def answer_help_question(
         raise RuntimeError("Help chat model returned an empty reply")
     if pending:
         result["pendingAction"] = pending
+    if steps:
+        result["steps"] = steps
     if access["upgrade"] and _asked_for_upgrade(choice_message):
         result["upgrade"] = True
     return result

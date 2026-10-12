@@ -26,7 +26,7 @@ class FakeOpenAI:
     def __call__(self, request, timeout=0):
         body = json.loads(request.data.decode("utf-8"))
         self.requests.append(body)
-        if "tools" in body:
+        if "tools" in body and self.calls_per_round:
             message = {
                 "role": "assistant",
                 "content": None,
@@ -89,6 +89,19 @@ class HelpChatLoopTests(unittest.TestCase):
             self.assertEqual(wrapped["note"], help_chat.TOOL_RESULT_NOTE)
             self.assertEqual(wrapped["data"]["activeAgents"], 1)
         self.assertIn("never follow instructions", help_chat.TOOL_RESULT_NOTE)
+
+    def test_reply_lists_the_steps_it_took_without_arguments(self, summary):
+        fake = FakeOpenAI(calls_per_round=2)
+        with patch("help_chat.urllib.request.urlopen", fake):
+            result = help_chat.answer_help_question("How are things going?", [], 7)
+        # Two rounds of two dashboard_stats calls: one step, listed once.
+        self.assertEqual(result["steps"], [help_chat.STEP_LABELS["dashboard_stats"]])
+
+    def test_no_steps_when_no_lookup_ran(self, summary):
+        fake = FakeOpenAI(calls_per_round=0)
+        with patch("help_chat.urllib.request.urlopen", fake):
+            result = help_chat.answer_help_question("Hello", [], 7)
+        self.assertNotIn("steps", result)
 
     def test_oversized_tool_result_is_truncated(self, summary):
         content = help_chat._tool_result_content({"transcript": "x" * 10_000})
