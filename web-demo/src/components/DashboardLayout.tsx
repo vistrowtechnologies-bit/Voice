@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { NAV_GROUPS, navItemActive } from './navGroups'
 import { useEmbedded } from './embedded'
 import { CommandMenuButton, CommandPalette } from './CommandPalette'
@@ -9,6 +9,7 @@ import { fetchBilling, fetchSubscription } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
 import { BRAND } from '../lib/brand'
 import { adminExitImpersonation, takeSupportReturn } from '../lib/adminApi'
+import { openCommandMenu } from '../lib/commandMenu'
 import { initClarity, stopClarityForStaff, tagClarityAccount } from '../lib/analytics'
 import { useAuth, hasRole, type AuthUser } from '../lib/auth'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
@@ -435,6 +436,25 @@ function SidebarRail({ onExpand }: { onExpand: () => void }) {
   )
 }
 
+/** Lets a page's header open the phone navigation drawer and tell the layout
+ * it is drawing the phone app bar itself (so the layout's plain bar hides). */
+const MobileNavContext = createContext<{ openNav: () => void; setHeaderShown: (shown: boolean) => void } | null>(null)
+
+function useIsDesktop() {
+  const query = '(min-width: 1024px)'
+  const [desktop, setDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const onChange = () => setDesktop(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return desktop
+}
+
+const appBarIconBtn =
+  'flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-transparent text-text-muted transition-colors hover:bg-surface-high hover:text-text active:scale-95'
+
 function FullPageHeader({
   title,
   subtitle,
@@ -472,6 +492,65 @@ function FullPageHeader({
     return () => window.removeEventListener('vv:billing-changed', load)
   }, [refreshSignal])
 
+  const desktop = useIsDesktop()
+  const mobileNav = useContext(MobileNavContext)
+  useEffect(() => {
+    if (desktop || !mobileNav) return
+    mobileNav.setHeaderShown(true)
+    return () => mobileNav.setHeaderShown(false)
+  }, [desktop, mobileNav])
+
+  const creditsPill = credits !== null && (
+    <Tooltip content={topupAvailable ? 'Buy credits · plan and invoices' : 'Plan and billing'}><Link
+      to={topupAvailable ? '/dashboard/settings?tab=billing&topup=1' : '/dashboard/settings?tab=billing'}
+      aria-label={topupAvailable ? `${credits} credits remaining. Buy credits` : `${credits} credits remaining. Open plan and billing`}
+      className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
+    >
+      <Icon name="toll" className="text-[15px] text-cyan" />
+      {credits} credits
+      {topupAvailable && <span className="hidden text-primary sm:inline">· Top up</span>}
+    </Link></Tooltip>
+  )
+  const newAgent = showNewAgent && (
+    <Link
+      to="/dashboard/agents?new=1"
+      className="flex shrink-0 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90"
+    >
+      <Icon name="add" className="text-[18px]" />
+      New Agent
+    </Link>
+  )
+
+  if (!desktop) {
+    // Phone and tablet: one app bar (menu, title, search, alerts, account)
+    // and a single swipeable row for credits and the page's own actions.
+    return (
+      <header className="sticky top-0 z-20 border-b border-border bg-bg/85 backdrop-blur-xl">
+        <div className="flex h-14 items-center gap-0.5 px-1.5">
+          <button type="button" aria-label="Open navigation" onClick={() => mobileNav?.openNav()} className={appBarIconBtn}>
+            <Icon name="menu" className="text-[22px]" />
+          </button>
+          <div className="flex min-w-0 flex-1 items-center gap-2 px-1">
+            <img src={vistrowMark} alt="" className="h-7 w-7 shrink-0 rounded-lg" />
+            <h1 className="truncate text-[17px] font-semibold tracking-tight">{title}</h1>
+          </div>
+          <button type="button" aria-label="Search and commands" aria-haspopup="dialog" onClick={openCommandMenu} className={appBarIconBtn}>
+            <Icon name="search" className="text-[21px]" />
+          </button>
+          <NotificationBell />
+          <span className="pl-1 pr-1.5">
+            <HeaderAvatarMenu />
+          </span>
+        </div>
+        <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {creditsPill}
+          {children}
+          {newAgent}
+        </div>
+      </header>
+    )
+  }
+
   return (
     <header className="sticky top-0 z-20 flex flex-col gap-3 border-b border-border bg-bg/90 px-4 py-4 backdrop-blur-xl sm:px-6 xl:flex-row xl:items-center">
       <div className="min-w-0 flex-1">
@@ -480,29 +559,11 @@ function FullPageHeader({
       </div>
       <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 xl:w-auto">
         <CommandMenuButton />
-        {credits !== null && (
-          <Tooltip content={topupAvailable ? 'Buy credits · plan and invoices' : 'Plan and billing'}><Link
-            to={topupAvailable ? '/dashboard/settings?tab=billing&topup=1' : '/dashboard/settings?tab=billing'}
-            aria-label={topupAvailable ? `${credits} credits remaining. Buy credits` : `${credits} credits remaining. Open plan and billing`}
-            className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-primary hover:text-primary"
-          >
-            <Icon name="toll" className="text-[15px] text-cyan" />
-            {credits} credits
-            {topupAvailable && <span className="hidden text-primary sm:inline">· Top up</span>}
-          </Link></Tooltip>
-        )}
+        {creditsPill}
         <NotificationBell />
         <HeaderAvatarMenu />
         {children}
-        {showNewAgent && (
-          <Link
-            to="/dashboard/agents?new=1"
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-bg hover:opacity-90"
-          >
-            <Icon name="add" className="text-[18px]" />
-            New Agent
-          </Link>
-        )}
+        {newAgent}
       </div>
     </header>
   )
@@ -577,6 +638,9 @@ function ImpersonationBanner({ accountName, session }: { accountName: string; se
 function FullDashboardLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [headerShown, setHeaderShown] = useState(false)
+  const openNav = useCallback(() => setMobileNavOpen(true), [])
+  const [mobileNav] = useState(() => ({ openNav, setHeaderShown }))
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_KEY) === 'true'
@@ -671,7 +735,7 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
       )}
 
       <div className={`min-w-0 transition-[margin] duration-200 ease-out motion-reduce:transition-none ${sidebarOpen ? 'lg:ml-[248px]' : 'lg:ml-16'} ${user?.impersonating ? 'pt-9' : ''}`}>
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3 lg:hidden">
+        {!headerShown && <div className="flex items-center gap-3 border-b border-border px-4 py-3 lg:hidden">
           <button
             aria-label="Open navigation"
             onClick={() => setMobileNavOpen(true)}
@@ -681,14 +745,16 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
           </button>
           <img src={vistrowMark} alt="" className="h-7 w-7 rounded-lg" />
           <span className="font-semibold tracking-tight">{BRAND.name}</span>
-        </div>
+        </div>}
         {/* HelpChatWidget floats fixed bottom-right on every dashboard page
             (bottom-3/right-3, sm:bottom-6/right-6) - without reserved space
             here, whatever a page happens to render in that corner (a
             status badge, a stat, a form's action buttons) sits directly
             under it. This padding is sized to clear the widget's launcher
             button plus its own margin at both breakpoints. */}
-        <main className="pb-24 sm:pb-28">{children}</main>
+        <main className="pb-24 sm:pb-28">
+          <MobileNavContext.Provider value={mobileNav}>{children}</MobileNavContext.Provider>
+        </main>
       </div>
       {user && !user.onboarded && <OnboardingModal />}
       {user && user.onboarded && !user.tourCompleted && <DashboardTour />}
