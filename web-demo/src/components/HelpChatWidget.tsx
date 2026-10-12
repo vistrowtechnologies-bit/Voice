@@ -603,24 +603,6 @@ export function HelpChatWidget() {
                     <ThinkingIndicator question={pendingQuestion} />
                   </div>
                 )}
-                {!sending && typingIndex === null && page && (
-                  <div className="mt-1 border-t border-border pt-3">
-                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted">Suggested on {page.label}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {questions.map((question, qi) => (
-                        <button
-                          key={question}
-                          type="button"
-                          onClick={() => send(question)}
-                          style={{ animationDelay: `${qi * 60}ms` }}
-                          className="help-msg-in rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-left text-[11px] text-text transition-all hover:-translate-y-px hover:border-primary"
-                        >
-                          {question}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
             {error && (
