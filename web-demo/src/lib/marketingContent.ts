@@ -208,9 +208,9 @@ export const PRODUCT_DETAIL: Record<
     eyebrow: 'Product · Outbound Campaigns',
     headline: 'Reach every contact at scale.',
     subhead:
-      'Launch reminder, follow-up, and collection campaigns that run consistent, polite, fully-logged calls to thousands of contacts.',
+      'Launch reminder, follow-up, and collection campaigns that run consistent, polite, fully-logged calls to the contact lists you choose.',
     features: [
-      { icon: 'groups', title: 'Bulk campaigns', body: 'Upload a contact list and let Artha work through it - no manual dialing.' },
+      { icon: 'groups', title: 'Bulk campaigns', body: 'Upload a contact list and let Artha work through it in batches you control.' },
       { icon: 'event_repeat', title: 'Reminders & follow-ups', body: 'Appointment reminders, renewals, and nudges that never slip through the cracks.' },
       { icon: 'volunteer_activism', title: 'Polite collections', body: 'Consistent, compliant reminder calls with every conversation recorded.' },
       { icon: 'monitoring', title: 'Live campaign metrics', body: 'Track pickup, completion, and outcome rates as the campaign runs.' },
