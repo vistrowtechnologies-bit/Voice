@@ -191,3 +191,5 @@ Not verified / left out: ₹299/month phone-number fee (in code, not on /pricing
 Owner actions after deploy: Search Console (`vistrowai@gmail.com`) → request indexing for `/solutions/finance`, `/solutions/real-estate`, `/languages/punjabi`, `/languages/tamil`, `/ai-voice-bot-pricing-india`; re-submit `/sitemap.xml`. The pricing guide's OG image still shows the old headline; regenerate with `npm run generate:og` if wanted.
 
 Next step: review, push branch, open PR, merge (Vercel only; no server or LiveKit deploy).
+
+**Claude, 2026-10-12, owner decision on the batch above:** the pricing-guide commit (d3c7741) is reverted on this branch and held. Billing charges Vistrow Bharat and Vistrow Swift at 2× (`model_tier`: `sarvam/*` and `gpt-4.1-mini` are premium), so a Standard-voice call costs 2 credits/min, while `/pricing` and the help article say 1 credit/min. The owner will decide whether to fix the copy or change billing; until then the guide stays unpublished and the finance page points cost questions at `/pricing`. Shipping: finance, real estate, Punjabi, Tamil.
