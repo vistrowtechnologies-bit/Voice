@@ -330,6 +330,13 @@ export interface AdminHealth {
   // Admin P0: real liveness instead of a hard-coded "Backend online" tile.
   workers?: AdminWorker[]
   api?: { ok: boolean; dbLatencyMs: number | null }
+  // Last vendor health check (server/vendor_health.py), null before the first.
+  vendors?: VendorReport | null
+}
+
+export interface VendorReport {
+  checkedAt: string
+  results: { name: string; status: 'ok' | 'warn' | 'fail' | 'skipped'; detail: string; latencyMs: number }[]
 }
 
 export interface AdminWorker {
@@ -390,6 +397,7 @@ export const adminAudit = (p: { action?: string; limit?: number; offset?: number
   aget<{ entries: AdminAuditEntry[]; total: number }>(`/audit${qs(p)}`)
 
 export const adminHealth = () => aget<AdminHealth>('/health')
+export const adminRunVendorHealth = () => apost<VendorReport>('/vendor-health/run')
 
 export const adminPrivacyRequests = (status = '') =>
   aget<{ requests: AdminPrivacyRequest[] }>(`/privacy-requests${qs({ status })}`)

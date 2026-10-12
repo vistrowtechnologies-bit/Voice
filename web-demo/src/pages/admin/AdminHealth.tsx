@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { adminHealth, type AdminHealth as Data, type AdminWorker } from '../../lib/adminApi'
+import { adminHealth, adminRunVendorHealth, type AdminHealth as Data, type AdminWorker, type VendorReport } from '../../lib/adminApi'
 import { AdminCard, BarList, EmptyState, ErrorState, fmtDateTime, PageHeader, Pill, StatCard, timeAgo, useVisiblePoll } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
@@ -53,6 +53,8 @@ export function AdminHealth() {
         <StatCard label="Live calls" value={d.liveCalls == null ? '—' : d.liveCalls.toLocaleString('en-IN')} sub={d.liveCalls == null ? 'LiveKit unreachable' : 'active rooms'} live={d.liveCalls != null} />
         <StatCard label="Errors (24h)" value={d.errorCount24h.toLocaleString('en-IN')} sub="logged events" icon="error" />
       </div>
+
+      <VendorsCard report={d.vendors} onChecked={load} />
 
       <WorkersCard workers={d.workers} />
 
@@ -142,6 +144,71 @@ function fmtAge(seconds: number | null): string {
   if (s < 120) return `last seen ${s.toLocaleString('en-IN')} s ago`
   if (s < 7200) return `last seen ${Math.floor(s / 60).toLocaleString('en-IN')} min ago`
   return `last seen ${Math.floor(s / 3600).toLocaleString('en-IN')} h ago`
+}
+
+const VENDOR_TONE = { ok: 'active', warn: 'warning', fail: 'suspended', skipped: 'neutral' } as const
+const VENDOR_LABEL = { ok: 'OK', warn: 'Warning', fail: 'Failing', skipped: 'Not configured' } as const
+
+/** Every vendor checked with a tiny real request (credit and quota, not just
+ * reachability): every 3 hours by the ops worker, or now from here. */
+function VendorsCard({ report, onChecked }: { report?: VendorReport | null; onChecked: () => void }) {
+  const [running, setRunning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [fresh, setFresh] = useState<VendorReport | null>(null)
+  const shown = fresh && (!report || fresh.checkedAt >= report.checkedAt) ? fresh : report
+  const run = async () => {
+    setRunning(true)
+    setError(null)
+    try {
+      setFresh(await adminRunVendorHealth())
+      onChecked()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Check failed')
+    } finally {
+      setRunning(false)
+    }
+  }
+  const failing = shown?.results.filter((r) => r.status === 'fail').length ?? 0
+  return (
+    <AdminCard className="mt-6 overflow-hidden">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 font-display text-base font-semibold">
+            Vendor health
+            {shown && <Pill tone={failing ? 'suspended' : 'active'}>{failing ? `${failing} failing` : 'all OK'}</Pill>}
+          </div>
+          <div className="mt-0.5 text-xs text-text-muted">
+            A tiny real request to each vendor every 3 hours, with an email when one fails and a daily digest at 9 AM.
+            {shown && <> Last checked <span title={fmtDateTime(shown.checkedAt)}>{timeAgo(shown.checkedAt)}</span>.</>}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={run}
+          disabled={running}
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-muted transition-colors hover:border-primary hover:text-text disabled:opacity-60"
+        >
+          <Icon name={running ? 'progress_activity' : 'refresh'} className={`text-[16px] ${running ? 'motion-safe:animate-spin' : ''}`} />
+          {running ? 'Checking…' : 'Run check now'}
+        </button>
+      </div>
+      {error && <div className="border-b border-border bg-destructive/5 px-5 py-2 text-xs text-destructive">{error}</div>}
+      {!shown ? (
+        <EmptyState icon="monitor_heart" message="Not checked yet. Run a check, or wait for the next 3-hourly run." />
+      ) : (
+        <div className="divide-y divide-border/60">
+          {shown.results.map((r) => (
+            <div key={r.name} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 text-sm">
+              <span className="w-36 shrink-0 font-semibold">{r.name}</span>
+              <Pill tone={VENDOR_TONE[r.status] ?? 'neutral'}>{VENDOR_LABEL[r.status] ?? r.status}</Pill>
+              <span className={`min-w-0 flex-1 text-xs ${r.status === 'fail' ? 'text-destructive' : 'text-text-muted'}`}>{r.detail}</span>
+              <span className="font-mono text-[11px] text-text-muted">{r.latencyMs.toLocaleString('en-IN')} ms</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </AdminCard>
+  )
 }
 
 /** LiveKit agent workers (web demo + phone), from their 60 s heartbeats. */

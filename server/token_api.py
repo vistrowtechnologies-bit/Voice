@@ -18,6 +18,7 @@ from pathlib import Path
 
 import admin_db
 import agent_builder
+import vendor_health
 import auth
 import call_intelligence
 import calls_db
@@ -2602,7 +2603,14 @@ async def admin_health(admin: dict = Depends(require_platform_owner)) -> dict:
     health = admin_db.system_health()
     health["liveCalls"] = await _platform_live_call_count()
     health["apiKeys"] = [{"name": n, "configured": bool(os.environ.get(env))} for n, env in _ADMIN_API_KEY_ENVS.items()]
+    health["vendors"] = vendor_health.last_report()
     return health
+
+
+@app.post("/admin/vendor-health/run")
+async def admin_vendor_health_run(admin: dict = Depends(require_platform_owner)) -> dict:
+    """Check every vendor now (the ops worker also does this every 3 hours)."""
+    return await asyncio.to_thread(vendor_health.run_checks)
 
 
 @app.get("/admin/vendor-credits")
