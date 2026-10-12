@@ -127,4 +127,5 @@ class TheDefaultModelBillsCorrectly(unittest.TestCase):
         import calls_db
         self.assertEqual(calls_db.model_tier("gemini-live:gemini-3.1-flash-live-preview"), "realtime_plus")
         self.assertEqual(calls_db.model_tier("gemini-live"), "premium")
+        self.assertEqual(calls_db.model_tier("gemini-live:gemini-3.8-live"), "realtime_plus")
         self.assertEqual(calls_db._MODEL_TIER_MULTIPLIERS["realtime_plus"], 6.0)

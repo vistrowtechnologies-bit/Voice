@@ -4,7 +4,10 @@ from google.genai import types
 
 DEFAULT_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
 MODEL_31 = "gemini-3.1-flash-live-preview"
-API_MODELS = {DEFAULT_MODEL, MODEL_31}
+# GA successor to 3.1 (Google lists 3.1 as legacy); same per-minute price.
+# Uses the 3.1 profile: every non-DEFAULT_MODEL branch below.
+MODEL_38 = "gemini-3.8-live"
+API_MODELS = {DEFAULT_MODEL, MODEL_31, MODEL_38}
 
 
 def activity_detection(model: str) -> types.RealtimeInputConfig:
@@ -45,6 +48,9 @@ def thinking_config(model: str) -> types.ThinkingConfig:
         return types.ThinkingConfig(thinking_budget=0, include_thoughts=False)
     if model == MODEL_31:
         return types.ThinkingConfig(thinking_level="minimal", include_thoughts=False)
+    if model == MODEL_38:
+        # 3.8 Live documents no thinking_level/budget; only hide thoughts.
+        return types.ThinkingConfig(include_thoughts=False)
     raise ValueError(f"Unsupported realtime model: {model}")
 
 

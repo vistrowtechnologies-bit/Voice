@@ -945,7 +945,8 @@ def vendor_cost_per_minute(model: str | None, call_type: str | None) -> float:
     """Estimated INR vendor cost of one minute of a call (VENDOR_COST_RATES)."""
     name = (model or "").strip()
     if name.startswith("gemini-live"):
-        engine = "realtime_31" if "3.1" in name else "realtime_25"
+        # 3.8 Live is priced like 3.1; only the 2.5 default is cheaper.
+        engine = "realtime_25" if name == "gemini-live" or "2.5" in name else "realtime_31"
     else:
         engine = "pipeline"
     rate = VENDOR_COST_RATES[engine]["inrPerMin"] + VENDOR_COST_RATES["livekit_session"]["inrPerMin"]
