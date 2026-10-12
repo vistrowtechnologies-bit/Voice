@@ -196,14 +196,15 @@ def _synth_gemini_api(voice_name: str, model_name: str, text: str) -> tuple[byte
     return audio, "audio/wav"
 
 
-def synthesize(voice_string: str, lang: str) -> tuple[bytes, str]:
-    """Synthesize the fixed audition line for `voice_string` in `lang`.
+def synthesize(voice_string: str, lang: str, text: str | None = None) -> tuple[bytes, str]:
+    """Synthesize the fixed audition line (or `text`, e.g. a drafted agent's
+    greeting) for `voice_string` in `lang`.
     Returns (audio_bytes, content_type). Raises PreviewError on any failure."""
     entry = voice_catalog.get_voice(voice_string)
     if entry is None:
         raise PreviewError("That voice isn't available.")
     # Gendered sample line so a female voice says "देती हूँ", not "देता हूँ".
-    text = voice_catalog.sample_text(lang, entry.get("gender"))
+    text = text or voice_catalog.sample_text(lang, entry.get("gender"))
     if text is None:
         raise PreviewError(f"No preview script for language '{lang}'.")
 

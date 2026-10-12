@@ -1159,7 +1159,7 @@ export function PostCallFieldsEditor({
       ))}
       <button
         onClick={() => onChange([...value, { key: '', type: 'string', description: '' }])}
-        className="self-start rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-bold text-text-muted hover:border-primary hover:text-text"
+        className="self-start rounded-lg border border-dashed border-border bg-transparent px-3 py-1.5 text-xs font-bold text-text-muted hover:border-primary hover:text-text"
       >
         + Add field
       </button>

@@ -354,5 +354,27 @@ class BuilderDatabaseTests(unittest.TestCase):
         self.assertEqual(calls_db.count_agent_drafts(self.b), before + 1)
 
 
+    def test_greeting_plays_have_their_own_cap_and_check_the_voice(self):
+        import voice_preview
+        conn = calls_db._connect()
+        with conn:
+            for _ in range(agent_builder.DAILY_DRAFT_LIMIT):
+                conn.execute("INSERT INTO agent_drafts (account_id, user_id) VALUES (?, 1)", (self.c,))
+        conn.close()
+        body = {"voice": "pooja", "language": "hi-IN", "text": "नमस्ते, मैं पूजा बोल रही हूँ।"}
+        with patch.object(voice_preview, "synthesize", lambda v, l, t: (b"RIFF", "audio/wav")) as _:
+            # Drafts used up, greetings still play; the play is counted as a greeting.
+            self.assertEqual(agent_builder.greeting_audio(body, self.c, 1), (b"RIFF", "audio/wav"))
+            self.assertEqual(calls_db.count_agent_drafts(self.c, "greeting"), 1)
+            self.assertEqual(calls_db.count_agent_drafts(self.c), agent_builder.DAILY_DRAFT_LIMIT)
+            # A voice the account's plan doesn't allow is refused (B is not on Scale).
+            with self.assertRaises(agent_builder.BuilderError) as ctx:
+                agent_builder.greeting_audio({**body, "voice": PREMIUM}, self.b, 1)
+            self.assertEqual(ctx.exception.status, 400)
+            with self.assertRaises(agent_builder.BuilderError) as ctx:
+                agent_builder.greeting_audio({**body, "text": "  "}, self.c, 1)
+            self.assertEqual(ctx.exception.status, 400)
+
+
 if __name__ == "__main__":
     unittest.main()
