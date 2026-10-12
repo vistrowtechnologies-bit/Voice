@@ -175,3 +175,19 @@ Not verified / left out: not opened in a browser (the Browser preview reads the 
 Owner actions after deploy: Search Console (`vistrowai@gmail.com`, property `https://www.vistrowvoice.com/`) → URL Inspection → Request indexing for `/ai-ivr`, `/vs-ivr`, `/languages/kannada`, `/languages/telugu`, `/languages/hindi`; re-submit `/sitemap.xml`.
 
 Next step: review, push branch, open PR, merge (Vercel deploys the marketing site; no server or LiveKit deploy needed), then the indexing requests above. Re-check these queries in Search Console after 2–4 weeks.
+
+### Claude — 2026-10-12 — SEO batch 2
+
+Branch `claude/seo-p2` (worktree `.claude/worktrees/agent-a758883e32f2c1821`, based on origin/main `32dc5fd`; not pushed, no PR). Commits `e522fc4` (Punjabi/Tamil), `d3c7741` (/ai-voice-bot-pricing-india), `004f2ed` (/solutions/finance + /solutions/real-estate), plus this note. Marketing content only; no `server/`, `agent/` or dashboard files touched.
+
+Files: `web-demo/src/lib/marketingContent.ts` (pa/ta language fields; new optional `Solution.guideSections`/`sampleExchange`; finance + real-estate copy/FAQs), `src/lib/seoPages.ts` (titles/descriptions for both solutions, Punjabi, Tamil; explicit `/ai-voice-bot-pricing-india` entry), `src/lib/seoExpansionContent.ts` (pricing removed from `BUYER_GUIDES`), new `src/pages/marketing/AiVoiceBotPricing.tsx`, `src/App.tsx` (route before `/:slug`), `src/pages/marketing/SolutionDetail.tsx` (renders the new optional sections only when present), `scripts/test-language-seo.mjs` (Punjabi/Tamil; demo link optional, solution links checked instead).
+
+Pricing numbers are computed in the page from `lib/plans.ts` (PLANS, TOPUP_PACKS) plus constants mirrored from `server/calls_db.py` (GST 0.18, OVERAGE_RATE_MULTIPLIER 1.4, voice tiers 0.75/1/2, model tiers, channel rate 1); keep them in sync if billing changes. Finding: both models offered in the agent editor (Vistrow Bharat `sarvam/…`, Vistrow Swift `gpt-4.1-mini`) bill in the 2x model tier, so a Standard-voice minute is 2 credits. The `/pricing` FAQ ("browser and phone calls both use 1 credit per minute") and the help article ("Standard uses half the credits") read as if 1 credit/min is typical. Not changed here (out of scope).
+
+Verified: `npm --prefix web-demo run build` passes (icon check, tsc, prerender, check-seo-pages: 113 routes); `npm --prefix web-demo run test:seo` passes for hindi, kannada, telugu, marathi, punjabi, tamil; `check-blog-seo.ts` (run from `web-demo/`) passes. Prerendered HTML of all five routes: titles ≤60, descriptions ≤155, canonical, one H1, JSON-LD parses (solutions/languages: BreadcrumbList+Service+FAQPage; pricing: BreadcrumbList+FAQPage), no "best"/quoted queries in new copy. Served `dist/` locally and checked finance, pricing, real-estate and Punjabi in a browser at desktop and 375 px (no horizontal scroll; Gurmukhi renders). Main-content words: finance 659→1808, real-estate 779→1771, punjabi 435→876, tamil 444→881, pricing 416→1289.
+
+Not verified / left out: ₹299/month phone-number fee (in code, not on /pricing), annual billing and the trial allowance left off the pricing guide. No Punjabi/Tamil demo-call pages exist, so none linked. Samples were written by Claude (labelled as samples); a native speaker should read the Punjabi, Tamil and Hindi lines. RBI 8 am–7 pm stated as guidance only, next to the default 9–9 window. `graphify update .` not run (main folder after merge). No `[CLAIM]`/`[DONE]` posted to issue #2.
+
+Owner actions after deploy: Search Console (`vistrowai@gmail.com`) → request indexing for `/solutions/finance`, `/solutions/real-estate`, `/languages/punjabi`, `/languages/tamil`, `/ai-voice-bot-pricing-india`; re-submit `/sitemap.xml`. The pricing guide's OG image still shows the old headline; regenerate with `npm run generate:og` if wanted.
+
+Next step: review, push branch, open PR, merge (Vercel only; no server or LiveKit deploy).
