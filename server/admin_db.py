@@ -277,23 +277,10 @@ def platform_overview(days: int = 30) -> dict:
 
 
 def _revenue_mtd(conn) -> dict:
-    """Money actually captured this calendar month (IST), from invoices.
-    Captured counts invoices paid this month even if refunded later, so the
-    refund is not counted twice; amounts are the invoice totals."""
-    month = "date_trunc('month', now() AT TIME ZONE 'Asia/Kolkata')"
-    ist = "(({col}::timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata')"
-    row = conn.execute(
-        f"""SELECT
-              COALESCE(SUM(amount_inr) FILTER (WHERE status IN ('paid', 'refunded') AND paid_at IS NOT NULL
-                                               AND {ist.format(col='paid_at')} >= {month}), 0) captured,
-              COALESCE(SUM(amount_inr) FILTER (WHERE kind = 'topup' AND status IN ('paid', 'refunded') AND paid_at IS NOT NULL
-                                               AND {ist.format(col='paid_at')} >= {month}), 0) topups,
-              COALESCE(SUM(amount_inr) FILTER (WHERE status = 'refunded' AND refunded_at IS NOT NULL
-                                               AND {ist.format(col='refunded_at')} >= {month}), 0) refunds
-            FROM invoices"""
-    ).fetchone()
-    captured, topups, refunds = (round(float(row[k] or 0), 2) for k in ("captured", "topups", "refunds"))
-    return {"capturedInr": captured, "topupsInr": topups, "refundsInr": refunds, "netInr": round(captured - refunds, 2)}
+    """Money actually captured this calendar month (IST), from invoices; the
+    current-month row of _revenue_months (same rules)."""
+    month = _revenue_months(conn, 1)[-1]
+    return {k: month[k] for k in ("capturedInr", "topupsInr", "refundsInr", "netInr")}
 
 
 def credit_positions(conn=None) -> list[dict]:
@@ -329,6 +316,7 @@ def _ops_counters(conn) -> dict:
     one = lambda sql, p=(): conn.execute(sql, p).fetchone()["c"]  # noqa: E731
     failed = _failed_call_sql()
     positions = credit_positions(conn)
+    low = low_credit_accounts(conn, positions)
     workers = worker_statuses(conn)
     return {
         "failedCalls1h": one(f"SELECT COUNT(*) c FROM calls c WHERE {failed} AND c.started_at::timestamp >= {_UTC_NOW} - INTERVAL '1 hour'"),
@@ -348,7 +336,10 @@ def _ops_counters(conn) -> dict:
                AND COALESCE((SELECT m.author_type FROM support_ticket_messages m
                              WHERE m.ticket_id = t.id AND m.author_type <> 'note' ORDER BY m.id DESC LIMIT 1), 'customer') <> 'support'"""
         ),
-        "creditsLowAccounts": sum(1 for p in positions if p["total"] > 0 and p["remaining"] <= p["total"] * 0.2),
+        # Same rule as the low-credit owner alert (is_low_credit): a live
+        # agent and under ~3 days of its own recent use left.
+        "creditsLowAccounts": len(low),
+        "creditsLowList": low[:10],
         "zeroBalanceLiveAccounts": sum(1 for p in positions if p["remaining"] <= 0 and p["liveAgents"] > 0),
         "integrationFailures24h": one(
             f"SELECT COUNT(*) c FROM integration_deliveries WHERE status = 'failed' AND created_at::timestamp >= {_UTC_NOW} - INTERVAL '24 hours'"
@@ -910,6 +901,339 @@ def billing_overview() -> dict:
         }
     finally:
         conn.close()
+
+
+# ----------------------------------------------------------------- usage & cost
+
+# ESTIMATED vendor cost of one conversation minute, INR, GST excluded. The ONE
+# table every admin cost/margin figure is built from; the API and the UI label
+# the result "estimated". Nothing records real per-call vendor cost yet (admin
+# audit 2026-10-11, P1 "per-call cost columns"), so these are averages from the
+# sources cited, not a measurement of any given call. Update them here when a
+# new bill or price page says otherwise.
+VENDOR_COST_RATES = {
+    # Gemini Live 3.1 (gemini-3.1-flash-live-preview), all of STT+LLM+TTS:
+    # Google Cloud bill, Gemini API "Bidi generate content" SKUs, 6-9 Oct
+    # 2026: about Rs424 over 25.2 call minutes. Mostly text input, the prompt
+    # re-billed every turn, so it moves with prompt size.
+    "realtime_31": {"label": "Gemini Live 3.1", "inrPerMin": 16.8,
+                    "source": "Google Cloud bill, 6-9 Oct 2026 (Rs424 / 25.2 min)"},
+    # Gemini Live 2.5 native audio: same bill, about Rs110 over 23.8 minutes.
+    "realtime_25": {"label": "Gemini Live 2.5", "inrPerMin": 4.6,
+                    "source": "Google Cloud bill, 6-9 Oct 2026 (Rs110 / 23.8 min)"},
+    # Every other model (STT -> LLM -> TTS): gpt-4.1-mini + Sarvam STT +
+    # ElevenLabs Flash provider cost, docs/REALTIME-VS-CASCADED-COST-2026-10-05.md
+    # rupee table (Rs95.16/USD). Sarvam LLM turns cost ~3x gpt-4.1-mini's
+    # (calls_db.model_tier comment), so this understates "Vistrow Bharat" calls.
+    "pipeline": {"label": "STT + LLM + TTS pipeline", "inrPerMin": 2.7,
+                 "source": "docs/REALTIME-VS-CASCADED-COST-2026-10-05.md (provider Rs/min)"},
+    # Added to every call: LiveKit Cloud agent session minute beyond the
+    # included 5,000 (calls_db._VOICE_TIER_MULTIPLIERS comment).
+    "livekit_session": {"label": "LiveKit agent session (every call)", "inrPerMin": 0.957,
+                        "source": "calls_db.py credit-floor comment (Rs0.957/min)"},
+    # Added to phone calls: EnableX SIP, inbound or outbound, per the
+    # commercial proposal accepted Jul 2026 (GST extra).
+    "enablex_sip": {"label": "EnableX SIP (phone calls)", "inrPerMin": 0.25,
+                    "source": "EnableX commercial proposal, Jul 2026 (Rs0.25/min each way)"},
+}
+
+# Admin money views use Indian calendar days, like the revenue figures.
+ADMIN_TZ = "Asia/Kolkata"
+
+
+def vendor_cost_per_minute(model: str | None, call_type: str | None) -> float:
+    """Estimated INR vendor cost of one minute of a call (VENDOR_COST_RATES)."""
+    name = (model or "").strip()
+    if name.startswith("gemini-live"):
+        engine = "realtime_31" if "3.1" in name else "realtime_25"
+    else:
+        engine = "pipeline"
+    rate = VENDOR_COST_RATES[engine]["inrPerMin"] + VENDOR_COST_RATES["livekit_session"]["inrPerMin"]
+    if call_type == "phone":
+        rate += VENDOR_COST_RATES["enablex_sip"]["inrPerMin"]
+    return rate
+
+
+def _admin_window(from_date: str | None, to_date: str | None, days: int | None) -> tuple:
+    """(from_date, to_date, start_utc, end_utc) for inclusive IST dates; days
+    (when from is not given) counts back from `to`. Raises ValueError."""
+    import calls_db  # local import: see account_detail
+
+    if days and not from_date:
+        _, to_d, _ = calls_db.usage_window(to_date, to_date, ADMIN_TZ)
+        from_date = (to_d - datetime.timedelta(days=max(1, int(days)) - 1)).isoformat()
+    from_d, to_d, tz = calls_db.usage_window(from_date, to_date, ADMIN_TZ)
+    start = calls_db._utc_text(datetime.datetime.combine(from_d, datetime.time.min, tzinfo=tz))
+    end = calls_db._utc_text(datetime.datetime.combine(to_d + datetime.timedelta(days=1), datetime.time.min, tzinfo=tz))
+    return from_d, to_d, start, end
+
+
+def _usage_by_account(conn, start_utc: str, end_utc: str, account_id: int | None = None) -> dict[int, dict]:
+    """Per account: calls/minutes/credits exactly as the tenant Usage page
+    counts them (calls_db.credits_for_call, test calls excluded, test-minute
+    overage added) plus estimated vendor cost over ALL minutes, tests
+    included, because the vendors bill those too."""
+    import calls_db  # local import: see account_detail
+
+    query = (
+        "SELECT account_id, COALESCE(call_type, 'browser') call_type, voice, model, "
+        "(COALESCE(room_name, '') LIKE ? OR COALESCE(room_name, '') LIKE ?) is_test, "
+        "COUNT(*) n, COALESCE(SUM(duration_seconds), 0) / 60.0 m FROM calls "
+        "WHERE account_id IS NOT NULL AND started_at::timestamp >= ?::timestamp AND started_at::timestamp < ?::timestamp"
+    )
+    params: list = ["test-phone-%", "test-agent-%", start_utc, end_utc]
+    if account_id is not None:
+        query += " AND account_id = ?"
+        params.append(account_id)
+    query += " GROUP BY 1, 2, 3, 4, 5"
+    out: dict[int, dict] = {}
+    rates_by_account: dict[int, dict] = {}
+    for row in conn.execute(query, params).fetchall():
+        aid = row["account_id"]
+        acc = out.setdefault(aid, {"calls": 0, "minutes": 0.0, "credits": 0.0, "testMinutes": 0.0, "estCostInr": 0.0})
+        minutes = float(row["m"] or 0)
+        acc["estCostInr"] += minutes * vendor_cost_per_minute(row["model"], row["call_type"])
+        if row["is_test"]:
+            acc["testMinutes"] += minutes
+            continue
+        if aid not in rates_by_account:
+            rates_by_account[aid] = calls_db.credit_rates(aid, conn=conn)
+        acc["calls"] += int(row["n"] or 0)
+        acc["minutes"] += minutes
+        acc["credits"] += calls_db.credits_for_call(row, rates_by_account[aid], minutes)
+    for aid, acc in out.items():
+        if acc["testMinutes"] > 0:  # same add-on usage_report applies
+            rates = rates_by_account.get(aid) or calls_db.credit_rates(aid, conn=conn)
+            acc["credits"] += calls_db._test_overage_credits(conn, aid, rates, start_utc, end_utc)
+    return out
+
+
+def _revenue_by_account(conn, start_utc: str, end_utc: str, account_id: int | None = None) -> dict[int, float]:
+    """Net revenue per account in the window, GST excluded so it compares
+    with vendor cost: invoices paid in the window (refunded later or not)
+    minus refunds made in the window - the same rule as _revenue_months."""
+    paid = "paid_at IS NOT NULL AND paid_at::timestamp >= ?::timestamp AND paid_at::timestamp < ?::timestamp"
+    refunded = "refunded_at IS NOT NULL AND refunded_at::timestamp >= ?::timestamp AND refunded_at::timestamp < ?::timestamp"
+    net = "amount_inr - COALESCE(gst_inr, 0)"
+    query = (
+        f"SELECT account_id, "
+        f"COALESCE(SUM({net}) FILTER (WHERE status IN ('paid', 'refunded') AND {paid}), 0) captured, "
+        f"COALESCE(SUM({net}) FILTER (WHERE status = 'refunded' AND {refunded}), 0) refunds "
+        f"FROM invoices"
+    )
+    params: list = [start_utc, end_utc, start_utc, end_utc]
+    if account_id is not None:
+        query += " WHERE account_id = ?"
+        params.append(account_id)
+    query += " GROUP BY account_id"
+    return {
+        r["account_id"]: float(r["captured"] or 0) - float(r["refunds"] or 0)
+        for r in conn.execute(query, params).fetchall()
+        if float(r["captured"] or 0) or float(r["refunds"] or 0)
+    }
+
+
+_USAGE_FIELDS = ("calls", "minutes", "credits", "testMinutes", "revenueInr", "estCostInr", "marginInr")
+
+
+def usage_cost(from_date: str | None = None, to_date: str | None = None, days: int | None = None,
+               account_id: int | None = None) -> dict:
+    """Usage, revenue and ESTIMATED vendor cost per account for IST dates
+    (default the last 30 days). Accounts with no calls and no money in the
+    window are left out."""
+    from_d, to_d, start, end = _admin_window(from_date, to_date, days)
+    conn = _connect()
+    try:
+        usage = _usage_by_account(conn, start, end, account_id)
+        revenue = _revenue_by_account(conn, start, end, account_id)
+        ids = sorted(set(usage) | set(revenue))
+        names = {}
+        if ids:
+            marks = ", ".join("?" for _ in ids)
+            names = {r["id"]: dict(r) for r in conn.execute(
+                f"SELECT id, name, plan FROM accounts WHERE id IN ({marks})", ids).fetchall()}
+    finally:
+        conn.close()
+    rows = []
+    for aid in ids:
+        u = usage.get(aid) or {"calls": 0, "minutes": 0.0, "credits": 0.0, "testMinutes": 0.0, "estCostInr": 0.0}
+        rev = revenue.get(aid, 0.0)
+        acct = names.get(aid) or {}
+        rows.append({
+            "id": aid, "name": acct.get("name") or f"Account {aid}", "plan": acct.get("plan") or "",
+            "calls": u["calls"], "minutes": round(u["minutes"], 1), "credits": round(u["credits"], 1),
+            "testMinutes": round(u["testMinutes"], 1), "revenueInr": round(rev, 2),
+            "estCostInr": round(u["estCostInr"], 2), "marginInr": round(rev - u["estCostInr"], 2),
+        })
+    rows.sort(key=lambda r: r["estCostInr"], reverse=True)
+    totals = {k: round(sum(r[k] for r in rows), 2) for k in _USAGE_FIELDS}
+    return {
+        "range": {"from": from_d.isoformat(), "to": to_d.isoformat(), "tz": ADMIN_TZ},
+        "costEstimated": True,
+        "rates": [{"key": k, **v} for k, v in VENDOR_COST_RATES.items()],
+        "accounts": rows,
+        "totals": totals,
+    }
+
+
+# ----------------------------------------------------------------- finance
+
+
+def _revenue_months(conn, months: int) -> list[dict]:
+    """Captured / top-ups / refunds / net per IST calendar month, oldest
+    first, ending with the current month. Captured counts invoices paid in
+    the month even if refunded later (so a refund is not counted twice);
+    refunds count in the month they were made. Invoice totals, GST included."""
+    ist = "(({col}::timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata')"
+    since = f"date_trunc('month', now() AT TIME ZONE 'Asia/Kolkata') - INTERVAL '{int(months) - 1} months'"
+    paid_month = f"to_char({ist.format(col='paid_at')}, 'YYYY-MM')"
+    refund_month = f"to_char({ist.format(col='refunded_at')}, 'YYYY-MM')"
+    captured = {
+        r["m"]: r for r in conn.execute(
+            f"""SELECT {paid_month} m, COALESCE(SUM(amount_inr), 0) captured,
+                       COALESCE(SUM(amount_inr) FILTER (WHERE kind = 'topup'), 0) topups
+                FROM invoices WHERE status IN ('paid', 'refunded') AND paid_at IS NOT NULL
+                  AND {ist.format(col='paid_at')} >= {since} GROUP BY m"""
+        ).fetchall()
+    }
+    refunds = {
+        r["m"]: float(r["refunds"] or 0) for r in conn.execute(
+            f"""SELECT {refund_month} m, COALESCE(SUM(amount_inr), 0) refunds
+                FROM invoices WHERE status = 'refunded' AND refunded_at IS NOT NULL
+                  AND {ist.format(col='refunded_at')} >= {since} GROUP BY m"""
+        ).fetchall()
+    }
+    now = datetime.datetime.now(datetime.timezone.utc).astimezone(_ist_zone())
+    out = []
+    for back in range(int(months) - 1, -1, -1):
+        y, m = divmod(now.year * 12 + now.month - 1 - back, 12)
+        key = f"{y:04d}-{m + 1:02d}"
+        c = captured.get(key)
+        cap = round(float(c["captured"] or 0), 2) if c else 0.0
+        top = round(float(c["topups"] or 0), 2) if c else 0.0
+        ref = round(refunds.get(key, 0.0), 2)
+        out.append({"month": key, "capturedInr": cap, "topupsInr": top, "refundsInr": ref, "netInr": round(cap - ref, 2)})
+    return out
+
+
+def _ist_zone():
+    from zoneinfo import ZoneInfo
+
+    return ZoneInfo(ADMIN_TZ)
+
+
+_INVOICE_STATUSES = ("paid", "failed", "refunded", "created")
+
+
+def list_invoices(status: str = "", limit: int = 200, days: int = 0) -> list[dict]:
+    """Invoices across all accounts, newest first; status one of
+    _INVOICE_STATUSES or '' for all; days > 0 keeps the last N days."""
+    if status and status not in _INVOICE_STATUSES:
+        raise ValueError("invalid invoice status")
+    where, params = [], []
+    if status:
+        where.append("i.status = ?")
+        params.append(status)
+    if days:
+        where.append(f"i.created_at::timestamp >= {_UTC_NOW} - make_interval(days => ?)")
+        params.append(int(days))
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            f"""SELECT i.id, i.account_id, a.name account_name, i.kind, i.amount_inr, i.gst_inr, i.status,
+                       i.invoice_number, i.credits, i.created_at, i.paid_at, i.refunded_at
+                FROM invoices i LEFT JOIN accounts a ON a.id = i.account_id
+                {'WHERE ' + ' AND '.join(where) if where else ''}
+                ORDER BY i.id DESC LIMIT ?""",
+            (*params, max(1, min(int(limit), 500))),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            "id": r["id"], "accountId": r["account_id"], "accountName": r["account_name"] or f"Account {r['account_id']}",
+            "kind": r["kind"], "amountInr": float(r["amount_inr"] or 0), "gstInr": float(r["gst_inr"] or 0),
+            "status": r["status"], "invoiceNumber": r["invoice_number"], "credits": r["credits"],
+            "createdAt": _iso_z(r["created_at"]), "paidAt": _iso_z(r["paid_at"]), "refundedAt": _iso_z(r["refunded_at"]),
+        }
+        for r in rows
+    ]
+
+
+def finance_overview() -> dict:
+    """Revenue by month (honest: from invoices), failed payments in the last
+    30 days, and month-to-date revenue vs ESTIMATED vendor cost. MRR, plan mix
+    and paying accounts stay on billing_overview."""
+    conn = _connect()
+    try:
+        months = _revenue_months(conn, 6)
+    finally:
+        conn.close()
+    today = datetime.datetime.now(_ist_zone()).date()
+    mtd = usage_cost(today.replace(day=1).isoformat(), today.isoformat())["totals"]
+    return {
+        "months": months,
+        "revenueMtd": months[-1],
+        "failedPayments30d": list_invoices("failed", limit=100, days=30),
+        "costVsRevenueMtd": {
+            "from": today.replace(day=1).isoformat(), "to": today.isoformat(), "costEstimated": True,
+            "revenueInr": mtd["revenueInr"], "estCostInr": mtd["estCostInr"], "marginInr": mtd["marginInr"],
+            "minutes": mtd["minutes"],
+        },
+    }
+
+
+# ----------------------------------------------------------------- low credit
+
+# An account with a live agent is "low on credit" when what is left would
+# last under LOW_CREDIT_DAYS of its own recent average use, and never less
+# than LOW_CREDIT_FLOOR credits. Shared by the overview tile and the owner
+# alert email so the two always agree.
+LOW_CREDIT_DAYS = 3
+LOW_CREDIT_FLOOR = 50
+LOW_CREDIT_LOOKBACK_DAYS = 14
+
+
+def low_credit_threshold(avg_daily: float) -> float:
+    return max(float(LOW_CREDIT_FLOOR), LOW_CREDIT_DAYS * max(0.0, float(avg_daily or 0)))
+
+
+def is_low_credit(remaining: float, avg_daily: float) -> bool:
+    """Zero or less is the separate zero-balance alert, not 'low'."""
+    return 0 < remaining < low_credit_threshold(avg_daily)
+
+
+def low_credit_accounts(conn=None, positions: list[dict] | None = None) -> list[dict]:
+    """Accounts with at least one live agent that are low on credit, with
+    their average daily use over the last LOW_CREDIT_LOOKBACK_DAYS days and
+    the days that leaves (None when there was no recent use). `positions`
+    reuses a credit_positions() result already in hand."""
+    own = conn is None
+    conn = conn or _connect()
+    try:
+        if positions is None:
+            positions = credit_positions(conn)
+        positions = [p for p in positions if p["liveAgents"] > 0 and p["remaining"] > 0]
+        if not positions:
+            return []
+        end = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        start = end - datetime.timedelta(days=LOW_CREDIT_LOOKBACK_DAYS)
+        fmt = "%Y-%m-%d %H:%M:%S"
+        usage = _usage_by_account(conn, start.strftime(fmt), end.strftime(fmt))
+    finally:
+        if own:
+            conn.close()
+    out = []
+    for p in positions:
+        avg = (usage.get(p["accountId"]) or {}).get("credits", 0.0) / LOW_CREDIT_LOOKBACK_DAYS
+        if is_low_credit(p["remaining"], avg):
+            out.append({
+                "accountId": p["accountId"], "name": p["name"], "liveAgents": p["liveAgents"],
+                "remaining": round(p["remaining"], 1), "avgDaily": round(avg, 1),
+                "daysLeft": round(p["remaining"] / avg, 1) if avg > 0 else None,
+            })
+    out.sort(key=lambda x: (x["daysLeft"] is None, x["daysLeft"] or 0, x["remaining"]))
+    return out
 
 
 # ----------------------------------------------------------------- support & audit

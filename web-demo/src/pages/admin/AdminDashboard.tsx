@@ -117,7 +117,7 @@ export function AdminDashboard() {
             count={data.needsAttention.nearLimit}
             label="accounts near credit limit"
             hint="Review usage & upsell"
-            onClick={() => navigate('/admin/billing')}
+            onClick={() => navigate('/admin/finance')}
           />
           <AttentionCard
             icon="person_off"
@@ -202,7 +202,8 @@ function OperationsOverview({ data }: { data: AdminOverview }) {
     ? [
         { count: unhealthyWorkers, text: `of ${n(ops.workersExpected)} LiveKit workers unhealthy`, to: '/admin/health', critical: true },
         { count: ops.failedCalls1h, text: 'failed calls in the last hour', to: '/admin/calls?outcome=failed&hours=1', critical: true },
-        { count: ops.zeroBalanceLiveAccounts, text: 'live accounts with zero credits', to: '/admin/billing', critical: true },
+        { count: ops.zeroBalanceLiveAccounts, text: 'live accounts with zero credits', to: '/admin/finance', critical: true },
+        { count: ops.creditsLowAccounts, text: 'live accounts low on credits' },
         // No cross-tenant integrations view yet, so this one is informational.
         { count: ops.integrationFailures24h, text: 'integration delivery failures (24 h)' },
         { count: ops.awaitingUs, text: 'support tickets awaiting our reply', to: '/admin/support' },
@@ -249,7 +250,7 @@ function OperationsOverview({ data }: { data: AdminOverview }) {
             />
             <StatCard label="Trials ending" value={n(ops.trialsEnding7d)} sub="in the next 7 days" icon="hourglass_bottom" />
             <StatCard label="Cancellations" value={n(ops.cancellationsPending)} sub="pending at period end" icon="event_busy" />
-            <StatCard label="Credits low" value={n(ops.creditsLowAccounts)} sub="accounts" icon="battery_alert" />
+            <StatCard label="Credits low" value={n(ops.creditsLowAccounts)} sub="live, under ~3 days left" icon="battery_alert" />
             <StatCard label="Open tickets" value={n(ops.openTickets)} sub={`${n(ops.awaitingUs)} awaiting us`} icon="support_agent" />
           </>
         )}
@@ -262,6 +263,23 @@ function OperationsOverview({ data }: { data: AdminOverview }) {
           />
         )}
       </div>
+
+      {ops?.creditsLowList && ops.creditsLowList.length > 0 && (
+        <AdminCard className="mt-3 overflow-hidden">
+          <div className="border-b border-border px-5 py-3 text-sm font-semibold">Low on credits (live agent, under ~3 days of its own use or 50 credits)</div>
+          <div className="divide-y divide-border/60">
+            {ops.creditsLowList.map((p) => (
+              <Link key={p.accountId} to={`/admin/accounts/${p.accountId}`} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm hover:bg-surface-high">
+                <span className="min-w-0 truncate font-semibold">{p.name}</span>
+                <span className="shrink-0 text-xs tabular-nums text-text-muted">
+                  {n(p.remaining)} left · {n(p.avgDaily)}/day ·{' '}
+                  <span className="font-semibold text-amber">{p.daysLeft == null ? 'no recent use' : `~${p.daysLeft} days`}</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </AdminCard>
+      )}
     </div>
   )
 }

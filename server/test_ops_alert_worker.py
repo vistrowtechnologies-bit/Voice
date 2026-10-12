@@ -102,6 +102,11 @@ class CheckTests(unittest.TestCase):
         for _ in range(5):
             self.sql("INSERT INTO calls (room_name, started_at, ended_at, duration_seconds, transcript_json, account_id, failure_reason) "
                      "VALUES ('r', ?, ?, 120, '[]', ?, 'sip 503')", (text(minutes=-5), text(minutes=-5), aid))
+        low = self.db.create_account_with_owner("L", "L", f"l-{stamp}@example.com", "h", email_verified=True)["account_id"]
+        self.db.end_trial(low)
+        self.sql("INSERT INTO settings (account_id, key, value) VALUES (?, 'credits_total', '40') "
+                 "ON CONFLICT (account_id, key) DO UPDATE SET value = EXCLUDED.value", (low,))
+        self.sql("INSERT INTO agents (account_id, name, status) VALUES (?, 'L', 'live')", (low,))
         invoice = self.sql("INSERT INTO invoices (account_id, kind, amount_inr, status) VALUES (?, 'topup', 590, 'failed') RETURNING id", (aid,))
 
         # Errors from earlier tests are history: start the watermark here.
@@ -121,6 +126,11 @@ class CheckTests(unittest.TestCase):
         self.assertIn("1 new platform error", alerts[f"errors:{backup['id']}"]["subject"])
         self.assertIn(f"invoice_failed:{invoice['id']}", alerts)
         self.assertIn(f"zero_balance:{aid}", alerts)
+        self.assertNotIn(f"low_credit:{aid}", alerts, "zero balance is its own alert")
+        self.assertIn(f"low_credit:{low}", alerts)
+        self.assertEqual(alerts[f"low_credit:{low}"]["repeat_s"], 24 * 3600)
+        self.assertIn(f"/admin/accounts/{low}", alerts[f"low_credit:{low}"]["body"])
+        self.assertIn("Credits left: <b>40</b>", alerts[f"low_credit:{low}"]["body"])
         self.assertIn(f"backup_failed:{backup['id']}", alerts)
         self.assertIn("failed_calls", alerts)
         self.assertIn("worker_stale:tenant", alerts)

@@ -247,7 +247,7 @@ export function fmtDuration(seconds: number): string {
 }
 
 export function fmtINR(n: number): string {
-  return '₹' + Math.round(n).toLocaleString('en-IN')
+  return (n < 0 ? '-₹' : '₹') + Math.abs(Math.round(n)).toLocaleString('en-IN')
 }
 
 /** Dependency-free area chart from a numeric series. */

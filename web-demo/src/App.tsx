@@ -54,6 +54,7 @@ const AdminCalls = lazy(() => import('./pages/admin/AdminCalls').then((m) => ({ 
 const AdminCallDetailPage = lazy(() => import('./pages/admin/AdminCalls').then((m) => ({ default: m.AdminCallDetailPage })))
 const AdminAnalytics = lazy(() => import('./pages/admin/AdminAnalytics').then((m) => ({ default: m.AdminAnalytics })))
 const AdminBilling = lazy(() => import('./pages/admin/AdminBilling').then((m) => ({ default: m.AdminBilling })))
+const AdminUsage = lazy(() => import('./pages/admin/AdminUsage').then((m) => ({ default: m.AdminUsage })))
 const AdminAudit = lazy(() => import('./pages/admin/AdminAudit').then((m) => ({ default: m.AdminAudit })))
 const AdminHealth = lazy(() => import('./pages/admin/AdminHealth').then((m) => ({ default: m.AdminHealth })))
 const AdminVendorCredits = lazy(() => import('./pages/admin/AdminVendorCredits').then((m) => ({ default: m.AdminVendorCredits })))
@@ -233,7 +234,9 @@ function App() {
         <Route path="/admin/calls" element={<RequireOwner><AdminCalls /></RequireOwner>} />
         <Route path="/admin/calls/:id" element={<RequireOwner><AdminCallDetailPage /></RequireOwner>} />
         <Route path="/admin/analytics" element={<RequireOwner><AdminAnalytics /></RequireOwner>} />
+        <Route path="/admin/finance" element={<RequireOwner><AdminBilling /></RequireOwner>} />
         <Route path="/admin/billing" element={<RequireOwner><AdminBilling /></RequireOwner>} />
+        <Route path="/admin/usage" element={<RequireOwner><AdminUsage /></RequireOwner>} />
         <Route path="/admin/audit" element={<RequireOwner><AdminAudit /></RequireOwner>} />
         <Route path="/admin/health" element={<RequireOwner><AdminHealth /></RequireOwner>} />
         <Route path="/admin/vendor-credits" element={<RequireOwner><AdminVendorCredits /></RequireOwner>} />

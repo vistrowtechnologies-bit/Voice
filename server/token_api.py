@@ -2996,6 +2996,34 @@ def admin_billing(admin: dict = Depends(require_platform_owner)) -> dict:
     return admin_db.billing_overview()
 
 
+@app.get("/admin/usage")
+def admin_usage(
+    from_date: str = Query("", alias="from"), to_date: str = Query("", alias="to"), days: int = 0, account_id: int = 0,
+    admin: dict = Depends(require_platform_owner),
+) -> dict:
+    """Calls, minutes, credits, revenue and ESTIMATED vendor cost per account
+    for IST dates (default the last 30 days)."""
+    if days and not 1 <= days <= 366:
+        raise HTTPException(400, "days must be between 1 and 366")
+    try:
+        return admin_db.usage_cost(from_date or None, to_date or None, days or None, account_id or None)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/admin/finance")
+def admin_finance(admin: dict = Depends(require_platform_owner)) -> dict:
+    return admin_db.finance_overview()
+
+
+@app.get("/admin/invoices")
+def admin_invoices(status: str = "", limit: int = 200, admin: dict = Depends(require_platform_owner)) -> dict:
+    try:
+        return {"invoices": admin_db.list_invoices(status, limit)}
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.get("/admin/audit")
 def admin_audit(action: str = "", limit: int = 100, offset: int = 0, admin: dict = Depends(require_platform_owner)) -> dict:
     return admin_db.audit_log(action, limit, offset)
