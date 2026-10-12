@@ -201,6 +201,18 @@ _NAME_TO_LANGUAGE_CODE = {name.lower(): code for code, name in LANGUAGE_NAMES.it
 _GOOGLE_NAME_TO_LANGUAGE_CODE = {
     name.lower(): code for code, name in GOOGLE_LANGUAGE_NAMES.items()
 }
+# A Chirp 3 HD persona follows the caller by swapping its locale prefix, so
+# it can switch to exactly the locales Google publishes it in. The native-11
+# names are applied last so "English" keeps meaning en-IN.
+_CHIRP3_NAME_TO_LANGUAGE_CODE = {
+    **{voice_catalog._ALL_LANGUAGE_LABELS[c].lower(): c
+       for c in voice_catalog.CHIRP3_LANGUAGES if c in voice_catalog._ALL_LANGUAGE_LABELS},
+    "mandarin": "cmn-CN", "chinese": "cmn-CN", "arabic": "ar-XA", "spanish": "es-ES",
+    "portuguese": "pt-BR", "norwegian": "nb-NO",
+    # All native names, Odia included: its text still switches even though no
+    # Chirp locale exists for it (the caller is told the voice cannot follow).
+    **_NAME_TO_LANGUAGE_CODE,
+}
 
 # How callers actually name a language out loud, beyond the catalog's own
 # English names — romanized Hindi for "English" above all, plus the endonyms
@@ -2710,6 +2722,8 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
     _names = (
         _GOOGLE_NAME_TO_LANGUAGE_CODE
         if is_google_multilingual(provider)
+        else _CHIRP3_NAME_TO_LANGUAGE_CODE
+        if provider == "google-native" and voice_catalog.chirp3_persona(getattr(agent, "_voice", "") or "")
         else _NAME_TO_LANGUAGE_CODE
     )
     code = _names.get(language.strip().lower())
@@ -2818,7 +2832,7 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
                         voice_name=voice_catalog.chirp3_voice_name(_persona, code),
                     )
                 else:
-                    # A locale Standard voice, or a language outside the ten
+                    # A locale Standard voice, or a language outside the ones
                     # Chirp 3 covers: the reply language still changes, the
                     # voice cannot follow, and the caller is told rather than
                     # handed a voice reading the wrong language.

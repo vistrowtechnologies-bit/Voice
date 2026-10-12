@@ -385,3 +385,14 @@ Fix: `<hr class="wp-header-end">` right after the header; plugin 1.7.1; `server/
 Verified: on the live page, adding the marker and re-running core's own relocation line put all four notices below the header with dark text and the header back to one row (DOM-only simulation, nothing installed on the site). Not verified: the new zip installed on a real site; no PHP linter on this machine (change is HTML only).
 
 Next: merge (needs a Railway deploy to serve the new zip), then the site owner uploads/updates the plugin in WP Admin → Plugins.
+
+### Claude — 2026-10-12 — Chirp voices, prompt trim, API keys screen
+
+Branch `claude/api-keys-screen` (commit 1fcf47a4, PR to follow, merged and deployed in one go).
+
+- **Voices:** all 30 Chirp 3 HD personas are in the catalog (24 added, names checked unique). Google's list_voices shows each in 52 locales, 11 Indian incl. Urdu; ru-RU exists for only 8 so it is left out. `CHIRP3_LANGUAGES` is now those 52, so a persona can follow the caller into any of them, and `switch_reply_language` accepts their names on a Chirp voice (`_CHIRP3_NAME_TO_LANGUAGE_CODE`; Odia still switches text with "voice cannot follow", as before).
+- **Prompt trim (pipeline agents):** the duplicate "Never claim something you have not actually done" block is gone (Platform rule 1 gained its WhatsApp/SMS/email detail), and "Global languages" is shortened with every rule kept. Agent 26 instructions 35,284 → 32,777 chars. Section-by-section diff: only Platform rules, Global languages and the clock changed; all speaking-style sections (How you actually talk, Fillers, Listen and react, Turn length) are byte-identical.
+- **Settings → Developer → API keys:** create keys with read/calls/agents/full scopes; key shown once; revoke with confirmation. Backend scopes shipped in #57.
+
+Verified: 693 agent tests, 87 voice/plan server tests, tsc + vite build. Local preview: HD tab shows 30 voices labelled "52 languages"; a local key created with calls + agents shows both scopes.
+Not verified yet: production behaviour after deploy (Sarvam test call planned).

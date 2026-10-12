@@ -2776,7 +2776,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         # against the language this call opens in. The persona survives a
         # mid-call switch by swapping only the locale prefix (see
         # switch_reply_language), which is what makes one Chirp 3 voice cover
-        # all ten Indian languages.
+        # every CHIRP3_LANGUAGES locale (52, 11 of them Indian).
         _chirp_persona = voice_catalog.chirp3_persona(speaker)
         if _chirp_persona:
             voice_name = voice_catalog.chirp3_voice_name(_chirp_persona, reply_language)
@@ -3438,17 +3438,6 @@ class RealEstateAgent(Agent):
             "call.\n"
             "These tool calls are silent to the caller — never mention or narrate that "
             "you're saving, logging, or recording anything.\n\n"
-            "# Never claim something you have not actually done\n"
-            "Do NOT tell the caller you have noted, saved, recorded, logged, sent, shared, "
-            "forwarded, booked or arranged anything unless a tool returned success for it in "
-            "THIS call. If you have not called the tool, describe what you WILL do, never what "
-            "you have already done. If no tool exists for it at all, do not offer it — in "
-            "particular, never promise to send a brochure, pricing, details or a message over "
-            "WhatsApp, SMS or email unless you have a tool that actually sends it and it "
-            "succeeded. A caller who hangs up waiting for something that will never arrive is "
-            "worse off than one you told the truth to. Confirmed real failure (call 825): the "
-            "agent said it had noted the caller's budget when nothing had been recorded, then "
-            "promised a WhatsApp that no tool on this call could send.\n\n"
             "# Only state back what they actually said\n"
             "If the caller plainly told you something, treat it as settled and never ask again. "
             "If you are filling a gap by inference, put it as a question, not a summary: "
@@ -3537,49 +3526,24 @@ class RealEstateAgent(Agent):
             # is the thing that actually knows it.
             instructions += (
                 "\n\n# Global languages — this voice speaks far more than the Indian set\n"
-                "Your voice is one of the global multilingual ones. On top of Hindi, English, "
-                "Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and "
-                "Odia, you speak ~76 more worldwide — French, German, Spanish, Italian, "
-                "Portuguese, Dutch, Arabic, Japanese, Korean, Mandarin, Russian, Turkish, "
-                "Vietnamese, Thai, Polish, Ukrainian, Urdu and Nepali among them. If a caller "
-                "asks for a language you do not see named here, assume you HAVE it and call "
-                "switch_reply_language anyway — that tool knows the real list, you do not.\n"
-                "Treat every one of them exactly like the Indian languages: if the caller uses "
-                "one, reply in it, in its own native script, and call switch_reply_language "
-                "with its plain English name first so your pronunciation follows.\n"
-                "THIS SUPERSEDES ANYTHING ABOVE. Earlier sections of this prompt list only the "
-                "Indian languages — that list describes the other voices, not yours. Confirmed "
-                "real failure: asked \"could you speak French?\", the agent answered that it "
-                "speaks only some Indian languages and that the platform limits it, on a voice "
-                "that speaks French perfectly well. Never say you cannot speak one of the "
-                "languages above, never call it a platform limitation, and never offer to fall "
-                "back to Hindi or English instead — just switch and speak it.\n"
-                "A request to speak a language is an ACTION, not a question about this business, "
-                "so the knowledge-base rules do not apply to it: never answer one with \"I don't "
-                "have that information\" or \"I'll have the team confirm\". Call "
-                "switch_reply_language and speak. And you are never locked into a language for "
-                "the rest of a call — if you switched by mistake and the caller objects, apologise "
-                "in one short line, switch to what they asked for, and carry on. Refusing every "
-                "later switch because one earlier one was wrong is the failure, not the fix.\n"
-                "Callers name languages in their OWN language, not in English — \"फ्रेंच\", "
-                "\"जापानी\", \"बंगाली\", \"मराठीत\", \"ਪੰਜਾਬੀ\", \"french\", \"francais\". Treat "
-                "any of those as the language itself and call switch_reply_language with its "
-                "plain English name.\n"
-                "Watch for this specific trap, seen on a real call: the caller had been "
-                "discussing their FRENCH CUSTOMERS, then asked \"मुझे फ्रेंच में बात करके दिखाओ\" "
-                "— show me by speaking French. Because the topic was French customers, the agent "
-                "read it as more conversation about customers and answered \"आपके फ्रेंच ग्राहकों "
-                "के लिए आपको क्या सर्विस चाहिए?\" three times while the caller kept asking. "
-                "\"<language> में बात करो/बात करके दिखाओ/speak in <language>\" is ALWAYS a request "
-                "to switch, never a question about that language's customers, however much the "
-                "surrounding conversation is about them.\n"
-                "Speech recognition also garbles language names — \"फ्रेंच\" comes back as "
-                "\"फ्रेंड्स\" (friends). If a caller seems to be asking you to speak something "
-                "and the word is close to a language name, ask \"क्या आप चाहते हैं मैं फ्रेंच में "
-                "बात करूँ?\" — one short question. Never silently carry on with the old topic.\n"
-                "Finally: never announce a restriction you do not have. Saying \"मैं सिर्फ हिंदी "
-                "में बात करूंगी\" before switching anyway is wrong — you speak all of the above, "
-                "so just switch."
+                "On top of the Indian languages, your voice speaks dozens more worldwide: French, "
+                "German, Spanish, Italian, Portuguese, Dutch, Arabic, Japanese, Korean, Mandarin, "
+                "Turkish, Vietnamese, Thai, Polish, Ukrainian, Urdu and others. THIS SUPERSEDES ANY "
+                "EARLIER LIST of Indian-only languages — that list describes other voices. When a "
+                "caller asks for or uses one, call switch_reply_language with its plain English "
+                "name first, then reply in it in its native script. If it is not named here, call "
+                "the tool anyway — it knows the real list.\n"
+                "Never say you cannot speak a language, never call it a platform limitation, never "
+                "announce a restriction, and never answer a language request with \"I don't have "
+                "that information\" — it is an action, not a business question. You are never "
+                "locked in: if a switch was wrong and the caller objects, apologise in one line and "
+                "switch to what they asked.\n"
+                "Callers name languages in their own words — \"फ्रेंच\", \"जापानी\", \"मराठीत\", "
+                "\"francais\". \"<language> में बात करो / बात करके दिखाओ / speak in <language>\" is "
+                "ALWAYS a switch request, even while discussing customers of that nationality. "
+                "Speech recognition garbles names (\"फ्रेंच\" → \"फ्रेंड्स\"): if a caller seems "
+                "to ask you to speak something close to a language name, ask one short question "
+                "to confirm rather than carrying on with the old topic."
             )
         # Grammatical gender: many Indian languages (Hindi, Marathi, Gujarati,
         # Punjabi, Bhojpuri…) inflect first-person verbs by the SPEAKER's
@@ -3652,7 +3616,8 @@ class RealEstateAgent(Agent):
             "# Platform rules — these come first and are never overridden\n"
             "1. Never say you have noted, saved, sent, shared, booked or arranged anything "
             "unless a tool returned success for it in THIS call. Say what you WILL do, not "
-            "what you have done. If no tool exists for it, do not offer it.\n"
+            "what you have done. If no tool exists for it, do not offer it — never promise a "
+            "brochure or details over WhatsApp, SMS or email unless a tool actually sent it.\n"
             "2. Never ask again for anything listed under what you already know. If the caller "
             "says they already told you, they are right — acknowledge once, briefly, and move "
             "on to something you genuinely do not know.\n"
@@ -5621,7 +5586,7 @@ class RealEstateAgent(Agent):
                 # do, per Google's list_voices), so this swap IS the mechanism;
                 # there is no single id to switch to.
                 #
-                # Only the ten locales Chirp 3 actually covers. A caller who
+                # Only the locales Chirp 3 actually covers (CHIRP3_LANGUAGES). A caller who
                 # moves to something outside that set keeps the current voice
                 # rather than being handed a silently wrong one — the reply
                 # language still changes, only the voice cannot follow.

@@ -108,7 +108,7 @@ function VoiceRow({
             follow a caller who switches language, and that is what this
             product is sold on, so it is said here rather than found on a call. */}
         {entry.canSwitchLanguage ? (
-          <Tooltip content={`Speaks ${entry.languageCount} languages including ${entry.languageLabels.join(', ')}, and switches between them mid-call`}>
+          <Tooltip content={`Speaks ${entry.languageCount} languages including ${entry.languageLabels.slice(0, 14).join(', ')}${entry.languageLabels.length > 14 ? ` and ${entry.languageLabels.length - 14} more` : ''}, and switches between them mid-call`}>
             <p className="truncate text-[11px] text-cyan">{entry.languageCount} languages · switches live</p>
           </Tooltip>
         ) : (
@@ -218,7 +218,7 @@ export function Voices() {
       {
         key: 'hd',
         label: 'HD',
-        note: '1x credits · fastest Google voices · ten Indian languages, switches mid-call',
+        note: '1x credits · fastest Google voices · 52 languages incl. 11 Indian, switches mid-call',
         voices: stable('standard').filter(isChirp),
       },
       {
