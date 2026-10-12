@@ -249,43 +249,6 @@ export const BUYER_GUIDES: BuyerGuide[] = [
       { q: 'How many test calls should I run before launch?', a: 'Run at least 20–30 test calls across languages, noisy audio, interruptions, failed answers, and CRM delivery before trusting an agent with real leads.' },
     ],
   },
-  {
-    slug: 'ai-voice-bot-pricing-india',
-    title: 'AI Voice Bot Pricing in India | Cost Factors and Calculator',
-    description:
-      'Understand AI voice bot pricing in India: telephony, STT, LLM, TTS, recordings, CRM sync, support, call minutes, and what to compare before buying.',
-    eyebrow: 'Pricing guide',
-    headline: 'What AI voice bot pricing really includes.',
-    subhead:
-      'A per-minute number can hide a lot. Real pricing depends on the full pipeline: phone transport, speech recognition, the LLM, voice generation, storage, integrations, and retries.',
-    sections: [
-      {
-        title: 'The cost stack',
-        body: 'Every live call uses several paid systems at once. You should understand which are included and which are passed through.',
-        bullets: ['Telephony or web RTC minutes', 'Speech-to-text', 'LLM reasoning', 'Text-to-speech', 'Recording/transcript storage'],
-      },
-      {
-        title: 'Cheap can become expensive',
-        body: 'A low model bill does not help if the agent repeats itself, misses intent, or fails to push leads to CRM.',
-        bullets: ['Measure successful outcomes, not only minutes', 'Watch retry and re-call volume', 'Check whether support and integrations are included'],
-      },
-      {
-        title: 'What to ask vendors',
-        body: 'Ask questions that expose hidden costs and operational gaps.',
-        bullets: ['Are recordings included?', 'Are failed CRM pushes retried?', 'Are web-widget calls priced differently?', 'Can I cap spend per agent or workspace?'],
-      },
-      {
-        title: 'How Vistrow thinks about pricing',
-        body: 'Vistrow Voice uses credit-based plans so operators can see usage and scale call volume without learning every underlying model price.',
-        bullets: ['Plan-level visibility', 'Call-level credit breakdown', 'Separate voice/model tiers where needed'],
-      },
-    ],
-    faqs: [
-      { q: 'How much does an AI voice bot cost in India?', a: 'It depends on monthly minutes, phone vs web calls, voice quality, model choice, recording storage, and integrations. Compare the full workflow cost, not only one API price.' },
-      { q: 'Why are voice AI calls priced per minute?', a: 'Because live calls consume streaming speech recognition, language-model reasoning, voice synthesis, transport, and storage while the conversation is happening.' },
-      { q: 'Can I reduce cost by using a smaller LLM?', a: 'Yes, for structured qualification flows a smaller fast model can work well. You still need to test accuracy, hallucination controls, and latency on real calls.' },
-    ],
-  },
 ]
 
 export interface LocalRealEstatePage {

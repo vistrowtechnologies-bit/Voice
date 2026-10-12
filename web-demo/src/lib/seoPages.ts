@@ -292,6 +292,17 @@ export const SEO_PAGES: SeoPage[] = [
     ),
     serviceType: 'AI IVR (conversational IVR replacement)',
   },
+  // A dedicated cost guide (AiVoiceBotPricing.tsx), no longer a BUYER_GUIDES
+  // entry: its numbers are computed from the billing constants.
+  page(
+    '/ai-voice-bot-pricing-india',
+    'AI Voice Bot Pricing in India: Cost per Minute',
+    'AI voice bot cost per minute in India, worked out: plans and included credits, credits per minute by voice and model, GST, overage and credit packs.',
+    'ai-voice-bot-pricing-india',
+    'AI voice bot pricing guide from Vistrow Voice',
+    'page',
+    'AI Voice Bot Pricing in India',
+  ),
   page(
     '/vs-ivr',
     'AI Voice Agent vs Traditional IVR vs Chatbot | Vistrow Voice',
