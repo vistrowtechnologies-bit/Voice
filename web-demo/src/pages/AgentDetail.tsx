@@ -216,14 +216,14 @@ function AgentEditorForm({
   // The account's curated voice menu - the only voices this picker offers.
   const [myVoices, setMyVoices] = useState<VoiceEntry[]>([])
   const [catalog, setCatalog] = useState<VoiceEntry[]>([])
-  // One option per Gemini Live voice, carried by its HD voice (the value an
-  // agent stores), labelled with the Live name, gender and Google's style word.
+  // The realtime-capable voices the account has added to its menu, labelled
+  // with gender, Google's style word and the Gemini voice a Live call uses.
   const realtimeVoices = useMemo(() => {
     const style = new Map(
       catalog.filter((v) => v.value.startsWith('google38:')).map((v) => [v.value.slice(9), v.note.split(' · ')[0]]),
     )
-    return catalog
-      .filter((v) => v.value.startsWith('google:chirp3:') && geminiLiveVoiceName(v.value))
+    return myVoices
+      .filter((v) => geminiLiveVoiceName(v.value))
       .map((v) => {
         const live = geminiLiveVoiceName(v.value)!
         const gender = v.gender === 'female' ? 'Female' : v.gender === 'male' ? 'Male' : 'Neutral'
@@ -231,11 +231,10 @@ function AgentEditorForm({
         return { value: v.value, label: `${v.name} · ${gender}${tone ? ` · ${tone}` : ''} (Gemini ${live})`, name: v.name }
       })
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [catalog])
+  }, [catalog, myVoices])
   useEffect(() => {
     fetchMyVoices().then(setMyVoices).catch(() => setMyVoices([]))
-    // Realtime (owner-only) offers every Gemini Live voice, not just the
-    // account's menu: the server accepts any catalog voice on an agent.
+    // Only for Google's style words in the realtime labels (realtime is owner-only).
     if (isPlatformOwner) fetchVoiceCatalog().then((c) => setCatalog(c.voices)).catch(() => setCatalog([]))
   }, [])
   // Connected lead-delivery integrations this agent can be scoped to.
@@ -386,7 +385,7 @@ function AgentEditorForm({
               ) : (
                 <>
                   {isRealtimeModel(form.model)
-                    ? 'Realtime models speak with Gemini Live voices, so only those can be picked; your other voices are greyed out. '
+                    ? 'Realtime lists the Gemini Live voices you have added (Voices → Live tabs); your other voices are greyed out. '
                     : null}
                   Only voices you’ve added appear here.{' '}
                   <Link to="/dashboard/voices" className="text-primary hover:underline">
@@ -402,7 +401,7 @@ function AgentEditorForm({
                     one removed from the menu since it was set) - surface it so the
                     browser doesn't silently show a different option as selected and
                     re-persist the wrong voice on Save. */}
-                {isRealtimeModel(form.model) && realtimeVoices.length > 0 ? (
+                {isRealtimeModel(form.model) ? (
                   <>
                     {!realtimeVoices.some((v) => v.value === form.voice) && (
                       <option value={form.voice}>
@@ -412,7 +411,12 @@ function AgentEditorForm({
                           : ' (not available on realtime, calls use Kore)'}
                       </option>
                     )}
-                    <optgroup label={`Voices for ${modelLabel(form.model)} - the same 30 on every Live model`}>
+                    <optgroup label={`Your voices for ${modelLabel(form.model)}`}>
+                      {realtimeVoices.length === 0 && (
+                        <option value="" disabled>
+                          No realtime voices added yet - add one on the Voices page
+                        </option>
+                      )}
                       {realtimeVoices.map((v) => (
                         <option key={v.value} value={v.value}>
                           {v.label}
