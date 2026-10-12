@@ -105,6 +105,16 @@ class HelpChatLoopTests(unittest.TestCase):
         self.assertIn("untrusted data", system)
         self.assertIn("never claim to have changed", system)
 
+    def test_no_session_user_means_no_write_tools(self, summary):
+        import copilot_tools
+
+        fake = FakeOpenAI()
+        with patch("help_chat.urllib.request.urlopen", fake):
+            result = help_chat.answer_help_question("Pause my agent", [], 7)
+        offered = {t["function"]["name"] for t in fake.requests[0]["tools"]}
+        self.assertFalse(offered & set(copilot_tools.TOOLS))
+        self.assertNotIn("pendingAction", result)
+
     @patch("help_chat.calls_db.calls_for_local_date", return_value={"count": 4})
     def test_deterministic_shortcut_bypasses_model(self, calls_for_local_date, summary):
         fake = FakeOpenAI()
