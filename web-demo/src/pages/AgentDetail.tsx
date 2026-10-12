@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { BrowserTestModal } from '../components/AgentTestCall'
@@ -18,6 +18,7 @@ import {
   fetchKnowledgeBases,
   fetchMyVoices,
   fetchProjectListings,
+  fetchVoiceCatalog,
   updateAgent,
 } from '../lib/api'
 import {
@@ -214,8 +215,28 @@ function AgentEditorForm({
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null)
   // The account's curated voice menu - the only voices this picker offers.
   const [myVoices, setMyVoices] = useState<VoiceEntry[]>([])
+  const [catalog, setCatalog] = useState<VoiceEntry[]>([])
+  // One option per Gemini Live voice, carried by its HD voice (the value an
+  // agent stores), labelled with the Live name, gender and Google's style word.
+  const realtimeVoices = useMemo(() => {
+    const style = new Map(
+      catalog.filter((v) => v.value.startsWith('google38:')).map((v) => [v.value.slice(9), v.note.split(' · ')[0]]),
+    )
+    return catalog
+      .filter((v) => v.value.startsWith('google:chirp3:') && geminiLiveVoiceName(v.value))
+      .map((v) => {
+        const live = geminiLiveVoiceName(v.value)!
+        const gender = v.gender === 'female' ? 'Female' : v.gender === 'male' ? 'Male' : 'Neutral'
+        const tone = style.get(live.toLowerCase())
+        return { value: v.value, label: `${live} · ${gender}${tone ? ` · ${tone}` : ''} (${v.name})`, live }
+      })
+      .sort((a, b) => a.live.localeCompare(b.live))
+  }, [catalog])
   useEffect(() => {
     fetchMyVoices().then(setMyVoices).catch(() => setMyVoices([]))
+    // Realtime (owner-only) offers every Gemini Live voice, not just the
+    // account's menu: the server accepts any catalog voice on an agent.
+    if (isPlatformOwner) fetchVoiceCatalog().then((c) => setCatalog(c.voices)).catch(() => setCatalog([]))
   }, [])
   // Connected lead-delivery integrations this agent can be scoped to.
   const [connectedIntegrations, setConnectedIntegrations] = useState<Integration[]>([])
@@ -365,7 +386,7 @@ function AgentEditorForm({
               ) : (
                 <>
                   {isRealtimeModel(form.model)
-                    ? 'Realtime models speak with the Gemini voice of the same name, so only those voices are listed. '
+                    ? 'Realtime models speak with Gemini Live voices, so only those can be picked; your other voices are greyed out. '
                     : null}
                   Only voices you’ve added appear here.{' '}
                   <Link to="/dashboard/voices" className="text-primary hover:underline">
@@ -381,11 +402,45 @@ function AgentEditorForm({
                     one removed from the menu since it was set) - surface it so the
                     browser doesn't silently show a different option as selected and
                     re-persist the wrong voice on Save. */}
+                {isRealtimeModel(form.model) && realtimeVoices.length > 0 ? (
+                  <>
+                    {!realtimeVoices.some((v) => v.value === form.voice) && (
+                      <option value={form.voice}>
+                        {catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)}
+                        {geminiLiveVoiceName(form.voice)
+                          ? ` → speaks as ${geminiLiveVoiceName(form.voice)}`
+                          : ' (not available on realtime, calls use Kore)'}
+                      </option>
+                    )}
+                    <optgroup label="Gemini Live voices - work on Live 2.5 and 3.1">
+                      {realtimeVoices.map((v) => (
+                        <option key={v.value} value={v.value}>
+                          {v.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                    {/* Shown, but not selectable: a realtime model cannot speak with them. */}
+                    {myVoices.some((v) => !geminiLiveVoiceName(v.value)) && (
+                      <optgroup label="Not available on realtime">
+                        {myVoices
+                          .filter((v) => !geminiLiveVoiceName(v.value))
+                          .map((v) => (
+                            <option key={v.value} value={v.value} disabled>
+                              {v.name}
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                  </>
+                ) : (
+                  <>
                 {isRealtimeModel(form.model) && !geminiLiveVoiceName(form.voice) ? (
                   <option value={form.voice}>{voiceLabel(form.voice)} (not available on realtime, calls use Kore)</option>
                 ) : (
                   !myVoices.some((v) => v.value === form.voice) && (
-                    <option value={form.voice}>{voiceLabel(form.voice)} (not in your voices)</option>
+                    <option value={form.voice}>
+                      {catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)} (not in your voices)
+                    </option>
                   )
                 )}
                 {voicePickerGroups(
@@ -397,12 +452,19 @@ function AgentEditorForm({
                       {group.voices.map((v) => (
                         <option key={v.value} value={v.value}>
                           {v.name}
-                          {v.note ? ` - ${v.note}` : ''}
+                          {/* Realtime speaks as the Gemini voice of the same name: say which. */}
+                          {isRealtimeModel(form.model)
+                            ? ` → speaks as ${geminiLiveVoiceName(v.value)}`
+                            : v.note
+                              ? ` - ${v.note}`
+                              : ''}
                         </option>
                       ))}
                     </optgroup>
                   )
                 })}
+                  </>
+                )}
               </select>
               {(() => {
                 const current = myVoices.find((v) => v.value === form.voice)

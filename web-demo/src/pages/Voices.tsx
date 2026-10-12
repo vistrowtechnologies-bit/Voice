@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
@@ -196,8 +196,13 @@ function Spotlight({
   onAdd,
   onRemove,
   realtimeHd,
+  stickyTop,
+  nameRef,
 }: {
   entry: VoiceEntry
+  // Height of the dashboard's sticky header, so the panel sticks below it.
+  stickyTop: number
+  nameRef: React.RefObject<HTMLHeadingElement | null>
   // Set for a Gemini Live voice: the HD voice an agent picks to speak with it.
   realtimeHd?: VoiceEntry | null
   sample: string
@@ -219,13 +224,18 @@ function Spotlight({
   const target = realtime ? realtimeHd : entry
 
   return (
-    <aside className="order-first overflow-hidden rounded-3xl border border-border bg-surface shadow-[0_18px_44px_-24px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] lg:sticky lg:top-6 lg:order-none">
+    <aside
+      style={{ top: stickyTop + 16 }}
+      className="order-first overflow-hidden rounded-3xl border border-border bg-surface shadow-[0_18px_44px_-24px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] lg:sticky lg:order-none"
+    >
       <div className="relative bg-[radial-gradient(120%_90%_at_50%_0%,color-mix(in_srgb,var(--color-primary)_24%,transparent),transparent_70%)] px-5 pb-4 pt-5 text-center lg:px-6 lg:pb-5 lg:pt-7">
         <div className="relative mx-auto mb-3 h-20 w-20 lg:mb-4 lg:h-28 lg:w-28">
           {playing && <span className="absolute -inset-2 animate-ping rounded-full border-2 border-primary/50" aria-hidden="true" />}
           <Orb entry={entry} size={0} className={`ring-2 transition-shadow ${playing ? 'ring-primary/60' : 'ring-primary/15'}`} />
         </div>
-        <h2 className="font-display text-xl font-semibold tracking-tight lg:text-2xl">{entry.name}</h2>
+        <h2 ref={nameRef} className="font-display text-xl font-semibold tracking-tight lg:text-2xl">
+          {entry.name}
+        </h2>
         <p className="mt-1 text-sm text-text-muted">
           {GENDER_LABEL[entry.gender]} · {realtime ? 'Gemini Live voice' : entry.tierLabel}
         </p>
@@ -264,13 +274,28 @@ function Spotlight({
           <div className="rounded-xl bg-surface-high px-4 py-3 text-sm leading-relaxed text-text-muted">
             {realtimeHd ? (
               <>
-                A Gemini Live agent speaks in this voice when its voice is{' '}
-                <span className="font-bold text-text">{realtimeHd.name}</span>.
+                <p className="font-bold text-text">Use {entry.name} on a realtime call</p>
+                <ol className="mt-1.5 list-decimal space-y-0.5 pl-5">
+                  <li>
+                    Add <span className="font-bold text-text">{realtimeHd.name}</span> to your picker (button below).
+                  </li>
+                  <li>
+                    On the agent, set <span className="font-bold text-text">Model</span> to Gemini Live 2.5 or 3.1.
+                  </li>
+                  <li>
+                    Set its <span className="font-bold text-text">Voice</span> to {realtimeHd.name}. Calls then speak as {entry.name}.
+                  </li>
+                </ol>
+                <p className="mt-2 text-xs">
+                  Works the same on Live 2.5 and 3.1. The preview is Gemini TTS in this voice, so a live call can sound slightly different.{' '}
+                  <Link to="/dashboard/agents" className="font-bold text-primary hover:underline">
+                    Open agents →
+                  </Link>
+                </p>
               </>
             ) : (
-              'No HD voice maps to this Gemini voice yet.'
-            )}{' '}
-            The preview is Gemini TTS in the same voice, so a live call can sound slightly different.
+              'No HD voice maps to this Gemini voice yet, so an agent cannot pick it.'
+            )}
           </div>
         ) : (
         <div className="grid grid-cols-3 gap-2 text-center">
@@ -423,8 +448,8 @@ export function Voices() {
       },
       {
         key: 'gemini',
-        label: 'Gemini 3.8',
-        note: '2x credits · expressive speech · try on a test call before using live',
+        label: 'Gemini 3.8 TTS',
+        note: '2x credits · text-to-speech for normal agents · not the realtime Live models',
         // These are flagged "preview" (owner-only), so they come from the full list
         // rather than from `all`, which drops previews.
         voices: (data?.voices ?? []).filter((v) => v.value.startsWith('google38:') || v.value.startsWith('google38flash:')),
@@ -490,6 +515,38 @@ export function Voices() {
   const sampleSet = data?.sampleTexts?.[previewLang]
   const sample = current ? (sampleSet?.[current.gender === 'female' ? 'female' : 'male'] ?? '') : ''
 
+  // The dashboard header is sticky; measure it so the spotlight and the
+  // now-playing bar sit below it instead of sliding underneath.
+  const [headerHeight, setHeaderHeight] = useState(0)
+  useEffect(() => {
+    const header = [...document.querySelectorAll('header')].find(
+      (h) => h.offsetHeight > 0 && getComputedStyle(h).position === 'sticky',
+    )
+    if (!header) return
+    const measure = () => setHeaderHeight(header.offsetHeight)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(header)
+    return () => observer.disconnect()
+  }, [data])
+
+  // Show the now-playing bar once the spotlight's voice name is not fully in view.
+  const spotlightNameRef = useRef<HTMLHeadingElement | null>(null)
+  const [spotlightVisible, setSpotlightVisible] = useState(true)
+  useEffect(() => {
+    const target = spotlightNameRef.current
+    if (!target) return
+    const observer = new IntersectionObserver(([e]) => setSpotlightVisible(e.intersectionRatio >= 0.99), {
+      rootMargin: `-${headerHeight}px 0px 0px 0px`,
+      threshold: [0, 0.99],
+    })
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [headerHeight, current?.value, data])
+
+  const nowPlaying = current && (preview.state === 'playing' || preview.state === 'paused') && !spotlightVisible
+  const currentHd = realtimeActive && current ? realtimeHdFor.get(current.value) : undefined
+
   // A row's play button selects that voice, then plays it once the spotlight
   // has switched to it (the hook resets whenever its voice changes).
   useEffect(() => {
@@ -518,6 +575,42 @@ export function Voices() {
       <PageHeader title="Voices" subtitle="Pick a voice to hear it. Add the ones your agents should use." />
 
       <div className="flex w-full flex-col gap-4 p-4 sm:p-6">
+        {nowPlaying && current && (
+          <div
+            style={{ top: headerHeight + 8 }}
+            className="sticky z-10 flex items-center gap-3 rounded-2xl border border-primary/30 bg-surface/95 px-3 py-2 shadow-lg backdrop-blur"
+            role="status"
+          >
+            <Orb entry={current} size={36} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold">
+                <span className="text-primary">{preview.state === 'playing' ? 'Playing' : 'Paused'}</span> · {current.name}
+              </p>
+              <p className="truncate text-xs text-text-muted">
+                {GENDER_LABEL[current.gender]} · {realtimeActive ? `Gemini Live voice${currentHd ? ` · pick ${currentHd.name}` : ''}` : current.tierLabel}
+              </p>
+              <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-high">
+                <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${Math.round(preview.progress * 100)}%` }} />
+              </div>
+            </div>
+            <Waveform playing={preview.state === 'playing'} bars={10} className="hidden h-6 sm:flex" />
+            <button
+              type="button"
+              onClick={preview.toggle}
+              aria-label={preview.state === 'playing' ? 'Pause preview' : `Play ${current.name}`}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white"
+            >
+              <Icon name={preview.state === 'playing' ? 'pause' : 'play_arrow'} className="text-[20px]" />
+            </button>
+            <button
+              type="button"
+              onClick={() => spotlightNameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+              className="hidden shrink-0 rounded-lg border border-border bg-transparent px-3 py-1.5 text-xs font-bold text-text-muted hover:border-primary hover:text-primary sm:block"
+            >
+              View
+            </button>
+          </div>
+        )}
         {!data ? (
           <VoicesSkeleton />
         ) : (
@@ -614,7 +707,7 @@ export function Voices() {
                             realtimeActive ? 'bg-primary/10 text-primary' : 'bg-transparent text-text-muted hover:text-text'
                           }`}
                         >
-                          Realtime <span className="text-[11px] font-medium opacity-70">{realtimeVoices.length || REALTIME_MODELS.length}</span>
+                          Realtime Live <span className="text-[11px] font-medium opacity-70">{realtimeVoices.length || REALTIME_MODELS.length}</span>
                         </button>
                       )}
                     </div>
@@ -638,7 +731,7 @@ export function Voices() {
                         </button>
                       ))}
                       {!query && filter !== 'added' && activeTab && <span className="ml-auto text-[11px] text-text-muted">{activeTab.note}</span>}
-                      {realtimeActive && <span className="ml-auto text-[11px] text-text-muted">Speech-to-speech models · owner only · set per agent</span>}
+                      {realtimeActive && <span className="ml-auto text-[11px] text-text-muted">Gemini Live voices · each works on Live 2.5 and 3.1 · owner only</span>}
                     </div>
                   )}
                 </div>
@@ -708,6 +801,8 @@ export function Voices() {
               {current && (
                 <Spotlight
                   entry={current}
+                  stickyTop={headerHeight}
+                  nameRef={spotlightNameRef}
                   realtimeHd={realtimeActive ? (realtimeHdFor.get(current.value) ?? null) : undefined}
                   sample={sample}
                   playState={preview.state}
