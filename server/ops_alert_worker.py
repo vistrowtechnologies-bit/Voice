@@ -9,7 +9,9 @@ opening System Health (admin audit, 2026-10-11). Checked every 10 minutes:
 - an account with at least one live agent and no credits left;
 - a database backup failure;
 - 5 or more failed calls across the platform in the last hour;
-- a worker heartbeat older than 5 minutes.
+- a worker heartbeat older than 5 minutes;
+- a vendor failing its health check (vendor_health.py, run every 3 hours),
+  plus a daily vendor digest after 09:00 IST.
 
 Each alert key is emailed at most once per 6 hours (per-event keys only
 once); the times sent live in settings (account 0) so a restart never
@@ -18,16 +20,19 @@ APP_ENV=staging unless OPS_ALERT_EMAIL is set. Same daemon-thread shape as
 notification_worker.py.
 """
 
+import datetime
 import html
 import logging
 import os
 import threading
 import time
+from zoneinfo import ZoneInfo
 
 import admin_db
 import calls_db
 import email_sender
 import env_guard
+import vendor_health
 
 logger = logging.getLogger("vistrow-ops-alerts")
 
@@ -38,6 +43,10 @@ _ERRORS_MARK = "ops_alert_errors_last_id"
 _MAX_ERRORS_PER_EMAIL = 20
 _FAILED_CALLS_PER_HOUR = 5
 _WORKER_STALE_S = 5 * 60
+_VENDOR_EVERY_S = 3 * 3600
+_VENDOR_RAN = "vendor_health.ran_at"
+_DIGEST_HOUR_IST = 9
+_STATUS_LABEL = {"ok": "OK", "warn": "Warning", "fail": "FAILING", "skipped": "Not configured"}
 
 _started = False
 _lock = threading.Lock()
@@ -181,6 +190,54 @@ def _stale_workers(now: float) -> list[dict]:
     ]
 
 
+def _vendor_table(results: list[dict]) -> str:
+    rows = "".join(
+        f"<tr><td style='padding:4px 12px 4px 0'><b>{html.escape(r['name'])}</b></td>"
+        f"<td style='padding:4px 12px 4px 0'>{_STATUS_LABEL.get(r['status'], r['status'])}</td>"
+        f"<td style='padding:4px 0'>{html.escape(r['detail'])}</td></tr>"
+        for r in results
+    )
+    return f"<table style='border-collapse:collapse;font-size:14px'>{rows}</table>"
+
+
+def _vendor_health(now: float) -> list[dict]:
+    """Probe vendors every 3 hours (fresh for the daily digest); alert on any
+    failure, at most once per 6 hours per vendor."""
+    ist = datetime.datetime.fromtimestamp(now, ZoneInfo("Asia/Kolkata"))
+    digest_key = f"vendor_digest.{ist.date().isoformat()}"
+    digest_due = ist.hour >= _DIGEST_HOUR_IST and due(digest_key, now, None)
+    ran = calls_db.get_setting(_VENDOR_RAN, calls_db.PLATFORM_ACCOUNT_ID)
+    if digest_due or not ran or now - float(ran) >= _VENDOR_EVERY_S:
+        report = vendor_health.run_checks()
+        calls_db.set_setting(_VENDOR_RAN, str(int(now)), calls_db.PLATFORM_ACCOUNT_ID)
+    else:
+        report = vendor_health.last_report()
+    if not report:
+        return []
+    results = report["results"]
+    alerts = [
+        _alert(
+            f"vendor.{r['name'].lower().replace(' ', '_')}",
+            f"{r['name']} is failing",
+            f"<p>The {html.escape(r['name'])} health check failed: <b>{html.escape(r['detail'])}</b>.</p>"
+            "<p>Calls or features that depend on it may be failing right now. "
+            "See System Health in the admin panel.</p>",
+        )
+        for r in results if r["status"] == "fail"
+    ]
+    if digest_due:
+        failing = sum(r["status"] == "fail" for r in results)
+        warned = sum(r["status"] == "warn" for r in results)
+        summary = (f"{failing} failing" if failing else "all OK") + (f", {warned} warning" if warned else "")
+        alerts.append(_alert(
+            digest_key,
+            f"Daily vendor health: {summary}",
+            f"<p>Checked {html.escape(report['checkedAt'])} UTC.</p>{_vendor_table(results)}",
+            repeat_s=None,
+        ))
+    return alerts
+
+
 def gather(now: float) -> list[dict]:
     alerts: list[dict] = []
     for check in (_error_events, _failed_invoices, _zero_balance_live, _backup_failures, _failed_calls):
@@ -188,10 +245,11 @@ def gather(now: float) -> list[dict]:
             alerts += check()
         except Exception:
             logger.exception("ops alert check %s failed", check.__name__)
-    try:
-        alerts += _stale_workers(now)
-    except Exception:
-        logger.exception("ops alert check _stale_workers failed")
+    for timed in (_stale_workers, _vendor_health):
+        try:
+            alerts += timed(now)
+        except Exception:
+            logger.exception("ops alert check %s failed", timed.__name__)
     return alerts
 
 
