@@ -417,3 +417,7 @@ Verified (local dev server with a mock API serving the real `voice_catalog.CATAL
 - `npm run build` passes.
 
 Not verified: real Google/Sarvam preview audio on production. `server/calls_db.py` was only syntax-checked (no Postgres here).
+
+### Claude — 2026-10-12 — Voices page uses full width
+
+Owner noticed empty space on the right of the new Voices page. Removed its `max-w-6xl` cap, which no other dashboard page has. The spotlight column is now 380 / 420 / 460 px at lg / xl / 2xl. Verified at 2000 px in the local app: content ends at the normal 24 px page padding, and `npm run build` passes. Also seen: production now serves #59 and #60 (the owner's screenshot shows the new page live), so the earlier Vercel rate limit has cleared.
