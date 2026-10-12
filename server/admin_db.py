@@ -522,6 +522,7 @@ def account_detail(account_id: int) -> dict | None:
         import calls_db  # local import: avoids a cycle at module load
 
         billing = calls_db.billing_summary(account_id)
+        copilot_actions = calls_db.list_copilot_actions(account_id, limit=10)
         health = _account_health(conn, acct, billing, users, agents, numbers, integrations)
         sub_plan = conn.execute(f"SELECT {_ACTIVE_SUB_PLAN} p FROM accounts a WHERE a.id = ?", (account_id,)).fetchone()["p"]
         return {
@@ -538,6 +539,7 @@ def account_detail(account_id: int) -> dict | None:
             "calls": calls,
             "audit": audit,
             "invoices": invoices,
+            "copilotActions": copilot_actions,
         }
     finally:
         conn.close()

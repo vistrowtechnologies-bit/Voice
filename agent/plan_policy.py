@@ -27,6 +27,8 @@ FEATURE_MIN_PLAN = {
     "campaigns": "growth", "inbound_routing": "growth", "crm": "growth",
     "api": "scale", "premium_voice": "scale", "knowledge": "starter",
     "live_catalog": "growth", "basic_inbound": "starter",
+    # Dashboard copilot actions (confirmed writes). Read-only answers stay on every plan.
+    "copilot_actions": "growth",
     # Already promised on every paid plan. Security/privacy are never upsells.
     "widget": "starter", "recording": "starter", "extraction": "starter",
     "transfer": "starter", "functions": "starter", "memory": "starter",
