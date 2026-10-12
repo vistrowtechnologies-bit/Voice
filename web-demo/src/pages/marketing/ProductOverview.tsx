@@ -103,6 +103,24 @@ export function ProductOverview() {
         </div>
       </section>
 
+      <section className="mx-auto max-w-7xl px-5 pb-4 md:px-8">
+        <Link
+          to="/ai-ivr"
+          className="group flex flex-col gap-2 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/[0.08] to-surface p-6 transition-colors hover:border-primary sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span>
+            <span className="block font-display text-lg font-semibold text-text">Replacing a press-1 phone menu?</span>
+            <span className="mt-1 block text-sm text-text-muted">
+              See how an AI IVR answers your business number in the caller’s language.
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-primary">
+            AI IVR
+            <Icon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-1" />
+          </span>
+        </Link>
+      </section>
+
       {/* How it fits */}
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8">
         <div className="mb-12 text-center">
