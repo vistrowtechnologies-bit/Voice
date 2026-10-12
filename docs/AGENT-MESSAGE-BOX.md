@@ -491,3 +491,9 @@ Branch `claude/live-indian-names`. Owner request.
 - **Agent editor, realtime voice dropdown:** "Myra HD · Female · Soft (Gemini Achernar)", sorted the same way.
 
 Verified in the local app (mock API, owner). `npm run build` passes.
+
+### Claude — 2026-10-13 — Realtime voice dropdown: only voices the account added
+
+Branch `claude/realtime-added-only`. Owner correction to PR #67: with a realtime model, the agent's voice dropdown now lists only the account's added voices that a Live model can use, under "Your voices for <model>". Non-realtime added voices stay disabled, and an empty state points to the Voices page. The catalog is still fetched, but only for the style words.
+
+Verified in the local app: the mock account has Myra HD, Sana HD, Vivaan HD and Aditya added. The dropdown shows the three HD voices, with Aditya disabled. `npm run build` passes.
