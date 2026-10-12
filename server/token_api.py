@@ -251,6 +251,7 @@ async def require_session(request: Request, call_next):
             request.state.account_id = account_id
             request.state.user_id = calls_db.account_owner_user_id(account_id)
             request.state.impersonator_id = None
+            request.state.via_api_key = True
             return await call_next(request)
     return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
@@ -3857,11 +3858,19 @@ def _copilot_decision(fn, req: CopilotActionRequest, user: dict) -> dict:
 
 
 @app.post("/help/chat/confirm")
-def help_chat_confirm(req: CopilotActionRequest, user: dict = Depends(current_user)) -> dict:
+def help_chat_confirm(req: CopilotActionRequest, request: Request, user: dict = Depends(current_user)) -> dict:
     """Runs one action the copilot proposed (copilot.confirm re-checks the
     signature, expiry, session, role, plan and daily cap). Refused during
-    "View as" by guard_support_session."""
-    return _copilot_decision(copilot.confirm, req, user)
+    "View as" (here and by guard_support_session) and for API-key requests,
+    which would otherwise be recorded as the account owner."""
+    try:
+        return copilot.confirm(
+            req.token, user["account_id"], user["user_id"],
+            impersonating=bool(getattr(request.state, "impersonator_id", None)),
+            via_api_key=bool(getattr(request.state, "via_api_key", False)),
+        )
+    except copilot.ConfirmError as exc:
+        raise HTTPException(exc.status, exc.detail) from exc
 
 
 @app.post("/help/chat/cancel")

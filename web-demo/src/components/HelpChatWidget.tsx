@@ -154,6 +154,7 @@ export function HelpChatWidget() {
   const [ratings, setRatings] = useState<Record<number, 'up' | 'down'>>({})
   // Per assistant message index: the state of its confirmation card.
   const [actions, setActions] = useState<Record<number, { busy?: 'confirm' | 'cancel'; done?: boolean; error?: string }>>({})
+  const decidingRef = useRef(new Set<number>())
   const threadRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
   const location = useLocation()
@@ -243,7 +244,9 @@ export function HelpChatWidget() {
   // confirms; a failure (expired, already decided, daily limit) closes the
   // card with the server's reason.
   const decideAction = async (index: number, token: string, decision: 'confirm' | 'cancel') => {
-    if (actions[index]?.busy || actions[index]?.done) return
+    // A ref, not state: two clicks before React re-renders must not both send.
+    if (decidingRef.current.has(index) || actions[index]?.done) return
+    decidingRef.current.add(index)
     setActions((current) => ({ ...current, [index]: { busy: decision } }))
     try {
       const result = await (decision === 'confirm' ? confirmCopilotAction(token) : cancelCopilotAction(token))
@@ -270,7 +273,7 @@ export function HelpChatWidget() {
   const closeChat = () => {
     setOpen(false)
     setMessages([])
-    setActions({})
+    setActions({}); decidingRef.current.clear()
     setInput('')
     setError('')
     setShowFaqs(false)
@@ -326,7 +329,7 @@ export function HelpChatWidget() {
                 <Tooltip content="Back to FAQs"><button
                   onClick={() => {
                     setMessages([])
-                    setActions({})
+                    setActions({}); decidingRef.current.clear()
                     setError('')
                   }}
                   className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text"

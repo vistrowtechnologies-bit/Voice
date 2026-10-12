@@ -7243,11 +7243,23 @@ def list_integration_deliveries(account_id: int, key: str, limit: int = 50, stat
 COPILOT_ACTION_STATUSES = ("proposed", "confirmed", "cancelled", "failed", "expired")
 
 
+_COPILOT_TOKEN_TTL_S = 10 * 60  # same as copilot.TOKEN_TTL_SECONDS
+
+
 def _copilot_action_dict(row) -> dict:
+    status = row["status"]
+    if status == "proposed":
+        try:
+            created = datetime.datetime.strptime(str(row["created_at"])[:19], "%Y-%m-%d %H:%M:%S")
+            age = (datetime.datetime.utcnow() - created).total_seconds()
+            if age > _COPILOT_TOKEN_TTL_S:
+                status = "expired"
+        except ValueError:
+            pass
     return {
         "id": row["id"], "userId": row["user_id"], "tool": row["tool"],
         "args": _load_json_field(row["args_json"], {}), "label": row["label"] or "",
-        "status": row["status"], "result": row["result"] or "",
+        "status": status, "result": row["result"] or "",
         "createdAt": row["created_at"], "decidedAt": row["decided_at"],
     }
 
@@ -7258,7 +7270,7 @@ def record_copilot_action(account_id: int, user_id: int | None, tool: str, args:
         with conn:
             cur = conn.execute(
                 "INSERT INTO copilot_actions (account_id, user_id, tool, args_json, label) VALUES (?, ?, ?, ?, ?) RETURNING id",
-                (account_id, user_id, tool, json.dumps(args), label[:300]),
+                (account_id, user_id, tool, json.dumps(args), label[:1000]),
             )
             return cur.lastrowid
     finally:

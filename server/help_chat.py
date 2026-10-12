@@ -285,11 +285,14 @@ def answer_help_question(
     open_record = _open_record_context(current_page, account_id)
     if open_record:
         system_prompt += f"\n\n{open_record}"
-    access = (
-        copilot.action_access(account_id, role, impersonating)
-        if user_id is not None
-        else {"tools": [], "note": "", "upgrade": False}
-    )
+    no_actions = {"tools": [], "note": "", "upgrade": False}
+    try:
+        access = copilot.action_access(account_id, role, impersonating) if user_id is not None else no_actions
+    except Exception:
+        # Read-only answers must keep working even if the actions layer
+        # (plan lookup, daily counts) is unavailable.
+        logger.warning("copilot action_access failed; answering without actions", exc_info=True)
+        access = no_actions
     action_names = access.get("names", set())
     if access["tools"]:
         system_prompt += f"\n\n{_ACTIONS_PROMPT}"

@@ -55,6 +55,15 @@ def _text(value, limit: int = MAX_TEXT) -> str:
     return str(value or "").strip()[:limit]
 
 
+def _whole_text(value, limit: int, what: str) -> str:
+    """Text the confirmation card shows in full: refused when too long rather
+    than cut, so a greeting or note is never written half-finished."""
+    text = str(value or "").strip()
+    if len(text) > limit:
+        raise ActionError(f"The {what} is too long ({len(text)} characters); keep it under {limit}.")
+    return text
+
+
 def _agent(account_id: int, agent_id: int) -> dict:
     # list_agents is account-scoped, so a foreign id is simply not found.
     agent = next((a for a in calls_db.list_agents(account_id) if a["id"] == agent_id), None)
@@ -129,7 +138,9 @@ def _clean_basics(args: dict) -> dict:
     if args.get("language") not in (None, ""):
         cleaned["language"] = _language(args["language"])
     if args.get("welcome_message") not in (None, ""):
-        cleaned["welcome_message"] = _text(args["welcome_message"], 1_000)
+        # Short enough that the confirmation card can show all of it: the
+        # caller hears exactly what the user approved, nothing hidden.
+        cleaned["welcome_message"] = _whole_text(args["welcome_message"], 300, "welcome message")
     if len(cleaned) == 1:
         raise ActionError("Say what to change: the name, language or welcome message.")
     return cleaned
@@ -143,7 +154,7 @@ def _describe_basics(account_id: int, args: dict) -> str:
     if "language" in args:
         changes.append(f"language {voice_catalog.LANGUAGE_LABELS.get(args['language'], args['language'])}")
     if "welcome_message" in args:
-        changes.append(f"welcome message \"{args['welcome_message'][:120]}\"")
+        changes.append(f"welcome message \"{args['welcome_message']}\"")
     return f"Update agent '{agent['name']}': " + ", ".join(changes)
 
 
@@ -214,7 +225,7 @@ def _clean_booking(args: dict, callback: bool) -> dict:
     if args.get("agent_id") not in (None, ""):
         cleaned["agent_id"] = _int(args["agent_id"], "agent")
     if args.get("notes"):
-        cleaned["notes"] = _text(args["notes"], 2_000)
+        cleaned["notes"] = _whole_text(args["notes"], 300, "note")  # shown in full on the card
     if not callback:
         duration = args.get("duration_minutes") or 30
         duration = _int(duration, "duration")
@@ -228,8 +239,14 @@ def _clean_booking(args: dict, callback: bool) -> dict:
 
 def _describe_booking(account_id: int, args: dict, kind: str) -> str:
     line = f"Book {kind} with {args['name']} ({args['phone']}) on {args['date']} at {args['time']}"
+    if args.get("duration_minutes") and args["duration_minutes"] != 30:
+        line += f" for {args['duration_minutes']} minutes"
+    if args.get("purpose"):
+        line += f", purpose: {args['purpose']}"
     if "agent_id" in args:
-        line += f" for agent '{_agent(account_id, args['agent_id'])['name']}'"
+        line += f", agent '{_agent(account_id, args['agent_id'])['name']}'"
+    if args.get("notes"):
+        line += f", notes: \"{args['notes']}\""
     return line
 
 
@@ -310,6 +327,9 @@ def _describe_events(account_id: int, args: dict) -> str:
     names = _integration_names(account_id)
     if args["integration_key"] not in names:
         raise ActionError(f"Integration '{args['integration_key']}' was not found in this workspace.")
+    if args["integration_key"] not in calls_db.EVENT_CONFIGURABLE_KEYS:
+        raise ActionError(f"{names[args['integration_key']]} always sends one record per caller at the end of the call; "
+                          "its events can't be chosen.")
     readable = ", ".join(e.replace("_", " ") for e in args["events"])
     return f"Send {names[args['integration_key']]} these events: {readable}"
 

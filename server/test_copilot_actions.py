@@ -319,7 +319,67 @@ class CopilotActions(unittest.TestCase):
         self.assertIn("Slack", describe("set_agent_integrations", {"agent_id": self.agent, "integration_keys": ["slack"]}))
         self.assertEqual(describe("book_callback", {"name": "Abhishek", "phone": "+919800000003", "date": "2026-11-02",
                                                     "time": "9:30", "agent_id": self.agent}),
-                         "Book a callback with Abhishek (+919800000003) on 2026-11-02 at 09:30 for agent 'Real estate agent'")
+                         "Book a callback with Abhishek (+919800000003) on 2026-11-02 at 09:30, agent 'Real estate agent'")
+
+    def test_the_card_shows_everything_the_write_will_do(self):
+        """Review P1: nothing the action writes may be hidden from the card."""
+        describe = lambda tool, args: self.tools.TOOLS[tool]["describe"](self.a, self.tools.TOOLS[tool]["clean"](args))
+        greeting = "Namaste! " + "x" * 280
+        label = describe("update_agent_basics", {"agent_id": self.agent, "welcome_message": greeting})
+        self.assertIn(greeting, label, "the whole welcome message is on the card")
+        with self.assertRaises(self.tools.ActionError):
+            self.tools.TOOLS["update_agent_basics"]["clean"]({"agent_id": self.agent, "welcome_message": "y" * 301})
+        label = describe("book_appointment", {"name": "Asha", "phone": "+919800000004", "date": "2026-11-03",
+                                              "time": "11:00", "duration_minutes": 120, "purpose": "Site visit",
+                                              "notes": "Bring the brochure"})
+        for part in ("120 minutes", "Site visit", "Bring the brochure"):
+            self.assertIn(part, label)
+        pending = self.propose("update_agent_basics", {"agent_id": self.agent, "welcome_message": greeting})
+        self.assertIn(greeting, self.rows()[0]["label"], "the audit keeps the whole card text")
+        self.assertTrue(pending["token"])
+
+    def test_events_only_for_integrations_that_have_a_choice(self):
+        clean = self.tools.TOOLS["set_integration_events"]["clean"]
+        describe = self.tools.TOOLS["set_integration_events"]["describe"]
+        with self.assertRaises(self.tools.ActionError):
+            describe(self.a, clean({"integration_key": "zoho_crm", "events": ["call_completed"]}))
+
+    def test_malformed_token_is_a_400_not_a_crash(self):
+        self.assertConfirmError(400, self.copilot.confirm, "abc.\u00e9", self.a, self.owner)
+
+    def test_confirm_refuses_view_as_and_api_keys_itself(self):
+        pending = self.propose()
+        with self.assertRaises(self.copilot.ConfirmError) as ctx:
+            self.copilot.confirm(pending["token"], self.a, self.owner, impersonating=True)
+        self.assertEqual(ctx.exception.status, 403)
+        with self.assertRaises(self.copilot.ConfirmError) as ctx:
+            self.copilot.confirm(pending["token"], self.a, self.owner, via_api_key=True)
+        self.assertEqual(ctx.exception.status, 403)
+        self.assertEqual(self.agent_status(), "live")
+
+    def test_unanswered_proposal_lists_as_expired_after_the_link_lapses(self):
+        self.propose()
+        conn = self.db._connect()
+        with conn:
+            conn.execute("UPDATE copilot_actions SET created_at = '2000-01-01 00:00:00' WHERE account_id = ?", (self.a,))
+        conn.close()
+        self.assertEqual(self.rows()[0]["status"], "expired")
+
+    def test_concurrent_confirms_run_the_action_once(self):
+        from concurrent.futures import ThreadPoolExecutor
+        pending = self.propose()
+
+        def attempt(_):
+            try:
+                self.copilot.confirm(pending["token"], self.a, self.owner)
+                return "ok"
+            except self.copilot.ConfirmError as exc:
+                return exc.status
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            outcomes = list(pool.map(attempt, range(5)))
+        self.assertEqual(outcomes.count("ok"), 1, outcomes)
+        self.assertEqual(sorted(o for o in outcomes if o != "ok"), [409] * 4)
 
     def test_set_agent_integrations_stores_the_none_sentinel(self):
         pending = self.propose("set_agent_integrations", {"agent_id": self.agent, "integration_keys": []})

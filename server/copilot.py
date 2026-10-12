@@ -53,7 +53,11 @@ def read_token(token: str) -> dict:
     """The verified payload, or ConfirmError(400). Expiry is checked by the caller
     so an expired action can still be marked expired in the audit."""
     body, _, sig = str(token or "").partition(".")
-    if not body or not sig or not hmac.compare_digest(sig, _sign(body)):
+    try:
+        valid = bool(body and sig) and hmac.compare_digest(sig.encode(), _sign(body).encode())
+    except (TypeError, UnicodeEncodeError):
+        valid = False
+    if not valid:
         raise ConfirmError(400, "This action link is not valid. Ask the copilot again.")
     try:
         payload = json.loads(auth._unb64(body))
@@ -118,7 +122,11 @@ def _already_decided(row: dict) -> ConfirmError:
     return ConfirmError(409, f"This action was already {row['status']}.")
 
 
-def confirm(token: str, account_id: int, user_id: int) -> dict:
+def confirm(token: str, account_id: int, user_id: int, *, impersonating: bool = False, via_api_key: bool = False) -> dict:
+    if impersonating:
+        raise ConfirmError(403, "Not allowed while viewing as a customer.")
+    if via_api_key:
+        raise ConfirmError(403, "Copilot actions need a signed-in person, not an API key.")
     payload, row = _session_action(token, account_id, user_id)
     if row["status"] != "proposed":
         raise _already_decided(row)
