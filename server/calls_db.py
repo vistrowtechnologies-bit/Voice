@@ -8665,7 +8665,7 @@ _ECONOMY_VOICE_PREFIXES = ("google:",)
 _PREMIUM_VOICES = {"google:kore", "google:charon"}
 # Chirp 3 HD personas ("google:chirp3:<Persona>") share the "google:" prefix
 # with the cheap single-locale voices too, and are likewise a different
-# product: one persona across ten Indian locales, switching mid-call, and the
+# product: one persona across 52 locales, switching mid-call, and the
 # only Google family the streaming endpoint serves. The catalog and the
 # dashboard both price them at the 1x standard tier, so this has to agree —
 # without it the prefix rule below silently billed them economy (0.75x) while

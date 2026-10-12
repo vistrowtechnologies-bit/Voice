@@ -45,6 +45,6 @@ The two `sha256-...` values in `script-src` are the two inline scripts in `web-d
 - **EnableX webhook auth:** `ENABLEX_WEBHOOK_USER` / `ENABLEX_WEBHOOK_PASS` are not set in production, so EnableX callbacks are not authenticated. Set matching credentials in the EnableX portal and on Railway, then make `_verify_enablex_webhook` refuse unauthenticated calls.
 - **Origin check:** once the logs show no "would block" from a real dashboard domain, set `ORIGIN_CHECK=enforce` on Railway.
 - **CSP:** report-only until checked in the browser console (see "Turning the CSP on").
-- **API key scopes in the dashboard:** there is no API keys screen (it was removed from Settings in `b3983301`), so scopes can only be chosen through `POST /api-keys`. Rebuild the screen if customers should create keys themselves.
+- **API key scopes in the dashboard:** done. Settings → Developer → API keys creates keys with scopes (2026-10-12).
 - **Hardening still to do:**
   - Platform owner set by a hardcoded email at boot (`calls_db.py` ~937); move it to an explicit flag.

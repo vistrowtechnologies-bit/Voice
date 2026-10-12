@@ -138,19 +138,43 @@ CATALOG: list[dict] = [
     #
     # No Chirp 3 voice ID carries more than one language code — checked
     # against Google's own list_voices, 0 of them do. But all 30 personas
-    # exist in all 10 Indian locales, so a persona survives a language switch
+    # exist in all 52 CHIRP3_LANGUAGES locales, so a persona survives a language switch
     # by swapping the locale prefix and keeping the name:
     # hi-IN-Chirp3-HD-Aoede -> mr-IN-Chirp3-HD-Aoede. That is what the
     # "google:chirp3:<Persona>" value means, and _build_tts resolves it
     # against the call's current language. The older per-locale form
     # ("google:hi-IN-Chirp3-HD-Aoede") still works if anything holds one, it
     # is simply not offered in the menu.
-    {"value": "google:chirp3:Aoede", "name": "Kiara HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
-    {"value": "google:chirp3:Achernar", "name": "Myra HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
-    {"value": "google:chirp3:Callirrhoe", "name": "Sana HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
-    {"value": "google:chirp3:Achird", "name": "Advik HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
-    {"value": "google:chirp3:Algenib", "name": "Rehan HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
-    {"value": "google:chirp3:Alnilam", "name": "Vivaan HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, ten Indian languages · switches mid-call"},
+    {"value": "google:chirp3:Aoede", "name": "Kiara HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Achernar", "name": "Myra HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Callirrhoe", "name": "Sana HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Achird", "name": "Advik HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Algenib", "name": "Rehan HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Alnilam", "name": "Vivaan HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Autonoe", "name": "Anika HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Despina", "name": "Devika HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Erinome", "name": "Esha HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Gacrux", "name": "Gauri HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Kore", "name": "Kirti HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Laomedeia", "name": "Lavanya HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Leda", "name": "Leela HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Pulcherrima", "name": "Pallavi HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Sulafat", "name": "Suhana HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Vindemiatrix", "name": "Vani HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Zephyr", "name": "Zoya HD", "gender": "female", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Algieba", "name": "Aryan HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Charon", "name": "Chirag HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Enceladus", "name": "Eshan HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Fenrir", "name": "Farhan HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Iapetus", "name": "Ishaan HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Orus", "name": "Omkar HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Puck", "name": "Pranav HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Rasalgethi", "name": "Rudra HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Sadachbia", "name": "Samar HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Sadaltager", "name": "Sahil HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Schedar", "name": "Shaurya HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Umbriel", "name": "Uday HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
+    {"value": "google:chirp3:Zubenelgenubi", "name": "Zubin HD", "gender": "male", "tier": "standard", "multilingual": True, "note": "One voice, 52 languages incl. 11 Indian · switches mid-call"},
 
     # --- Lite (Sarvam bulbul:v2) — REMOVED 2026-09-04 ------------------------
     # Sarvam retired the model: every request now returns
@@ -443,18 +467,46 @@ def to_google_code(code: str) -> str:
 # disagree with their own tables), so the enumerated count is the honest one.
 GOOGLE_TTS_TOTAL_LOCALES = len(GOOGLE_TTS_LANGUAGES)
 
-# Labels for anything either engine can speak, so public_entry can name a
-# locale regardless of which engine produced it.
-_ALL_LANGUAGE_LABELS = {**LANGUAGE_LABELS, **GOOGLE_TTS_LANGUAGES}
-
 _GOOGLE_PREFIXES = ("google:", "google31:", GEMINI_38_FLASH_PREFIX, GEMINI_38_PREFIX)
 
 
-# Chirp 3 HD personas exist in exactly these Indian locales (verified against
-# Google's list_voices: all 30 personas are present in all ten). This is the
-# real switchable range for a "google:chirp3:<Persona>" voice.
+# Chirp 3 HD personas exist in exactly these locales (verified against
+# Google's list_voices on 2026-10-12: all 30 personas are present in all 52;
+# ru-RU exists for only 8 of them, so it is left out). Indian locales first.
+# A persona follows the caller by swapping the locale prefix, so this is both
+# what the Voices tab names and the real switchable range.
 CHIRP3_PERSONA_PREFIX = "google:chirp3:"
-CHIRP3_LANGUAGES = ["hi-IN", "en-IN", "mr-IN", "ta-IN", "te-IN", "kn-IN", "ml-IN", "gu-IN", "bn-IN", "pa-IN"]
+CHIRP3_INDIAN_LANGUAGES = ["hi-IN", "en-IN", "mr-IN", "ta-IN", "te-IN", "kn-IN", "ml-IN", "gu-IN", "bn-IN", "pa-IN", "ur-IN"]
+CHIRP3_LANGUAGES = CHIRP3_INDIAN_LANGUAGES + [
+    "en-US", "en-GB", "en-AU", "ar-XA", "bg-BG", "cmn-CN", "cs-CZ", "da-DK",
+    "de-DE", "el-GR", "es-ES", "es-US", "et-EE", "fi-FI", "fr-CA", "fr-FR",
+    "he-IL", "hr-HR", "hu-HU", "id-ID", "it-IT", "ja-JP", "ko-KR", "lt-LT",
+    "lv-LV", "nb-NO", "nl-BE", "nl-NL", "pl-PL", "pt-BR", "ro-RO", "sk-SK",
+    "sl-SI", "sr-RS", "sv-SE", "sw-KE", "th-TH", "tr-TR", "uk-UA", "vi-VN",
+    "yue-HK",
+]
+# Names for the Chirp locales no other engine table labels.
+CHIRP3_LANGUAGE_LABELS = {
+    "ur-IN": "Urdu", "en-US": "English (US)", "en-GB": "English (UK)",
+    "en-AU": "English (Australia)", "ar-XA": "Arabic", "bg-BG": "Bulgarian",
+    "cmn-CN": "Chinese (Mandarin)", "cs-CZ": "Czech", "da-DK": "Danish",
+    "de-DE": "German", "el-GR": "Greek", "es-ES": "Spanish",
+    "es-US": "Spanish (US)", "et-EE": "Estonian", "fi-FI": "Finnish",
+    "fr-CA": "French (Canada)", "fr-FR": "French", "he-IL": "Hebrew",
+    "hr-HR": "Croatian", "hu-HU": "Hungarian", "id-ID": "Indonesian",
+    "it-IT": "Italian", "ja-JP": "Japanese", "ko-KR": "Korean",
+    "lt-LT": "Lithuanian", "lv-LV": "Latvian", "nb-NO": "Norwegian",
+    "nl-BE": "Dutch (Belgium)", "nl-NL": "Dutch", "pl-PL": "Polish",
+    "pt-BR": "Portuguese (Brazil)", "ro-RO": "Romanian", "sk-SK": "Slovak",
+    "sl-SI": "Slovenian", "sr-RS": "Serbian", "sv-SE": "Swedish",
+    "sw-KE": "Swahili", "th-TH": "Thai", "tr-TR": "Turkish",
+    "uk-UA": "Ukrainian", "vi-VN": "Vietnamese", "yue-HK": "Cantonese",
+}
+
+
+# Labels for anything either engine can speak, so public_entry can name a
+# locale regardless of which engine produced it.
+_ALL_LANGUAGE_LABELS = {**CHIRP3_LANGUAGE_LABELS, **GOOGLE_TTS_LANGUAGES, **LANGUAGE_LABELS}
 
 
 def chirp3_persona(value: str) -> str | None:
@@ -481,9 +533,9 @@ def languages_for(entry: dict) -> tuple[list[str], bool]:
     """
     value = entry.get("value", "")
     if value.startswith(CHIRP3_PERSONA_PREFIX):
-        # One persona, ten Indian locales — not Gemini's 87. Falling through
-        # to the branch below would claim the Gemini range for a voice that
-        # does not have it.
+        # One persona across Chirp 3's own 52 locales — not Gemini's list.
+        # Falling through to the branch below would claim the Gemini range
+        # for a voice that does not have it.
         return list(CHIRP3_LANGUAGES), True
     if value.startswith(_GOOGLE_PREFIXES):
         part = value.split(":", 1)[1]
