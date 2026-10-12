@@ -7,6 +7,13 @@ import { Seo } from '../../components/Seo'
 import { COMPARE_VENDORS } from '../../lib/seoExpansionContent'
 import { NotFound } from './NotFound'
 
+const GLANCE: { icon: string; title: string; body: string; to: string }[] = [
+  { icon: 'translate', title: 'Languages', body: 'Ten Indian languages plus English, including Hinglish, switching with the caller mid-call.', to: '/languages' },
+  { icon: 'call', title: 'Phone and website', body: 'Inbound phone calls through a connected number, plus a call widget that talks to website visitors in the browser.', to: '/product/widget' },
+  { icon: 'menu_book', title: 'Approved answers', body: 'A knowledge base with strict mode, so the agent quotes your material instead of improvising.', to: '/product/knowledge-base' },
+  { icon: 'receipt_long', title: 'A finished record', body: 'Transcript, summary, captured lead fields, optional recording and CRM or webhook delivery status for every call.', to: '/product/integrations' },
+]
+
 const faqJsonLd = (items: { q: string; a: string }[]) => ({
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
@@ -68,7 +75,7 @@ export function CompareVendor() {
             <thead>
               <tr className="bg-surface-high">
                 <th className="px-5 py-4 font-display text-sm font-semibold">Decision point</th>
-                <th className="px-5 py-4 font-display text-sm font-semibold text-text-muted">{vendor.name}</th>
+                <th className="px-5 py-4 font-display text-sm font-semibold text-text-muted">Typical {vendor.category} approach</th>
                 <th className="px-5 py-4 font-display text-sm font-semibold text-primary">Vistrow Voice</th>
               </tr>
             </thead>
@@ -84,9 +91,59 @@ export function CompareVendor() {
           </table>
         </div>
         <p className="mt-3 text-xs leading-relaxed text-text-muted">
-          Vendor products change. This page is a buyer checklist, not a live pricing/spec sheet. Verify current features directly with each vendor before purchase.
+          The left column describes the {vendor.category} category in general terms, not {vendor.name}&rsquo;s current product. Vendor products change, so this page is a buyer checklist, not a spec sheet. Verify current features directly with each vendor before you decide.
         </p>
       </section>
+
+      {vendor.scenarios && (
+        <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
+          <div className="mb-8 max-w-2xl">
+            <SectionEyebrow>Which approach fits</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Match the tool to the job, not the brand.</h2>
+          </div>
+          <div className="grid gap-5 md:grid-cols-3">
+            {vendor.scenarios.map((item) => (
+              <div key={item.title} className="rounded-2xl border border-border bg-surface p-6">
+                <h3 className="font-display text-lg font-semibold">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
+        <div className="mb-8 max-w-2xl">
+          <SectionEyebrow>What Vistrow Voice covers</SectionEyebrow>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">The parts of a call it handles for you.</h2>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {GLANCE.map((item) => (
+            <Link key={item.title} to={item.to} className="rounded-2xl border border-border bg-surface p-6 transition-colors hover:border-primary">
+              <Icon name={item.icon} className="text-[24px] text-primary" />
+              <h3 className="mt-4 font-display text-base font-semibold">{item.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {vendor.ask && (
+        <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
+          <div className="rounded-3xl border border-border bg-surface p-8 sm:p-10">
+            <SectionEyebrow>Questions for any vendor</SectionEyebrow>
+            <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">Ask these before you shortlist, including us.</h2>
+            <ul className="mt-6 space-y-3">
+              {vendor.ask.map((item) => (
+                <li key={item} className="flex gap-3 text-sm leading-relaxed text-text-muted">
+                  <Icon name="help" className="mt-0.5 shrink-0 text-[18px] text-primary" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
 
       <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
         <div className="rounded-3xl border border-border bg-surface p-8 sm:p-10">
@@ -103,7 +160,47 @@ export function CompareVendor() {
         </div>
       </section>
 
+      {vendor.steps && (
+        <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
+          <div className="rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/[0.10] via-surface to-surface-high p-8 sm:p-10">
+            <SectionEyebrow>Side-by-side testing</SectionEyebrow>
+            <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">Try it next to what you use today.</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-text-muted">
+              Moving to an AI voice agent does not need a cut-over. Run it alongside your current setup on one narrow slice of calls, and keep the old path as fallback until the transcripts convince you.
+            </p>
+            <ol className="mt-6 space-y-3">
+              {vendor.steps.map((step, i) => (
+                <li key={step} className="flex gap-3 text-sm leading-relaxed text-text-muted">
+                  <span className="font-display text-base font-bold text-primary">{i + 1}</span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+      )}
+
       <FaqSection items={vendor.faqs} />
+      {vendor.related && (
+        <section className="mx-auto max-w-7xl px-5 pb-8 md:px-8">
+          <div className="rounded-2xl border border-border bg-surface/50 px-6 py-7">
+            <p className="text-center text-xs font-bold uppercase tracking-widest text-text-muted">{`Related to ${vendor.name} comparisons`}</p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {vendor.related.map((r) => (
+                <Link
+                  key={r.to}
+                  to={r.to}
+                  className="inline-flex items-center gap-1 rounded-full border border-border px-4 py-1.5 text-sm text-text-muted transition-colors hover:border-primary hover:text-text"
+                >
+                  {r.label}
+                  <Icon name="arrow_forward" className="text-[14px]" />
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       <CTABand title={`Compare ${vendor.name} with a live Vistrow call.`} subtitle="Test the voice, latency, transcript, and CRM-ready outcome before you decide." />
     </MarketingLayout>
   )

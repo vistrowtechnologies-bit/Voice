@@ -251,3 +251,13 @@ Branch `claude/seo-p3-languages` (based on origin/main `c47bc9d`). Deepened `/la
 Verified: `npm run build` (icon check, tsc, prerender, route audit 113 routes), `npm run test:seo` (10 languages), `check-blog-seo.ts` pass. Main-content words before to after: marathi 530 to 1197, odia 449 to 1141, malayalam 448 to 1135, gujarati 449 to 1097, bengali 448 to 1098 (includes shared template text). No prices, credit figures or quoted queries added.
 
 Not verified: native-speaker review of the Marathi, Odia, Malayalam, Gujarati and Bengali sample lines and "call notes" dialect remarks (written by Claude; sample is labelled as a written example). Not viewed in a browser. Next step: review and merge (Vercel only), then request indexing for the five URLs.
+
+### Claude — 2026-10-12 — SEO batch 4: compare pages and buyer-guide hub
+
+Branch `claude/seo-p4-compare` (from origin/main `3c45816`). Marketing content only, no new routes: `web-demo/src/lib/seoExpansionContent.ts` (new `COMPARE_EXTRAS` merged into `COMPARE_VENDORS`: per-page "which approach fits", questions to ask any vendor, side-by-side testing steps, 3 extra FAQs, related links; hub guide gains category overview, ten-point checklist table, trial steps, 4 FAQs, related links; hub title/first FAQ reworded so there is no "best" claim; "Best fit" row labels became "Where it fits"), `web-demo/src/pages/marketing/CompareVendor.tsx` and `BuyerGuide.tsx` (render the new sections; comparison table column now reads "Typical <category> approach" with a category-level disclaimer; shared "What Vistrow Voice covers" strip), `web-demo/src/lib/marketingContent.ts` (nav label only). Scope note: the brief said 6 compare pages, the repo has 8 vendor pages (exotel, knowlarity, ozonetel, sarvam-ai, elevenlabs, retell-ai, bland-ai, synthflow), so all 8 were deepened. `/vs-ivr` already ~1,200 words and left unchanged.
+
+Vistrow claims reused only from existing product-page copy (verified earlier against help articles/dashboard). No prices or credit figures, no named-competitor feature claims, no quoted queries.
+
+Verified: build (icon check, tsc, prerender, route audit 113 routes), `test:seo`, `check-blog-seo.ts` pass. Prerendered main-content words: exotel 1012, knowlarity 934, ozonetel 913, sarvam-ai 971, elevenlabs 947, retell-ai 918, bland-ai 930, synthflow 935, hub 1291 (before: roughly 350-450 each). All internal hrefs resolve to prerendered routes.
+
+Not verified: no browser visual check (reused card/table classes); pre-existing table cells about named vendors were reworded only at column-header level; `graphify update .` not run. Next step: review PR, merge (Vercel only), request indexing for `/best-ai-voice-calling-software-india` and `/compare/sarvam-ai`.
