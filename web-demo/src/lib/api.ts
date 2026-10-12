@@ -19,6 +19,8 @@ import type {
   FeedbackSummary,
   HelpChatMessage,
   HelpFaq,
+  CopilotAction,
+  CopilotPendingAction,
   InboundRoute,
   AppNotification,
   Integration,
@@ -588,7 +590,19 @@ export const fetchWidgetBackendUrl = () => get<{ backendUrl: string | null }>('/
 
 export const fetchHelpFaqs = () => get<HelpFaq[]>('/help/faqs')
 export const sendHelpChatMessage = (message: string, history: HelpChatMessage[], currentPage?: string) =>
-  send<{ reply: string; suggestTicket: boolean; comingSoon: boolean; article: { slug: string; title: string } | null }>('POST', '/help/chat', { message, history, currentPage })
+  send<{
+    reply: string
+    suggestTicket: boolean
+    comingSoon: boolean
+    article: { slug: string; title: string } | null
+    pendingAction?: CopilotPendingAction
+    upgrade?: boolean
+  }>('POST', '/help/chat', { message, history: history.map(({ role, content }) => ({ role, content })), currentPage })
+export const confirmCopilotAction = (token: string) =>
+  send<{ ok: boolean; message: string }>('POST', '/help/chat/confirm', { token })
+export const cancelCopilotAction = (token: string) =>
+  send<{ ok: boolean; message: string }>('POST', '/help/chat/cancel', { token })
+export const fetchCopilotActions = () => get<CopilotAction[]>('/help/copilot/actions')
 export const submitHelpTicket = (ticket: {
   subject: string
   detail: string

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import arthaAvatar from '../assets/artha-avatar.webp'
-import { fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
+import { cancelCopilotAction, confirmCopilotAction, fetchHelpFaqs, sendHelpChatMessage } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { HelpChatMessage, HelpFaq } from '../lib/types'
 import { Icon } from './Icon'
@@ -51,7 +51,7 @@ const PAGE_SUGGESTIONS: Record<string, PageHelp> = {
   },
   '/dashboard/appointments': {
     label: 'Appointments',
-    questions: ["What's booked this week?", 'Where do I manage appointment availability?', 'How do I reschedule an appointment?'],
+    questions: ["What's booked this week?", 'Book a callback', 'Where do I manage appointment availability?'],
   },
   '/dashboard/integrations': {
     label: 'Integrations',
@@ -63,7 +63,7 @@ const PAGE_SUGGESTIONS: Record<string, PageHelp> = {
   },
   '/dashboard/agents': {
     label: 'Agents',
-    questions: ['Which of my agents are live?', "How do I edit an agent's settings?", 'How do I connect a knowledge base?'],
+    questions: ['Which of my agents are live?', 'Pause an agent', "How do I edit an agent's settings?"],
   },
   '/dashboard/testing': {
     label: 'Testing Lab',
@@ -152,6 +152,8 @@ export function HelpChatWidget() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [ratings, setRatings] = useState<Record<number, 'up' | 'down'>>({})
+  // Per assistant message index: the state of its confirmation card.
+  const [actions, setActions] = useState<Record<number, { busy?: 'confirm' | 'cancel'; done?: boolean; error?: string }>>({})
   const threadRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
   const location = useLocation()
@@ -226,12 +228,32 @@ export function HelpChatWidget() {
           suggestTicket: result.suggestTicket,
           comingSoon: result.comingSoon,
           article: result.article,
+          pendingAction: result.pendingAction ?? null,
+          upgrade: result.upgrade ?? false,
         },
       ])
     } catch {
       setError("Couldn't reach the help assistant - try again in a moment.")
     } finally {
       setSending(false)
+    }
+  }
+
+  // Confirm/Cancel on a proposed action. Nothing changes until the server
+  // confirms; a failure (expired, already decided, daily limit) closes the
+  // card with the server's reason.
+  const decideAction = async (index: number, token: string, decision: 'confirm' | 'cancel') => {
+    if (actions[index]?.busy || actions[index]?.done) return
+    setActions((current) => ({ ...current, [index]: { busy: decision } }))
+    try {
+      const result = await (decision === 'confirm' ? confirmCopilotAction(token) : cancelCopilotAction(token))
+      setActions((current) => ({ ...current, [index]: { done: true } }))
+      setMessages((current) => [...current, { role: 'assistant', content: result.message, suggestTicket: false, comingSoon: false }])
+    } catch (err) {
+      setActions((current) => ({
+        ...current,
+        [index]: { done: true, error: err instanceof Error ? err.message : 'That action could not be completed.' },
+      }))
     }
   }
 
@@ -248,6 +270,7 @@ export function HelpChatWidget() {
   const closeChat = () => {
     setOpen(false)
     setMessages([])
+    setActions({})
     setInput('')
     setError('')
     setShowFaqs(false)
@@ -303,6 +326,7 @@ export function HelpChatWidget() {
                 <Tooltip content="Back to FAQs"><button
                   onClick={() => {
                     setMessages([])
+                    setActions({})
                     setError('')
                   }}
                   className="flex h-7 w-7 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-high hover:text-text"
@@ -381,6 +405,48 @@ export function HelpChatWidget() {
                         {m.article && (
                           <button type="button" onClick={() => navigate(`/dashboard/support?article=${m.article!.slug}`)} className="mt-1.5 flex items-center gap-1 rounded-md border border-primary/30 px-2 py-1 text-[10px] font-semibold text-primary hover:bg-primary/5">
                             <Icon name="article" className="text-[12px]" /> Read: {m.article.title}
+                          </button>
+                        )}
+                        {m.pendingAction && (() => {
+                          const action = m.pendingAction
+                          const state = actions[i] || {}
+                          return (
+                            <div className="mt-1.5 rounded-lg border border-primary/30 bg-primary/5 p-2.5">
+                              <p className="flex items-start gap-1.5 text-[11px] font-semibold text-text">
+                                <Icon name="bolt" className="mt-px shrink-0 text-[13px] text-primary" /> {action.label}
+                              </p>
+                              {state.error ? (
+                                <p className="mt-1.5 text-[11px] text-destructive">{state.error}</p>
+                              ) : state.done ? null : (
+                                <div className="mt-2 flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={!!state.busy}
+                                    onClick={() => decideAction(i, action.token, 'confirm')}
+                                    className="rounded-md bg-primary px-3 py-1 text-[11px] font-semibold text-bg hover:opacity-90 disabled:opacity-50"
+                                  >
+                                    {state.busy === 'confirm' ? 'Working…' : 'Confirm'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={!!state.busy}
+                                    onClick={() => decideAction(i, action.token, 'cancel')}
+                                    className="rounded-md border border-border bg-surface px-3 py-1 text-[11px] font-semibold text-text-muted hover:text-text disabled:opacity-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+                        {m.upgrade && (
+                          <button
+                            type="button"
+                            onClick={() => navigate('/dashboard/settings?tab=billing')}
+                            className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/5 px-2 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/10"
+                          >
+                            <Icon name="workspace_premium" className="text-[12px]" /> Available on Growth
                           </button>
                         )}
                         {m.comingSoon && (

@@ -18,7 +18,7 @@ import {
 import { AdminCard, EmptyState, ErrorState, fmtDate, fmtDateTime, fmtDuration, Pill, PlanPill, StatusPill, timeAgo } from '../../components/AdminUI'
 import { Icon } from '../../components/Icon'
 
-type Tab = 'health' | 'users' | 'agents' | 'calls' | 'knowledge' | 'numbers' | 'integrations' | 'billing' | 'notes'
+type Tab = 'health' | 'users' | 'agents' | 'calls' | 'knowledge' | 'numbers' | 'integrations' | 'billing' | 'copilot' | 'notes'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'health', label: 'Health' },
   { id: 'users', label: 'Users' },
@@ -28,6 +28,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'numbers', label: 'Numbers' },
   { id: 'integrations', label: 'Integrations' },
   { id: 'billing', label: 'Billing' },
+  { id: 'copilot', label: 'Copilot' },
   { id: 'notes', label: 'Notes & Audit' },
 ]
 
@@ -165,6 +166,7 @@ export function AdminAccountDetail() {
         {tab === 'numbers' && <NumbersTab d={d} />}
         {tab === 'integrations' && <IntegrationsTab d={d} />}
         {tab === 'billing' && <BillingTab d={d} />}
+        {tab === 'copilot' && <CopilotTab d={d} />}
         {tab === 'notes' && <NotesTab d={d} onSaved={load} />}
       </div>
 
@@ -435,6 +437,30 @@ function NumbersTab({ d }: { d: Detail }) {
           <td className="px-4 py-3 text-text-muted">{n.label || '-'}</td>
           <td className="px-4 py-3">
             <Pill tone={n.status === 'active' ? 'active' : 'neutral'}>{n.status}</Pill>
+          </td>
+        </tr>
+      ))}
+    </TabTable>
+  )
+}
+
+const COPILOT_TONE = { confirmed: 'active', failed: 'suspended', proposed: 'primary', cancelled: 'neutral', expired: 'neutral' } as const
+
+/** What the help copilot proposed or changed in this workspace (last 10). */
+function CopilotTab({ d }: { d: Detail }) {
+  const rows = d.copilotActions ?? []
+  return (
+    <TabTable head={['Action', 'By', 'When', 'Status']} empty={rows.length === 0}>
+      {rows.map((a) => (
+        <tr key={a.id} className="border-b border-border/60 last:border-0">
+          <td className="px-4 py-3">
+            <div className="font-semibold">{a.label}</div>
+            {a.result && <div className="text-xs text-text-muted">{a.result}</div>}
+          </td>
+          <td className="px-4 py-3 text-text-muted">{a.userName || '-'}</td>
+          <td className="px-4 py-3 text-text-muted">{fmtDateTime(a.createdAt)}</td>
+          <td className="px-4 py-3">
+            <Pill tone={COPILOT_TONE[a.status] ?? 'neutral'}>{a.status}</Pill>
           </td>
         </tr>
       ))}
