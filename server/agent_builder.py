@@ -163,11 +163,29 @@ def _duration(value) -> int:
     return max(120, value)
 
 
+# Hindi first person: "हूँ"/"हूं" only follows "मैं", and the word before it
+# carries the speaker's gender ("बोल रहा हूँ" / "बोल रही हूँ", "सकता"/"सकती").
+_FIRST_PERSON_MASC = re.compile(r"(\S+)ा (हूँ|हूं)")
+_FIRST_PERSON_FEM = re.compile(r"(\S+)ी (हूँ|हूं)")
+
+
+def _match_gender(text: str, gender: str) -> str:
+    """The agent speaks with its voice's gender in the welcome lines; models
+    sometimes miss the prompt rule, so it is enforced here."""
+    if gender == "female":
+        return _FIRST_PERSON_MASC.sub(r"\1ी \2", text)
+    if gender == "male":
+        return _FIRST_PERSON_FEM.sub(r"\1ा \2", text)
+    return text
+
+
 def validate_draft(raw, options: dict, *, business_name: str = "", description: str = "") -> dict:
     """Whitelist and repair a model draft. Unknown keys are dropped; every
     known key comes back with a valid value."""
     raw = raw if isinstance(raw, dict) else {}
     voices = {v["value"] for v in options["voices"]}
+    voice = _pick(raw.get("voice"), voices, DEFAULT_VOICE)
+    gender = next((v.get("gender") for v in options["voices"] if v["value"] == voice), "")
     biz = _text(raw.get("businessName"), 120, business_name[:120])
     prompt = _text(raw.get("systemPrompt"), 12000)
     if not prompt:
@@ -183,11 +201,11 @@ def validate_draft(raw, options: dict, *, business_name: str = "", description: 
         "description": _text(raw.get("description"), 200),
         "model": _pick(raw.get("model"), ALLOWED_MODELS, DEFAULT_MODEL),
         "language": _pick(raw.get("language"), options["languages"], DEFAULT_LANGUAGE),
-        "voice": _pick(raw.get("voice"), voices, DEFAULT_VOICE),
+        "voice": voice,
         "tone": _pick(raw.get("tone"), TONES, "balanced"),
         "firstSpeaker": _pick(raw.get("firstSpeaker"), ("agent", "user"), "agent"),
-        "welcomeMessage": _text(raw.get("welcomeMessage"), 300),
-        "welcomeMessageOutbound": _text(raw.get("welcomeMessageOutbound"), 300),
+        "welcomeMessage": _match_gender(_text(raw.get("welcomeMessage"), 300), gender),
+        "welcomeMessageOutbound": _match_gender(_text(raw.get("welcomeMessageOutbound"), 300), gender),
         "systemPrompt": prompt,
         "enabledFunctions": _functions(raw.get("enabledFunctions")),
         "maxCallDurationS": _duration(raw.get("maxCallDurationS")),
@@ -428,6 +446,8 @@ def draft(body: dict, account_id: int, user_id: int) -> dict:
 
     drafted = validate_draft(result.get("draft"), options, business_name=business_name, description=description)
     if current is not None:
-        drafted = {**current, **{k: drafted[k] for k in SECTIONS[section]}}
+        # Re-validated whole so a new voice re-genders the kept welcome lines.
+        drafted = validate_draft({**current, **{k: drafted[k] for k in SECTIONS[section]}}, options,
+                                 business_name=business_name, description=description)
     calls_db.record_agent_draft(account_id, user_id)
     return {"draft": drafted}

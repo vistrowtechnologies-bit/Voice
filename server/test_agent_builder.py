@@ -167,6 +167,28 @@ class BuilderUnitTests(unittest.TestCase):
         self.assertEqual(out["name"], current["name"])
         self.assertEqual(out["systemPrompt"], current["systemPrompt"])
 
+    def test_welcome_lines_match_the_voice_gender(self):
+        options = agent_builder._account_options(7)
+        male = agent_builder.validate_draft({**GOOD_DRAFT, "voice": "shubh",
+                                             "welcomeMessage": "नमस्ते, मैं रिया बोल रही हूँ, बताइए क्या कर सकती हूं?",
+                                             "welcomeMessageOutbound": "मैं आपको कॉल कर रही हूँ।"}, options)
+        self.assertEqual(male["welcomeMessage"], "नमस्ते, मैं रिया बोल रहा हूँ, बताइए क्या कर सकता हूं?")
+        self.assertEqual(male["welcomeMessageOutbound"], "मैं आपको कॉल कर रहा हूँ।")
+        female = agent_builder.validate_draft({**GOOD_DRAFT, "voice": "pooja",
+                                               "welcomeMessage": "नमस्ते, मैं पूजा बोल रहा हूँ।"}, options)
+        self.assertEqual(female["welcomeMessage"], "नमस्ते, मैं पूजा बोल रही हूँ।")
+        # Lines about the caller ("आप ... रहे हैं") and gender-free ones are left alone.
+        about_caller = "नमस्ते, आप Smile Dental से बात कर रहे हैं। मैं आपकी मदद के लिए यहाँ हूँ।"
+        kept = agent_builder.validate_draft({**GOOD_DRAFT, "voice": "pooja", "welcomeMessage": about_caller}, options)
+        self.assertEqual(kept["welcomeMessage"], about_caller)
+
+    def test_regenerated_voice_regenders_the_kept_welcome(self):
+        current = agent_builder.validate_draft({**GOOD_DRAFT, "voice": "pooja"}, agent_builder._account_options(7))
+        self.assertIn("बोल रही हूँ", current["welcomeMessage"])
+        new = {**GOOD_DRAFT, "voice": "shubh"}
+        out = self.run_draft(FakeNet(openai=[openai_body({"draft": new})]), section="voice", current=current)["draft"]
+        self.assertIn("बोल रहा हूँ", out["welcomeMessage"])
+
     def test_openai_429_falls_back_to_gemini(self):
         net = FakeNet(openai=[429], gemini=[gemini_body({"draft": GOOD_DRAFT})])
         out = self.run_draft(net, answers={})
