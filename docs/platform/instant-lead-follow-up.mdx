@@ -18,6 +18,10 @@ It works with any source that can send a webhook: a form on your website, your C
 <Steps>
   <Step title="Copy your webhook URL">
     Go to **Integrations** and find the **Instant Lead Follow-up** card. Click the eye icon to show the full URL and the copy icon to copy it. Only admins and the workspace owner can see it.
+
+    <Frame caption="The Instant Lead Follow-up card on the Integrations page. The token stays hidden until you click the eye icon.">
+      <img src="/images/screens/instant-lead-follow-up.webp" alt="Instant Lead Follow-up card showing the webhook URL with the token masked, and eye and copy icons" />
+    </Frame>
   </Step>
   <Step title="Point your lead source at it">
     In your form tool, CRM or automation, add a step that sends a `POST` request with a JSON body to that URL.

@@ -529,3 +529,14 @@ Branch `claude/docs-youtube-features` (local commit, not pushed; owner reviews a
 
 Verified: `mint broken-links` clean; `mint dev` 200 on every changed/new page, /AGENT-MESSAGE-BOX 404; headless Chrome shows the youtube-nocookie iframe for 4xmXVnsolaI on the welcome page.
 Not verified: live docs.vistrowvoice.com (not deployed). Next step: owner review, push, merge.
+
+### Claude — 2026-10-13 — docs site: real dashboard screenshots
+
+Branch `claude/docs-screenshots` (local commit, not pushed; owner reviews and merges). Docs only, no runtime code.
+- 12 WebP screenshots in `docs/images/screens/` (21–199 KB each), captured from the real dashboard on localhost only: the real server against a throwaway local Postgres DB with a fictional clinic workspace on the Scale plan, provider keys stripped, browser limited to localhost and Google Fonts. The DB was dropped and the session cookie deleted afterwards.
+- Added with `<Frame>` captions to platform/calls, usage, voices, integrations, instant-lead-follow-up, settings (new short "Plan & billing" section), compliance, billing, and essentials/authentication.
+- Text fixed to match the UI: calls (Details / Other calls tabs, Analyze becomes Re-analyze), integrations (ArthaLeads asks for an API token), compliance (DNC: Block one number or Bulk import numbers), settings (opens on Workspace details).
+- No WhatsApp/Facebook in frame. API key, Instant Lead token and webhook URL are masked. The Instant Lead URL shows `https://app.vistrowvoice.com/api/...` because the local server's PUBLIC_BASE_URL was set to that display string.
+
+Verified: `mint broken-links` clean; `mint dev` 200 on all 9 pages, every image naturalWidth > 0; /AGENT-MESSAGE-BOX 404.
+Not verified: live docs.vistrowvoice.com (not deployed). Next step: owner review, push, merge.
