@@ -14,7 +14,8 @@ import voice_catalog
 class Google38Billing(unittest.TestCase):
     def test_every_google38_voice_bills_premium(self):
         voices = [v for v in voice_catalog.CATALOG if v["value"].startswith(("google38:", "google38flash:"))]
-        self.assertEqual(len(voices), 60)
+        # 30 personas x 2 models, plus the Flash-Lite library voices.
+        self.assertEqual(len(voices), 60 + len(voice_catalog.GEMINI_LIBRARY_VOICES))
         for v in voices:
             with self.subTest(voice=v["value"]):
                 self.assertEqual(v["tier"], "premium")

@@ -230,6 +230,43 @@ CATALOG += [
     for persona, gender, style in GEMINI_PREBUILT_VOICES
 ]
 
+# --- Gemini 3.8 Flash-Lite library voices (owner-only until quota) -------
+# Google's /v1beta/voices library (2,089 voices, 290 Indian, checked
+# 2026-10-13). These are ids, not personas: "en-in-csagent-3" must reach the
+# API exactly as written, so every caller resolves names through
+# gemini_voice_name() below instead of .capitalize(). Preview (owner-only)
+# because Tier 1 allows 10 RPM / 100 RPD per Gemini TTS model — a few calls a
+# day. Lift preview only after the project's limit is raised.
+# (library id, display name, gender, role, accent)
+GEMINI_LIBRARY_VOICES = (
+    ("en-in-csagent-3", "Anjali", "female", "Customer support", "Hinglish"),
+    ("en-in-csagent-1", "Rohit", "male", "Customer support", "Hinglish"),
+    ("en-in-csagent-5", "Sneha", "female", "Sales", "Hinglish"),
+    ("en-in-csagent-4", "Varun", "male", "Sales", "Hinglish"),
+    ("en-in-advisor-6", "Nisha", "female", "Advisor", "Hinglish"),
+    ("en-in-advisor-3", "Karan", "male", "Advisor", "Hinglish"),
+    ("en-in-commercial-2", "Tanya", "female", "Promotions", "Hinglish"),
+    ("en-in-commercial-7", "Dev", "male", "Promotions", "Hinglish"),
+    ("hi-in-csagent-6", "Sunita", "female", "Customer support", "Haryanvi Hindi"),
+    ("hi-in-csagent-7", "Ramesh", "male", "Sales", "Awadhi Hindi"),
+    ("hi-in-csagent-4", "Ayesha", "female", "Customer support", "Urdu"),
+    ("hi-in-csagent-11", "Imran", "male", "Customer support", "Urdu"),
+)
+_GEMINI_LIBRARY_IDS = {vid for vid, *_ in GEMINI_LIBRARY_VOICES}
+CATALOG += [
+    {
+        "value": f"{GEMINI_38_PREFIX}{vid}",
+        "name": f"{name} 3.8 Flash-Lite",
+        "gender": gender,
+        "tier": "premium",
+        "multilingual": True,
+        "preview": True,
+        "note": f"{role} · {accent} · Flash-Lite · test before live calls",
+    }
+    for vid, name, gender, role, accent in GEMINI_LIBRARY_VOICES
+]
+
+
 # Gemini-TTS model behind each Gemini persona prefix. Longest-first is not
 # needed ("google:" does not prefix "google31:"), but keep specific first.
 GEMINI_TTS_MODELS = (
@@ -246,6 +283,26 @@ def gemini_prefix_and_model(value: str) -> tuple[str, str] | None:
         if value.startswith(prefix):
             return prefix, model
     return None
+
+
+def gemini_voice_name(value: str) -> str:
+    """The voice name the Gemini/Cloud TTS API expects for a Gemini voice
+    value: "Kore" for the persona "google38:kore", the id unchanged for a
+    library voice ("google38:en-in-csagent-3")."""
+    found = gemini_prefix_and_model(value)
+    tail = value[len(found[0]):] if found else value
+    return tail if tail in _GEMINI_LIBRARY_IDS else tail.capitalize()
+
+
+def gemini_backup_persona(value: str) -> str:
+    """Persona for the Cloud TTS backup voice. Library voices do not exist on
+    Cloud TTS, so they fall back to a stock persona of the same gender."""
+    found = gemini_prefix_and_model(value)
+    tail = value[len(found[0]):] if found else value
+    if tail in _GEMINI_LIBRARY_IDS:
+        gender = next(g for vid, _n, g, *_ in GEMINI_LIBRARY_VOICES if vid == tail)
+        return "Charon" if gender == "male" else "Kore"
+    return tail.capitalize()
 
 
 _BY_VALUE: dict[str, dict] = {v["value"]: v for v in CATALOG}
