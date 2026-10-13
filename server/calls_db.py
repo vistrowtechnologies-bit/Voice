@@ -8720,7 +8720,10 @@ _ECONOMY_VOICES = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 # _ELEVENLABS_V3_VOICE_PREFIX) ElevenLabs voice forms bill as premium.
 # Gemini 3.8 Flash-Lite personas ("google38:") bill premium too - Google
 # charges per audio token for them, and voice_catalog lists them at 2x.
-_PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:", "google38:", "google38flash:", "sarvam4:")
+# Sarvam bulbul:v4-flash ("sarvam4:") bills standard since 2026-10-13: it
+# costs about Rs0.37 per call minute (Rs1.00/1K chars), in line with the
+# default stack, so the owner priced it at 1x like the bare Sarvam names.
+_PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:", "google38:", "google38flash:")
 _ECONOMY_VOICE_PREFIXES = ("google:",)
 # The two Gemini persona voices (Mira/Arin) share the "google:" prefix with
 # the cheap single-locale Google voices but are a different product: one voice
@@ -8738,7 +8741,7 @@ _PREMIUM_VOICES = set(voice_catalog.EXPRESSIVE_VOICES)
 # without it the prefix rule below silently billed them economy (0.75x) while
 # the picker promised 1x, which is the same display-vs-billing split that had
 # Mira sitting under a 0.5x label while charging 2x.
-_STANDARD_VOICE_PREFIXES = ("google:chirp3:",)
+_STANDARD_VOICE_PREFIXES = ("google:chirp3:", "sarvam4:")
 # The 3.1 preview is billed at twice Gemini 2.5 Flash TTS, so its explicit
 # test prefix intentionally falls through to the standard 1x credit tier.
 

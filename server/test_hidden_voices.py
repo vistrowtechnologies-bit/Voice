@@ -34,11 +34,11 @@ class HiddenVoices(unittest.TestCase):
             # is raised; flip to assertFalse when they open to tenants.
             self.assertTrue(entry.get("preview"), value)
 
-    def test_sarvam_v4_voices_are_premium_and_switch_language(self):
+    def test_sarvam_v4_voices_are_standard_and_switch_language(self):
         v4 = [e for e in vc.CATALOG if e["value"].startswith(vc.SARVAM_V4_PREFIX)]
         self.assertEqual(len(v4), len(vc.SARVAM_V4_VOICES))
         for e in v4:
-            self.assertEqual(e["tier"], "premium", e["value"])
+            self.assertEqual(e["tier"], "standard", e["value"])
             self.assertIn(e["gender"], ("male", "female"), e["value"])
             self.assertFalse(vc.is_hidden(e["value"]), e["value"])
         langs, can_switch = vc.languages_for(vc.get_voice("sarvam4:ritu_hi_customer"))

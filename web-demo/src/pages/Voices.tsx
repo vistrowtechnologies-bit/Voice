@@ -437,8 +437,8 @@ export function Voices() {
       {
         key: 'sarvam4',
         label: 'Sarvam v4',
-        note: '2x credits · Bulbul v4 persona voices by use case · switches language live',
-        voices: stable('premium').filter((v) => v.value.startsWith('sarvam4:')),
+        note: '1x credits · Bulbul v4 persona voices by use case · switches language live',
+        voices: stable('standard').filter((v) => v.value.startsWith('sarvam4:')),
       },
       {
         key: 'hd',
