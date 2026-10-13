@@ -109,19 +109,37 @@ if __name__ == "__main__":
 
 
 class TheDefaultModelBillsCorrectly(unittest.TestCase):
-    """Since 2026-10-12 a credit is priced on one minute of the default stack
-    (plan_policy.COST_PER_DEFAULT_MINUTE_INR), so the default model bills 1x.
-    Before that credits were priced on gpt-4o-mini and Sarvam billed 2x.
-    Other Sarvam models are matched by prefix so none can fall through
-    unclassified; Gemini Live is billed for what it costs."""
+    """A model that is not listed falls through to "standard" = 1x credits.
 
-    def test_the_default_model_bills_one_credit_per_minute(self):
-        import calls_db
-        self.assertEqual(calls_db.model_tier(EXPECTED_MODEL), "standard")
+    Vistrow Bharat shipped that way and it was materially wrong. Measured on
+    this product's real 10k-token prompt, a Bharat turn costs ~Rs 0.299 against
+    Vistrow Swift's ~Rs 0.101: Sarvam does not cache the prompt (usage returns
+    prompt_tokens_details=None with all 10,018 tokens billed every turn) while
+    OpenAI caches 9,600 of 9,757 at a quarter rate. Billing it at 1x while
+    Swift bills 2x charged tenants half for the option costing us triple.
+    (2026-10-12/13 it billed 1x; the owner reversed that on 2026-10-13.)
+    Gemini Live is billed for what it costs.
+    """
 
-    def test_a_future_sarvam_model_is_classified_by_prefix(self):
+    def test_the_default_model_is_not_billed_as_standard(self):
         import calls_db
-        self.assertEqual(calls_db.model_tier("sarvam/sarvam-999b-future"), "standard")
+        self.assertNotEqual(
+            calls_db.model_tier(EXPECTED_MODEL), "standard",
+            "the default model falls through to 1x credits — check model_tier",
+        )
+
+    def test_it_bills_the_same_tier_as_vistrow_swift(self):
+        import calls_db
+        self.assertEqual(
+            calls_db.model_tier(EXPECTED_MODEL),
+            calls_db.model_tier("gpt-4.1-mini"),
+        )
+
+    def test_a_future_sarvam_model_cannot_silently_bill_at_1x(self):
+        # Matched by prefix, not by name, so adding a model to the picker
+        # cannot quietly halve what it earns.
+        import calls_db
+        self.assertEqual(calls_db.model_tier("sarvam/sarvam-999b-future"), "premium")
 
     def test_gemini_live_is_not_billed_as_standard(self):
         import calls_db

@@ -97,9 +97,31 @@ CONCURRENT_CALL_LIMITS = {key: value["concurrency"] for key, value in plan_polic
 
 _FREE_TEST_MINUTES = float(os.getenv("FREE_TEST_MINUTES_PER_MONTH", "30"))
 _VOICE_TIER_MULTIPLIERS = {"economy": 0.75, "standard": 1.0, "premium": 2.0}
-_MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0}
+_MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0, "realtime_plus": 6.0}
 _PREMIUM_MODELS = {"gpt-4.1-mini", "gemini-3.5-flash-lite", "gemini-3.6-flash"}
 _PREMIUM_PLUS_MODELS = {"gpt-4.1", "gpt-4o"}
+
+
+def _model_tier(model: str | None) -> str:
+    """Mirror of server/calls_db.model_tier — keep the two in sync by hand.
+
+    The trial cutoff below used exact-name sets only, so Vistrow Bharat
+    (sarvam/*) and Gemini Live counted at 1x here while the dashboard billed
+    them at 2x / 6x: a trial account could talk for about twice its credits
+    before the worker stopped it.
+    """
+    name = (model or "").strip()
+    if not name or name.startswith("groq/"):
+        return "standard"
+    if name.startswith("sarvam/"):
+        return "premium"
+    if name.startswith("gemini-live"):
+        return "premium" if name == "gemini-live" or "2.5" in name else "realtime_plus"
+    if name in _PREMIUM_PLUS_MODELS:
+        return "premium_plus"
+    if name in _PREMIUM_MODELS:
+        return "premium"
+    return "standard"
 
 
 def log_platform_error(message: str, *, source: str = "agent", level: str = "error",
@@ -213,8 +235,7 @@ def _trial_credits_exhausted(conn, account_id: int) -> bool:
         call_type = usage["call_type"] if usage["call_type"] in rates else "browser"
         entry = voice_catalog.get_voice(usage["voice"] or "") or {}
         voice_mult = _VOICE_TIER_MULTIPLIERS.get(entry.get("tier"), 1.0)
-        model = usage["model"] or ""
-        model_tier = "premium_plus" if model in _PREMIUM_PLUS_MODELS else "premium" if model in _PREMIUM_MODELS else "standard"
+        model_tier = _model_tier(usage["model"])
         used += float(usage["m"] or 0) * max(
             0.75,
             rates[call_type] * voice_mult * _MODEL_TIER_MULTIPLIERS[model_tier],
