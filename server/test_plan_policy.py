@@ -265,9 +265,26 @@ class EntitlementsStorageTests(unittest.TestCase):
 
 
 class PlansKeepTheirMargin(unittest.TestCase):
+    # The default stack: Vistrow Bharat + Chirp 3 HD (Myra HD).
+    DEFAULT_MODEL = "sarvam/sarvam-105b-conversations"
+    DEFAULT_VOICE = "google:chirp3:Achernar"
+
+    def _credits_per_default_minute(self):
+        # The real billing formula at the base (1.0) channel rate.
+        import calls_db
+        return calls_db._credits_per_minute(
+            1.0,
+            calls_db._VOICE_TIER_MULTIPLIERS[calls_db.voice_tier(self.DEFAULT_VOICE)],
+            calls_db._MODEL_TIER_MULTIPLIERS[calls_db.model_tier(self.DEFAULT_MODEL)],
+        )
+
+    def test_a_default_minute_bills_two_credits(self):
+        self.assertEqual(self._credits_per_default_minute(), 2.0)
+
     def test_every_plan_earns_at_least_twice_the_default_minute_cost(self):
-        # A credit is one minute of the default stack; prices exclude GST.
+        # Prices exclude GST, so price/credits is the net rate per credit.
+        per_default_minute_credits = self._credits_per_default_minute()
         for key, plan in plan_policy.PLANS.items():
-            per_minute = plan["price_inr"] / plan["credits"]
+            per_minute = plan["price_inr"] / plan["credits"] * per_default_minute_credits
             self.assertGreaterEqual(per_minute, 2 * plan_policy.COST_PER_DEFAULT_MINUTE_INR, key)
 

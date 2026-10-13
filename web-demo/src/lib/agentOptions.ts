@@ -197,7 +197,8 @@ export const MODEL_OPTIONS = [
 // 2026-10-12: Vistrow Swift (gpt-4.1-mini) left the tenant picker. Real test
 // calls on the production worker, same question, Chirp 3 voice: Sarvam's turn
 // was 0.6-0.9 s against Swift's 1.65-2.8 s in both Hindi and English, Swift
-// said "10 pm" for 10 am in Hindi, and it bills 2 credits a minute against 1.
+// said "10 pm" for 10 am in Hindi, and (on the 12 Oct pricing) it billed 2 credits a
+// minute against 1. Since 13 Oct both bill 2 credits a minute again.
 // It is in RETIRED_MODELS so existing agents keep their label and keep working.
 // 2026-10-08: only the models that pass the speed and accuracy bar are offered.
 // Measured on production calls (docs/INTERNATIONAL-EXPANSION-PLAN-2026-10-07.md

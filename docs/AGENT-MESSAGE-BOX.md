@@ -551,3 +551,15 @@ Branch `claude/recording-links-retention` (PR open, NOT merged). Privacy audit g
 
 Verified: new `server/test_recording_links_retention.py` (17 tests, 9 Postgres-backed) + related suites against a throwaway local Postgres (Postgres.app, TCP 54329); full server suite 643 passed, 1 failure unrelated to this diff (`test_topup_flow` pack 500 expects 5900 while the quote is 5056.3; fails the same on a fresh DB; touches no changed code). ASGI end-to-end on the local DB: fresh link 307, 120-day new-style 404, grandfathered 500-day 307, after revoke 404, 121st request/min 429. web-demo build + test:seo pass.
 Not verified: dashboard UI in a browser; B2 bucket version lifecycle (a hidden-not-deleted object is possible). Deploy needed after merge: Railway (server) + Vercel (web). No LiveKit deploy.
+
+### Claude — 2026-10-13 — 12 Oct pricing reverted (300 / 1,000 / 2,500; Bharat 2 credits a minute)
+
+Branch `claude/revert-oct12-pricing` (PR open, NOT merged). Owner decision 2026-10-13: reverse the credit and minute changes from ea922f86 and 6b68c160.
+- Plans: Starter 300, Growth 1,000, Scale 2,500 credits (were 350 / 850 / 2,000). Prices unchanged. Top-up rate is price/credits again: Starter ₹10.00, Growth ₹6.00, Scale ₹5.20 per credit.
+- `calls_db.model_tier`: `sarvam/*` is `premium` (2×) again, with the original comment. gpt-4.1-mini was never changed (still premium). Kept: Gemini Live tiers (3.1/3.8 `realtime_plus` 6×, 2.5 2×), Chirp 3 HD default voice, Swift retired from the picker.
+- `agent/plan_policy.py`: credits restored. `COST_PER_DEFAULT_MINUTE_INR` stays at 3.24; the margin test now multiplies by the real credits per default minute (2.0, from `calls_db._credits_per_minute`).
+- Copy: plans.ts, Pricing FAQ (2 credits wording, Bharat only), help_articles (+ regenerated helpArticles.ts), help_content, docs/platform billing/usage/voices.
+- Tests: full server suite 648 passed vs local Postgres (pgserver, nothing skipped). Agent suite in a livekit-agents 1.8.3 venv: 714 passed, 15 skipped. web-demo build + test:seo pass; the built /pricing shows 300/1,000/2,500 and "uses 2 credits".
+- Production, read-only: 0 credits_total at 350/850/2,000/750/1,750; 0 subscriptions started; 0 trials since 19:00 IST 12 Oct (trial grant is 10, not plan-based); 0 invoices since then. 46 Sarvam calls (21.6 min) since then, all on internal accounts 1 and 2. Usage is computed when it is read, so after deploy those minutes count 2× again.
+- Open: `docs/images/screens/billing.webp` (used in billing.mdx and settings.mdx) still shows 350/850/2,000 cards and needs a new screenshot. PR #82 is obsolete. `agent/db._trial_credits_exhausted` has its own model-tier map with no `sarvam/` rule, so it counts Bharat at 1×. That was already true before 12 Oct and is not changed here.
+- Deploy after merge: Railway + Vercel + `lk agent deploy` for both CA_53d8HgBktjZ7 and CA_TGdpVhSdxDyS (agent/plan_policy.py changed). Run `graphify update .` on main after merge.

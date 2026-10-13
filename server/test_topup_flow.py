@@ -21,14 +21,14 @@ class TopupQuoteTests(unittest.TestCase):
     def test_pack_prices_the_base_and_grants_the_bonus(self):
         import calls_db
         q = calls_db.topup_quote("starter", pack_key="500")
-        self.assertEqual((q["credits"], q["bonusCredits"], q["perCreditInr"]), (500, 50, 8.57))  # 2,999 / 350
-        self.assertEqual((q["baseInr"], q["gstInr"], q["totalInr"]), (4285.0, 771.3, 5056.3))
+        self.assertEqual((q["credits"], q["bonusCredits"], q["perCreditInr"]), (500, 50, 10.0))
+        self.assertEqual((q["baseInr"], q["gstInr"], q["totalInr"]), (5000.0, 900.0, 5900.0))
         self.assertEqual(calls_db.topup_quote("growth", pack_key="1000")["bonusCredits"], 150)
-        self.assertEqual(calls_db.topup_quote("scale", 50)["baseInr"], 325.0)  # 12,999 / 2,000 = 6.50 per credit
+        self.assertEqual(calls_db.topup_quote("scale", 50)["baseInr"], 260.0)
 
     def test_unknown_plan_uses_the_starter_rate(self):
         import calls_db
-        self.assertEqual(calls_db.topup_quote("trial", 100)["perCreditInr"], 8.57)
+        self.assertEqual(calls_db.topup_quote("trial", 100)["perCreditInr"], 10.0)
 
     def test_outside_the_range_or_unknown_pack_is_rejected(self):
         import calls_db
