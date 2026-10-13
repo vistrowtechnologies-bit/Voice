@@ -33,7 +33,7 @@ export function Privacy() {
     <LegalLayout
       eyebrow="Legal"
       title="Privacy Policy"
-      updated="12 October 2026"
+      updated="13 October 2026"
       path="/privacy"
       description="How Vistrow Voice collects, uses, shares, retains, and protects account, call, and integration data."
       intro={`${BRAND.name} (operated by Vistrow Technologies Pvt. Ltd.; "we", "us", "${BRAND.short}") builds AI voice agents that businesses use to answer and place phone calls. This policy explains what we collect, why, who else handles it, and the choices you have, whether you run a business on ${BRAND.name} or you spoke with an AI agent powered by it.`}
@@ -115,7 +115,10 @@ export function Privacy() {
           Compliance settings. Transcripts are produced for calls so the agent can respond and the
           Customer can review them in the dashboard. Recordings are stored in private object storage and
           played back in the dashboard through short-lived links. Links a Customer shares with a
-          connected tool (such as a CRM or spreadsheet) last longer and work for anyone who holds them.
+          connected tool (such as a CRM or spreadsheet) last longer and work for anyone who holds them,
+          until they expire (90 days after the call by default; the Customer can choose 7, 30 or 90 days
+          or no expiry), the Customer revokes them, or the recording or call is deleted. Links sent
+          before link expiry was introduced in October 2026 do not expire until the Customer revokes them.
         </p>
         <p>
           Customers are responsible for telling callers that a call is with an AI, recorded or
@@ -225,8 +228,8 @@ export function Privacy() {
 
       <LegalSection title="9. How long we keep data">
         <ul>
-          <li><b>Calls (recordings, transcripts, captured details, call intelligence)</b> - kept until deleted. A Customer can set a retention period in days under Compliance settings; calls older than that are deleted automatically each day, together with their recordings. By default no period is set. A Customer can also delete a call's recording at any time.</li>
-          <li><b>Contacts, notes, appointments, caller memory and campaigns</b> - kept until the Customer deletes them or the account is deleted. The retention setting above does not remove these.</li>
+          <li><b>Calls (recordings, transcripts, captured details, call intelligence)</b> - kept until deleted. A Customer can set a retention period in days under Compliance settings; calls older than that are deleted automatically each day, together with their recordings, the integration delivery log entries for them, and any caller memory not refreshed by a call within that period. By default no period is set. A Customer can also delete a call's recording at any time.</li>
+          <li><b>Contacts, notes, appointments and campaigns</b> - kept until the Customer deletes them or the account is deleted. The retention setting above does not remove these.</li>
           <li><b>Account data</b> - kept while the account is active and, after closure, for as long as needed to meet legal, tax and accounting obligations.</li>
           <li><b>Billing records</b> - kept as long as tax and accounting law requires.</li>
           <li><b>Support attachments</b> - deleted 14 days after the ticket is resolved. Ticket text is kept.</li>

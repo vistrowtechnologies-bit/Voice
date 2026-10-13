@@ -47,7 +47,7 @@ const CONTROLS: { icon: string; title: string; body: string }[] = [
   {
     icon: 'link',
     title: 'Recording access control',
-    body: 'Recordings sit in private storage with no public address. Dashboard playback uses one-hour signed URLs issued to signed-in members of the owning workspace. Recording links sent to a connected CRM or spreadsheet are long-lived links that work for anyone who holds them.',
+    body: 'Recordings sit in private storage with no public address. Dashboard playback uses one-hour signed URLs issued to signed-in members of the owning workspace. Recording links sent to a connected CRM or spreadsheet work for anyone who holds them until they expire (90 days by default, configurable), are revoked by a workspace admin, or the recording is deleted. Links sent before link expiry was introduced in October 2026 last until revoked.',
   },
   {
     icon: 'visibility_off',

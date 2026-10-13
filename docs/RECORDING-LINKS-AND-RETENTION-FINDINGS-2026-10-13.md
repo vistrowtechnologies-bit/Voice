@@ -141,3 +141,30 @@ recording off; the link then answers 404 ("This recording isn't available..."). 
    and `integration_deliveries` rows older than the window or tied to purged calls. Contacts,
    appointments, campaign contacts and tickets hold no transcript/recording fields: leave them and
    document it. `error_events` and backups: document only.
+
+## Phase 2: what changed (same branch, after this document was written)
+
+- `calls.recording_link_no_expiry` (new column). Created once by `init_tables`; in that same run every
+  call that already had a share token is set to 1 (grandfathered). Later starts never backfill again.
+- Compliance setting `recording_link_expiry_days`: 0 (never), 7, 30, 90; default 90. Saved through the
+  existing `PATCH /compliance/settings`; read at request time by `calls_db.recording_link_expired`, called
+  from `get_shared_call_recording_key` for every non-grandfathered link. Measured from the call's start.
+  Changing the setting applies to all non-grandfathered links, including ones already sent.
+- `get_shared_call_recording_key` joins `accounts`, so a call row left behind after a manual account
+  deletion no longer plays.
+- `POST /storage/recordings/revoke-links` (admin+, refused in "View as" by the existing
+  `storage/recordings` block, written to `admin_audit_log` and the user's security events) clears every
+  share token of the account. A manual "Push to ArthaLeads" afterwards mints a new token under the
+  expiry setting; new calls get new tokens as before.
+- Public routes: `Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow`,
+  `Referrer-Policy: no-referrer` (outermost middleware), and 120 requests/minute per IP via `_limited`.
+- Retention purge: batches of 500; B2 objects deleted first and a row is kept for the next run when its
+  object could not be deleted; when storage is not configured at all, rows are still deleted (as before).
+  Also deletes the purged calls' `integration_deliveries` rows, delivery rows older than the window, and
+  `caller_memory` rows not refreshed within the window. Contacts, appointments, campaign contacts,
+  tickets, `error_events` and backups are unchanged.
+- Dashboard: Compliance > "Consent, recording & retention" card gets "Recording link expiry" and
+  "Revoke links" (hidden for non-admins and in "View as").
+
+Still open: B2 bucket version lifecycle (UNVERIFIED, see above); `error_events` has no purge; the agent
+still attaches a recording link to leads from accounts with recording off (the link answers 404).
