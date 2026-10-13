@@ -19,9 +19,10 @@ class _Result:
 
 
 class _CreditConnection:
-    def __init__(self, *, subscription_status: str, used_minutes: float):
+    def __init__(self, *, subscription_status: str, used_minutes: float, model: str = "model"):
         self.subscription_status = subscription_status
         self.used_minutes = used_minutes
+        self.model = model
 
     def execute(self, sql, params=()):
         if "FROM subscriptions" in sql:
@@ -31,7 +32,7 @@ class _CreditConnection:
         if "key = ?" in sql and "settings" in sql:
             return _Result({"value": "1"})
         if "SUM(duration_seconds)" in sql:
-            return _Result(many=[{"call_type": "phone", "voice": "voice", "model": "model", "m": self.used_minutes}])
+            return _Result(many=[{"call_type": "phone", "voice": "voice", "model": self.model, "m": self.used_minutes}])
         raise AssertionError(sql)
 
 
@@ -45,6 +46,30 @@ class CreditAdmissionTests(unittest.TestCase):
             self.assertFalse(db._trial_credits_exhausted(_CreditConnection(subscription_status="inactive", used_minutes=9), 7))
             self.assertTrue(db._trial_credits_exhausted(_CreditConnection(subscription_status="inactive", used_minutes=10), 7))
 
+    def test_premium_models_use_the_dashboard_multipliers(self) -> None:
+        # 10 credits: 5 Bharat minutes (2x) and 2 Gemini 3.1 Live minutes (6x)
+        # use them up, exactly as server/calls_db bills them.
+        with patch.object(db.voice_catalog, "get_voice", return_value={"tier": "standard"}):
+            for model, minutes, exhausted in (
+                ("sarvam/sarvam-105b-conversations", 4.9, False),
+                ("sarvam/sarvam-105b-conversations", 5, True),
+                ("gemini-live:gemini-3.1-flash-live-preview", 1.6, False),
+                ("gemini-live:gemini-3.1-flash-live-preview", 2, True),
+                ("gemini-live", 5, True),
+                ("groq/llama-3.3-70b", 9, False),
+            ):
+                conn = _CreditConnection(subscription_status="inactive", used_minutes=minutes, model=model)
+                self.assertEqual(db._trial_credits_exhausted(conn, 7), exhausted, (model, minutes))
+
+    def test_model_tier_matches_server_calls_db(self) -> None:
+        # Same answers as server/calls_db.model_tier for the models we ship.
+        for model, tier in (
+            ("", "standard"), ("gpt-4.1-nano", "standard"), ("groq/llama-3.3-70b", "standard"),
+            ("sarvam/sarvam-105b-conversations", "premium"), ("gpt-4.1-mini", "premium"),
+            ("gemini-live", "premium"), ("gemini-live:gemini-3.8-live", "realtime_plus"),
+            ("gemini-live:gemini-3.1-flash-live-preview", "realtime_plus"), ("gpt-4o", "premium_plus"),
+        ):
+            self.assertEqual(db._model_tier(model), tier, model)
 
 if __name__ == "__main__":
     unittest.main()
