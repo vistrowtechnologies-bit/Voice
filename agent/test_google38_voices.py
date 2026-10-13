@@ -14,7 +14,9 @@ _MAIN_SOURCE = (_ROOT / "main.py").read_text(encoding="utf-8")
 
 class Google38Voices(unittest.TestCase):
     def entries(self):
-        return [v for v in voice_catalog.CATALOG if v["value"].startswith("google38:")]
+        # The 30 stock personas; library voices (ids) are tested separately.
+        library = {f"google38:{vid}" for vid, *_ in voice_catalog.GEMINI_LIBRARY_VOICES}
+        return [v for v in voice_catalog.CATALOG if v["value"].startswith("google38:") and v["value"] not in library]
 
     def flash_entries(self):
         return [v for v in voice_catalog.CATALOG if v["value"].startswith("google38flash:")]

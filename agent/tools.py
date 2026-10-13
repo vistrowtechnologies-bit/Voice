@@ -2803,12 +2803,11 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
             ):
                 raw_voice = getattr(agent, "_voice", "")
                 prefix, gemini_model = voice_catalog.gemini_prefix_and_model(raw_voice)
-                voice_name = raw_voice.removeprefix(prefix)
                 agent.tts.update_options(
                     # Google spells Odia or-IN and Bengali bn-BD; sending our
                     # own od-IN/bn-IN would be an unrecognised locale.
                     language=to_google_code(code),
-                    voice_name=voice_name.capitalize(),
+                    voice_name=voice_catalog.gemini_voice_name(raw_voice),
                     model_name=gemini_model,
                 )
             elif provider == "google-native":

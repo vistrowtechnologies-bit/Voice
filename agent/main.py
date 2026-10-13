@@ -2707,7 +2707,9 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     )
     if gemini38_prefix:
         model = voice_catalog.gemini_prefix_and_model(speaker)[1]
-        voice_name = speaker[len(gemini38_prefix):].capitalize()
+        # Persona ("Kore") or library id ("en-in-csagent-3"), never .capitalize():
+        # a capitalised library id is a different, nonexistent voice.
+        voice_name = voice_catalog.gemini_voice_name(speaker)
         api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         if api_key:
             style = {
@@ -2728,7 +2730,8 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                 return gemini38_tts, _GEMINI_PROVIDERS[model]
             backup = PatchedGeminiTTS(
                 language=to_google_code(reply_language),
-                voice_name=voice_name,
+                # Cloud TTS has no library voices; same-gender persona there.
+                voice_name=voice_catalog.gemini_backup_persona(speaker),
                 credentials_info=_GOOGLE_CREDENTIALS,
                 **_rate,
                 prompt=style,
@@ -5646,11 +5649,10 @@ class RealEstateAgent(Agent):
                 # call — FallbackAdapter has no update_options at all, so
                 # guard the same way tools.py's switch_reply_language does.
                 prefix, gemini_model = voice_catalog.gemini_prefix_and_model(self._voice)
-                voice_name = self._voice[len(prefix):]
                 try:
                     self.tts.update_options(
                         language=to_google_code(candidate),
-                        voice_name=voice_name.capitalize(),
+                        voice_name=voice_catalog.gemini_voice_name(self._voice),
                         model_name=gemini_model,
                     )
                 except AttributeError:

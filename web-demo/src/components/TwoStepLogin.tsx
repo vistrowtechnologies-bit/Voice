@@ -59,6 +59,9 @@ export function TwoStepLoginCard() {
     await load()
   })
 
+  // Required accounts (the platform owner) cannot stay off, but must still be
+  // able to replace a leaked authenticator key: turn off, then go straight
+  // into setup with a fresh key. The admin panel stays locked in between.
   const disable = () => run(async () => {
     const result = await apiMfaDisable(code.trim())
     setUser(result.user)
@@ -66,6 +69,10 @@ export function TwoStepLoginCard() {
     setCode('')
     setCodes(null)
     await load()
+    if (status?.required) {
+      const { secret, otpauthUrl } = await apiMfaSetup()
+      setSetup({ secret, qr: await QRCode.toDataURL(otpauthUrl, { margin: 1, width: 200 }) })
+    }
   })
 
   const regenerate = () => run(async () => {
@@ -191,11 +198,9 @@ export function TwoStepLoginCard() {
               <button type="button" onClick={() => { setMode('regenerate'); setError(null) }} className={quietBtn}>
                 <Icon name="refresh" className="text-[15px]" /> New recovery codes
               </button>
-              {!status.required && (
-                <button type="button" onClick={() => { setMode('disable'); setError(null) }} className={quietBtn}>
-                  Turn off
-                </button>
-              )}
+              <button type="button" onClick={() => { setMode('disable'); setError(null) }} className={quietBtn}>
+                {status.required ? 'Change authenticator' : 'Turn off'}
+              </button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
@@ -214,7 +219,7 @@ export function TwoStepLoginCard() {
                 disabled={busy || code.trim().length < 6}
                 className={primaryBtn}
               >
-                {mode === 'disable' ? 'Turn off two-step login' : 'Make new codes'}
+                {mode === 'disable' ? (status.required ? 'Get a new key' : 'Turn off two-step login') : 'Make new codes'}
               </button>
               <button type="button" onClick={() => { setMode('idle'); setCode('') }} className="bg-transparent px-2 text-xs font-semibold text-text-muted hover:text-text">
                 Cancel

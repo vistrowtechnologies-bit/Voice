@@ -227,7 +227,7 @@ def synthesize(voice_string: str, lang: str, text: str | None = None) -> tuple[b
     gemini38 = voice_catalog.gemini_prefix_and_model(voice_string)
     if gemini38 and gemini38[0] in (_GOOGLE_38_FLASH_PREFIX, _GOOGLE_38_PREFIX):
         prefix, model_name = gemini38
-        return _synth_gemini_api(voice_string[len(prefix):].capitalize(), model_name, text)
+        return _synth_gemini_api(voice_catalog.gemini_voice_name(voice_string), model_name, text)
     if voice_string.startswith(_GOOGLE_31_PREFIX):
         prefix, model_name = voice_catalog.gemini_prefix_and_model(voice_string)
         return _synth_google(voice_string[len(prefix):], lang, text, model_name)
