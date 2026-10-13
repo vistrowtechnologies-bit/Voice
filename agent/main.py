@@ -1,4 +1,6 @@
 import asyncio
+import contextlib
+import fcntl
 import json
 import logging
 import os
@@ -8843,9 +8845,16 @@ def _prewarm(proc: JobProcess) -> None:
 # opener warm-up at the same instant — enough concurrent Gemini TTS requests
 # to hit Google's own rate limit (429 RESOURCE_EXHAUSTED) on most of them.
 # The openers themselves now load from disk (see _load_cached_greetings,
-# no API call, no rate limit possible), but this stagger is kept for the
-# live calls below (warming the gRPC/credential connection) — even a single
-# request per process can still collide if all 4 fire at once.
+# no API call, no rate limit possible), but the live requests below (warming
+# the gRPC/credential connection) can still collide if all 4 fire at once.
+#
+# Until 2026-10-13 that was handled by a random 0-20 s stagger on top of the
+# 10 s init delay, so a process could sit cold for up to 30 s after spawn
+# (logs: "warm-up started" to "client warmed" took 23-26 s on every process
+# that day, of which the warm-up itself was about 2 s). Now the processes
+# take a host-wide file lock instead (_tts_prewarm_serialized): the first
+# one warms as soon as its init window closes, each later one the moment
+# the previous finishes, and Google still sees one warm-up at a time.
 #
 # Was 20s, which is the whole point of this note. The sleep happens BEFORE
 # the warm-up, so it is also a window in which a brand-new process is
@@ -8871,12 +8880,14 @@ def _prewarm(proc: JobProcess) -> None:
 # exactly what a caller reported as "I talked and the call got cut" with
 # nothing in the database afterwards.
 #
-# So the warm-up now waits out the init window entirely before it starts,
-# and the spread goes back to what it was. The cold window this reopens is
-# real but bounded and only affects the first call on a fresh process; a
-# killed worker affects the call in progress.
+# So the warm-up waits out the init window entirely before it starts. The
+# spread that used to follow is gone (see the lock above); the cold window
+# is now the init delay plus however long the processes ahead in the lock
+# queue take, about 2 s each. A killed worker affects the call in progress,
+# which is why the init delay itself stays.
 _TTS_PREWARM_INITIAL_DELAY_S = 10.0
-_TTS_PREWARM_STAGGER_MAX_S = 20.0
+# Shared by every job subprocess of this worker (same container filesystem).
+_TTS_PREWARM_LOCK_PATH = os.environ.get("TTS_PREWARM_LOCK_PATH", "/tmp/vistrow-tts-prewarm.lock")
 
 
 # Warmed in the order they matter. Chirp 3 HD is FIRST because it is what
@@ -8928,15 +8939,36 @@ async def _warm_google_tts_client() -> None:
                     await asyncio.sleep(_TTS_PREWARM_RETRY_S)
 
 
+@contextlib.contextmanager
+def _tts_prewarm_serialized(path: str = _TTS_PREWARM_LOCK_PATH):
+    """Hold the host-wide warm-up lock for the duration of the block.
+
+    Every job subprocess on this worker shares the filesystem, so an
+    advisory flock on one file serializes their Google warm-ups: the next
+    process starts the moment the previous one finishes, instead of each
+    guessing a random delay. A process that dies mid-warm-up drops the lock
+    with its file descriptor, so nobody waits on a corpse.
+    """
+    with open(path, "a+b") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def _run_google_tts_prewarm(pid: int) -> None:
     # Nothing here may touch CPU or the network until the process has
     # finished initializing — see _TTS_PREWARM_INITIAL_DELAY_S. Reading the
     # cached greetings off disk moved below the delay for the same reason.
-    time.sleep(_TTS_PREWARM_INITIAL_DELAY_S + random.uniform(0, _TTS_PREWARM_STAGGER_MAX_S))
+    time.sleep(_TTS_PREWARM_INITIAL_DELAY_S)
     _load_cached_greetings()
     try:
-        asyncio.run(_warm_google_tts_client())
-        logger.info("prewarm: Google TTS client warmed (pid=%s)", pid)
+        waited = time.monotonic()
+        with _tts_prewarm_serialized():
+            waited = time.monotonic() - waited
+            asyncio.run(_warm_google_tts_client())
+        logger.info("prewarm: Google TTS client warmed (pid=%s, lock wait %.1fs)", pid, waited)
     except Exception:
         logger.exception("prewarm: Google TTS warm-up failed — first real call pays the cost instead")
 
