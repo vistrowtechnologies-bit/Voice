@@ -1,0 +1,12 @@
+export const HelpVideo = ({ slug, title }) => (
+  <Frame caption={title}>
+    <video
+      controls
+      playsInline
+      preload="none"
+      poster={`https://www.vistrowvoice.com/media/help/${slug}.jpg`}
+      src={`https://www.vistrowvoice.com/media/help/${slug}.mp4`}
+      className="w-full aspect-video rounded-xl"
+    />
+  </Frame>
+);

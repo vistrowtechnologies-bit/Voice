@@ -1,0 +1,33 @@
+---
+title: "Testing Lab"
+description: "Stress-test an agent with realistic callers before your customers do."
+---
+
+import { HelpVideo } from "/snippets/help-video.mdx";
+
+<HelpVideo slug="testing-lab" title="Test your agent in the Testing Lab · 1:34" />
+
+The **Testing Lab** runs a live conversation with your agent's real configuration in the browser — you play the caller.
+
+<Steps>
+  <Step title="Choose a caller situation">
+    Pick one of the ready-made situations: Impatient customer, Angry customer, Silent caller, Frequent interruptions, Hindi-English switching, Multiple language changes, Noisy background, Unsupported question, Booking conflict, CRM or API failure, Transfer unavailable or Voicemail.
+  </Step>
+  <Step title="Pick the agent under test">
+    Choose the agent under **Agent under test**, then read the **Caller instructions** and the list of what **The agent should** do.
+  </Step>
+  <Step title="Start a live test">
+    Click **Start live test** and play the caller using your microphone.
+  </Step>
+  <Step title="Read the result">
+    **Latest test result** checks opening quality, response length, empathy, one question at a time, repeated responses, tool accuracy, first response latency and estimated cost. Amber items need a look; some checks stay as review items until you read the transcript. Click **Open transcript and diagnostics** to read the conversation turn by turn.
+  </Step>
+</Steps>
+
+## Re-run tests after every change
+
+Use **Custom regression** to save your own scenario — what the tester should say and the behaviours you expect, one per line — and run it again after every prompt change. **Save as regression** saves the selected situation the same way.
+
+<Tip>
+  For a quick check without a scenario, every agent card on the **Agents** page has a **Browser test** button (your microphone) and a **Call test** button (a real phone call).
+</Tip>

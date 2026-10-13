@@ -20,23 +20,31 @@
         "groups": [
           {
             "group": "Welcome",
-            "pages": ["index"]
+            "pages": [
+              "index"
+            ]
           },
           {
             "group": "Getting Started",
-            "pages": ["quickstart", "essentials/authentication"]
+            "pages": [
+              "quickstart",
+              "platform/build-with-ai",
+              "essentials/authentication"
+            ]
           },
           {
             "group": "Platform",
             "pages": [
               "platform/agents",
               "platform/knowledge-base",
+              "platform/testing-lab",
               "platform/website-widget",
               "platform/phone-numbers",
               "platform/compliance",
               "platform/billing",
               "platform/integrations",
-              "platform/calls"
+              "platform/calls",
+              "platform/copilot"
             ]
           }
         ]
@@ -46,7 +54,9 @@
         "groups": [
           {
             "group": "Getting Started",
-            "pages": ["api-reference/introduction"]
+            "pages": [
+              "api-reference/introduction"
+            ]
           },
           {
             "group": "Endpoints",
@@ -59,7 +69,21 @@
           }
         ]
       }
-    ]
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "Demo",
+          "icon": "microphone",
+          "href": "https://www.vistrowvoice.com/#live-demo"
+        },
+        {
+          "anchor": "Website",
+          "icon": "globe",
+          "href": "https://www.vistrowvoice.com"
+        }
+      ]
+    }
   },
   "navbar": {
     "links": [
@@ -76,5 +100,13 @@
   },
   "footer": {
     "socials": {}
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude"
+    ]
   }
 }
