@@ -50,6 +50,7 @@ cancellation already is — never counted as a provider failure.
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import AsyncGenerator
 
 from google.api_core.exceptions import Cancelled, DeadlineExceeded, GoogleAPICallError
@@ -61,6 +62,27 @@ from livekit.plugins.google.tts import TTS as GoogleTTS
 from livekit.plugins.google.tts import SynthesizeStream as GoogleSynthesizeStream
 
 from clause_tokenizer import ClauseTokenizer
+
+# Chirp 3 HD pause control. Cloud TTS honours pause tags only in the `markup`
+# input field (docs: "Pause tags will only work in the markup field, and not in
+# the text field"). Measured 2026-10-13 on hi-IN-Chirp3-HD-Achernar, three runs
+# per case, longest interior silence: plain 0.44 s; "[pause long]" 0.70 s
+# (max 1.06 s) and about +1 s of audio; "[pause short]" and "[pause]" no
+# change; an unknown bracket such as "[Name]" not spoken (same length as
+# plain) — in the `text` field the same tag IS read aloud. So only the long
+# tag is worth emitting, and stray brackets in LLM text are safe here.
+_EXPR_BREAK_RE = re.compile(r'<expr\s+type="break"[^>]*?/?>', re.IGNORECASE)
+_CHIRP_PAUSE = " [pause long] "
+_SPACE_RE = re.compile(r"[ \t]{2,}")
+
+
+def chirp_markup(text: str) -> str:
+    """Text for Chirp 3 HD's markup field: framework break markers become
+    "[pause long]", every other <expr/> or provider-native tag is removed."""
+    from livekit.agents.tts._provider_format import strip_all_markup
+
+    text = _EXPR_BREAK_RE.sub(_CHIRP_PAUSE, text)
+    return _SPACE_RE.sub(" ", strip_all_markup(text))
 
 
 async def _next_token(stream: tokenize.SentenceStream) -> str | None:
@@ -165,7 +187,7 @@ class _PatchedSynthesizeStream(GoogleSynthesizeStream):
                     self._mark_started()
                     sent.append(True)
                     synthesis_input = texttospeech.StreamingSynthesisInput(
-                        markup=token if self._opts.use_markup else None,
+                        markup=chirp_markup(token) if self._opts.use_markup else None,
                         text=None if self._opts.use_markup else token,
                         prompt=self._opts.prompt if len(sent) == 1 else None,
                     )

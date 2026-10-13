@@ -2646,6 +2646,20 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     # would lose real audio quality for a saving that only exists when
     # something downstream is resampling to 8k anyway.
     _rate = {"sample_rate": _TELEPHONY_SAMPLE_RATE} if is_phone else {}
+    # Sarvam's LiveKit production guide (docs.sarvam.ai/api/integration/
+    # livekit-production-best-practices): min_buffer_size 30 (the minimum,
+    # audio starts sooner), linear16 so the plugin skips the mp3 decode, and
+    # the transport's native sample rate (8 kHz on the phone leg, 24 kHz on
+    # WebRTC). This was the latency-lab recipe only; promoted to every Sarvam
+    # voice — primary and the Google-path safety net — on 2026-10-13 (owner
+    # request) after the 1.8.6 plugin confirmed bulbul:v4-flash streams at
+    # both rates with linear16.
+    sarvam_stream_options = {
+        "min_buffer_size": 30,
+        "max_chunk_length": 150,
+        "output_audio_codec": "linear16",
+        "speech_sample_rate": _TELEPHONY_SAMPLE_RATE if is_phone else 24000,
+    }
     if speaker.startswith(_ELEVENLABS_V3_VOICE_PREFIX) and _ELEVENLABS_API_KEY:
         voice_id = speaker[len(_ELEVENLABS_V3_VOICE_PREFIX) :]
         base = _ELEVENLABS_TONE_PRESETS.get(tone_name, _ELEVENLABS_TONE_PRESETS[DEFAULT_TONE])
@@ -2840,12 +2854,21 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             # measured 278ms to first audio against 360-670ms for the Standard
             # voices below. The plugin picks model_name="chirp_3" on its own
             # from the voice name, so nothing needs passing here.
+            # use_markup: text goes to Cloud TTS's `markup` field, the only
+            # place Chirp 3 HD honours pause tags. Measured 2026-10-13 on
+            # hi-IN-Chirp3-HD-Achernar (3 runs each): "[pause long]" adds a
+            # real 0.7-1.1 s silence, "[pause short]"/"[pause]" add nothing,
+            # and an unknown bracket such as "[Name]" is NOT spoken — in the
+            # plain `text` field the same tag is read aloud. The LLM writes
+            # <expr type="break"/>; chirp_markup() in google_tts_streaming_patch
+            # turns it into "[pause long]" and strips every other tag.
             google_tts = PatchedGeminiTTS(
                 language=voice_language,
                 voice_name=voice_name,
                 credentials_info=_GOOGLE_CREDENTIALS,
                 **_rate,
                 speaking_rate=tone.get("pace", 1.0),
+                use_markup=True,
             )
         else:
             google_tts = StreamAdapter(
@@ -2869,6 +2892,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             "female" if safety_speaker == "ritu" else "male",
             target_language_code=reply_language,
             **{**tone, "temperature": min(float(tone.get("temperature", 0.6)), 1.0)},
+            **sarvam_stream_options,
         )
         _prewarm_provider(sarvam_safety_net, "sarvam TTS (Google fallback)")
         _use_clause_tokenizer(sarvam_safety_net, "sarvam TTS (Google fallback)")
@@ -2903,16 +2927,6 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         ))
         else speaker
     )
-    # Sarvam's current LiveKit production recipe uses a smaller 30-character
-    # buffer and linear PCM at the transport's native sample rate. Apply it
-    # only to the lab worker until the measured p50/p95 and interruption rate
-    # justify promoting it to production.
-    sarvam_lab_options = {
-        "min_buffer_size": 30,
-        "max_chunk_length": 150,
-        "output_audio_codec": "linear16",
-        "speech_sample_rate": _TELEPHONY_SAMPLE_RATE if is_phone else 24000,
-    } if sarvam_latency_lab else {}
     # "sarvam4:<id>" is a bulbul:v4-flash persona voice (voice_catalog
     # SARVAM_V4_VOICES): the id goes to the API as-is. The LiveKit plugin does
     # not know v4 yet and skips its speaker check for an unknown model.
@@ -2932,7 +2946,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         _sarvam_gender,
         target_language_code=reply_language,
         **tone,
-        **sarvam_lab_options,
+        **sarvam_stream_options,
     )
     # The primary Sarvam voice — the one a tenant on shubh/priya actually
     # hears, so the ~300ms this saves lands on their first spoken word.
@@ -3755,6 +3769,22 @@ class RealEstateAgent(Agent):
                 "before a sentence when its delivery should change. These controls are rendered "
                 "as voice performance and are not spoken as text. This is the only exception to "
                 "the general no-formatting instruction above.\n"
+            )
+        if not _rt_selected and voice_value.startswith(voice_catalog.CHIRP3_PERSONA_PREFIX):
+            # Chirp 3 HD has exactly one control worth using: a long pause,
+            # honoured only through Cloud TTS's markup field (see the
+            # use_markup note in _build_tts). The break marker is converted
+            # by chirp_markup(); any other tag is stripped before synthesis.
+            instructions += (
+                "\n\n# Pause control\n"
+                "The selected voice supports one internal control: a real pause of about a "
+                "second, written as <expr type=\"break\" label=\"1s\"/> on its own between two "
+                "sentences. Use it only where a listener needs a beat — before reading out a "
+                "number, an address or a price, or after asking a question you want them to "
+                "think about. A period or an ellipsis already gives a short pause, so never put "
+                "the marker next to one, and never use more than one per reply. It is rendered "
+                "as silence and is not spoken as text. This is the only exception to the "
+                "general no-formatting instruction above.\n"
             )
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         if _rt_selected:
