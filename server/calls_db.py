@@ -1269,6 +1269,20 @@ def init_tables() -> None:
                 ("llm_completion_tokens", "INTEGER"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
+            # 1 = a recording link issued before link expiry existed: it keeps
+            # working until the owner revokes all links, so sheets and CRMs that
+            # already hold it do not break silently. Backfilled only in the run
+            # that creates the column; every later link follows the account's
+            # "Recording link expiry" setting.
+            if not conn.execute(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'calls' AND column_name = 'recording_link_no_expiry'"
+            ).fetchone():
+                conn.execute("ALTER TABLE calls ADD COLUMN IF NOT EXISTS recording_link_no_expiry INTEGER DEFAULT 0")
+                conn.execute(
+                    "UPDATE calls SET recording_link_no_expiry = 1 "
+                    "WHERE COALESCE(recording_share_token, '') <> ''"
+                )
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")
             # Agent-builder settings added after go-live — explicit migrations so
             # they land on the existing production agents table (see agents CREATE
@@ -3135,11 +3149,54 @@ def get_shared_call_recording_key(call_id: int, token: str) -> str | None:
         return None
     conn = _connect()
     try:
+        # The join makes a link die with its workspace: account deletion is a
+        # manual process, and a call row left behind must not stay playable.
         row = conn.execute(
-            "SELECT recording_key FROM calls WHERE id = ? AND recording_share_token = ?",
+            "SELECT c.recording_key, c.account_id, c.started_at, c.recording_link_no_expiry "
+            "FROM calls c JOIN accounts a ON a.id = c.account_id "
+            "WHERE c.id = ? AND c.recording_share_token = ?",
             (call_id, token),
         ).fetchone()
-        return row["recording_key"] if row and row["recording_key"] else None
+    finally:
+        conn.close()
+    if not row or not row["recording_key"]:
+        return None
+    if not row["recording_link_no_expiry"] and recording_link_expired(row["account_id"], row["started_at"]):
+        return None
+    return row["recording_key"]
+
+
+def recording_link_expired(account_id: int, started_at: str, now: "datetime.datetime | None" = None) -> bool:
+    """True when the account's "Recording link expiry" (days after the call
+    started; 0 = never) has passed. Read at request time, so changing the
+    setting applies to every link that is not grandfathered."""
+    days = int(get_compliance(account_id).get("recording_link_expiry_days") or 0)
+    if days <= 0:
+        return False
+    try:
+        started = datetime.datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
+    except ValueError:
+        return True  # unreadable start time: refuse rather than play forever
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=datetime.timezone.utc)
+    return (now or datetime.datetime.now(datetime.timezone.utc)) > started + datetime.timedelta(days=days)
+
+
+def revoke_recording_links(account_id: int) -> int:
+    """Stop every recording link this account has handed out (Sheets, CRMs,
+    webhooks). The token is cleared rather than replaced: nothing outside
+    holds a replacement, and a manual re-send creates a fresh one under the
+    current expiry setting. New calls get new links as usual. Returns how
+    many links were revoked."""
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                "UPDATE calls SET recording_share_token = NULL, recording_link_no_expiry = 0 "
+                "WHERE account_id = ? AND COALESCE(recording_share_token, '') <> ''",
+                (account_id,),
+            )
+            return cur.rowcount or 0
     finally:
         conn.close()
 
@@ -10578,7 +10635,13 @@ _COMPLIANCE_DEFAULTS = {
     # 0 = keep transcripts/recordings indefinitely; >0 = purge calls older
     # than N days (surfaced to the operator; enforced by purge_expired_calls).
     "retention_days": 0,
+    # Days a recording link sent to Sheets/CRMs/webhooks keeps playing after
+    # the call started; 0 = never expires. Enforced in
+    # get_shared_call_recording_key. Links issued before this setting existed
+    # are grandfathered (calls.recording_link_no_expiry) until revoked.
+    "recording_link_expiry_days": 90,
 }
+RECORDING_LINK_EXPIRY_CHOICES = (0, 7, 30, 90)
 _COMPLIANCE_KEY = "compliance.config"
 _DAY_ABBR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -10679,6 +10742,11 @@ def _compliance_error(cfg: dict) -> str | None:
             raise ValueError
     except (TypeError, ValueError):
         return "Retention must be 0 or a positive number of days."
+    try:
+        if int(cfg.get("recording_link_expiry_days")) not in RECORDING_LINK_EXPIRY_CHOICES:
+            raise ValueError
+    except (TypeError, ValueError):
+        return "Recording link expiry must be never, 7, 30 or 90 days."
     return None
 
 
@@ -10839,32 +10907,94 @@ def purge_expired_calls(account_id: int) -> int:
     days = int(cfg.get("retention_days") or 0)
     if days <= 0:
         return 0
-    conn = _connect()
-    try:
-        with conn:
+    deleted = 0
+    kept: set[int] = set()  # rows whose audio could not be deleted this run
+    while True:
+        conn = _connect()
+        try:
             # Cast in SQL (::timestamptz tolerates both 'T' and space forms and
             # optional offset) and compare against a Postgres interval, so the
             # purge doesn't depend on exactly how started_at was serialized.
-            cur = conn.execute(
-                "DELETE FROM calls WHERE account_id = ? "
+            rows = conn.execute(
+                "SELECT id, recording_key FROM calls WHERE account_id = ? "
                 "AND started_at::timestamptz < now() - (? || ' days')::interval "
-                "RETURNING id, recording_key",
+                "ORDER BY id LIMIT ?",
+                (account_id, days, _PURGE_BATCH + len(kept)),
+            ).fetchall()
+        finally:
+            conn.close()
+        rows = [r for r in rows if r["id"] not in kept]
+        if not rows:
+            break
+        # Audio first, row second, as delete_call_recordings does: deleting
+        # the row first left the audio in B2 forever with nothing pointing at
+        # it whenever storage failed. A row whose audio is still there is kept
+        # and retried on the next run.
+        keys = [r["recording_key"] for r in rows if _row_get(r, "recording_key")]
+        gone: set[str] = set()
+        if keys:
+            try:
+                gone = _remove_recording_objects(keys)
+            except StorageNotConfigured:
+                logger.warning("retention purge: storage not configured, %d recording(s) cannot be deleted", len(keys))
+                gone = set(keys)  # nothing we can reach; never keep transcripts forever over it
+        done = [r["id"] for r in rows if not _row_get(r, "recording_key") or r["recording_key"] in gone]
+        kept.update(r["id"] for r in rows if r["id"] not in set(done))
+        if done:
+            marks = ",".join("?" for _ in done)
+            conn = _connect()
+            try:
+                with conn:
+                    cur = conn.execute(
+                        f"DELETE FROM calls WHERE account_id = ? AND id IN ({marks})", (account_id, *done)
+                    )
+                    deleted += cur.rowcount or 0
+                    conn.execute(
+                        f"DELETE FROM integration_deliveries WHERE account_id = ? AND call_id IN ({marks})",
+                        (account_id, *done),
+                    )
+            finally:
+                conn.close()
+        if len(rows) < _PURGE_BATCH or not done:
+            break
+    if kept:
+        logger.warning("retention purge: kept %d call(s) for account %s whose audio could not be deleted; retrying next run",
+                       len(kept), account_id)
+    if deleted:
+        storage_usage.forget(account_id)
+    _purge_call_derived_data(account_id, days)
+    return deleted
+
+
+_PURGE_BATCH = 500
+
+
+def _purge_call_derived_data(account_id: int, days: int) -> None:
+    """What exists only because of calls that have now aged out.
+
+    Caller memory has no call id: it is one rolling summary per (agent,
+    caller phone), rewritten after each phone call. A summary not refreshed
+    within the window was built only from purged calls, so it goes. Delivery
+    log rows older than the window go too (they name the caller); rows tied
+    to a purged call were removed with it. Contacts, appointments and
+    campaign contacts are the business's own records and hold no transcript
+    or recording fields, so they stay (see
+    docs/RECORDING-LINKS-AND-RETENTION-FINDINGS-2026-10-13.md)."""
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                "DELETE FROM caller_memory WHERE account_id = ? "
+                "AND updated_at::timestamp < (now() AT TIME ZONE 'utc') - (? || ' days')::interval",
                 (account_id, days),
             )
-            rows = cur.fetchall()
+            conn.execute(
+                "DELETE FROM integration_deliveries WHERE account_id = ? "
+                "AND created_at::timestamp < (now() AT TIME ZONE 'utc') - (? || ' days')::interval",
+                (account_id, days),
+            )
     finally:
         conn.close()
-
-    # Delete the audio too, not just the row. Purging the row alone left the
-    # recording sitting in B2 forever AND unreachable through the app (the
-    # only pointer to it was the row we just deleted) — the opposite of the
-    # data-minimisation this function exists for. Best-effort and outside the
-    # DB transaction: a storage failure must not roll back or block the purge,
-    # it just leaves an object to be swept later.
-    keys = [r["recording_key"] for r in rows if _row_get(r, "recording_key")]
-    if keys:
-        _delete_recording_objects(keys)
-    return len(rows)
 
 
 class StorageNotConfigured(RuntimeError):
@@ -10874,7 +11004,7 @@ class StorageNotConfigured(RuntimeError):
 def _remove_recording_objects(keys: list[str]) -> set[str]:
     """Delete these objects from B2 and return the keys that are now gone.
 
-    Unlike _delete_recording_objects (retention's best-effort sweep) the caller needs to
+    The caller (recording delete, retention purge) needs to
     know which deletions worked, because only those calls may lose their pointer to the
     audio. Deleting an object that is already absent counts as gone."""
     client, bucket = b2_client()
@@ -10950,32 +11080,6 @@ def delete_call_recordings(account_id: int, *, call_id: "int | None" = None, old
     after = storage_usage.account_storage_bytes(account_id, fresh=True)
     freed = max(0, before - after) if before is not None and after is not None else None
     return {"deleted": len(done_ids), "failed": len(rows) - len(done_ids), "freedBytes": freed}
-
-
-def _delete_recording_objects(keys: list[str]) -> None:
-    """Remove recording objects from B2. Never raises — see purge_expired_calls."""
-    endpoint = os.environ.get("B2_ENDPOINT_URL")
-    key_id = os.environ.get("B2_KEY_ID")
-    app_key = os.environ.get("B2_APPLICATION_KEY")
-    bucket = os.environ.get("B2_BUCKET_NAME")
-    region = os.environ.get("B2_REGION")
-    if not (endpoint and key_id and app_key and bucket and region):
-        logger.warning("retention purge: B2 not configured, %d recording(s) left in storage", len(keys))
-        return
-    try:
-        import boto3
-
-        client = boto3.client(
-            "s3", endpoint_url=endpoint, aws_access_key_id=key_id,
-            aws_secret_access_key=app_key, region_name=region,
-        )
-        for key in keys:
-            try:
-                client.delete_object(Bucket=bucket, Key=key)
-            except Exception:
-                logger.exception("retention purge: could not delete recording %s", key)
-    except Exception:
-        logger.exception("retention purge: could not reach B2 to delete %d recording(s)", len(keys))
 
 
 

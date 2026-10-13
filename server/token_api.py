@@ -473,7 +473,16 @@ async def _security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers.update(_public_recording_headers(request.url.path))
     return response
+
+
+def _public_recording_headers(path: str) -> dict:
+    """The recording links in Sheets/CRMs carry their bearer token in the URL:
+    never cache it, never index it, never leak it in a Referer."""
+    if not path.startswith("/public/calls/"):
+        return {}
+    return {"Cache-Control": "private, no-store", "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "no-referrer"}
 
 
 def _client_ip(request: Request) -> str:
@@ -3418,15 +3427,43 @@ def get_call_recording_url(call_id: int, user: dict = Depends(current_user)) -> 
     return {"url": url}
 
 
+@app.post("/storage/recordings/revoke-links")
+def revoke_recording_links(user: dict = Depends(require_role("admin"))) -> dict:
+    """Stop every recording link already sent to Sheets, CRMs and webhooks.
+    Admin+; refused in a super-admin "View as" session (the storage/recordings
+    prefix in _SUPPORT_BLOCKED_PATHS)."""
+    revoked = calls_db.revoke_recording_links(user["account_id"])
+    admin_db.write_audit(user["user_id"], "", "revoke_recording_links", user["account_id"], user["user_id"],
+                         detail=f"revoked {revoked} recording link(s)")
+    calls_db.record_security_event(user["user_id"], "recording_links_revoked")
+    logger.info("storage: account %s user %s revoked %s recording link(s)", user["account_id"], user["user_id"], revoked)
+    return {"revoked": revoked}
+
+
+_RECORDING_LINK_MAX_PER_MINUTE = 120
+
+
+def _refuse_if_recording_link_flood(request: Request) -> None:
+    """Per-IP cap on the public recording routes. The 256-bit token makes
+    guessing hopeless; this only stops a script hammering storage. A sales
+    team on one office IP opening links by hand stays far below it."""
+    if _limited("recording-link", _client_ip(request), _RECORDING_LINK_MAX_PER_MINUTE, 60):
+        raise HTTPException(429, "Too many requests. Please wait a minute and try again.")
+
+
 @app.get("/public/calls/{call_id}/recording", include_in_schema=False)
-def get_shared_call_recording(call_id: int, token: str = "") -> RedirectResponse:
-    """Permanent CRM-facing URL that redirects to a fresh short-lived B2 URL.
+def get_shared_call_recording(call_id: int, request: Request, token: str = "") -> RedirectResponse:
+    """CRM-facing URL that redirects to a fresh short-lived B2 URL.
 
     The URL itself contains a high-entropy per-call bearer. ArthaLeads can
     safely store it, while the underlying private object key and B2
     credentials never leave Vistrow. Each playback gets a fresh one-hour
-    storage signature instead of persisting an already-expired B2 URL.
+    storage signature instead of persisting an already-expired B2 URL. The
+    link stops working when the recording, call or workspace is deleted,
+    when the account's link expiry passes, or after "Revoke all recording
+    links" (calls_db.get_shared_call_recording_key).
     """
+    _refuse_if_recording_link_flood(request)
     key = calls_db.get_shared_call_recording_key(call_id, token)
     if not key:
         raise HTTPException(404, "Recording not found")
@@ -3440,18 +3477,20 @@ def get_shared_call_recording(call_id: int, token: str = "") -> RedirectResponse
 
 
 @app.get("/public/calls/{call_id}/play", include_in_schema=False, response_class=HTMLResponse)
-def play_shared_call_recording(call_id: int, token: str = "") -> HTMLResponse:
+def play_shared_call_recording(call_id: int, request: Request, token: str = "") -> HTMLResponse:
     """Browser player for the CRM recording link - the Google Sheets
     "▶ Play recording" cell opens this. The raw /recording link redirects to
     a WAV that many browsers download instead of playing. Same bearer check
     as /recording; the page reveals nothing beyond what that link does."""
+    _refuse_if_recording_link_flood(request)
     available = bool(calls_db.get_shared_call_recording_key(call_id, token))
     src = f"/public/calls/{call_id}/recording?token={urllib.parse.quote(token, safe='')}"
     body = (
         f'<audio controls autoplay preload="auto" src="{html.escape(src)}"></audio>'
         '<p class="hint" id="err" hidden>The recording could not be played. Please try again in a minute.</p>'
         if available else
-        '<p class="hint">This recording isn’t available. It may still be processing — try again in a minute.</p>'
+        '<p class="hint">This recording isn’t available. It may still be processing — try again in a minute. '
+        'Links also stop working when they expire, are revoked, or the recording is deleted.</p>'
     )
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">

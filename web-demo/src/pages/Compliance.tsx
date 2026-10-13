@@ -10,6 +10,7 @@ import {
   fetchDnc,
   previewRetentionPurge,
   removeDnc,
+  revokeRecordingLinks,
   updateCompliance,
   type ComplianceSettings,
   type DncEntry,
@@ -80,6 +81,28 @@ export function Compliance() {
   const [msg, setMsg] = useState<string | null>(null)
   const [dncError, setDncError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+
+  const [revoking, setRevoking] = useState(false)
+  const [revokeMsg, setRevokeMsg] = useState<string | null>(null)
+  const revokeLinks = async () => {
+    if (
+      !window.confirm(
+        'Every recording link already sent to Google Sheets, CRMs and webhooks will stop playing. ' +
+          'Recordings stay in your dashboard, and new calls get new links. This cannot be undone. Continue?',
+      )
+    )
+      return
+    setRevoking(true)
+    setRevokeMsg(null)
+    try {
+      const { revoked } = await revokeRecordingLinks()
+      setRevokeMsg(`Revoked ${revoked} recording link${revoked === 1 ? '' : 's'}.`)
+    } catch (err) {
+      setRevokeMsg(err instanceof Error ? err.message : 'Could not revoke the links.')
+    } finally {
+      setRevoking(false)
+    }
+  }
 
   const reloadDnc = () => fetchDnc().then(setDnc).catch(() => setDnc([]))
 
@@ -289,8 +312,40 @@ export function Compliance() {
                   onChange={(e) => patch({ retention_days: Math.max(0, Number(e.target.value) || 0) })}
                   className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-50"
                 />
-                <span className="text-xs text-text-muted">0 = keep indefinitely. Otherwise transcripts older than this are purged.</span>
+                <span className="text-xs text-text-muted">0 = keep indefinitely. Otherwise calls older than this are purged with their transcripts, recordings, caller memory and delivery log entries.</span>
               </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-text-muted">Recording link expiry</span>
+                <select
+                  value={cfg.recording_link_expiry_days ?? 90}
+                  disabled={!canManage}
+                  onChange={(e) => patch({ recording_link_expiry_days: Number(e.target.value) })}
+                  className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-50"
+                >
+                  <option value={7}>7 days after the call</option>
+                  <option value={30}>30 days after the call</option>
+                  <option value={90}>90 days after the call</option>
+                  <option value={0}>Never</option>
+                </select>
+                <span className="text-xs text-text-muted">
+                  How long the “Play recording” links sent to Google Sheets, CRMs and webhooks keep working. Links sent
+                  before this setting existed keep working until you revoke them.
+                </span>
+              </label>
+              {canManage && !user?.impersonating && (
+                <Row label="Revoke all recording links" hint="Stops every link already sent out. Recordings stay in your dashboard.">
+                  <button
+                    type="button"
+                    onClick={revokeLinks}
+                    disabled={revoking}
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-surface-high disabled:opacity-50"
+                  >
+                    <Icon name="link_off" className="text-[16px]" />
+                    {revoking ? 'Revoking…' : 'Revoke links'}
+                  </button>
+                </Row>
+              )}
+              {revokeMsg && <p className="text-xs text-text-muted">{revokeMsg}</p>}
             </Card>
 
             <Card title="Do-Not-Call registry" subtitle={`${dnc.length} number${dnc.length === 1 ? '' : 's'} blocked. Every outbound dial is scrubbed against this list first.`}>

@@ -20,7 +20,9 @@ TRAI norms limit unsolicited calls to 9am–9pm, Monday–Saturday. With **Enfor
 | **Honor Do-Not-Call list** | Never dials a number on your DNC registry. |
 | **Require spoken consent** | The agent opens every call with a consent line and logs the caller's reply. |
 | **Record calls** | Stores call audio alongside transcripts. |
-| **Data retention (days)** | Transcripts and recordings older than this are purged automatically. `0` keeps everything indefinitely. |
+| **Data retention (days)** | Calls older than this are purged automatically with their transcripts and recordings, their integration delivery log entries, and caller memory not refreshed within the period. `0` keeps everything indefinitely. Contacts and appointments are not removed. |
+| **Recording link expiry** | How long the "Play recording" links sent to Google Sheets, CRMs and webhooks keep working: 7, 30 or 90 days after the call (default 90), or never. Links sent before this setting existed keep working until you revoke them. |
+| **Revoke links** | Admins only. Stops every recording link already sent out. Recordings stay in your dashboard and new calls get new links. |
 
 <Tip>
   If you're subject to India's DPDP Act or a similar data-minimization requirement, set a real retention window here rather than leaving it at `0` — see your [Privacy Policy](https://vistrowvoice.com/privacy) for how Vistrow Voice itself handles retention and deletion requests.

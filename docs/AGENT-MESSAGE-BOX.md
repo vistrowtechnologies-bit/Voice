@@ -540,3 +540,14 @@ Branch `claude/docs-screenshots` (local commit, not pushed; owner reviews and me
 
 Verified: `mint broken-links` clean; `mint dev` 200 on all 9 pages, every image naturalWidth > 0; /AGENT-MESSAGE-BOX 404.
 Not verified: live docs.vistrowvoice.com (not deployed). Next step: owner review, push, merge.
+
+### Claude — 2026-10-13 — recording link expiry/revoke + retention purge of call-derived data
+
+Branch `claude/recording-links-retention` (PR open, NOT merged). Privacy audit gaps 2-3. Findings first: `docs/RECORDING-LINKS-AND-RETENTION-FINDINGS-2026-10-13.md` (file:line + read-only prod counts: 278 calls with a share token, 237 still playable; 2 of 7 accounts record; 0 have retention set).
+- Server only (`server/calls_db.py`, `server/token_api.py`), no agent/ change. New column `calls.recording_link_no_expiry` (existing tokens grandfathered once, at column creation). Compliance setting `recording_link_expiry_days` (0/7/30/90, default 90) read at request time in `get_shared_call_recording_key`, which also now requires the account row to exist.
+- `POST /storage/recordings/revoke-links` (admin+, audited, blocked in View as). Public `/public/calls/*`: private/no-store, X-Robots-Tag noindex, Referrer-Policy no-referrer, 120 req/min/IP.
+- Retention purge batched (500), deletes B2 audio before the row (row kept for retry if audio delete fails), plus caller_memory not refreshed within the window and integration_deliveries of purged calls/older than the window. Contacts/appointments/tickets untouched (no transcript/recording fields).
+- Dashboard Compliance card: expiry select + Revoke links. Privacy (date 13 Oct) and Security copy, docs/platform/compliance.mdx updated.
+
+Verified: new `server/test_recording_links_retention.py` (17 tests, 9 Postgres-backed) + related suites against a throwaway local Postgres (Postgres.app, TCP 54329); full server suite 643 passed, 1 failure unrelated to this diff (`test_topup_flow` pack 500 expects 5900 while the quote is 5056.3; fails the same on a fresh DB; touches no changed code). ASGI end-to-end on the local DB: fresh link 307, 120-day new-style 404, grandfathered 500-day 307, after revoke 404, 121st request/min 429. web-demo build + test:seo pass.
+Not verified: dashboard UI in a browser; B2 bucket version lifecycle (a hidden-not-deleted object is possible). Deploy needed after merge: Railway (server) + Vercel (web). No LiveKit deploy.

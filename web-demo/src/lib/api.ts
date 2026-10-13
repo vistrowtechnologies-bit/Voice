@@ -118,6 +118,10 @@ export function deleteOldRecordings(olderThanDays: number) {
   return send<{ deleted: number; failed: number; freedBytes: number | null }>('POST', '/storage/recordings/delete', { olderThanDays })
 }
 
+export function revokeRecordingLinks() {
+  return send<{ revoked: number }>('POST', '/storage/recordings/revoke-links')
+}
+
 export function fetchEntitlements() {
   return get<AccountEntitlements>('/entitlements')
 }
@@ -398,6 +402,8 @@ export interface ComplianceSettings {
   require_consent: boolean
   record_calls: boolean
   retention_days: number
+  /** Days a recording link in Sheets/CRMs keeps playing after the call; 0 = never. */
+  recording_link_expiry_days: number
 }
 export interface DncEntry {
   id: number
