@@ -1,4 +1,7 @@
-"""Offline tests for Gemini 3.8 Interactions markup lowering."""
+"""Offline tests for Gemini 3.8 TTS markup lowering and both API paths.
+
+Most tests pin path="interactions" (per-span style annotations); the
+GenerateContentPath tests cover the default streamGenerateContent path."""
 
 import base64
 import json
@@ -68,7 +71,8 @@ class GeminiInteractionsMarkupTests(unittest.TestCase):
 
         async def run():
             tts = GeminiInteractionsTTS(
-                model="gemini-3.8-flash-tts", voice="Kore", api_key="unit-test-key"
+                model="gemini-3.8-flash-tts", voice="Kore", api_key="unit-test-key",
+                path="interactions",
             )
             tts._session = Session()
             stream = tts.stream(conn_options=DEFAULT_API_CONNECT_OPTIONS)
@@ -132,7 +136,8 @@ class FirstClauseIsSentEarly(unittest.TestCase):
         import asyncio
 
         async def run():
-            tts = GeminiInteractionsTTS(model="gemini-3.8-flash-lite-tts", voice="Kore", api_key="k")
+            tts = GeminiInteractionsTTS(model="gemini-3.8-flash-lite-tts", voice="Kore", api_key="k",
+                                        path="interactions")
             session = _FakeSession(gate)
             session.pushed = 0
             tts._session = session
@@ -208,7 +213,7 @@ class ExpressiveMarkupReachesGemini(unittest.TestCase):
 
         async def run():
             tts = GeminiInteractionsTTS(model="gemini-3.8-flash-lite-tts", voice="Kore", api_key="k",
-                                        style=style)
+                                        style=style, path="interactions")
             session = _FakeSession()
             session.pushed = 0
             tts._session = session
@@ -263,3 +268,79 @@ class ExpressiveMarkupReachesGemini(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GenerateContentPath(unittest.TestCase):
+    """Default path: streamGenerateContent, words + native tags, no style text."""
+
+    def run_stream(self, text, **kwargs):
+        import asyncio
+        pcm = base64.b64encode(b"\0\0" * 2400).decode("ascii")
+        chunk = json.dumps({"candidates": [{"content": {"parts": [
+            {"inlineData": {"mimeType": "audio/L16;codec=pcm;rate=24000", "data": pcm}}]}}]})
+
+        class Content:
+            async def __aiter__(self):
+                yield f"data: {chunk}\n".encode()
+
+        class Response:
+            status = 200
+            content = Content()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return None
+
+        class Session:
+            closed = False
+
+            def __init__(self):
+                self.calls = []
+
+            def post(self, url, **kw):
+                self.calls.append((url, kw["json"]))
+                return Response()
+
+        async def run():
+            tts = GeminiInteractionsTTS(model="gemini-3.8-flash-lite-tts", voice="en-in-csagent-3",
+                                        api_key="k", **kwargs)
+            tts._session = Session()
+            stream = tts.stream(conn_options=DEFAULT_API_CONNECT_OPTIONS)
+            stream.push_text(text)
+            stream.end_input()
+            frames = [a async for a in stream]
+            await stream.aclose()
+            return tts, frames
+
+        return asyncio.run(run())
+
+    def test_default_path_is_generate_content(self):
+        tts, frames = self.run_stream('<expr type="sound" label="laugh"/>Hello', style="warm")
+        url, body = tts._session.calls[0]
+        self.assertIn("gemini-3.8-flash-lite-tts:streamGenerateContent", url)
+        self.assertTrue(frames)
+        self.assertEqual(frames[0].frame.sample_rate, 24_000)
+
+    def test_only_words_and_native_tags_are_sent_never_style_text(self):
+        # A style written into the text was spoken aloud on a real request.
+        tts, _ = self.run_stream('<expr type="expression" label="cheerful"/>Hi <expr type="break" label="300ms"/>there',
+                                 style="warm, perceptive delivery")
+        text = tts._session.calls[0][1]["contents"][0]["parts"][0]["text"]
+        self.assertEqual(text, "Hi <short pause>there")
+        self.assertNotIn("warm", text)
+        self.assertNotIn("cheerful", text)
+
+    def test_library_voice_id_is_sent_unchanged(self):
+        tts, _ = self.run_stream("Hello")
+        cfg = tts._session.calls[0][1]["generationConfig"]["speechConfig"]["voiceConfig"]
+        self.assertEqual(cfg["prebuiltVoiceConfig"]["voiceName"], "en-in-csagent-3")
+
+    def test_env_switch_restores_interactions(self):
+        import os
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"GEMINI38_TTS_PATH": "interactions"}):
+            tts = GeminiInteractionsTTS(model="m", voice="Kore", api_key="k")
+        self.assertEqual(tts._path, "interactions")
+

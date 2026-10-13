@@ -1,8 +1,9 @@
 """LiveKit streaming adapter for Gemini 3.8 Flash and Flash-Lite TTS.
 
-Gemini 3.8 TTS is served by the Gemini Interactions API (not Google Cloud
-Text-to-Speech). Its streaming response is 24 kHz mono signed PCM in SSE audio
-deltas; this adapter forwards those deltas into LiveKit's AudioEmitter.
+Gemini 3.8 TTS is served by the Gemini API (not Google Cloud Text-to-Speech),
+through streamGenerateContent by default or the Interactions API (see
+_DEFAULT_PATH). Both stream 24 kHz mono signed PCM over SSE; this adapter
+forwards it into LiveKit's AudioEmitter.
 """
 
 from __future__ import annotations
@@ -21,6 +22,16 @@ from livekit.agents.tts._provider_format import _GEMINI_TAGS, convert_markup, sp
 
 
 _API_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
+_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse"
+# Which Gemini endpoint speaks. Measured 2026-10-13 from production, same
+# voice and text: streamGenerateContent first audio 0.37-0.52 s, Interactions
+# 0.88-1.16 s (median 1.01 s, 5 runs). The fast path has no per-span style
+# annotations, and a style written in front of the text is NOT safe there:
+# "Say warmly: ..." was spoken aloud on a real request, and a long style
+# lead-in tripled the audio length. So the fast path sends only the words and
+# Gemini's native inline tags (<laugh>, <short pause> - verified rendered,
+# not read out). "interactions" restores per-span delivery styles.
+_DEFAULT_PATH = "generate"
 _STYLE_TAG = re.compile(r'<expression\s+value="([^"]*)"\s*/>')
 _SOUND_TAG = re.compile(r'<sound\s+value="([^"]*)"\s*/>')
 _BREAK_TAG = re.compile(r'<break\s+time="([^"]*)"\s*/>')
@@ -121,10 +132,13 @@ class GeminiInteractionsTTS(TTS):
                 "never force laughter into routine, serious, or factual replies."
             )
 
-    def __init__(self, *, model: str, voice: str, style: str = "", api_key: str | None = None):
+    def __init__(self, *, model: str, voice: str, style: str = "", api_key: str | None = None,
+                 path: str | None = None):
         super().__init__(
             capabilities=TTSCapabilities(streaming=True), sample_rate=24_000, num_channels=1
         )
+        chosen = (path or os.environ.get("GEMINI38_TTS_PATH") or _DEFAULT_PATH).strip().lower()
+        self._path = "interactions" if chosen == "interactions" else "generate"
         self._model_name = model
         self._voice_name = voice
         self._style = style[:240]
@@ -230,6 +244,49 @@ class _GeminiStream(SynthesizeStream):
                 first.cancel()
 
     async def _synthesize_call(
+        self, spans: list[tuple[str, str | None]], carry: str | None, output_emitter: AudioEmitter
+    ) -> None:
+        if self._gemini_tts._path == "generate":
+            await self._generate_call(spans, output_emitter)
+        else:
+            await self._interactions_call(spans, carry, output_emitter)
+
+    async def _generate_call(
+        self, spans: list[tuple[str, str | None]], output_emitter: AudioEmitter
+    ) -> None:
+        """One streamGenerateContent request: words and native inline tags
+        only (see _DEFAULT_PATH for why no style text is sent)."""
+        text = " ".join(words for words, _label in spans)
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": text}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {
+                    "voiceName": self._gemini_tts._voice_name}}},
+            },
+        }
+        async with self._gemini_tts._session.post(
+            _GENERATE_URL.format(model=self._gemini_tts._model_name),
+            headers={"x-goog-api-key": self._gemini_tts._api_key, "content-type": "application/json"},
+            json=payload,
+        ) as response:
+            if response.status >= 400:
+                detail = (await response.text())[:300]
+                raise RuntimeError(f"Gemini TTS returned HTTP {response.status}: {detail}")
+            async for line in response.content:
+                line = line.decode("utf-8", "replace").strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if not data:
+                    continue
+                for candidate in json.loads(data).get("candidates") or []:
+                    for part in (candidate.get("content") or {}).get("parts") or []:
+                        audio = (part.get("inlineData") or {}).get("data")
+                        if audio:
+                            output_emitter.push(base64.b64decode(audio))
+
+    async def _interactions_call(
         self, spans: list[tuple[str, str | None]], carry: str | None, output_emitter: AudioEmitter
     ) -> None:
         """One Interactions request; pushes its audio into the open segment.
