@@ -13,7 +13,7 @@ https://app.vistrowvoice.com/api
 
 ## Authentication
 
-Every request needs an `X-Api-Key` header. See [Authentication](/essentials/authentication) for how to generate one.
+Every request needs an `X-Api-Key` header. Create keys under **Settings → Developer → API keys** (Scale plan, admins only) — see [Authentication](/essentials/authentication).
 
 ```bash
 curl https://app.vistrowvoice.com/api/agents \
@@ -27,6 +27,8 @@ curl https://app.vistrowvoice.com/api/agents \
 - List endpoints return a plain JSON array — there's no pagination envelope; use each endpoint's own `limit`/filter query parameters to bound results.
 - Fields on a resource are camelCase (e.g. `durationSeconds`, `hasRecording`), even where the underlying data is stored differently.
 - A key only ever sees the account that created it — there is no cross-account access, by key or otherwise.
+- Each key has permissions: **Read**, **Calls**, **Agents** or **Full** (new keys default to Read + Calls). A request the key isn't allowed to make returns `403`.
+- Billing, team, profile, sign-in and API-key endpoints can't be called with any key, including **Full**.
 
 <Card title="Authentication" icon="key" href="/essentials/authentication">
   Generate a key and see request examples in cURL, Node, and Python.

@@ -16,6 +16,13 @@ curl https://app.vistrowvoice.com/api/agents \
 
 `GET /agents` — returns every agent on your account as a JSON array.
 
+Each agent has two IDs:
+
+| Field | What it is |
+|---|---|
+| `id` | The internal numeric ID. Use this in API paths such as `PATCH /agents/{agentId}`. |
+| `publicId` | The 10-digit **Agent ID** shown on the agent's dashboard page. It's the `agent_id` sent with every lead to ArthaLeads and your webhooks — use it to match leads to agents in other tools. |
+
 ## Create an agent
 
 <CodeGroup>
@@ -27,8 +34,8 @@ curl -X POST https://app.vistrowvoice.com/api/agents \
   -d '{
     "name": "Sales Agent",
     "description": "Qualifies inbound leads",
-    "model": "gpt-4.1",
-    "voice": "shubh",
+    "model": "sarvam/sarvam-105b-conversations",
+    "voice": "google:chirp3:Achernar",
     "language": "hi-IN",
     "systemPrompt": "You are a helpful sales assistant for Acme Corp."
   }'
@@ -42,8 +49,8 @@ curl -X POST https://app.vistrowvoice.com/api/agents \
 |---|---|---|---|
 | `name` | string | `"Unnamed agent"` | |
 | `description` | string | `""` | |
-| `model` | string | `"gpt-4.1"` | |
-| `voice` | string | `"shubh"` | Preview/next-generation voices are restricted to the platform's own account. |
+| `model` | string | `"sarvam/sarvam-105b-conversations"` | **Vistrow Bharat**, the model offered in the dashboard. |
+| `voice` | string | `"google:chirp3:Achernar"` | Myra HD. Must be a catalog voice your plan includes; preview voices are rejected. |
 | `language` | string | `"hi-IN"` | Default reply language before any switching. |
 | `systemPrompt` | string | `""` | Leave blank for the built-in generic assistant prompt. |
 
@@ -60,7 +67,7 @@ curl -X PATCH https://app.vistrowvoice.com/api/agents/AGENT_ID \
 
 </CodeGroup>
 
-`PATCH /agents/{agentId}` — send only the fields you want to change. Returns `404` if the agent doesn't exist on your account.
+`PATCH /agents/{agentId}` — `agentId` is the numeric `id`, not the 10-digit `publicId`. Send only the fields you want to change. Returns `404` if the agent doesn't exist on your account.
 
 ## Delete an agent
 
@@ -69,4 +76,4 @@ curl -X DELETE https://app.vistrowvoice.com/api/agents/AGENT_ID \
   -H "X-Api-Key: YOUR_API_KEY"
 ```
 
-`DELETE /agents/{agentId}`
+`DELETE /agents/{agentId}` — again, the numeric `id`.

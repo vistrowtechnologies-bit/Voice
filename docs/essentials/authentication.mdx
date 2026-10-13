@@ -7,12 +7,35 @@ The dashboard itself authenticates with a session cookie, but any request can al
 
 ## Generate a key
 
-1. Sign in to the dashboard and go to **Settings → API keys**.
-2. Click **Create key**, name it something that identifies where it'll be used (e.g. `production-backend`).
-3. Copy the key immediately — it's shown once, in full, and never again.
+<Note>
+  API keys are part of the **Scale** plan, and only workspace **admins** and the **owner** can create or revoke them.
+</Note>
+
+<Steps>
+  <Step title="Open API keys">
+    Sign in to the dashboard and go to **Settings → Developer → API keys**.
+  </Step>
+  <Step title="Name the key and pick its permissions">
+    Give it a name that says where it'll be used (e.g. `production-backend`) and tick the permissions it needs. New keys start with **Read** and **Calls** ticked.
+  </Step>
+  <Step title="Create and copy it">
+    Click **Create key** and copy it straight away — it's shown once and never again.
+  </Step>
+</Steps>
+
+## Permissions
+
+| Permission | What the key can do |
+|---|---|
+| **Read** | View calls, agents, contacts, campaigns and appointments. |
+| **Calls** | Start calls, run campaigns, add contacts and book appointments. |
+| **Agents** | Create and change agents and knowledge bases. |
+| **Full** | Everything above. |
+
+Even a **Full** key can never reach billing, your team, your profile, sign-in, or other API keys. Those stay in the dashboard.
 
 <Warning>
-  Creating an API key requires the **admin** role or higher on your account. Keys act as a full-access grant to your account's data, scoped to your account only — treat one the way you'd treat a password.
+  Treat a key like a password. Use a separate key for each system, give it only the permissions it needs, and click **Revoke** on any key you no longer use or think was exposed.
 </Warning>
 
 ## Authenticate a request
@@ -47,7 +70,7 @@ agents = res.json()
 
 ## Scope
 
-An API key resolves to the account that created it — every request made with it sees exactly what that account's dashboard sees, nothing from any other tenant. There's currently no per-key permission scoping below the account level; if you need a request path locked down further, use a dedicated key per integration and revoke it independently when needed.
+A key belongs to the workspace that created it. Every request made with it sees only that workspace's data, limited to the permissions you gave the key — nothing from any other account.
 
 <Card title="API Reference" icon="code" href="/api-reference/introduction">
   See every endpoint you can call with a key.

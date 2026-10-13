@@ -518,3 +518,14 @@ Branch `claude/llm-token-fixes` (PR linked on issue #2). Each audit finding was 
 
 Verified: agent suite in a livekit-agents 1.8.3 venv: 709 passed, 16 skipped. Server suite (server/.venv): 532 passed, 88 skipped (DB-backed tests skipped without TEST_DATABASE_URL). The new warmer test fails against the old filter.
 Unverified: live calls. Nothing deployed. Needed after merge: Railway (server migration plus warmer), then `lk agent deploy` for BOTH CA_53d8HgBktjZ7 and CA_TGdpVhSdxDyS. Next step: after deploy, check that a new Sarvam call row has `llm_prompt_tokens` filled in.
+
+### Claude — 2026-10-13 — docs site: YouTube videos + last week's features
+
+Branch `claude/docs-youtube-features` (local commit, not pushed; owner reviews and merges). Docs only, no runtime code.
+- `docs/snippets/help-video.mdx`: `HelpVideo` now takes `id` and embeds a lazy, 16:9 youtube-nocookie iframe (8 public uploads on the "Vistrow Voice" channel) instead of the self-hosted MP4.
+- Fixed facts, each rechecked in code: billing (1 credit = 1 min on the default stack on every channel; plans from `agent/plan_policy.py` PLANS; 30 free dashboard test minutes, Testing Lab billed — `server/calls_db.py` FREE_TEST_MINUTES); agents (5 tabs, Vistrow Bharat only, Agent ID chip, wrap-up before max duration — `agent/call_limit.py`; demo-agent section removed); integrations (cards, detail-page tabs, Sheets, Growth gate in `server/token_api.py`); API keys (Settings → Developer, Read/Calls/Agents/Full, Scale + admin); API agent defaults and `publicId`; phone providers (EnableX only); quickstart/index.
+- New pages: platform/voices, usage, settings, instant-lead-follow-up; nav regrouped Build / Deploy / Monitor / Workspace.
+- Left out on purpose: owner-only Gemini voices, top-up/cancel, storage GB, Premium voice tier (no tenant-visible Premium voice exists).
+
+Verified: `mint broken-links` clean; `mint dev` 200 on every changed/new page, /AGENT-MESSAGE-BOX 404; headless Chrome shows the youtube-nocookie iframe for 4xmXVnsolaI on the welcome page.
+Not verified: live docs.vistrowvoice.com (not deployed). Next step: owner review, push, merge.

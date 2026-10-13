@@ -1,24 +1,89 @@
 ---
 title: "Integrations"
-description: "Connect and manage external tools that power your agents."
+description: "Send leads and call results to the tools your team already uses."
 ---
 
-Push qualified leads and call outcomes to the tools your team already uses.
+Push qualified leads and call outcomes to your CRM, your team chat, or a spreadsheet — automatically, after every call.
+
+<Note>
+  Connecting an integration needs the **Growth** or **Scale** plan. See [Billing](/platform/billing).
+</Note>
 
 ## Available integrations
 
+Go to **Integrations** in the sidebar. Each card opens that integration's own page.
+
 <CardGroup cols={2}>
-  <Card title="ArthaLeads CRM">
-    Push every qualified lead — with the full call transcript — straight into ArthaLeads. Paste your API token; no URL setup needed.
+  <Card title="ArthaLeads CRM" icon="address-book">
+    Push every qualified lead — with the full call transcript — straight into ArthaLeads. Paste your connection key; no URL setup needed.
   </Card>
-  <Card title="CRM / Webhook">
+  <Card title="Zoho CRM" icon="building">
+    Click **Connect with Zoho** and every qualified lead goes into your Zoho Leads module — no webhook URL or field mapping to set up.
+  </Card>
+  <Card title="CRM / Webhook" icon="webhook">
     POST every qualified lead as JSON to any endpoint — your own CRM, Zapier, n8n, or Make.
   </Card>
-  <Card title="Slack">
+  <Card title="Slack" icon="slack">
     Get a Slack message the moment a call qualifies a lead. Connect Slack and choose the channel once.
+  </Card>
+  <Card title="Google Sheets" icon="table">
+    Sign in with Google and every reachable caller is added as a row to a leads sheet created in your Drive.
+  </Card>
+  <Card title="Instant Lead Follow-up" icon="bolt" href="/platform/instant-lead-follow-up">
+    The other direction: send a new lead in, and your agent calls it within about 15–30 seconds.
   </Card>
 </CardGroup>
 
+## Each integration's page
+
+Every integration page has the same layout, with four tabs:
+
+| Tab | What's there |
+|---|---|
+| **Overview** | Connection status, last delivery, and delivered / failed / skipped counts for the last 7 days. |
+| **Settings** | What gets sent and which agents send here (see below). |
+| **Activity** | A log of every delivery from calls and tests, with the reason when one fails. History is kept for 30 days. |
+| **Setup help** | Step-by-step setup and fixes for common problems. |
+
+The buttons at the top of the page:
+
+- **Connect** — connect the integration (for example **Connect with Zoho**, or sign in with Google).
+- **Send test** — sends a sample lead so you can check it arrives.
+- **Reconnect** — re-authorise or pick a different destination, for example a new Slack channel.
+- **Disconnect** — stop sending. You're asked to confirm first.
+
+### Choose what gets sent
+
+On the **Settings** tab:
+
+- **What gets sent** — pick the moments that send: **End of call**, **Lead details during the call**, **Appointment booked**, and **Callback requested**.
+- **Fields to send** (**Columns in your sheet** for Google Sheets) — for CRM / Webhook, Slack and Google Sheets, choose which fields go out, such as name, phone, email, details and summary, transcript, and a recording link. Anything you leave out is never sent.
+- **Agents that send here** — turn an agent off to keep its calls out of this integration. Applies from its next call.
+
+You can also choose integrations from the agent's side: open the agent, go to **After the call → CRM routing**.
+
+## Google Sheets
+
+<Steps>
+  <Step title="Connect">
+    Open **Integrations → Google Sheets** and connect with your Google account.
+  </Step>
+  <Step title="Find your sheet">
+    Vistrow Voice creates a spreadsheet called **Vistrow Voice — Leads** in your Google Drive. Each agent gets its own tab, named after the agent, with one row per caller.
+  </Step>
+  <Step title="Test it">
+    Click **Send test** — a row marked "TEST — safe to delete" appears.
+  </Step>
+</Steps>
+
+Callers who left no phone number or email are skipped on purpose; you'll see them as skipped on the **Activity** tab. If the sheet is deleted or Google access is removed, click **Reconnect**.
+
+## ArthaLeads: call new leads automatically
+
+On the ArthaLeads page's **Settings** tab, the **ArthaLeads leads and calls** section lets your agent call new ArthaLeads leads as soon as they arrive. Choose which lead sources to call, add a rule for each website page or project, and pick the **agent** and the **number** to call from. Then click **Save call setup**.
+
+Only sources you turn on, with a matching page or project rule, are called. Do-Not-Call and calling-window rules still apply.
+
 ## How delivery works
 
-Integrations fire from the same webhook mechanism described in [Agents → Webhook](/platform/agents#webhook) — an agent delivers its call outcome to every integration you've connected, in addition to any custom webhook URL you've configured directly on that agent.
+After a call, the agent sends its result to every connected integration (or only the ones chosen in that agent's **CRM routing**), in addition to any webhook URL set directly on the agent under **After the call → Webhook**. Every lead carries the agent's 10-digit **Agent ID** as `agent_id`.
