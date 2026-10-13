@@ -28,6 +28,7 @@ calls_db.voice_tier() — the prefix convention there and here must agree:
   - "google38:<voice>"    → Gemini 3.8 Flash-Lite TTS    → tier "premium"  (2x credits)
   - "google38flash:<voice>" → Gemini 3.8 Flash TTS       → tier "premium"  (2x credits)
   - bare Sarvam bulbul:v2 speaker (abhilash/anushka) → tier "lite"      (0.75x credits)
+  - "sarvam4:<id>"        → Sarvam bulbul:v4-flash  → tier "standard"     (1x credits; ~Rs0.37/min, owner decision 2026-10-13)
   - any other bare name (Sarvam, spoken by bulbul:v4-flash via SARVAM_V3_TO_V4) → tier "standard" (1x credits)
 
 Adding a new voice here makes it appear in the catalog automatically; no
@@ -518,7 +519,7 @@ def _sarvam_v4_entry(vid: str, g: str) -> dict:
         "value": f"{SARVAM_V4_PREFIX}{vid}",
         "name": f"{name.title()} {style_words} ({_SARVAM_V4_LANG.get(lang, lang)})",
         "gender": "male" if g == "m" else "female",
-        "tier": "premium",
+        "tier": "standard",
         "multilingual": True,
         "note": f"Sarvam v4 · {style_words.lower()}{' · expressive' if expressive else ''}",
     }
