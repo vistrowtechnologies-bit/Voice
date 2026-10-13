@@ -2215,16 +2215,10 @@ async def log_lead(
     it was. Calling it eight times across a call with one field each is
     correct and expected.
 
-    `need` is the field that works for every business. The others below
-    (budget, location, property_type, configuration) are property-specific
-    and simply will not fit most callers: a dental patient saying "tooth
-    pain, can I come tomorrow", a caterer's "twenty people next Friday", a
-    software buyer's "twelve technicians in the field". Tested on those exact
-    openers, this tool was called ZERO times, because there was no field to
-    put the answer in — the caller's actual requirement went unrecorded while
-    the agent held out for a budget nobody was going to give it. Put the need
-    in `need`, in the caller's own words, and use the property fields only
-    when they genuinely apply.
+    `need` works for every business; budget, location, property_type and
+    configuration are property-specific. Put the need in `need`, in the
+    caller's own words, and use the property fields only when they genuinely
+    apply — never wait for a budget before recording what they want.
 
     Args:
         name: Caller's name, once they give it.
@@ -2244,6 +2238,12 @@ async def log_lead(
             service with pickup". Always fill this in when they tell you what
             they are after; it is the one field that is never inapplicable.
     """
+    # Why `need` exists: tested on a dental patient's "tooth pain, can I come
+    # tomorrow", a caterer's "twenty people next Friday" and a software
+    # buyer's "twelve technicians in the field", this tool was called ZERO
+    # times — there was no field for the answer, so the requirement went
+    # unrecorded while the agent held out for a budget. (Moved out of the
+    # docstring, which is sent on every LLM request: token audit 2026-10-12.)
     lead_data = (context.userdata or {}).get("lead_data")
     if lead_data is None:
         return "Nothing recorded — no active call state."
@@ -2688,14 +2688,11 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
     speak in — in any phrasing, in any language ("let's speak in Marathi",
     "मराठीत बोलूया", "can you do Tamil instead", "angrezi mein baat karo").
 
-    This is the only reliable way to change your spoken language mid-call.
-    The system cannot reliably auto-detect a switch from the caller's words
-    alone — Hindi and Marathi in particular are written in the exact same
-    script, so nothing downstream can tell them apart without you flagging
-    it explicitly. If you don't call this, your VOICE keeps its old
-    language's pronunciation even after you start writing replies in the new
-    language, which sounds foreign/accented to the caller — so always call
-    this before your first reply in the new language, not after.
+    This is the only reliable way to change your spoken language mid-call
+    (Hindi and Marathi share a script, so the switch cannot be auto-detected).
+    Without it your VOICE keeps the old language's pronunciation and sounds
+    foreign to the caller — so always call this before your first reply in
+    the new language, not after.
 
     NEVER tell a caller you cannot speak a language without calling this
     tool first. THIS TOOL is what knows which languages are available — you
@@ -2703,11 +2700,6 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
     only then do you say anything to the caller about it. There is also no
     such thing as being locked into one language for the rest of a call: a
     caller can move you as many times as they like.
-
-    Confirmed real failure: asked for Bengali, then Marathi, then Japanese,
-    on a voice that speaks all three, the agent refused each one in its own
-    words without ever calling this tool, and told the caller it would only
-    speak Hindi from then on.
 
     Args:
         language: The language's plain English name — "Hindi", "English",
@@ -2717,6 +2709,11 @@ async def switch_reply_language(context: RunContext, language: str) -> str:
             "Arabic", "Mandarin" and dozens more. Pass whatever language the
             caller asked for and let the tool decide.
     """
+    # Confirmed real failure behind the "NEVER tell a caller" rule: asked for
+    # Bengali, then Marathi, then Japanese, on a voice that speaks all three,
+    # the agent refused each one without ever calling this tool and said it
+    # would only speak Hindi from then on. (Moved out of the docstring, which
+    # is sent on every LLM request: token audit 2026-10-12.)
     agent = context.session.current_agent
     provider = getattr(agent, "_tts_provider", None)
     _names = (

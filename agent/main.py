@@ -3007,6 +3007,24 @@ def _consent_instructions(config: dict) -> str:
     )
 
 
+def _new_llm_usage() -> dict:
+    return {"requests": 0, "cancelledRequests": 0, "promptTokens": 0, "cachedTokens": 0, "completionTokens": 0}
+
+
+def _add_llm_usage(usage: dict, metric) -> None:
+    """Adds one LiveKit LLMMetrics to a call's running token totals. Cheap:
+    the counts are already on the metric, no extra request is made."""
+    usage["requests"] = usage.get("requests", 0) + 1
+    if getattr(metric, "cancelled", False):
+        usage["cancelledRequests"] = usage.get("cancelledRequests", 0) + 1
+    for key, attr in (
+        ("promptTokens", "prompt_tokens"),
+        ("cachedTokens", "prompt_cached_tokens"),
+        ("completionTokens", "completion_tokens"),
+    ):
+        usage[key] = usage.get(key, 0) + max(0, int(getattr(metric, attr, 0) or 0))
+
+
 def _build_tools(config: dict) -> list:
     """The agent's live tool set. Core lead-capture + KB tools are always on
     (they're how the call does its job); enabled_functions only gates the
@@ -3057,7 +3075,10 @@ def _build_tools(config: dict) -> list:
             # again. An opt-out an operator can switch off is not an opt-out.
             do_not_call,
             log_lead,
-            capture_platform_lead,
+            # No capture_platform_lead: it records a lead for Vistrow Voice
+            # itself, so only the platform demos above can use it. Sending it
+            # to tenants cost ~900 chars of schema on every LLM request
+            # (token audit 2026-10-12, docs/LLM-TOKEN-AUDIT-2026-10-12.md).
             switch_reply_language,
         ]
     enabled_raw = (config.get("enabled_functions") or "").strip()
@@ -3460,12 +3481,17 @@ class RealEstateAgent(Agent):
             "purpose/reason for the visit. If any are missing, ask for them one at a time. "
             "Never say booked, confirmed, reserved, or saved unless book_appointment returned "
             "success in this call. A proposed time is not a booking.\n"
-            "- Vistrow Voice platform-assistant calls (explaining Vistrow Voice itself "
-            "to a prospective customer): once you have the caller's name plus at least "
-            "one more of company/contact/use case/team size, call "
-            "capture_platform_lead — call it again if more comes up later in the same "
-            "call.\n"
-            "These tool calls are silent to the caller — never mention or narrate that "
+            + (
+                # Only the platform demos have capture_platform_lead (_build_tools).
+                "- Vistrow Voice platform-assistant calls (explaining Vistrow Voice itself "
+                "to a prospective customer): once you have the caller's name plus at least "
+                "one more of company/contact/use case/team size, call "
+                "capture_platform_lead — call it again if more comes up later in the same "
+                "call.\n"
+                if self._is_platform_demo
+                else ""
+            )
+            + "These tool calls are silent to the caller — never mention or narrate that "
             "you're saving, logging, or recording anything.\n\n"
             "# Only state back what they actually said\n"
             "If the caller plainly told you something, treat it as settled and never ask again. "
@@ -6860,6 +6886,11 @@ async def entrypoint(ctx: JobContext) -> None:
             # by greetings, cancellations, and retries.
             "callerStopToFirstAudioMs": [],
             "providers": [],
+            # Per-call LLM token totals from LiveKit's llm_metrics, cancelled
+            # (preemptive/interrupted) requests included: a request that was
+            # sent is billed whether or not its reply was used. Copied to the
+            # calls.llm_* columns after the call is saved.
+            "llmUsage": _new_llm_usage(),
         },
     }
 
@@ -7912,7 +7943,13 @@ async def entrypoint(ctx: JobContext) -> None:
                 duration_ms = round(max(0.0, seconds) * 1000)
                 timings[key].append(duration_ms)
                 _record_diagnostic("metric", stage, event_label, "warning" if duration_ms >= 1500 else "ok", durationMs=duration_ms, provider=provider, model=model)
-        elif metric_type == "llm_metrics" and not metric.cancelled:
+        elif metric_type == "llm_metrics" and metric.cancelled:
+            # Not a turn the caller heard, so no latency sample — but it was
+            # sent, so its tokens count toward the call's totals.
+            _add_llm_usage(timings.setdefault("llmUsage", _new_llm_usage()), metric)
+            return
+        elif metric_type == "llm_metrics":
+            _add_llm_usage(timings.setdefault("llmUsage", _new_llm_usage()), metric)
             duration_ms = round(max(0.0, metric.ttft) * 1000)
             timings["llmTtftMs"].append(duration_ms)
             # metrics_collected fires when the whole request completes, not
@@ -7941,6 +7978,7 @@ async def entrypoint(ctx: JobContext) -> None:
                 model=model,
                 promptTokens=metric.prompt_tokens,
                 cachedTokens=metric.prompt_cached_tokens,
+                completionTokens=metric.completion_tokens,
             )
         elif metric_type == "tts_metrics" and not metric.cancelled:
             duration_ms = round(max(0.0, metric.ttfb) * 1000)
@@ -8117,6 +8155,12 @@ async def entrypoint(ctx: JobContext) -> None:
                 }
             )
             logger.info("saved call log for room %s (%d turns)", ctx.room.name, len(transcript))
+            # Separate best-effort UPDATE, not part of the INSERT: if this
+            # worker is deployed before the server has added the llm_*
+            # columns, only the totals are lost, never the call row.
+            await asyncio.to_thread(
+                db.set_call_llm_usage, saved_call_id, userdata["latency_metrics"].get("llmUsage")
+            )
         except Exception:
             logger.exception("failed to save call log for room %s", ctx.room.name)
             # No row means no transcript, no recording link and no credits

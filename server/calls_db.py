@@ -1259,6 +1259,14 @@ def init_tables() -> None:
                 ("test_scenario_id", "INTEGER"),
                 ("test_scenario_key", "TEXT DEFAULT ''"),
                 ("test_scenario_name", "TEXT DEFAULT ''"),
+                # Per-call LLM token totals from LiveKit's llm_metrics,
+                # cancelled requests included; written by the agent right
+                # after the call row (agent/db.py set_call_llm_usage). NULL =
+                # calls before these columns, realtime calls, or no request.
+                ("llm_requests", "INTEGER"),
+                ("llm_prompt_tokens", "INTEGER"),
+                ("llm_cached_tokens", "INTEGER"),
+                ("llm_completion_tokens", "INTEGER"),
             ):
                 conn.execute(f"ALTER TABLE calls ADD COLUMN IF NOT EXISTS {column} {coltype}")
             conn.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_platform_demo INTEGER DEFAULT 0")

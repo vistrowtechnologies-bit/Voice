@@ -1887,6 +1887,33 @@ def account_storage_limit_bytes(account_id: int | None) -> int | None:
             pass
 
 
+def set_call_llm_usage(call_id: int | None, usage: dict | None) -> None:
+    """Per-call LLM token totals (agent/main.py's llmUsage) into the calls.llm_*
+    columns server/calls_db.py adds. Best-effort: a missing column or a DB
+    hiccup must never disturb call teardown."""
+    if call_id is None or not usage or not usage.get("requests"):
+        return
+    try:
+        conn = dbconn.connect()
+        try:
+            with conn:
+                conn.execute(
+                    "UPDATE calls SET llm_requests = ?, llm_prompt_tokens = ?, llm_cached_tokens = ?, "
+                    "llm_completion_tokens = ? WHERE id = ?",
+                    (
+                        int(usage.get("requests") or 0),
+                        int(usage.get("promptTokens") or 0),
+                        int(usage.get("cachedTokens") or 0),
+                        int(usage.get("completionTokens") or 0),
+                        call_id,
+                    ),
+                )
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("could not persist LLM token totals")
+
+
 def set_call_recording_status(call_id: int | None, status: str) -> None:
     """Records what became of this call's recording ('failed', 'discarded',
     'not_configured'). 'failed' is only stamped on calls that lasted at least
