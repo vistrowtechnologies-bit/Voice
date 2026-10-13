@@ -2859,7 +2859,7 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             # 2026-10-13: a real 0.7-1.1 s silence; "[pause short]"/"[pause]"
             # do nothing; a stray "[Name]" is not spoken there, but IS read
             # aloud in the `text` field). Direct streaming probes showed no
-            # first-audio cost for the markup field, yet with use_markup=True
+            # first-audio cost for the markup field, yet with the markup flag
             # on the worker 3 of 5 real calls had a 2.6-3.2 s TTS first byte
             # on one segment (calls 1245, 1246, 1248; worker version
             # 25dBtLmxteMN), against 0 of the 37 Chirp calls before it. Until
