@@ -12,9 +12,12 @@ separate Railway cron service. Only pings agents that have taken a real call
 recently (see _RECENT_CALL_WINDOW_MIN) — an agent nobody is calling gets no
 pings, so this never spends money warming a cache no one will use.
 
-Gemini/Groq models are skipped: this file is specifically about the
+Gemini/Groq/Sarvam models are skipped: this file is specifically about the
 prompt_cache_key mechanism _build_llm (agent/main.py) already wires up for
-the OpenAI branch. Gemini has its own implicit caching with different
+the OpenAI branch. Sarvam (`sarvam/...`) used to slip through and was posted
+to api.openai.com under a model name OpenAI does not have, failing every
+ping; Sarvam caches automatically and the token audit (docs/LLM-TOKEN-AUDIT-
+2026-10-12.md) found warmup adds nothing billable, so it is not warmed at all. Gemini has its own implicit caching with different
 mechanics; revisit separately if it turns out to need the same treatment.
 """
 
@@ -33,6 +36,8 @@ logger = logging.getLogger("vistrow-llm-warmer")
 _PING_INTERVAL_S = 4 * 60  # inside OpenAI's cache TTL (a few minutes of idle evicts it)
 _RECENT_CALL_WINDOW_MIN = 30  # only warm agents actually being called right now
 _PROMPT_CACHE_KEY = "vistrow-voice-agent-v1"  # must match agent/main.py's _build_llm
+# Model-name prefixes _build_llm routes away from api.openai.com.
+_NON_OPENAI_PREFIXES = ("gemini", "groq/", "sarvam/")
 
 _started = False
 _lock = threading.Lock()
@@ -41,7 +46,7 @@ _lock = threading.Lock()
 def _recently_active_openai_agents() -> list[dict]:
     """agent_id -> system_prompt for every agent (any tenant) that has taken
     a call in the last _RECENT_CALL_WINDOW_MIN minutes and whose model isn't
-    Gemini/Groq (see module docstring).
+    Gemini/Groq/Sarvam (see module docstring).
 
     Bound param for the interval, and model-family filtering done in Python
     rather than SQL LIKE - a literal '%' in the query text collides with
@@ -59,7 +64,7 @@ def _recently_active_openai_agents() -> list[dict]:
         return [
             {"id": r["id"], "system_prompt": r["system_prompt"], "model": r["model"]}
             for r in rows
-            if not (r["model"] or "").startswith(("gemini", "groq/"))
+            if not (r["model"] or "").startswith(_NON_OPENAI_PREFIXES)
         ]
     finally:
         conn.close()

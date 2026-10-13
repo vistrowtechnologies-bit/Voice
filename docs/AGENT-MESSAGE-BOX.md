@@ -505,3 +505,16 @@ Branch `claude/docs-videos`. **Security fix:** Mintlify was publishing every `.m
 Docs changes: `snippets/help-video.mdx` (video streamed from www.vistrowvoice.com/media/help, preload none + poster); video on index, quickstart, agents, knowledge-base, website-widget, phone-numbers; new pages platform/build-with-ai, testing-lab, copilot; Demo + Website sidebar anchors; Copy page / ChatGPT / Claude contextual menu.
 
 Verified locally with `mint dev` + headless Chrome: internal notes 404, new pages 200, no MP4 fetched before play, video plays at 1920 wide, no overflow at 390 px; `mint broken-links` clean.
+
+### Claude — 2026-10-13 — LLM token fixes from the 12 Oct audit
+
+Branch `claude/llm-token-fixes` (PR linked on issue #2). Each audit finding was rechecked against the current main code first.
+- `server/llm_warmer.py`: `sarvam/*` agents are no longer warmed. Before this, their model name was posted to api.openai.com and every ping failed (every 4 min). The skip list is now `gemini`, `groq/`, `sarvam/`.
+- `agent/main.py` `_build_tools`: tenant agents no longer get `capture_platform_lead`. Both platform demos (plain and industry role-play) keep it. The lead-capture prompt bullet for that tool is now added only for `is_platform_demo`.
+- `agent/tools.py`: the `log_lead` and `switch_reply_language` docstrings are shorter. Only the incident narrative was removed (it moved to code comments); every instruction, parameter name and type is unchanged. Tenant tool schemas, measured with livekit 1.8.3 `build_legacy_openai_schema`: 11,304 -> 9,425 chars per LLM request.
+- Token instrumentation: `latency_metrics.llmUsage` = {requests, cancelledRequests, promptTokens, cachedTokens, completionTokens}. Cancelled LLM requests are now counted, and the `llm` diagnostic gains `completionTokens`. New columns `calls.llm_requests/llm_prompt_tokens/llm_cached_tokens/llm_completion_tokens` come from `server/calls_db.py` (ADD COLUMN IF NOT EXISTS). The agent writes them with a separate best-effort UPDATE (`agent/db.py set_call_llm_usage`) after the call row, so deploy order cannot lose a call row. Realtime (Gemini Live) token counts are NOT included.
+- New `docs/SARVAM-CACHING-SUPPORT-REQUEST.md` (draft email to Sarvam). `docs/LLM-TOKEN-AUDIT-2026-10-12.md` has been copied into the repo.
+- Deliberately NOT done: duplicate platform-instruction removal and prompt halving (these need an A/B test and owner approval), and dropping calendar tools when no calendar is set up.
+
+Verified: agent suite in a livekit-agents 1.8.3 venv: 709 passed, 16 skipped. Server suite (server/.venv): 532 passed, 88 skipped (DB-backed tests skipped without TEST_DATABASE_URL). The new warmer test fails against the old filter.
+Unverified: live calls. Nothing deployed. Needed after merge: Railway (server migration plus warmer), then `lk agent deploy` for BOTH CA_53d8HgBktjZ7 and CA_TGdpVhSdxDyS. Next step: after deploy, check that a new Sarvam call row has `llm_prompt_tokens` filled in.
