@@ -159,7 +159,7 @@ export function Usage() {
     <DashboardLayout>
       <PageHeader title="Usage" subtitle="Where your credits go - by day, channel, agent, voice and model, in your timezone." />
 
-      <div className="space-y-5">
+      <div className="space-y-5 p-4 sm:p-6">
         {activeCalls.length > 0 && (
           <Card variant="flat" padding="sm" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <span className="flex items-center gap-2 font-semibold">

@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Vistrow Voice Widget
- * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard (Integrations) — that's the only thing you need to set.
- * Version: 1.7.1
+ * Description: Embeds the Vistrow Voice AI call widget on your site. Paste the site key shown on the Website Widget page in your Vistrow Voice dashboard — that's the only thing you need to set.
+ * Version: 1.7.2
  * Author: Vistrow Voice
  */
 
@@ -285,7 +285,7 @@ function vistrow_voice_render_settings_page() {
                                 class="regular-text" placeholder="av_live_..." />
                             <p class="vvw-help">
                                 Found in your Vistrow Voice dashboard under
-                                <strong>Integrations &rarr; Website Widget</strong>. This is what tells us which
+                                <strong>Website Widget</strong>. This is what tells us which
                                 account this site's calls and leads belong to.
                             </p>
                         </div>

@@ -94,6 +94,7 @@ export const HELP_TOPIC_BY_ROUTE: Record<string, string> = {
   '/dashboard/agents': 'agents',
   '/dashboard/testing': 'testing-lab',
   '/dashboard/voices': 'voices',
+  '/dashboard/usage': 'usage',
   '/dashboard/knowledge': 'knowledge-base',
   '/dashboard/inbound': 'inbound',
   '/dashboard/outbound': 'outbound',
