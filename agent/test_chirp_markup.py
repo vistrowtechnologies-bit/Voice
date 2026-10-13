@@ -49,16 +49,18 @@ class ChirpMarkup(unittest.TestCase):
 
 
 class WiringInMain(unittest.TestCase):
-    def test_chirp_branch_uses_the_markup_field(self):
-        build_tts = function_source("_build_tts")
-        chirp = build_tts[build_tts.index("CHIRP3_PERSONA_PREFIX") :] if "CHIRP3_PERSONA_PREFIX" in build_tts else build_tts
-        self.assertIn("use_markup=True", chirp)
-        # The Gemini persona branch and the locale Standard voices keep the text field.
-        self.assertEqual(build_tts.count("use_markup=True"), 1)
+    """Markup stays OFF on the worker: with use_markup=True, 3 of 5 real calls
+    (1245, 1246, 1248) had a 2.6-3.2 s TTS first byte on one segment, against
+    0 of 37 Chirp calls before. Re-enable only with a measured fix."""
 
-    def test_only_chirp_agents_are_told_about_the_break_marker(self):
-        self.assertIn("voice_value.startswith(voice_catalog.CHIRP3_PERSONA_PREFIX)", SOURCE)
-        self.assertIn('<expr type=\\"break\\" label=\\"1s\\"/>', SOURCE)
+    def test_chirp_branch_keeps_the_text_field(self):
+        build_tts = function_source("_build_tts")
+        self.assertNotIn("use_markup=True", build_tts)
+
+    def test_no_agent_is_offered_a_break_marker_while_markup_is_off(self):
+        # In the text field a "[pause long]" tag is read aloud (measured), so
+        # the LLM must not be told it can emit one.
+        self.assertNotIn("# Pause control", SOURCE)
 
 
 class SarvamStreamingRecipeEverywhere(unittest.TestCase):

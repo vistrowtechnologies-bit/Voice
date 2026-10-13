@@ -2854,21 +2854,25 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             # measured 278ms to first audio against 360-670ms for the Standard
             # voices below. The plugin picks model_name="chirp_3" on its own
             # from the voice name, so nothing needs passing here.
-            # use_markup: text goes to Cloud TTS's `markup` field, the only
-            # place Chirp 3 HD honours pause tags. Measured 2026-10-13 on
-            # hi-IN-Chirp3-HD-Achernar (3 runs each): "[pause long]" adds a
-            # real 0.7-1.1 s silence, "[pause short]"/"[pause]" add nothing,
-            # and an unknown bracket such as "[Name]" is NOT spoken — in the
-            # plain `text` field the same tag is read aloud. The LLM writes
-            # <expr type="break"/>; chirp_markup() in google_tts_streaming_patch
-            # turns it into "[pause long]" and strips every other tag.
+            # Pause markup is deliberately OFF. Cloud TTS's `markup` field is
+            # the only place Chirp 3 HD honours "[pause long]" (measured
+            # 2026-10-13: a real 0.7-1.1 s silence; "[pause short]"/"[pause]"
+            # do nothing; a stray "[Name]" is not spoken there, but IS read
+            # aloud in the `text` field). Direct streaming probes showed no
+            # first-audio cost for the markup field, yet with use_markup=True
+            # on the worker 3 of 5 real calls had a 2.6-3.2 s TTS first byte
+            # on one segment (calls 1245, 1246, 1248; worker version
+            # 25dBtLmxteMN), against 0 of the 37 Chirp calls before it. Until
+            # that stall is understood, text stays in the `text` field, and
+            # the LLM is not offered a break marker (it would be read aloud).
+            # google_tts_streaming_patch.chirp_markup() is the converter to
+            # re-enable with.
             google_tts = PatchedGeminiTTS(
                 language=voice_language,
                 voice_name=voice_name,
                 credentials_info=_GOOGLE_CREDENTIALS,
                 **_rate,
                 speaking_rate=tone.get("pace", 1.0),
-                use_markup=True,
             )
         else:
             google_tts = StreamAdapter(
@@ -3769,22 +3773,6 @@ class RealEstateAgent(Agent):
                 "before a sentence when its delivery should change. These controls are rendered "
                 "as voice performance and are not spoken as text. This is the only exception to "
                 "the general no-formatting instruction above.\n"
-            )
-        if not _rt_selected and voice_value.startswith(voice_catalog.CHIRP3_PERSONA_PREFIX):
-            # Chirp 3 HD has exactly one control worth using: a long pause,
-            # honoured only through Cloud TTS's markup field (see the
-            # use_markup note in _build_tts). The break marker is converted
-            # by chirp_markup(); any other tag is stripped before synthesis.
-            instructions += (
-                "\n\n# Pause control\n"
-                "The selected voice supports one internal control: a real pause of about a "
-                "second, written as <expr type=\"break\" label=\"1s\"/> on its own between two "
-                "sentences. Use it only where a listener needs a beat — before reading out a "
-                "number, an address or a price, or after asking a question you want them to "
-                "think about. A period or an ellipsis already gives a short pause, so never put "
-                "the marker next to one, and never use more than one per reply. It is rendered "
-                "as silence and is not spoken as text. This is the only exception to the "
-                "general no-formatting instruction above.\n"
             )
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         if _rt_selected:
