@@ -1,0 +1,4 @@
+# Only .mdx files are docs pages. Everything .md in this folder is an internal
+# working note (audits, runbooks, the agent message box) and must never be
+# published on docs.vistrowvoice.com.
+*.md

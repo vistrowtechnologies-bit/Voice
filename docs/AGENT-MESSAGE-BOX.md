@@ -497,3 +497,11 @@ Verified in the local app (mock API, owner). `npm run build` passes.
 Branch `claude/realtime-added-only`. Owner correction to PR #67: with a realtime model, the agent's voice dropdown now lists only the account's added voices that a Live model can use, under "Your voices for <model>". Non-realtime added voices stay disabled, and an empty state points to the Voices page. The catalog is still fetched, but only for the style words.
 
 Verified in the local app: the mock account has Myra HD, Sana HD, Vivaan HD and Aditya added. The dropdown shows the three HD voices, with Aditya disabled. `npm run build` passes.
+
+### Claude — 2026-10-13 — docs site: videos, Agni-style layout, internal notes unpublished
+
+Branch `claude/docs-videos`. **Security fix:** Mintlify was publishing every `.md` in `docs/` — e.g. docs.vistrowvoice.com/AGENT-MESSAGE-BOX, /STAGING and /ADMIN-P0-API-CONTRACT-2026-10-11 returned 200. New `docs/.mintignore` (`*.md`) removes them; all public pages are `.mdx`. No secrets found in the exposed files (scanned for keys, DB URLs, passwords), but they describe internal infrastructure. **Keep internal notes as `.md`**, never `.mdx`, in `docs/`.
+
+Docs changes: `snippets/help-video.mdx` (video streamed from www.vistrowvoice.com/media/help, preload none + poster); video on index, quickstart, agents, knowledge-base, website-widget, phone-numbers; new pages platform/build-with-ai, testing-lab, copilot; Demo + Website sidebar anchors; Copy page / ChatGPT / Claude contextual menu.
+
+Verified locally with `mint dev` + headless Chrome: internal notes 404, new pages 200, no MP4 fetched before play, video plays at 1920 wide, no overflow at 390 px; `mint broken-links` clean.
