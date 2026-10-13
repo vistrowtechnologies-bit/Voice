@@ -160,9 +160,9 @@ class TopupFlowTests(unittest.TestCase):
 
     def test_pack_bonus_is_credited_but_only_the_base_is_invoiced(self):
         session = self.order(pack="500")
-        self.assertEqual((session["credits"], session["bonusCredits"], session["amountInr"]), (500, 50, 5900.0))
+        self.assertEqual((session["credits"], session["bonusCredits"], session["amountInr"]), (500, 50, 5056.3))  # 500 x Rs 8.57 (2,999 / 350) + 18% GST
         inv = self.invoice_for(session["orderId"])
-        self.assertEqual((inv["credits"], inv["bonus_credits"], float(inv["amount_inr"])), (500, 50, 5900.0))
+        self.assertEqual((inv["credits"], inv["bonus_credits"], float(inv["amount_inr"])), (500, 50, 5056.3))  # 500 x Rs 8.57 (2,999 / 350) + 18% GST
         self.assertEqual(self.razorpay.create_order.call_args.kwargs["notes"]["bonus"], "50")
         self.assertEqual(self.verify(session["orderId"])["credits"], 550)
         self.assertEqual(self.credits(self.a), 650)
