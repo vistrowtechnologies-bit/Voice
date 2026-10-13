@@ -15,8 +15,8 @@ agent/main.py's _build_tts:
   - "elevenlabs:<id>"    → ElevenLabs REST, model eleven_flash_v2_5
   - "google:<persona>"   → Gemini Flash TTS, same persona across languages
   - "google:<locale-id>" → Google Cloud Standard, locale-specific voice
-  - bare name            → Sarvam REST, bulbul:v2 for the two v2 speakers,
-                           else bulbul:v3
+  - bare name / sarvam4: → Sarvam REST, bulbul:v4-flash (v3 names mapped by
+                           voice_catalog.sarvam_v4_speaker)
 """
 
 from __future__ import annotations
@@ -235,6 +235,6 @@ def synthesize(voice_string: str, lang: str, text: str | None = None) -> tuple[b
         return _synth_google(voice_string[len(_GOOGLE_PREFIX):], lang, text)
     # bulbul:v2 is retired vendor-side and its speakers are gone from the
     # catalog, so get_voice() above already rejects them.
-    if voice_string.startswith(voice_catalog.SARVAM_V4_PREFIX):
-        return _synth_sarvam(voice_string[len(voice_catalog.SARVAM_V4_PREFIX):], voice_catalog.SARVAM_V4_MODEL, lang, text)
-    return _synth_sarvam(voice_string, "bulbul:v3", lang, text)
+    # Every Sarvam voice previews through bulbul:v4-flash, as calls do.
+    gender = (voice_catalog.get_voice(voice_string) or {}).get("gender")
+    return _synth_sarvam(voice_catalog.sarvam_v4_speaker(voice_string, gender), voice_catalog.SARVAM_V4_MODEL, lang, text)

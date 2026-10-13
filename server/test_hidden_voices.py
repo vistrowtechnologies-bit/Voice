@@ -45,6 +45,18 @@ class HiddenVoices(unittest.TestCase):
         self.assertTrue(can_switch)
         self.assertIn("ta-IN", langs)
 
+    def test_every_offered_v3_voice_has_a_same_gender_v4_replacement(self):
+        v4_gender = {vid: ("male" if g == "m" else "female") for vid, g in vc.SARVAM_V4_VOICES}
+        offered = [e for e in vc.CATALOG if ":" not in e["value"] and not vc.is_hidden(e["value"]) and not e.get("preview")]
+        self.assertTrue(offered)
+        for e in offered:
+            self.assertIn(e["value"], vc.SARVAM_V3_TO_V4, e["value"])
+            self.assertEqual(v4_gender[vc.sarvam_v4_speaker(e["value"])], e["gender"], e["value"])
+
+    def test_unknown_sarvam_names_fall_back_by_gender(self):
+        self.assertEqual(vc.sarvam_v4_speaker("anushka", "female"), "ritu_hi_customer")
+        self.assertEqual(vc.sarvam_v4_speaker("karun", "male"), "shubh_hi_customer")
+
     def test_existing_agents_still_resolve_a_hidden_voice(self):
         self.assertIsNotNone(vc.get_voice("google:hi-IN-Standard-A"))
         self.assertIsNotNone(vc.get_voice("google:kore"))

@@ -28,7 +28,7 @@ calls_db.voice_tier() — the prefix convention there and here must agree:
   - "google38:<voice>"    → Gemini 3.8 Flash-Lite TTS    → tier "premium"  (2x credits)
   - "google38flash:<voice>" → Gemini 3.8 Flash TTS       → tier "premium"  (2x credits)
   - bare Sarvam bulbul:v2 speaker (abhilash/anushka) → tier "lite"      (0.75x credits)
-  - any other bare name (Sarvam bulbul:v3)           → tier "standard"   (1x credits)
+  - any other bare name (Sarvam, spoken by bulbul:v4-flash via SARVAM_V3_TO_V4) → tier "standard" (1x credits)
 
 Adding a new voice here makes it appear in the catalog automatically; no
 frontend deploy or billing change is needed (voice_tier keys off the prefix,
@@ -479,6 +479,33 @@ SARVAM_V4_VOICES = (
     ("vipul_hi_social", "m"),
     ("zarina_en_conversation", "f"),
 )
+# bulbul:v3 -> v4 (2026-10-13). v4 rejects v3 short names, so every stored v3
+# speaker ("ritu", in agents and voice menus) is spoken by a v4 persona: the
+# same name in a Hindi customer/conversation style where one exists. Checked
+# by pitch against the v3 voice; aditya's v4 voice is ~45 Hz higher (likely a
+# different speaker), priya/rohan exist only as "recovery" personas, pooja only
+# with Gujarati/Telugu tags. Real calls: v4 first audio 170-189 ms vs v3
+# 178-193 ms; Sarvam bills v4 about Rs 1.00 per 1K characters vs v3 Rs 3.00.
+SARVAM_V3_TO_V4 = {
+    "shubh": "shubh_hi_customer", "priya": "priya_hi_recovery", "aditya": "aditya_hi_conversational",
+    "ritu": "ritu_hi_customer", "rohan": "rohan_en_recovery", "simran": "simran_hi_conversation",
+    "kavya": "kavya_hi_conversational", "amit": "amit_hi_conversational", "pooja": "pooja_gu_customer",
+    "ishita": "ishita_enhi_customer",
+}
+_SARVAM_V4_DEFAULT = {"male": "shubh_hi_customer", "female": "ritu_hi_customer"}
+
+
+def sarvam_v4_speaker(value: str, gender: str | None = None) -> str:
+    """bulbul:v4-flash persona id for any Sarvam voice value: a "sarvam4:" id
+    as-is, a v3 short name through SARVAM_V3_TO_V4, anything else the
+    gender-matched default (a retired v2 name would otherwise kill the call)."""
+    if value.startswith(SARVAM_V4_PREFIX):
+        return value[len(SARVAM_V4_PREFIX):]
+    if value in SARVAM_V3_TO_V4:
+        return SARVAM_V3_TO_V4[value]
+    return _SARVAM_V4_DEFAULT["male" if gender == "male" else "female"]
+
+
 _SARVAM_V4_LANG = {"hi": "Hindi", "en": "English", "enhi": "Hinglish", "mr": "Marathi", "kn": "Kannada",
                    "pa": "Punjabi", "ta": "Tamil", "te": "Telugu", "gu": "Gujarati", "bn": "Bengali"}
 
