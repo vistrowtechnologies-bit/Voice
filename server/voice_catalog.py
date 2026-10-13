@@ -267,7 +267,9 @@ EXPRESSIVE_VOICES = frozenset(f"google:{p.lower()}" for p, _g, _s in GEMINI_PREB
 # --- Sarvam Bulbul v4 Flash (premium) ------------------------------------
 # bulbul:v4-flash persona voices, "<name>_<language>_<style>". The list is the
 # one the API itself accepts (2026-10-13: 224 ids, 3 docs ids rejected, 2
-# Assamese ids need beta access - all excluded). Sarvam publishes no genders;
+# Assamese ids need beta access - all excluded). aravind_ta_ads/_suspense are
+# accepted by the API but rejected by livekit-plugins-sarvam 1.8.6's own list,
+# which would fail the call at construction, so they are left out too. Sarvam publishes no genders;
 # each speaker's gender is used only where Sarvam's v3 label, measured pitch
 # and an audio classifier agree (67 of 79 names). The other 12 names (19 ids)
 # are held until someone listens. A Hindi-tagged id was verified speaking
@@ -285,8 +287,6 @@ SARVAM_V4_VOICES = (
     ("anand_hi_news", "m"),
     ("anand_pa_conversation", "m"),
     ("anand_pa_customer", "m"),
-    ("aravind_ta_ads", "m"),
-    ("aravind_ta_suspense", "m"),
     ("ashutosh_hi_conversational", "m"),
     ("ashwin_en_sports", "f"),
     ("ashwin_en_sports_energetic", "f"),
