@@ -54,7 +54,7 @@ function languageSummary(entry: VoiceEntry): string {
 }
 
 // Realtime tabs are one per Live model: `rt:<model value>`.
-type TabKey = 'expressive' | 'hd' | 'standard' | 'native' | 'gemini' | 'premium' | `rt:${string}`
+type TabKey = 'sarvam4' | 'expressive' | 'hd' | 'standard' | 'native' | 'gemini' | 'premium' | `rt:${string}`
 type FilterKey = 'all' | 'added' | 'female' | 'male'
 
 const FILTERS: { key: FilterKey; label: string }[] = [
@@ -431,8 +431,14 @@ export function Voices() {
       {
         key: 'expressive',
         label: 'Expressive',
-        note: '2x credits · most expressive · switches language live',
-        voices: stable('premium').filter((v) => v.multilingual),
+        note: '2x credits · follows the caller’s emotion · about 0.7 s slower than HD',
+        voices: stable('premium').filter((v) => v.multilingual && v.value.startsWith('google:')),
+      },
+      {
+        key: 'sarvam4',
+        label: 'Sarvam v4',
+        note: '2x credits · Bulbul v4 persona voices by use case · switches language live',
+        voices: stable('premium').filter((v) => v.value.startsWith('sarvam4:')),
       },
       {
         key: 'hd',

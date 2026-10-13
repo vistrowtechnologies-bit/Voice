@@ -8663,14 +8663,16 @@ _ECONOMY_VOICES = {"abhilash", "hitesh", "karun", "anushka", "arya", "manisha"}
 # _ELEVENLABS_V3_VOICE_PREFIX) ElevenLabs voice forms bill as premium.
 # Gemini 3.8 Flash-Lite personas ("google38:") bill premium too - Google
 # charges per audio token for them, and voice_catalog lists them at 2x.
-_PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:", "google38:", "google38flash:")
+_PREMIUM_VOICE_PREFIXES = ("elevenlabs:", "elevenlabs-v3:", "google38:", "google38flash:", "sarvam4:")
 _ECONOMY_VOICE_PREFIXES = ("google:",)
 # The two Gemini persona voices (Mira/Arin) share the "google:" prefix with
 # the cheap single-locale Google voices but are a different product: one voice
 # that carries across Gemini's ~95 locales and switches language mid-call.
 # Checked ahead of the prefix rules so they bill premium while
 # google:hi-IN-Standard-A and friends stay economy.
-_PREMIUM_VOICES = {"google:kore", "google:charon"}
+# All 30 Expressive personas (gemini-2.5-flash-tts), not just Kore/Charon:
+# without this the prefix rule below would bill "google:aoede" as economy.
+_PREMIUM_VOICES = set(voice_catalog.EXPRESSIVE_VOICES)
 # Chirp 3 HD personas ("google:chirp3:<Persona>") share the "google:" prefix
 # with the cheap single-locale voices too, and are likewise a different
 # product: one persona across 52 locales, switching mid-call, and the

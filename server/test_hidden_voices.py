@@ -12,7 +12,7 @@ class HiddenVoices(unittest.TestCase):
                          (root / "server/voice_catalog.py").read_bytes())
 
     def test_slow_and_bad_voices_are_hidden(self):
-        for value in ("google31:kore", "google:kore", "google:charon", "google:hi-IN-Standard-A", "elevenlabs:zT03pEAEi0VHKciJODfn"):
+        for value in ("google31:kore", "google:hi-IN-Standard-A", "elevenlabs:zT03pEAEi0VHKciJODfn"):
             self.assertTrue(vc.is_hidden(value), value)
 
     def test_good_voices_stay_visible(self):
@@ -20,6 +20,30 @@ class HiddenVoices(unittest.TestCase):
         sarvam = next(e["value"] for e in vc._BY_VALUE.values() if ":" not in e["value"])
         self.assertFalse(vc.is_hidden(chirp))
         self.assertFalse(vc.is_hidden(sarvam))
+
+    def test_expressive_voices_are_offered(self):
+        # Mira/Arin were hidden for speed on 2026-10-08 and return, labelled
+        # slower, as part of the opt-in Expressive tier (2026-10-13).
+        self.assertEqual(len(vc.EXPRESSIVE_VOICES), 30)
+        for value in vc.EXPRESSIVE_VOICES:
+            self.assertFalse(vc.is_hidden(value), value)
+            entry = vc.get_voice(value)
+            self.assertEqual(entry["tier"], "premium", value)
+            self.assertTrue(entry["multilingual"], value)
+            # Owner-only until the Vertex gemini-2.5-flash-tts quota (5 RPM)
+            # is raised; flip to assertFalse when they open to tenants.
+            self.assertTrue(entry.get("preview"), value)
+
+    def test_sarvam_v4_voices_are_premium_and_switch_language(self):
+        v4 = [e for e in vc.CATALOG if e["value"].startswith(vc.SARVAM_V4_PREFIX)]
+        self.assertEqual(len(v4), len(vc.SARVAM_V4_VOICES))
+        for e in v4:
+            self.assertEqual(e["tier"], "premium", e["value"])
+            self.assertIn(e["gender"], ("male", "female"), e["value"])
+            self.assertFalse(vc.is_hidden(e["value"]), e["value"])
+        langs, can_switch = vc.languages_for(vc.get_voice("sarvam4:ritu_hi_customer"))
+        self.assertTrue(can_switch)
+        self.assertIn("ta-IN", langs)
 
     def test_existing_agents_still_resolve_a_hidden_voice(self):
         self.assertIsNotNone(vc.get_voice("google:hi-IN-Standard-A"))

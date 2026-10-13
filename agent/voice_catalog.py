@@ -103,8 +103,8 @@ CATALOG: list[dict] = [
     # Gemini TTS personas keep the same voice identity while the reply
     # language changes during a call. They use Cloud Text-to-Speech directly,
     # so the existing service-account credential is sufficient.
-    {"value": "google:kore", "name": "Mira", "gender": "female", "tier": "premium", "multilingual": True, "note": "One voice, every language · switches mid-call"},
-    {"value": "google:charon", "name": "Arin", "gender": "male", "tier": "premium", "multilingual": True, "note": "One voice, every language · switches mid-call"},
+    {"value": "google:kore", "preview": True, "name": "Mira Expressive", "gender": "female", "tier": "premium", "multilingual": True, "note": "Expressive · follows caller emotion · about 0.7 s slower than HD"},
+    {"value": "google:charon", "preview": True, "name": "Arin Expressive", "gender": "male", "tier": "premium", "multilingual": True, "note": "Expressive · follows caller emotion · about 0.7 s slower than HD"},
     # Explicit opt-in test voices for the newer preview model. Keep a distinct
     # value prefix so existing Mira/Arin agents remain on the stable 2.5 model.
     {"value": "google31:kore", "name": "Mira Next (Preview)", "gender": "female", "tier": "standard", "multilingual": True, "preview": True, "note": "Prompt emotion + modulation · testing only"},
@@ -229,6 +229,276 @@ CATALOG += [
                             (GEMINI_38_FLASH_PREFIX, "Flash"))
     for persona, gender, style in GEMINI_PREBUILT_VOICES
 ]
+
+# --- Expressive: Gemini 2.5 Flash TTS personas (Cloud TTS) ---------------
+# The same 30 Gemini personas as Chirp 3 HD, on gemini-2.5-flash-tts through
+# Cloud Text-to-Speech. Unlike Chirp they take a style prompt in its own field
+# (never read aloud), which the worker rewrites every turn from the caller's
+# detected emotion. Measured 2026-10-13 on real calls: first audio 0.78-1.15 s
+# vs Chirp 3 HD 0.14-0.17 s (turn 1.40-1.49 s vs 0.68 s). Cloud TTS limits are
+# per minute (1,000 requests), but Gemini voices also count against Vertex AI
+# "global generate content requests per minute per base model", which is 5 for
+# gemini-2.5-flash-tts on this project (verified 2026-10-13: the 9th request in
+# a burst got 429). One call can use that, so they stay preview (owner-only)
+# until the quota is raised. Price $10 per 1M audio tokens,
+# 25 tokens/s: about $0.0082 per call minute at the measured 373 agent
+# characters/min and 12.1 characters/s - below Chirp 3 HD's list price.
+# Named after each persona's HD voice; Kore/Charon keep their Mira/Arin names.
+_HD_NAMES = {
+    e["value"].rsplit(":", 1)[-1].lower(): e["name"].removesuffix(" HD")
+    for e in CATALOG if e["value"].startswith("google:chirp3:")
+}
+CATALOG += [
+    {
+        "value": f"google:{persona.lower()}",
+        "name": f"{_HD_NAMES.get(persona.lower(), persona)} Expressive",
+        "gender": gender,
+        "tier": "premium",
+        "multilingual": True,
+        "preview": True,
+        "note": "Expressive · follows caller emotion · about 0.7 s slower than HD",
+    }
+    for persona, gender, _style in GEMINI_PREBUILT_VOICES
+    if persona.lower() not in ("kore", "charon")
+]
+EXPRESSIVE_VOICES = frozenset(f"google:{p.lower()}" for p, _g, _s in GEMINI_PREBUILT_VOICES)
+
+
+# --- Sarvam Bulbul v4 Flash (premium) ------------------------------------
+# bulbul:v4-flash persona voices, "<name>_<language>_<style>". The list is the
+# one the API itself accepts (2026-10-13: 224 ids, 3 docs ids rejected, 2
+# Assamese ids need beta access - all excluded). Sarvam publishes no genders;
+# each speaker's gender is used only where Sarvam's v3 label, measured pitch
+# and an audio classifier agree (67 of 79 names). The other 12 names (19 ids)
+# are held until someone listens. A Hindi-tagged id was verified speaking
+# Tamil, Bengali and English correctly, so these follow language switches.
+SARVAM_V4_PREFIX = "sarvam4:"
+SARVAM_V4_MODEL = "bulbul:v4-flash"
+SARVAM_V4_VOICES = (
+    ("aarti_hi_customer", "f"),
+    ("aayan_hi_conversational", "m"),
+    ("aditya_hi_conversational", "m"),
+    ("aditya_hi_sales", "m"),
+    ("amelia_en_conversational", "f"),
+    ("amit_hi_conversational", "m"),
+    ("anand_hi_documentary", "m"),
+    ("anand_hi_news", "m"),
+    ("anand_pa_conversation", "m"),
+    ("anand_pa_customer", "m"),
+    ("aravind_ta_ads", "m"),
+    ("aravind_ta_suspense", "m"),
+    ("ashutosh_hi_conversational", "m"),
+    ("ashwin_en_sports", "f"),
+    ("ashwin_en_sports_energetic", "f"),
+    ("bhavik_gu_conversation", "m"),
+    ("bimal_bn_suspense", "m"),
+    ("chaitra_hi_customer", "f"),
+    ("chaitra_kn_conversation", "f"),
+    ("chaitra_kn_narration", "f"),
+    ("chhavi_hi_kids", "f"),
+    ("girish_en_devotional", "m"),
+    ("girish_en_documentary", "m"),
+    ("girish_hi_devotional", "m"),
+    ("gokul_ta_narration", "m"),
+    ("harpreet_pa_narration", "m"),
+    ("ishita_en_customer", "f"),
+    ("ishita_en_medical", "f"),
+    ("ishita_en_numbers", "f"),
+    ("ishita_en_social", "f"),
+    ("ishita_en_stories", "f"),
+    ("ishita_enhi_companion", "f"),
+    ("ishita_enhi_customer", "f"),
+    ("ishita_enhi_customer_expressive", "f"),
+    ("ishita_hi_ads", "f"),
+    ("ishita_hi_ads_informal", "f"),
+    ("ishita_hi_banking", "f"),
+    ("ishita_hi_devotional", "f"),
+    ("ishita_hi_edtech", "f"),
+    ("ishita_hi_numbers", "f"),
+    ("ishita_hi_social", "f"),
+    ("ishita_mr_conversational", "f"),
+    ("jaspal_pa_banking", "m"),
+    ("kabir_hi_conversational", "m"),
+    ("kavitha_te_conversation", "f"),
+    ("kavitha_te_narration", "f"),
+    ("kavya_hi_conversational", "f"),
+    ("kunal_hi_kids", "m"),
+    ("mahesh_hi_documentary", "m"),
+    ("manan_hi_conversational", "m"),
+    ("mani_hi_conversational", "m"),
+    ("mani_hi_devotional", "m"),
+    ("mohit_hi_conversational", "m"),
+    ("mrunal_mr_narration", "f"),
+    ("mukul_hi_ads", "m"),
+    ("mukul_hi_suspense", "m"),
+    ("mukul_mr_stories", "m"),
+    ("nachiket_en_ads", "m"),
+    ("nachiket_hi_devotional", "m"),
+    ("neha_en_customer", "f"),
+    ("neha_en_latenight", "f"),
+    ("neha_mr_narration", "f"),
+    ("nilesh_mr_conversation", "m"),
+    ("nupur_en_kids", "f"),
+    ("ojas_en_social", "m"),
+    ("pooja_gu_conversational", "f"),
+    ("pooja_gu_customer", "f"),
+    ("pooja_te_conversation", "f"),
+    ("priya_hi_recovery", "f"),
+    ("rahul_hi_conversational", "m"),
+    ("ratan_hi_customer_expressive", "m"),
+    ("ratan_hi_devotional", "m"),
+    ("ratan_hi_documentary", "m"),
+    ("ratan_hi_latenight", "m"),
+    ("ratan_hi_latenight_warm", "m"),
+    ("ratan_hi_recovery", "m"),
+    ("ratan_hi_social", "m"),
+    ("ratan_hi_sports", "m"),
+    ("rehan_hi_social", "m"),
+    ("ritu_en_edtech", "f"),
+    ("ritu_en_latenight", "f"),
+    ("ritu_en_medical", "f"),
+    ("ritu_en_reels", "f"),
+    ("ritu_hi_ads_formal", "f"),
+    ("ritu_hi_ads_informal", "f"),
+    ("ritu_hi_banking", "f"),
+    ("ritu_hi_conversation", "f"),
+    ("ritu_hi_customer", "f"),
+    ("ritu_hi_customer_utility", "f"),
+    ("ritu_hi_customer_warm", "f"),
+    ("ritu_hi_edtech", "f"),
+    ("ritu_hi_edtech_bot", "f"),
+    ("ritu_hi_insurance", "f"),
+    ("ritu_hi_kids", "f"),
+    ("ritu_hi_medical", "f"),
+    ("ritu_hi_reels", "f"),
+    ("ritu_hi_sales", "f"),
+    ("ritu_hi_social", "f"),
+    ("ritu_hi_social_lively", "f"),
+    ("ritu_mr_insurance", "f"),
+    ("ritu_mr_narration", "f"),
+    ("rohan_en_recovery", "m"),
+    ("roopa_bn_conversational", "f"),
+    ("roopa_en_conversational", "f"),
+    ("roopa_hi_companion", "f"),
+    ("roopa_hi_conversational", "f"),
+    ("roopa_hi_market", "f"),
+    ("roopa_hi_narration", "f"),
+    ("roopa_hi_recovery", "f"),
+    ("rupali_mr_stories", "f"),
+    ("rustom_en_suspense", "m"),
+    ("sanchita_en_companion", "f"),
+    ("sanchita_en_insurance", "f"),
+    ("sanchita_en_market", "f"),
+    ("sanchita_en_recovery", "f"),
+    ("sanchita_en_social", "f"),
+    ("sanchita_enhi_companion", "f"),
+    ("sanchita_hi_ads_formal", "f"),
+    ("sanchita_hi_ads_informal", "f"),
+    ("sanchita_hi_assistant", "f"),
+    ("sanchita_hi_banking", "f"),
+    ("sanchita_hi_edtech", "f"),
+    ("sanchita_hi_feedback", "f"),
+    ("sanchita_hi_interview", "f"),
+    ("sanchita_hi_kyc", "f"),
+    ("sanchita_hi_market", "f"),
+    ("sanchita_hi_romantic", "f"),
+    ("sanchita_hi_social", "f"),
+    ("sarang_en_narration", "m"),
+    ("sarika_hi_conversation", "f"),
+    ("shabana_en_edtech", "f"),
+    ("shalini_en_companion", "f"),
+    ("shalini_en_customer", "f"),
+    ("shalini_enhi_companion", "f"),
+    ("shalini_enhi_customer", "f"),
+    ("shalini_hi_companion", "f"),
+    ("shalini_hi_social", "f"),
+    ("shilpa_hi_narration", "f"),
+    ("shreya_hi_conversational", "f"),
+    ("shreya_hi_news", "f"),
+    ("shruti_hi_edtech", "f"),
+    ("shubh_en_ads", "m"),
+    ("shubh_en_audiobook", "m"),
+    ("shubh_en_narration", "m"),
+    ("shubh_en_narration_gentle", "m"),
+    ("shubh_en_numbers", "m"),
+    ("shubh_en_recovery", "m"),
+    ("shubh_en_sports", "m"),
+    ("shubh_enhi_ads", "m"),
+    ("shubh_enhi_banking", "m"),
+    ("shubh_enhi_companion", "m"),
+    ("shubh_hi_ads", "m"),
+    ("shubh_hi_customer", "m"),
+    ("shubh_hi_devotional", "m"),
+    ("shubh_hi_ecomm", "m"),
+    ("shubh_hi_recovery", "m"),
+    ("shubh_hi_stories_dramatic", "m"),
+    ("shubh_hi_stories_mixed", "m"),
+    ("simran_en_ads", "f"),
+    ("simran_en_automobile", "f"),
+    ("simran_en_conversation", "f"),
+    ("simran_en_customer", "f"),
+    ("simran_en_edtech", "f"),
+    ("simran_en_edtech_bot", "f"),
+    ("simran_en_narration", "f"),
+    ("simran_en_recovery", "f"),
+    ("simran_en_sales", "f"),
+    ("simran_en_therapist", "f"),
+    ("simran_enhi_banking_expressive", "f"),
+    ("simran_enhi_companion", "f"),
+    ("simran_enhi_customer", "f"),
+    ("simran_hi_assistant", "f"),
+    ("simran_hi_automobile", "f"),
+    ("simran_hi_conversation", "f"),
+    ("simran_hi_latenight", "f"),
+    ("simran_hi_narration", "f"),
+    ("simran_hi_news", "f"),
+    ("simran_hi_news_breaking", "f"),
+    ("simran_hi_recovery", "f"),
+    ("simran_hi_sales", "f"),
+    ("simran_hi_social_energetic", "f"),
+    ("simran_hi_social_excited", "f"),
+    ("soham_mr_narration", "m"),
+    ("sophia_en_conversational", "f"),
+    ("suchitra_hi_ecomm", "f"),
+    ("suchitra_kn_narration", "f"),
+    ("suhani_hi_social", "f"),
+    ("suman_hi_companion", "f"),
+    ("sumit_hi_conversational", "m"),
+    ("sunny_en_social", "m"),
+    ("sunny_enhi_customer", "m"),
+    ("sunny_hi_ads", "m"),
+    ("sunny_hi_reels", "m"),
+    ("tanya_hi_narration", "f"),
+    ("tarun_hi_conversational", "m"),
+    ("tarun_hi_sales", "m"),
+    ("tarun_te_narration", "m"),
+    ("vandana_hi_ecomm", "f"),
+    ("varun_en_ads", "m"),
+    ("varun_en_suspense", "m"),
+    ("vijay_ta_narration", "m"),
+    ("vipul_hi_social", "m"),
+    ("zarina_en_conversation", "f"),
+)
+_SARVAM_V4_LANG = {"hi": "Hindi", "en": "English", "enhi": "Hinglish", "mr": "Marathi", "kn": "Kannada",
+                   "pa": "Punjabi", "ta": "Tamil", "te": "Telugu", "gu": "Gujarati", "bn": "Bengali"}
+
+
+def _sarvam_v4_entry(vid: str, g: str) -> dict:
+    name, lang, *style = vid.split("_")
+    style_words = " ".join(style).title()
+    expressive = "expressive" in style
+    return {
+        "value": f"{SARVAM_V4_PREFIX}{vid}",
+        "name": f"{name.title()} {style_words} ({_SARVAM_V4_LANG.get(lang, lang)})",
+        "gender": "male" if g == "m" else "female",
+        "tier": "premium",
+        "multilingual": True,
+        "note": f"Sarvam v4 · {style_words.lower()}{' · expressive' if expressive else ''}",
+    }
+
+
+CATALOG += [_sarvam_v4_entry(vid, g) for vid, g in SARVAM_V4_VOICES]
+
 
 # --- Gemini 3.8 Flash-Lite library voices (owner-only until quota) -------
 # Google's /v1beta/voices library (2,089 voices, 290 Indian, checked
@@ -426,7 +696,9 @@ _HIDDEN_VOICE_PREFIXES = ("elevenlabs-v3:", "elevenlabs:", "google31:")
 #   - the locale "Standard" family (e.g. google:hi-IN-Standard-A): audible distortion
 #     and no transcription on call 885 (see web-demo agentOptions).
 # Agents already using one keep working: get_voice() and billing still resolve them.
-_HIDDEN_VOICES_EXACT = frozenset({"google:kore", "google:charon"})
+# Mira/Arin were hidden on 2026-10-08 for speed (about 0.93 s); they return on
+# 2026-10-13 as part of the opt-in Expressive tier, labelled as slower.
+_HIDDEN_VOICES_EXACT: frozenset = frozenset()
 
 
 # Which languages a voice can actually SPEAK, and whether it can switch
