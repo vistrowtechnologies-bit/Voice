@@ -2335,36 +2335,9 @@ def _build_stt(speech_context: str | None = None, reply_language: str | None = N
     return SttFallbackAdapter([sarvam_stt, google_stt])
 
 
-# bulbul:v2 was retired by Sarvam — every request returns "400: Model
-# 'bulbul:v2' has been deprecated. Please use 'bulbul:v3'". Its six speakers
-# are gone from the catalog (see voice_catalog.py), but a stale agent or
-# account-voice-menu row can still name one, and sarvam.TTS RAISES at
-# construction for a speaker the model does not know ("Speaker 'anushka' is
-# not compatible with model 'bulbul:v3'"), which would kill the call before
-# a word is spoken. So the speaker is validated against the plugin's own live
-# roster and dropped to a gender-matched default if it is not on it — the
-# rosters do not overlap, so an old v2 name can never be re-pointed directly.
-try:
-    from livekit.plugins.sarvam.tts import MODEL_SPEAKER_COMPATIBILITY as _SARVAM_ROSTER
-except Exception:  # plugin internals are not API — never break startup over it
-    _SARVAM_ROSTER = {}
-
-_SARVAM_V3_DEFAULTS = {"male": "shubh", "female": "ritu"}
-
-
-def _sarvam_v3_speaker(speaker: str, gender: str | None = None) -> str:
-    roster = _SARVAM_ROSTER.get("bulbul:v3") or {}
-    allowed = set(roster.get("all") or [])
-    if not allowed:
-        allowed = set(roster.get("male") or []) | set(roster.get("female") or [])
-    if not allowed or speaker in allowed:
-        return speaker
-    replacement = _SARVAM_V3_DEFAULTS["male" if gender == "male" else "female"]
-    logger.warning(
-        "speaker %r is not on the bulbul:v3 roster (retired v2 voice?) — using %r",
-        speaker, replacement,
-    )
-    return replacement
+# Sarvam speakers: every value is resolved to a bulbul:v4-flash persona by
+# voice_catalog.sarvam_v4_speaker, which also catches retired v2 names (the
+# plugin raises at construction for a speaker the model does not know).
 
 _GOOGLE_VOICE_PREFIX = "google:"
 _GOOGLE_31_VOICE_PREFIX = "google31:"
@@ -2875,9 +2848,9 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         safety_speaker = "ritu" if (voice_catalog.get_voice(speaker) or {}).get("gender") == "female" else "shubh"
         sarvam_safety_net = sarvam.TTS(
             target_language_code=reply_language,
-            model="bulbul:v3",
-            speaker=safety_speaker,
-            **tone,
+            model=voice_catalog.SARVAM_V4_MODEL,
+            speaker=voice_catalog.sarvam_v4_speaker(safety_speaker),
+            **{**tone, "temperature": min(float(tone.get("temperature", 0.6)), 1.0)},
         )
         _prewarm_provider(sarvam_safety_net, "sarvam TTS (Google fallback)")
         _use_clause_tokenizer(sarvam_safety_net, "sarvam TTS (Google fallback)")
@@ -2925,22 +2898,21 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
     # "sarvam4:<id>" is a bulbul:v4-flash persona voice (voice_catalog
     # SARVAM_V4_VOICES): the id goes to the API as-is. The LiveKit plugin does
     # not know v4 yet and skips its speaker check for an unknown model.
-    # livekit-plugins-sarvam sends temperature and its buffer settings only for
-    # bulbul:v3 (checked in the installed plugin), so on v4 the Tone preset's
-    # pace is the only delivery control that reaches Sarvam; a v4 voice's
-    # expressiveness comes from its persona style. Temperature is still
+    # Every Sarvam voice speaks through bulbul:v4-flash (2026-10-13): a
+    # "sarvam4:" persona id as-is, a stored v3 short name ("ritu") through
+    # voice_catalog.SARVAM_V3_TO_V4, anything else the gender default.
+    # livekit-plugins-sarvam 1.8.3 sends temperature and its buffer settings
+    # only for bulbul:v3 (1.8.6 adds v4 but needs livekit-agents 1.8.6). The
+    # measured cost is nil: on v4, temperature 0.2 vs 0.95 did not change pitch
+    # variation, and v4 first audio matched v3 on real calls. Temperature is
     # clamped to v4's documented 0.01-1.0 in case the plugin starts sending it.
-    sarvam_v4 = speaker.startswith(voice_catalog.SARVAM_V4_PREFIX)
-    if sarvam_v4:
-        tone = {**tone, "temperature": min(float(tone.get("temperature", 0.6)), 1.0)}
+    tone = {**tone, "temperature": min(float(tone.get("temperature", 0.6)), 1.0)}
     sarvam_tts = sarvam.TTS(
         target_language_code=reply_language,
-        # v2 is retired vendor-side.
-        model=voice_catalog.SARVAM_V4_MODEL if sarvam_v4 else "bulbul:v3",
-        speaker=(
-            speaker[len(voice_catalog.SARVAM_V4_PREFIX):]
-            if sarvam_v4
-            else _sarvam_v3_speaker(sarvam_speaker, (voice_catalog.get_voice(speaker) or {}).get("gender"))
+        model=voice_catalog.SARVAM_V4_MODEL,
+        speaker=voice_catalog.sarvam_v4_speaker(
+            speaker if speaker.startswith(voice_catalog.SARVAM_V4_PREFIX) else sarvam_speaker,
+            (voice_catalog.get_voice(speaker) or {}).get("gender"),
         ),
         **tone,
         **sarvam_lab_options,
@@ -6713,7 +6685,7 @@ async def entrypoint(ctx: JobContext) -> None:
         cfg = config
         logger.info(
             "Sarvam latency profile active: STT=saaras:v3-realtime LLM=sarvam-105b-conversations "
-            "TTS=bulbul:v3/simran channel=%s room=%s",
+            "TTS=bulbul:v4-flash/simran channel=%s room=%s",
             call_context.get("call_type"), ctx.room.name,
         )
     def _record_eot_probability(probability: float, extra: dict) -> None:
