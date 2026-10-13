@@ -301,7 +301,7 @@ function GeneralTab() {
       <SettingsCard title="Related workspace controls" subtitle="These are kept with the feature they configure, so your team can find them where they work.">
         <div className="grid gap-2 sm:grid-cols-2">
           {[
-            { to: '/dashboard/integrations', icon: 'extension', label: 'Integrations', description: 'Connect Slack, CRM, WhatsApp and more.' },
+            { to: '/dashboard/integrations', icon: 'extension', label: 'Integrations', description: 'Connect your CRM, Slack, Google Sheets and webhooks.' },
             { to: '/dashboard/billing', icon: 'credit_card', label: 'Billing & credits', description: 'Plan, credits, invoices and usage.' },
             { to: '/dashboard/numbers', icon: 'dialpad', label: 'Phone numbers', description: 'Assign and manage calling numbers.' },
             { to: '/dashboard/website-widget', icon: 'widgets', label: 'Website widget', description: 'Control the embed and visitor experience.' },

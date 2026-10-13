@@ -1,0 +1,57 @@
+---
+title: "Instant Lead Follow-up"
+description: "Send a new lead to a webhook and your agent calls it within seconds."
+---
+
+The fastest lead is the one you call first. **Instant Lead Follow-up** gives your workspace a private webhook URL: POST a lead to it, and a call to that lead is queued within about **15–30 seconds** — no dashboard action needed.
+
+It works with any source that can send a webhook: a form on your website, your CRM, or an automation tool such as Zapier, Make or n8n.
+
+## Before you start
+
+<Note>
+  The lead is called from your first active phone number that's assigned to a live agent, and that agent takes the call. Set one up under [Phone Numbers](/platform/phone-numbers) first — without one, leads aren't queued.
+</Note>
+
+## Set it up
+
+<Steps>
+  <Step title="Copy your webhook URL">
+    Go to **Integrations** and find the **Instant Lead Follow-up** card. Click the eye icon to show the full URL and the copy icon to copy it. Only admins and the workspace owner can see it.
+  </Step>
+  <Step title="Point your lead source at it">
+    In your form tool, CRM or automation, add a step that sends a `POST` request with a JSON body to that URL.
+  </Step>
+  <Step title="Send a test lead">
+    Use your own phone number. Your agent should call you within about half a minute.
+  </Step>
+</Steps>
+
+<Warning>
+  The URL contains a secret token for your workspace. Keep it private — anyone with it can queue calls on your account.
+</Warning>
+
+## What to send
+
+Send a JSON body with the lead's phone number and, ideally, their name:
+
+```bash
+curl -X POST "YOUR_WEBHOOK_URL" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Priya Sharma", "phone": "+919876543210"}'
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `phone` | Yes | The number to call. `phone_number` also works. |
+| `name` | No | The lead's name, so the agent can greet them. `full_name` also works. |
+
+If you'd rather not keep the token in the URL, send it in an `X-Vistrow-Webhook-Token` header (or as `Authorization: Bearer <token>`) and drop it from the URL.
+
+The response is always JSON. `"ok": true` means the call was queued. If it wasn't, `reason` says why — for example `no_phone_in_payload`, `invalid_phone`, or `auto_call_not_ready_or_paused` (no live agent with a phone number yet, or the follow-up campaign is paused).
+
+Sending the same lead twice while its call is still pending doesn't queue a second call.
+
+## Your calling rules still apply
+
+Every queued call goes through your [Calling rules](/platform/compliance), exactly like a regular campaign. Numbers on your Do-Not-Call list are never dialed, and a lead that arrives outside your calling window waits until the window opens.

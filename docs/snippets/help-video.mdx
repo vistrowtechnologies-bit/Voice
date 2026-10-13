@@ -1,12 +1,14 @@
-export const HelpVideo = ({ slug, title }) => (
+export const HelpVideo = ({ id, title }) => (
   <Frame caption={title}>
-    <video
-      controls
-      playsInline
-      preload="none"
-      poster={`https://www.vistrowvoice.com/media/help/${slug}.jpg`}
-      src={`https://www.vistrowvoice.com/media/help/${slug}.mp4`}
+    <iframe
+      src={`https://www.youtube-nocookie.com/embed/${id}?rel=0`}
+      title={title}
+      loading="lazy"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      referrerPolicy="strict-origin-when-cross-origin"
+      allowFullScreen
       className="w-full aspect-video rounded-xl"
+      style={{ border: 0 }}
     />
   </Frame>
 );

@@ -33,17 +33,36 @@
             ]
           },
           {
-            "group": "Platform",
+            "group": "Build",
             "pages": [
               "platform/agents",
+              "platform/voices",
               "platform/knowledge-base",
-              "platform/testing-lab",
-              "platform/website-widget",
+              "platform/testing-lab"
+            ]
+          },
+          {
+            "group": "Deploy",
+            "pages": [
               "platform/phone-numbers",
+              "platform/website-widget",
+              "platform/integrations",
+              "platform/instant-lead-follow-up"
+            ]
+          },
+          {
+            "group": "Monitor",
+            "pages": [
+              "platform/calls",
+              "platform/usage"
+            ]
+          },
+          {
+            "group": "Workspace",
+            "pages": [
+              "platform/settings",
               "platform/compliance",
               "platform/billing",
-              "platform/integrations",
-              "platform/calls",
               "platform/copilot"
             ]
           }

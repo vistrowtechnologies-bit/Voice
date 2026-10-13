@@ -5,52 +5,73 @@ description: "Voice, model, persona, and behavior settings for each AI agent."
 
 import { HelpVideo } from "/snippets/help-video.mdx";
 
-<HelpVideo slug="create-and-edit-agent" title="Create and edit an agent · 1:49" />
+<HelpVideo id="EIX4efDUurc" title="Create and edit an agent · 1:49" />
 
-An agent is one configured persona — a voice, a model, a system prompt, and a set of behaviors — that can answer calls on any channel you connect to it (phone, website widget, or browser test call).
+An agent is one configured persona — a voice, a model, instructions, and a set of behaviors — that can answer calls on any channel you connect to it (phone, website widget, or a browser test call).
+
+<Tip>
+  The fastest way to start is **Agents → New Agent → Build with AI**: describe your business and it drafts the whole agent for you. See [Build with AI](/platform/build-with-ai).
+</Tip>
 
 <Note>
-  Changes you make to an agent (prompt, voice, model, knowledge base, pause) apply from the very next call. There's no redeploy step.
+  Changes you make to an agent (instructions, voice, knowledge base, pause) apply from the very next call. Click **Save changes** at the bottom of the page — there's no redeploy step.
 </Note>
 
-## Core settings
+## Agent ID
 
-| Field | What it controls |
-|---|---|
-| **Model** | The LLM powering responses — a balanced default plus faster/cheaper tiers. |
-| **Voice** | The TTS voice, including preview/next-generation voices where available. |
-| **Default language** | The language the agent opens in before any language switching happens. |
-| **Voice delivery** | Pacing and expressiveness — from measured to casual and fast. |
-| **Emotion intensity** | How much the agent's tone shifts in response to the caller's own tone. |
-| **Who speaks first** | Whether the agent greets the caller or waits to be spoken to. |
-| **Welcome message** | A fixed opening line, or leave blank to auto-generate one. |
-| **System prompt** | The agent's persona and instructions. Leave blank to use the built-in generic business assistant prompt. |
+Every agent has a 10-digit **Agent ID**, shown as a chip next to its name at the top of the agent page. Click it to copy.
 
-## Speech settings
+Use it to match calls to the right agent in other tools: every lead sent to ArthaLeads and to your webhooks carries it as `agent_id`.
 
-Turn-taking is tunable per agent:
+## The five tabs
 
-- **Interruption sensitivity** — how quickly the agent yields the floor when the caller starts talking. Higher values yield faster; lower values let the agent finish its sentence through brief background noise.
-- **Silence check-in after (sec)** — how long a caller can go quiet before the agent checks in. `0` uses the platform default (~6.5s).
-- **Max check-ins** — how many times the agent will check in before giving up.
-- **End call after silence (sec)** — hangs up after this much continuous silence. `0` means never.
+The agent page is split into five tabs.
 
-## Functions
+<Tabs>
+  <Tab title="Instructions">
+    | Field | What it controls |
+    |---|---|
+    | **Name** and **Description** | How the agent appears in your dashboard. |
+    | **Model** | The AI that holds the conversation. **Vistrow Bharat** is built for Hindi, English and other Indian languages, and is the model to pick for every agent. |
+    | **Who speaks first** | **AI speaks first** (greets the caller) or **Caller speaks first** (the agent waits). |
+    | **Welcome message — inbound** | The opening line on inbound calls. Leave blank to have one generated. |
+    | **Welcome message — outbound** | The opening line on outbound calls. Leave blank to reuse the inbound one. |
+    | **System prompt** | The agent's persona and instructions. Leave blank to use the built-in generic business assistant prompt. |
+    | **Variables** | Your own `{{variable}}` names, each with a fallback value, to personalise welcome messages and instructions. |
 
-Agents can be given tools to run during a call — checking calendar availability, booking an appointment, capturing a qualified lead, or calling a custom webhook mid-call. Enable only what a given agent's persona actually needs.
+    <Note>
+      Older agents set up on **Vistrow Swift** keep working, but Vistrow Swift is no longer offered for new choices — switch to Vistrow Bharat when you next edit the agent.
+    </Note>
+  </Tab>
+  <Tab title="Voice & language">
+    | Field | What it controls |
+    |---|---|
+    | **Voice** | The voice callers hear. Only voices you've added on the [Voices](/platform/voices) page appear here. |
+    | **Default language** | The language the agent opens in. It follows the caller if they switch. |
+    | **Voice delivery** | Pacing and expressiveness. |
+    | **Background sound** | Optional ambience behind the agent, with a volume control. |
+  </Tab>
+  <Tab title="Knowledge & tools">
+    - **Functions** — what the agent can do during a call: **Let the agent end the call**, **Let the agent search the web**, **Let the agent press phone keys (DTMF)**, a **Transfer to a human** number, an **Emergency fallback** number if the call breaks, and your own custom functions (for example, calling your webhook mid-call).
+    - **Knowledge base** — attach one so the agent answers from your own content instead of improvising. See [Knowledge Base](/platform/knowledge-base).
+    - **Live catalog** — optionally give the agent access to your products, services, listings or plans.
+    - **Memory** — **Remember returning callers** lets the agent recall past conversations with the same caller (phone and widget calls).
+  </Tab>
+  <Tab title="Conversation">
+    - **Caller noise suppression** — filters background noise out of the caller's audio. If callers say they spoke but the transcript is empty, set it to **Off**.
+    - **Interruption sensitivity** — how quickly the agent stops talking when the caller starts. Higher yields faster; lower lets it finish through brief background noise.
+    - **Silence check-in after (sec)** — how long a caller can go quiet before the agent checks in.
+    - **Max check-ins** — how many times the agent checks in before giving up.
+    - **End call after silence (sec)** — hangs up after this much continuous silence. `0` means never.
+    - **Max call duration (sec)** — the longest a call can run. Shortly before the limit (up to about 25 seconds early), the agent says a short, polite goodbye in the caller's language, then the call ends. Even with no limit set, calls end after 45 minutes.
+  </Tab>
+  <Tab title="After the call">
+    - **Post-call data extraction** — structured fields (name, budget, appointment time, anything you need) pulled from each transcript automatically and shown on the call's record.
+    - **Webhook** — send each call's result (transcript, extracted fields, sentiment, `agent_id`) as JSON to your own endpoint.
+    - **CRM routing** — choose which connected [integrations](/platform/integrations) this agent sends leads to. With none selected, it sends to every connected integration.
+  </Tab>
+</Tabs>
 
-## Knowledge base
+## Test your agent
 
-Attach a knowledge base (see [Knowledge Base](/platform/knowledge-base)) so the agent grounds its answers in your own content instead of improvising.
-
-## Post-call data extraction
-
-Define structured fields (name, budget, appointment time, anything else you need) that get pulled from the transcript automatically once a call ends, and surfaced on that call's record.
-
-## Webhook
-
-Send the outcome of every call — transcript, extracted fields, sentiment — to your own endpoint or CRM as JSON. See [Integrations](/platform/integrations) for the built-in ArthaLeads and Slack options if you don't want to build a custom receiver.
-
-## Public website demo agent
-
-Exactly one agent platform-wide can be flagged to power the "talk to it live" demo on the marketing site. Enabling it on one agent automatically turns it off on whichever agent had it before.
+On the **Agents** page, each agent card has a mic button (**Browser test**) to talk to it in your browser and a phone button (**Call test**) to place a real call to your phone. For repeatable checks, use the [Testing Lab](/platform/testing-lab).
