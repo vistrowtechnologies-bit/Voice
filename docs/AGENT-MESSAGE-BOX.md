@@ -21,6 +21,13 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 5. Verify a change with deployed SDK versions; preserve 3.1/pipeline, merge via PR, export exact main for agent deploy, and confirm both workers registered.
 6. Update this file and issue #2 with evidence and remaining live gates before stopping. Do not declare success from tests/startup alone.
 
+## Current Codex media task — 2026-10-13
+
+- Owner: Codex; branch `codex/artha-youtube-thumbnails`. Eight YouTube demo/help thumbnails exported and visually reviewed; no website, public docs, dashboard, server or agent code changed.
+- Deliverables: `output/youtube-thumbnails-2026-10-13/professional-v2/` in the Codex marketing worktree; convenient final copies at `/Users/mac15/Downloads/Vistrow-Voice-YouTube-Thumbnails-Professional-2026-10-13/`.
+- Verified: eight named JPEGs at 1280×720, 230,731–272,105 bytes, and a contact sheet displaying each at 320×180. Original user headlines preserved; presenter identity reference kept consistent.
+- Next: owner reviews the professional set and uploads the selected thumbnails to the eight YouTube videos. No YouTube publishing was performed; observed click-through performance has not been measured.
+
 ## Messages (append with author and UTC date/time)
 
 ### Codex — 2026-10-10 — PR #20 recap
@@ -518,3 +525,11 @@ Branch `claude/llm-token-fixes` (PR linked on issue #2). Each audit finding was 
 
 Verified: agent suite in a livekit-agents 1.8.3 venv: 709 passed, 16 skipped. Server suite (server/.venv): 532 passed, 88 skipped (DB-backed tests skipped without TEST_DATABASE_URL). The new warmer test fails against the old filter.
 Unverified: live calls. Nothing deployed. Needed after merge: Railway (server migration plus warmer), then `lk agent deploy` for BOTH CA_53d8HgBktjZ7 and CA_TGdpVhSdxDyS. Next step: after deploy, check that a new Sarvam call row has `llm_prompt_tokens` filled in.
+
+### Codex — 2026-10-13 07:16 UTC — Artha YouTube thumbnail delivery
+
+Branch `codex/artha-youtube-thumbnails`; generated eight thumbnails using the owner's supplied Artha portrait as the identity reference. Higgsfield Nano Banana Pro rejected the initial batch for a plan restriction (zero jobs submitted); production continued with the built-in image generator. The first cinematic neon set was rejected by the owner as gaming-like. Final `professional-v2` uses calm lavender/white backgrounds, dark flat type with restrained magenta emphasis, natural portraits, and simple tutorial illustrations. No source files under Claude's active claims were touched.
+
+Outputs (one JPEG per video): `01-get-started.jpg`, `02-build-an-agent-with-ai.jpg`, `03-create-and-edit-an-agent.jpg`, `04-testing-lab.jpg`, `05-knowledge-base.jpg`, `06-connect-a-phone-number.jpg`, `07-website-widget-wordpress.jpg`, `08-artha-copilot.jpg`. Both sets, source PNGs, exact generation prompts, export script, and size manifest remain in `output/youtube-thumbnails-2026-10-13/` in `/Users/mac15/.codex/worktrees/marketing-seo-deploy/VISTROW VOICE/`. Final JPEGs, review sheet, and ZIP also copied to `/Users/mac15/Downloads/Vistrow-Voice-YouTube-Thumbnails-Professional-2026-10-13/`.
+
+Verified: export script asserts JPEG format and exactly 1280×720 for each final; all eight are below 2 MB (230,731–272,105 bytes). Visually inspected the combined contact sheet at an actual 320×180 per thumbnail: exact headlines legible, reference presenter recognisable, consistent professional series, distinct topic illustrations, duration area clear of headline/face/main prop. Requested five-word website headline retained verbatim despite the original general four-word limit. Source files and earlier versions preserved. No application build/test needed for a media-only deliverable. No assets committed into public web routes, no deployment, no YouTube account changes, no measured conversion claim. Exact next step: owner reviews this professional set; only then upload if requested.
