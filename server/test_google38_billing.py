@@ -24,6 +24,11 @@ class Google38Billing(unittest.TestCase):
 
     def test_existing_gemini_tiers_unchanged(self):
         self.assertEqual(calls_db.voice_tier("google:kore"), "premium")
+        # Every Expressive persona bills premium, not just Kore/Charon.
+        for value in voice_catalog.EXPRESSIVE_VOICES:
+            self.assertEqual(calls_db.voice_tier(value), "premium", value)
+        self.assertEqual(calls_db.voice_tier("sarvam4:ritu_hi_customer_warm"), "premium")
+        self.assertEqual(calls_db.voice_tier("ritu"), "standard")
         self.assertEqual(calls_db.voice_tier("google31:kore"), "standard")
         self.assertEqual(calls_db.voice_tier("google:hi-IN-Standard-A"), "economy")
 

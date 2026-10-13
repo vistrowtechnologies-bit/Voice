@@ -235,4 +235,6 @@ def synthesize(voice_string: str, lang: str, text: str | None = None) -> tuple[b
         return _synth_google(voice_string[len(_GOOGLE_PREFIX):], lang, text)
     # bulbul:v2 is retired vendor-side and its speakers are gone from the
     # catalog, so get_voice() above already rejects them.
+    if voice_string.startswith(voice_catalog.SARVAM_V4_PREFIX):
+        return _synth_sarvam(voice_string[len(voice_catalog.SARVAM_V4_PREFIX):], voice_catalog.SARVAM_V4_MODEL, lang, text)
     return _synth_sarvam(voice_string, "bulbul:v3", lang, text)

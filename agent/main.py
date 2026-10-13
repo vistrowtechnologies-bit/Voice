@@ -2408,7 +2408,9 @@ _GEMINI_PROVIDERS = {
 # language this platform supports without swapping voices. Keyed by the
 # bare persona name (no locale prefix) — see
 # https://docs.cloud.google.com/text-to-speech/docs/gemini-tts#voice_options
-_GOOGLE_MULTILINGUAL_VOICES = {"charon", "kore"}
+# Every Gemini persona is an Expressive voice on gemini-2.5-flash-tts (see
+# voice_catalog.EXPRESSIVE_VOICES), not just Kore/Charon.
+_GOOGLE_MULTILINGUAL_VOICES = {p.lower() for p, _g, _s in voice_catalog.GEMINI_PREBUILT_VOICES}
 
 _ELEVENLABS_VOICE_PREFIX = "elevenlabs:"
 # Experimental — see _build_tts's docstring. Distinct prefix so it's an
@@ -2920,12 +2922,25 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
         "output_audio_codec": "linear16",
         "speech_sample_rate": _TELEPHONY_SAMPLE_RATE if is_phone else 24000,
     } if sarvam_latency_lab else {}
+    # "sarvam4:<id>" is a bulbul:v4-flash persona voice (voice_catalog
+    # SARVAM_V4_VOICES): the id goes to the API as-is. The LiveKit plugin does
+    # not know v4 yet and skips its speaker check for an unknown model.
+    # livekit-plugins-sarvam sends temperature and its buffer settings only for
+    # bulbul:v3 (checked in the installed plugin), so on v4 the Tone preset's
+    # pace is the only delivery control that reaches Sarvam; a v4 voice's
+    # expressiveness comes from its persona style. Temperature is still
+    # clamped to v4's documented 0.01-1.0 in case the plugin starts sending it.
+    sarvam_v4 = speaker.startswith(voice_catalog.SARVAM_V4_PREFIX)
+    if sarvam_v4:
+        tone = {**tone, "temperature": min(float(tone.get("temperature", 0.6)), 1.0)}
     sarvam_tts = sarvam.TTS(
         target_language_code=reply_language,
-        # v2 is retired vendor-side; v3 is the only model left.
-        model="bulbul:v3",
-        speaker=_sarvam_v3_speaker(
-            sarvam_speaker, (voice_catalog.get_voice(speaker) or {}).get("gender")
+        # v2 is retired vendor-side.
+        model=voice_catalog.SARVAM_V4_MODEL if sarvam_v4 else "bulbul:v3",
+        speaker=(
+            speaker[len(voice_catalog.SARVAM_V4_PREFIX):]
+            if sarvam_v4
+            else _sarvam_v3_speaker(sarvam_speaker, (voice_catalog.get_voice(speaker) or {}).get("gender"))
         ),
         **tone,
         **sarvam_lab_options,
