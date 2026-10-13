@@ -140,9 +140,9 @@ class _Session:
 class FailoverMidCall(unittest.TestCase):
     def test_a_gemini_error_is_spoken_by_the_backup_not_silence(self):
         async def run():
-            failing = GeminiInteractionsTTS(model="gemini-3.8-flash-lite-tts", voice="Kore", api_key="k")
+            failing = GeminiInteractionsTTS(model="gemini-3.8-flash-lite-tts", voice="Kore", api_key="k", path="interactions")
             failing._session = _Session(429)
-            backup = GeminiInteractionsTTS(model="gemini-3.8-flash-lite-tts", voice="Kore", api_key="k")
+            backup = GeminiInteractionsTTS(model="gemini-3.8-flash-lite-tts", voice="Kore", api_key="k", path="interactions")
             backup._session = _Session(200)
             with patch.object(main, "_ELEVENLABS_API_KEY", None), patch.object(main.db, "log_platform_error"):
                 tts = main._google_fallback_tts(
