@@ -28,13 +28,18 @@ from help_tools import TOOL_FUNCTIONS, TOOL_SCHEMAS
 logger = logging.getLogger("help-chat")
 
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
-# Cheapest GPT text model that still supports Chat Completions, function
-# calling, and structured JSON output. Help answers are grounded in our own
-# documentation/tools, so a larger general model adds cost without adding a
-# better source of truth.
-CHAT_MODEL = "gpt-5-nano"
+# gpt-5-nano until 2026-10-14. Measured on this code path against a real
+# workspace (14 tasks x 4 runs): gpt-5-nano at its default reasoning took
+# 12.5 s median (p90 22 s) and in 9 of 16 write requests said "ready to
+# confirm on the card" without proposing anything; gpt-5.4-mini answered
+# 50/56 with every write proposed correctly (16/16), no wrong numbers, 2.0 s
+# median. gpt-5.4-nano was 47/56 and answered "kal kitni calls" with the
+# all-time total. Reasoning off: GPT-5.4 accepts "none" (gpt-5-nano does not).
+CHAT_MODEL = "gpt-5.4-mini"
+_MODEL_PARAMS = {"reasoning_effort": "none"}
 # Turns that offer write actions use this model; override to try a larger
-# one for actions without changing read-only answers.
+# one for actions without changing read-only answers. Must be a GPT-5.4
+# model while _MODEL_PARAMS sends reasoning "none".
 ACTION_MODEL = os.environ.get("COPILOT_ACTION_MODEL") or CHAT_MODEL
 # Fallback when OpenAI fails (e.g. out of credit): Sarvam's model, which our
 # voice agents already run tools on. COPILOT_PROVIDER=openai|sarvam forces one.
@@ -218,12 +223,16 @@ def _deterministic_live_reply(
 def _tool_result_content(result) -> str:
     """Wrap a tool result as untrusted workspace data, truncated so one
     transcript-heavy lookup cannot crowd out the rest of the context."""
-    data = json.dumps(result)
+    # ensure_ascii=False: the default escapes Hindi as \\uXXXX codes (twice on
+    # the truncated path), and models then guessed at what a caller said
+    # (measured 2026-10-14: three models invented "discount/price" for a call
+    # about office hours; with plain UTF-8 all three were right 3/3).
+    data = json.dumps(result, ensure_ascii=False)
     if len(data) > MAX_TOOL_RESULT_CHARS:
         data = data[:MAX_TOOL_RESULT_CHARS] + "…[truncated]"
     else:
         data = result
-    return json.dumps({"data": data, "note": TOOL_RESULT_NOTE})
+    return json.dumps({"data": data, "note": TOOL_RESULT_NOTE}, ensure_ascii=False)
 
 
 def _post_chat(api_key: str, body: dict, url: str = OPENAI_CHAT_URL) -> dict:
@@ -258,6 +267,8 @@ def _sarvam_body(body: dict, tools: list[dict]) -> dict:
     still list the tools, so the forced final round sends them with
     tool_choice "none"."""
     out = {**body, "model": SARVAM_MODEL}
+    # OpenAI-only parameter; Sarvam's reasoning_effort has no "none".
+    out.pop("reasoning_effort", None)
     if "tools" in out:
         out.pop("response_format", None)
     elif any(m.get("role") == "tool" for m in out["messages"]):
@@ -389,7 +400,7 @@ def answer_help_question(
         # final JSON answer.
         offer_tools = round_no < MAX_TOOL_ROUNDS and tool_calls_used < MAX_TOOL_CALLS and pending is None
         model = ACTION_MODEL if access["tools"] else CHAT_MODEL
-        body = {"model": model, "response_format": response_shape, "messages": messages}
+        body = {"model": model, **_MODEL_PARAMS, "response_format": response_shape, "messages": messages}
         tools = TOOL_SCHEMAS + access["tools"]
         if offer_tools:
             body["tools"] = tools

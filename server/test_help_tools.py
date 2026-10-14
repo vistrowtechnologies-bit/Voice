@@ -64,7 +64,7 @@ class HelpToolsTests(unittest.TestCase):
 
     @patch.dict("help_chat.os.environ", {"OPENAI_API_KEY": "test-key"})
     @patch("help_chat._post_chat")
-    def test_help_chat_uses_lowest_model_without_unsupported_temperature(self, post_chat):
+    def test_help_chat_uses_gpt54_mini_with_reasoning_off(self, post_chat):
         post_chat.return_value = {
             "choices": [{"message": {"content": '{"reply":"Open Agents.","suggestTicket":false,"comingSoon":false}'}}]
         }
@@ -72,8 +72,10 @@ class HelpToolsTests(unittest.TestCase):
         result = help_chat.answer_help_question("Where do I edit an agent?", [], 7)
 
         payload = post_chat.call_args.args[1]
-        self.assertEqual(payload["model"], "gpt-5-nano")
+        self.assertEqual(payload["model"], "gpt-5.4-mini")
+        self.assertEqual(payload["reasoning_effort"], "none")
         self.assertNotIn("temperature", payload)
+        self.assertNotIn("max_tokens", payload)
         self.assertEqual(result["reply"], "Open Agents.")
 
     @patch("help_tools.calls_db.list_calls")
