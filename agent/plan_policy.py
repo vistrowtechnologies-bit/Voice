@@ -119,3 +119,28 @@ def validate_agent(conn, account_id: int, config: dict, catalog) -> None:
         ).fetchall()
         if config.get("id") not in {row["id"] for row in included}:
             raise EntitlementError("This agent exceeds the workspace's plan limit. The earliest agents remain available; upgrade to reactivate additional agents. No data was deleted.")
+
+
+# GPT-4 family retired 2026-10-14 (owner decision). Agents saved with one of
+# these names keep their stored value (billing tiers and dashboard labels key
+# off it, and no agent row is rewritten), but every request is sent to the
+# GPT-5 successor below. Chosen from a benchmark run from India on a
+# 14K-token tenant-sized prompt, 9 Hindi answers per model: gpt-5.4-nano was
+# 9/9 correct with a correct tool call at ~670 ms first token and ~Rs 0.22 per
+# call minute, against gpt-4o-mini's 6/9 (it misquoted a price every time)
+# and gpt-4.1-mini's 9/9 at ~Rs 0.70. The large GPT-4 models map to
+# gpt-5.4-mini (9/9, tool call correct). GPT-5 models need
+# max_completion_tokens instead of max_tokens.
+OPENAI_MODEL_SUCCESSORS = {
+    "gpt-4o-mini": "gpt-5.4-nano",
+    "gpt-4.1-nano": "gpt-5.4-nano",
+    "gpt-4.1-mini": "gpt-5.4-nano",
+    "gpt-4.1": "gpt-5.4-mini",
+    "gpt-4o": "gpt-5.4-mini",
+}
+
+
+def current_openai_model(model: str) -> str:
+    """The model a request should actually use: the GPT-5 successor for a
+    retired GPT-4 name, anything else unchanged."""
+    return OPENAI_MODEL_SUCCESSORS.get(model, model)

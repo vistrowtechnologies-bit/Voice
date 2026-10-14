@@ -14,7 +14,7 @@ the default, never surfaced as an error.
 
 LLM: same stdlib-urllib style as call_intelligence/kb_extract. Sarvam
 sarvam-105b-conversations first (the platform's own model, fastest here:
-~1-3 s per draft), then OpenAI gpt-4.1-mini (JSON mode), then Gemini 2.5
+~1-3 s per draft), then OpenAI gpt-5.4-mini (JSON mode), then Gemini 2.5
 Flash (JSON mime type), each tried when the one before fails for any reason.
 AGENT_BUILDER_PROVIDER=sarvam|openai|gemini forces one.
 """
@@ -36,7 +36,7 @@ logger = logging.getLogger("agent-builder")
 SARVAM_CHAT_URL = "https://api.sarvam.ai/v1/chat/completions"
 SARVAM_MODEL = "sarvam-105b-conversations"
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
-OPENAI_MODEL = "gpt-4.1-mini"
+OPENAI_MODEL = "gpt-5.4-mini"  # gpt-4.1-mini until 2026-10-14 (GPT-4 retired)
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 TIMEOUT_S = 25
@@ -349,6 +349,7 @@ def _openai(system: str, user: str) -> dict:
         OPENAI_CHAT_URL,
         {
             "model": OPENAI_MODEL,
+            "reasoning_effort": "none",
             "response_format": {"type": "json_object"},
             "temperature": 0.4,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],

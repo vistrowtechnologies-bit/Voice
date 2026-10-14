@@ -19,9 +19,12 @@ import urllib.request
 logger = logging.getLogger("kb-extract")
 
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
-# Mini is plenty for structured extraction and ~10x cheaper than gpt-4.1 —
-# this runs on whole brochures (tens of thousands of input tokens).
-EXTRACT_MODEL = "gpt-4.1-mini"
+# Runs on whole brochures (tens of thousands of input tokens). gpt-4.1-mini
+# until 2026-10-14 (GPT-4 family retired). Same 24-project price sheet through
+# this function: gpt-4.1-mini 10 Q&A pairs covering 7 projects; gpt-5.4-nano
+# with reasoning off 21 pairs covering 14; neither quoted a price that was not
+# in the source. Slower (5.7 s vs 3.6 s), which an offline job can afford.
+EXTRACT_MODEL = "gpt-5.4-nano"
 # Brochure text beyond this is truncated to keep one extraction cheap and
 # well under the model context; ~60k chars ≈ 15k tokens.
 MAX_SOURCE_CHARS = 60_000
@@ -61,6 +64,7 @@ def extract_qa_pairs(source_name: str, content: str) -> list[dict]:
     body = json.dumps(
         {
             "model": EXTRACT_MODEL,
+            "reasoning_effort": "none",
             "response_format": {"type": "json_object"},
             "temperature": 0,
             "messages": [

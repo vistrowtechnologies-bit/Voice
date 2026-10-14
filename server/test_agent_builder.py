@@ -127,7 +127,8 @@ class BuilderUnitTests(unittest.TestCase):
         self.assertEqual(out["draft"]["postCallFields"][0]["key"], "budget")
         self.assertEqual(set(out["draft"]), set(agent_builder.DRAFT_KEYS))
         sent = net.calls[0][1]
-        self.assertEqual(sent["model"], "gpt-4.1-mini")
+        self.assertEqual(sent["model"], "gpt-5.4-mini")
+        self.assertEqual(sent["reasoning_effort"], "none")
         self.assertEqual(sent["response_format"], {"type": "json_object"})
         self.assertIn("Inbound", sent["messages"][1]["content"])
         self.assertIn("Do not ask questions", sent["messages"][0]["content"])

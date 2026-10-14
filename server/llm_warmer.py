@@ -30,6 +30,7 @@ import urllib.error
 import urllib.request
 
 import calls_db
+import plan_policy
 
 logger = logging.getLogger("vistrow-llm-warmer")
 
@@ -78,11 +79,17 @@ def _ping(agent_id: int, system_prompt: str, model: str, api_key: str) -> None:
     # warming gpt-4.1-mini for an agent that actually runs gpt-4o-mini spends
     # money warming a cache that call will never read, and leaves the real one
     # cold. Three of five agents on this account run gpt-4o-mini.
+    # Warm the model the call will really use: a retired GPT-4 name stored on
+    # an agent runs on its GPT-5 successor (plan_policy).
+    model = plan_policy.current_openai_model(model)
     body = json.dumps(
         {
             "model": model,
             "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": "."}],
-            "max_completion_tokens": 1,
+            # 1 worked on GPT-4; GPT-5 models reject 1-2 with 400 "could not
+            # finish the message" (measured 2026-10-14), which would fail every
+            # warm silently. 16 is the smallest round number with margin.
+            "max_completion_tokens": 16,
             "prompt_cache_key": _PROMPT_CACHE_KEY,
         }
     ).encode()

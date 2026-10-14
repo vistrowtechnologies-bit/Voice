@@ -19,7 +19,7 @@ AGENT_ID = 18
 cfg = db.get_agent_config(AGENT_ID)
 agent = main.RealEstateAgent(cfg, None, None)
 SYSTEM = agent.instructions
-MODEL = cfg.get("model") or "gpt-4.1-mini"
+MODEL = cfg.get("model") or "gpt-5.4-nano"
 
 TOOLS = [
     {
@@ -100,7 +100,7 @@ def run(name: str, history, user_text: str, tool_results=None):
         msgs += tool_results
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     r = client.chat.completions.create(
-        model=MODEL, messages=msgs, tools=TOOLS, temperature=0.7, max_tokens=200
+        model=MODEL, messages=msgs, tools=TOOLS, temperature=0.7, max_completion_tokens=200
     )
     m = r.choices[0].message
     calls = [(c.function.name, c.function.arguments) for c in (m.tool_calls or [])]
