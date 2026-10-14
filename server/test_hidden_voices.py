@@ -12,8 +12,17 @@ class HiddenVoices(unittest.TestCase):
                          (root / "server/voice_catalog.py").read_bytes())
 
     def test_slow_and_bad_voices_are_hidden(self):
-        for value in ("google31:kore", "google:hi-IN-Standard-A", "elevenlabs:zT03pEAEi0VHKciJODfn"):
+        for value in ("google31:kore", "elevenlabs:zT03pEAEi0VHKciJODfn"):
             self.assertTrue(vc.is_hidden(value), value)
+
+    def test_native_voices_are_owner_only_previews(self):
+        # Owner, 2026-10-14: visible to the owner for testing, never to tenants.
+        native = [e for e in vc.CATALOG if e["value"].startswith("google:") and "-Standard-" in e["value"]]
+        self.assertEqual(len(native), 20)
+        for e in native:
+            self.assertTrue(e.get("preview"), e["value"])
+            self.assertFalse(vc.is_hidden(e["value"]), e["value"])
+            self.assertEqual(e["tier"], "lite", e["value"])
 
     def test_good_voices_stay_visible(self):
         chirp = next(e["value"] for e in vc._BY_VALUE.values() if "chirp3" in e["value"])
