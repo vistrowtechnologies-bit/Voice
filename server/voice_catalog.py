@@ -111,26 +111,26 @@ CATALOG: list[dict] = [
     {"value": "google31:kore", "name": "Mira Next (Preview)", "gender": "female", "tier": "standard", "multilingual": True, "preview": True, "note": "Prompt emotion + modulation · testing only"},
     {"value": "google31:charon", "name": "Arin Next (Preview)", "gender": "male", "tier": "standard", "multilingual": True, "preview": True, "note": "Prompt emotion + modulation · testing only"},
     # Google Cloud Standard — locale-specific economy alternatives.
-    {"value": "google:en-IN-Standard-D", "name": "Aarav (English)", "gender": "female", "tier": "lite", "preview": True, "force_lang": "en"},
-    {"value": "google:en-IN-Standard-B", "name": "Kabir (English)", "gender": "male", "tier": "lite", "preview": True, "force_lang": "en"},
-    {"value": "google:hi-IN-Standard-A", "name": "Aditi (Hindi)", "gender": "female", "tier": "lite", "preview": True, "force_lang": "hi"},
-    {"value": "google:hi-IN-Standard-B", "name": "Vihaan (Hindi)", "gender": "male", "tier": "lite", "preview": True, "force_lang": "hi"},
-    {"value": "google:mr-IN-Standard-A", "name": "Isha (Marathi)", "gender": "female", "tier": "lite", "preview": True, "force_lang": "mr"},
-    {"value": "google:mr-IN-Standard-B", "name": "Om (Marathi)", "gender": "male", "tier": "lite", "preview": True, "force_lang": "mr"},
-    {"value": "google:ta-IN-Standard-A", "name": "Nila (Tamil)", "gender": "female", "tier": "lite", "preview": True, "force_lang": "ta"},
-    {"value": "google:ta-IN-Standard-B", "name": "Arjun (Tamil)", "gender": "male", "tier": "lite", "preview": True, "force_lang": "ta"},
-    {"value": "google:te-IN-Standard-A", "name": "Ananya (Telugu)", "gender": "female", "tier": "lite", "preview": True, "force_lang": "te"},
-    {"value": "google:te-IN-Standard-B", "name": "Karthik (Telugu)", "gender": "male", "tier": "lite", "preview": True, "force_lang": "te"},
-    {"value": "google:kn-IN-Standard-A", "name": "Nandini (Kannada)", "gender": "female", "tier": "lite", "preview": True, "force_lang": "kn"},
-    {"value": "google:kn-IN-Standard-B", "name": "Vikram (Kannada)", "gender": "male", "tier": "lite", "preview": True, "force_lang": "kn"},
-    {"value": "google:ml-IN-Standard-A", "name": "Diya (Malayalam)", "gender": "female", "tier": "lite", "preview": True, "force_lang": "ml"},
-    {"value": "google:ml-IN-Standard-B", "name": "Nikhil (Malayalam)", "gender": "male", "tier": "lite", "preview": True, "force_lang": "ml"},
-    {"value": "google:gu-IN-Standard-A", "name": "Hetal (Gujarati)", "gender": "female", "tier": "lite", "preview": True, "force_lang": "gu"},
-    {"value": "google:gu-IN-Standard-B", "name": "Harsh (Gujarati)", "gender": "male", "tier": "lite", "preview": True, "force_lang": "gu"},
-    {"value": "google:bn-IN-Standard-A", "name": "Mrittika (Bengali)", "gender": "female", "tier": "lite", "preview": True, "force_lang": "bn"},
-    {"value": "google:bn-IN-Standard-B", "name": "Arindam (Bengali)", "gender": "male", "tier": "lite", "preview": True, "force_lang": "bn"},
-    {"value": "google:pa-IN-Standard-A", "name": "Gurleen (Punjabi)", "gender": "female", "tier": "lite", "preview": True, "force_lang": "pa"},
-    {"value": "google:pa-IN-Standard-B", "name": "Armaan (Punjabi)", "gender": "male", "tier": "lite", "preview": True, "force_lang": "pa"},
+    {"value": "google:en-IN-Standard-D", "name": "Anika (English)", "gender": "female", "tier": "lite", "force_lang": "en"},
+    {"value": "google:en-IN-Standard-B", "name": "Kabir (English)", "gender": "male", "tier": "lite", "force_lang": "en"},
+    {"value": "google:hi-IN-Standard-A", "name": "Aditi (Hindi)", "gender": "female", "tier": "lite", "force_lang": "hi"},
+    {"value": "google:hi-IN-Standard-B", "name": "Vihaan (Hindi)", "gender": "male", "tier": "lite", "force_lang": "hi"},
+    {"value": "google:mr-IN-Standard-A", "name": "Isha (Marathi)", "gender": "female", "tier": "lite", "force_lang": "mr"},
+    {"value": "google:mr-IN-Standard-B", "name": "Om (Marathi)", "gender": "male", "tier": "lite", "force_lang": "mr"},
+    {"value": "google:ta-IN-Standard-A", "name": "Nila (Tamil)", "gender": "female", "tier": "lite", "force_lang": "ta"},
+    {"value": "google:ta-IN-Standard-B", "name": "Arjun (Tamil)", "gender": "male", "tier": "lite", "force_lang": "ta"},
+    {"value": "google:te-IN-Standard-A", "name": "Ananya (Telugu)", "gender": "female", "tier": "lite", "force_lang": "te"},
+    {"value": "google:te-IN-Standard-B", "name": "Karthik (Telugu)", "gender": "male", "tier": "lite", "force_lang": "te"},
+    {"value": "google:kn-IN-Standard-A", "name": "Nandini (Kannada)", "gender": "female", "tier": "lite", "force_lang": "kn"},
+    {"value": "google:kn-IN-Standard-B", "name": "Vikram (Kannada)", "gender": "male", "tier": "lite", "force_lang": "kn"},
+    {"value": "google:ml-IN-Standard-A", "name": "Diya (Malayalam)", "gender": "female", "tier": "lite", "force_lang": "ml"},
+    {"value": "google:ml-IN-Standard-B", "name": "Nikhil (Malayalam)", "gender": "male", "tier": "lite", "force_lang": "ml"},
+    {"value": "google:gu-IN-Standard-A", "name": "Hetal (Gujarati)", "gender": "female", "tier": "lite", "force_lang": "gu"},
+    {"value": "google:gu-IN-Standard-B", "name": "Harsh (Gujarati)", "gender": "male", "tier": "lite", "force_lang": "gu"},
+    {"value": "google:bn-IN-Standard-A", "name": "Mrittika (Bengali)", "gender": "female", "tier": "lite", "force_lang": "bn"},
+    {"value": "google:bn-IN-Standard-B", "name": "Arindam (Bengali)", "gender": "male", "tier": "lite", "force_lang": "bn"},
+    {"value": "google:pa-IN-Standard-A", "name": "Gurleen (Punjabi)", "gender": "female", "tier": "lite", "force_lang": "pa"},
+    {"value": "google:pa-IN-Standard-B", "name": "Armaan (Punjabi)", "gender": "male", "tier": "lite", "force_lang": "pa"},
     # --- Google Chirp 3 HD ---------------------------------------------------
     # The only Google family the streaming endpoint accepts, which makes these
     # the fastest Google voices available: ~360ms to first audio against
@@ -724,9 +724,10 @@ _HIDDEN_VOICE_PREFIXES = ("elevenlabs-v3:", "elevenlabs:", "google31:")
 #   - the locale "Standard" family (e.g. google:hi-IN-Standard-A): audible distortion
 #     and no transcription on call 885 (see web-demo agentOptions).
 # Agents already using one keep working: get_voice() and billing still resolve them.
-# 2026-10-14 (owner): the locale "Standard" (Native) voices come back as
-# owner-only previews ("preview": True in CATALOG) so the owner can listen and
-# test them; tenants still cannot see or pick them.
+# 2026-10-14 (owner): the locale "Standard" (Native) voices are offered again.
+# Their "distortion" was a decoding bug (PCM request answered with MP3), fixed
+# in agent/main.py by requesting LINEAR16; verified clean on test call 1278.
+# en-IN-Standard-D is female per Google's voice list, so it is "Anika", not "Aarav".
 # Mira/Arin were hidden on 2026-10-08 for speed (about 0.93 s); they return on
 # 2026-10-13 as part of the opt-in Expressive tier, labelled as slower.
 _HIDDEN_VOICES_EXACT: frozenset = frozenset()

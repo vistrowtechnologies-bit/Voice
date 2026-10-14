@@ -140,6 +140,8 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
   {
     key: 'native-lite',
     label: 'Vistrow Native',
+    // FIXED 2026-10-14 (PR #93): the distortion below was Google answering a PCM
+    // request with MP3; main.py now asks for LINEAR16 (clean on call 1278).
     // Measured on call 885 (agent 26 set to google:hi-IN-Standard-A / Aditi):
     // audible distortion, 402ms TTS TTFB, and NOT ONE caller turn transcribed
     // across the whole call — the agent checked in twice and hung up on a
@@ -150,7 +152,7 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
     // Warned rather than hidden: they are cheaper and some tenants may be on
     // one already, so an operator picking one deserves to know before a live
     // call rather than after.
-    note: '0.5x credits · owner testing only',
+    note: '0.5x credits · one language each · a little slower to start',
     voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
   },
 ]
