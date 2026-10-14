@@ -23,11 +23,11 @@ agent/main.py's _build_tts, AND classified for billing by
 calls_db.voice_tier() — the prefix convention there and here must agree:
   - "elevenlabs:<id>"     → ElevenLabs Flash v2.5  → tier "premium"      (2x credits)
   - "elevenlabs-v3:<id>"  → ElevenLabs v3          → tier "premium_plus" (2x credits)
-  - "google:<voice>"      → Google Cloud locale voice → tier "lite"     (0.75x credits)
+  - "google:<voice>"      → Google Cloud locale voice → tier "lite"     (0.5x credits)
   - "google31:<voice>"    → next-generation TTS preview → tier "standard" (1x credits)
   - "google38:<voice>"    → Gemini 3.8 Flash-Lite TTS    → tier "premium"  (2x credits)
   - "google38flash:<voice>" → Gemini 3.8 Flash TTS       → tier "premium"  (2x credits)
-  - bare Sarvam bulbul:v2 speaker (abhilash/anushka) → tier "lite"      (0.75x credits)
+  - bare Sarvam bulbul:v2 speaker (abhilash/anushka) → tier "lite"      (0.5x credits)
   - "sarvam4:<id>"        → Sarvam bulbul:v4-flash  → tier "standard"     (1x credits; ~Rs0.37/min, owner decision 2026-10-13)
   - any other bare name (Sarvam, spoken by bulbul:v4-flash via SARVAM_V3_TO_V4) → tier "standard" (1x credits)
 
@@ -47,7 +47,7 @@ TIER_META: dict[str, dict] = {
     # that claim to every Premium voice (including ElevenLabs) here.
     "premium": {"label": "Premium", "note": "2x credits · advanced natural voices", "rank": 0},
     "standard": {"label": "Standard", "note": "1x credits", "rank": 1},
-    "lite": {"label": "Lite", "note": "0.75x credits · economy", "rank": 2},
+    "lite": {"label": "Lite", "note": "0.5x credits · economy", "rank": 2},
 }
 
 # The master catalog. Keep display names free of vendor branding.

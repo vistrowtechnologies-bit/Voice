@@ -150,7 +150,7 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
     // Warned rather than hidden: they are cheaper and some tenants may be on
     // one already, so an operator picking one deserves to know before a live
     // call rather than after.
-    note: '0.75x credits · known audio quality issues — test before using on live calls',
+    note: '0.5x credits · owner testing only',
     voices: voices.filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
   },
 ]
