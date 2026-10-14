@@ -29,6 +29,17 @@ export function LanguagesOverview() {
           the everyday mixed speech most people actually use on the phone. That same agent also handles
           {GLOBAL_LANGUAGES.length} more, from French to Japanese: 99 languages in all.
         </p>
+        <p className="mx-auto mt-4 max-w-xl text-sm text-text-muted">
+          Each Indian language has its own page with a sample conversation and regional notes, for example{' '}
+          <Link to="/languages/kannada" className="font-semibold text-primary hover:underline">
+            Kannada for Bengaluru and Karnataka
+          </Link>{' '}
+          and{' '}
+          <Link to="/languages/telugu" className="font-semibold text-primary hover:underline">
+            Telugu for Hyderabad, Telangana and Andhra Pradesh
+          </Link>
+          .
+        </p>
       </section>
 
       <TryALanguage />

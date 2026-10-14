@@ -33,11 +33,11 @@ function cardHtml(spec) {
 body{font-family:"Manrope","Noto Sans",sans-serif;color:#1a1523;background:#f4f2f9;position:relative}
 .wash{position:absolute;inset:0;background:radial-gradient(circle at 83% 48%,color-mix(in srgb,${spec.accent} 18%,transparent),transparent 31%),radial-gradient(circle at 7% 102%,#fff 0,transparent 38%),linear-gradient(120deg,#fff 0%,#fbf9ff 54%,#f4f2f9 100%)}
 .grid{position:absolute;inset:0;opacity:.28;background-image:linear-gradient(rgba(93,87,118,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(93,87,118,.08) 1px,transparent 1px);background-size:40px 40px;mask-image:linear-gradient(90deg,black,transparent 65%)}
-.left{position:absolute;z-index:3;left:68px;top:48px;width:690px}
+.left{position:absolute;z-index:3;left:68px;top:48px;width:620px}
 .brand{display:flex;align-items:center;gap:16px}.brand img{width:64px;height:64px;border-radius:16px;box-shadow:0 12px 30px rgba(126,34,206,.18)}
 .brand-name{font-family:"Sora","Manrope",sans-serif;font-size:34px;line-height:1;font-weight:700;letter-spacing:-1.3px}.by{margin-left:2px;color:#7a7391;font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 .eyebrow{margin-top:45px;color:${spec.accent};font-size:16px;font-weight:800;letter-spacing:.19em;text-transform:uppercase}
-h1{margin:13px 0 0;max-width:690px;font-family:"Sora","Manrope","Noto Sans",sans-serif;font-size:58px;line-height:1.065;letter-spacing:-2.7px;font-weight:700;text-wrap:balance}
+h1{margin:13px 0 0;max-width:620px;font-family:"Sora","Manrope","Noto Sans",sans-serif;font-size:58px;line-height:1.065;letter-spacing:-2.7px;font-weight:700;text-wrap:balance}
 .native{margin-top:12px;color:${spec.accent};font-family:"Noto Sans","Manrope",sans-serif;font-size:24px;font-weight:700;letter-spacing:.02em}
 .proof{display:inline-flex;margin-top:28px;padding:13px 18px;border:1px solid color-mix(in srgb,${spec.accent} 30%,#ddd7ec);border-radius:999px;background:rgba(255,255,255,.72);box-shadow:0 8px 24px rgba(26,21,35,.05);color:#5d5776;font-size:18px;font-weight:700;white-space:nowrap}
 .orb-wrap{position:absolute;z-index:2;right:31px;top:61px;width:470px;height:470px;display:grid;place-items:center}

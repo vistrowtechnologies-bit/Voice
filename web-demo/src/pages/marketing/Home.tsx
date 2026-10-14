@@ -305,6 +305,17 @@ export function Home() {
                     See every language
                     <Icon name="arrow_forward" className="text-[16px]" />
                   </Link>
+                  <p className="mt-3 text-sm text-text-muted">
+                    Regional guides:{' '}
+                    <Link to="/languages/kannada" className="font-semibold text-primary hover:underline">
+                      Kannada calls in Karnataka
+                    </Link>{' '}
+                    and{' '}
+                    <Link to="/languages/telugu" className="font-semibold text-primary hover:underline">
+                      Telugu calls in Andhra Pradesh and Telangana
+                    </Link>
+                    .
+                  </p>
                 </div>
                 {/* Decorative: the greetings already carry the meaning, and
                     reading ten scripts aloud in sequence tells a screen-reader
