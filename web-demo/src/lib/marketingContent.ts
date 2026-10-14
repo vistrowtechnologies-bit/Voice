@@ -955,7 +955,13 @@ export const NAV: NavGroup[] = [
   { label: 'Home', to: '/' },
   {
     label: 'Product',
-    items: [{ label: 'Overview', to: '/product', icon: 'grid_view', desc: 'The whole platform at a glance.' }, ...PRODUCT_PAGES],
+    items: [
+      { label: 'Overview', to: '/product', icon: 'grid_view', desc: 'The whole platform at a glance.' },
+      ...PRODUCT_PAGES,
+      { label: 'Voice AI platform', to: '/voice-ai-platform', icon: 'hub', desc: 'Every part of the platform, from builder to reports.' },
+      { label: 'AI call center', to: '/ai-call-center', icon: 'support_agent', desc: 'First-line calls and follow-ups, with handoff.' },
+      { label: 'AI voice bot', to: '/voice-bot', icon: 'record_voice_over', desc: 'What a voice bot is and how a call works.' },
+    ],
   },
   {
     label: 'Solutions',
@@ -998,7 +1004,13 @@ export const NAV: NavGroup[] = [
 export const FOOTER_COLUMNS = [
   {
     title: 'Product',
-    links: [{ label: 'Overview', to: '/product' }, ...PRODUCT_PAGES.map((p) => ({ label: p.label, to: p.to }))],
+    links: [
+      { label: 'Overview', to: '/product' },
+      ...PRODUCT_PAGES.map((p) => ({ label: p.label, to: p.to })),
+      { label: 'Voice AI platform', to: '/voice-ai-platform' },
+      { label: 'AI call center', to: '/ai-call-center' },
+      { label: 'AI voice bot', to: '/voice-bot' },
+    ],
   },
   {
     title: 'Solutions',

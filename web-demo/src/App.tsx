@@ -27,6 +27,9 @@ import { CompareIvr } from './pages/marketing/CompareIvr'
 import { AiIvr } from './pages/marketing/AiIvr'
 import { CompareVendor } from './pages/marketing/CompareVendor'
 import { BuyerGuide } from './pages/marketing/BuyerGuide'
+import { VoiceAiPlatform } from './pages/marketing/VoiceAiPlatform'
+import { AiCallCenter } from './pages/marketing/AiCallCenter'
+import { VoiceBot } from './pages/marketing/VoiceBot'
 import { LocalRealEstate } from './pages/marketing/LocalRealEstate'
 import { DemoCall } from './pages/marketing/DemoCall'
 import { Privacy } from './pages/marketing/Privacy'
@@ -171,6 +174,9 @@ function App() {
         <Route path="/vs-ivr" element={<CompareIvr />} />
         <Route path="/ai-ivr" element={<AiIvr />} />
         <Route path="/compare/:slug" element={<CompareVendor />} />
+        <Route path="/voice-ai-platform" element={<VoiceAiPlatform />} />
+        <Route path="/ai-call-center" element={<AiCallCenter />} />
+        <Route path="/voice-bot" element={<VoiceBot />} />
         <Route path="/:slug" element={<BuyerGuide />} />
         <Route path="/solutions/real-estate/:slug" element={<LocalRealEstate />} />
         <Route path="/demo-calls/:slug" element={<DemoCall />} />
