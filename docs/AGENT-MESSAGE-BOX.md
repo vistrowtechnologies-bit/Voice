@@ -623,7 +623,7 @@ Verified: `npm --prefix web-demo run build` (SEO route audit: 120 indexable rout
 
 ### Claude — 2026-10-14 — privacy gaps 2: recording/AI announcement, error_events purge, age gate, cookie banner, widget dataLayer (PR open, NOT merged)
 
-Branch `claude/privacy-gaps-2` (owner request; claim on issue #2). Each gap re-verified in main 43881e6f first.
+Branch `claude/privacy-gaps-2`, PR #109 (owner request; claim on issue #2). Hotfix for the html-shadow 500s split out as PR #108. Each gap re-verified in main 43881e6f first.
 - Announcement: new `agent/call_disclosure.py`; compliance keys `announce_recording` (default true, so existing accounts get it) and `recording_notice` (custom wording, max 160). Spoken only while `record_calls` is on; folded into the existing opener text (welcome message, default openers, realtime/outbound instructions, first reply when the caller speaks first); skipped when the welcome message already mentions recording, and for the platform demo. No TTS/pipeline change. Compliance page toggle + wording field.
 - Widget: `/widget/site-config` returns `recorded`; notice/consent say "recorded" only when true ("may be recorded" until known). `vistrow_widget_lead_submit` keeps its name but carries only has_name/has_phone/has_email booleans.
 - error_events: `calls_db.purge_old_error_events` (90 days, batches of 5,000, idempotent) from the daily retention run; account rows also follow a shorter account retention. `phone_format.redact_contact_details` masks phones/emails in `admin_db.log_error` and agent `db.log_platform_error`.
