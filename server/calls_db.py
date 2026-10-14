@@ -8689,7 +8689,9 @@ def set_credit_rate(call_type: str, rate: float, account_id: int) -> None:
 # earned Rs2.60 against Rs2.23 of real cost - a 14% margin that one FX move
 # or a month of LiveKit overage erases. 0.75x is still a genuine discount
 # and takes that combo to roughly 43%.
-_VOICE_TIER_MULTIPLIERS = {"economy": 0.75, "standard": 1.0, "premium": 2.0}
+# economy 0.5 (owner, 2026-10-14): Native = 1 credit/min on Vistrow Bharat. Real
+# cost ~Rs 3.3/min (Google Standard TTS ~Rs 0.15/min); thinner margin on Scale accepted.
+_VOICE_TIER_MULTIPLIERS = {"economy": 0.5, "standard": 1.0, "premium": 2.0}
 # Hard floor on billable credits per minute, for the same reason: no
 # combination of discounts may price a minute below the fixed cost of
 # serving it. Applied after every multiplier.

@@ -96,7 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_active_calls_account ON active_calls(account_id);
 CONCURRENT_CALL_LIMITS = {key: value["concurrency"] for key, value in plan_policy.PLANS.items()}
 
 _FREE_TEST_MINUTES = float(os.getenv("FREE_TEST_MINUTES_PER_MONTH", "30"))
-_VOICE_TIER_MULTIPLIERS = {"economy": 0.75, "standard": 1.0, "premium": 2.0}
+_VOICE_TIER_MULTIPLIERS = {"economy": 0.5, "standard": 1.0, "premium": 2.0}  # mirrors server/calls_db
 _MODEL_TIER_MULTIPLIERS = {"standard": 1.0, "premium": 2.0, "premium_plus": 4.0, "realtime_plus": 6.0}
 _PREMIUM_MODELS = {"gpt-4.1-mini", "gemini-3.5-flash-lite", "gemini-3.6-flash"}
 _PREMIUM_PLUS_MODELS = {"gpt-4.1", "gpt-4o"}
