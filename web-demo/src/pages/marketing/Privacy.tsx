@@ -33,7 +33,7 @@ export function Privacy() {
     <LegalLayout
       eyebrow="Legal"
       title="Privacy Policy"
-      updated="13 October 2026"
+      updated="14 October 2026"
       path="/privacy"
       description="How Vistrow Voice collects, uses, shares, retains, and protects account, call, and integration data."
       intro={`${BRAND.name} (operated by Vistrow Technologies Pvt. Ltd.; "we", "us", "${BRAND.short}") builds AI voice agents that businesses use to answer and place phone calls. This policy explains what we collect, why, who else handles it, and the choices you have, whether you run a business on ${BRAND.name} or you spoke with an AI agent powered by it.`}
@@ -78,7 +78,7 @@ export function Privacy() {
           <li><b>Account data</b> - name, email, optional phone number, password (stored only as a salted hash), role, workspace name, and how you heard about us. If you sign in with Google, GitHub or Slack we receive your verified email and name from them.</li>
           <li><b>Team data</b> - names, emails and roles of teammates you invite.</li>
           <li><b>Acceptance records</b> - which version of the Terms and Privacy Policy you accepted, and when.</li>
-          <li><b>Sign-in and security data</b> - the devices and browsers signed in to your account (browser user agent, last-seen time) and security events such as sign-ins and sign-outs. We use IP addresses to rate-limit sign-in and sign-up requests; we do not store them in your account records.</li>
+          <li><b>Sign-in and security data</b> - the devices and browsers signed in to your account (browser user agent, last-seen time) and security events such as sign-ins and sign-outs. We use IP addresses to rate-limit sign-in and sign-up requests. When you accept the Terms and this policy at sign-up, we record the time, the version you accepted, your IP address and browser user agent, and your confirmation that you are 18 or older and authorised to act for the business, as evidence of that acceptance.</li>
           <li><b>Billing data</b> - legal name, GSTIN, billing address and email, invoices, and payment and subscription identifiers from Razorpay. Card details are entered with Razorpay and are not stored by us.</li>
           <li><b>Support data</b> - tickets and messages you send, the page you were on, and attachments, which we delete 14 days after a ticket is resolved.</li>
           <li><b>Usage and error data</b> - API requests, error logs, and the actions the in-app AI assistant proposes and you approve.</li>
@@ -122,10 +122,12 @@ export function Privacy() {
         </p>
         <p>
           Customers are responsible for telling callers that a call is with an AI, recorded or
-          transcribed, and for having a lawful basis for calling them. {BRAND.name} offers a setting that
-          makes the agent ask for spoken consent at the start of a call, and a notice and consent screen
-          in the website widget before the microphone is used, but the Customer decides which settings to
-          use.
+          transcribed, and for having a lawful basis for calling them. When a Customer records calls, the
+          agent's opening line says by default that the call is recorded and that the caller is speaking
+          with an AI assistant; the Customer can change that wording or turn it off. {BRAND.name} also
+          offers a setting that makes the agent ask for spoken consent at the start of a call, and a notice
+          and consent screen in the website widget before the microphone is used, which says the call is
+          recorded only when the Customer records calls. The Customer decides which settings to use.
         </p>
       </LegalSection>
 
@@ -289,8 +291,8 @@ export function Privacy() {
       <LegalSection title="12. Cookies and similar technologies">
         <p><b>Essential.</b> When you sign in we set HTTP-only cookies to keep you signed in (up to 30 days) and to recognise your device in your list of signed-in devices (up to a year), plus short-lived cookies while you connect Google, Slack or similar services. The dashboard also stores display preferences (theme, sidebar, table widths, time zone) in your browser's local storage. Without these the dashboard will not work properly.</p>
         <p><b>Analytics.</b> On our website and app we use Google Analytics, Microsoft Clarity and Vercel Web Analytics to understand how the product is used: pages viewed, clicks, scrolling and, on our public website, session replays and heatmaps. Text typed into form fields and the live demo's transcript are masked. Inside the app all on-screen text is masked, so call transcripts, contacts and leads are not captured; sessions are tagged only with a workspace ID. Microsoft processes Clarity data under the{' '}
-          <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noopener noreferrer">Microsoft Privacy Statement</a>. We do not use advertising cookies. You can block analytics cookies in your browser without affecting the product. We do not currently show a cookie banner.</p>
-        <p><b>Website widget.</b> The widget on a Customer's site stores a note in your browser that you accepted the voice-call notice, and a flag that you dismissed its greeting for that tab. It sets no cookies. It sends the Customer's system the details you type into it, and the Customer's own site can see the widget's events.</p>
+          <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noopener noreferrer">Microsoft Privacy Statement</a>. Google Analytics and Microsoft Clarity load only after you press Accept on our cookie banner; if you press Reject or do not answer, they are not loaded. We remember your choice in your browser's local storage; to change it, clear this site's data in your browser and choose again. Vercel Web Analytics does not use cookies or store anything in your browser, so it runs without that choice. We do not use advertising cookies.</p>
+        <p><b>Website widget.</b> The widget on a Customer's site stores a note in your browser that you accepted the voice-call notice, and a flag that you dismissed its greeting for that tab. It sets no cookies. It sends the Customer's system the details you type into it. The Customer's own site can see the widget's events (for example that a call started or a form was submitted), but not the name, phone number or email you typed.</p>
       </LegalSection>
 
       <LegalSection title="13. Children">

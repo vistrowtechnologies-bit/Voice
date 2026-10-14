@@ -76,6 +76,7 @@ import realtime_prompt
 import realtime_config
 import realtime_timing
 import sarvam_realtime_stt
+import call_disclosure
 import voice_catalog  # a byte-identical copy of server/voice_catalog.py (the
 # agent build context can't reach ../server), kept in sync the same way
 # dbconn.py is duplicated into agent/. Used here only to resolve a voice's
@@ -3094,6 +3095,27 @@ def _consent_instructions(config: dict) -> str:
     )
 
 
+def _disclosure_first_reply_instructions(config: dict) -> str:
+    """An agent set to let the caller speak first has no opening line to
+    carry the recording/AI disclosure, so its first reply carries it."""
+    if (config.get("first_speaker") or "agent").lower() != "user":
+        return ""
+    compliance = config.get("_compliance_config")
+    if compliance is None:
+        compliance = db.get_compliance_config(config.get("account_id"))
+    disclosure = call_disclosure.recording_disclosure(
+        compliance, config.get("language") or "hi-IN", bool(config.get("is_platform_demo")),
+    )
+    if not disclosure:
+        return ""
+    return (
+        "\n\n# Recording notice\n"
+        "In your very first reply, before anything else, tell the caller in a few words, in their "
+        f"language, that this call is recorded and that they are speaking with an AI assistant, "
+        f"for example: \"{disclosure}\". Say it once only."
+    )
+
+
 def _new_llm_usage() -> dict:
     return {"requests": 0, "cancelledRequests": 0, "promptTokens": 0, "cachedTokens": 0, "completionTokens": 0}
 
@@ -3794,6 +3816,7 @@ class RealEstateAgent(Agent):
             )
         instructions += _transfer_instructions(config)
         instructions += _consent_instructions(config)
+        instructions += _disclosure_first_reply_instructions(config)
         # LAST. Everything above this line is identical between two calls on
         # the same agent, so it is one cacheable prefix; only the caller's own
         # details and these ~100 tokens change. See where date_instruction is
@@ -3999,6 +4022,19 @@ class RealEstateAgent(Agent):
             if self._direction == "outbound"
             else ""
         ) or (config.get("welcome_message") or "").strip()
+        # Recording + AI disclosure (Compliance → "Announce recording"),
+        # folded into whichever opening this call speaks. "" when the account
+        # does not record or the owner turned the announcement off.
+        _compliance = config.get("_compliance_config")
+        if _compliance is None:
+            _compliance = db.get_compliance_config(config.get("account_id"))
+        self._recording_disclosure = call_disclosure.recording_disclosure(
+            _compliance, self._reply_language, self._is_platform_demo,
+        )
+        if self._welcome_message:
+            self._welcome_message = call_disclosure.with_disclosure(
+                self._welcome_message, self._recording_disclosure,
+            )
         # Post-call structured extraction fields (parsed from the agent's JSON).
         self._post_call_fields = _parse_json_config(config.get("post_call_fields"), [])
 
@@ -4319,6 +4355,7 @@ class RealEstateAgent(Agent):
                 self.session.generate_reply(
                     instructions=(
                         "Greet them briefly and say why you are calling, in one short line."
+                        + call_disclosure.instruction(getattr(self, "_recording_disclosure", ""))
                     )
                 )
         except Exception:
@@ -4406,6 +4443,7 @@ class RealEstateAgent(Agent):
             )
         if _opener:
             _greet += f" Open with this line, or as close to it as reads naturally: {_opener}"
+        _greet += call_disclosure.instruction(getattr(self, "_recording_disclosure", ""))
         if _opener and self._realtime_wants_tts_greeting():
             self.session.userdata["realtime_greeting_pending"] = True
             try:
@@ -4619,14 +4657,18 @@ class RealEstateAgent(Agent):
                 else:
                     greeting = f"Hi {self._visitor_first_name}, " if self._visitor_first_name else "Hi, "
                     template = _DEFAULT_OPENER_EN_BUSINESS
-                await self.session.say(template.format(greeting=greeting, business_name=business_name))
+                await self.session.say(call_disclosure.with_disclosure(
+                    template.format(greeting=greeting, business_name=business_name), getattr(self, "_recording_disclosure", ""),
+                ))
             else:
                 # No real business name to say (e.g. resolved to the
                 # placeholder) - fall back to the agent-name opener rather
                 # than ever speaking the literal words "this business".
                 greeting = f"Hi {self._visitor_first_name}," if self._visitor_first_name else "Hi,"
                 template = _DEFAULT_OPENERS.get(self._reply_language, _DEFAULT_OPENER_EN)
-                await self.session.say(template.format(greeting=greeting, agent_name=self._agent_name))
+                await self.session.say(call_disclosure.with_disclosure(
+                    template.format(greeting=greeting, agent_name=self._agent_name), getattr(self, "_recording_disclosure", ""),
+                ))
         finally:
             # Cold starts / slow TTS providers (Google) can push the opening
             # line's actual playback well past the away-timeout — without
@@ -5031,6 +5073,7 @@ class RealEstateAgent(Agent):
                     "the conversation. Briefly introduce yourself and the reason for the call, "
                     "then respond directly to what they said. Ask permission to continue only "
                     "if it still reads naturally."
+                    + call_disclosure.instruction(getattr(self, "_recording_disclosure", ""))
                 ),
             )
         elif _userdata.pop("outbound_context_pending", False):

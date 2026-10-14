@@ -144,6 +144,10 @@ def log_platform_error(message: str, *, source: str = "agent", level: str = "err
     locally.
     """
     try:
+        # Exception text can carry a caller's number or email (a webhook's
+        # error body, a request URL); error_events must not.
+        message = phone_format.redact_contact_details(message)
+        context = phone_format.redact_contact_details(context)
         conn = dbconn.connect()
         with conn:
             conn.execute(

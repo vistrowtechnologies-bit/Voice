@@ -1468,6 +1468,14 @@ def init_tables() -> None:
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_accepted_at TEXT")
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_version TEXT DEFAULT ''")
             conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_user_id INTEGER")
+            # Evidence of the acceptance itself (2026-10-14): where it came
+            # from, and the "I am 18 or older and authorised to act for this
+            # business" confirmation. Accounts that accepted before this
+            # stay as they were (NULLs); nothing is backfilled or re-asked.
+            conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_ip TEXT")
+            conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_user_agent TEXT")
+            conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS consent_source TEXT")
+            conn.execute("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS age_confirmed_at TEXT")
             # agents.model defaulted to 'gpt-4.1', which is the WORST
             # available default on both axes it is chosen for. It sits on a
             # 30,000 TPM limit — roughly three turns a minute at this
@@ -2403,7 +2411,14 @@ def record_login(user_id: int, provider: str | None = None) -> None:
 CONSENT_VERSION = "2026-08-22"
 
 
-def record_consent(account_id: int, user_id: int) -> None:
+def record_consent(
+    account_id: int,
+    user_id: int,
+    ip: str = "",
+    user_agent: str = "",
+    source: str = "onboarding",
+    age_confirmed: bool = False,
+) -> None:
     """Records that this account accepted the Terms/Privacy bundle shown at
     signup — a single combined checkbox, not five separate ones, matching
     how every major consumer product actually does this (nobody reads five
@@ -2417,8 +2432,11 @@ def record_consent(account_id: int, user_id: int) -> None:
         with conn:
             conn.execute(
                 f"UPDATE accounts SET consent_accepted_at = {_NOW}, consent_version = ?, "
-                "consent_user_id = ? WHERE id = ? AND consent_accepted_at IS NULL",
-                (CONSENT_VERSION, user_id, account_id),
+                "consent_user_id = ?, consent_ip = ?, consent_user_agent = ?, consent_source = ?, "
+                f"age_confirmed_at = CASE WHEN ? THEN {_NOW} ELSE NULL END "
+                "WHERE id = ? AND consent_accepted_at IS NULL",
+                (CONSENT_VERSION, user_id, (ip or "")[:64], (user_agent or "")[:512], source,
+                 bool(age_confirmed), account_id),
             )
     finally:
         conn.close()
@@ -10644,6 +10662,14 @@ _COMPLIANCE_DEFAULTS = {
     "honor_dnc": True,
     "require_consent": False,
     "record_calls": False,
+    # While record_calls is on, the agent's opening line says the call is
+    # recorded and that the caller is speaking with an AI assistant (agent/
+    # main.py _recording_disclosure). On by default for new AND existing
+    # accounts: a stored config without this key reads the default. An owner
+    # can turn it off or replace the wording (recording_notice; "" = the
+    # built-in Hindi/English line in the call's language).
+    "announce_recording": True,
+    "recording_notice": "",
     # 0 = keep transcripts/recordings indefinitely; >0 = purge calls older
     # than N days (surfaced to the operator; enforced by purge_expired_calls).
     "retention_days": 0,
@@ -10654,6 +10680,9 @@ _COMPLIANCE_DEFAULTS = {
     "recording_link_expiry_days": 90,
 }
 RECORDING_LINK_EXPIRY_CHOICES = (0, 7, 30, 90)
+# Spoken inside the opening line, so it must stay short: every character is
+# TTS time before the caller can answer.
+RECORDING_NOTICE_MAX_CHARS = 160
 _COMPLIANCE_KEY = "compliance.config"
 _DAY_ABBR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -10754,6 +10783,11 @@ def _compliance_error(cfg: dict) -> str | None:
             raise ValueError
     except (TypeError, ValueError):
         return "Retention must be 0 or a positive number of days."
+    if not isinstance(cfg.get("announce_recording"), bool):
+        return "Announce recording must be on or off."
+    notice = cfg.get("recording_notice")
+    if not isinstance(notice, str) or len(notice.strip()) > RECORDING_NOTICE_MAX_CHARS:
+        return f"The recording announcement must be text of at most {RECORDING_NOTICE_MAX_CHARS} characters."
     try:
         if int(cfg.get("recording_link_expiry_days")) not in RECORDING_LINK_EXPIRY_CHOICES:
             raise ValueError
@@ -10767,6 +10801,8 @@ def save_compliance(account_id: int, data: dict) -> dict:
     for k in _COMPLIANCE_DEFAULTS:
         if k in data:
             cfg[k] = data[k]
+    if isinstance(cfg.get("recording_notice"), str):
+        cfg["recording_notice"] = " ".join(cfg["recording_notice"].split())
     error = _compliance_error(cfg)
     if error:
         raise ValueError(error)
@@ -11005,8 +11041,47 @@ def _purge_call_derived_data(account_id: int, days: int) -> None:
                 "AND created_at::timestamp < (now() AT TIME ZONE 'utc') - (? || ' days')::interval",
                 (account_id, days),
             )
+            # A tenant's own diagnostics follow its retention when that is
+            # shorter than the platform-wide cap (purge_old_error_events).
+            conn.execute(
+                "DELETE FROM error_events WHERE account_id = ? "
+                "AND created_at::timestamp < (now() AT TIME ZONE 'utc') - (? || ' days')::interval",
+                (account_id, days),
+            )
     finally:
         conn.close()
+
+
+# error_events is a diagnostics feed (admin System Health, ops alerts), not a
+# record anyone needs for long, and nothing ever deleted from it. Every row,
+# with or without an account, goes after this many days.
+ERROR_EVENT_RETENTION_DAYS = 90
+_ERROR_EVENT_PURGE_BATCH = 5000
+
+
+def purge_old_error_events(days: int = ERROR_EVENT_RETENTION_DAYS) -> int:
+    """Delete error_events older than `days`, in batches so one run never
+    holds a long lock on the table the agent and server write to. Safe to
+    re-run: a second run finds nothing. Returns rows deleted."""
+    if days <= 0:
+        return 0
+    deleted = 0
+    while True:
+        conn = _connect()
+        try:
+            with conn:
+                rows = conn.execute(
+                    "DELETE FROM error_events WHERE id IN ("
+                    "SELECT id FROM error_events "
+                    "WHERE created_at::timestamp < (now() AT TIME ZONE 'utc') - (? || ' days')::interval "
+                    "ORDER BY id LIMIT ?) RETURNING id",
+                    (days, _ERROR_EVENT_PURGE_BATCH),
+                ).fetchall()
+        finally:
+            conn.close()
+        deleted += len(rows)
+        if len(rows) < _ERROR_EVENT_PURGE_BATCH:
+            return deleted
 
 
 class StorageNotConfigured(RuntimeError):

@@ -51,6 +51,7 @@ export function Signup() {
   // No workspace yet, so no workspace country: start from the browser's region.
   const [dialCode, setDialCode] = useState(() => dialCodeFor(guessCountry()))
   const [agreed, setAgreed] = useState(false)
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [referralError, setReferralError] = useState(false)
@@ -78,10 +79,19 @@ export function Signup() {
       setError('Please agree to the Terms of Service and Privacy Policy.')
       return
     }
+    if (!ageConfirmed) {
+      setError('Please confirm you are 18 or older and authorised to act for this business.')
+      return
+    }
     setBusy(true)
     try {
       const { phoneNumber, ...rest } = form
-      const result = await signup({ ...rest, phone: phoneNumber ? `${dialCode} ${phoneNumber}` : '' })
+      const result = await signup({
+        ...rest,
+        phone: phoneNumber ? `${dialCode} ${phoneNumber}` : '',
+        accepted_terms: agreed,
+        confirmed_age: ageConfirmed,
+      })
       trackQualifyLead('signup')
       navigate(`/verify-email?email=${encodeURIComponent(result.email)}&sent=${result.emailSent ? '1' : '0'}`, { replace: true })
     } catch (err) {
@@ -203,6 +213,15 @@ export function Signup() {
             </Link>
             .
           </span>
+        </label>
+        <label className="flex items-start gap-2 text-xs text-text-muted">
+          <input
+            type="checkbox"
+            checked={ageConfirmed}
+            onChange={(e) => setAgeConfirmed(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>I confirm I am 18 or older and authorised to act for this business.</span>
         </label>
         <button
           type="submit"

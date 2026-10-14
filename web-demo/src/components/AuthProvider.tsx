@@ -61,6 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string
       referral_source?: string
       phone?: string
+      accepted_terms: boolean
+      confirmed_age: boolean
     }) => {
       return apiSignup(data)
     },

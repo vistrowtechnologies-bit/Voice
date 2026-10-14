@@ -19,6 +19,7 @@ import logging
 import time
 
 import dbconn
+import phone_format
 import vendor_live
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,14 @@ def write_audit(
 def log_error(message: str, source: str = "backend", level: str = "error", account_id: int | None = None, context: str = "") -> None:
     # The error sink must never itself raise into a request path - including
     # when the database is the thing that is down, so connect inside the try.
+    # Phone numbers and emails are masked first: error_events is a
+    # diagnostics table (purged after ERROR_EVENT_RETENTION_DAYS), not a
+    # place for a caller's or customer's contact details.
+    try:
+        message = phone_format.redact_contact_details(message)
+        context = phone_format.redact_contact_details(context)
+    except Exception:
+        message, context = "error message withheld (redaction failed)", ""
     try:
         conn = _connect()
     except Exception:

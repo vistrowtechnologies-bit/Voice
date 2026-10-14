@@ -30,6 +30,9 @@ export function OnboardingModal() {
   const STEPS = needsConsent ? ALL_STEPS : ALL_STEPS.filter((s) => s !== 'consent')
   const [step, setStep] = useState<Step>(needsConsent ? 'consent' : 'welcome')
   const [consentChecked, setConsentChecked] = useState(false)
+  // Google/GitHub sign-ups skip the signup form, so the age/authority
+  // confirmation it asks for is asked here too (the server requires it).
+  const [ageChecked, setAgeChecked] = useState(false)
   const [workspaceName, setWorkspaceName] = useState(user?.accountName ?? '')
   // A brand-new workspace has only the server's default; the browser's region
   // is a better first guess, and the owner confirms it here.
@@ -39,7 +42,7 @@ export function OnboardingModal() {
   const [showTestCall, setShowTestCall] = useState(false)
 
   const finishConsent = async () => {
-    if (!user || !consentChecked) return
+    if (!user || !consentChecked || !ageChecked) return
     setSaving(true)
     try {
       const { user: updated } = await apiAcceptConsent(user.consent.currentVersion)
@@ -140,9 +143,18 @@ export function OnboardingModal() {
                 recorded to provide and improve the service.
               </span>
             </label>
+            <label className="flex items-start gap-2.5 rounded-lg border border-border bg-surface-high/40 p-3 text-xs leading-relaxed text-text-muted">
+              <input
+                type="checkbox"
+                checked={ageChecked}
+                onChange={(e) => setAgeChecked(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>I confirm I am 18 or older and authorised to act for this business.</span>
+            </label>
             <button
               onClick={finishConsent}
-              disabled={saving || !consentChecked}
+              disabled={saving || !consentChecked || !ageChecked}
               className="mt-1 rounded-lg bg-primary py-2.5 text-sm font-bold text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {saving ? 'Saving…' : 'Agree and continue'}

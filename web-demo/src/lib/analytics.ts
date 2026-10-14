@@ -1,3 +1,7 @@
+import { analyticsAllowed } from './analyticsConsent'
+
+// Nothing here sends anything until the visitor accepts analytics cookies
+// (analyticsConsent.ts); GA4's tag itself is only loaded after that.
 // GA4 is loaded in index.html with send_page_view disabled - every page
 // view, including the very first one, goes through here instead, so
 // client-side navigations (Home -> Pricing -> Contact) are counted as
@@ -23,6 +27,7 @@ const APP_HOST = 'app.vistrowvoice.com'
 
 export function initClarity(path: string, signedInCustomer = false): void {
   if (typeof window === 'undefined' || !CLARITY_PROJECT_ID || window.clarity) return
+  if (!analyticsAllowed()) return
   const host = window.location.hostname
   if (!MARKETING_HOSTS.has(host) && host !== APP_HOST) return
   if (cleanPath(path).startsWith('/admin')) return
@@ -133,7 +138,7 @@ export function trackPageView(path: string): void {
   // Lets Clarity recordings and heatmaps be filtered by page group (pricing,
   // solution_detail, ...). Clarity tracks the SPA route change itself.
   window.clarity?.('set', 'page_group', classifyPageGroup(cleanPath(path)))
-  if (typeof window.gtag !== 'function') return
+  if (typeof window.gtag !== 'function' || !analyticsAllowed()) return
   window.gtag('event', 'page_view', {
     page_path: path,
     page_location: window.location.href,
@@ -148,7 +153,7 @@ export function trackPageView(path: string): void {
 // moments a site visitor actually becomes a lead: signup, the contact/demo
 // form, and a live demo call connecting.
 export function trackQualifyLead(source: LeadSource): void {
-  if (typeof window === 'undefined' || typeof window.gtag !== 'function') return
+  if (typeof window === 'undefined' || typeof window.gtag !== 'function' || !analyticsAllowed()) return
   const params = {
     lead_source: source,
     ...commonPageParams(window.location.pathname + window.location.search),
@@ -162,7 +167,7 @@ export function trackQualifyLead(source: LeadSource): void {
 }
 
 export function trackMarketingCta(cta: MarketingCta, placement: string): void {
-  if (typeof window === 'undefined' || typeof window.gtag !== 'function') return
+  if (typeof window === 'undefined' || typeof window.gtag !== 'function' || !analyticsAllowed()) return
   const params = {
     cta_name: cta,
     cta_placement: placement,

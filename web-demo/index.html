@@ -40,16 +40,34 @@
     />
     <meta name="twitter:image" content="https://www.vistrowvoice.com/og/home.png" />
     <meta name="twitter:image:alt" content="Vistrow Voice multilingual AI voice agent orb with support for 99 languages across phone and web" />
-    <!-- Google tag (gtag.js). send_page_view is off because this is a
-         client-side-routed SPA - the initial load and every in-app
-         navigation both fire through src/lib/analytics.ts instead, so
-         Home -> Pricing -> Contact are three page_views, not one. -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YSY7Z22NS2"></script>
+    <!-- Google tag (gtag.js), loaded only after the visitor accepts
+         analytics cookies (src/lib/analyticsConsent.ts, banner in
+         AnalyticsConsentBanner.tsx). Consent Mode v2 defaults are all
+         denied; a stored "granted" loads the tag here so page views count
+         from the first page. send_page_view is off because this is a
+         client-side-routed SPA - page views fire through
+         src/lib/analytics.ts. If this script changes, update its sha256 in
+         vercel.json's Content-Security-Policy-Report-Only. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag() { dataLayer.push(arguments); }
+      var vvAnalytics = null;
+      try { vvAnalytics = localStorage.getItem('vv-analytics-consent'); } catch (e) {}
+      gtag('consent', 'default', {
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+        analytics_storage: vvAnalytics === 'granted' ? 'granted' : 'denied'
+      });
       gtag('js', new Date());
       gtag('config', 'G-YSY7Z22NS2', { send_page_view: false });
+      if (vvAnalytics === 'granted') {
+        var vvGa = document.createElement('script');
+        vvGa.async = true;
+        vvGa.src = 'https://www.googletagmanager.com/gtag/js?id=G-YSY7Z22NS2';
+        vvGa.setAttribute('data-vv-ga', '');
+        document.head.appendChild(vvGa);
+      }
     </script>
     <link rel="preload" href="/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/sora-latin.woff2" as="font" type="font/woff2" crossorigin />

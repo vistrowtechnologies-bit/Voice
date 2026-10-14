@@ -13,7 +13,8 @@
     "check:seo-pages": "tsx scripts/check-seo-pages.mts",
     "test:menu": "tsx scripts/test-command-menu.mts",
     "test:import": "tsx scripts/test-contact-import.mts",
-    "test:leads": "tsx scripts/test-lead-details.mts"
+    "test:leads": "tsx scripts/test-lead-details.mts",
+    "test:consent": "tsx scripts/test-analytics-consent.mts"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.21",
