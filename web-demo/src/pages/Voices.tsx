@@ -64,10 +64,12 @@ function liveCredits(modelValue: string | undefined): string {
   return creditsPerMinuteLabel(liveMultiplier(modelValue))
 }
 
-// Small "2/min" pill on a tab.
-function CreditPill({ credits }: { credits: number }) {
+// "2x" above a tab name: credits per minute on a Vistrow Bharat agent.
+function CreditBadge({ credits }: { credits: number }) {
   return (
-    <span className="ml-1 rounded-full bg-surface-high px-1.5 py-0.5 text-[10px] font-bold text-text-muted">{formatCredits(credits)}/min</span>
+    <span className="block text-[10px] font-bold leading-none tracking-wide text-primary/80" title={`${formatCredits(credits)} credits per minute`}>
+      {formatCredits(credits)}x credits
+    </span>
   )
 }
 
@@ -402,40 +404,6 @@ function Spotlight({
   )
 }
 
-function PriceStrip({
-  groups,
-  activeKey,
-  onChoose,
-}: {
-  groups: { credits: number; keys: TabKey[]; labels: string[] }[]
-  activeKey: TabKey | undefined
-  onChoose: (key: TabKey) => void
-}) {
-  if (groups.length === 0) return null
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="mr-1 font-bold text-text-muted">Credits per minute</span>
-      {groups.map((g) => {
-        const on = activeKey !== undefined && g.keys.includes(activeKey)
-        return (
-          <button
-            key={g.credits}
-            type="button"
-            onClick={() => onChoose(g.keys[0])}
-            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors ${
-              on ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border bg-surface text-text-muted hover:text-text'
-            }`}
-          >
-            <span className="font-display text-sm font-semibold">{formatCredits(g.credits)}</span>
-            <span className="font-semibold">{g.labels.join(' · ')}</span>
-          </button>
-        )
-      })}
-      <span className="ml-auto hidden text-[11px] text-text-muted sm:inline">on a Vistrow Bharat agent · phone and web alike</span>
-    </div>
-  )
-}
-
 export function Voices() {
   const { user } = useAuth()
   // Same audience as the model dropdown: the server refuses these models for everyone else.
@@ -550,24 +518,6 @@ export function Voices() {
     return list.filter((t) => t.voices.length > 0).sort((a, b) => a.credits - b.credits)
   }, [data])
 
-  // The price ladder above the tabs: one chip per credit level, naming the
-  // tabs at that level; a chip opens its first (cheapest-listed) tab.
-  const priceGroups = useMemo(() => {
-    const entries: { credits: number; key: TabKey; label: string }[] = [
-      ...tabs.map((t) => ({ credits: t.credits, key: t.key, label: t.label })),
-      ...(showRealtime
-        ? REALTIME_MODELS.map((m) => ({ credits: liveMultiplier(m.value), key: `rt:${m.value}` as TabKey, label: shortModelLabel(m.label) }))
-        : []),
-    ]
-    const groups = new Map<number, { credits: number; keys: TabKey[]; labels: string[] }>()
-    for (const e of entries) {
-      const g = groups.get(e.credits) ?? { credits: e.credits, keys: [], labels: [] }
-      g.keys.push(e.key)
-      g.labels.push(e.label)
-      groups.set(e.credits, g)
-    }
-    return [...groups.values()].sort((x, y) => x.credits - y.credits)
-  }, [tabs, showRealtime])
 
   // Gemini Live speaks with the Gemini voice named like the agent's HD voice
   // (agent/main.py _gemini_live_voice). The catalog's Gemini 3.8 Flash-Lite
@@ -790,47 +740,40 @@ export function Voices() {
                   </label>
 
                   {!query && (filter !== 'added' || realtimeActive) && (
-                    <PriceStrip
-                      groups={priceGroups}
-                      activeKey={realtimeActive ? `rt:${realtimeModel?.value}` : activeTab?.key}
-                      onChoose={chooseTab}
-                    />
-                  )}
-                  {!query && (filter !== 'added' || realtimeActive) && (
                     <div
                       role="tablist"
                       aria-label="Voice categories"
                       className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     >
-                      {tabs.map((t) => (
-                        <button
-                          key={t.key}
-                          role="tab"
-                          aria-selected={activeTab?.key === t.key}
-                          onClick={() => chooseTab(t.key)}
-                          className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                            activeTab?.key === t.key ? 'bg-primary/10 text-primary' : 'bg-transparent text-text-muted hover:text-text'
-                          }`}
-                        >
-                          {t.label} <span className="text-[11px] font-medium opacity-70">{t.voices.length}</span>
-                          <CreditPill credits={t.credits} />
-                        </button>
-                      ))}
-                      {showRealtime &&
-                        REALTIME_MODELS.map((m) => {
-                          const on = realtimeActive && realtimeModel?.value === m.value
+                      {[
+                        ...tabs.map((t) => ({ key: t.key, label: t.label, count: t.voices.length, credits: t.credits })),
+                        ...(showRealtime
+                          ? REALTIME_MODELS.map((m) => ({
+                              key: `rt:${m.value}` as TabKey,
+                              label: shortModelLabel(m.label),
+                              count: realtimeVoices.length,
+                              credits: liveMultiplier(m.value),
+                            }))
+                          : []),
+                      ]
+                        // One row, cheapest first; same-price tabs keep their order.
+                        .sort((a, b) => a.credits - b.credits)
+                        .map((t) => {
+                          const on = t.key.startsWith('rt:')
+                            ? realtimeActive && `rt:${realtimeModel?.value}` === t.key
+                            : !realtimeActive && activeTab?.key === t.key
                           return (
                             <button
-                              key={m.value}
+                              key={t.key}
                               role="tab"
                               aria-selected={on}
-                              onClick={() => chooseTab(`rt:${m.value}`)}
-                              className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                              onClick={() => chooseTab(t.key)}
+                              className={`shrink-0 whitespace-nowrap rounded-lg px-3 pb-1.5 pt-1 text-left text-sm font-semibold transition-colors ${
                                 on ? 'bg-primary/10 text-primary' : 'bg-transparent text-text-muted hover:text-text'
                               }`}
                             >
-                              {shortModelLabel(m.label)} <span className="text-[11px] font-medium opacity-70">{realtimeVoices.length}</span>
-                              <CreditPill credits={liveMultiplier(m.value)} />
+                              <CreditBadge credits={t.credits} />
+                              {t.label} <span className="text-[11px] font-medium opacity-70">{t.count}</span>
                             </button>
                           )
                         })}
