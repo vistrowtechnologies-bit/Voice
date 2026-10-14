@@ -288,3 +288,20 @@ class PlansKeepTheirMargin(unittest.TestCase):
             per_minute = plan["price_inr"] / plan["credits"] * per_default_minute_credits
             self.assertGreaterEqual(per_minute, 2 * plan_policy.COST_PER_DEFAULT_MINUTE_INR, key)
 
+
+
+class VoicesPageCreditsTests(unittest.TestCase):
+    """web-demo/src/lib/plans.ts shows credits per minute on the Voices page;
+    those numbers must match what server/calls_db actually bills."""
+
+    def test_page_multipliers_match_billing(self):
+        import re
+        import calls_db
+        src = (Path(__file__).resolve().parent.parent / "web-demo/src/lib/plans.ts").read_text()
+        bharat = float(re.search(r"BHARAT_MODEL_MULTIPLIER = ([\d.]+)", src).group(1))
+        live = re.search(r"LIVE_MODEL_MULTIPLIER[^=]*= \{ '2.5': ([\d.]+), default: ([\d.]+) \}", src)
+        tiers = calls_db._MODEL_TIER_MULTIPLIERS
+        self.assertEqual(bharat, tiers[calls_db.model_tier("sarvam/sarvam-105b-conversations")])
+        self.assertEqual(float(live.group(1)), tiers[calls_db.model_tier("gemini-live")])
+        for model in ("gemini-live:gemini-3.1-flash-live-preview", "gemini-live:gemini-3.8-live"):
+            self.assertEqual(float(live.group(2)), tiers[calls_db.model_tier(model)], model)
