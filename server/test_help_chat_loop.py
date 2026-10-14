@@ -192,3 +192,18 @@ class SarvamFallbackTests(unittest.TestCase):
                 patch("help_chat.urllib.request.urlopen", fake):
             help_chat.answer_help_question("How many agents are live?", [], 7)
         self.assertFalse(any(r.get("openai") for r in fake.requests))
+
+
+class ToolResultsKeepIndicText(unittest.TestCase):
+    """Hindi in a tool result must reach the model as text, not \\uXXXX codes."""
+
+    def test_short_and_truncated_results_are_plain_utf8(self):
+        import help_chat
+        hindi = "आपका ऑफिस कितने बजे खुलता है"
+        short = help_chat._tool_result_content({"text": hindi})
+        self.assertIn(hindi, short)
+        self.assertNotIn("\\u0906", short)
+        long = help_chat._tool_result_content({"text": hindi * 400})
+        self.assertIn(hindi, long)
+        self.assertNotIn("\\u0906", long)
+        self.assertIn("[truncated]", long)

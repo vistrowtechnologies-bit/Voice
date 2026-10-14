@@ -223,12 +223,16 @@ def _deterministic_live_reply(
 def _tool_result_content(result) -> str:
     """Wrap a tool result as untrusted workspace data, truncated so one
     transcript-heavy lookup cannot crowd out the rest of the context."""
-    data = json.dumps(result)
+    # ensure_ascii=False: the default escapes Hindi as \\uXXXX codes (twice on
+    # the truncated path), and models then guessed at what a caller said
+    # (measured 2026-10-14: three models invented "discount/price" for a call
+    # about office hours; with plain UTF-8 all three were right 3/3).
+    data = json.dumps(result, ensure_ascii=False)
     if len(data) > MAX_TOOL_RESULT_CHARS:
         data = data[:MAX_TOOL_RESULT_CHARS] + "…[truncated]"
     else:
         data = result
-    return json.dumps({"data": data, "note": TOOL_RESULT_NOTE})
+    return json.dumps({"data": data, "note": TOOL_RESULT_NOTE}, ensure_ascii=False)
 
 
 def _post_chat(api_key: str, body: dict, url: str = OPENAI_CHAT_URL) -> dict:
