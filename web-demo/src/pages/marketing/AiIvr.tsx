@@ -83,6 +83,31 @@ const FITS = [
   },
 ]
 
+const IVR_TERMS = [
+  {
+    icon: 'dialpad',
+    title: 'IVR system',
+    body: 'An IVR system answers a business number, plays prompts and acts on the caller’s input: keypad tones or a few expected words. It then plays information, collects digits or routes the call to a queue. An AI IVR keeps that job but understands full sentences, so the caller does not need to know which option to pick.',
+  },
+  {
+    icon: 'public',
+    title: 'Cloud IVR',
+    body: 'A cloud or hosted IVR runs on a provider’s servers instead of hardware in your office, and you manage it from a web dashboard. Vistrow Voice works the same way: there is nothing to install, numbers connect over SIP, and you change the agent’s instructions, knowledge and routing in the browser.',
+  },
+  {
+    icon: 'call',
+    title: 'IVR call',
+    body: 'On a menu IVR call the caller listens, presses keys and often lands in a queue. On an AI IVR call the agent greets them, listens to the request, asks a follow-up if needed, and answers, books, takes a callback request or transfers. Every call is saved with a transcript and summary.',
+  },
+]
+
+const GUIDES = [
+  { to: '/resources/blog/what-is-ivr-interactive-voice-response', title: 'What is IVR (interactive voice response)?', body: 'Menus, DTMF, IVR trees, cloud IVR and where AI fits.' },
+  { to: '/resources/blog/ivr-vs-ai-voice-agent-india', title: 'IVR vs AI voice agent: which should you use?', body: 'Decide from your own call reasons, with a worked menu example.' },
+  { to: '/resources/blog/ivr-in-banking-and-finance', title: 'IVR in banking and finance', body: 'Which finance calls suit conversation and the guardrails to set.' },
+  { to: '/resources/blog/how-to-choose-an-ivr-service-provider-india', title: 'How to choose an IVR service provider in India', body: 'A neutral checklist for comparing IVR solutions.' },
+]
+
 const FAQ = [
   {
     q: 'How do I replace my IVR with AI?',
@@ -107,6 +132,14 @@ const FAQ = [
   {
     q: 'What happens to call recordings and caller data?',
     a: 'Each call is stored in your workspace with its transcript and summary, and the recording if recording is on. You can require spoken consent at the start of the call and set a retention period after which transcripts and recordings are deleted automatically.',
+  },
+  {
+    q: 'What is the difference between an IVR system and an AI IVR?',
+    a: 'A traditional IVR system offers a fixed menu and acts on keypad tones or a few expected words. An AI IVR lets the caller say what they need in a full sentence, understands the request in their language, and answers, books or transfers without a menu. Both answer the number and route the call; the AI version removes the step of choosing an option.',
+  },
+  {
+    q: 'Is Vistrow Voice a cloud IVR?',
+    a: 'It is a cloud-hosted platform, so there is no hardware to install and everything is managed from the browser dashboard. Instead of a keypad menu it puts a conversational AI agent on the number. Phone calls connect over SIP through EnableX, and the same agent can also answer on your website.',
   },
 ]
 
@@ -164,6 +197,31 @@ export function AiIvr() {
               </li>
             ))}
           </ul>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+        <div className="mb-8 max-w-2xl">
+          <SectionEyebrow>IVR system, cloud IVR, IVR call</SectionEyebrow>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Where an AI IVR fits among the terms you have heard.</h2>
+          <p className="mt-3 text-text-muted">
+            New to the vocabulary? Our guide to{' '}
+            <Link to="/resources/blog/what-is-ivr-interactive-voice-response" className="font-semibold text-primary underline-offset-4 hover:underline">
+              what IVR is and how it works
+            </Link>{' '}
+            explains menus, keypad tones and call flows in more detail.
+          </p>
+        </div>
+        <div className="grid gap-5 lg:grid-cols-3">
+          {IVR_TERMS.map((item) => (
+            <div key={item.title} className="rounded-2xl border border-border bg-surface p-7">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary">
+                <Icon name={item.icon} className="text-[22px]" />
+              </span>
+              <h3 className="mt-5 font-display text-lg font-semibold">{item.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -366,6 +424,33 @@ export function AiIvr() {
             </Link>
           </div>
         </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+        <div className="mb-8 max-w-2xl">
+          <SectionEyebrow>IVR guides</SectionEyebrow>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Read before you replace your menu.</h2>
+          <p className="mt-3 text-text-muted">
+            Answering front-desk calls rather than routing them? See the{' '}
+            <Link to="/ai-receptionist" className="font-semibold text-primary underline-offset-4 hover:underline">
+              AI receptionist
+            </Link>{' '}
+            page.
+          </p>
+        </div>
+        <ul className="grid gap-5 sm:grid-cols-2">
+          {GUIDES.map((guide) => (
+            <li key={guide.to} className="rounded-2xl border border-border bg-surface p-6">
+              <Link to={guide.to} className="group flex items-start justify-between gap-3">
+                <span>
+                  <span className="block font-display text-base font-semibold group-hover:text-primary">{guide.title}</span>
+                  <span className="mt-1 block text-sm text-text-muted">{guide.body}</span>
+                </span>
+                <Icon name="arrow_forward" className="mt-1 shrink-0 text-[18px] text-primary" />
+              </Link>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <FaqSection items={FAQ} title="AI IVR questions, answered." />

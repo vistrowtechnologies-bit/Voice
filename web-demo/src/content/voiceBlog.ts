@@ -1,3 +1,5 @@
+import { IVR_CONTEXTUAL_LINKS, IVR_IMAGE_ALTS, IVR_POSTS } from './ivrBlogPosts'
+
 export interface VoiceBlogSection {
   heading: string
   paragraphs: string[]
@@ -270,10 +272,13 @@ const CONTEXTUAL_LINK_PARAGRAPHS: Record<string, string> = {
   'ai-call-recordings-and-transcripts': 'For the receiving side of the workflow, use the [CRM handoff checklist](/resources/blog/connecting-voice-calls-to-your-crm). If a site visitor began the call in a browser, the [website voice widget guide](/resources/blog/website-voice-widget-for-lead-generation) explains why channel and microphone permissions belong in the investigation.',
 }
 
-export const VOICE_BLOG_POSTS: VoiceBlogPost[] = [...ORIGINAL_POSTS, ...NEW_POSTS].map((post) => {
+Object.assign(IMAGE_ALTS, IVR_IMAGE_ALTS)
+Object.assign(CONTEXTUAL_LINK_PARAGRAPHS, IVR_CONTEXTUAL_LINKS)
+
+export const VOICE_BLOG_POSTS: VoiceBlogPost[] = [...ORIGINAL_POSTS, ...NEW_POSTS, ...IVR_POSTS].map((post) => {
   const sections = [...post.sections, ...(EXTRA_SECTIONS[post.slug] ?? [])].map((section, index) => index === 0
     ? { ...section, paragraphs: [...section.paragraphs, CONTEXTUAL_LINK_PARAGRAPHS[post.slug]] }
     : section)
   const words = sections.flatMap(section => [section.heading, ...section.paragraphs, ...(section.points ?? [])]).join(' ').replace(/\[([^\]]+)\]\(\/[^)]+\)/g, '$1').trim().split(/\s+/).length
-  return { ...post, sections, readTime: `${Math.max(1, Math.ceil(words / 200))} min read`, updatedAt: '2026-10-07', image: `/blog/${post.slug}.jpg`, imageAlt: IMAGE_ALTS[post.slug], sources: SOURCES[post.slug] ?? [] }
+  return { ...post, sections, readTime: `${Math.max(1, Math.ceil(words / 200))} min read`, updatedAt: post.publishedAt > '2026-10-07' ? post.publishedAt : '2026-10-07', image: `/blog/${post.slug}.jpg`, imageAlt: IMAGE_ALTS[post.slug], sources: SOURCES[post.slug] ?? [] }
 })
