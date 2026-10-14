@@ -19,7 +19,6 @@ import { WatchHowButton } from './HelpVideo'
 import { helpVideoFor } from '../lib/helpVideos'
 import { Icon } from './Icon'
 import { StorageWarning } from './StorageWarning'
-import { OnboardingModal } from './OnboardingModal'
 import vistrowMark from '../assets/vistrow-mark.png'
 import { Tooltip } from './ui/Tooltip'
 
@@ -762,7 +761,6 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
           <MobileNavContext.Provider value={mobileNav}>{children}</MobileNavContext.Provider>
         </main>
       </div>
-      {user && !user.onboarded && <OnboardingModal />}
       {user && user.onboarded && !user.tourCompleted && <DashboardTour />}
       {user && <HelpChatWidget />}
     </div>

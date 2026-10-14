@@ -620,3 +620,37 @@ Branch `claude/seo-p5-receptionist-ivr` (owner request; Keyword Planner India: i
 - `/ai-ivr` strengthened (title/H1 unchanged): "IVR system, cloud IVR, IVR call" section, IVR guides list linking the 4 posts + /ai-receptionist, 2 new FAQs.
 Facts checked in repo: transfer refuses web calls (`agent/tools.py` transfer_call), 11 languages (`agent/language.py`), Appointments/Scheduling, route call window blank = answer at any time, integrations list, custom functions (AgentDetail), strict mode, consent/retention, calling window/DNC (help articles).
 Verified: `npm --prefix web-demo run build` (SEO route audit: 120 indexable routes pass), `npm run test:seo`, `npx tsx scripts/check-blog-seo.ts` (14 articles), oxlint (no new warnings). Built pages checked at 375 px: no horizontal scroll, one H1. Not done: `graphify update .` (graphify-out is not tracked; run on main after merge). After merge: Vercel deploy only, then request indexing for the 5 new URLs.
+
+### Claude — 2026-10-14 — Full-page onboarding before the dashboard, signup data in admin
+
+Branch `claude/fullpage-onboarding`. The owner asked for a full-page onboarding that is required before platform access and collects as much as possible, like other SaaS brands.
+
+**Customer side**
+- New `/onboarding` page (`web-demo/src/pages/Onboarding.tsx`), four steps:
+  1. About you: role, phone if missing, how you heard if a Google/GitHub sign-up.
+  2. Business: company, website, industry, size, country.
+  3. Goals: uses, channels, languages, calls/month, current solution, go-live timeline.
+  4. Ready: test call with the default agent, summary, Terms consent.
+- The draft is saved in localStorage, so a reload resumes where the customer left off.
+- `RequireAuth` sends any user whose account is not onboarded to `/onboarding` (support sessions excepted). `OnboardingModal` is deleted.
+
+**Data capture**
+- First-touch attribution (`lib/attribution.ts`, captured in `main.tsx`): utm_*, gclid/fbclid/msclkid, external referrer, landing page.
+- Sent with `/auth/signup` and again on `/onboarding/complete`, so Google sign-ups are covered.
+- Server: `accounts.onboarding_profile` and `signup_attribution` (JSON text, `ADD COLUMN IF NOT EXISTS`). New `server/onboarding_profile.py` cleaning (whitelist + caps).
+- `save_onboarding_profile` fills the owner's phone and `referral_source` only when empty. Attribution is first-touch only.
+
+**Admin**
+- New first tab "Signup & onboarding" on the account page: contact, sign-up method, how they heard, ad/referrer data, all answers.
+- Accounts list gains Source and Industry columns. The "Onboarded" card, which actually showed the signup date, is relabelled "Signed up".
+
+**Fixes along the way**
+- `guessCountry` now uses the time zone first. Indian browsers set to en-US/en-GB had defaulted to US/GB: the old popup saved `country: GB` for a +91 customer in the local test.
+- The signup Terms error no longer turns every field red.
+
+**Verified**
+- Local app with a mock API: dashboard redirects to `/onboarding`; validation; all 4 steps; the completion payload; landing on `/dashboard`; the admin tab; 375 px has no horizontal scroll.
+- 5 server unit tests; `npm run build`.
+- Read-only prod query: all 6 real accounts are already onboarded, so nobody is blocked. Only test account 8 "Staging QA" is not.
+
+**Not verified:** against a real Postgres. Staging holds PR #72's unmerged build, so I did not overwrite it. The migration is the same ADD COLUMN IF NOT EXISTS pattern as the neighbouring lines.

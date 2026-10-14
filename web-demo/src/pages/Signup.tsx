@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { useAuth } from '../lib/auth'
 import { trackQualifyLead } from '../lib/analytics'
+import { getAttribution } from '../lib/attribution'
 import { AuthInput, AuthShell, PasswordVisibilityToggle, SocialButtons, useShake } from './AuthShell'
 import { COMMON_DIAL_CODES, dialCodeFor, guessCountry } from '../lib/phone'
 
@@ -54,6 +55,8 @@ export function Signup() {
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [referralError, setReferralError] = useState(false)
+  // Its own flag, so an unticked box does not paint every field red.
+  const [termsError, setTermsError] = useState(false)
   const [busy, setBusy] = useState(false)
   const shake = useShake(error)
 
@@ -66,6 +69,7 @@ export function Signup() {
     e.preventDefault()
     setError(null)
     setReferralError(false)
+    setTermsError(false)
     if (form.password.length < 8) {
       setError('Password must be at least 8 characters.')
       return
@@ -75,13 +79,17 @@ export function Signup() {
       return
     }
     if (!agreed) {
-      setError('Please agree to the Terms of Service and Privacy Policy.')
+      setTermsError(true)
       return
     }
     setBusy(true)
     try {
       const { phoneNumber, ...rest } = form
-      const result = await signup({ ...rest, phone: phoneNumber ? `${dialCode} ${phoneNumber}` : '' })
+      const result = await signup({
+        ...rest,
+        phone: phoneNumber ? `${dialCode} ${phoneNumber}` : '',
+        attribution: getAttribution(),
+      })
       trackQualifyLead('signup')
       navigate(`/verify-email?email=${encodeURIComponent(result.email)}&sent=${result.emailSent ? '1' : '0'}`, { replace: true })
     } catch (err) {
@@ -191,7 +199,15 @@ export function Signup() {
           {referralError && <span className="text-xs text-destructive">Please tell us how you heard about us.</span>}
         </div>
         <label className="flex items-start gap-2 text-xs text-text-muted">
-          <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => {
+              setAgreed(e.target.checked)
+              setTermsError(false)
+            }}
+            className="mt-0.5"
+          />
           <span>
             I agree to the{' '}
             <Link to="/terms" className="text-cyan hover:underline">
@@ -204,6 +220,7 @@ export function Signup() {
             .
           </span>
         </label>
+        {termsError && <span className="-mt-2 text-xs text-destructive">Please agree to the Terms of Service and Privacy Policy.</span>}
         <button
           type="submit"
           disabled={busy}
