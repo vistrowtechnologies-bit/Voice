@@ -1,0 +1,27 @@
+# After each successful Vercel production deploy of the marketing site, submit
+# the pages whose text changed to IndexNow (Bing, which ChatGPT search uses).
+name: IndexNow
+on:
+  deployment_status:
+concurrency:
+  group: indexnow
+  cancel-in-progress: false
+jobs:
+  submit:
+    if: github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production – voice'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/cache/restore@v4
+        with:
+          path: .indexnow-state.json
+          key: indexnow-state-${{ github.run_id }}
+          restore-keys: indexnow-state-
+      - run: node web-demo/scripts/indexnow.mjs --state .indexnow-state.json
+      - uses: actions/cache/save@v4
+        with:
+          path: .indexnow-state.json
+          key: indexnow-state-${{ github.run_id }}
