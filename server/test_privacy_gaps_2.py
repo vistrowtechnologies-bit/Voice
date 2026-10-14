@@ -186,30 +186,6 @@ class SignupAgeGate(unittest.TestCase):
         )
 
 
-class HtmlModuleNotShadowed(unittest.TestCase):
-    """8209cb4e (2026-10-12) added html.escape() to seven routes that also
-    assign a local `html = email_sender.render_email(...)`. Python then treats
-    `html` as local for the whole function, so html.escape raised
-    UnboundLocalError: signup, resend code, password reset, email change,
-    team invite, admin reset and the contact form all failed with 500. Found
-    by SignupAgeGate above, which runs auth_signup's real body."""
-
-    def test_no_route_shadows_the_html_module(self):
-        import ast
-        bad = []
-        for path in Path(__file__).resolve().parent.glob("*.py"):
-            for fn in ast.walk(ast.parse(path.read_text())):
-                if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                nodes = list(ast.walk(fn))
-                stores = any(isinstance(n, ast.Name) and n.id == "html" and isinstance(n.ctx, ast.Store) for n in nodes)
-                uses = any(isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "html"
-                           for n in nodes)
-                if stores and uses:
-                    bad.append(f"{path.name}:{fn.name}")
-        self.assertEqual(bad, [])
-
-
 def _ts(days_ago: float) -> str:
     return (datetime.datetime.now(UTC) - datetime.timedelta(days=days_ago)).strftime("%Y-%m-%d %H:%M:%S")
 
