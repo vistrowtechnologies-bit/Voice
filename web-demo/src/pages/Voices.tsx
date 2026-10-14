@@ -4,7 +4,7 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { useVoicePreview } from '../components/VoicePreviewButton'
 import { addVoice, fetchVoiceCatalog, removeVoice } from '../lib/api'
-import { BHARAT_MODEL_MULTIPLIER, LIVE_MODEL_MULTIPLIER, creditsPerMinuteLabel } from '../lib/plans'
+import { BHARAT_MODEL_MULTIPLIER, LIVE_MODEL_MULTIPLIER, creditsPerMinuteLabel, formatCredits } from '../lib/plans'
 import { ADMIN_ONLY_MODELS, geminiLiveVoiceName } from '../lib/agentOptions'
 import { useAuth } from '../lib/auth'
 import type { VoiceCatalog, VoiceEntry } from '../lib/types'
@@ -56,9 +56,19 @@ function voiceCredits(entry: VoiceEntry): string {
 }
 
 // Gemini Live bills by model: 2.5 at 2x, 3.1 / 3.8 at 6x (calls_db.model_tier).
-function liveCredits(modelValue: string | undefined): string {
+function liveMultiplier(modelValue: string | undefined): number {
   const key = modelValue && (modelValue === 'gemini-live' || modelValue.includes('2.5')) ? '2.5' : 'default'
-  return creditsPerMinuteLabel(LIVE_MODEL_MULTIPLIER[key])
+  return LIVE_MODEL_MULTIPLIER[key]
+}
+function liveCredits(modelValue: string | undefined): string {
+  return creditsPerMinuteLabel(liveMultiplier(modelValue))
+}
+
+// Small "2/min" pill on a tab.
+function CreditPill({ credits }: { credits: number }) {
+  return (
+    <span className="ml-1 rounded-full bg-surface-high px-1.5 py-0.5 text-[10px] font-bold text-text-muted">{formatCredits(credits)}/min</span>
+  )
 }
 
 function languageSummary(entry: VoiceEntry): string {
@@ -89,6 +99,8 @@ const shortModelLabel = (label: string) => label.replace(/^Gemini /, '').replace
 
 interface Tab {
   key: TabKey
+  // Credits per minute on a Vistrow Bharat agent; tabs are ordered by it.
+  credits: number
   label: string
   note: string
   voices: VoiceEntry[]
@@ -390,6 +402,40 @@ function Spotlight({
   )
 }
 
+function PriceStrip({
+  groups,
+  activeKey,
+  onChoose,
+}: {
+  groups: { credits: number; keys: TabKey[]; labels: string[] }[]
+  activeKey: TabKey | undefined
+  onChoose: (key: TabKey) => void
+}) {
+  if (groups.length === 0) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="mr-1 font-bold text-text-muted">Credits per minute</span>
+      {groups.map((g) => {
+        const on = activeKey !== undefined && g.keys.includes(activeKey)
+        return (
+          <button
+            key={g.credits}
+            type="button"
+            onClick={() => onChoose(g.keys[0])}
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors ${
+              on ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border bg-surface text-text-muted hover:text-text'
+            }`}
+          >
+            <span className="font-display text-sm font-semibold">{formatCredits(g.credits)}</span>
+            <span className="font-semibold">{g.labels.join(' · ')}</span>
+          </button>
+        )
+      })}
+      <span className="ml-auto hidden text-[11px] text-text-muted sm:inline">on a Vistrow Bharat agent · phone and web alike</span>
+    </div>
+  )
+}
+
 export function Voices() {
   const { user } = useAuth()
   // Same audience as the model dropdown: the server refuses these models for everyone else.
@@ -399,7 +445,7 @@ export function Voices() {
   const [busyVoice, setBusyVoice] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [tab, setTab] = useState<TabKey>('expressive')
+  const [tab, setTab] = useState<TabKey>('sarvam4')
   const [filter, setFilter] = useState<FilterKey>('all')
   const [expanded, setExpanded] = useState(false)
   const [selectedValue, setSelectedValue] = useState<string | null>(null)
@@ -451,12 +497,14 @@ export function Voices() {
     const list: Tab[] = [
       {
         key: 'expressive',
+        credits: 2 * BHARAT_MODEL_MULTIPLIER,
         label: 'Expressive',
         note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · follows the caller’s emotion · about 0.7 s slower than HD`,
         voices: stable('premium').filter((v) => v.multilingual && v.value.startsWith('google:')),
       },
       {
         key: 'sarvam4',
+        credits: 1 * BHARAT_MODEL_MULTIPLIER,
         label: 'Sarvam',
         note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · Bulbul v4 persona voices first, then the classic Sarvam voices · switches language live`,
         // Every non-Chirp standard voice is a Sarvam voice: v4 (`sarvam4:`) and
@@ -469,18 +517,21 @@ export function Voices() {
       },
       {
         key: 'hd',
+        credits: 1 * BHARAT_MODEL_MULTIPLIER,
         label: 'HD',
         note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · fastest Google voices · switches language mid-call`,
         voices: stable('standard').filter(isChirp),
       },
       {
         key: 'native',
+        credits: 0.75 * BHARAT_MODEL_MULTIPLIER,
         label: 'Native',
         note: `${creditsPerMinuteLabel(0.75 * BHARAT_MODEL_MULTIPLIER)} · native Indian languages`,
         voices: stable('lite').filter((v) => v.value.startsWith('google:') && !v.multilingual),
       },
       {
         key: 'gemini',
+        credits: 2 * BHARAT_MODEL_MULTIPLIER,
         label: 'Gemini 3.8 TTS',
         note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · text-to-speech for normal agents · not the realtime Live models`,
         // These are flagged "preview" (owner-only), so they come from the full list
@@ -489,13 +540,34 @@ export function Voices() {
       },
       {
         key: 'premium',
+        credits: 2 * BHARAT_MODEL_MULTIPLIER,
         label: 'Premium',
         note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · natural conversational voices`,
         voices: stable('premium').filter((v) => !v.multilingual),
       },
     ]
-    return list.filter((t) => t.voices.length > 0)
+    // Cheapest first; same-price tabs keep the order above (Array.sort is stable).
+    return list.filter((t) => t.voices.length > 0).sort((a, b) => a.credits - b.credits)
   }, [data])
+
+  // The price ladder above the tabs: one chip per credit level, naming the
+  // tabs at that level; a chip opens its first (cheapest-listed) tab.
+  const priceGroups = useMemo(() => {
+    const entries: { credits: number; key: TabKey; label: string }[] = [
+      ...tabs.map((t) => ({ credits: t.credits, key: t.key, label: t.label })),
+      ...(showRealtime
+        ? REALTIME_MODELS.map((m) => ({ credits: liveMultiplier(m.value), key: `rt:${m.value}` as TabKey, label: shortModelLabel(m.label) }))
+        : []),
+    ]
+    const groups = new Map<number, { credits: number; keys: TabKey[]; labels: string[] }>()
+    for (const e of entries) {
+      const g = groups.get(e.credits) ?? { credits: e.credits, keys: [], labels: [] }
+      g.keys.push(e.key)
+      g.labels.push(e.label)
+      groups.set(e.credits, g)
+    }
+    return [...groups.values()].sort((x, y) => x.credits - y.credits)
+  }, [tabs, showRealtime])
 
   // Gemini Live speaks with the Gemini voice named like the agent's HD voice
   // (agent/main.py _gemini_live_voice). The catalog's Gemini 3.8 Flash-Lite
@@ -718,6 +790,13 @@ export function Voices() {
                   </label>
 
                   {!query && (filter !== 'added' || realtimeActive) && (
+                    <PriceStrip
+                      groups={priceGroups}
+                      activeKey={realtimeActive ? `rt:${realtimeModel?.value}` : activeTab?.key}
+                      onChoose={chooseTab}
+                    />
+                  )}
+                  {!query && (filter !== 'added' || realtimeActive) && (
                     <div
                       role="tablist"
                       aria-label="Voice categories"
@@ -734,6 +813,7 @@ export function Voices() {
                           }`}
                         >
                           {t.label} <span className="text-[11px] font-medium opacity-70">{t.voices.length}</span>
+                          <CreditPill credits={t.credits} />
                         </button>
                       ))}
                       {showRealtime &&
@@ -750,6 +830,7 @@ export function Voices() {
                               }`}
                             >
                               {shortModelLabel(m.label)} <span className="text-[11px] font-medium opacity-70">{realtimeVoices.length}</span>
+                              <CreditPill credits={liveMultiplier(m.value)} />
                             </button>
                           )
                         })}

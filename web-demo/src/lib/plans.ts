@@ -39,9 +39,12 @@ export const PRICING_FINALIZED = true
 export const BHARAT_MODEL_MULTIPLIER = 2
 // Gemini Live replaces the voice pipeline; billed by model (calls_db.model_tier).
 export const LIVE_MODEL_MULTIPLIER: Record<string, number> = { '2.5': 2, default: 6 }
-export function creditsPerMinuteLabel(multiplier: number): string {
+export function formatCredits(multiplier: number): string {
   const n = Math.max(0.75, multiplier)
-  return `${Number.isInteger(n) ? n : n.toFixed(2).replace(/0$/, '')} credits/min`
+  return `${Number.isInteger(n) ? n : n.toFixed(2).replace(/0$/, '')}`
+}
+export function creditsPerMinuteLabel(multiplier: number): string {
+  return `${formatCredits(multiplier)} credits/min`
 }
 
 // One-off credit top-ups. Mirrors agent/plan_policy.py's TOPUP_PACKS /
