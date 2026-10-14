@@ -33,6 +33,17 @@ export const ANNUAL_MONTHS_CHARGED = 10
 // Mirrors server/calls_db.py's PRICING_FINALIZED - keep both in sync.
 export const PRICING_FINALIZED = true
 
+// Credits per minute = voice multiplier × model multiplier × channel rate (1).
+// Tenant agents run Vistrow Bharat (sarvam/*), which server/calls_db.model_tier
+// bills "premium" (2x); server/test_plan_policy.py checks this stays in sync.
+export const BHARAT_MODEL_MULTIPLIER = 2
+// Gemini Live replaces the voice pipeline; billed by model (calls_db.model_tier).
+export const LIVE_MODEL_MULTIPLIER: Record<string, number> = { '2.5': 2, default: 6 }
+export function creditsPerMinuteLabel(multiplier: number): string {
+  const n = Math.max(0.75, multiplier)
+  return `${Number.isInteger(n) ? n : n.toFixed(2).replace(/0$/, '')} credits/min`
+}
+
 // One-off credit top-ups. Mirrors agent/plan_policy.py's TOPUP_PACKS /
 // TOPUP_MIN_CREDITS / TOPUP_MAX_CREDITS - the server prices and grants; this
 // is display copy. The bonus is granted, only the base is invoiced.

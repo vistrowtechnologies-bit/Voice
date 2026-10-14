@@ -4,6 +4,7 @@ import { DashboardLayout, PageHeader } from '../components/DashboardLayout'
 import { Icon } from '../components/Icon'
 import { useVoicePreview } from '../components/VoicePreviewButton'
 import { addVoice, fetchVoiceCatalog, removeVoice } from '../lib/api'
+import { BHARAT_MODEL_MULTIPLIER, LIVE_MODEL_MULTIPLIER, creditsPerMinuteLabel } from '../lib/plans'
 import { ADMIN_ONLY_MODELS, geminiLiveVoiceName } from '../lib/agentOptions'
 import { useAuth } from '../lib/auth'
 import type { VoiceCatalog, VoiceEntry } from '../lib/types'
@@ -44,9 +45,20 @@ function avatarGradient(value: string, name: string): string {
 
 const GENDER_LABEL: Record<VoiceEntry['gender'], string> = { female: 'Female', male: 'Male', neutral: 'Neutral' }
 
-// "2x credits · advanced natural voices" -> "2x"
-function creditMultiplier(entry: VoiceEntry): string {
-  return /([\d.]+x)\s*credits/i.exec(entry.tierNote)?.[1] ?? '1x'
+// "2x credits · advanced natural voices" -> 2
+function voiceMultiplier(entry: VoiceEntry): number {
+  return Number(/([\d.]+)x\s*credits/i.exec(entry.tierNote)?.[1] ?? 1)
+}
+
+// What one minute costs with this voice on a Vistrow Bharat agent.
+function voiceCredits(entry: VoiceEntry): string {
+  return creditsPerMinuteLabel(voiceMultiplier(entry) * BHARAT_MODEL_MULTIPLIER)
+}
+
+// Gemini Live bills by model: 2.5 at 2x, 3.1 / 3.8 at 6x (calls_db.model_tier).
+function liveCredits(modelValue: string | undefined): string {
+  const key = modelValue && (modelValue === 'gemini-live' || modelValue.includes('2.5')) ? '2.5' : 'default'
+  return creditsPerMinuteLabel(LIVE_MODEL_MULTIPLIER[key])
 }
 
 function languageSummary(entry: VoiceEntry): string {
@@ -66,7 +78,12 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 
 // Realtime (speech-to-speech) is a model, not a voice: it is chosen on the agent.
 // The tab exists so someone looking for it among the voices is sent to the right place.
-const REALTIME_MODELS = ADMIN_ONLY_MODELS.filter((m) => m.value.startsWith('gemini-live'))
+// Live 3.1 is left out: 3.8 is its successor at the same price and the same 30
+// voices, so a second tab only confused the page (owner, 2026-10-14). Agents
+// already on 3.1 keep it under Model.
+const REALTIME_MODELS = ADMIN_ONLY_MODELS.filter(
+  (m) => m.value.startsWith('gemini-live') && m.value !== 'gemini-live:gemini-3.1-flash-live-preview',
+)
 // "Gemini Live 3.1 · realtime" -> "Live 3.1"
 const shortModelLabel = (label: string) => label.replace(/^Gemini /, '').replace(/ · realtime$/, '')
 
@@ -128,10 +145,13 @@ function VoiceRow({
   loading,
   onPlay,
   detail,
+  credits,
 }: {
   entry: VoiceEntry
   // Replaces the languages line (realtime voices show style and HD voice).
   detail?: string
+  // Credits per minute shown on the row; defaults to this voice on Vistrow Bharat.
+  credits?: string
   active: boolean
   playing: boolean
   loading: boolean
@@ -159,6 +179,7 @@ function VoiceRow({
         <p className="truncate text-xs text-text-muted">
           {GENDER_LABEL[entry.gender]} · {detail ?? languageSummary(entry)}
           {!detail && entry.canSwitchLanguage && <span className="text-cyan"> · switches live</span>}
+          <span className="font-semibold text-text"> · {credits ?? voiceCredits(entry)}</span>
         </p>
       </div>
       {entry.selected ? (
@@ -316,8 +337,8 @@ function Spotlight({
             <p className="text-[11px] font-bold text-text-muted">Language switch</p>
           </div>
           <div className="rounded-xl bg-surface-high px-2 py-2.5">
-            <p className="font-display text-base font-semibold">{creditMultiplier(entry)}</p>
-            <p className="text-[11px] font-bold text-text-muted">Credits</p>
+            <p className="font-display text-base font-semibold">{voiceCredits(entry).replace(' credits/min', '')}</p>
+            <p className="text-[11px] font-bold text-text-muted">Credits / min</p>
           </div>
         </div>
         )}
@@ -431,13 +452,13 @@ export function Voices() {
       {
         key: 'expressive',
         label: 'Expressive',
-        note: '2x credits · follows the caller’s emotion · about 0.7 s slower than HD',
+        note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · follows the caller’s emotion · about 0.7 s slower than HD`,
         voices: stable('premium').filter((v) => v.multilingual && v.value.startsWith('google:')),
       },
       {
         key: 'sarvam4',
         label: 'Sarvam',
-        note: '1x credits · Bulbul v4 persona voices first, then the classic Sarvam voices · switches language live',
+        note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · Bulbul v4 persona voices first, then the classic Sarvam voices · switches language live`,
         // Every non-Chirp standard voice is a Sarvam voice: v4 (`sarvam4:`) and
         // the classic Bulbul ids (pooja, shubh, ...). Since PR #85 billed v4 at
         // standard, a separate "Standard" tab listed all 201 v4 voices again.
@@ -449,19 +470,19 @@ export function Voices() {
       {
         key: 'hd',
         label: 'HD',
-        note: '1x credits · fastest Google voices · switches language mid-call',
+        note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · fastest Google voices · switches language mid-call`,
         voices: stable('standard').filter(isChirp),
       },
       {
         key: 'native',
         label: 'Native',
-        note: '0.75x credits · native Indian languages',
+        note: `${creditsPerMinuteLabel(0.75 * BHARAT_MODEL_MULTIPLIER)} · native Indian languages`,
         voices: stable('lite').filter((v) => v.value.startsWith('google:') && !v.multilingual),
       },
       {
         key: 'gemini',
         label: 'Gemini 3.8 TTS',
-        note: '2x credits · text-to-speech for normal agents · not the realtime Live models',
+        note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · text-to-speech for normal agents · not the realtime Live models`,
         // These are flagged "preview" (owner-only), so they come from the full list
         // rather than from `all`, which drops previews.
         voices: (data?.voices ?? []).filter((v) => v.value.startsWith('google38:') || v.value.startsWith('google38flash:')),
@@ -469,7 +490,7 @@ export function Voices() {
       {
         key: 'premium',
         label: 'Premium',
-        note: '2x credits · natural conversational voices',
+        note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · natural conversational voices`,
         voices: stable('premium').filter((v) => !v.multilingual),
       },
     ]
@@ -767,6 +788,7 @@ export function Voices() {
                     <p className="text-sm leading-relaxed text-text-muted">
                       {realtimeModel?.label} is a <span className="font-semibold text-text">model</span>, picked under Model on an agent. It
                       speaks with the Gemini voice named like the agent's HD voice. These are its voices; the other Live models use the same 30.
+                      {' '}It bills <span className="font-semibold text-text">{liveCredits(realtimeModel?.value)}</span> whichever voice it uses.
                     </p>
                     {REALTIME_MODELS.filter((m) => m.value === realtimeModel?.value).map((model) => (
                       <div key={model.value} className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3">
@@ -801,6 +823,7 @@ export function Voices() {
                         }
                         onPlay={() => playFromRow(entry.value)}
                         detail={realtimeActive ? entry.note : undefined}
+                        credits={realtimeActive ? liveCredits(realtimeModel?.value) : undefined}
                       />
                     ))}
                     {shown.length === 0 && (
