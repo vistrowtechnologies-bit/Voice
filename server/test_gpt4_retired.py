@@ -64,3 +64,21 @@ class Gpt5Parameters(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CallSummaryIsStrict(unittest.TestCase):
+    """gpt-5.4-mini in JSON mode returned qa_score: null on 3/10 runs (stored
+    as 0); a strict schema made it 0/10."""
+
+    def test_schema_requires_an_integer_score_and_closed_vocabularies(self):
+        import call_intelligence as ci
+        fmt = ci._RESPONSE_FORMAT
+        self.assertEqual(fmt["type"], "json_schema")
+        self.assertTrue(fmt["json_schema"]["strict"])
+        schema = fmt["json_schema"]["schema"]
+        self.assertEqual(schema["properties"]["qa_score"], {"type": "integer"})
+        self.assertEqual(set(schema["required"]), set(schema["properties"]))
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(schema["properties"]["outcome"]["enum"], ci.OUTCOMES)
+        self.assertEqual(schema["properties"]["sentiment"]["enum"], ci.SENTIMENTS)
+        self.assertIn('"response_format": _RESPONSE_FORMAT', _code("server/call_intelligence.py"))
