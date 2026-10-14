@@ -16,7 +16,14 @@ import urllib.request
 logger = logging.getLogger("call-intelligence")
 
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
-INTEL_MODEL = "gpt-4.1-mini"
+# gpt-4.1-mini until 2026-10-14 (GPT-4 family retired). On 5 owner-account
+# calls GPT-5 models labelled outcomes differently from 4.1-mini in all 5 and
+# scored agent QA ~12 points lower; reading the transcripts, neither was
+# consistently right. gpt-5.4-mini got the clearest case right (a prospect
+# with 200 reminder calls/day asking for a demo: "callback", where 4.1-mini
+# said "not_qualified") at the same ~1.9 s. Outcome/QA trends will shift
+# from this date — compare dashboards across it with that in mind.
+INTEL_MODEL = "gpt-5.4-mini"
 MAX_TRANSCRIPT_CHARS = 30_000
 
 # Normalized outcome vocabulary — a small closed set so the aggregate ROI
@@ -65,6 +72,7 @@ def analyze_transcript(transcript: list[dict]) -> dict:
     body = json.dumps(
         {
             "model": INTEL_MODEL,
+            "reasoning_effort": "none",
             "response_format": {"type": "json_object"},
             "temperature": 0,
             "messages": [

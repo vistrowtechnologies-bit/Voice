@@ -1,4 +1,4 @@
-"""The default Sarvam LLM fails over to gpt-4o-mini, and Gemini 2.5 gets a
+"""The default Sarvam LLM fails over to gpt-5.4-nano (gpt-4o-mini until 2026-10-14), and Gemini 2.5 gets a
 thinking config it accepts (2026-10-12: thinking_level made 2.5 agents silent)."""
 import os
 import sys
@@ -14,13 +14,16 @@ import main
 from livekit.agents import llm
 
 
-class SarvamFailsOverToGpt4oMini(unittest.TestCase):
+class SarvamFailsOverToGpt54Nano(unittest.TestCase):
     def test_sarvam_is_wrapped_with_the_fallback(self):
         with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test", "LLM_FALLBACK": "1"}):
             built = main._build_llm("sarvam/sarvam-105b-conversations")
         self.assertIsInstance(built, llm.FallbackAdapter)
         models = [m.model for m in built._llm_instances]
-        self.assertEqual(models, ["sarvam-105b-conversations", "gpt-4o-mini"])
+        self.assertEqual(models, ["sarvam-105b-conversations", "gpt-5.4-nano"])
+        # GPT-5.4 only accepts temperature with reasoning off, and "none" keeps
+        # the first token fast on a live call.
+        self.assertEqual(built._llm_instances[1]._opts.reasoning_effort, "none")
 
     def test_switch_turns_it_off(self):
         with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test", "LLM_FALLBACK": "0"}):

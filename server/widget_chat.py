@@ -21,10 +21,13 @@ import urllib.request
 logger = logging.getLogger("widget-chat")
 
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
-# gpt-4o-mini over gpt-4.1-mini specifically for this path — first-token
-# latency matters more than anything else here (a website visitor watching
-# a typing indicator), and 4o-mini is the faster of the two at this size.
-DEFAULT_CHAT_MODEL = "gpt-4o-mini"
+# First-token latency matters more than anything else here (a website
+# visitor watching a typing indicator). gpt-4o-mini until 2026-10-14 (GPT-4
+# family retired): gpt-5.4-nano matched its first-token time from India
+# (~670 ms vs ~630 ms on a 14K-token prompt), answered 9/9 where 4o-mini got
+# 6/9, at about half the price. Reasoning off keeps the first token fast.
+DEFAULT_CHAT_MODEL = "gpt-5.4-nano"
+_MODEL_PARAMS = {"reasoning_effort": "none"}
 MAX_HISTORY_TURNS = 12
 MAX_MESSAGE_CHARS = 2_000
 
@@ -135,10 +138,10 @@ def answer_widget_chat(message: str, history: list[dict], agent: dict, kb_conten
     messages = _prepare_messages(message, history, agent, kb_content, kb_strict)
 
     # Always the cheapest/fastest OpenAI chat model, deliberately ignoring the
-    # agent's own configured voice model (which may be gpt-4.1/gpt-4o) -
+    # agent's own configured voice model -
     # chat-only mode exists specifically to cut cost and latency, so it
     # shouldn't inherit a model choice made for voice quality.
-    payload = _post_chat(api_key, {"model": DEFAULT_CHAT_MODEL, "temperature": 0.4, "messages": messages})
+    payload = _post_chat(api_key, {"model": DEFAULT_CHAT_MODEL, **_MODEL_PARAMS, "temperature": 0.4, "messages": messages})
 
     try:
         choice_message = payload["choices"][0]["message"]
@@ -162,4 +165,4 @@ def stream_widget_chat(message: str, history: list[dict], agent: dict, kb_conten
         raise RuntimeError("OPENAI_API_KEY is not configured on the server")
 
     messages = _prepare_messages(message, history, agent, kb_content, kb_strict)
-    yield from _stream_chat(api_key, {"model": DEFAULT_CHAT_MODEL, "temperature": 0.4, "messages": messages})
+    yield from _stream_chat(api_key, {"model": DEFAULT_CHAT_MODEL, **_MODEL_PARAMS, "temperature": 0.4, "messages": messages})

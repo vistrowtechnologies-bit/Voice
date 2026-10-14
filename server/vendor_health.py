@@ -95,9 +95,13 @@ def _openai() -> str:
     _http(
         "https://api.openai.com/v1/chat/completions",
         headers={"Authorization": f"Bearer {_key('OPENAI_API_KEY')}"},
-        body={"model": "gpt-4.1-mini", "max_tokens": 1, "messages": [{"role": "user", "content": "ok"}]},
+        # GPT-5 models reject max_tokens, and answer 400 "could not finish the
+        # message" when max_completion_tokens is 1 or 2 (measured 2026-10-14;
+        # 4+ works). 16 leaves margin; reasoning off keeps it to one round trip.
+        body={"model": "gpt-5.4-nano", "max_completion_tokens": 16, "reasoning_effort": "none",
+              "messages": [{"role": "user", "content": "ok"}]},
     )
-    return "gpt-4.1-mini answered"
+    return "gpt-5.4-nano answered"
 
 
 def _gemini() -> str:

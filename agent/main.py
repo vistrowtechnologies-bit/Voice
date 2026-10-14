@@ -61,6 +61,7 @@ from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarv
 # construct EarlyFlushTTS until that completeness test passes reliably.
 
 import db
+import plan_policy
 import worker_heartbeat
 from contact_notes import build_contact_notes
 import numpy as np
@@ -1899,7 +1900,19 @@ def _build_realtime_llm(model: str, instructions: str, voice_value: str, languag
     )
 
 
-_FALLBACK_LLM_MODEL = "gpt-4o-mini"
+# gpt-4o-mini until 2026-10-14 (GPT-4 family retired). Benchmarked from India
+# on a 14K-token tenant-sized prompt: gpt-5.4-nano 9/9 correct, tool call
+# correct, ~670 ms first token, ~Rs 0.22/call-minute; gpt-4o-mini was 6/9 (it
+# misquoted the same price three times) at ~Rs 0.43. GPT-5 models need
+# max_completion_tokens (max_tokens is rejected) and reasoning off for speed.
+_FALLBACK_LLM_MODEL = "gpt-5.4-nano"
+# reasoning_effort for GPT-5 voice turns: "none" keeps the first token fast;
+# anything higher spends hidden reasoning tokens while the caller waits.
+_GPT5_VOICE_REASONING = {"reasoning_effort": "none"}
+
+
+def _openai_voice_kwargs(model: str) -> dict:
+    return _GPT5_VOICE_REASONING if model.startswith("gpt-5") else {}
 
 
 def _build_llm(model: str, *, max_output_tokens: int = 220):
@@ -1987,8 +2000,7 @@ def _build_llm(model: str, *, max_output_tokens: int = 220):
         # Automatic failover: Sarvam is the only LLM vendor on the default
         # stack, so an outage there used to fail every call. If Sarvam errors
         # or sends nothing within LLM_FALLBACK_TIMEOUT_S, the same turn is
-        # retried on gpt-4o-mini (real calls 2026-10-12: 1.45 s turn, correct
-        # Hindi, about half Sarvam's per-token cost). Billing stays on the
+        # retried on _FALLBACK_LLM_MODEL (see its note). Billing stays on the
         # agent's configured model. LLM_FALLBACK=0 turns it off.
         if os.environ.get("LLM_FALLBACK", "1") != "0" and os.environ.get("OPENAI_API_KEY"):
             return llm.FallbackAdapter(
@@ -1998,6 +2010,7 @@ def _build_llm(model: str, *, max_output_tokens: int = 220):
                         model=_FALLBACK_LLM_MODEL,
                         max_completion_tokens=max_output_tokens,
                         prompt_cache_key="vistrow-voice-agent-v1",
+                        **_openai_voice_kwargs(_FALLBACK_LLM_MODEL),
                     ),
                 ],
                 attempt_timeout=float(os.environ.get("LLM_FALLBACK_TIMEOUT_S", "4.0")),
@@ -2007,10 +2020,14 @@ def _build_llm(model: str, *, max_output_tokens: int = 220):
     # Bound spoken replies and give OpenAI a stable cache-routing key.  The
     # exact prompt prefix still has to match before it can be reused, so this
     # does not mix one tenant's instructions or KB with another tenant's.
+    # A retired GPT-4 name (still stored on some agents) runs on its GPT-5
+    # successor; see plan_policy.OPENAI_MODEL_SUCCESSORS.
+    model = plan_policy.current_openai_model(model)
     return openai.LLM(
         model=model,
         max_completion_tokens=max_output_tokens,
         prompt_cache_key="vistrow-voice-agent-v1",
+        **_openai_voice_kwargs(model),
     )
 
 
@@ -3849,7 +3866,9 @@ class RealEstateAgent(Agent):
             voice_value.startswith((_GOOGLE_38_VOICE_PREFIX, _GOOGLE_38_FLASH_VOICE_PREFIX)),
         )
         agent_tools = _build_tools(config)
-        _model_name = config.get("model") or "gpt-4.1-mini"
+        # No saved model -> Vistrow Bharat, the same default the agents.model
+        # column and the agent builder use (GPT-4 retired 2026-10-14).
+        _model_name = config.get("model") or "sarvam/sarvam-105b-conversations"
         self._is_realtime = _model_name.startswith(_GEMINI_LIVE_PREFIX)
         # The Google model id, resolved exactly as _build_realtime_llm does.
         self._realtime_model_name = (
@@ -3916,14 +3935,10 @@ class RealEstateAgent(Agent):
             # line. Raised well clear of it; still a real ceiling against a
             # runaway reply, just not one a normal turn should ever reach.
             llm=_rt if self._is_realtime else _build_llm(
-                # gpt-4.1-mini, not gpt-4.1. An agent with no model set used
-                # to fall back to gpt-4.1, which is on a 30,000 TPM limit —
-                # about three turns a minute at this prompt size, since
-                # cached tokens count against the limit too (measured: a
-                # fully-cached 7,213-token request still consumed 4,541 TPM).
-                # It also bills at premium_plus, 4x credits against mini's
-                # 2x. The dashboard has always labelled mini "recommended";
-                # only the fallback disagreed.
+                # An agent with no model set used to fall back to gpt-4.1
+                # (30,000 TPM limit, premium_plus billing), then gpt-4.1-mini;
+                # since 2026-10-14 it is Vistrow Bharat, matching the column
+                # default. Billing reads self._model, which mirrors this.
                 _model_name,
                 max_output_tokens=200 if self._is_platform_demo else 400,
             ),
@@ -3955,7 +3970,7 @@ class RealEstateAgent(Agent):
         # _voice is for per-voice-tier billing. Must mirror the value handed
         # to _build_llm below - the fallback included - or billing would
         # attribute the call to the wrong model.
-        self._model = config.get("model") or "gpt-4.1-mini"
+        self._model = config.get("model") or "sarvam/sarvam-105b-conversations"
         # Prosody-adaptation baseline (see on_user_turn_completed) — deltas
         # from a detected caller emotion apply on top of these, never replace
         # them, so the agent's configured base personality always shows through.
@@ -6367,8 +6382,11 @@ async def _post_call_analysis(
         from openai import AsyncOpenAI
 
         client = AsyncOpenAI(api_key=api_key)
+        # gpt-4o-mini until 2026-10-14 (GPT-4 retired): same model and
+        # settings as the server's call summaries (call_intelligence).
         resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5.4-mini",
+            reasoning_effort="none",
             messages=[{"role": "system", "content": system}, {"role": "user", "content": convo}],
             response_format={"type": "json_object"},
             temperature=0,
