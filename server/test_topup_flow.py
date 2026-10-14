@@ -224,8 +224,13 @@ class WebhookIsReachableWithoutASession(unittest.TestCase):
     no payment.captured or refund event could land."""
 
     def test_public_path(self):
-        import token_api
-        self.assertIn("/billing/razorpay/webhook", token_api._PUBLIC_PATHS)
+        # Read from source: importing token_api runs calls_db.init_tables()
+        # on whatever DATABASE_URL is set (see conftest.py).
+        import ast
+        tree = ast.parse(TOKEN_API.read_text(encoding="utf-8"))
+        node = next(n for n in tree.body if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", None) == "_PUBLIC_PATHS" for t in n.targets))
+        self.assertIn("/billing/razorpay/webhook", ast.literal_eval(node.value))
 
 
 if __name__ == "__main__":
