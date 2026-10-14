@@ -482,6 +482,42 @@ export const SEO_PAGES: SeoPage[] = [
     'article',
     post.title,
   ), image: `${SEO_ORIGIN}${post.image}`, imageAlt: post.imageAlt })),
+  {
+    ...page(
+      '/voice-ai-platform',
+      'Voice AI Platform for Indian Businesses | Vistrow Voice',
+      'A voice AI platform for India: build agents, add your knowledge, connect phone numbers and a website widget, test, and send every call record to your CRM.',
+      'product',
+      'Vistrow Voice voice AI platform with agent builder, knowledge, phone, widget and integrations',
+      'product',
+      'Voice AI Platform',
+    ),
+    serviceType: 'Voice AI platform',
+  },
+  {
+    ...page(
+      '/ai-call-center',
+      'AI Call Center Software for India | Vistrow Voice',
+      'AI call center software that takes first-line inbound calls and follow-ups in Indian languages, transfers phone calls to your team, and logs every call.',
+      'product-inbound',
+      'Vistrow Voice AI agent answering first-line call center calls',
+      'product',
+      'AI Call Center',
+    ),
+    serviceType: 'AI call center software',
+  },
+  {
+    ...page(
+      '/voice-bot',
+      'AI Voice Bot for Business Calls in India | Vistrow Voice',
+      'What an AI voice bot is, how a voicebot call works, and how Vistrow Voice runs one on phone and website calls in Hindi, English and 9 more Indian languages.',
+      'product-agents',
+      'Vistrow Voice AI voice bot for phone and website calls',
+      'product',
+      'AI Voice Bot',
+    ),
+    serviceType: 'AI voice bot',
+  },
 ]
 
 export const SEO_BY_PATH = new Map(SEO_PAGES.map((entry) => [entry.path, entry]))

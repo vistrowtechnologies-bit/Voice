@@ -887,6 +887,9 @@ const HUB_EXTRA: Pick<BuyerGuide, 'approaches' | 'checklist' | 'trial' | 'relate
     { to: '/compare/exotel', label: 'Vistrow Voice vs Exotel' },
     { to: '/compare/sarvam-ai', label: 'Build or buy voice agents' },
     { to: '/pricing', label: 'Pricing' },
+    { to: '/voice-ai-platform', label: 'Voice AI platform' },
+    { to: '/ai-call-center', label: 'AI call center software' },
+    { to: '/voice-bot', label: 'What an AI voice bot is' },
   ],
   extraFaqs: [
     { q: 'Do I need developers to run an AI voice agent?', a: 'It depends on the category. Programmable platforms and model providers assume engineering. A finished product such as Vistrow Voice has a no-code agent builder, so business teams can set the prompt, voice and language and test it themselves.' },
