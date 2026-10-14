@@ -2643,8 +2643,18 @@ def _google_fallback_tts(primary_tts, fallback_tts, primary_model: str, reply_la
 _TELEPHONY_SAMPLE_RATE = 8000
 
 
+def _chirp_markup_enabled(config: dict) -> bool:
+    """Chirp 3 HD pause markup is a measured experiment, off by default. On
+    only for an agent whose account id is listed in CHIRP_MARKUP_ACCOUNT_IDS
+    (unset everywhere unless a test build sets it) AND whose name contains
+    "[chirp-markup]", so an A/B alternates agents inside one account and no
+    tenant can get it. See the use_markup note in _build_tts."""
+    accounts = {a.strip() for a in os.environ.get("CHIRP_MARKUP_ACCOUNT_IDS", "").split(",") if a.strip()}
+    return str(config.get("account_id")) in accounts and "[chirp-markup]" in (config.get("name") or "")
+
+
 def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_name: str,
-               is_phone: bool = False, sarvam_latency_lab: bool = False):
+               is_phone: bool = False, sarvam_latency_lab: bool = False, chirp_markup: bool = False):
     """Same fallback pattern as _build_stt, for TTS. Returns (tts, provider)
     — provider identifies the active TTS family, telling the caller which
     update_options kwarg shape to use for mid-call prosody/language updates
@@ -2920,13 +2930,15 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
             # that stall is understood, text stays in the `text` field, and
             # the LLM is not offered a break marker (it would be read aloud).
             # google_tts_streaming_patch.chirp_markup() is the converter to
-            # re-enable with.
+            # re-enable with. `chirp_markup` is the test opt-in
+            # (_chirp_markup_enabled), False for every tenant.
             google_tts = PatchedGeminiTTS(
                 language=voice_language,
                 voice_name=voice_name,
                 credentials_info=_GOOGLE_CREDENTIALS,
                 **_rate,
                 speaking_rate=tone.get("pace", 1.0),
+                use_markup=chirp_markup,
             )
         else:
             google_tts = StreamAdapter(
@@ -3836,6 +3848,20 @@ class RealEstateAgent(Agent):
                 "as voice performance and are not spoken as text. This is the only exception to "
                 "the general no-formatting instruction above.\n"
             )
+        if (not _rt_selected and voice_value.startswith(voice_catalog.CHIRP3_PERSONA_PREFIX)
+                and _chirp_markup_enabled(config)):
+            # Only with markup on: in the `text` field the tag is read aloud.
+            instructions += (
+                "\n\n# Pause control\n"
+                "The selected voice supports one internal control: a real pause of about a "
+                "second, written as <expr type=\"break\" label=\"1s\"/> on its own between two "
+                "sentences. Use it only where a listener needs a beat — before reading out a "
+                "number, an address or a price, or after asking a question you want them to "
+                "think about. A period or an ellipsis already gives a short pause, so never put "
+                "the marker next to one, and never use more than one per reply. It is rendered "
+                "as silence and is not spoken as text. This is the only exception to the "
+                "general no-formatting instruction above.\n"
+            )
         base_tone = TONE_PRESETS.get(tone_name, TONE_PRESETS[DEFAULT_TONE])
         if _rt_selected:
             tts, tts_provider = None, "realtime"
@@ -3851,6 +3877,7 @@ class RealEstateAgent(Agent):
                 reply_language, voice_value, base_tone, tone_name,
                 is_phone=(call_type or "") == "phone",
                 sarvam_latency_lab=self._sarvam_latency_lab,
+                chirp_markup=_chirp_markup_enabled(config),
             )
         # Make an explicit voice selection observable in LiveKit logs. This
         # lets us distinguish "the widget loaded a different agent config"

@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from collections.abc import AsyncGenerator
 
 from google.api_core.exceptions import Cancelled, DeadlineExceeded, GoogleAPICallError
@@ -83,6 +84,26 @@ def chirp_markup(text: str) -> str:
 
     text = _EXPR_BREAK_RE.sub(_CHIRP_PAUSE, text)
     return _SPACE_RE.sub(" ", strip_all_markup(text))
+
+
+def _ms(timing: dict, start: str, end: str) -> int | None:
+    if start in timing and end in timing:
+        return round((timing[end] - timing[start]) * 1000)
+    return None
+
+
+def _log_timing(timing: dict, *, call: int, chunks: int, markup: bool) -> None:
+    """One INFO line per streaming_synthesize request. text_to_audio_ms is
+    this request's own first-byte time; input_done_to_audio_ms is negative
+    when audio began before the request's text was complete."""
+    timing.setdefault("end", time.perf_counter())
+    logger.info(
+        "[google-tts-timing] markup=%s call=%d chunks=%d chars=%d first_chars=%s blank_chunks=%d "
+        "pauses=%d open_to_text_ms=%s text_to_audio_ms=%s input_done_to_audio_ms=%s total_ms=%s audio_bytes=%d",
+        markup, call, chunks, timing["chars"], timing.get("first_chars"), timing["blank"],
+        timing["pauses"], _ms(timing, "open", "first_text"), _ms(timing, "first_text", "first_audio"),
+        _ms(timing, "input_done", "first_audio"), _ms(timing, "open", "end"), timing["bytes"],
+    )
 
 
 async def _next_token(stream: tokenize.SentenceStream) -> str | None:
@@ -186,22 +207,36 @@ class _PatchedSynthesizeStream(GoogleSynthesizeStream):
                 async for token in text_chunks:
                     self._mark_started()
                     sent.append(True)
+                    payload = chirp_markup(token) if self._opts.use_markup else token
+                    if len(sent) == 1:
+                        timing["first_text"] = time.perf_counter()
+                        timing["first_chars"] = len(payload.strip())
+                    timing["chars"] += len(payload)
+                    timing["pauses"] += payload.count("[pause long]")
+                    timing["blank"] += not payload.strip()
                     synthesis_input = texttospeech.StreamingSynthesisInput(
-                        markup=chirp_markup(token) if self._opts.use_markup else None,
-                        text=None if self._opts.use_markup else token,
+                        markup=payload if self._opts.use_markup else None,
+                        text=None if self._opts.use_markup else payload,
                         prompt=self._opts.prompt if len(sent) == 1 else None,
                     )
                     yield texttospeech.StreamingSynthesizeRequest(input=synthesis_input)
+                timing["input_done"] = time.perf_counter()
             except Exception:
                 logger.exception("an error occurred while streaming input to google TTS")
 
         sent: list[bool] = []
+        # Per-request timing, logged once below (2026-10-14 markup stall hunt).
+        self._vv_calls = getattr(self, "_vv_calls", 0) + 1
+        timing: dict = {"open": time.perf_counter(), "chars": 0, "pauses": 0, "blank": 0, "bytes": 0}
         input_gen = input_generator()
         try:
             stream = await self._tts._ensure_client().streaming_synthesize(
                 input_gen, timeout=self._conn_options.timeout
             )
             async for resp in stream:
+                if "first_audio" not in timing:
+                    timing["first_audio"] = time.perf_counter()
+                timing["bytes"] += len(resp.audio_content)
                 output_emitter.push(resp.audio_content)
 
         except Cancelled:
@@ -223,6 +258,7 @@ class _PatchedSynthesizeStream(GoogleSynthesizeStream):
             except RuntimeError as e:
                 if "asynchronous generator is already running" not in str(e):
                     raise
+            _log_timing(timing, call=self._vv_calls, chunks=len(sent), markup=self._opts.use_markup)
         return bool(sent)
 
 
