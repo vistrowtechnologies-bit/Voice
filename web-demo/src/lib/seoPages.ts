@@ -292,6 +292,18 @@ export const SEO_PAGES: SeoPage[] = [
     ),
     serviceType: 'AI IVR (conversational IVR replacement)',
   },
+  {
+    ...page(
+      '/ai-receptionist',
+      'AI Receptionist for Indian Businesses | Vistrow Voice',
+      'An AI receptionist that answers your phone and website calls in Hindi, English and 9 more Indian languages, books appointments and transfers to your team.',
+      'ai-receptionist',
+      'Vistrow Voice AI receptionist orb answering a front-desk call',
+      'product',
+      'AI Receptionist',
+    ),
+    serviceType: 'AI receptionist (virtual phone and website receptionist)',
+  },
   page(
     '/vs-ivr',
     'AI Voice Agent vs Traditional IVR vs Chatbot | Vistrow Voice',
@@ -669,6 +681,7 @@ export const OG_CARD_BY_IMAGE: Record<string, OgCardSpec> = {
   'language-odia': { eyebrow: 'ODIA AI VOICE AGENT', headline: 'ଓଡ଼ିଆ calls, handled naturally.', proof: 'Odia + English  \u00b7  Inbound  \u00b7  Outbound  \u00b7  Web', accent: '#9333ea', hue: '0deg', native: 'ଓଡ଼ିଆ' },
   pricing: { eyebrow: 'VOICE AI PRICING', headline: 'Start small. Scale every conversation.', proof: 'Phone + Web  \u00b7  Usage visibility  \u00b7  No hidden model names', accent: '#9333ea', hue: '0deg' },
   integrations: { eyebrow: 'VOICE AI INTEGRATIONS', headline: 'Your calls. Your CRM. Already synced.', proof: 'CRM  \u00b7  Zoho  \u00b7  Slack  \u00b7  Sheets  \u00b7  Webhooks', accent: '#0e7490', hue: '-91deg' },
+  'ai-receptionist': { eyebrow: 'AI RECEPTIONIST', headline: 'Front-desk calls, in the caller’s language.', proof: 'Answer  \u00b7  Book  \u00b7  Transfer  \u00b7  Record', accent: '#0e7490', hue: '-91deg' },
   'vs-ivr': { eyebrow: 'AI VOICE VS IVR', headline: 'Stop making callers press buttons.', proof: 'Natural answers  \u00b7  Language switching  \u00b7  Complete records', accent: '#b45309', hue: '129deg' },
   ...Object.fromEntries(
     COMPARE_VENDORS.map((vendor) => [
