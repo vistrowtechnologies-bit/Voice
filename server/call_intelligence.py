@@ -31,6 +31,25 @@ MAX_TRANSCRIPT_CHARS = 30_000
 OUTCOMES = ["qualified", "not_qualified", "callback", "not_interested", "wrong_number", "voicemail", "other"]
 SENTIMENTS = ["positive", "neutral", "negative"]
 
+# Strict structured output. gpt-5.4-mini in plain JSON mode returned
+# "qa_score": null on 3 of 10 runs over 5 owner calls (2026-10-14), which
+# _normalize turns into a QA score of 0; gpt-4.1-mini never did. With this
+# schema: 0 of 10, same ~1.3 s. Structured outputs are a documented feature of
+# gpt-5.4-mini. Every key is required and typed, so the model cannot omit one.
+_RESPONSE_FORMAT = {"type": "json_schema", "json_schema": {"name": "call_intelligence", "strict": True, "schema": {
+    "type": "object", "additionalProperties": False,
+    "required": ["summary", "sentiment", "outcome", "qa_score", "disqualification_reason", "key_points", "action_items"],
+    "properties": {
+        "summary": {"type": "string"},
+        "sentiment": {"type": "string", "enum": SENTIMENTS},
+        "outcome": {"type": "string", "enum": OUTCOMES},
+        "qa_score": {"type": "integer"},
+        "disqualification_reason": {"type": "string"},
+        "key_points": {"type": "array", "items": {"type": "string"}},
+        "action_items": {"type": "array", "items": {"type": "string"}},
+    },
+}}}
+
 _SYSTEM_PROMPT = """You analyze a single sales/support phone-call transcript between an AI voice agent and a customer, for an Indian business. Transcripts may mix English and Indian languages (Hindi, Tamil, etc.) — understand them but write your output in English.
 
 Return ONLY a JSON object with exactly these keys:
@@ -73,7 +92,7 @@ def analyze_transcript(transcript: list[dict]) -> dict:
         {
             "model": INTEL_MODEL,
             "reasoning_effort": "none",
-            "response_format": {"type": "json_object"},
+            "response_format": _RESPONSE_FORMAT,
             "temperature": 0,
             "messages": [
                 {"role": "system", "content": _SYSTEM_PROMPT},
