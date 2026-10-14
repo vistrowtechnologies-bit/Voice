@@ -351,10 +351,19 @@ TONE_PRESETS: dict[str, dict[str, float]] = {
     # reads as more present/engaged rather than just faster.
     # temperature was 0.85 until 2026-10-14. Sarvam's LiveKit production
     # guide: 0.3-0.5 for amounts/OTPs/disclaimers, and "0.8 and up" sounds
-    # more expressive but may mispronounce words. 0.7 keeps casual livelier
-    # than balanced (0.6) without crossing that line. pitch/loudness here are
-    # ignored by bulbul:v4-flash (Sarvam docs: not supported on v3/v4).
-    "casual": {"pace": 1.08, "temperature": 0.7, "pitch": 0.05, "loudness": 1.1},
+    # more expressive but may mispronounce words.
+    #
+    # pace/pitch went back to neutral on 2026-10-14 (were 1.08 / 0.05).
+    # Measured on bulbul:v4-flash over the plugin's WebSocket path, same
+    # sentence, 5-6 interleaved runs: ANY non-default pace (0.95 or 1.08) or
+    # pitch (+/-0.05..0.4) delays first audio by ~115 ms (615 -> 730 ms);
+    # loudness costs nothing (625 ms at 2.0). On real calls the casual
+    # greeting started ~100 ms later than balanced. v4 DOES apply pitch and
+    # loudness despite Sarvam's API reference saying it doesn't (pitch +0.4
+    # -> F0 276 Hz vs 245; loudness 2.0 -> RMS x1.9), but a 5% pitch lift
+    # and an 8% speed-up were not worth ~115 ms on every turn. Casual keeps
+    # what is free: louder (1.1) and the higher temperature.
+    "casual": {"pace": 1.0, "temperature": 0.7, "pitch": 0.0, "loudness": 1.1},
 }
 DEFAULT_TONE = "balanced"
 
