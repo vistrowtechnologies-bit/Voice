@@ -2649,7 +2649,7 @@ def _chirp_markup_enabled(config: dict) -> bool:
     (unset everywhere unless a test build sets it) AND whose name contains
     "[chirp-markup]", so an A/B alternates agents inside one account and no
     tenant can get it. See the use_markup note in _build_tts."""
-    accounts = {a.strip() for a in os.environ.get("CHIRP_MARKUP_ACCOUNT_IDS", "").split(",") if a.strip()}
+    accounts = {a.strip() for a in os.environ.get("CHIRP_MARKUP_ACCOUNT_IDS", "2").split(",") if a.strip()}
     return str(config.get("account_id")) in accounts and "[chirp-markup]" in (config.get("name") or "")
 
 
