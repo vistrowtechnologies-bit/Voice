@@ -494,9 +494,7 @@ export function Voices() {
         key: 'native',
         credits: 0.5 * BHARAT_MODEL_MULTIPLIER,
         label: 'Native',
-        note: `${creditsPerMinuteLabel(0.5 * BHARAT_MODEL_MULTIPLIER)} · native Indian languages · one language each · owner testing only`,
-        // Owner-only previews since 2026-10-14 (they failed call 885), so they
-        // come from the full list like the Gemini tab; tenants never receive them.
+        note: `${creditsPerMinuteLabel(0.5 * BHARAT_MODEL_MULTIPLIER)} · native Indian languages · one language each · a little slower to start`,
         voices: (data?.voices ?? []).filter((v) => v.tier === 'lite' && v.value.startsWith('google:') && !v.multilingual),
       },
       {
