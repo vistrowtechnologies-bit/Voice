@@ -728,6 +728,24 @@ _HIDDEN_VOICE_PREFIXES = ("elevenlabs-v3:", "elevenlabs:", "google31:")
 # 2026-10-13 as part of the opt-in Expressive tier, labelled as slower.
 _HIDDEN_VOICES_EXACT: frozenset = frozenset()
 
+# 2026-10-14 (owner): only the Sarvam v4 personas made for business calls are
+# offered. The other ~104 (narration, stories, audiobook, documentary, ads,
+# reels, news, sports, market, social, companion, devotional, kids, late-night,
+# romantic, therapist, suspense) are content voices. Matched on the first
+# use-case word of the id (name_lang_use[_variant]); hidden, not deleted.
+_SARVAM_V4_CALL_USES = frozenset({
+    "customer", "conversational", "conversation", "sales", "banking", "recovery",
+    "insurance", "ecomm", "medical", "edtech", "assistant", "kyc", "feedback",
+    "interview", "numbers", "automobile",
+})
+
+
+def _is_sarvam_v4_content_voice(value: str) -> bool:
+    if not value.startswith(SARVAM_V4_PREFIX):
+        return False
+    parts = value[len(SARVAM_V4_PREFIX):].split("_")
+    return len(parts) < 3 or parts[2] not in _SARVAM_V4_CALL_USES
+
 
 # Which languages a voice can actually SPEAK, and whether it can switch
 # between them mid-call. This is the decision an operator is really making
@@ -914,6 +932,7 @@ def is_hidden(value: str) -> bool:
         value.startswith(_HIDDEN_VOICE_PREFIXES)
         or value in _HIDDEN_VOICES_EXACT
         or (value.startswith("google:") and "-Standard-" in value)
+        or _is_sarvam_v4_content_voice(value)
     )
 
 
