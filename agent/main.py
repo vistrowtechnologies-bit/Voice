@@ -31,7 +31,6 @@ from livekit.agents import (
     EndpointingOptions,
     JobContext,
     JobProcess,
-    RoomInputOptions,
     StopResponse,
     TurnHandlingOptions,
     WorkerOptions,
@@ -45,6 +44,7 @@ from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
 from livekit.agents.tts import TTS as _BaseTTS, TTSCapabilities
 from livekit.agents.types import DEFAULT_API_CONNECT_OPTIONS, NOT_GIVEN, APIConnectOptions
 from livekit.agents.voice.agent_session import SessionConnectOptions
+from livekit.agents.voice.room_io import AudioInputOptions, RoomOptions
 from livekit.plugins import elevenlabs, google, noise_cancellation, openai, sarvam
 # EarlyFlushTTS (sarvam_early_flush_patch) is NOT wired in below — call 984,
 # 2026-09-16: it intermittently ends the whole reply after the first clause
@@ -157,6 +157,22 @@ _SARVAM_LATENCY_PROFILE = "sarvam-livekit"
 # was booting deadlocked on exactly these tables.
 
 logger = logging.getLogger("real-estate-voice-agent")
+
+
+class _MetricsDeprecationFilter(logging.Filter):
+    """Drops exactly one framework warning: livekit-agents 1.8.6 logs
+    "metrics_collected is deprecated" every time a session subscribes to that
+    event, i.e. once per call. We subscribe deliberately (see the comment at
+    session.on("metrics_collected", ...)), so the line is noise; every other
+    livekit.agents record passes through untouched."""
+
+    _PREFIX = "metrics_collected is deprecated"
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not str(record.msg).startswith(self._PREFIX)
+
+
+logging.getLogger("livekit.agents").addFilter(_MetricsDeprecationFilter())
 logger.setLevel(logging.INFO)
 
 # A single code-switched word/phrase shouldn't flip the reply language —
@@ -333,7 +349,12 @@ TONE_PRESETS: dict[str, dict[str, float]] = {
     # loudness slightly up — bulbul:v3's own "loudness" param (never wired
     # up before this), a genuinely separate dimension from pace/pitch that
     # reads as more present/engaged rather than just faster.
-    "casual": {"pace": 1.08, "temperature": 0.85, "pitch": 0.05, "loudness": 1.1},
+    # temperature was 0.85 until 2026-10-14. Sarvam's LiveKit production
+    # guide: 0.3-0.5 for amounts/OTPs/disclaimers, and "0.8 and up" sounds
+    # more expressive but may mispronounce words. 0.7 keeps casual livelier
+    # than balanced (0.6) without crossing that line. pitch/loudness here are
+    # ignored by bulbul:v4-flash (Sarvam docs: not supported on v3/v4).
+    "casual": {"pace": 1.08, "temperature": 0.7, "pitch": 0.05, "loudness": 1.1},
 }
 DEFAULT_TONE = "balanced"
 
@@ -8080,9 +8101,16 @@ async def entrypoint(ctx: JobContext) -> None:
     session.on("close", _on_session_close)
     session.on("function_tools_executed", _on_function_tools_executed)
     session.on("conversation_item_added", _on_conversation_item_added)
-    # Deprecated only for usage accounting; it remains LiveKit 1.6's public
-    # event for detailed per-stage latency.  session_usage_updated does not
-    # include EOU, TTFT or TTFB, which are the values we need here.
+    # Kept on purpose despite livekit-agents 1.8.6 logging it as deprecated.
+    # Its suggested replacements carry less: session_usage_updated has no
+    # latency at all, and ChatMessage.metrics gives ONE tts_node_ttfb per
+    # turn with no provider/model, no cached-token counts and nothing for
+    # cancelled requests. This handler records every TTS segment's TTFB
+    # (that per-segment data is what exposed the 2026-10-13 Chirp markup
+    # stall), LLM TTFT with prompt/cached/completion tokens, EOU timings,
+    # realtime first audio and provider switches. The event is still emitted
+    # in 1.8.6; test_livekit_deprecations.py fails if an upgrade removes it.
+    # The deprecation line itself is dropped by _MetricsDeprecationFilter.
     session.on("metrics_collected", _on_metrics_collected)
 
     # Held in a dict (not read at shutdown time) because by the time the job
@@ -8601,10 +8629,15 @@ async def entrypoint(ctx: JobContext) -> None:
     # Only ever does anything after a transfer has dialled somebody in.
     asyncio.create_task(_watch_handoff())
     logger.info("[latency] session.start() beginning at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
+    # RoomOptions replaces the deprecated RoomInputOptions. Checked against
+    # livekit-agents 1.8.6 (RoomOptions._create_from_legacy): every resolved
+    # option — audio input incl. noise cancellation, audio/text output, text
+    # and video input, close_on_disconnect, delete_room_on_close — is the
+    # same as the legacy form produced.
     await session.start(
         agent=agent,
         room=ctx.room,
-        room_input_options=RoomInputOptions(noise_cancellation=noise_filter),
+        room_options=RoomOptions(audio_input=AudioInputOptions(noise_cancellation=noise_filter)),
     )
     logger.info("[latency] session.start() returned at +%.2fs (room=%s)", time.monotonic() - _t0, ctx.room.name)
 
