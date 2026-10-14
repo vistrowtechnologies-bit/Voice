@@ -19,6 +19,7 @@ import psycopg
 from zoneinfo import ZoneInfo
 
 import dbconn
+import integration_crypto
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
@@ -291,7 +292,7 @@ def get_webhook_url() -> str | None:
         ).fetchone()
         if row is None:
             return None
-        return json.loads(row["config_json"] or "{}").get("url") or None
+        return integration_crypto.decode_config(row["config_json"]).get("url") or None
     except psycopg.Error:
         return None
     finally:
@@ -447,7 +448,7 @@ def get_delivery_integrations(account_id: int | None) -> list[dict]:
             "AND key IN ('webhook', 'slack', 'whatsapp', 'sheets', 'arthaleads')",
             (account_id,),
         ).fetchall()
-        return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
+        return [{"key": r["key"], "config": integration_crypto.decode_config(r["config_json"])} for r in rows]
     except psycopg.Error:
         return []
     finally:

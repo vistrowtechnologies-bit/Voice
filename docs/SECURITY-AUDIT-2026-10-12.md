@@ -48,3 +48,20 @@ The two `sha256-...` values in `script-src` are the two inline scripts in `web-d
 - **API key scopes in the dashboard:** done. Settings → Developer → API keys creates keys with scopes (2026-10-12).
 - **Hardening still to do:**
   - Platform owner set by a hardcoded email at boot (`calls_db.py` ~937); move it to an explicit flag.
+
+## Integration tokens encrypted at rest (2026-10-14)
+
+Privacy audit 2026-10-12, gap 5. `integrations.config_json` (Google Sheets and Zoho OAuth tokens, Slack/webhook URLs, ArthaLeads keys) is encrypted with Fernet by `integration_crypto.py` (identical copies in `server/`, `agent/`, `orchestrator/`). Stored as `enc:v1:<token>`; legacy plain JSON rows still read. Nothing changes until the owner sets the variables below.
+
+- `INTEGRATION_ENCRYPTION_KEY`: Fernet key(s), comma-separated (first encrypts, all decrypt). Lets a process read encrypted rows.
+- `INTEGRATION_ENCRYPTION_WRITE=on`: new writes are encrypted, and the API encrypts existing plaintext rows at boot (idempotent; skips encrypted and empty rows).
+- No key: plaintext as before, with a warning in the Voice logs. An encrypted row without the key reads as `{}` (logged), and a settings save on it is refused rather than overwriting it.
+
+Order. Every service that reads `integrations` needs the key: Railway `Voice` and `orchestrator` (production), `voice-staging`, LiveKit `CA_TGdpVhSdxDyS` (phone) and `CA_53d8HgBktjZ7` (platform-demo).
+1. Deploy this code everywhere, with no variables set (behaviour unchanged).
+2. Generate a key per environment: `python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Keep it in the password manager: losing it means every integration must be reconnected.
+3. Set `INTEGRATION_ENCRYPTION_KEY` on every reader. LiveKit: `lk agent update-secrets --secrets-file <file>` per worker, **never `--overwrite`** (it replaces the whole secret set).
+4. Only then set `INTEGRATION_ENCRYPTION_WRITE=on` on the same services.
+5. Check (read-only): `SELECT key, left(config_json, 7) FROM integrations WHERE config_json <> '{}'` shows `enc:v1:`; Send test on each connected integration still delivers.
+
+Never remove the key once rows are encrypted; to stop encrypting, unset only `INTEGRATION_ENCRYPTION_WRITE`. To rotate, set `new,old` everywhere; rows under the old key stay readable while it is listed.

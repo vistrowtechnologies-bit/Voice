@@ -80,6 +80,12 @@ load_dotenv()
 
 app = FastAPI()
 calls_db.init_tables()
+# Encrypts plaintext integration configs once INTEGRATION_ENCRYPTION_WRITE is
+# on (see integration_crypto.py); a failure must never stop the API booting.
+try:
+    calls_db.encrypt_legacy_integration_configs()
+except Exception:
+    logger.exception("could not encrypt existing integration configs")
 # Background worker that places due campaign calls (compliance-gated). Daemon
 # thread, idempotent start — no-op until a campaign is set 'running'.
 campaign_dialer.start_dialer()
@@ -5102,7 +5108,9 @@ def update_integration(key: str, data: dict = Body(...), user: dict = Depends(re
     # Tokens and provider hosts come only from our OAuth callbacks. Keep the
     # stored ones; never take them from the browser (security audit
     # 2026-10-12: a typed accounts_base received the Zoho client secret).
-    stored = next((i.get("config") or {} for i in calls_db.list_integrations(user["account_id"]) if i.get("key") == key), {})
+    # strict: a config we can't decrypt must not be replaced by one without its tokens.
+    stored = next((i.get("config") or {} for i in calls_db.list_integrations(user["account_id"], strict=True)
+                   if i.get("key") == key), {})
     keep_stored = data.get("status", "not_connected") == "connected"
     for server_key in _SERVER_MANAGED_INTEGRATION_KEYS:
         config.pop(server_key, None)
