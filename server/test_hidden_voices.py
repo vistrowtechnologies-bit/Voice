@@ -40,10 +40,24 @@ class HiddenVoices(unittest.TestCase):
         for e in v4:
             self.assertEqual(e["tier"], "standard", e["value"])
             self.assertIn(e["gender"], ("male", "female"), e["value"])
-            self.assertFalse(vc.is_hidden(e["value"]), e["value"])
         langs, can_switch = vc.languages_for(vc.get_voice("sarvam4:ritu_hi_customer"))
         self.assertTrue(can_switch)
         self.assertIn("ta-IN", langs)
+
+    def test_only_call_personas_of_sarvam_v4_are_offered(self):
+        # Owner, 2026-10-14: 97 business-call personas offered; content
+        # voices (narration, ads, news, companion, ...) hidden but resolvable.
+        v4 = [e["value"] for e in vc.CATALOG if e["value"].startswith(vc.SARVAM_V4_PREFIX)]
+        offered = [v for v in v4 if not vc.is_hidden(v)]
+        self.assertEqual(len(offered), 97)
+        for value in ("sarvam4:ritu_hi_customer", "sarvam4:aditya_hi_sales", "sarvam4:aarti_hi_customer"):
+            self.assertIn(value, offered)
+        for value in ("sarvam4:anand_hi_documentary", "sarvam4:chhavi_hi_kids", "sarvam4:girish_en_devotional"):
+            self.assertTrue(vc.is_hidden(value), value)
+            self.assertIsNotNone(vc.get_voice(value), value)
+        # Every classic voice's v4 replacement must stay offered.
+        for target in set(vc.SARVAM_V3_TO_V4.values()):
+            self.assertFalse(vc.is_hidden(vc.SARVAM_V4_PREFIX + target), target)
 
     def test_every_offered_v3_voice_has_a_same_gender_v4_replacement(self):
         v4_gender = {vid: ("male" if g == "m" else "female") for vid, g in vc.SARVAM_V4_VOICES}
