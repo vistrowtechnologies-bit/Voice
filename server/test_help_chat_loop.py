@@ -175,6 +175,8 @@ class SarvamFallbackTests(unittest.TestCase):
         self.assertEqual([r for r in fake.requests if r.get("openai")], [{"openai": True}])
         sarvam = [r for r in fake.requests if not r.get("openai")]
         self.assertTrue(all(r["model"] == help_chat.SARVAM_MODEL for r in sarvam))
+        # OpenAI's reasoning_effort "none" is not sent to Sarvam.
+        self.assertTrue(all("reasoning_effort" not in r for r in sarvam))
         # Tools offered: no JSON mode, or Sarvam skips the tools and guesses.
         self.assertNotIn("response_format", sarvam[0])
         # Forced final round still lists tools (Sarvam requires it) but disables them.
