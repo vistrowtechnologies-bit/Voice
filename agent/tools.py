@@ -45,10 +45,30 @@ def _mask_phone(phone) -> str:
 # enough that the caller was sitting in dead air waiting for the actual
 # reply. delay=0.6 at each call site means this only fires if the tool is
 # genuinely still running past that point, not on a fast/cached response.
-# One short, code-switch-friendly line rather than a per-language dict -
-# "one second" is said in English mid-sentence across every Indian language
-# this product speaks, so it doesn't need translating to sound natural.
+# Language-matched since 2026-10-14 (owner request): the single English
+# "One second..." played on Hindi calls (seen on booking test calls), which
+# breaks the language the caller and agent are speaking. Gender-neutral
+# wording on purpose — the agent's voice gender is not known here, and a
+# gendered verb would be wrong half the time. English stays the fallback.
 _TOOL_FILLER_TEXT = "One second..."
+_TOOL_FILLERS = {
+    "hi-IN": "एक सेकंड...",
+    "en-IN": "One second...",
+    "mr-IN": "एक सेकंद...",
+    "ta-IN": "ஒரு நொடி...",
+    "te-IN": "ఒక్క క్షణం...",
+    "kn-IN": "ಒಂದು ಕ್ಷಣ...",
+    "ml-IN": "ഒരു നിമിഷം...",
+    "gu-IN": "એક સેકન્ડ...",
+    "bn-IN": "এক সেকেন্ড...",
+    "pa-IN": "ਇੱਕ ਸਕਿੰਟ...",
+    "od-IN": "ଗୋଟେ ସେକେଣ୍ଡ...",
+}
+
+
+def _tool_filler_text(language: str | None) -> str:
+    """The generic wait line in the language the call is currently in."""
+    return _TOOL_FILLERS.get(language or "", _TOOL_FILLER_TEXT)
 
 # log_lead's fan-out runs in the background instead of being awaited.
 #
@@ -122,7 +142,11 @@ def _tool_filler(context: RunContext):
         realtime = False
     if realtime:
         return contextlib.nullcontext()
-    return context.with_filler(_TOOL_FILLER_TEXT, delay=0.6)
+    try:
+        language = getattr(context.session.current_agent, "_reply_language", None)
+    except Exception:  # current_agent raises when no agent is running
+        language = None
+    return context.with_filler(_tool_filler_text(language), delay=0.6)
 
 # Availability checks need an immediate spoken bridge, even though the native
 # calendar lookup itself is usually fast. Without one, the caller asks for a
@@ -2048,10 +2072,14 @@ async def book_appointment(
             "BOOKING REJECTED — the caller's real name is missing. Ask for their name and do not say "
             "the appointment is booked or confirmed."
         )
-    if len(phone_digits) < 8:
+    # Same plausibility rule log_lead uses (_looks_like_a_phone_number). The
+    # old ">= 8 digits" check let a mis-heard 9-digit number ("982134567",
+    # booking test calls 1296 and 1298, 2026-10-14) onto a real booking.
+    if not _looks_like_a_phone_number(phone_digits):
         return (
-            "BOOKING REJECTED — a real callback phone number is missing or invalid. Ask for it and do "
-            "not say the appointment is booked or confirmed."
+            "BOOKING REJECTED — the callback phone number looks incomplete or mis-heard. Ask the caller "
+            "to repeat it slowly, digit by digit, read it back to confirm, and do not say the "
+            "appointment is booked or confirmed."
         )
     if len(clean_purpose) < 3 or clean_purpose.lower() in {"unknown", "not provided", "na", "n/a"}:
         return (
