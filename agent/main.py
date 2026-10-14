@@ -39,6 +39,7 @@ from livekit.agents import (
     tokenize,
 )
 from livekit.agents.tts import StreamAdapter
+from google.cloud import texttospeech
 from livekit.agents.stt import FallbackAdapter as SttFallbackAdapter
 from livekit.agents.tts import FallbackAdapter as TtsFallbackAdapter
 from livekit.agents.tts import TTS as _BaseTTS, TTSCapabilities
@@ -2914,6 +2915,14 @@ def _build_tts(reply_language: str, speaker: str, tone: dict[str, float], tone_n
                     credentials_info=_GOOGLE_CREDENTIALS,
                 **_rate,
                     speaking_rate=tone.get("pace", 1.0),
+                    # The plugin's default PCM encoding is wrong for these
+                    # voices on synthesize(): Google returns MP3 frames
+                    # (0xFFF3...) that the plugin then plays as raw PCM, so
+                    # each sentence came out as ~1 s of fast noise (measured
+                    # 2026-10-14, calls 1273/1275; the "distortion" on call 885).
+                    # LINEAR16 comes back as a WAV the decoder reads correctly
+                    # at 24 kHz and 8 kHz.
+                    audio_encoding=texttospeech.AudioEncoding.LINEAR16,
                 ),
                 sentence_tokenizer=tokenize.blingfire.SentenceTokenizer(retain_format=True),
             )
