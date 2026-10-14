@@ -10,7 +10,7 @@ const CORE_LINKS: Record<string, string[]> = {
   '/voice-bot': ['/product/agents', '/vs-ivr', '/ai-voice-bot-pricing-india', '/voice-ai-platform', '/ai-call-center'],
   '/product/agents': ['/voice-ai-platform', '/voice-bot'],
   '/product/outbound': ['/ai-call-center'],
-  '/solutions/support': ['/ai-call-center', '/voice-bot'],
+  '/solutions/support': ['/ai-call-center', '/voice-bot', '/ai-receptionist'],
   '/integrations': ['/voice-ai-platform'],
   '/pricing': ['/ai-voice-bot-pricing-india', '/product', '/contact'],
   '/best-ai-voice-calling-software-india': ['/product', '/solutions', '/compare/sarvam-ai', '/pricing'],
@@ -22,7 +22,6 @@ const CORE_LINKS: Record<string, string[]> = {
   '/product/inbound': ['/ai-ivr', '/ai-receptionist'],
   '/solutions/healthcare': ['/ai-receptionist'],
   '/solutions/real-estate': ['/ai-receptionist'],
-  '/solutions/support': ['/ai-receptionist'],
   '/solutions/finance': ['/ai-receptionist'],
 }
 
