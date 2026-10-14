@@ -90,13 +90,13 @@ class CasualToneTemperature(unittest.TestCase):
         self.assertLess(casual, 0.8)
         self.assertGreater(casual, main.TONE_PRESETS["balanced"]["temperature"])
 
-    def test_casual_avoids_the_settings_that_delay_first_audio(self):
+    def test_no_preset_uses_the_settings_that_delay_first_audio(self):
         # Measured 2026-10-14: non-default pace or pitch adds ~115 ms before
-        # Sarvam v4's first audio; loudness is free.
-        casual = main.TONE_PRESETS["casual"]
-        self.assertEqual(casual["pace"], 1.0)
-        self.assertEqual(casual["pitch"], 0.0)
-        self.assertGreater(casual["loudness"], 1.0)
+        # Sarvam v4's first audio; loudness and temperature are free.
+        for name, preset in main.TONE_PRESETS.items():
+            self.assertEqual(preset["pace"], 1.0, name)
+            self.assertEqual(preset["pitch"], 0.0, name)
+        self.assertGreater(main.TONE_PRESETS["casual"]["loudness"], 1.0)
 
     def test_other_presets_unchanged(self):
         self.assertEqual(main.TONE_PRESETS["professional"]["temperature"], 0.4)
