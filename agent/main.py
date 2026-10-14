@@ -342,7 +342,11 @@ _DEFAULT_OPENER_EN_BUSINESS = "{greeting}thanks for calling {business_name} — 
 TONE_PRESETS: dict[str, dict[str, float]] = {
     # Measured and steady — a bit slower and low-variation, for formal/
     # informational agents (banking, legal, official notices).
-    "professional": {"pace": 0.95, "temperature": 0.4, "pitch": 0.0, "loudness": 1.0},
+    # pace was 0.95 until 2026-10-14: any non-default pace delays Sarvam v4's
+    # first audio by ~115 ms (measured 731 vs 615 ms, see "casual" below),
+    # for a 5% slow-down. The low temperature (0.4, steadier delivery, Sarvam's
+    # advice for amounts and disclaimers) is free and stays.
+    "professional": {"pace": 1.0, "temperature": 0.4, "pitch": 0.0, "loudness": 1.0},
     # Sarvam bulbul:v3's own defaults — natural conversational delivery.
     "balanced": {"pace": 1.0, "temperature": 0.6, "pitch": 0.0, "loudness": 1.0},
     # Faster and more expressive/varied prosody — addresses "slow and
