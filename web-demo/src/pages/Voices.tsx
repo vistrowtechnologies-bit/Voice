@@ -54,7 +54,7 @@ function languageSummary(entry: VoiceEntry): string {
 }
 
 // Realtime tabs are one per Live model: `rt:<model value>`.
-type TabKey = 'sarvam4' | 'expressive' | 'hd' | 'standard' | 'native' | 'gemini' | 'premium' | `rt:${string}`
+type TabKey = 'sarvam4' | 'expressive' | 'hd' | 'native' | 'gemini' | 'premium' | `rt:${string}`
 type FilterKey = 'all' | 'added' | 'female' | 'male'
 
 const FILTERS: { key: FilterKey; label: string }[] = [
@@ -436,21 +436,21 @@ export function Voices() {
       },
       {
         key: 'sarvam4',
-        label: 'Sarvam v4',
-        note: '1x credits · Bulbul v4 persona voices by use case · switches language live',
-        voices: stable('standard').filter((v) => v.value.startsWith('sarvam4:')),
+        label: 'Sarvam',
+        note: '1x credits · Bulbul v4 persona voices first, then the classic Sarvam voices · switches language live',
+        // Every non-Chirp standard voice is a Sarvam voice: v4 (`sarvam4:`) and
+        // the classic Bulbul ids (pooja, shubh, ...). Since PR #85 billed v4 at
+        // standard, a separate "Standard" tab listed all 201 v4 voices again.
+        voices: [
+          ...stable('standard').filter((v) => v.value.startsWith('sarvam4:')),
+          ...stable('standard').filter((v) => !isChirp(v) && !v.value.startsWith('sarvam4:')),
+        ],
       },
       {
         key: 'hd',
         label: 'HD',
         note: '1x credits · fastest Google voices · switches language mid-call',
         voices: stable('standard').filter(isChirp),
-      },
-      {
-        key: 'standard',
-        label: 'Standard',
-        note: '1x credits · natural conversational voices',
-        voices: stable('standard').filter((v) => !isChirp(v)),
       },
       {
         key: 'native',
