@@ -10,8 +10,13 @@ const CORE_LINKS: Record<string, string[]> = {
   '/ai-voice-bot-pricing-india': ['/pricing', '/product', '/compare/elevenlabs', '/contact'],
   '/resources/docs': ['/help', '/product/agents', '/product/widget', '/product/integrations'],
   '/vs-ivr': ['/ai-ivr', '/product/inbound', '/product/agents', '/compare/sarvam-ai', '/contact'],
-  '/ai-ivr': ['/vs-ivr', '/product/inbound', '/languages', '/pricing', '/contact'],
-  '/product/inbound': ['/ai-ivr'],
+  '/ai-ivr': ['/vs-ivr', '/ai-receptionist', '/product/inbound', '/languages', '/pricing'],
+  '/ai-receptionist': ['/product/inbound', '/ai-ivr', '/solutions/healthcare', '/product/widget', '/pricing'],
+  '/product/inbound': ['/ai-ivr', '/ai-receptionist'],
+  '/solutions/healthcare': ['/ai-receptionist'],
+  '/solutions/real-estate': ['/ai-receptionist'],
+  '/solutions/support': ['/ai-receptionist'],
+  '/solutions/finance': ['/ai-receptionist'],
 }
 
 function relatedPaths(pathname: string): string[] {
