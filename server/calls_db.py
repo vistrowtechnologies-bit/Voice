@@ -6427,7 +6427,8 @@ def ingest_inbound_lead(
     a new adapter calling this, not a new dialing path. ArthaLeads leads are
     queued only when the source opt-in and a page/project route both resolve;
     other sources keep their existing campaign behavior. A queued contact is
-    picked up by campaign_dialer.py's next tick (<=15s); DNC, calling-window,
+    picked up by campaign_dialer.py's next pass (at once when the route calls
+    campaign_dialer.notify(), else <=15s); DNC, calling-window,
     and concurrency checks remain in the dialer.
 
     Deduped against the SAME campaign's still-open contacts (pending or
@@ -11044,6 +11045,26 @@ def within_calling_window(account_id: int, at: datetime.datetime | None = None) 
         return True, ""
     win = f"{cfg.get('window_start')}–{cfg.get('window_end')} {cfg.get('timezone')}"
     return False, f"Outside the allowed calling window ({win})."
+
+
+def next_calling_window_open(account_id: int, at: datetime.datetime | None = None) -> datetime.datetime | None:
+    """When the calling window next opens, in the account's timezone, or None
+    when it is open now (or nothing opens within a week). Each candidate is
+    the configured start time on a coming day, confirmed by
+    within_calling_window itself so the two can never disagree."""
+    if within_calling_window(account_id, at)[0]:
+        return None
+    cfg = get_compliance(account_id)
+    start_s = str(cfg.get("window_start") or "")
+    if not (_HHMM.match(start_s) and _HHMM.match(str(cfg.get("window_end") or ""))):
+        start_s = _COMPLIANCE_DEFAULTS["window_start"]
+    sh, sm = (int(x) for x in start_s.split(":"))
+    now = account_local_now(account_id, at)
+    for days in range(8):
+        candidate = (now + datetime.timedelta(days=days)).replace(hour=sh, minute=sm, second=0, microsecond=0)
+        if candidate > now and within_calling_window(account_id, candidate)[0]:
+            return candidate
+    return None
 
 
 def is_dnc(account_id: int, phone: str) -> bool:

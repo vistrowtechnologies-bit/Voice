@@ -171,6 +171,23 @@ def _campaign_gap_seconds(campaign: dict) -> float:
 _started = False
 _lock = threading.Lock()
 
+# Set by notify() when a new lead is queued, so the dialer runs a pass now
+# instead of up to _TICK_SECONDS later. The owner's promise is a call within
+# 30s of an ArthaLeads lead arriving; a 15s sleep spent half of it waiting.
+# Waking only starts a normal pass: the window, concurrency, channel, stagger
+# and breaker gates in _dial_one all still apply.
+_wake = threading.Event()
+
+# Instant-lead campaigns (see calls_db.get_or_create_instant_campaign) go
+# first in a pass, so a fresh lead is not dialled after a long list's batch
+# has used the trunk's channels.
+_INSTANT_CAMPAIGN_NAMES = ("ArthaLeads Instant Follow-up", "Instant Lead Follow-up")
+
+
+def notify() -> None:
+    """Wake the dialer for an immediate pass. Safe from any thread."""
+    _wake.set()
+
 
 def _on_orchestrator_pipeline(account_id: int) -> bool:
     return bool(os.environ.get("ORCHESTRATOR_URL")) and calls_db.is_on_orchestrator_pipeline(account_id)
@@ -370,11 +387,17 @@ def _loop() -> None:
             promoted = calls_db.promote_due_scheduled_campaigns()
             if promoted:
                 logger.info("promoted %s scheduled campaign(s) to running", promoted)
-            for campaign in calls_db.running_campaigns():
+            campaigns = calls_db.running_campaigns()
+            # Stable sort: instant-lead campaigns first, the rest unchanged.
+            campaigns.sort(key=lambda c: c.get("name") not in _INSTANT_CAMPAIGN_NAMES)
+            for campaign in campaigns:
                 _dial_one(campaign)
         except Exception:
             logger.exception("dialer tick failed")
-        time.sleep(_TICK_SECONDS)
+        # A notify() during the pass above leaves the event set, so the next
+        # pass starts at once rather than losing that lead to a full tick.
+        _wake.wait(_TICK_SECONDS)
+        _wake.clear()
 
 
 def start_dialer() -> None:

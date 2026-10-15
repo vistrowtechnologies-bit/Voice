@@ -49,6 +49,39 @@ GOOGLE_ONLY_LANGUAGE_NAMES: dict[str, str] = {
 }
 
 
+# How a lead's own record names its language (a CRM field or a form answer):
+# the code itself, the English name, or the language's own name for itself.
+_LEAD_LANGUAGE_ALIASES = {
+    "hindi": "hi-IN", "हिंदी": "hi-IN", "हिन्दी": "hi-IN",
+    "english": "en-IN", "angrezi": "en-IN",
+    "marathi": "mr-IN", "मराठी": "mr-IN",
+    "tamil": "ta-IN", "தமிழ்": "ta-IN",
+    "telugu": "te-IN", "తెలుగు": "te-IN",
+    "kannada": "kn-IN", "ಕನ್ನಡ": "kn-IN",
+    "malayalam": "ml-IN", "മലയാളം": "ml-IN",
+    "gujarati": "gu-IN", "ગુજરાતી": "gu-IN",
+    "bengali": "bn-IN", "bangla": "bn-IN", "বাংলা": "bn-IN",
+    "punjabi": "pa-IN", "ਪੰਜਾਬੀ": "pa-IN",
+    "odia": "od-IN", "oriya": "od-IN", "ଓଡ଼ିଆ": "od-IN",
+}
+
+
+def lead_language(value: str | None) -> str | None:
+    """A lead's stated language as one of the LANGUAGE_NAMES codes, or None
+    when it is blank, unknown, or names more than one language ("Hindi or
+    English" is no instruction to switch)."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    for code in LANGUAGE_NAMES:
+        if text.casefold() in (code.casefold(), code.split("-")[0].casefold()):
+            return code
+    # Split on separators, not \W: Indic vowel signs are not "word" characters.
+    found = {code for word in re.split(r"[\s,/;:|()&+.\-]+", text.casefold())
+             if (code := _LEAD_LANGUAGE_ALIASES.get(word))}
+    return found.pop() if len(found) == 1 else None
+
+
 def is_google_multilingual(provider: str | None) -> bool:
     """Whether this TTS provider is a Gemini persona voice, and therefore
     gets the full global language range rather than the native 11."""
