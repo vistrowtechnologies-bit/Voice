@@ -31,6 +31,7 @@ import { BuyerGuide } from './pages/marketing/BuyerGuide'
 import { VoiceAiPlatform } from './pages/marketing/VoiceAiPlatform'
 import { AiCallCenter } from './pages/marketing/AiCallCenter'
 import { AiTelecaller } from './pages/marketing/AiTelecaller'
+import { AiCallingAgent } from './pages/marketing/AiCallingAgent'
 import { VoiceBot } from './pages/marketing/VoiceBot'
 import { LocalRealEstate } from './pages/marketing/LocalRealEstate'
 import { DemoCall } from './pages/marketing/DemoCall'
@@ -184,6 +185,7 @@ function App() {
         <Route path="/ai-call-center" element={<AiCallCenter />} />
         <Route path="/voice-bot" element={<VoiceBot />} />
         <Route path="/ai-telecaller" element={<AiTelecaller />} />
+        <Route path="/ai-calling-agent" element={<AiCallingAgent />} />
         <Route path="/:slug" element={<BuyerGuide />} />
         <Route path="/solutions/real-estate/:slug" element={<LocalRealEstate />} />
         <Route path="/demo-calls/:slug" element={<DemoCall />} />

@@ -171,6 +171,8 @@ export function AiTelecaller() {
           <Link to="/product/inbound" className={linkClass}>inbound call answering</Link>,{' '}
           <Link to="/product/outbound" className={linkClass}>outbound campaigns</Link> and{' '}
           <Link to="/help/integrations/instant-lead-follow-up" className={linkClass}>calling new leads within seconds</Link>.
+          For the same agent on every kind of business call, see the{' '}
+          <Link to="/ai-calling-agent" className={linkClass}>AI calling agent</Link> page.
         </p>
       </section>
 

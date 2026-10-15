@@ -25,12 +25,12 @@ export const IVR_POSTS: IvrBlogPost[] = [
   {
     slug: 'what-is-ivr-interactive-voice-response',
     title: 'What is IVR (interactive voice response)? How it works and where AI fits',
-    excerpt: 'A plain explanation of IVR systems: the menu, the keypad tones, speech options, cloud IVR and call routing, and where a conversational AI agent changes the picture.',
+    excerpt: 'Interactive voice response explained: how an IVR system uses menus, keypad tones, speech and cloud IVR to route calls, and where an AI voice agent fits.',
     category: CATEGORY,
     publishedAt: PUBLISHED,
     readTime: '',
     sections: [
-      { heading: 'IVR in one paragraph', paragraphs: [
+      { heading: 'Interactive voice response in one paragraph', paragraphs: [
         'IVR stands for interactive voice response. It is the system that answers a phone call with recorded or synthesised prompts and lets the caller choose what happens next, usually by pressing keys: “press 1 for new bookings, press 2 for an existing order.” Based on the choice, the IVR plays information, collects a number such as an account or order ID, or routes the call to a queue of people.',
         'Almost everyone in India has used one: a bank’s phone banking line, a telecom operator’s customer care number, a courier’s tracking line or a hospital’s appointment desk. An IVR system is the reason a business can take many calls at once without a person answering every one of them first.',
       ] },
@@ -132,13 +132,13 @@ export const IVR_POSTS: IvrBlogPost[] = [
   {
     slug: 'ivr-in-banking-and-finance',
     title: 'IVR in banking and finance: replacing menus with conversation',
-    excerpt: 'What banks, NBFCs and lenders use IVR for, which calls suit a conversational voice agent, and the guardrails a finance team should set before any caller hears it.',
+    excerpt: 'IVR in banking: what banks, NBFCs and lenders use it for, which calls suit a conversational voice agent, and the guardrails to set before callers hear one.',
     category: CATEGORY,
     publishedAt: PUBLISHED,
     readTime: '',
     sections: [
-      { heading: 'Why finance runs on IVR', paragraphs: [
-        'Banks, card issuers and lenders have relied on IVR for a long time. Phone banking menus handle balance enquiries, card blocking, PIN-related requests and statement requests at a scale no team could answer by hand, and keypad entry suits the long account and card numbers those tasks need.',
+      { heading: 'Why IVR in banking became the norm', paragraphs: [
+        'Banks, card issuers and lenders have relied on IVR for a long time. IVR in banking handles balance enquiries, card blocking, PIN-related requests and statement requests at a scale no team could answer by hand, and keypad entry suits the long account and card numbers those tasks need.',
         'The same menus are also where callers get stuck. A borrower who wants to ask “why did my EMI amount change?” or “can I pay part of it next week?” does not fit an option list, so the call ends in a queue for a person who starts from zero. That gap, between what the menu can sort and what the caller needs to explain, is where conversational voice agents are being tried.',
       ] },
       { heading: 'Which banking calls suit a conversation', paragraphs: [
@@ -181,12 +181,12 @@ export const IVR_POSTS: IvrBlogPost[] = [
   {
     slug: 'how-to-choose-an-ivr-service-provider-india',
     title: 'How to choose an IVR service provider in India (checklist)',
-    excerpt: 'A neutral checklist for comparing IVR solutions and IVR companies: numbers and telephony, call flows, languages, AI, integrations, data handling, pricing structure and support.',
+    excerpt: 'A neutral checklist for choosing an IVR service provider in India: numbers, call flows, languages, AI, integrations, data handling, pricing and support.',
     category: CATEGORY,
     publishedAt: PUBLISHED,
     readTime: '',
     sections: [
-      { heading: 'Know what you are buying first', paragraphs: [
+      { heading: 'Know what an IVR service provider sells first', paragraphs: [
         'IVR service providers in India fall into a few broad groups. Telephony-first providers sell numbers, call routing, menu IVR and contact-centre features, sometimes with AI added. AI-first platforms focus on the conversational agent and connect to a telephony provider for the phone line. Some businesses use one of each. None of these is automatically right; what matters is which part of the call you need to improve.',
         'If the vocabulary is unfamiliar, [what IVR is and how it works](/resources/blog/what-is-ivr-interactive-voice-response) explains menus, DTMF, cloud IVR and call flows. Before speaking to any vendor, write a one-page brief: the numbers you have, the ten most common call reasons, the languages your callers use, your peak simultaneous calls, the systems a call must update, and who answers when the system cannot. Every question below gets easier with that page in hand.',
       ] },

@@ -466,13 +466,13 @@ export interface BuyerGuide {
 const BASE_BUYER_GUIDES: BuyerGuide[] = [
   {
     slug: 'best-ai-voice-calling-software-india',
-    title: 'How to Choose AI Voice Calling Software in India | Vistrow Voice',
+    title: 'How to Choose AI Calling Software in India | Vistrow Voice',
     description:
-      'A selection checklist for AI voice calling software in India: tool categories, latency, Indian languages, phone and website channels, CRM records, compliance and a trial plan.',
+      'A checklist for choosing AI calling software in India: tool types, latency, Indian languages, phone and web channels, CRM records, compliance and a trial.',
     eyebrow: 'Buyer guide',
     headline: 'How to choose AI voice calling software in India.',
     subhead:
-      'The right tool is not the one with the flashiest demo. It is the one that handles your real calls, in your customer’s language, and leaves your team with a useful record.',
+      'The right AI calling software is not the one with the flashiest demo. It is the one that handles your real calls, in your customer’s language, and leaves your team with a useful record.',
     sections: [
       {
         title: 'Start with the real call type',

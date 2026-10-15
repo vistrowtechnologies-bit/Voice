@@ -125,8 +125,8 @@ export function Home() {
   return (
     <MarketingLayout>
       <Seo
-        title="Multilingual AI Voice Agents | Vistrow Voice"
-        description="Artha answers, qualifies, and books appointments in 10 Indian languages plus English, across inbound, outbound, and web conversations - 24/7."
+        title="AI Voice Agent for India in 11 Languages | Vistrow Voice"
+        description="An AI voice agent for Indian businesses: an AI voice calling agent that answers, qualifies and books customers on phone and web in 11 languages."
         path="/"
         jsonLd={HOME_JSONLD}
       />
@@ -167,9 +167,9 @@ export function Home() {
             </span>
           </h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-text-muted sm:mt-5 sm:text-lg sm:leading-relaxed">
-            Vistrow Voice is voice AI built for how India actually speaks. Answer, qualify, and book customers across phone and
-            web in Hindi, English and 9 more Indian languages, with natural Hinglish and mid-sentence language
-            switching.
+            Vistrow Voice is an AI voice agent for Indian businesses, built for how India actually speaks. Your AI voice
+            calling agent answers, qualifies, and books customers across phone and web in Hindi, English and 9 more
+            Indian languages, with natural Hinglish and mid-sentence language switching.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <TalkToArthaButton />
@@ -208,7 +208,7 @@ export function Home() {
         <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
           <div className="rounded-2xl border border-border bg-surface p-7">
             <SectionEyebrow>Hear the difference</SectionEyebrow>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Language switching without restarting the call.</h2>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">An AI voice agent for India that switches language without restarting the call.</h2>
             <p className="mt-3 text-sm leading-relaxed text-text-muted">Artha follows the caller naturally instead of forcing a language menu or a separate agent.</p>
             <a href="#live-demo" className="mt-5 inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline">Try it live <Icon name="arrow_forward" className="text-[16px]" /></a>
           </div>
@@ -475,8 +475,8 @@ export function Home() {
         <Reveal>
           <div className="mb-12 text-center">
             <SectionEyebrow>Get started</SectionEyebrow>
-            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Build your first agent in minutes.</h2>
-            <p className="mx-auto mt-4 max-w-2xl text-text-muted">Describe the job in plain English, test it with real calls, and put it on your website or phone line when it is ready.</p>
+            <h2 className="mt-3 font-display text-4xl font-bold tracking-tight">Build your first AI voice calling agent in minutes.</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-text-muted">Describe the job in plain English, test it with real calls, and put it on your website or phone line when it is ready. To have it make calls as well as take them, set it up as an{' '}<Link to="/ai-calling-agent" className="font-semibold text-primary underline-offset-4 hover:underline">AI calling agent</Link>.</p>
           </div>
         </Reveal>
         <div className="grid gap-5 md:grid-cols-3">

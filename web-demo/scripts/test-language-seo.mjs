@@ -8,7 +8,7 @@ const pages = [
   {
     slug: 'hindi',
     title: 'Hindi AI Voice Calling Agent with Hinglish | Vistrow Voice',
-    phrases: ['Hinglish AI voice calling agent', 'real AI phone calling agent', 'North & Central India', 'Example conversation', 'Hinglish is the normal case'],
+    phrases: ['AI calling agent in Hindi', 'real AI phone calling agent', 'North & Central India', 'Example conversation', 'Hinglish is the normal case'],
     demo: 'hindi-real-estate-lead-qualification',
   },
   {

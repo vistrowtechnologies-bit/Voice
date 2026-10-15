@@ -138,7 +138,7 @@ const FAQ = [
     a: 'Not quite. An IVR routes - it collects a keypress and sends the caller somewhere. Artha holds a conversation, answers from your knowledge base, captures details, and books appointments without transferring anyone. When it is used in place of a menu, people call it an AI IVR.',
   },
   {
-    q: 'Voice AI vs IVR: which is better?',
+    q: 'IVR vs AI voice agent: which is better?',
     a: 'For routing a few departments in one language, a menu IVR is cheap and fine. Once callers ask questions, want bookings, speak several languages or call after hours, a voice agent resolves more calls without a transfer. Many teams keep a person for sensitive or high-value calls.',
   },
   {
@@ -170,8 +170,8 @@ export function CompareIvr() {
   return (
     <MarketingLayout>
       <Seo
-        title="AI Voice Agent vs Traditional IVR vs Chatbot | Vistrow Voice"
-        description="IVR, IVA, AI voice agent, chatbot or receptionist? Plain definitions, a side-by-side table, which fits when, and how to replace a menu IVR step by step."
+        title="IVR vs AI Voice Agent vs Chatbot | Vistrow Voice"
+        description="IVR vs AI voice agent, chatbot or receptionist: plain definitions, a side-by-side table, which fits when, and how to replace a menu IVR step by step."
         path="/vs-ivr"
         jsonLd={FAQ_JSONLD}
       />
@@ -183,7 +183,7 @@ export function CompareIvr() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
           Nobody has ever enjoyed pressing 1 for sales. Most businesses answer calls with a phone menu, a small
-          team, or both. Here’s how an AI voice agent actually differs - including where it doesn’t win.
+          team, or both. Here is IVR vs AI voice agent in plain terms: how the agent actually differs, including where it doesn’t win.
         </p>
         <div className="mt-8 flex justify-center">
           <TalkToArthaButton />
