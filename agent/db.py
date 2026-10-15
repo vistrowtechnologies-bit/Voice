@@ -26,6 +26,7 @@ from psycopg import sql as psycopg_sql
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import dbconn
+import integration_crypto
 import phone_format
 import retry_rules
 import plan_policy
@@ -944,7 +945,7 @@ def get_webhook_url(account_id: int | None) -> str | None:
         ).fetchone()
         if row is None:
             return None
-        return json.loads(row["config_json"] or "{}").get("url") or None
+        return integration_crypto.decode_config(row["config_json"]).get("url") or None
     except psycopg.Error:
         return None
     finally:
@@ -1184,7 +1185,7 @@ def get_delivery_integrations(
         if allowed_keys:
             allowed = set(allowed_keys)
             rows = [r for r in rows if r["key"] in allowed]
-        return [{"key": r["key"], "config": json.loads(r["config_json"] or "{}")} for r in rows]
+        return [{"key": r["key"], "config": integration_crypto.decode_config(r["config_json"])} for r in rows]
     except Exception:
         # Was `except psycopg.Error` — silent and unlogged, so a call whose
         # lead never reached the CRM left zero trace of why: not psycopg.Error
@@ -1477,7 +1478,7 @@ def update_integration_config(account_id: int | None, key: str, config: dict) ->
         with conn:
             conn.execute(
                 "UPDATE integrations SET config_json = ? WHERE key = ? AND account_id = ?",
-                (json.dumps(config), key, account_id),
+                (integration_crypto.encode_config(config), key, account_id),
             )
     except Exception:
         logger.exception("could not persist refreshed integration config")

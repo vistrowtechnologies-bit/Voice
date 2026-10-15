@@ -894,10 +894,13 @@ def to_google_code(code: str) -> str:
 # disagree with their own tables), so the enumerated count is the honest one.
 GOOGLE_TTS_TOTAL_LOCALES = len(GOOGLE_TTS_LANGUAGES)
 
-# Gemini 3.8 TTS documents its own, larger table: 132 rows ("over 130
-# languages") at ai.google.dev/gemini-api/docs/speech-generation, checked
-# 2026-10-15. The Live API (realtime) lists 99. Recheck both when Google updates.
-GEMINI_38_TTS_TOTAL_LANGUAGES = 132
+# Gemini 3.8 TTS documents its own, larger table at
+# ai.google.dev/gemini-api/docs/speech-generation (checked 2026-10-15): 132 rows,
+# all ticked for Flash TTS ("over 130") but only 103 for Flash-Lite TTS ("over
+# 100"), which google38: voices use. The Live API (realtime) lists 99. Recheck
+# all three when Google updates.
+GEMINI_38_FLASH_TTS_TOTAL_LANGUAGES = 132
+GEMINI_38_FLASH_LITE_TTS_TOTAL_LANGUAGES = 103
 GEMINI_LIVE_TOTAL_LANGUAGES = 99
 
 _GOOGLE_PREFIXES = ("google:", "google31:", GEMINI_38_FLASH_PREFIX, GEMINI_38_PREFIX)
@@ -1043,8 +1046,10 @@ def public_entry(entry: dict, allowed_tiers: set[str]) -> dict:
         "languageCount": (
             len(_langs)
             if entry.get("value", "").startswith(CHIRP3_PERSONA_PREFIX)
-            else GEMINI_38_TTS_TOTAL_LANGUAGES
-            if entry.get("value", "").startswith((GEMINI_38_PREFIX, GEMINI_38_FLASH_PREFIX))
+            else GEMINI_38_FLASH_TTS_TOTAL_LANGUAGES
+            if entry.get("value", "").startswith(GEMINI_38_FLASH_PREFIX)
+            else GEMINI_38_FLASH_LITE_TTS_TOTAL_LANGUAGES
+            if entry.get("value", "").startswith(GEMINI_38_PREFIX)
             else GOOGLE_TTS_TOTAL_LOCALES
             if _can_switch and entry.get("value", "").startswith(_GOOGLE_PREFIXES)
             else len(_langs)

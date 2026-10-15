@@ -9,3 +9,5 @@ PyJWT[crypto]>=2.9.0
 python-multipart>=0.0.9
 phonenumbers>=9.0
 reportlab>=4.2,<5
+# integration_crypto.py (integration tokens encrypted at rest)
+cryptography>=42

@@ -30,6 +30,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import psycopg
 
 import dbconn
+import integration_crypto
 import phone_format
 import voice_catalog
 import plan_policy
@@ -6058,7 +6059,7 @@ def facebook_page_connection(page_id: str) -> dict | None:
         ).fetchall()
         for row in rows:
             try:
-                config = json.loads(row["config_json"] or "{}")
+                config = integration_crypto.decode_config(row["config_json"])
             except (json.JSONDecodeError, TypeError):
                 continue
             if config.get("pageId") == page_id:
@@ -7509,7 +7510,9 @@ def integration_accepts_connect(account_id: int, key: str) -> bool:
         conn.close()
 
 
-def list_integrations(account_id: int) -> list[dict]:
+def list_integrations(account_id: int, strict: bool = False) -> list[dict]:
+    """strict: raise integration_crypto.ConfigDecryptError instead of
+    returning {} for a config this process can't decrypt."""
     conn = _connect()
     try:
         return [
@@ -7519,7 +7522,7 @@ def list_integrations(account_id: int) -> list[dict]:
                 "category": r["category"],
                 "description": r["description"],
                 "status": r["status"],
-                "config": json.loads(r["config_json"] or "{}"),
+                "config": integration_crypto.decode_config(r["config_json"], strict=strict),
                 "lastSync": r["last_sync"],
                 "lastError": r["last_error"],
                 # Tells the dashboard to show a "Coming soon" card instead of
@@ -7549,22 +7552,59 @@ def update_integration(key: str, status: str, config: dict, account_id: int, nam
                     "SELECT config_json FROM integrations WHERE key = ? AND account_id = ?", (key, account_id)
                 ).fetchone()
                 try:
-                    prev_config = json.loads(prev["config_json"] or "{}") if prev else {}
+                    prev_config = integration_crypto.decode_config(prev["config_json"]) if prev else {}
                 except (TypeError, ValueError):
                     prev_config = {}
                 config = {**{k: prev_config[k] for k in _INTEGRATION_SETTING_KEYS if k in prev_config}, **config}
             if name and name.strip():
                 conn.execute(
                     "UPDATE integrations SET status = ?, config_json = ?, name = ? WHERE key = ? AND account_id = ?",
-                    (status, json.dumps(config), name.strip(), key, account_id),
+                    (status, integration_crypto.encode_config(config), name.strip(), key, account_id),
                 )
             else:
                 conn.execute(
                     "UPDATE integrations SET status = ?, config_json = ? WHERE key = ? AND account_id = ?",
-                    (status, json.dumps(config), key, account_id),
+                    (status, integration_crypto.encode_config(config), key, account_id),
                 )
     finally:
         conn.close()
+
+
+def encrypt_legacy_integration_configs() -> int:
+    """Encrypts plaintext integration configs in place. Runs at boot; does
+    nothing unless INTEGRATION_ENCRYPTION_WRITE is on with a valid key, and
+    skips rows already encrypted, so re-running is harmless. Each UPDATE only
+    lands if the row still holds the plaintext it read (a concurrent save
+    wins). Returns the number of rows encrypted."""
+    integration_crypto.warn_if_unconfigured()
+    if not integration_crypto.write_enabled():
+        return 0
+    conn = _connect()
+    done = 0
+    try:
+        rows = conn.execute(
+            "SELECT account_id, key, config_json FROM integrations WHERE config_json NOT LIKE ?",
+            (integration_crypto.PREFIX + "%",),
+        ).fetchall()
+        for r in rows:
+            try:
+                config = integration_crypto.decode_config(r["config_json"])
+            except (ValueError, TypeError):
+                logger.warning("integration %s for account %s has an unreadable config; left as is", r["key"], r["account_id"])
+                continue
+            if not config:
+                continue
+            with conn:
+                cur = conn.execute(
+                    "UPDATE integrations SET config_json = ? WHERE account_id = ? AND key = ? AND config_json = ?",
+                    (integration_crypto.encode_config(config), r["account_id"], r["key"], r["config_json"]),
+                )
+                done += cur.rowcount or 0
+    finally:
+        conn.close()
+    if done:
+        logger.info("encrypted %s integration config(s)", done)
+    return done
 
 
 # Events an outbound integration can be told to send (config["events"]).
@@ -7605,7 +7645,8 @@ def update_integration_settings(account_id: int, key: str, events: list | None =
             ).fetchone()
             if row is None:
                 raise ValueError("Unknown integration")
-            config = json.loads(row["config_json"] or "{}")
+            # strict: never save {} over a config this process can't decrypt.
+            config = integration_crypto.decode_config(row["config_json"], strict=True)
             if events is not None:
                 if key not in EVENT_CONFIGURABLE_KEYS or (key == "sheets" and config.get("mode") == "oauth"):
                     raise ValueError("This integration always sends one record per caller at the end of the call")
@@ -7635,7 +7676,7 @@ def update_integration_settings(account_id: int, key: str, events: list | None =
                     config.pop("template", None)
             conn.execute(
                 "UPDATE integrations SET config_json = ? WHERE account_id = ? AND key = ?",
-                (json.dumps(config), account_id, key),
+                (integration_crypto.encode_config(config), account_id, key),
             )
             return {k: config[k] for k in _INTEGRATION_SETTING_KEYS if k in config}
     finally:

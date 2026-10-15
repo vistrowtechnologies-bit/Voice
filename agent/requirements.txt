@@ -10,3 +10,5 @@ phonenumbers>=9.0
 
 # Native input transcription language_codes (no separate STT engine).
 google-genai>=2.29.0
+# integration_crypto.py (integration tokens encrypted at rest)
+cryptography>=42

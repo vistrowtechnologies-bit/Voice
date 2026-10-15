@@ -18,3 +18,5 @@ google-cloud-texttospeech>=2.31.0
 # Anti-aliasing low-pass filter before downsampling TTS output to 8kHz for
 # the phone leg (audioop.ratecv alone has no filtering) — see audio.py.
 numpy>=1.26
+# integration_crypto.py (integration tokens encrypted at rest)
+cryptography>=42

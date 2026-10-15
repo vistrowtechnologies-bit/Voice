@@ -95,6 +95,13 @@ export function LocalRealEstate() {
           <p className="mt-4 max-w-3xl text-text-muted">
             Buyers mention landmarks, budgets, languages, mixed speech, and project names. A useful agent must handle that context and still leave a structured record for the sales team.
           </p>
+          <p className="mt-4 max-w-3xl text-sm text-text-muted">
+            Language details and a sample conversation are on the{' '}
+            <Link to={`/languages/${page.language.toLowerCase()}`} className="font-semibold text-primary underline-offset-4 hover:underline">
+              {page.language} AI voice calling agent
+            </Link>{' '}
+            page.
+          </p>
         </div>
       </section>
 

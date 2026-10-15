@@ -199,6 +199,28 @@ export function LanguageDetail() {
         </section>
       )}
 
+      {lang.sampleLines && (
+        <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
+          <div className="mb-8 max-w-2xl">
+            <SectionEyebrow>Short sample lines</SectionEyebrow>
+            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">How the agent phrases common moments in {lang.name}.</h2>
+            <p className="mt-3 text-sm text-text-muted">
+              Written examples with an English gloss, not recordings. Your own welcome message and prompt set the exact
+              wording.
+            </p>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            {lang.sampleLines.map((line) => (
+              <div key={line.label} className="rounded-2xl border border-border bg-surface p-6">
+                <p className="text-xs font-bold uppercase tracking-widest text-text-muted">{line.label}</p>
+                <p lang={lang.code} className="mt-2 text-base leading-relaxed text-text">{line.native}</p>
+                <p className="mt-1 text-sm italic leading-relaxed text-text-muted">{line.gloss}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {lang.regionalCalls && (
         <section className="mx-auto max-w-7xl px-5 py-12 md:px-8">
           <div className="mb-8 max-w-2xl">

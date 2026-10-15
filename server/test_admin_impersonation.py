@@ -153,6 +153,22 @@ class SupportSessionTests(unittest.TestCase):
         status, body = client.request("POST", f"/admin/impersonate/{self.tenant_aid}")
         self.assertEqual((status, body["detail"]), (403, self.ns["ADMIN_MFA_SIGNIN_REQUIRED"]))
 
+    def test_owner_without_two_step_is_asked_to_enrol_not_locked_out(self):
+        conn = self.db._connect()
+        with conn:
+            conn.execute("UPDATE users SET mfa_enabled_at = NULL WHERE id = ?", (self.admin_uid,))
+        conn.close()
+        try:
+            client = self.login(self.admin_uid, self.admin_aid)
+            status, body = client.request("POST", f"/admin/impersonate/{self.tenant_aid}")
+            self.assertEqual((status, body["detail"]), (403, self.ns["ADMIN_MFA_SETUP_REQUIRED"]))
+            self.assertEqual(client.request("GET", "/contacts")[0], 200, "the dashboard still opens")
+        finally:
+            conn = self.db._connect()
+            with conn:
+                conn.execute("UPDATE users SET mfa_enabled_at = '2026-10-12 00:00:00' WHERE id = ?", (self.admin_uid,))
+            conn.close()
+
     def test_a_teammate_in_the_owner_workspace_is_not_an_admin(self):
         stamp = os.urandom(3).hex()
         conn = self.db._connect()
