@@ -604,6 +604,8 @@ export function Voices() {
           name: hd ? hd.name.replace(/ HD$/, '') : gemini,
           note: `${gemini} · ${v.note.split(' · ')[0]} voice`,
           selected: hd?.selected,
+          // Google's Live API documents 99 languages (checked 2026-10-15).
+          languageCount: 99,
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name))
