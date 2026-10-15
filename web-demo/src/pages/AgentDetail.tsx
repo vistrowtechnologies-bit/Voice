@@ -228,7 +228,7 @@ function AgentEditorForm({
         const live = geminiLiveVoiceName(v.value)!
         const gender = v.gender === 'female' ? 'Female' : v.gender === 'male' ? 'Male' : 'Neutral'
         const tone = style.get(live.toLowerCase())
-        return { value: v.value, label: `${v.name} · ${gender}${tone ? ` · ${tone}` : ''} (Gemini ${live})`, name: v.name }
+        return { value: v.value, label: `${v.name} · ${gender}${tone ? ` · ${tone}` : ''}`, name: v.name }
       })
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [catalog, myVoices])
@@ -360,7 +360,7 @@ function AgentEditorForm({
             label="Model"
             hint={
               isRealtimeModel(form.model)
-                ? 'Speech-to-speech: the model listens and speaks directly, so speech recognition, the AI model and the voice below are bypassed. It speaks with the Gemini voice that has the same name as the voice you pick (for example Aoede). Compare "Reply audio reached caller" in the call diagnostics.'
+                ? 'Speech-to-speech: the model listens and speaks directly, so speech recognition, the AI model and the voice below are bypassed. It speaks in the Live version of the voice you pick. Compare "Reply audio reached caller" in the call diagnostics.'
                 : undefined
             }
           >
@@ -385,7 +385,7 @@ function AgentEditorForm({
               ) : (
                 <>
                   {isRealtimeModel(form.model)
-                    ? 'Realtime lists the Gemini Live voices you have added (Voices → Live tabs); your other voices are greyed out. '
+                    ? 'Realtime lists the Live voices you have added (Voices → Live tabs); your other voices are greyed out. '
                     : null}
                   Only voices you’ve added appear here.{' '}
                   <Link to="/dashboard/voices" className="text-primary hover:underline">
@@ -407,8 +407,8 @@ function AgentEditorForm({
                       <option value={form.voice}>
                         {catalog.find((v) => v.value === form.voice)?.name ?? voiceLabel(form.voice)}
                         {geminiLiveVoiceName(form.voice)
-                          ? ` → speaks as ${geminiLiveVoiceName(form.voice)}`
-                          : ' (not available on realtime, calls use Kore)'}
+                          ? ' → Live voice'
+                          : ' (not available on realtime, calls use Kirti)'}
                       </option>
                     )}
                     <optgroup label={`Your voices for ${modelLabel(form.model)}`}>
@@ -456,9 +456,9 @@ function AgentEditorForm({
                       {group.voices.map((v) => (
                         <option key={v.value} value={v.value}>
                           {v.name}
-                          {/* Realtime speaks as the Gemini voice of the same name: say which. */}
+                          {/* Realtime speaks as the Live voice of the same name. */}
                           {isRealtimeModel(form.model)
-                            ? ` → speaks as ${geminiLiveVoiceName(v.value)}`
+                            ? ' → Live voice'
                             : v.note
                               ? ` - ${v.note}`
                               : ''}
