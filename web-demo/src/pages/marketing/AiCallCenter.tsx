@@ -198,7 +198,11 @@ export function AiCallCenter() {
             <p className="mt-3 text-sm leading-relaxed text-text-muted">
               For new leads, the Instant Lead Follow-up webhook queues a call when a website form, CRM or automation
               tool posts a lead to it. Start outbound with a small list and read the transcripts before widening it;
-              every dial still passes the compliance checks below.
+              every dial still passes the compliance checks below. For lead calls specifically, see the{' '}
+              <Link to="/ai-telecaller" className="font-semibold text-primary underline-offset-4 hover:underline">
+                AI telecaller
+              </Link>{' '}
+              page.
             </p>
           </div>
         </div>

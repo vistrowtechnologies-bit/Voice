@@ -131,6 +131,17 @@ export function SolutionDetail() {
               </Link>
             ))}
           </div>
+          <p className="mt-5 text-sm text-text-muted">
+            For South Indian markets, the language pages add sample lines and regional notes:{' '}
+            <Link to="/languages/kannada" className="font-semibold text-primary underline-offset-4 hover:underline">
+              Kannada AI voice calling agent for Bengaluru
+            </Link>{' '}
+            and{' '}
+            <Link to="/languages/telugu" className="font-semibold text-primary underline-offset-4 hover:underline">
+              Telugu AI voice calling agent for Hyderabad
+            </Link>
+            .
+          </p>
         </section>
       )}
 
