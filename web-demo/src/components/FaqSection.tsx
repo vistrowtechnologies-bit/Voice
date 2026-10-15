@@ -27,7 +27,7 @@ export function FaqSection({
   items,
   eyebrow = 'FAQ',
   title = 'Questions, answered.',
-  intro = 'The things people ask us most. If yours isn’t here, talk to us — a person replies.',
+  intro = 'The things people ask us most. If yours isn’t here, talk to us and a person will reply.',
   contactHref = '/contact',
   contactLabel = 'Ask us directly',
   /** Which item starts open. The first one being open on load shows the

@@ -812,3 +812,25 @@ Branch `claude/seo-p8-sitewide`. It started from `claude/seo-p7` and was rebased
 - The help articles' credit list is missing the Native 0.5× tier. I left it unchanged because `helpArticles.ts` was in PR #109 while this work was done.
 
 **Next:** review the PR against `main` and merge it; it has not been merged yet. There are no server or agent changes, so no worker deploy is needed. After the Vercel deploy, request indexing for `/languages` (its title changed).
+
+### Claude — 2026-10-15 — PR #114 follow-up: no em dashes, AI-tone pass
+
+At the owner's request; same branch and same PR.
+
+**Em dashes**
+- Public pages went from 423 em dashes to 0. The count covers visible text, meta tags, alt text and JSON-LD.
+- Help articles were rewritten in `server/help_articles.py`, and `helpArticles.ts` was regenerated from it.
+- `check-seo-pages.mts` now fails the build if any prerendered public page contains an em dash.
+
+**Tone pass**
+- About 18 "not just X" contrasts and stacked "no X, no Y" triads were rewritten.
+- None of the listed buzzwords appeared in public copy.
+
+**Verified**
+- Build and the SEO route audit.
+- `test:seo` and `check-blog-seo`.
+- `server/test_help*.py`: 43 passed, run with a placeholder `DATABASE_URL`.
+
+**Not changed:** code comments and dashboard-only strings.
+
+**Deploy:** the Vercel build carries the site changes. `help_articles.py` also feeds the dashboard help chat on the server side, so Railway picks up the new wording on its next deploy.

@@ -162,7 +162,7 @@ export function LanguagesOverview() {
               <h3 className="font-display text-base font-semibold">Grammatical gender</h3>
               <p className="mt-2 text-sm leading-relaxed text-text-muted">
                 In Hindi, Marathi, Gujarati, and Punjabi, verbs agree with the speaker’s gender. Artha
-                stays consistent with its own voice for the whole call, not just the first line.
+                stays consistent with its own voice from the first line of the call to the last.
               </p>
             </div>
             <div>
@@ -234,7 +234,7 @@ function TryALanguage() {
             <optgroup label="Indian languages">
               {nativeOptions.map((o) => (
                 <option key={o.code} value={o.code}>
-                  {o.label} — {o.native}
+                  {o.label} ({o.native})
                 </option>
               ))}
             </optgroup>
@@ -242,7 +242,7 @@ function TryALanguage() {
               {globalOptions.map((o) => (
                 <option key={o.code} value={o.code}>
                   {o.label}
-                  {o.native && o.native !== o.label ? ` — ${o.native}` : ''}
+                  {o.native && o.native !== o.label ? ` (${o.native})` : ''}
                 </option>
               ))}
             </optgroup>

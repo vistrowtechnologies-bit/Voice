@@ -26,11 +26,11 @@ TOPICS: list[dict] = [
                 "body": """Vistrow Voice gives your business AI voice agents that answer and place calls in Indian languages, capture leads, book appointments, and log every call with a transcript.
 
 ## Set up in this order
-1. **Agents** — open your agent and set its persona, voice, default language and welcome message.
-2. **Knowledge Base** — add your brochure, price list or FAQs so the agent answers from your facts.
-3. **Testing Lab** — run a few test conversations in the browser before real callers hear it.
-4. **Website Widget** or **Phone Numbers** — put the agent where your customers are.
-5. **Integrations** — send every qualified lead to your CRM, Slack or Google Sheets.
+1. **Agents**: open your agent and set its persona, voice, default language and welcome message.
+2. **Knowledge Base**: add your brochure, price list or FAQs so the agent answers from your facts.
+3. **Testing Lab**: run a few test conversations in the browser before real callers hear it.
+4. **Website Widget** or **Phone Numbers**: put the agent where your customers are.
+5. **Integrations**: send every qualified lead to your CRM, Slack or Google Sheets.
 
 ## Where things are
 - The sidebar groups pages by Platform, Campaigns, Management and Operations; **Help & Support** is pinned at the bottom.
@@ -40,13 +40,13 @@ TOPICS: list[dict] = [
             {
                 "slug": "dashboard-overview",
                 "title": "Read the Dashboard",
-                "summary": "What the Dashboard's numbers mean — and what they count.",
+                "summary": "What the Dashboard's numbers mean and what each one counts.",
                 "body": """The Dashboard summarises calls, leads, minutes and appointments for the period you pick (Week, 14 days or 30 days), compared with the period before.
 
 ## What each figure counts
-- **Qualified** — calls where a caller's name was captured. Website-widget visitors enter their name before the call, so most widget calls count.
-- **Booked** — calls where the caller asked for a date and time. It does not guarantee an entry exists in Appointments; confirmed bookings are listed there.
-- **Minutes** — total call duration in the period.
+- **Qualified**: calls where a caller's name was captured. Website-widget visitors enter their name before the call, so most widget calls count.
+- **Booked**: calls where the caller asked for a date and time. It does not guarantee an entry exists in Appointments; confirmed bookings are listed there.
+- **Minutes**: total call duration in the period.
 
 ## Needs attention
 The cards at the top flag things that affect customers: a CRM that stopped receiving leads, calls that ended before anyone spoke, and finished campaigns. Click a card to go to the page that fixes it.""",
@@ -67,13 +67,13 @@ The cards at the top flag things that affect customers: a CRM that stopped recei
                 "body": """Go to **Agents** → **New Agent** and choose **Build with AI**. Nothing is saved until you click **Create agent**, so you can try it freely.
 
 ## 1. Describe your business
-Write who calls you (or who you call), what they ask, which languages they speak, and what the agent should collect or book — up to 4,000 characters. Not sure what to write? Pick a card under **Or start from an example**. Add your **Business name** and **Website** if you like, then click **Draft my agent** (or press ⌘ + Enter).
+Write who calls you (or who you call), what they ask, which languages they speak, and what the agent should collect or book, in up to 4,000 characters. Not sure what to write? Pick a card under **Or start from an example**. Add your **Business name** and **Website** if you like, then click **Draft my agent** (or press ⌘ + Enter).
 
 ## 2. Answer a few quick questions
 If something isn't clear, the builder asks a few short questions. Tap an answer or type your own. If your description already covers everything, this step is skipped.
 
 ## 3. Review the draft
-The builder writes the instructions, chooses a voice and sets up the fields to fill after every call. Review each section — **Basics**, **Voice & language**, **Instructions**, **Conversation & tools** and **After the call** — edit anything, or click **Regenerate** on one section. Click **Hear the greeting** to listen to the first thing callers hear.
+The builder writes the instructions, chooses a voice and sets up the fields to fill after every call. Review each section (**Basics**, **Voice & language**, **Instructions**, **Conversation & tools** and **After the call**: edit anything, or click **Regenerate** on one section. Click **Hear the greeting** to listen to the first thing callers hear.
 
 ## 4. Create the agent
 Click **Create agent**. Then **Run a test call** to talk to it straight away, or **Open agent** to fine-tune it. Plan limits, voice tiers and models are checked when you create the agent.""",
@@ -83,14 +83,14 @@ Click **Create agent**. Then **Run a test call** to talk to it straight away, or
                 "title": "Create and edit an agent",
                 "video": "create-and-edit-agent",
                 "summary": "Set an agent's voice, language, prompt and greeting.",
-                "body": """Go to **Agents** and click **New Agent**, or **Edit** on an existing card. Every setting lives on the agent's own page; click **Save changes** at the bottom. Changes apply from the next call — no redeploy.
+                "body": """Go to **Agents** and click **New Agent**, or **Edit** on an existing card. Every setting lives on the agent's own page; click **Save changes** at the bottom. Changes apply from the next call, with no redeploy.
 
 ## The main settings
-- **Model** — the AI that holds the conversation. Vistrow Bharat handles Hindi, English and other Indian languages. With a Standard or HD voice it uses 2 credits per minute.
-- **Voice** — only voices added under **Voices** appear here.
-- **Default language** — the language the agent opens in. It follows the caller if they switch.
-- **Welcome message** — separate lines for inbound and outbound calls. Use {{name}}-style variables to personalise them.
-- **System prompt** — the agent's instructions. Leave it blank to use the built-in assistant prompt.
+- **Model**: the AI that holds the conversation. Vistrow Bharat handles Hindi, English and other Indian languages. With a Standard or HD voice it uses 2 credits per minute.
+- **Voice**: only voices added under **Voices** appear here.
+- **Default language**: the language the agent opens in. It follows the caller if they switch.
+- **Welcome message**: separate lines for inbound and outbound calls. Use {{name}}-style variables to personalise them.
+- **System prompt**: the agent's instructions. Leave it blank to use the built-in assistant prompt.
 - **Who speaks first**, **voice delivery**, **emotion intensity**, **noise suppression** and **background ambience** tune how the call sounds.
 
 ## Agent readiness
@@ -110,21 +110,21 @@ Each card shows a readiness score such as 5/6 with the next step to finish, like
 **Call settings** sets the maximum call duration. **Speech settings** controls interruption sensitivity and what the agent does when the caller goes silent.
 
 ## Variables and data extraction
-- **Variables** — define {{variable}} names with fallback values for prompts and greetings.
-- **Post-call data extraction** — fields pulled from every transcript, such as budget or location.""",
+- **Variables**: define {{variable}} names with fallback values for prompts and greetings.
+- **Post-call data extraction**: fields pulled from every transcript, such as budget or location.""",
             },
             {
                 "slug": "agent-webhook-crm-memory",
                 "title": "Webhook, CRM routing and memory",
                 "summary": "Send an agent's events to your systems and recognise returning callers.",
                 "body": """## Webhook
-Add a URL under **Webhook** and this agent's lead, appointment and callback events are posted there as JSON — in addition to the workspace webhook on the Integrations page. The same URL in both places gets one delivery.
+Add a URL under **Webhook** and this agent's lead, appointment and callback events are posted there as JSON, in addition to the workspace webhook on the Integrations page. The same URL in both places gets one delivery.
 
 ## CRM routing
 By default an agent delivers leads to every connected integration. Select specific integrations under **CRM routing** to limit this agent to those.
 
 ## Memory
-Turn on **Memory** and the agent remembers returning callers by phone number — a short summary of past calls — and greets them accordingly.""",
+Turn on **Memory** and the agent remembers returning callers by phone number (a short summary of past calls) and greets them accordingly.""",
             },
         ],
     },
@@ -139,12 +139,12 @@ Turn on **Memory** and the agent remembers returning callers by phone number —
                 "title": "Test an agent before customers do",
                 "video": "testing-lab",
                 "summary": "Run realistic caller scenarios and read the checks.",
-                "body": """**Testing Lab** runs a live conversation with your agent's real configuration in the browser — you play the caller.
+                "body": """**Testing Lab** runs a live conversation with your agent's real configuration in the browser. You play the caller.
 
 1. Pick a situation such as Impatient customer, Angry customer, Silent caller, Hindi-English switching, Noisy background, Booking conflict, Transfer unavailable or Voicemail.
 2. Choose the **Agent under test** and read the caller instructions and expected behaviour.
 3. Click **Start live test** and speak, or type in "Or type here instead".
-4. Review **Latest test result** — opening quality, response length, one question at a time, repeated responses, tool accuracy and cost.
+4. Review **Latest test result**: opening quality, response length, one question at a time, repeated responses, tool accuracy and cost.
 
 Save your own scenario with **Custom regression** to re-run it after every prompt change.""",
             },
@@ -154,7 +154,7 @@ Save your own scenario with **Custom regression** to re-run it after every promp
                 "summary": "Talk or type to an agent in one click.",
                 "body": """On **Agents**, each card has a **Browser test** button (microphone) and a **Call test** button (phone).
 
-- **Browser test** opens a live call in the page. Speak, or type in "Or type here instead" — typed messages reach the agent exactly like speech.
+- **Browser test** opens a live call in the page. Speak, or type in "Or type here instead". Typed messages reach the agent exactly like speech.
 - **Call test** rings a phone number so you hear the agent on a real line.
 
 Test calls appear in **All Calls History** with a **Dashboard test** badge.""",
@@ -174,9 +174,9 @@ Test calls appear in **All Calls History** with a **Dashboard test** badge.""",
                 "body": """**Voices** lists every voice by tier. Preview any voice in Hindi or English with **Listen**.
 
 ## Tiers and credits
-- **Vistrow Expressive** — most expressive; switches language mid-call; 2× credits.
-- **Premium** — natural conversational voices; 2× credits.
-- **Standard** — 1× credits.
+- **Vistrow Expressive**: most expressive; switches language mid-call; 2× credits.
+- **Premium**: natural conversational voices; 2× credits.
+- **Standard**: 1× credits.
 
 ## Add a voice to your agents
 Click **Add to my voices**. Only added voices appear in an agent's **Voice** picker; **Remove** takes a voice out of the picker.""",
@@ -195,7 +195,7 @@ Click **Add to my voices**. Only added voices appear in an agent's **Voice** pic
                 "video": "knowledge-base",
                 "summary": "Upload documents, approve Q&A pairs and use strict mode.",
                 "body": """1. Go to **Knowledge Base** and click **Create Knowledge Base**.
-2. **Add source** — upload a brochure, price sheet or handbook, or paste text.
+2. **Add source**: upload a brochure, price sheet or handbook, or paste text.
 3. Click **Auto-extract Q&A** to turn it into question–answer pairs, then review and edit them. You can also **Add Q&A pair** by hand.
 4. Attach the knowledge base to an agent under **Agents → Knowledge base**.
 
@@ -207,7 +207,7 @@ Click **Add to my voices**. Only added voices appear in an agent's **Voice** pic
                 "slug": "live-catalog",
                 "title": "Live catalog",
                 "summary": "Structured products, listings or plans the agent can look up.",
-                "body": """The **Live catalog** holds structured items — products, services, property listings, menus or plans. Only a compact index is loaded into the call; the agent looks up full details (price, availability, specifications) when a caller asks, so a large catalog doesn't slow calls down.
+                "body": """The **Live catalog** holds structured items: products, services, property listings, menus or plans. Only a compact index is loaded into the call; the agent looks up full details (price, availability, specifications) when a caller asks, so a large catalog doesn't slow calls down.
 
 Only agents you explicitly enable can use the catalog.""",
             },
@@ -228,9 +228,9 @@ Only agents you explicitly enable can use the catalog.""",
 
 ## Schedule & rules
 - **Timezone**, **Start date** and **End date**.
-- **Call window start / end** — leave blank to answer at any time.
-- **Active days** — for example Mon–Sat only.
-- **Max concurrent calls** — how many calls this number takes at once.
+- **Call window start / end**: leave blank to answer at any time.
+- **Active days**: for example Mon–Sat only.
+- **Max concurrent calls**: how many calls this number takes at once.
 
 Calls outside the window or days, or beyond the limit, are not answered by the agent. Edit or delete a route under **Saved routes**.""",
             },
@@ -299,7 +299,7 @@ Click a caller to open details: the full transcript, recording playback and down
                 "slug": "phone-number-format",
                 "title": "How phone numbers are read",
                 "summary": "Why numbers become +91… and how to change the country.",
-                "body": """Every number is stored in full international format, for example **+918080197945**, however it was typed — "8080197945", "08080 197945" and "+91 80801 97945" are the same person.
+                "body": """Every number is stored in full international format, for example **+918080197945**, however it was typed: "8080197945", "08080 197945" and "+91 80801 97945" are the same person.
 
 A number typed without a country code is read in your workspace's country. Change it in **Settings → Workspace details → Country** (owners and admins). The same rule applies to contacts, campaigns, the Do-Not-Call list and phone fields across the dashboard.""",
             },
@@ -317,7 +317,7 @@ A number typed without a country code is read in your workspace's country. Chang
                 "summary": "See, create and update bookings; set bookable hours.",
                 "body": """**Appointments** shows bookings made by your agents or your team, in **Calendar** or **List** view. Filter by source (Agent or Manual) and status.
 
-- **New Appointment** — pick a free slot and book it.
+- **New Appointment**: pick a free slot and book it.
 - Open a booking to reschedule it or mark it confirmed, completed, cancelled or no-show.
 
 ## Bookable hours
@@ -337,14 +337,14 @@ Agents only offer slots inside your hours. Set business hours per day, slot leng
                 "summary": "Connect Zoho, ArthaLeads, Slack, Sheets or a webhook.",
                 "body": """Go to **Integrations** and click **Connect** on a card. Connected integrations receive every qualified lead in real time.
 
-- **Zoho CRM** and **ArthaLeads CRM** — leads go straight into your CRM.
-- **CRM / Webhook** — every lead posted as JSON to any URL (Zapier, n8n, Make).
-- **Slack** and **Google Sheets** — alerts and a lead sheet.
+- **Zoho CRM** and **ArthaLeads CRM**: leads go straight into your CRM.
+- **CRM / Webhook**: every lead posted as JSON to any URL (Zapier, n8n, Make).
+- **Slack** and **Google Sheets**: alerts and a lead sheet.
 
 To call new leads from ad forms the moment they arrive, send them to the **Instant Lead Follow-up** webhook (see "Call new leads within seconds").
 
 ## Check it's working
-Each card shows its status, last sync and any error; use **Send test** where offered. If deliveries start failing, the Dashboard flags it and — if enabled in your preferences — you get an email.""",
+Each card shows its status, last sync and any error; use **Send test** where offered. If deliveries start failing, the Dashboard flags it and, if enabled in your preferences, you get an email.""",
             },
             {
                 "slug": "instant-lead-follow-up",
@@ -352,7 +352,7 @@ Each card shows its status, last sync and any error; use **Send test** where off
                 "summary": "Use the Instant Lead Follow-up webhook.",
                 "body": """**Integrations → Instant Lead Follow-up** gives you a private URL. POST a lead to it and a call is queued within about 15–30 seconds.
 
-It works with any source that can send a webhook: a form on your website, your CRM, or an automation tool such as Zapier, Make or n8n. Every queued call still follows your Compliance rules — Do-Not-Call and calling window.""",
+It works with any source that can send a webhook: a form on your website, your CRM, or an automation tool such as Zapier, Make or n8n. Every queued call still follows your Compliance rules: Do-Not-Call and calling window.""",
             },
         ],
     },
@@ -369,7 +369,7 @@ It works with any source that can send a webhook: a form on your website, your C
                 "summary": "Create a site, pick an agent, and embed the widget.",
                 "body": """1. Go to **Website Widget** → **Add your website**. Name it, pick the **Agent**, the corner, and the button label.
 2. Copy the embed snippet (or use the WordPress plugin) onto your site.
-3. Visitors click the button and talk to your agent in the browser — no phone needed.
+3. Visitors click the button and talk to your agent in the browser. No phone is needed.
 
 Each site has its own key and its own call history; filter the Calls page by site. **Regenerate key** if a key is exposed.
 
@@ -380,7 +380,7 @@ Choose the animated **Orb** or **Artha**, the waving presenter, as the button's 
                 "slug": "page-rules",
                 "title": "Different agents on different pages",
                 "summary": "Page rules route pages to agents with their own greeting.",
-                "body": """**Page rules** send visitors on matching pages to a different agent, with an optional greeting and avatar — for example, a property page routed to an agent that only knows that listing.
+                "body": """**Page rules** send visitors on matching pages to a different agent, with an optional greeting and avatar. For example, a property page routed to an agent that only knows that listing.
 
 Each rule saves the moment you click **Add rule**. **Save changes** lower on the page only saves the site's main settings. Type a real value in **URL contains** before adding a rule.""",
             },
@@ -430,10 +430,10 @@ Click **Save rules** after changing anything.""",
                 "slug": "consent-recording-retention",
                 "title": "Consent, recording and data retention",
                 "summary": "Spoken consent, call recording and how long data is kept.",
-                "body": """- **Require spoken consent** — the agent's first reply asks the caller whether it's okay that the call is recorded (if recording is on) and their details are used to follow up. The answer is saved on the call. If they decline, or leave before answering, the recording is discarded and the agent does not collect personal details.
-- **Record calls** — store call audio alongside transcripts.
-- **Announce recording and AI** — on by default. While recording is on, the agent's opening line says the call is recorded and that the caller is speaking with an AI assistant, in Hindi for Hindi agents and in English for every other language. You can write your own wording (one short sentence) or turn it off. If your welcome message already mentions recording, nothing is added.
-- **Data retention (days)** — transcripts and recordings older than this are deleted automatically each day. 0 keeps them indefinitely.""",
+                "body": """- **Require spoken consent**: the agent's first reply asks the caller whether it's okay that the call is recorded (if recording is on) and their details are used to follow up. The answer is saved on the call. If they decline, or leave before answering, the recording is discarded and the agent does not collect personal details.
+- **Record calls**: store call audio alongside transcripts.
+- **Announce recording and AI**: on by default. While recording is on, the agent's opening line says the call is recorded and that the caller is speaking with an AI assistant, in Hindi for Hindi agents and in English for every other language. You can write your own wording (one short sentence) or turn it off. If your welcome message already mentions recording, nothing is added.
+- **Data retention (days)**: transcripts and recordings older than this are deleted automatically each day. 0 keeps them indefinitely.""",
             },
         ],
     },
@@ -449,8 +449,8 @@ Click **Save rules** after changing anything.""",
                 "summary": "Credits per minute, by channel, voice tier and model.",
                 "body": """Credits = call minutes × channel rate × voice multiplier × model multiplier.
 
-- **Voice tiers** — Standard 1×, Premium 2×, Vistrow Expressive 2×.
-- **Model tiers** — Standard 1×, Premium 2×, Premium Plus 4×.
+- **Voice tiers**: Standard 1×, Premium 2×, Vistrow Expressive 2×.
+- **Model tiers**: Standard 1×, Premium 2×, Premium Plus 4×.
 
 **Billing** shows your remaining credits and minutes used this cycle. **Usage** (under Monitor) breaks credits down by day, channel, agent, voice tier, model tier, direction and phone number for any date range, and lists the most expensive calls. Each call's details show the exact credits it used. If you enable low-credit emails in your preferences, you're emailed when credits drop below 10% of your allocation.""",
             },
@@ -458,11 +458,11 @@ Click **Save rules** after changing anything.""",
                 "slug": "plans",
                 "title": "Plans",
                 "summary": "What Starter, Growth and Scale include.",
-                "body": """- **Starter** — ₹2,999/month + GST: 300 credits, 1 AI agent, a knowledge base with approved answers.
-- **Growth** — ₹5,999/month: 1,000 credits, 5 AI agents, inbound + outbound campaigns, CRM webhook integration, agent-assigned live catalog.
-- **Scale** — ₹12,999/month: 2,500 credits, 20 AI agents, full API access.
+                "body": """- **Starter**: ₹2,999/month + GST: 300 credits, 1 AI agent, a knowledge base with approved answers.
+- **Growth**: ₹5,999/month: 1,000 credits, 5 AI agents, inbound + outbound campaigns, CRM webhook integration, agent-assigned live catalog.
+- **Scale**: ₹12,999/month: 2,500 credits, 20 AI agents, full API access.
 
-Online payments and self-service plan changes aren't available yet — contact us to change plans or add credits.""",
+Online payments and self-service plan changes aren't available yet. Contact us to change plans or add credits.""",
             },
         ],
     },
@@ -476,18 +476,18 @@ Online payments and self-service plan changes aren't available yet — contact u
                 "slug": "workspace-and-team",
                 "title": "Workspace, country and team",
                 "summary": "Company name, phone-number country, and inviting teammates.",
-                "body": """- **Workspace details** — the company name shown across the dashboard and the **Country** your phone numbers belong to (owners and admins).
-- **Team & roles** — **Invite member** by email and give them a role: Owner, Admin, Member or Viewer.
-- **Scheduling** — business hours, slot length, timezone and blackout dates for bookings.""",
+                "body": """- **Workspace details**: the company name shown across the dashboard and the **Country** your phone numbers belong to (owners and admins).
+- **Team & roles**: **Invite member** by email and give them a role: Owner, Admin, Member or Viewer.
+- **Scheduling**: business hours, slot length, timezone and blackout dates for bookings.""",
             },
             {
                 "slug": "notifications-and-privacy",
                 "title": "Email notifications, security and your data",
                 "summary": "Choose alert emails, secure sign-in, export or delete data.",
                 "body": """## Preferences → Notifications (per person)
-- **Qualified leads** — an email when your agents capture new leads, grouped every couple of minutes.
-- **Delivery issues** — when a connected CRM or integration stops receiving your leads.
-- **Low credits** — when credits drop below 10% of your allocation.
+- **Qualified leads**: an email when your agents capture new leads, grouped every couple of minutes.
+- **Delivery issues**: when a connected CRM or integration stops receiving your leads.
+- **Low credits**: when credits drop below 10% of your allocation.
 
 ## Sign-in & security
 Change your password and review account protection.
@@ -508,10 +508,10 @@ Change your password and review account protection.
                 "title": "Ask Artha Copilot",
                 "video": "copilot",
                 "summary": "Ask questions about your workspace, or have it make a change after you confirm.",
-                "body": """Click the **Artha** button in the bottom-right corner of any dashboard page. **Artha Copilot** reads your live workspace — calls, leads, agents, bookings, credits and integrations. Tap a suggested question or type your own, for example **Who are my hottest leads right now?** (it lists your most recent qualified calls).
+                "body": """Click the **Artha** button in the bottom-right corner of any dashboard page. **Artha Copilot** reads your live workspace: calls, leads, agents, bookings, credits and integrations. Tap a suggested question or type your own, for example **Who are my hottest leads right now?** (it lists your most recent qualified calls).
 
 ## Ask it to make a change
-On Growth plans, Copilot can also act for you. It prepares the action and shows a **Needs your confirmation** card — nothing changes until you click **Confirm**. **Cancel** leaves everything as it is.
+On Growth plans, Copilot can also act for you. It prepares the action and shows a **Needs your confirmation** card. Nothing changes until you click **Confirm**. **Cancel** leaves everything as it is.
 
 It can:
 - Pause an agent or put it live
@@ -528,12 +528,12 @@ It can:
                 "slug": "contact-support",
                 "title": "Contact support and track your request",
                 "summary": "Raise a request with screenshots and follow every reply.",
-                "body": """Go to **Help & Support** → **Submit a request**. Choose what it's about and how urgent it is, describe what happened, and add screenshots — drag them in, browse, or paste one with ⌘V / Ctrl+V (up to 3 files, 5 MB each).
+                "body": """Go to **Help & Support** → **Submit a request**. Choose what it's about and how urgent it is, describe what happened, and add screenshots: drag them in, browse, or paste one with ⌘V / Ctrl+V (up to 3 files, 5 MB each).
 
 ## After you submit
 - You get a confirmation email with your request number, such as VV-12.
 - **Your requests** shows each request as **Open** (we're working on it), **Awaiting your reply** (we've answered) or **Solved**.
-- Replies arrive by email and in the notification bell. Reply from the request page — add details or more screenshots any time.
+- Replies arrive by email and in the notification bell. Reply from the request page to add details or more screenshots at any time.
 - **Mark as solved** when you're done; replying later reopens it. You can rate the help you got once it's solved.
 
 Screenshots and files on a solved request are deleted after 14 days; the conversation itself stays.

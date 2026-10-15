@@ -615,9 +615,9 @@ export const SOLUTIONS: Solution[] = [
     ],
     features: ['Appointment booking', 'Reminder calls', 'FAQ answering', 'Call triage'],
     scenarios: [
-      { label: 'Patient with symptoms', callerLine: '“मेरे पेट में बहुत दर्द है—किस डॉक्टर को दिखाऊँ?”', agentAction: 'Acknowledges the concern, checks whether it sounds urgent and routes to the relevant clinic service without diagnosing.', outcome: 'Appropriate next step with safety kept ahead of scheduling.' },
+      { label: 'Patient with symptoms', callerLine: '“मेरे पेट में बहुत दर्द है, किस डॉक्टर को दिखाऊँ?”', agentAction: 'Acknowledges the concern, checks whether it sounds urgent and routes to the relevant clinic service without diagnosing.', outcome: 'Appropriate next step with safety kept ahead of scheduling.' },
       { label: 'Find a doctor', callerLine: '“General physician कब available हैं?”', agentAction: 'Uses verified clinic information, asks for the preferred day and checks live availability instead of reading a directory.', outcome: 'Two or three relevant appointment choices.' },
-      { label: 'Book or reschedule', callerLine: '“कल दो बजे का appointment कर दीजिए.”', agentAction: 'Collects patient name, phone and visit reason, verifies the exact slot and confirms only after it is saved.', outcome: 'A traceable appointment—not a verbal promise.' },
+      { label: 'Book or reschedule', callerLine: '“कल दो बजे का appointment कर दीजिए.”', agentAction: 'Collects patient name, phone and visit reason, verifies the exact slot and confirms only after it is saved.', outcome: 'A traceable appointment instead of a verbal promise.' },
     ],
     workflow: [
       { icon: 'hearing', title: 'Listen to the concern', body: 'Capture the reason for calling before suggesting a doctor or appointment.' },
@@ -709,7 +709,7 @@ export const SOLUTIONS: Solution[] = [
     scenarios: [
       { label: 'Track an order', callerLine: '“Order NV-1042 अभी कहाँ है?”', agentAction: 'Looks up the supplied sample order, states the latest verified status and avoids guessing a delivery promise.', outcome: 'Clear order status with the next useful action.' },
       { label: 'Damaged delivery', callerLine: '“Package खुला था और product damaged है.”', agentAction: 'Acknowledges the inconvenience, collects the order reference and explains the applicable replacement path first.', outcome: 'Structured damage case ready for resolution.' },
-      { label: 'Return or exchange', callerLine: '“Size गलत है—return कैसे होगा?”', agentAction: 'Checks the store’s approved policy, confirms eligibility and records the requested resolution.', outcome: 'Return or exchange intent captured without policy improvisation.' },
+      { label: 'Return or exchange', callerLine: '“Size गलत है, return कैसे होगा?”', agentAction: 'Checks the store’s approved policy, confirms eligibility and records the requested resolution.', outcome: 'Return or exchange intent captured without policy improvisation.' },
     ],
     workflow: [
       { icon: 'receipt_long', title: 'Identify the order', body: 'Capture the order reference and understand status, damage, return or product intent.' },
@@ -888,7 +888,7 @@ export const SOLUTIONS: Solution[] = [
     scenarios: [
       { label: 'Reset email missing', callerLine: '“Password reset email अभी तक नहीं आया.”', agentAction: 'Acknowledges the failed attempt, checks the simple causes one at a time and avoids making the caller repeat themselves.', outcome: 'Resolved step or a clean escalation with attempted actions.' },
       { label: 'Billing question', callerLine: '“मेरे invoice में extra charge क्यों है?”', agentAction: 'Uses approved billing information, explains what is known and escalates account-specific disputes safely.', outcome: 'A categorized billing case with exact caller concern.' },
-      { label: 'Escalate an issue', callerLine: '“मैं ये तीन बार try कर चुका हूँ—person से connect करो.”', agentAction: 'Stops repeating tier-one steps and hands off the full conversation and troubleshooting history.', outcome: 'Human escalation without restarting the story.' },
+      { label: 'Escalate an issue', callerLine: '“मैं ये तीन बार try कर चुका हूँ, person से connect करो.”', agentAction: 'Stops repeating tier-one steps and hands off the full conversation and troubleshooting history.', outcome: 'Human escalation without restarting the story.' },
     ],
     workflow: [
       { icon: 'hearing', title: 'Understand the failure', body: 'Capture what is broken and what the caller already tried.' },
@@ -1187,7 +1187,7 @@ export const LANGUAGES: LanguagePage[] = [
     ],
     seoFaq: {
       q: 'Is this a Hindi voice bot or a real AI phone calling agent?',
-      a: 'It is a real AI phone calling agent: it speaks, listens, qualifies the caller, answers approved questions, and logs the conversation. It is not just a recorded Hindi IVR or a translated chatbot.',
+      a: 'It is a real AI phone calling agent: it speaks, listens, qualifies the caller, answers approved questions, and logs the conversation. That makes it different from a recorded Hindi IVR or a translated chatbot.',
     },
     sampleExchange: {
       context: 'An outbound EMI reminder call',

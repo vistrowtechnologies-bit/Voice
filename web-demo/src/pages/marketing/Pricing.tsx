@@ -10,7 +10,7 @@ import { PLANS, SHARED_PLAN_FEATURES, planHighlights } from '../../lib/plans'
 const FAQ = [
   {
     q: 'What is a credit?',
-    a: 'A credit pays for conversation time. With the AI model you can choose today (Vistrow Bharat) and a Standard or HD voice, one minute of a call uses 2 credits, on the browser widget and on phone calls alike — telephony is billed separately by whichever provider you connect. A Vistrow Native voice uses 1 credit a minute, and a Premium voice uses twice the Standard rate. Both channels draw from the same monthly pool.',
+    a: 'A credit pays for conversation time. With the AI model you can choose today (Vistrow Bharat) and a Standard or HD voice, one minute of a call uses 2 credits, on the browser widget and on phone calls alike. Telephony is billed separately by whichever provider you connect. A Vistrow Native voice uses 1 credit a minute, and a Premium voice uses twice the Standard rate. Both channels draw from the same monthly pool.',
   },
   {
     q: 'Which languages are supported?',
@@ -138,7 +138,7 @@ export function Pricing() {
             </p>
           </div>
           <div>
-            <h3 className="font-display text-base font-semibold">Pick capacity, not just minutes</h3>
+            <h3 className="font-display text-base font-semibold">Check capacity as well as minutes</h3>
             <p className="mt-2 text-sm leading-relaxed text-text-muted">
               Plans also differ in the number of agents, concurrent calls and features such as{' '}
               <Link to="/product/outbound" className="font-semibold text-primary hover:underline">outbound campaigns</Link>,{' '}

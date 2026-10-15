@@ -153,7 +153,7 @@ export function DemoCall() {
       </section>
 
       <FaqSection items={call.faqs} />
-      <CTABand title="Want this with your own call script?" subtitle="Send us your industry, language, lead fields, and CRM destination — we’ll configure a live test flow." />
+      <CTABand title="Want this with your own call script?" subtitle="Send us your industry, language, lead fields, and CRM destination, and we’ll configure a live test flow." />
     </MarketingLayout>
   )
 }

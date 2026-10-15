@@ -172,7 +172,7 @@ export const SEO_PAGES: SeoPage[] = [
   page(
     '/product/widget',
     'AI Voice Website Widget | Vistrow Voice',
-    'Add a real-time multilingual AI voice conversation to any website with one script or the WordPress plugin—no phone number or app required.',
+    'Add a real-time multilingual AI voice conversation to any website with one script or the WordPress plugin. No phone number or app required.',
     'product-widget',
     'Vistrow Voice AI website calling widget with the real Artha orb',
     'product',
@@ -393,9 +393,9 @@ export const SEO_PAGES: SeoPage[] = [
       page(
         `/help/${t.slug}/${a.slug}`,
         `${a.title} | Vistrow Voice Help`,
-        `${a.summary} A step-by-step Vistrow Voice guide for ${t.title.toLowerCase()} — AI voice agents for Indian businesses.`.slice(0, 158),
+        `${a.summary} A step-by-step Vistrow Voice guide for ${t.title.toLowerCase()}, for AI voice agents in Indian businesses.`.slice(0, 158),
         'docs',
-        `${a.title} — Vistrow Voice help article`,
+        `${a.title} | Vistrow Voice help article`,
         'docs',
         a.title,
       ),

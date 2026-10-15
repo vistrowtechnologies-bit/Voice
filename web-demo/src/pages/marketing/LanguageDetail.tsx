@@ -93,7 +93,7 @@ export function LanguageDetail() {
           </div>
           <div className="rounded-2xl border border-border bg-surface p-7 text-center">
             <p className="font-display text-2xl font-bold">24/7</p>
-            <p className="mt-3 text-sm text-text-muted">No shift, no hold music, no voicemail</p>
+            <p className="mt-3 text-sm text-text-muted">Answers outside office hours too</p>
           </div>
         </div>
       </section>
@@ -106,8 +106,8 @@ export function LanguageDetail() {
               Built for teams that take calls in {lang.name}.
             </h2>
             <p className="mt-4 leading-relaxed text-text-muted">
-              This page is for teams that need a real {lang.name} AI voice calling agent on live calls — not a
-              translated chatbot, not an IVR recording, and not a human queue that only works during office hours.
+              This page is for teams that need a real {lang.name} AI voice calling agent that answers live calls at
+              any hour, rather than a translated chatbot or a recorded IVR menu.
             </p>
           </div>
 

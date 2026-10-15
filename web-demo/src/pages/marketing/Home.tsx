@@ -85,7 +85,7 @@ const BHARAT_POINTS = [
   },
   {
     glyph: '🎭',
-    title: 'A voice that reacts, not just replies',
+    title: 'A voice that reacts to the caller',
     body: 'Built by an Indian team, tuned for Indian callers: Artha reads frustration, confusion, or excitement in your caller’s voice and shifts its own pace and warmth to match - live, mid-call, not a flat text-to-speech read.',
   },
 ]
@@ -137,7 +137,7 @@ export function Home() {
         className="independence-ribbon flex w-full items-center justify-center gap-2 px-4 py-2.5 text-center text-xs font-semibold text-text sm:text-sm"
       >
         <span className="ribbon-tricolour" aria-hidden="true"><i /><i /><i /></span>
-        <span>Hear Artha switch language mid-call — talk to her live, no signup needed</span>
+        <span>Hear Artha switch language mid-call. Talk to her live, no signup needed</span>
         <Icon name="arrow_forward" className="text-[16px]" />
       </button>
       {/* ---------- Hero ---------- */}
@@ -294,8 +294,8 @@ export function Home() {
                     </span>
                   </div>
                   <p className="mt-3 text-sm leading-relaxed text-text-muted">
-                    From Punjabi in the north to Malayalam in the south, one agent covers them all - no
-                    separate deployment, no per-language rebuild, no region left on an English-only fallback.
+                    From Punjabi in the north to Malayalam in the south, one agent covers them all,
+                    without a separate deployment for each language.
                   </p>
                   <Link
                     to="/languages"

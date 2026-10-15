@@ -247,7 +247,7 @@ export const COMPARE_EXTRAS: Record<string, CompareExtra> = {
     steps: [
       'Pick one narrow call type, such as after-hours enquiries or missed-call callbacks, and leave everything else untouched.',
       'Write 20 realistic test calls, including a wrong number, an interruption and a question the agent should not answer.',
-      'Run the same calls against each option and compare the records, not just the audio.',
+      'Run the same calls against each option and compare the records as well as the audio.',
       'Route one line or one time window to the voice agent, keep a transfer number for hand-offs, and read the first week of transcripts before widening.',
     ],
     extraFaqs: [

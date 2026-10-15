@@ -279,3 +279,36 @@ All content added is page-specific. Nothing was padded with templated filler.
   - `/ai-voice-bot-pricing-india`, a blog article, `/careers`, a compare page, a language page
 
   The pricing credit table scrolls inside its own box.
+
+## Follow-up: em dashes and AI-style tone (owner request, same day)
+
+**Em dashes**
+- Built public pages went from 423 em dashes to 0, counting visible text, meta tags, alt text and JSON-LD.
+  - Before the fix they appeared on 91 pages.
+  - The coordinator's count, visible text only, was 226 dashes across 85 pages.
+- Each dash was rewritten with a full stop, comma, colon or brackets:
+  - help article labels change from `**Model** — ...` to `**Model**: ...`;
+  - the demo language list now reads `Hindi (हिन्दी)`;
+  - help page titles now end in `| Vistrow Voice help article`;
+  - Hindi sample lines use a comma.
+- Help articles were edited in `server/help_articles.py` and then regenerated with `export_help_articles.py`.
+- Left unchanged: code comments and dashboard-only strings (support ticket UI, agent test call status, the noise-suppression option).
+
+**New build check**
+- `scripts/check-seo-pages.mts` now fails the build on any em dash in a prerendered public page. It checks visible text, meta tags and JSON-LD, and skips executable scripts and styles.
+- Negative test: an em dash injected into a built page made the build fail, as intended.
+
+**Tone pass**
+- None of the listed buzzwords (seamless, leverage, unlock, robust and so on) appear in public copy.
+- "Not just X" contrasts and stacked "no X, no Y, no Z" triads were rewritten as plain sentences in:
+  - the BuyerGuide heading
+  - the Home "reacts, not just replies" card and the triad on the Home language card
+  - `/languages`
+  - the pricing card heading
+  - `/voice-ai-platform` and `/voice-bot`
+  - "No shift, no hold music, no voicemail" on the language pages
+  - two sentences on `/resources/docs`
+  - the Hindi language FAQ
+  - one comparison step
+  - four blog sentences or headings
+  - `LanguageDetail`: "not a translated chatbot, not an IVR recording, and not a human queue"

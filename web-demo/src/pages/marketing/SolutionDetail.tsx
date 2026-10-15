@@ -48,7 +48,7 @@ export function SolutionDetail() {
         className="independence-ribbon flex w-full items-center justify-center gap-2 px-4 py-2.5 text-center text-xs font-semibold text-text sm:text-sm"
       >
         <span className="ribbon-tricolour" aria-hidden="true"><i /><i /><i /></span>
-        <span>Try a real {solution.label} call with Artha — no signup required</span>
+        <span>Try a real {solution.label} call with Artha, no signup required</span>
         <Icon name="arrow_forward" className="text-[16px]" />
       </button>
 
@@ -99,7 +99,7 @@ export function SolutionDetail() {
               accentHue={solution.demoAccentHue}
             />
             <p className="mx-auto max-w-[420px] text-center text-xs text-text-muted lg:mx-0 lg:ml-auto">
-              You’ll be talking to <span className="font-semibold text-text">{solution.demoBusiness}</span> — a
+              You’ll be talking to <span className="font-semibold text-text">{solution.demoBusiness}</span>, a
               demo business we made up, answered live by Artha. {solution.demoPrompt}
             </p>
           </div>
@@ -155,7 +155,7 @@ export function SolutionDetail() {
             Don’t watch a generic demo. Test the work.
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-text-muted">
-            Pick a situation your team handles today, then say the sample line—or use your own words. Artha stays in role as {solution.demoBusiness}.
+            Pick a situation your team handles today, then say the sample line or use your own words. Artha stays in role as {solution.demoBusiness}.
           </p>
         </div>
 

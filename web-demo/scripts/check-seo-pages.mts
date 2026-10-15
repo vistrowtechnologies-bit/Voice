@@ -34,6 +34,17 @@ for (const page of SEO_PAGES.filter((entry) => !entry.noindex)) {
   if (canonical !== `${SEO_ORIGIN}${page.path === '/' ? '/' : page.path}`) failures.push(`${page.path}: canonical mismatch (${canonical ?? 'missing'})`)
   if (h1Count !== 1) failures.push(`${page.path}: expected exactly one prerendered H1, found ${h1Count}`)
 
+  // House style: no em dashes in public copy (owner request, 2026-10-15).
+  // Checks the visible text, meta tags and JSON-LD; executable scripts and
+  // styles are skipped. Rewrite with a full stop, comma, colon or brackets.
+  const publicText = html
+    .replace(/<script(?![^>]*application\/ld\+json)[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+  for (const match of publicText.matchAll(/\u2014/g)) {
+    const at = match.index ?? 0
+    failures.push(`${page.path}: em dash in public text: "${publicText.slice(Math.max(0, at - 50), at + 50).replace(/\s+/g, ' ')}"`)
+  }
+
   for (const match of html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)) {
     const href = match[1]
     if (!href.startsWith('/')) continue
