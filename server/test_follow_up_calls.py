@@ -174,8 +174,10 @@ class DatabaseBacked(unittest.TestCase):
         self.assertEqual(url, integrations_dispatch._ARTHALEADS_URL)
         self.assertEqual(body["crm_outcome"], {"booking": "Not Reachable", "attempts": 3})
         self.assertEqual(body["arthaleads_lead_id"], "L1")
+        # A numeric call_id, or ArthaLeads files it as a new lead instead of
+        # a call result; negative so it can never collide with a real call.
         self.assertEqual((body["token"], body["name"], body["phone"], body["direction"], body["call_id"]),
-                         ("tok", "Priya", "+919812300011", "outbound", None))
+                         ("tok", "Priya", "+919812300011", "outbound", -spent))
         self.assertEqual(body["agent_name"], "Siya")
         self.assertIn("3 call attempt", body["message"])
 

@@ -615,7 +615,12 @@ def report_contact_not_reachable(account_id: int, contact: dict) -> tuple[bool, 
             "channel": "phone",
             "agent_name": (agent or {}).get("name") or "",
             "agent_id": calls_db.agent_public_id(contact.get("agent_id")),
-            "call_id": None,
+            # ArthaLeads keys a call on a numeric call_id and treats a null
+            # one as a plain lead (new row, 2-minute dedupe, no attempts).
+            # No call row exists for an undelivered dial, so the report gets
+            # a synthetic id: the negated contact id, unique per contact and
+            # never equal to a real (positive) call id.
+            "call_id": -int(contact["id"]),
             "arthaleads_lead_id": str(fields.get("arthaleads_lead_id") or ""),
             "direction": "outbound",
             "crm_outcome": outcome,
