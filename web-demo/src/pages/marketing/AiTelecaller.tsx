@@ -47,7 +47,7 @@ const RULES = [
   {
     icon: 'schedule',
     title: 'Calling window',
-    body: 'With the calling window enforced, dials outside your permitted hours and days are blocked automatically, in the contact’s timezone.',
+    body: 'With the calling window enforced, dials outside your permitted hours and days are blocked automatically, using your account’s timezone.',
   },
   {
     icon: 'history',

@@ -234,7 +234,7 @@ export const PRODUCT_DETAIL: Record<
         items: [
           { icon: 'event_repeat', title: 'Retries', body: 'Set a maximum number of attempts and a gap between them, with separate rules for busy lines and voicemail if you want them.' },
           { icon: 'speed', title: 'Concurrency and pace', body: 'Choose how many calls run at once and an optional limit on attempts per minute. The channel limit on your telephony account is the real ceiling.' },
-          { icon: 'schedule', title: 'Calling window', body: 'TRAI norms limit unsolicited calls to 9am to 9pm, Monday to Saturday. With the calling window enforced, dials outside your hours and days are blocked in the callee’s timezone.' },
+          { icon: 'schedule', title: 'Calling window', body: 'TRAI norms limit unsolicited calls to 9am to 9pm, Monday to Saturday. With the calling window enforced, dials outside your hours and days are blocked, using your account’s timezone.' },
           { icon: 'data_object', title: 'Variables', body: 'Use {{name}}-style variables in the welcome message and prompt so each call carries the contact’s own details.' },
           { icon: 'block', title: 'Do-Not-Call', body: 'Add numbers by hand or in bulk. When a caller asks not to be called again, the agent adds them itself.' },
           { icon: 'bolt', title: 'Instant lead follow-up', body: 'A private webhook queues a call within about 15 to 30 seconds of a new lead arriving, still subject to your compliance rules.', to: '/help/integrations/instant-lead-follow-up', link: 'How it works' },

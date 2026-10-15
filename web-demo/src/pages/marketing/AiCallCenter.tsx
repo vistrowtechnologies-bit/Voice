@@ -23,7 +23,7 @@ const COMPLIANCE = [
   {
     icon: 'schedule',
     title: 'Calling window',
-    body: 'With the calling window enforced, outbound dials outside your permitted hours and days are blocked automatically, in the callee’s timezone.',
+    body: 'With the calling window enforced, outbound dials outside your permitted hours and days are blocked automatically, using your account’s timezone.',
   },
   {
     icon: 'block',
