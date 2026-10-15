@@ -128,12 +128,13 @@ class SignupAgeGate(unittest.TestCase):
             "disposable_email": SimpleNamespace(is_disposable=lambda e: False),
             "auth": SimpleNamespace(hash_password=lambda p: "hash"), "html": __import__("html"),
             "logger": MagicMock(), "SignupRequest": object, "Request": object,
+            "onboarding_profile": SimpleNamespace(clean_attribution=lambda a: a or {}),
         }
         return function_from_file(TOKEN_API, "auth_signup", ns), db
 
     def _req(self, **over):
         fields = dict(name="Asha", company="Acme", email="asha@acme.in", password="longpassword",
-                      referral_source="", phone="", accepted_terms=True, confirmed_age=True)
+                      referral_source="", phone="", attribution={}, accepted_terms=True, confirmed_age=True)
         fields.update(over)
         return SimpleNamespace(**fields)
 

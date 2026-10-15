@@ -3,12 +3,14 @@
 name: IndexNow
 on:
   deployment_status:
-concurrency:
-  group: indexnow
-  cancel-in-progress: false
 jobs:
   submit:
     if: github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production – voice'
+    # Job-level, so the many other deployment_status events (pending, other
+    # Vercel projects) are skipped without cancelling the real run.
+    concurrency:
+      group: indexnow
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -81,6 +81,8 @@ export function AdminAccounts() {
               <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-text-muted">
                 <th className="px-4 py-3 font-semibold">Account</th>
                 <th className="px-4 py-3 font-semibold">Owner</th>
+                <th className="px-4 py-3 font-semibold">Source</th>
+                <th className="px-4 py-3 font-semibold">Industry</th>
                 <th className="px-4 py-3 font-semibold">Plan</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3 text-right font-semibold">Users</th>
@@ -107,6 +109,8 @@ export function AdminAccounts() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-text-muted">{a.owner_email || '-'}</td>
+                  <td className="px-4 py-3 text-text-muted">{a.source || '-'}</td>
+                  <td className="px-4 py-3 text-text-muted">{a.industry || '-'}</td>
                   <td className="px-4 py-3">
                     <PlanPill plan={a.plan} />
                   </td>

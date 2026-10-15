@@ -53,6 +53,7 @@ import ops_alert_worker
 import widget_avatars
 import widget_chat
 import voice_catalog
+import onboarding_profile
 from help_content import FAQS
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
@@ -811,6 +812,8 @@ class SignupRequest(BaseModel):
     # browser, so a direct POST cannot create an account without them.
     accepted_terms: bool = False
     confirmed_age: bool = False
+    # First-touch marketing tags captured in the browser (utm_*, gclid, ...).
+    attribution: dict = {}
 
 
 class LoginRequest(BaseModel):
@@ -1697,6 +1700,7 @@ def auth_signup(req: SignupRequest, request: Request) -> dict:
         ip=_client_ip(request), user_agent=request.headers.get("user-agent", ""),
         source="signup", age_confirmed=True,
     )
+    calls_db.save_signup_attribution(created["account_id"], onboarding_profile.clean_attribution(req.attribution))
     code, _ = calls_db.create_email_verification(created["user_id"])
     if code is None:
         raise HTTPException(429, "Please wait before requesting another code")
@@ -2738,7 +2742,16 @@ def accept_consent(request: Request, data: dict = Body(...), user: dict = Depend
 
 
 @app.post("/onboarding/complete")
-def complete_onboarding(user: dict = Depends(current_user)) -> dict:
+def complete_onboarding(data: dict | None = Body(None), user: dict = Depends(current_user)) -> dict:
+    """Finishes the full-page onboarding. The dashboard sends the answers
+    and the browser's first-touch attribution; both are optional so an older
+    client can still finish."""
+    data = data or {}
+    profile = onboarding_profile.clean_profile(data.get("profile"))
+    if profile:
+        profile["completedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        calls_db.save_onboarding_profile(user["account_id"], user["user_id"], profile)
+    calls_db.save_signup_attribution(user["account_id"], onboarding_profile.clean_attribution(data.get("attribution")))
     calls_db.mark_account_onboarded(user["account_id"])
     return {"user": _me_payload(user["user_id"])}
 

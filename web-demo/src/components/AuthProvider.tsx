@@ -63,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       phone?: string
       accepted_terms: boolean
       confirmed_age: boolean
+      attribution?: Record<string, string>
     }) => {
       return apiSignup(data)
     },

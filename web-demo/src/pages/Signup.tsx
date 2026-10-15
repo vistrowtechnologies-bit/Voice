@@ -3,8 +3,10 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { useAuth } from '../lib/auth'
 import { trackQualifyLead } from '../lib/analytics'
+import { getAttribution } from '../lib/attribution'
 import { AuthInput, AuthShell, PasswordVisibilityToggle, SocialButtons, useShake } from './AuthShell'
-import { COMMON_DIAL_CODES, dialCodeFor, guessCountry } from '../lib/phone'
+import { PhoneInput, isValidPhone } from '../components/PhoneInput'
+import { dialCodeFor, guessCountry } from '../lib/phone'
 
 // Cheap client-side password strength: length + character-class variety.
 // Purely for the meter/feedback - the server enforces the 8-char minimum.
@@ -25,7 +27,9 @@ const STRENGTH_COLORS = ['bg-border', 'bg-destructive', 'bg-amber', 'bg-cyan', '
 // Pure marketing attribution, but required - matches the competitor field
 // set + validation this was modeled on.
 const REFERRAL_SOURCES = [
+  'Google search',
   'Google Ad',
+  'AI assistant (ChatGPT, Gemini, Claude…)',
   'Facebook Ad',
   'LinkedIn',
   'Twitter / X',
@@ -49,12 +53,15 @@ export function Signup() {
     phoneNumber: '',
   })
   // No workspace yet, so no workspace country: start from the browser's region.
-  const [dialCode, setDialCode] = useState(() => dialCodeFor(guessCountry()))
+  const [phoneCountry, setPhoneCountry] = useState(() => guessCountry())
   const [agreed, setAgreed] = useState(false)
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [referralError, setReferralError] = useState(false)
+  // Its own flag, so an unticked box does not paint every field red.
+  const [termsError, setTermsError] = useState(false)
+  const [ageError, setAgeError] = useState(false)
   const [busy, setBusy] = useState(false)
   const shake = useShake(error)
 
@@ -67,8 +74,14 @@ export function Signup() {
     e.preventDefault()
     setError(null)
     setReferralError(false)
+    setTermsError(false)
+    setAgeError(false)
     if (form.password.length < 8) {
       setError('Password must be at least 8 characters.')
+      return
+    }
+    if (form.phoneNumber && !isValidPhone(phoneCountry, form.phoneNumber)) {
+      setError('Enter a valid phone number for the selected country.')
       return
     }
     if (!form.referral_source) {
@@ -76,11 +89,11 @@ export function Signup() {
       return
     }
     if (!agreed) {
-      setError('Please agree to the Terms of Service and Privacy Policy.')
+      setTermsError(true)
       return
     }
     if (!ageConfirmed) {
-      setError('Please confirm you are 18 or older and authorised to act for this business.')
+      setAgeError(true)
       return
     }
     setBusy(true)
@@ -88,7 +101,8 @@ export function Signup() {
       const { phoneNumber, ...rest } = form
       const result = await signup({
         ...rest,
-        phone: phoneNumber ? `${dialCode} ${phoneNumber}` : '',
+        phone: phoneNumber ? `${dialCodeFor(phoneCountry)} ${phoneNumber}` : '',
+        attribution: getAttribution(),
         accepted_terms: agreed,
         confirmed_age: ageConfirmed,
       })
@@ -125,32 +139,14 @@ export function Signup() {
         </div>
         <AuthInput label="Work email" type="email" required value={form.email} onChange={set('email')} error={!!error} />
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="phone-number" className="text-xs font-medium text-text-muted">
-            Phone Number
-          </label>
-          <div className="flex gap-2">
-            <select
-              value={dialCode}
-              onChange={(e) => setDialCode(e.target.value)}
-              aria-label="Country dial code"
-              className="rounded-lg border border-border bg-surface-high px-2 text-sm text-text outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
-            >
-              {COMMON_DIAL_CODES.map((c) => (
-                <option key={c.code} value={c.dial}>
-                  {c.code} {c.dial}
-                </option>
-              ))}
-            </select>
-            <input
-              id="phone-number"
-              type="tel"
-              inputMode="numeric"
-              placeholder="9876543210"
-              value={form.phoneNumber}
-              onChange={set('phoneNumber')}
-              className="w-full rounded-lg border border-border bg-surface-high px-3 py-2.5 text-sm text-text outline-none transition-colors placeholder:text-text-muted focus:border-primary focus:ring-2 focus:ring-primary/15"
-            />
-          </div>
+          <span className="text-xs font-medium text-text-muted">Phone number</span>
+          <PhoneInput
+            country={phoneCountry}
+            number={form.phoneNumber}
+            onCountryChange={setPhoneCountry}
+            onNumberChange={(n) => setForm((f) => ({ ...f, phoneNumber: n }))}
+            fieldClassName="rounded-lg bg-surface-high"
+          />
         </div>
         <div>
           <AuthInput
@@ -201,7 +197,15 @@ export function Signup() {
           {referralError && <span className="text-xs text-destructive">Please tell us how you heard about us.</span>}
         </div>
         <label className="flex items-start gap-2 text-xs text-text-muted">
-          <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => {
+              setAgreed(e.target.checked)
+              setTermsError(false)
+            }}
+            className="mt-0.5"
+          />
           <span>
             I agree to the{' '}
             <Link to="/terms" className="text-cyan hover:underline">
@@ -214,15 +218,24 @@ export function Signup() {
             .
           </span>
         </label>
+        {termsError && <span className="-mt-2 text-xs text-destructive">Please agree to the Terms of Service and Privacy Policy.</span>}
         <label className="flex items-start gap-2 text-xs text-text-muted">
           <input
             type="checkbox"
             checked={ageConfirmed}
-            onChange={(e) => setAgeConfirmed(e.target.checked)}
+            onChange={(e) => {
+              setAgeConfirmed(e.target.checked)
+              setAgeError(false)
+            }}
             className="mt-0.5"
           />
           <span>I confirm I am 18 or older and authorised to act for this business.</span>
         </label>
+        {ageError && (
+          <span className="-mt-2 text-xs text-destructive">
+            Please confirm you are 18 or older and authorised to act for this business.
+          </span>
+        )}
         <button
           type="submit"
           disabled={busy}
