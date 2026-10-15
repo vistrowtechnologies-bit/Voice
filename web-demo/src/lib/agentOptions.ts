@@ -127,13 +127,13 @@ export const voicePickerGroups = (voices: VoiceEntry[]) => [
   },
   {
     key: 'gemini38-lite',
-    label: 'Gemini 3.8 Flash-Lite',
+    label: 'Studio Lite',
     note: '2x credits · lower latency and cost · test before live calls',
     voices: voices.filter((v) => v.preview && v.value.startsWith('google38:')),
   },
   {
     key: 'gemini38-flash',
-    label: 'Gemini 3.8 Flash',
+    label: 'Studio',
     note: '2x credits · richer expression and voice fidelity · test before live calls',
     voices: voices.filter((v) => v.preview && v.value.startsWith('google38flash:')),
   },
@@ -308,9 +308,9 @@ export const ADMIN_ONLY_MODELS: readonly { value: string; label: string; tag?: s
   { value: 'gpt-5-nano', label: 'Vistrow Nano Lab', tag: 'Experimental · lowest OpenAI cost; measure quality before rollout' },
   // Re-listed at the platform owner's request for a controlled retest. Keep
   // this owner-only: prior calls showed slower audio and turn-handling errors.
-  { value: 'gemini-live', label: 'Gemini Live 2.5 · realtime', tag: 'Owner-only · replies in about 2-3 s · about a third of the cost of 3.1' },
-  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Gemini Live 3.1 · realtime', tag: 'Owner-only · fastest speech-to-speech (about 1-2 s) · recommended for Gemini voice' },
-  { value: 'gemini-live:gemini-3.8-live', label: 'Gemini Live 3.8 · realtime', tag: 'Owner-only · GA successor to 3.1, same price · in testing' },
+  { value: 'gemini-live', label: 'Vistrow Live 2.5 · realtime', tag: 'Owner-only · replies in about 2-3 s · about a third of the cost of 3.1' },
+  { value: 'gemini-live:gemini-3.1-flash-live-preview', label: 'Vistrow Live 3.1 · realtime', tag: 'Owner-only · fastest speech-to-speech (about 1-2 s) · recommended for realtime' },
+  { value: 'gemini-live:gemini-3.8-live', label: 'Vistrow Live 3.8 · realtime', tag: 'Owner-only · GA successor to 3.1, same price · in testing' },
 ]
 
 /** True for the speech-to-speech models: they bypass STT, the LLM and TTS. */
@@ -363,7 +363,7 @@ const RETIRED_MODELS = [
   // (median 4.2 s vs 2.5 s on clean audio), missed greetings, repeated answers after
   // the lead tool, and premature hangups. It is now exposed only to the platform owner
   // for a controlled retest; tenant accounts cannot select it.
-  { value: 'gemini-live', label: 'Gemini Live 2.5 (retired)' },
+  { value: 'gemini-live', label: 'Vistrow Live 2.5 (retired)' },
 ] as const
 
 export const modelLabel = (value: string) =>

@@ -5,7 +5,7 @@ import { Icon } from '../components/Icon'
 import { useVoicePreview } from '../components/VoicePreviewButton'
 import { addVoice, fetchVoiceCatalog, removeVoice } from '../lib/api'
 import { BHARAT_MODEL_MULTIPLIER, LIVE_MODEL_MULTIPLIER, creditsPerMinuteLabel, formatCredits } from '../lib/plans'
-import { ADMIN_ONLY_MODELS, geminiLiveVoiceName } from '../lib/agentOptions'
+import { ADMIN_ONLY_MODELS } from '../lib/agentOptions'
 import { useAuth } from '../lib/auth'
 import type { VoiceCatalog, VoiceEntry } from '../lib/types'
 
@@ -106,8 +106,8 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 const REALTIME_MODELS = ADMIN_ONLY_MODELS.filter(
   (m) => m.value.startsWith('gemini-live') && m.value !== 'gemini-live:gemini-3.1-flash-live-preview',
 )
-// "Gemini Live 3.1 · realtime" -> "Live 3.1"
-const shortModelLabel = (label: string) => label.replace(/^Gemini /, '').replace(/ · realtime$/, '')
+// "Vistrow Live 3.1 · realtime" -> "Live 3.1"
+const shortModelLabel = (label: string) => label.replace(/^Vistrow /, '').replace(/ · realtime$/, '')
 
 interface Tab {
   key: TabKey
@@ -296,7 +296,7 @@ function Spotlight({
           {entry.name}
         </h2>
         <p className="mt-1 text-sm text-text-muted">
-          {GENDER_LABEL[entry.gender]} · {realtime ? `Gemini voice ${geminiLiveVoiceName(entry.value) ?? ''}` : entry.tierLabel}
+          {GENDER_LABEL[entry.gender]} · {realtime ? 'Live voice' : entry.tierLabel}
         </p>
         {entry.note && (
           <p className="mx-auto mt-3 w-fit max-w-full rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{entry.note}</p>
@@ -339,21 +339,21 @@ function Spotlight({
                     Add <span className="font-bold text-text">{realtimeHd.name}</span> to your picker (button below).
                   </li>
                   <li>
-                    On the agent, set <span className="font-bold text-text">Model</span> to {realtimeModelLabel ?? 'a Gemini Live model'}.
+                    On the agent, set <span className="font-bold text-text">Model</span> to {realtimeModelLabel ?? 'a Vistrow Live model'}.
                   </li>
                   <li>
-                    Set its <span className="font-bold text-text">Voice</span> to {realtimeHd.name}. Calls then speak with Google's {geminiLiveVoiceName(entry.value)} voice.
+                    Set its <span className="font-bold text-text">Voice</span> to {realtimeHd.name}. Calls then speak in this voice.
                   </li>
                 </ol>
                 <p className="mt-2 text-xs">
-                  Every Live model uses the same 30 voices. The preview is Gemini TTS in this voice, so a live call can sound slightly different.{' '}
+                  Every Live model uses the same 30 voices. The preview is made by a different engine, so a live call can sound slightly different.{' '}
                   <Link to="/dashboard/agents" className="font-bold text-primary hover:underline">
                     Open agents →
                   </Link>
                 </p>
               </>
             ) : (
-              'No HD voice maps to this Gemini voice yet, so an agent cannot pick it.'
+              'No HD voice maps to this Live voice yet, so an agent cannot pick it.'
             )}
           </div>
         ) : (
@@ -538,8 +538,8 @@ export function Voices() {
       {
         key: 'sarvam4',
         credits: 1 * BHARAT_MODEL_MULTIPLIER,
-        label: 'Sarvam',
-        note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · Bulbul v4 persona voices first, then the classic Sarvam voices · switches language live`,
+        label: 'Bharat',
+        note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · Indian persona voices first, then the classic voices · switches language live`,
         // Every non-Chirp standard voice is a Sarvam voice: v4 (`sarvam4:`) and
         // the classic Bulbul ids (pooja, shubh, ...). Since PR #85 billed v4 at
         // standard, a separate "Standard" tab listed all 201 v4 voices again.
@@ -552,7 +552,7 @@ export function Voices() {
         key: 'hd',
         credits: 1 * BHARAT_MODEL_MULTIPLIER,
         label: 'HD',
-        note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · fastest Google voices · switches language mid-call`,
+        note: `${creditsPerMinuteLabel(1 * BHARAT_MODEL_MULTIPLIER)} · fastest voices · switches language mid-call`,
         voices: stable('standard').filter(isChirp),
       },
       {
@@ -565,7 +565,7 @@ export function Voices() {
       {
         key: 'gemini',
         credits: 2 * BHARAT_MODEL_MULTIPLIER,
-        label: 'Gemini 3.8 TTS',
+        label: 'Studio',
         note: `${creditsPerMinuteLabel(2 * BHARAT_MODEL_MULTIPLIER)} · text-to-speech for normal agents · not the realtime Live models`,
         // These are flagged "preview" (owner-only), so they come from the full list
         // rather than from `all`, which drops previews.
@@ -599,10 +599,10 @@ export function Voices() {
         const gemini = persona.charAt(0).toUpperCase() + persona.slice(1)
         return {
           ...v,
-          // Lead with the Indian name the agent picker uses (Myra), and keep
-          // Google's voice name (Achernar) as the detail.
+          // The Indian name the agent picker uses (Myra); the vendor's voice
+          // name (Achernar) is never shown (owner decision 2026-10-15).
           name: hd ? hd.name.replace(/ HD$/, '') : gemini,
-          note: `${gemini} · ${v.note.split(' · ')[0]} voice`,
+          note: `${v.note.split(' · ')[0]} voice`,
           selected: hd?.selected,
           // Google's Live API documents 99 languages (checked 2026-10-15).
           languageCount: 99,
@@ -743,7 +743,7 @@ export function Voices() {
                 <span className="text-primary">{preview.state === 'playing' ? 'Playing' : 'Paused'}</span> · {current.name}
               </p>
               <p className="truncate text-xs text-text-muted">
-                {GENDER_LABEL[current.gender]} · {realtimeActive ? `Gemini voice ${geminiLiveVoiceName(current.value) ?? ''}${currentHd ? ` · pick ${currentHd.name}` : ''}` : current.tierLabel}
+                {GENDER_LABEL[current.gender]} · {realtimeActive ? `Live voice${currentHd ? ` · pick ${currentHd.name}` : ''}` : current.tierLabel}
               </p>
               <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-high">
                 <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${Math.round(preview.progress * 100)}%` }} />
@@ -924,7 +924,7 @@ export function Voices() {
                   <div className="flex flex-col gap-2 border-b border-border p-4">
                     <p className="text-sm leading-relaxed text-text-muted">
                       {realtimeModel?.label} is a <span className="font-semibold text-text">model</span>, picked under Model on an agent. It
-                      speaks with the Gemini voice named like the agent's HD voice. These are its voices; the other Live models use the same 30.
+                      speaks in the Live version of the agent's HD voice. These are its voices; the other Live models use the same 30.
                       {' '}It bills <span className="font-semibold text-text">{liveCredits(realtimeModel?.value)}</span> whichever voice it uses.
                     </p>
                     {REALTIME_MODELS.filter((m) => m.value === realtimeModel?.value).map((model) => (
