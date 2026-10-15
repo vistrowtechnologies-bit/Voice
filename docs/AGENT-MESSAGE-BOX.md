@@ -654,3 +654,19 @@ Branch `claude/fullpage-onboarding`. The owner asked for a full-page onboarding 
 - Read-only prod query: all 6 real accounts are already onboarded, so nobody is blocked. Only test account 8 "Staging QA" is not.
 
 **Not verified:** against a real Postgres. Staging holds PR #72's unmerged build, so I did not overwrite it. The migration is the same ADD COLUMN IF NOT EXISTS pattern as the neighbouring lines.
+
+### Claude — 2026-10-15 — Onboarding redesign (premium), required vs optional, no country question
+
+Branch `claude/fullpage-onboarding` (PR #107), owner feedback:
+- **Country:** no longer a question. Account country comes from the phone's calling code (step 1, or the code given at signup), else the time-zone guess.
+- **Required now:** role; phone if missing; how you heard (OAuth sign-ups only); company; industry; team size; uses; languages; calls per month.
+- **Optional:** website, plus a collapsed "A few more details (optional, skip if you like)" block with channels, current solution and timeline.
+- **New design:**
+  - top bar with logo, a 4-segment labelled progress bar and sign-out;
+  - large icon cards for role, industry and uses; segmented controls for size and volume; pills for languages and referral;
+  - a live "Your workspace" preview on the right that fills in as answers are given;
+  - step fade-in; Enter to continue; only unanswered required questions turn red;
+  - the step and answers survive a reload; two cards per row on phones.
+- **Copy:** dropped claims the product doesn't do yet ("tailor your agent and its sample scripts").
+
+Verified in the local app at 1440 px and 375 px (no horizontal scroll); `npm run build` passes.
