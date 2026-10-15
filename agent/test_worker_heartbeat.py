@@ -71,6 +71,17 @@ class HeartbeatDbTests(unittest.TestCase):
         os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
         import db
         import dbconn
+        # The server owns the schema (calls_db.init_tables); a fresh test
+        # database has none, so create the one table this write needs.
+        conn = dbconn.connect()
+        try:
+            with conn:
+                conn.execute(
+                    "CREATE TABLE IF NOT EXISTS settings (account_id INTEGER NOT NULL, key TEXT NOT NULL, "
+                    "value TEXT, PRIMARY KEY (account_id, key))"
+                )
+        finally:
+            conn.close()
         db.write_worker_heartbeat("test-worker", '{"seenAt": "a"}')
         db.write_worker_heartbeat("test-worker", '{"seenAt": "b"}')
         conn = dbconn.connect()

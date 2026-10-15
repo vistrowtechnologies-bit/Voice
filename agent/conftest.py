@@ -10,6 +10,12 @@ did worse the same way; see server/conftest.py.
 DATABASE_URL is pinned before load_dotenv() can fill it (it never overrides
 a set variable): TEST_DATABASE_URL if given, else a placeholder that cannot
 resolve. A Railway database is refused outright.
+
+OPENAI_API_KEY gets a placeholder the same way. Production always has one, so
+the session builds the OpenAI failover LLM and the post-call extractor, and
+those clients refuse to construct without a key. Without this, a checkout with
+no .env (any worktree) failed 23 agent tests, and the main checkout passed only
+by handing the real key to the tests. No test calls OpenAI.
 """
 import os
 
@@ -22,3 +28,12 @@ if ".rlwy.net" in _url or ".railway.internal" in _url:
     pytest.exit("DATABASE_URL points at a Railway database; tests use a throwaway local Postgres "
                 "(TEST_DATABASE_URL).", returncode=4)
 os.environ["DATABASE_URL"] = _url
+os.environ.setdefault("OPENAI_API_KEY", "test-key-not-used-offline")
+
+if _url == _PLACEHOLDER:
+    # No database at all: fail each connect at once instead of 3 x 6 s, so
+    # code that falls back on a DB error is tested in seconds, not minutes.
+    import dbconn
+
+    dbconn._GETCONN_TIMEOUT_S = 0.2
+    dbconn._CONNECT_ATTEMPTS = 1

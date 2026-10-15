@@ -805,8 +805,11 @@ def get_compliance_config(account_id: int | None) -> dict:
     now = time.monotonic()
     if cached is not None and now - cached[0] < _COMPLIANCE_CACHE_TTL_S:
         return cached[1]
-    conn = dbconn.connect()
+    conn = None
     try:
+        # Inside the try: an unreachable database raises PoolTimeout (a
+        # psycopg.OperationalError) here, and must fall back like a failed query.
+        conn = dbconn.connect()
         row = conn.execute(
             "SELECT value FROM settings WHERE key = 'compliance.config' AND account_id = ?",
             (account_id,),
@@ -821,7 +824,8 @@ def get_compliance_config(account_id: int | None) -> dict:
         logger.exception("could not read compliance config for account %s", account_id)
         return dict(_COMPLIANCE_FALLBACK)
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
     _compliance_cache[account_id] = (now, cfg)
     return cfg
 
