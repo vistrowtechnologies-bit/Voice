@@ -75,7 +75,7 @@ export function DashboardTour() {
       const { user: updated } = await apiCompleteTour()
       setUser(updated)
     } catch {
-      // Same reasoning as OnboardingModal: don't trap the user behind a
+      // Same reasoning as onboarding: don't trap the user behind a
       // failed network call - worst case the tour reappears next session.
       setUser({ ...user, tourCompleted: true })
     }

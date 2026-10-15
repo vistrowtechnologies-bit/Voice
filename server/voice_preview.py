@@ -43,7 +43,10 @@ _GOOGLE_PREFIX = "google:"
 _GOOGLE_MULTILINGUAL_VOICES = {p.lower() for p, _g, _s in voice_catalog.GEMINI_PREBUILT_VOICES}
 
 # lang code (voice_catalog.SAMPLE_TEXTS keys) → Sarvam target_language_code.
-_SARVAM_LANG = {"hi": "hi-IN", "en": "en-IN"}
+_SARVAM_LANG = {
+    "hi": "hi-IN", "en": "en-IN", "mr": "mr-IN", "ta": "ta-IN", "te": "te-IN", "kn": "kn-IN",
+    "ml": "ml-IN", "gu": "gu-IN", "bn": "bn-IN", "pa": "pa-IN", "od": "od-IN",
+}
 
 _TIMEOUT_S = 30
 

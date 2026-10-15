@@ -408,6 +408,7 @@ def list_accounts(search: str = "", plan: str = "", status: str = "", activity: 
         total = conn.execute(f"SELECT COUNT(*) c FROM accounts a {clause}", tuple(params)).fetchone()["c"]
         rows = conn.execute(
             f"""SELECT a.id, a.name, a.plan, a.status, a.created_at, a.is_platform_owner,
+                       a.referral_source, a.onboarding_profile, a.signup_attribution,
                        (SELECT email FROM users WHERE account_id = a.id ORDER BY id LIMIT 1) owner_email,
                        (SELECT COUNT(*) FROM users WHERE account_id = a.id) users,
                        (SELECT COUNT(*) FROM agents WHERE account_id = a.id) agents,
@@ -426,6 +427,11 @@ def list_accounts(search: str = "", plan: str = "", status: str = "", activity: 
             d["credits_used"] = round(float(d["credits_used"] or 0), 1)
             d["credits_total"] = round(float(d["credits_total"] or 0), 0)
             d["mrr"] = PLAN_PRICING.get((d.pop("sub_plan") or "").lower(), 0)
+            # Only the two signup facts the list shows, not the whole JSON.
+            profile = _json_or_empty(d.pop("onboarding_profile", ""))
+            attribution = _json_or_empty(d.pop("signup_attribution", ""))
+            d["industry"] = profile.get("industry", "")
+            d["source"] = attribution.get("utm_source") or d.get("referral_source") or ""
             accounts.append(d)
         # Activity filter is post-computed (needs the calls count above).
         if activity == "active":
@@ -437,6 +443,14 @@ def list_accounts(search: str = "", plan: str = "", status: str = "", activity: 
         conn.close()
 
 
+def _json_or_empty(raw: object) -> dict:
+    try:
+        value = json.loads(raw or "{}") if isinstance(raw, str) else (raw or {})
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def account_detail(account_id: int) -> dict | None:
     conn = _connect()
     try:
@@ -444,8 +458,10 @@ def account_detail(account_id: int) -> dict | None:
         if acct is None:
             return None
         acct = dict(acct)
+        acct["onboarding_profile"] = _json_or_empty(acct.get("onboarding_profile"))
+        acct["signup_attribution"] = _json_or_empty(acct.get("signup_attribution"))
         owner = conn.execute(
-            "SELECT id, email, name FROM users WHERE account_id = ? ORDER BY id LIMIT 1", (account_id,)
+            "SELECT id, email, name, phone, auth_provider FROM users WHERE account_id = ? ORDER BY id LIMIT 1", (account_id,)
         ).fetchone()
 
         users = [

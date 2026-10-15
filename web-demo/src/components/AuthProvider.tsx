@@ -61,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string
       referral_source?: string
       phone?: string
+      attribution?: Record<string, string>
     }) => {
       return apiSignup(data)
     },
