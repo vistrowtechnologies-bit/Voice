@@ -752,3 +752,85 @@ Sarvam's v4 voice ids are `<name>_<lang>_<style>`. Per Sarvam, `<lang>` is the l
 - Server voice tests: 38 pass.
 - `agent/test_sarvam_v4_plugin.py::test_a_rejected_id_falls_back_by_gender` fails with and without this change (local livekit 1.8.3 vs pinned 1.8.6).
 - `npm run build` passes.
+
+### Claude — 2026-10-15 — SEO P8: site-wide content audit, fact fixes, thin pages, internal links
+
+Branch `claude/seo-p8-sitewide`. It started from `claude/seo-p7` and was rebased onto `main` once PR #106 and PR #109 had merged. This branch changes web-demo marketing content only. It does not touch Signup, onboarding or auth, the Privacy page file, or `helpArticles.ts`.
+
+**Audit**
+- New script: `web-demo/scripts/audit-seo-content.py`. After a build it scores all 124 sitemap routes on:
+  - main-content word count, with boilerplate removed;
+  - contextual inbound and outbound links (body plus the related-links box, never nav or footer);
+  - title and description length, H1 and JSON-LD types;
+  - fact-flag regexes.
+- Full results are in `docs/SEO-SITEWIDE-AUDIT-2026-10-15.md`.
+
+**Before and after**
+
+| Measure | Before | After |
+|---|---|---|
+| Thin pages | 20 | 0 |
+| Pages with fewer than 3 contextual inbound links | 32 | 0 |
+| Pages with fewer than 3 contextual outbound links | 7 | 0 |
+| Orphan pages | 2 | 0 |
+
+**Facts corrected**
+- **Language count:** "99 languages / 88 more" is removed from every page. Pages now say Hindi, English and 9 more Indian languages (11 in total). The 99-language lists belong to owner-only Gemini voices (`ADMIN_ONLY_MODELS`). Places changed:
+  - Home, and the home meta description
+  - `/languages`: title, description, hero and the global chips section
+  - `HERO_STATS` and the CTA chip
+  - `/product/agents`
+  - the Knowlarity comparison row
+- **Pricing FAQ:** "Economy 0.5×" now reads "Native 1 credit/min".
+- **Pricing guide:** the `/ai-voice-bot-pricing-india` title no longer promises a calculator.
+- **E-commerce:** the page no longer claims built-in order lookup or returns handled without a person. Order status needs a custom function.
+- **Transfers:** three cards now say that transfer to a person works on phone calls only.
+- **Overclaims:** softened on the About page and in the Home FAQ.
+
+**Content and links**
+- The five local real-estate pages get market-specific copy and labelled native-script samples.
+- New or expanded sections on:
+  - `/solutions` and `/solutions/ecommerce`
+  - `/pricing`: a credit table computed from `PLANS`
+  - `/ai-voice-bot-pricing-india`, `/languages` and `/about`
+  - one new section in each of 10 blog articles
+- `SeoRelatedLinks` changes:
+  - company and legal pages now link to each other;
+  - compare pages and demo pages link to their siblings;
+  - language pages link to their demo and local real-estate pages;
+  - a new "Set-up guides" row links to help articles.
+- `/vs-ivr` gets a further-reading section.
+
+**Verified**
+- Build, the SEO route audit, `test:seo` and `check-blog-seo` all pass.
+- The new audit script, re-run after the changes, gives the numbers above.
+- No horizontal scroll at 375 px on any of the 13 changed templates.
+
+**Not verified**
+- The native-script samples need a native speaker's review.
+- I have not checked that the live demo actually opens in each language marked "demo only, in testing".
+- The help articles' credit list is missing the Native 0.5× tier. I left it unchanged because `helpArticles.ts` was in PR #109 while this work was done.
+
+**Next:** review the PR against `main` and merge it; it has not been merged yet. There are no server or agent changes, so no worker deploy is needed. After the Vercel deploy, request indexing for `/languages` (its title changed).
+
+### Claude — 2026-10-15 — PR #114 follow-up: no em dashes, AI-tone pass
+
+At the owner's request; same branch and same PR.
+
+**Em dashes**
+- Public pages went from 423 em dashes to 0. The count covers visible text, meta tags, alt text and JSON-LD.
+- Help articles were rewritten in `server/help_articles.py`, and `helpArticles.ts` was regenerated from it.
+- `check-seo-pages.mts` now fails the build if any prerendered public page contains an em dash.
+
+**Tone pass**
+- About 18 "not just X" contrasts and stacked "no X, no Y" triads were rewritten.
+- None of the listed buzzwords appeared in public copy.
+
+**Verified**
+- Build and the SEO route audit.
+- `test:seo` and `check-blog-seo`.
+- `server/test_help*.py`: 43 passed, run with a placeholder `DATABASE_URL`.
+
+**Not changed:** code comments and dashboard-only strings.
+
+**Deploy:** the Vercel build carries the site changes. `help_articles.py` also feeds the dashboard help chat on the server side, so Railway picks up the new wording on its next deploy.

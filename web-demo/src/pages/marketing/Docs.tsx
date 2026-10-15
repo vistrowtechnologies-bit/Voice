@@ -74,7 +74,7 @@ const HOWTO: { icon: string; title: string; body: string }[] = [
   {
     icon: 'dialpad',
     title: 'Use your existing phone number',
-    body: 'Add the number under Phone Numbers and route it to an agent. You keep the number your customers already know - no porting, no new line to advertise.',
+    body: 'Add the number under Phone Numbers and route it to an agent. You keep the number your customers already know, so there is nothing to port or re-advertise.',
   },
   {
     icon: 'code',
@@ -84,7 +84,7 @@ const HOWTO: { icon: string; title: string; body: string }[] = [
   {
     icon: 'event',
     title: 'Let the agent book appointments',
-    body: 'Set your availability under Settings → Availability. The agent then checks real free slots during the call and books directly - no double-booking, no callback needed.',
+    body: 'Set your availability under Settings → Availability. The agent then checks real free slots during the call and books directly, without double-booking.',
   },
   {
     icon: 'webhook',
@@ -99,7 +99,7 @@ const HOWTO: { icon: string; title: string; body: string }[] = [
   {
     icon: 'swap_calls',
     title: 'Hand off to a human',
-    body: 'Set a transfer number on the agent. When a caller needs a person, the agent hands off with context instead of dead-ending the call.',
+    body: 'Set a transfer number on the agent. When a phone caller needs a person, the agent dials your colleague into the call instead of dead-ending it. Website calls take a callback request instead.',
   },
 ]
 

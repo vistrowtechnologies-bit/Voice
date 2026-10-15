@@ -99,9 +99,9 @@ export const PRODUCT_DETAIL: Record<
     subhead:
       'A no-code builder for real-time AI phone agents. Set the persona, prompt, voice and language - publish, and Artha starts taking calls.',
     features: [
-      { icon: 'translate', title: 'Multilingual', body: 'Speaks 10 Indian languages plus English, including natural Hinglish, and switches mid-call with the caller — plus 88 more worldwide.' },
-      { icon: 'menu_book', title: 'Grounded answers', body: 'Ties responses to your knowledge base with strict-mode RAG, so the agent never makes things up.' },
-      { icon: 'swap_calls', title: 'Human handoff', body: 'Escalates to a live person with full context when a call needs a human touch.' },
+      { icon: 'translate', title: 'Multilingual', body: 'Speaks 10 Indian languages plus English, including natural Hinglish, and switches mid-call with the caller.' },
+      { icon: 'menu_book', title: 'Grounded answers', body: 'Ties responses to your knowledge base with strict-mode RAG, so the agent says it does not know instead of improvising.' },
+      { icon: 'swap_calls', title: 'Human handoff', body: 'On phone calls, transfers to the colleague you set when a caller needs a person. Website calls take a callback request instead.' },
       { icon: 'analytics', title: 'Analytics & transcripts', body: 'Every call is transcribed, scored, and searchable across channels and agents.' },
     ],
     guideSections: [
@@ -491,12 +491,12 @@ export const SOLUTIONS: Solution[] = [
     label: 'Real Estate',
     to: '/solutions/real-estate',
     icon: 'apartment',
-    desc: 'Qualify buyers and book site visits - 24/7, in any language.',
+    desc: 'Qualify buyers and book site visits - 24/7, in Hindi, English and 9 more Indian languages.',
     headline: 'AI calling agent for real estate enquiries and site visits.',
     subhead:
       'Artha answers property enquiries and calls new leads back within seconds, in Hindi, English or 9 other Indian languages. It qualifies budget, location, configuration, timeline and purpose, and books site visits on your calendar, day or night.',
     pains: [
-      { icon: 'phone_missed', title: 'Missed calls', body: 'After-hours enquiries go to voicemail and buyers move on. Artha picks up every time.' },
+      { icon: 'phone_missed', title: 'Missed calls', body: 'After-hours enquiries go to voicemail and buyers move on. Artha picks up at any hour, within the call limits you set.' },
       { icon: 'fact_check', title: 'Manual qualification', body: 'No more re-asking budget and location - Artha saves each detail as a lead field during the call.' },
       { icon: 'schedule', title: 'Slow follow-up', body: 'Every qualified lead syncs to your CRM instantly, so agents follow up while it’s hot.' },
     ],
@@ -615,9 +615,9 @@ export const SOLUTIONS: Solution[] = [
     ],
     features: ['Appointment booking', 'Reminder calls', 'FAQ answering', 'Call triage'],
     scenarios: [
-      { label: 'Patient with symptoms', callerLine: '“मेरे पेट में बहुत दर्द है—किस डॉक्टर को दिखाऊँ?”', agentAction: 'Acknowledges the concern, checks whether it sounds urgent and routes to the relevant clinic service without diagnosing.', outcome: 'Appropriate next step with safety kept ahead of scheduling.' },
+      { label: 'Patient with symptoms', callerLine: '“मेरे पेट में बहुत दर्द है, किस डॉक्टर को दिखाऊँ?”', agentAction: 'Acknowledges the concern, checks whether it sounds urgent and routes to the relevant clinic service without diagnosing.', outcome: 'Appropriate next step with safety kept ahead of scheduling.' },
       { label: 'Find a doctor', callerLine: '“General physician कब available हैं?”', agentAction: 'Uses verified clinic information, asks for the preferred day and checks live availability instead of reading a directory.', outcome: 'Two or three relevant appointment choices.' },
-      { label: 'Book or reschedule', callerLine: '“कल दो बजे का appointment कर दीजिए.”', agentAction: 'Collects patient name, phone and visit reason, verifies the exact slot and confirms only after it is saved.', outcome: 'A traceable appointment—not a verbal promise.' },
+      { label: 'Book or reschedule', callerLine: '“कल दो बजे का appointment कर दीजिए.”', agentAction: 'Collects patient name, phone and visit reason, verifies the exact slot and confirms only after it is saved.', outcome: 'A traceable appointment instead of a verbal promise.' },
     ],
     workflow: [
       { icon: 'hearing', title: 'Listen to the concern', body: 'Capture the reason for calling before suggesting a doctor or appointment.' },
@@ -701,15 +701,15 @@ export const SOLUTIONS: Solution[] = [
     subhead:
       'Artha handles “where is my order”, returns, and product questions instantly - in the language your customer shops in.',
     pains: [
-      { icon: 'local_shipping', title: 'WISMO overload', body: '“Where is my order” calls flood support. Artha answers them from your order data.' },
-      { icon: 'assignment_return', title: 'Returns friction', body: 'Guides customers through returns and exchanges without a human agent.' },
+      { icon: 'local_shipping', title: 'WISMO overload', body: '“Where is my order” calls flood support. Connect your order system and Artha reads back the current status.' },
+      { icon: 'assignment_return', title: 'Returns friction', body: 'Explains your approved returns and exchange policy and records the request, so your team only handles the approval.' },
       { icon: 'language', title: 'Language barriers', body: 'Speaks the customer’s language, so support feels local everywhere you sell.' },
     ],
     features: ['Order status', 'Returns & exchanges', 'Product Q&A', 'Multilingual support'],
     scenarios: [
       { label: 'Track an order', callerLine: '“Order NV-1042 अभी कहाँ है?”', agentAction: 'Looks up the supplied sample order, states the latest verified status and avoids guessing a delivery promise.', outcome: 'Clear order status with the next useful action.' },
       { label: 'Damaged delivery', callerLine: '“Package खुला था और product damaged है.”', agentAction: 'Acknowledges the inconvenience, collects the order reference and explains the applicable replacement path first.', outcome: 'Structured damage case ready for resolution.' },
-      { label: 'Return or exchange', callerLine: '“Size गलत है—return कैसे होगा?”', agentAction: 'Checks the store’s approved policy, confirms eligibility and records the requested resolution.', outcome: 'Return or exchange intent captured without policy improvisation.' },
+      { label: 'Return or exchange', callerLine: '“Size गलत है, return कैसे होगा?”', agentAction: 'Checks the store’s approved policy, confirms eligibility and records the requested resolution.', outcome: 'Return or exchange intent captured without policy improvisation.' },
     ],
     workflow: [
       { icon: 'receipt_long', title: 'Identify the order', body: 'Capture the order reference and understand status, damage, return or product intent.' },
@@ -727,12 +727,28 @@ export const SOLUTIONS: Solution[] = [
     integrations: [
       { icon: 'inventory', title: 'Order system', body: 'Ground status answers in the customer’s actual order record.' },
       { icon: 'confirmation_number', title: 'Helpdesk tickets', body: 'Open or update a case with the transcript and requested outcome.' },
-      { icon: 'forum', title: 'Customer follow-up', body: 'Send return instructions or resolution updates through your chosen channel.' },
+      { icon: 'forum', title: 'Customer follow-up', body: 'Post the outcome by webhook to the system that sends your return instructions or resolution updates.' },
     ],
     guardrails: ['Never invent an order status, delivery date, refund or replacement approval.', 'Give the next useful action before quoting long policy text.', 'Escalate exceptions with the customer’s context so they do not repeat everything.'],
+    guideSections: [
+      {
+        eyebrow: 'Connect it to your store',
+        title: 'What the agent needs to answer store calls well.',
+        intro: 'A store support agent is only as good as the information behind it. These are the pieces most D2C teams set up, roughly in this order.',
+        items: [
+          { icon: 'menu_book', title: 'Policies in the knowledge base', body: 'Upload the returns, exchange, shipping and cancellation policy, review the question and answer pairs it extracts, and switch on strict mode so the agent quotes your policy instead of paraphrasing it.', to: '/product/knowledge-base', link: 'Knowledge base' },
+          { icon: 'inventory_2', title: 'Products in the live catalog', body: 'Sizes, materials, care instructions and availability go in the live catalog. The agent looks an item up when a customer asks, so a large range does not slow the call down.', to: '/help/knowledge-base/live-catalog', link: 'Live catalog guide' },
+          { icon: 'api', title: 'Order status through a custom function', body: 'A custom function calls your order system with the order number the customer gives and reads back what it returns. Test it with sample orders before real customers call.', to: '/help/agents/agent-functions-and-transfer', link: 'Functions and transfer' },
+          { icon: 'confirmation_number', title: 'Cases to your helpdesk', body: 'Damaged-delivery and return requests are posted as JSON to any helpdesk or automation tool that accepts a webhook, with the transcript and the outcome the customer asked for.', to: '/integrations', link: 'All integrations' },
+          { icon: 'graphic_eq', title: 'A voice button on product pages', body: 'Put the website widget on product or order-tracking pages so a shopper can ask a question out loud without leaving the page. Page rules can send each page to a different agent.', to: '/product/widget', link: 'Website call widget' },
+          { icon: 'translate', title: 'The language your customer shops in', body: 'The same agent answers in Hindi, English and 9 more Indian languages and follows a customer who switches mid-call, which matters when you sell across several states.', to: '/languages', link: 'Supported languages' },
+        ],
+        note: 'Refunds, replacements and exceptions should stay with your team. The agent collects the facts and the customer’s request so nobody has to ask twice.',
+      },
+    ],
     faqs: [
-      { q: 'Can it check real order status?', a: 'Yes - grounded in your order data, Artha answers “where is my order” calls with the actual current status.' },
-      { q: 'Can it handle returns without a human agent?', a: 'Yes - it guides customers through your returns and exchange policy end-to-end on the call.' },
+      { q: 'Can it check real order status?', a: 'Yes, once you connect it. A custom function lets the agent call your order system during the conversation and read back the current status. Without that connection it takes the order number and passes the request to your team instead of guessing.' },
+      { q: 'Can it handle returns without a human agent?', a: 'It handles the conversation: it explains your approved returns and exchange policy, checks the details the policy asks for and records the request with the transcript. Approving a refund or replacement stays with your team or your own system.' },
       { q: 'What languages can it support customers in?', a: 'Artha speaks 10 Indian languages plus English, including natural Hinglish, matching whichever language the customer uses.' },
     ],
   },
@@ -872,7 +888,7 @@ export const SOLUTIONS: Solution[] = [
     scenarios: [
       { label: 'Reset email missing', callerLine: '“Password reset email अभी तक नहीं आया.”', agentAction: 'Acknowledges the failed attempt, checks the simple causes one at a time and avoids making the caller repeat themselves.', outcome: 'Resolved step or a clean escalation with attempted actions.' },
       { label: 'Billing question', callerLine: '“मेरे invoice में extra charge क्यों है?”', agentAction: 'Uses approved billing information, explains what is known and escalates account-specific disputes safely.', outcome: 'A categorized billing case with exact caller concern.' },
-      { label: 'Escalate an issue', callerLine: '“मैं ये तीन बार try कर चुका हूँ—person से connect करो.”', agentAction: 'Stops repeating tier-one steps and hands off the full conversation and troubleshooting history.', outcome: 'Human escalation without restarting the story.' },
+      { label: 'Escalate an issue', callerLine: '“मैं ये तीन बार try कर चुका हूँ, person से connect करो.”', agentAction: 'Stops repeating tier-one steps and hands off the full conversation and troubleshooting history.', outcome: 'Human escalation without restarting the story.' },
     ],
     workflow: [
       { icon: 'hearing', title: 'Understand the failure', body: 'Capture what is broken and what the caller already tried.' },
@@ -947,7 +963,7 @@ export const HOME_FEATURES: NavLink[] = PRODUCT_PAGES
 
 export const HOW_IT_WORKS: FeatureRow[] = [
   { icon: 'dialpad', title: 'Connect a number', body: 'Bring your own number or get one from us. Point inbound calls at Vistrow in minutes.' },
-  { icon: 'menu_book', title: 'Train on your knowledge', body: 'Upload PDFs and docs. Artha learns your business logic instantly with retrieval-grounded RAG.' },
+  { icon: 'menu_book', title: 'Train on your knowledge', body: 'Upload PDFs and docs. Artha answers from them with retrieval-grounded RAG.' },
   { icon: 'rocket_launch', title: 'Go live', body: 'Publish your agent and it starts answering, qualifying, and booking - in 10 Indian languages plus English.' },
 ]
 
@@ -1074,7 +1090,7 @@ export const GLOBAL_GREETINGS: { greeting: string; name: string }[] = [
 ]
 
 export const HERO_STATS = [
-  { value: '99', label: 'Languages' },
+  { value: '11', label: 'Languages' },
   { value: '24/7', label: 'Always answering' },
   { value: '3', label: 'Inbound · outbound · web' },
 ]
@@ -1171,7 +1187,7 @@ export const LANGUAGES: LanguagePage[] = [
     ],
     seoFaq: {
       q: 'Is this a Hindi voice bot or a real AI phone calling agent?',
-      a: 'It is a real AI phone calling agent: it speaks, listens, qualifies the caller, answers approved questions, and logs the conversation. It is not just a recorded Hindi IVR or a translated chatbot.',
+      a: 'It is a real AI phone calling agent: it speaks, listens, qualifies the caller, answers approved questions, and logs the conversation. That makes it different from a recorded Hindi IVR or a translated chatbot.',
     },
     sampleExchange: {
       context: 'An outbound EMI reminder call',

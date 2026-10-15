@@ -324,7 +324,7 @@ export function VoiceAiPlatform() {
           <p className="mt-3 leading-relaxed text-text-muted">
             Developer frameworks give full control and expect engineers to own prompts, telephony and storage. A
             finished platform lets the business team edit, test and read the results. When comparing, ask to see a
-            finished call record, not just hear a demo. The{' '}
+            finished call record as well as hearing a demo. The{' '}
             <Link to="/best-ai-voice-calling-software-india" className="font-semibold text-primary underline-offset-4 hover:underline">
               guide to choosing AI voice calling software
             </Link>{' '}

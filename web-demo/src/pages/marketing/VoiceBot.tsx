@@ -28,7 +28,7 @@ const PARTS = [
   {
     icon: 'task_alt',
     title: 'It acts',
-    body: 'Tools let it do things during the call: check free slots and book one, request a callback, save lead details, or transfer the call.',
+    body: 'Tools let it do things during the call: check free slots and book one, request a callback, save lead details, or, on phone calls, transfer to a colleague.',
   },
 ]
 
@@ -76,7 +76,7 @@ const FAQ = [
   },
   {
     q: 'How long does it take to set up a voice bot?',
-    a: 'The first draft is quick with Build with AI. The time goes into writing down your real answers for the knowledge base and running test calls until the hard cases sound right. Plan for testing, not just building.',
+    a: 'The first draft is quick with Build with AI. The time goes into writing down your real answers for the knowledge base and running test calls until the hard cases sound right. Plan time for testing as well as building.',
   },
 ]
 

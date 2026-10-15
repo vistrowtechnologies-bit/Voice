@@ -24,14 +24,14 @@ const ORIGINAL_POSTS: Omit<VoiceBlogPost, 'image' | 'imageAlt' | 'updatedAt' | '
   {
     slug: 'what-is-an-ai-voice-agent',
     title: 'What is an AI voice agent? A practical guide for business teams',
-    excerpt: 'Understand how a voice agent listens, responds, and completes useful work—and where it fits alongside your people, phone system, and existing workflows.',
+    excerpt: 'Understand how a voice agent listens, responds, and completes useful work, and where it fits alongside your people, phone system, and existing workflows.',
     category: 'Voice AI basics',
     publishedAt: '2026-09-28',
     readTime: '6 min read',
     sections: [
       { heading: 'From phone menu to conversation', paragraphs: [
         'An AI voice agent is software that can take part in a spoken conversation. A caller speaks naturally; the system recognizes the words, works out what the caller needs, and replies out loud. Unlike a fixed keypad menu, the exchange can follow the caller’s intent and ask a relevant follow-up question.',
-        'A business voice agent combines speech recognition, a language model, text-to-speech, and the rules and information supplied by the business. The experience is only as reliable as that complete system—not any single model in isolation.',
+        'A business voice agent combines speech recognition, a language model, text-to-speech, and the rules and information supplied by the business. The experience is only as reliable as that complete system, not any single model in isolation.',
       ] },
       { heading: 'What should it handle?', paragraphs: ['Start with calls that are frequent, repeatable, and have a clear next step. An agent may answer approved questions, collect a few details, qualify an enquiry, request an appointment, or route a caller to a person.'], points: [
         'Inbound calls that arrive outside staffed hours or during busy periods.',
@@ -51,7 +51,7 @@ const ORIGINAL_POSTS: Omit<VoiceBlogPost, 'image' | 'imageAlt' | 'updatedAt' | '
     readTime: '7 min read',
     sections: [
       { heading: 'Test the conversation, not the language count', paragraphs: ['A platform may list many languages, but your callers care whether it understands the words they actually use. Test common names, addresses, numbers, product terms, and the mix of regional language and English your customers speak.', 'Include ordinary speech and imperfect audio. A quiet browser demo is not the same as a mobile call with background noise, interruptions, and a caller speaking at their normal pace.'] },
-      { heading: 'Check these five details', paragraphs: ['Ask vendors to demonstrate a complete task in each language you plan to support—not just a greeting. Compare the transcript with what the caller said and listen for awkward pronunciation or unnatural pauses.'], points: [
+      { heading: 'Check these five details', paragraphs: ['Ask vendors to demonstrate a complete task in each language you plan to support, beyond a greeting. Compare the transcript with what the caller said and listen for awkward pronunciation or unnatural pauses.'], points: [
         'Recognition quality for local accents, names, and domain-specific vocabulary.',
         'Whether people can switch between a regional language, Hindi, and English mid-conversation.',
         'Voice quality and pronunciation of numbers, dates, addresses, and brand names.',
@@ -77,7 +77,7 @@ const ORIGINAL_POSTS: Omit<VoiceBlogPost, 'image' | 'imageAlt' | 'updatedAt' | '
         'Repeat over browser audio and the actual phone route; their network paths differ.',
         'Log the selected speech, model, and fallback route so a test is attributable.',
       ] },
-      { heading: 'Tune the whole pipeline', paragraphs: ['Shorter, well-structured answers can reduce perceived waiting and keep a conversation focused. Streaming recognition and speech generation can help when supported, but buffering, slow tool calls, or synchronous work on the audio event loop can erase those gains.', 'Optimize from observed traces, one component at a time. A useful target is a conversation that feels responsive and remains accurate—not the smallest number in a provider’s marketing table.'] },
+      { heading: 'Tune the whole pipeline', paragraphs: ['Shorter, well-structured answers can reduce perceived waiting and keep a conversation focused. Streaming recognition and speech generation can help when supported, but buffering, slow tool calls, or synchronous work on the audio event loop can erase those gains.', 'Optimize from observed traces, one component at a time. A useful target is a conversation that feels responsive and remains accurate, rather than the smallest number in a provider’s marketing table.'] },
     ],
   },
   {
@@ -90,7 +90,7 @@ const ORIGINAL_POSTS: Omit<VoiceBlogPost, 'image' | 'imageAlt' | 'updatedAt' | '
     sections: [
       { heading: 'Give visitors a reason to speak', paragraphs: ['A website voice widget works best when it offers a clear benefit: ask about a service, check whether a product fits, understand a project, or request a next step. A generic “talk to us” button is less helpful than explaining what the agent can answer.', 'Keep the choice optional. Visitors should be able to close the widget and use the site normally, and the page should explain whether the conversation may be recorded or transcribed.'] },
       { heading: 'Ground the agent in the page and your approved facts', paragraphs: ['Give the agent reliable product or service information and make the page context available only when appropriate. It should distinguish confirmed facts from details that need a human follow-up. If pricing or availability changes frequently, do not rely on an old static document as the source of truth.'] },
-      { heading: 'Measure outcomes beyond widget opens', paragraphs: ['Count completed conversations, qualified enquiries, useful handoffs, and booked next steps—not just clicks on the microphone. Review transcripts and caller feedback to find questions the agent cannot answer or moments when visitors abandon the exchange.', 'Start with one page and a narrow purpose. Once you understand the quality of the conversations, expand to other high-intent pages and compare outcomes against the existing enquiry path.'] },
+      { heading: 'Measure outcomes beyond widget opens', paragraphs: ['Count completed conversations, qualified enquiries, useful handoffs, and booked next steps rather than clicks on the microphone. Review transcripts and caller feedback to find questions the agent cannot answer or moments when visitors abandon the exchange.', 'Start with one page and a narrow purpose. Once you understand the quality of the conversations, expand to other high-intent pages and compare outcomes against the existing enquiry path.'] },
     ],
   },
   {
@@ -109,7 +109,7 @@ const ORIGINAL_POSTS: Omit<VoiceBlogPost, 'image' | 'imageAlt' | 'updatedAt' | '
         'Set a clear retention policy for recordings, transcripts, and webhook logs.',
         'Test both success and failure paths with a non-production CRM record.',
       ] },
-      { heading: 'Verify the destination, not just the send button', paragraphs: ['A successful HTTP response does not always mean the record appeared in the intended workspace or that the recording is playable there. Confirm the field mapping, tenant, permissions, and media URL from the receiving CRM account. Give operators a way to inspect delivery status and safely retry a failed event.', 'For recording links, check access control and expiration. A public URL may be convenient, but it can expose a customer conversation to anyone who obtains the link.'] },
+      { heading: 'Verify the destination as well as the send button', paragraphs: ['A successful HTTP response does not always mean the record appeared in the intended workspace or that the recording is playable there. Confirm the field mapping, tenant, permissions, and media URL from the receiving CRM account. Give operators a way to inspect delivery status and safely retry a failed event.', 'For recording links, check access control and expiration. A public URL may be convenient, but it can expose a customer conversation to anyone who obtains the link.'] },
     ],
   },
   {
@@ -121,7 +121,7 @@ const ORIGINAL_POSTS: Omit<VoiceBlogPost, 'image' | 'imageAlt' | 'updatedAt' | '
     readTime: '5 min read',
     sections: [
       { heading: 'IVR is still useful for simple routing', paragraphs: ['A keypad menu is predictable, easy to audit, and often effective when callers need only choose a department, language, or known option. If the tree is short and callers understand it, replacing it may add complexity without improving the experience.'] },
-      { heading: 'Use conversation when callers need to explain', paragraphs: ['A voice agent may fit when the caller’s intent is varied, the next question depends on the answer, or the system needs to collect context before routing. For example, it can ask what the caller needs help with and pass a short summary to a human—provided it is connected to trustworthy information and a clear handoff.'] },
+      { heading: 'Use conversation when callers need to explain', paragraphs: ['A voice agent may fit when the caller’s intent is varied, the next question depends on the answer, or the system needs to collect context before routing. For example, it can ask what the caller needs help with and pass a short summary to a human, provided it is connected to trustworthy information and a clear handoff.'] },
       { heading: 'Choose from the call, not the trend', paragraphs: ['Map the top call reasons, how often each repeats, the cost of a wrong answer, and what happens when the system is uncertain. Then test both approaches with real scripts and accessibility needs in mind.'], points: [
         'Keep IVR for stable, high-confidence routing choices.',
         'Consider voice AI for natural-language questions and structured qualification.',
@@ -142,6 +142,10 @@ const EXTRA_SECTIONS: Record<string, VoiceBlogSection[]> = {
       'Pick one call reason and write down what a successful call leaves behind. For appointment enquiries, that might be a verified service, a requested slot, and a reachable contact. Decide which situations go straight to a person, including a complaint or a request the agent cannot verify.',
       'Review a sample of successful calls as well as failed ones. An enquiry can look complete in a dashboard while containing the wrong date. Keep a short issue log, change one part of the flow at a time, and repeat the same test calls after each change. Expand the scope only when the first task is dependable.',
     ], points: ['Can the caller correct a name or date without starting over?', 'Does an unavailable service produce an honest answer?', 'Can your team find the call and act on its next step?', 'Does the agent stop or hand off when asked?'] },
+    { heading: 'Where a voice agent sits in a small business', paragraphs: [
+      'Most teams meet a voice agent in one of three places. On the main phone number it acts as a receptionist: it answers, works out why the person is calling, answers from approved information and books or passes the call on. Our page on [what an AI receptionist handles](/ai-receptionist) walks through that front-desk role. On a website it sits behind a call button, so a visitor can ask a question out loud instead of filling in a form. And on follow-up work it calls people back, for example a new enquiry that arrived after hours.',
+      'In every case the useful part is what the call leaves behind: a transcript, a short summary, the details the caller gave and the next step. A plain explanation of the term itself is on [what an AI voice bot is](/voice-bot). To hear the difference between a scripted bot and a conversation, read a [Kannada sample call transcript](/demo-calls/kannada-inbound-property-enquiry), then try a [quick browser test of your own agent](/help/testing-lab/quick-browser-test) before putting it on a real line.',
+    ] },
   ],
   'how-to-choose-a-multilingual-voice-agent': [
     { heading: 'Start with a primary language and one real fallback', paragraphs: [
@@ -152,6 +156,10 @@ const EXTRA_SECTIONS: Record<string, VoiceBlogSection[]> = {
       'Include the phrases customers actually use: “budget seventy-five tak hai,” a building name, a village address, and a callback time. Use fictional contact details. Ask colleagues to read the examples naturally rather than pronounce every syllable as if recording a training course.',
       'Score the important fields separately from the transcript. A transcript can be mostly correct while the agent confuses fifteen with fifty or a requested date with an available date. Confirm critical details aloud, then inspect the saved record. For code-switching, test whether the reply follows the caller without changing voice identity unexpectedly.',
     ], points: ['Same twenty enquiries in each required language.', 'Quiet room and ordinary background-noise samples.', 'Names, currency amounts, dates, and regional place names.', 'Language-change request halfway through a task.', 'A misunderstanding followed by a correction.'] },
+    { heading: 'Read the language list carefully', paragraphs: [
+      'A long language list on a vendor page can mean several different things. Some languages may work only in a demo, only with one premium voice, or only for speech recognition and not for the voice that answers. Ask which languages are available on the plan you would actually buy, on phone calls as well as in the browser, and whether each one has voices that sound native rather than translated.',
+      'On Vistrow Voice, customer agents support eleven languages: Hindi, English, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia, on both phone and website calls. The [guide to choosing voices](/help/voices/choose-voices) explains how voices are previewed and added. If you are weighing a build against a finished product, the [comparison with Sarvam AI](/compare/sarvam-ai) covers the trade-off, and the [comparison with ElevenLabs](/compare/elevenlabs) covers what a voice provider does and does not include. A [Telugu website widget call transcript](/demo-calls/telugu-website-widget-call) shows a full regional-language conversation with the fields it produced.',
+    ] },
   ],
   'voice-ai-latency-how-to-measure-it': [
     { heading: 'Make a timing sheet before changing providers', paragraphs: [
@@ -162,6 +170,10 @@ const EXTRA_SECTIONS: Record<string, VoiceBlogSection[]> = {
       'Run at least a few repeated conversations per configuration and keep the failures in the results. Report a median and a slower percentile, along with sample size and the channel. Do not mix browser and phone observations into one number or compare a cached greeting with a fresh answer.',
       'Include a short question, a longer explanation, an interrupted answer, and a tool-backed request. A system can feel fast until it checks availability. Also listen for premature replies: cutting a caller off may shorten the measured pause while making the conversation worse. Choose the fastest configuration that still lets people finish and gets the task right.',
     ], points: ['Record exact provider, model, voice, region, and fallback.', 'Keep the same prompt and response-length instructions.', 'Measure the actual phone route as well as the browser.', 'Separate tool time from model and synthesis time.', 'Track misunderstood answers alongside latency.'] },
+    { heading: 'Comparing platforms on response time', paragraphs: [
+      'When you shortlist platforms, ask each vendor how they measure latency and on which channel. A number measured from text arriving at the model to the first audio byte leaves out speech recognition, end-of-turn detection and the phone network. Ask for the measurement from the end of the caller’s speech to the first audible word, and run your own test calls on the same phone route for every option.',
+      'Developer platforms such as those compared on our [Vistrow Voice and Retell AI page](/compare/retell-ai), the [Bland AI comparison](/compare/bland-ai) and the [Synthflow comparison](/compare/synthflow) let you choose many of the components yourself, which also means you own the tuning. A finished product makes those choices for you, so test it as delivered. Whichever you pick, a [quick browser test](/help/testing-lab/quick-browser-test) and a call test to your own phone are the fastest way to hear the pause a caller will hear.',
+    ] },
   ],
   'website-voice-widget-for-lead-generation': [
     { heading: 'The microphone permission step is part of the funnel', paragraphs: [
@@ -170,7 +182,11 @@ const EXTRA_SECTIONS: Record<string, VoiceBlogSection[]> = {
     ] },
     { heading: 'Ask one useful question before asking for a number', paragraphs: [
       'On a property page, “Are you exploring this for yourself or as an investment?” can be a useful opening after a visitor asks about the project. But the agent should answer that question first. Demanding a phone number before offering any help makes the widget feel like a form wearing a microphone.',
-      'When a next step is appropriate, explain why the detail is needed: “If you want the sales team to confirm availability, what number should they use?” Confirm the number and save the page context with the enquiry. Compare qualified enquiries and staff follow-up quality, not just the total number of conversations. A smaller number of relevant leads can be more useful than many empty opens.',
+      'When a next step is appropriate, explain why the detail is needed: “If you want the sales team to confirm availability, what number should they use?” Confirm the number and save the page context with the enquiry. Compare qualified enquiries and staff follow-up quality as well as the total number of conversations. A smaller number of relevant leads can be more useful than many empty opens.',
+    ] },
+    { heading: 'Setting the widget up on one page first', paragraphs: [
+      'Start with a single page where visitors already show intent, such as a project page, a pricing page or a booking page. On Vistrow Voice you add the website, pick the agent and paste the embed snippet; the [widget setup guide](/help/website-widget/add-widget) lists the steps. If different pages need different answers, [page rules for the website widget](/help/website-widget/page-rules) send visitors on matching pages to a different agent with its own greeting.',
+      'Tell visitors what happens to the conversation. Link the [privacy policy](/privacy) from the page, say whether calls are recorded, and keep the button optional. After the first week, open the calls from that site, read where visitors dropped off, and change one thing at a time. A [Telugu website widget call transcript](/demo-calls/telugu-website-widget-call) shows what a complete widget enquiry looks like, including the page it started from. Before storing those calls, read the [checklist for call recordings and transcripts](/resources/blog/ai-call-recordings-and-transcripts).',
     ] },
   ],
   'connecting-voice-calls-to-your-crm': [
@@ -180,7 +196,11 @@ const EXTRA_SECTIONS: Record<string, VoiceBlogSection[]> = {
     ], points: ['Call ID, tenant identity, start time, end time, and channel.', 'Contact details with explicit missing values rather than guessed defaults.', 'Summary, qualification answers, outcome, and requested next action.', 'Recording status, protected media reference, and transcript.', 'Delivery attempt history with credentials removed.'] },
     { heading: 'Three failure tests worth doing before launch', paragraphs: [
       'Send the same event twice and confirm there is still one call. Make the receiver temporarily unavailable and verify that delivery can recover. Finally, sign in to a different tenant and confirm that the recording and transcript cannot be accessed there.',
-      'The last test is easy to skip because the integration looks correct in the administrator account. Check it from the ordinary user account that will actually handle the lead. Verify playback, contact association, and the next-action field—not just a green “sent” badge.',
+      'The last test is easy to skip because the integration looks correct in the administrator account. Check it from the ordinary user account that will actually handle the lead. Verify playback, contact association, and the next-action field, as well as the green “sent” badge.',
+    ] },
+    { heading: 'What Vistrow Voice sends, and where to check it', paragraphs: [
+      'On Vistrow Voice, connected integrations receive every qualified lead as the call finishes: Zoho CRM and ArthaLeads directly, Slack and Google Sheets for alerts and a lead sheet, and any other system through a webhook that posts the lead as JSON. The [integrations directory](/integrations) lists each one, and the [guide to connecting integrations](/help/integrations/connect-integrations) shows how to switch them on and send a test.',
+      'An agent can also post to its own URL or deliver only to chosen integrations, as described in [webhook, CRM routing and memory](/help/agents/agent-webhook-crm-memory). When something looks wrong, start from the call rather than the CRM: [finding a call in Calls history](/help/calls/find-a-call) opens the transcript, the captured fields and the delivery status, with a re-send button when a delivery failed. For leads that should be called straight away, [instant lead follow-up](/help/integrations/instant-lead-follow-up) works in the other direction: your CRM or form posts the lead, and a call is queued.',
     ] },
   ],
   'when-to-use-voice-ai-instead-of-ivr': [
@@ -192,6 +212,38 @@ const EXTRA_SECTIONS: Record<string, VoiceBlogSection[]> = {
       'Test a known department request, an ambiguous request, a wrong selection, a caller who stays silent, and a caller who asks for a person. Measure whether they reach a useful destination and how often they must repeat themselves. Include people who prefer keypad controls or have difficulty using speech input.',
       'Keep the existing route available during a pilot. If the conversational path repeatedly misunderstands a particular task, narrow its scope rather than hiding the problem behind a longer prompt. The best choice may be a short language menu followed by a focused voice agent, with a clear human fallback.',
     ] },
+    { heading: 'Running a pilot on the number you already have', paragraphs: [
+      'You do not need a new number to try a voice agent. Route one line, or only the after-hours window, to the agent and keep the menu for everything else. On Vistrow Voice that is a route from a [connected phone number](/help/phone-numbers/connect-a-number) to an agent, with its own hours, active days and call limit, set up as described in [routing inbound calls to an agent](/help/inbound/route-inbound-calls). The [AI IVR page](/ai-ivr) explains the whole approach of answering a business line with a conversation instead of a menu.',
+      'If you already use a cloud telephony provider, compare what it does with what an agent adds before you switch anything. Our [comparison with Knowlarity](/compare/knowlarity) and [comparison with Ozonetel](/compare/ozonetel) set out where a telephony and contact-centre suite fits and where a finished voice agent fits. Teams running a full support floor can read [how an AI call center splits the work](/ai-call-center) between the agent and people.',
+    ], points: ['Pilot on one line or the after-hours window only.', 'Keep a transfer number on the agent for phone calls.', 'Read a week of transcripts before widening the pilot.', 'Compare repeat calls and abandoned calls with the menu.'] },
+  ],
+  'ai-voice-agents-for-real-estate-leads': [
+    { heading: 'Adjust the script to the city and the language', paragraphs: [
+      'The same qualification questions sound different in different markets. Buyers in Pune talk about carpet area and possession, in Hyderabad and Andhra Pradesh plot buyers describe size in square yards, and in Bengaluru documentation questions come up early. Set the default language to the one your buyers use, and add fields for the details that matter locally. Our local guides cover [Marathi property calls in Maharashtra](/solutions/real-estate/marathi-ai-calling-agent-mumbai-real-estate), [Gujarati property calls in Gujarat](/solutions/real-estate/gujarati-ai-calling-agent-ahmedabad-real-estate), [Kannada property calls in Bengaluru](/solutions/real-estate/kannada-ai-voice-bot-bangalore-real-estate) and [Telugu property calls in Hyderabad](/solutions/real-estate/telugu-ai-calling-agent-hyderabad-real-estate).',
+      'A [Marathi site-visit booking transcript](/demo-calls/marathi-site-visit-booking) shows a full booking flow. Visits booked by the agent appear in the [appointments calendar](/help/appointments/manage-appointments), where your team can reschedule or confirm them. For calling back ad leads, read [how an AI telecaller follows up enquiries](/ai-telecaller) inside a calling window.',
+      'Keep the recording and transcript with each lead, so the advisor who calls back hears what the buyer actually said. The [checklist for call recordings and transcripts](/resources/blog/ai-call-recordings-and-transcripts) covers how to confirm they reached your CRM.',
+    ], points: ['Budget in lakhs or crores, confirmed aloud.', 'Locality and configuration as separate fields.', 'Purpose: to live in or as an investment.', 'Timeline and the preferred visit day.', 'Whether a home loan is needed, recorded as a yes or no.'] },
+  ],
+  'ai-voice-agent-pricing-india': [
+    { heading: 'Reading a voice AI price list', paragraphs: [
+      'Vendors express the same cost in different units: per minute, per credit, per call or per seat. Convert each offer into the cost of one useful call for your own call length, then add what is billed separately, such as telephony, number rental and taxes. Check whether the voice and model you would really use change the rate, because the cheapest line on a price list is often a basic voice.',
+      'On Vistrow Voice, plans include a monthly pool of credits and the rate per minute depends on the voice and model. The [guide to how credits are counted](/help/billing/how-credits-work) explains the multipliers, and [what each plan includes](/help/billing/plans) lists agents and features by plan. Our [AI voice bot pricing guide](/ai-voice-bot-pricing-india) has a ten-point cost checklist to run against any vendor, and the [comparison with Exotel](/compare/exotel) explains how telephony pricing differs from paying for a finished agent.',
+      'Finally, budget for the first month separately. Teams usually make more test calls, change the prompt a few times and run a short pilot before traffic settles, so the first bill is rarely a good guide to the steady state. Compare the second month with your estimate before deciding whether a larger plan is worth it.',
+    ], points: ['The cost of one useful call, not one minute.', 'Telephony and number rental, if billed separately.', 'GST and any setup or support fee.', 'Test calls and retries in the first month.', 'The rate for the voice you will really use.'] },
+  ],
+  'write-ai-voice-agent-prompts': [
+    { heading: 'Draft with the builder, then edit by hand', paragraphs: [
+      'You do not have to start from a blank page. On Vistrow Voice, [building an agent with AI](/help/agents/build-with-ai) turns a short description of your business into a first set of instructions, a voice and the fields to fill after every call. Treat that draft as a starting point: read every section, remove anything you would not say to a customer, and add the rules that matter to you, such as when to offer a callback.',
+      'Keep facts out of the prompt where you can. Prices, timings and policies belong in the knowledge base, where [adding approved knowledge](/help/knowledge-base/add-knowledge) explains strict mode and the character limit. Settings such as the welcome message, default language and who speaks first live on the agent page, described in [creating and editing an agent](/help/agents/create-and-edit-agent). After each change, re-run the same scenarios in [the Testing Lab](/help/testing-lab/run-a-test), including a silent caller and a language switch.',
+      'The [product documentation overview](/resources/docs) explains the terms used across the dashboard, such as agents, routes, campaigns and knowledge bases, if you are writing instructions for the first time.',
+    ], points: ['Who the agent is and which business it speaks for.', 'What it may book, collect or promise, and what it may not.', 'When it must offer a callback or a transfer.', 'What it says when the answer is not in the knowledge base.'] },
+  ],
+  'ai-call-recordings-and-transcripts': [
+    { heading: 'Where recordings and transcripts live in Vistrow Voice', paragraphs: [
+      'Every call in Vistrow Voice is listed in Calls history, across website, widget and phone. Opening a call shows the full transcript, recording playback and download when recording is on, the captured lead fields and the CRM delivery status; [finding a call](/help/calls/find-a-call) covers the filters. Recording is a setting, not a given: [consent, recording and data retention](/help/compliance/consent-recording-retention) explains spoken consent, the record-calls switch and how many days transcripts and recordings are kept.',
+      'For your own records, [email notifications and your data](/help/settings/notifications-and-privacy) describes delivery-issue alerts and how to download workspace data. The [security page](/security) lists how call data is protected and what is not done yet, and the [privacy policy](/privacy) sets out how we handle personal data. If you suspect a recording is missing, send the call details through [contacting support](/help/help-and-support/contact-support) rather than a screenshot of the CRM alone.',
+      'Before a launch, agree internally on who may listen to recordings, how long they are kept and how a caller’s request to delete their data is handled. Write those decisions down next to the retention setting, so the person who changes it later knows why it was chosen.',
+    ], points: ['Check the recording setting on the agent before a test call.', 'Confirm the consent answer saved on the call.', 'Play the recording from the account that owns the call.', 'Check the retention period matches your policy.', 'Decide whether a deletion should also reach the copy in your CRM.'] },
   ],
 }
 

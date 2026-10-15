@@ -239,7 +239,7 @@ export function DemoOrbCard({
       return
     }
     if (!claimCallLock()) {
-      setErrorMessage('A conversation is already active on this page — please finish it first.')
+      setErrorMessage('A conversation is already active on this page. Please finish it first.')
       setPhase('unreachable')
       return
     }
@@ -383,7 +383,7 @@ export function DemoOrbCard({
     if (failures >= 2) {
       const cooldownMs = Math.min(30_000, 8_000 * 2 ** (failures - 2))
       setCooldownUntil(Date.now() + cooldownMs)
-      setErrorMessage("We're seeing high demand right now — please wait a moment before trying again.")
+      setErrorMessage("We're seeing high demand right now. Please wait a moment before trying again.")
     } else {
       setErrorMessage('Artha didn’t pick up just now - please try again.')
     }

@@ -6,16 +6,45 @@ import { Seo } from '../../components/Seo'
 import { CTABand, SectionEyebrow } from '../../components/MarketingBits'
 import { Reveal } from '../../components/Reveal'
 import { DemoOrbCard } from '../../components/DemoOrbCard'
-import { DEMO_GLOBAL_LOCALES, GLOBAL_LANGUAGES, LANGUAGES } from '../../lib/marketingContent'
+import { DEMO_GLOBAL_LOCALES, LANGUAGES } from '../../lib/marketingContent'
+
+// Customer agents support exactly the 11 languages in LANGUAGES (Hindi, English
+// + 9 Indian languages; see lib/agentOptions.ts LANGUAGES). The larger Gemini
+// language lists are owner-only and must not be claimed here.
+const LANGUAGE_SETUP = [
+  {
+    title: 'Set a default language',
+    body: 'Each agent has a default language: the one it greets callers in. A Pune developer might open in Marathi, a Chennai clinic in Tamil, a national helpline in Hindi or English. The welcome message is written in that language too.',
+  },
+  {
+    title: 'The caller can switch',
+    body: 'If a caller answers in another of the eleven languages, or mixes English words into Hindi, Kannada or Telugu, the agent replies in the language the caller is using rather than asking them to switch back.',
+  },
+  {
+    title: 'Pick a voice that suits the language',
+    body: 'Voices are added from the Voices page and previewed before you use them. Some voices are tuned to sound native in a particular language while still speaking all eleven, so a Tamil line can use a voice that sounds local.',
+  },
+  {
+    title: 'Numbers, dates and names',
+    body: 'Prices, dates, phone numbers and Indian names are where generic voice systems sound foreign. Test them in your own language in the Testing Lab before going live, and add the spellings that matter to your knowledge base.',
+  },
+  {
+    title: 'Same records in every language',
+    body: 'Whatever language the call ran in, it is saved with a recording, a transcript and a summary in Calls history, and the lead details go to your CRM, Slack, Google Sheets or a webhook in the same format.',
+  },
+  {
+    title: 'Phone and website',
+    body: 'All eleven languages work on phone calls (inbound and outbound) and on browser calls from the website widget.',
+  },
+]
+
 
 export function LanguagesOverview() {
-  // Languages, not locales: the demo's regional variants (en-GB/en-US, es-ES/es-MX) count once.
-  const demoLanguages = demoLanguageCount()
   return (
     <MarketingLayout>
       <Seo
-        title="AI Voice Agents in 99 Languages, 10 of them Indian | Vistrow Voice"
-        description="Artha answers in Hindi, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi, Odia and English - plus French, German, Spanish, Japanese, Arabic and 82 more, 99 languages in all. Pick a language and try it live."
+        title="AI Voice Agents in Hindi, English + 9 Indian Languages | Vistrow Voice"
+        description="AI voice agents that speak Hindi, English, Marathi, Tamil, Telugu, Kannada, Bengali, Gujarati, Malayalam, Punjabi and Odia, and switch language mid-call."
         path="/languages"
       />
 
@@ -26,8 +55,8 @@ export function LanguagesOverview() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-text-muted">
           Artha speaks 10 Indian languages plus English, and switches mid-call when the caller does - including
-          the everyday mixed speech most people actually use on the phone. That same agent also handles
-          {GLOBAL_LANGUAGES.length} more, from French to Japanese: 99 languages in all.
+          the everyday mixed speech most people actually use on the phone. Every customer agent supports
+          all eleven languages on phone calls and website calls.
         </p>
         <p className="mx-auto mt-4 max-w-xl text-sm text-text-muted">
           Each Indian language has its own page with a sample conversation and regional notes, for example{' '}
@@ -74,32 +103,45 @@ export function LanguagesOverview() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
-        <SectionEyebrow>Global languages</SectionEyebrow>
+        <SectionEyebrow>How language works on an agent</SectionEyebrow>
         <h2 className="mt-4 max-w-2xl font-display text-2xl font-bold sm:text-3xl">
-          And {GLOBAL_LANGUAGES.length} more, on the same agent.
+          One agent, one default language, and it follows the caller.
         </h2>
-        <p className="mt-3 max-w-2xl text-text-muted">
-          The Indian languages above are the ones we build for. These are the languages Google’s realtime
-          voice models cover — the same agent, the same call, no separate setup. The live demo above can
-          run {demoLanguages} of the 99 today.
-        </p>
-        {/* Chips, not cards: there are too many to give each one a tile, and
-            unlike the Indian languages these do not each have a page behind
-            them. The endonym leads because that is what a speaker scans for. */}
-        <ul className="mt-8 flex flex-wrap gap-2">
-          {GLOBAL_LANGUAGES.map((l) => (
-            <li
-              key={l.code}
-              className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm"
-              title={`${l.name} · ${l.code}`}
-            >
-              <span className="font-medium">{l.native || l.name}</span>
-              {l.native && l.native !== l.name ? (
-                <span className="ml-1.5 text-text-muted">{l.name}</span>
-              ) : null}
-            </li>
+        <div className="mt-8 grid gap-6 md:grid-cols-2">
+          {LANGUAGE_SETUP.map((item) => (
+            <div key={item.title} className="rounded-2xl border border-border bg-surface p-6">
+              <h3 className="font-display text-base font-semibold">{item.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-text-muted">{item.body}</p>
+            </div>
           ))}
-        </ul>
+        </div>
+        <p className="mt-8 max-w-3xl text-sm leading-relaxed text-text-muted">
+          Where to go next: the{' '}
+          <Link to="/product/agents" className="font-semibold text-primary hover:underline">
+            voice agent builder
+          </Link>{' '}
+          is where the default language and voice are set; the{' '}
+          <Link to="/help/voices/choose-voices" className="font-semibold text-primary hover:underline">
+            guide to choosing voices
+          </Link>{' '}
+          explains the voice tiers; and the sample transcripts show real flows, such as a{' '}
+          <Link to="/demo-calls/marathi-site-visit-booking" className="font-semibold text-primary hover:underline">
+            Marathi site-visit booking
+          </Link>{' '}
+          and a{' '}
+          <Link to="/demo-calls/telugu-website-widget-call" className="font-semibold text-primary hover:underline">
+            Telugu website widget call
+          </Link>
+          . If you are replacing a keypad menu, the{' '}
+          <Link to="/ai-ivr" className="font-semibold text-primary hover:underline">
+            AI IVR page
+          </Link>{' '}
+          covers how a multilingual agent answers your existing number.
+        </p>
+        <p className="mt-4 max-w-3xl text-xs leading-relaxed text-text-muted">
+          The live demo above can also open in some languages outside this list. Those run on voices we are
+          still testing and are not available on customer agents yet.
+        </p>
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
@@ -120,7 +162,7 @@ export function LanguagesOverview() {
               <h3 className="font-display text-base font-semibold">Grammatical gender</h3>
               <p className="mt-2 text-sm leading-relaxed text-text-muted">
                 In Hindi, Marathi, Gujarati, and Punjabi, verbs agree with the speaker’s gender. Artha
-                stays consistent with its own voice for the whole call, not just the first line.
+                stays consistent with its own voice from the first line of the call to the last.
               </p>
             </div>
             <div>
@@ -192,21 +234,21 @@ function TryALanguage() {
             <optgroup label="Indian languages">
               {nativeOptions.map((o) => (
                 <option key={o.code} value={o.code}>
-                  {o.label} — {o.native}
+                  {o.label} ({o.native})
                 </option>
               ))}
             </optgroup>
-            <optgroup label="Global languages">
+            <optgroup label="Other languages (demo only, in testing)">
               {globalOptions.map((o) => (
                 <option key={o.code} value={o.code}>
                   {o.label}
-                  {o.native && o.native !== o.label ? ` — ${o.native}` : ''}
+                  {o.native && o.native !== o.label ? ` (${o.native})` : ''}
                 </option>
               ))}
             </optgroup>
           </select>
           <p className="mt-3 text-xs text-text-muted">
-            {nativeOptions.length + globalOptions.length} languages available in this demo.
+            Customer agents support Hindi, English and 9 more Indian languages; the other languages in this demo are in testing.
           </p>
           <p className="mt-5 max-w-sm rounded-xl border border-border bg-bg px-4 py-3 text-sm leading-relaxed text-text-muted">
             Selected: <span className="font-semibold text-text">{selected?.label ?? 'Hindi'}</span>. Ask Artha
@@ -223,15 +265,4 @@ function TryALanguage() {
       </div>
     </section>
   )
-}
-
-function demoLanguageCount(): number {
-  const base = (code: string) => {
-    if (code === 'cmn-CN') return 'zh-Hans'
-    if (code === 'cmn-tw') return 'zh-Hant'
-    if (code === 'nn-NO' || code === 'nb-NO') return 'no'
-    if (code === 'pt-BR' || code === 'pt-PT') return code
-    return code.split('-')[0]
-  }
-  return new Set([...LANGUAGES, ...DEMO_GLOBAL_LOCALES].map((l) => base(l.code === 'od-IN' ? 'or-IN' : l.code))).size
 }

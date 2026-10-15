@@ -15,7 +15,6 @@ import {
   HOME_FEATURES,
   HOW_IT_WORKS,
   SOLUTIONS,
-  GLOBAL_GREETINGS,
   HERO_STATS,
   LANGUAGES,
 } from '../../lib/marketingContent'
@@ -23,15 +22,15 @@ import {
 const FAQ = [
   {
     q: 'What is Vistrow Voice?',
-    a: 'An AI voice-agent platform for Indian businesses - Artha answers, qualifies, and books inbound, outbound, and web calls in 99 languages, live 24/7: 10 Indian languages, English, and 88 more from French to Japanese.',
+    a: 'An AI voice-agent platform for Indian businesses - Artha answers, qualifies, and books inbound, outbound, and web calls 24/7 in Hindi, English and 9 more Indian languages (Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi and Odia).',
   },
   {
     q: 'Do I need to write code to set it up?',
-    a: 'No - build an agent with a no-code editor: persona, prompt, voice, and language, then publish. Most teams are live in under an hour.',
+    a: 'No - build an agent with a no-code editor: persona, prompt, voice, and language, then publish. You can build a first agent and test it in the browser in one sitting.',
   },
   {
     q: 'Which languages does Artha speak?',
-    a: 'Hindi, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, and Odia - plus English and everyday code-switching such as Hinglish. The same agent handles 88 more, including French, German, Spanish, Arabic and Japanese.',
+    a: 'Hindi, Marathi, Tamil, Telugu, Kannada, Malayalam, Gujarati, Bengali, Punjabi, and Odia - plus English and everyday code-switching such as Hinglish. One agent covers all eleven and follows the caller when they switch mid-call.',
   },
   {
     q: 'Can I try it before signing up?',
@@ -86,7 +85,7 @@ const BHARAT_POINTS = [
   },
   {
     glyph: '🎭',
-    title: 'A voice that reacts, not just replies',
+    title: 'A voice that reacts to the caller',
     body: 'Built by an Indian team, tuned for Indian callers: Artha reads frustration, confusion, or excitement in your caller’s voice and shifts its own pace and warmth to match - live, mid-call, not a flat text-to-speech read.',
   },
 ]
@@ -138,7 +137,7 @@ export function Home() {
         className="independence-ribbon flex w-full items-center justify-center gap-2 px-4 py-2.5 text-center text-xs font-semibold text-text sm:text-sm"
       >
         <span className="ribbon-tricolour" aria-hidden="true"><i /><i /><i /></span>
-        <span>Hear Artha switch language mid-call — talk to her live, no signup needed</span>
+        <span>Hear Artha switch language mid-call. Talk to her live, no signup needed</span>
         <Icon name="arrow_forward" className="text-[16px]" />
       </button>
       {/* ---------- Hero ---------- */}
@@ -169,8 +168,8 @@ export function Home() {
           </h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-text-muted sm:mt-5 sm:text-lg sm:leading-relaxed">
             Vistrow Voice is voice AI built for how India actually speaks. Answer, qualify, and book customers across phone and
-            web in 99 languages (10 Indian languages plus English, and 88 more worldwide) with natural Hinglish and
-            mid-sentence language switching.
+            web in Hindi, English and 9 more Indian languages, with natural Hinglish and mid-sentence language
+            switching.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <TalkToArthaButton />
@@ -286,7 +285,7 @@ export function Home() {
               <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                 <div className="md:max-w-md">
                   <div className="flex items-start justify-between gap-4">
-                    <h3 className="font-display text-lg font-semibold">Ten Indian languages plus 88 more, one agent</h3>
+                    <h3 className="font-display text-lg font-semibold">Ten Indian languages plus English, one agent</h3>
                     <span
                       aria-hidden="true"
                       className="shrink-0 font-display text-2xl text-text-muted transition-colors group-hover:text-primary md:hidden"
@@ -295,8 +294,8 @@ export function Home() {
                     </span>
                   </div>
                   <p className="mt-3 text-sm leading-relaxed text-text-muted">
-                    From Punjabi in the north to Malayalam in the south, one agent covers them all - no
-                    separate deployment, no per-language rebuild, no region left on an English-only fallback.
+                    From Punjabi in the north to Malayalam in the south, one agent covers them all,
+                    without a separate deployment for each language.
                   </p>
                   <Link
                     to="/languages"
@@ -329,19 +328,8 @@ export function Home() {
                       {lang.greeting}
                     </li>
                   ))}
-                  {/* The Indian languages are the product's centre of gravity,
-                      so they lead; these few say "and it does not stop there"
-                      without turning the strip into a directory. */}
-                  {GLOBAL_GREETINGS.map((g) => (
-                    <li
-                      key={g.name}
-                      className="rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 font-display text-sm text-text-muted transition-colors group-hover:border-primary/50 group-hover:text-text"
-                    >
-                      {g.greeting}
-                    </li>
-                  ))}
                   <li className="rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 font-display text-sm font-semibold text-primary">
-                    +88 more
+                    + English
                   </li>
                 </ul>
               </div>
@@ -494,7 +482,7 @@ export function Home() {
         <div className="grid gap-5 md:grid-cols-3">
           {[
             ['mic', 'Live voice and chat', 'Test real conversations in the browser, by phone, or through your website.'],
-            ['translate', '99 languages, one agent', 'One agent handles natural code-switching without separate language deployments.'],
+            ['translate', '11 languages, one agent', 'Hindi, English and 9 more Indian languages, with natural code-switching and no separate deployment per language.'],
             ['analytics', 'Calls, transcripts and feedback', 'Review outcomes, recordings, ratings, and operational analytics in one dashboard.'],
           ].map(([icon, title, body], i) => (
             <Reveal key={title} delayMs={i * 70} className="h-full">

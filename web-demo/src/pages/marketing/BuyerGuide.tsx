@@ -66,7 +66,7 @@ export function BuyerGuide() {
       <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
         <div className="rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/[0.12] via-surface to-surface-high p-8 sm:p-10">
           <SectionEyebrow>Decision rule</SectionEyebrow>
-          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Buy the workflow, not just the model.</h2>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">Judge the whole call workflow.</h2>
           <p className="mt-4 max-w-3xl text-text-muted">
             A production voice agent needs transport, listening, thinking, speaking, interruption recovery, recordings, transcripts, compliance controls, analytics, and CRM delivery. If one piece is slow or missing, the caller feels it.
           </p>
@@ -128,7 +128,7 @@ export function BuyerGuide() {
         <section className="mx-auto max-w-7xl px-5 pb-14 md:px-8">
           <div className="rounded-3xl border border-border bg-surface p-8 sm:p-10">
             <SectionEyebrow>Run a fair trial</SectionEyebrow>
-            <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">From shortlist to pilot in five steps.</h2>
+            <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">{guide.trialTitle ?? 'From shortlist to pilot in five steps.'}</h2>
             <ol className="mt-6 space-y-3">
               {guide.trial.map((step, i) => (
                 <li key={step} className="flex gap-3 text-sm leading-relaxed text-text-muted">
