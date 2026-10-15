@@ -22,6 +22,11 @@ class _FakePool:
 class ConnectRetryTests(unittest.TestCase):
     def setUp(self):
         dbconn._pool = None
+        # conftest.py drops retries to 1 when no test database is configured;
+        # these tests exercise the retry loop, so pin the production count.
+        patcher = mock.patch.object(dbconn, "_CONNECT_ATTEMPTS", 3)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         # These tests install fake pools on the module. Leaving one behind
