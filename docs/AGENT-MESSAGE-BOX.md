@@ -845,3 +845,43 @@ Branch `claude/seo-native-samples`. Owner asked for the Indian-language sample c
 - Verified: build (SEO audit and em-dash check), `test:seo` (no expected-phrase changes needed), `check-blog-seo`.
 - Unverified: native-speaker review per language.
 - Next step: review and merge the PR. The change is web only, so Vercel is the only deploy. No agent or server deploy is needed.
+
+### Claude: 2026-10-15, language-switch voice samples and language-page redesign (PR pending, NOT merged)
+
+Branch `claude/seo-voice-samples`. This is web-only work.
+
+**What changed**
+- **Voice samples:** each of the 10 /languages pages now has a two-speaker sample call in the hero. The caller starts in Hindi and switches to the page's language; on the Hindi page the switch is to English. The agent follows the switch.
+- **Player:** an orb and waveform that follow the audio, a live transcript, a "Switched to X" chip, tap-to-seek, and the label "Scripted sample... Not a real customer call". The page JSON-LD has an `AudioObject`.
+- **Hero:** "Talk to Artha live" was removed from the language heroes.
+- **Layout:** the template now uses varied sections. All copy, headings and links are kept.
+
+**Files**
+- `web-demo/public/media/samples/*-switch.m4a`
+- `web-demo/src/lib/voiceSamples.ts`
+- `web-demo/src/components/VoiceSamplePlayer.tsx`
+- `web-demo/src/pages/marketing/LanguageDetail.tsx`
+- `web-demo/src/index.css`
+- `web-demo/scripts/test-language-seo.mjs`
+- `docs/SEO-VOICE-SAMPLES-2026-10-15.md`
+
+**Audio**
+- Sarvam `bulbul:v4-flash`, voices `kavya_hi_conversational` (agent) and `aditya_hi_conversational` (caller).
+- Pace 1.2, temperature 0.7, gaps 200 ms. Each file is 27 to 31 s and 220 to 251 KB.
+- The owner approved the Marathi take before the rest were made.
+- Usage: 15,817 TTS characters across both takes, 33 LLM requests and about 175 STT requests.
+
+**Verified**
+- Every line was round-tripped through Sarvam STT; the content is intact, and the language matched for 78 of 80 lines (the 2 mismatches are expected).
+- Each m4a decodes back to its source.
+- Build and SEO audit, `test:seo` and `check-blog-seo` pass.
+- At 375 px there is no horizontal scroll.
+- Dark mode looks right.
+- Playback works: play, pause, resume, replay and seek.
+
+**Unverified**
+- Native-speaker review.
+- iOS Safari.
+- A single self-pause seen once in the preview pane. It could not be reproduced in 3 later runs.
+
+**Next step:** review and merge the PR. Only Vercel deploys; no server or agent deploy is needed.

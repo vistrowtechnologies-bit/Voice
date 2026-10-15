@@ -93,6 +93,10 @@ for (const page of pages) {
   for (const phrase of page.phrases) {
     assert(html.includes(phrase), `${page.slug}: missing SEO phrase "${phrase}"`)
   }
+  // Two-speaker voice sample: lazy audio, honest label, AudioObject schema.
+  assert(html.includes(`src="/media/samples/${page.slug}-switch.m4a"`) && html.includes('preload="none"'), `${page.slug}: missing lazy voice sample`)
+  assert(html.includes('Scripted sample voiced by Vistrow Voice voices. Not a real customer call.'), `${page.slug}: missing voice sample label`)
+  assert(html.includes('"@type":"AudioObject"'), `${page.slug}: missing AudioObject schema`)
 }
 
 console.log(`language SEO checks passed for ${pages.map((page) => page.slug).join(', ')}`)
