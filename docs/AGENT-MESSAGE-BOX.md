@@ -4,6 +4,7 @@ Shared repository handoff. Also read [GitHub bridge issue #2](https://github.com
 
 ## Current status — 2026-10-10
 
+- Claude (2026-10-15): main `43881e6f`. Phone worker `CA_TGdpVhSdxDyS` version `T2UaoJUggS4Z`, platform-demo `CA_53d8HgBktjZ7` version `RcsGE5Gp4FbB`, both Running and built from `f4fb8d07` (PRs #98–#100); nothing under `agent/` changed after that. No open Claude claims. Production health check 2026-10-15: 0 call failures and 0 platform errors since 12:00 UTC on 14 Oct; vendor checks ok except Razorpay (401, see the 2026-10-15 message).
 - Owner: Codex; branch `codex/gemini25-barge-in`.
 - Task: investigate delayed Gemini Live 2.5 input and broken barge-in in browser/widget calls. Owner reports speech arrives in captions 2–5 seconds late and reply follows it.
 - **Open: 2.5 is not fixed or launch-validated.** Native 3.1 and STT→LLM→TTS pipeline must retain their separate configurations.
@@ -620,3 +621,23 @@ Branch `claude/seo-p5-receptionist-ivr` (owner request; Keyword Planner India: i
 - `/ai-ivr` strengthened (title/H1 unchanged): "IVR system, cloud IVR, IVR call" section, IVR guides list linking the 4 posts + /ai-receptionist, 2 new FAQs.
 Facts checked in repo: transfer refuses web calls (`agent/tools.py` transfer_call), 11 languages (`agent/language.py`), Appointments/Scheduling, route call window blank = answer at any time, integrations list, custom functions (AgentDetail), strict mode, consent/retention, calling window/DNC (help articles).
 Verified: `npm --prefix web-demo run build` (SEO route audit: 120 indexable routes pass), `npm run test:seo`, `npx tsx scripts/check-blog-seo.ts` (14 articles), oxlint (no new warnings). Built pages checked at 375 px: no horizontal scroll, one H1. Not done: `graphify update .` (graphify-out is not tracked; run on main after merge). After merge: Vercel deploy only, then request indexing for the 5 new URLs.
+
+### Claude — 2026-10-15 — PRs #98, #99, #100 merged and deployed; production check
+
+- **PR #98 (copilot model):** merged. Corrects the 2026-10-14 entry that says "PR open, NOT merged". `server/help_chat.py` uses gpt-5.4-mini with reasoning `none`. The same PR fixes the Hindi escaping: `_tool_result_content` now uses `ensure_ascii=False`, so tool results reach the model as UTF-8 (test `ToolResultsKeepIndicText` in `server/test_help_chat_loop.py`). Server-only change; Railway redeployed.
+- **PR #99 (bookings), `agent/tools.py`:**
+  - The tool-wait line now follows the call language: `_TOOL_FILLERS` / `_tool_filler_text`, e.g. hi-IN "एक सेकंड..." instead of English "One second...".
+  - `book_appointment` rejects implausible numbers via `_looks_like_a_phone_number`: a 9-digit number, or a 10-digit number starting 1–5. The model is told to ask the caller to repeat the number digit by digit.
+  - Tests: `agent/test_booking_filler_phone.py`.
+  - Verified on the deployed worker with two Hindi booking calls (1366, 1367). The caller first gave "982134567"; the agent asked for it again, heard "एक सेकंड..." before the booking, and booked once with the corrected 10-digit number (appointments 45, 46).
+- **PR #100 (tests vs production DB):**
+  - Cause: `server/token_api.py` and `agent/main.py` call `load_dotenv()`, which finds the repo-root `.env`, whose `DATABASE_URL` is production. Test imports therefore ran `calls_db.init_tables()` ALTERs against production and locked `calls` for ~50 s. That caused the 33–36 s post-call saves on calls 1282–1284. The OPEN item in the 2026-10-14 GPT-4 entry is explained by this; the build was not at fault.
+  - Fix: `server/conftest.py` and `agent/conftest.py` pin `DATABASE_URL` to `TEST_DATABASE_URL` or an unresolvable placeholder, and refuse Railway hosts.
+  - Rule for both agents: never run pytest or local scripts with `DATABASE_URL` unset. The repo `.env` still points at production (owner action to change).
+- **Production check, read-only:**
+  - API 200; Railway SUCCESS on `43881e6f`. Later main commits (#101–#103, SEO/IndexNow) do not touch `agent/`, so the workers are current.
+  - Vendor health ok except Razorpay: "HTTP 401 BAD_REQUEST_ERROR". The production keys are set but rejected. Checkout is off, so no customer impact today; it blocks turning billing on. Owner must replace the keys; agents must not handle payment keys.
+- **Cleanup:** the leftover temp agent 119 "Combo test (temp)" in account 2 was deleted on owner request via `calls_db.delete_agent` (the dashboard's delete path). Its one call row (1266) keeps `agent_id` 119, which is normal: there is no FK on `calls.agent_id`. No `(temp)` agents remain in account 2.
+- **Open (owner):** rotate the authenticator / recovery codes; fix the Razorpay keys, add the GSTIN and enable checkout; move the repo `.env` `DATABASE_URL` off production; approve PR #72 and detach `/data`; EnableX webhook credentials.
+- **Open (either agent):** Chirp 3 HD markup stays off until a ≥10-calls-per-arm worker-timed comparison exists (see the 2026-10-13 entries). Owner is about to supply a JEV AI key for a local evaluation only; no code uses it.
+- **Next exact step:** none in progress for Claude.
