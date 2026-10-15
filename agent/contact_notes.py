@@ -57,7 +57,10 @@ _SKIP_KEYS = {
     "budget_min", "budget_max", "budget_currency", "whatsapp_consent", "form_responses",
     # Rendered with their own labels by _lead_lines.
     "ad_headline", "ad_body", "form_answers", "whatsapp_first_message", "tags",
-    "repeat_enquiry", "enquiry_at",
+    "repeat_enquiry", "enquiry_at", "follow_up_summary",
+    # A scheduled follow-up call's kind and visit time are spoken through
+    # lead_opening_instruction, not listed.
+    "follow_up_kind", "follow_up_visit_at",
 }
 # Ids and per-integration bookkeeping, whatever the exact key.
 _SKIP_PREFIXES = ("arthaleads_", "form_")
@@ -133,6 +136,7 @@ def _lead_lines(custom_fields: dict, used: set[str]) -> list[str]:
         ("form_answers", "Form answers", _MAX_FORM_ANSWERS),
         ("whatsapp_first_message", "First WhatsApp message", _MAX_VALUE),
         ("tags", "Tags", _MAX_VALUE),
+        ("follow_up_summary", "From our last call with them", _MAX_VALUE),
     ):
         value = _clean(custom_fields.get(key), cap)
         if value and key not in used:
@@ -181,28 +185,61 @@ def build_contact_notes(custom_fields: dict | None, prompt_text: str = "", compa
     return HEADER + "\n" + "\n".join(lines)
 
 
+FOLLOW_UP_KINDS = ("callback", "visit_reminder", "nurture")
+
+
 def lead_opening_instruction(custom_fields: dict | None, first_name: str | None, language_name: str) -> str:
     """How to open an outbound call to a fresh ArthaLeads lead when the
-    operator wrote no opener of their own, or "" for any other call.
+    operator wrote no opener of their own, or a scheduled follow-up call
+    (custom_fields.follow_up_kind, see agent/follow_ups.py: the caller asked
+    to be rung back, a site-visit reminder, a nurture call), or "" for any
+    other call.
 
     An instruction for the model's first line rather than a fixed sentence:
     the existing no-opener outbound paths already greet through
     generate_reply, and the line has to fit the agent's own persona and the
     call language. The enquiry topic is quoted, flattened and short, so it
     reads as the thing they asked about, not as an instruction."""
-    if not isinstance(custom_fields, dict) or custom_fields.get("source") != "arthaleads":
+    if not isinstance(custom_fields, dict):
+        return ""
+    kind = str(custom_fields.get("follow_up_kind") or "")
+    if kind not in FOLLOW_UP_KINDS and custom_fields.get("source") != "arthaleads":
         return ""
     topic = (_clean(custom_fields.get("project"), 80) or _ad_name(custom_fields)[:80]).replace('"', "'")
+    about = f' about "{topic}"' if topic else ""
+    who = f"by their first name, {first_name}" if first_name else "warmly"
+    tail = (
+        "Mention only facts from what we already know about this contact; never add a price, "
+        "offer or detail that is not there."
+    )
+    if kind == "callback":
+        return (
+            f"They asked us to call them back{about} at this time, which is why you are calling. "
+            f"In {language_name}, in one short natural line: greet them {who}, say who you are and "
+            f"that you are calling back as they asked, and ask whether now is a good time to talk. {tail}"
+        )
+    if kind == "visit_reminder":
+        visit = _clean(custom_fields.get("follow_up_visit_at"), 40)
+        when = f" on {visit}" if visit else ""
+        return (
+            f"They have a site visit booked with us{about}{when}, and this is the reminder call. "
+            f"In {language_name}, in one short natural line: greet them {who}, say who you are, "
+            f"confirm they are still coming to the visit{when}, and offer to reschedule if the time "
+            f"no longer suits them. {tail}"
+        )
+    if kind == "nurture":
+        return (
+            f"We spoke with them a few days ago and they were interested{about}, which is why you are "
+            f"calling. In {language_name}, in one short natural line: greet them {who}, say who you are "
+            f"and that you are following up on that conversation, and ask whether they have had a chance "
+            f"to think it over or have any questions. {tail}"
+        )
     via = came_via(custom_fields)
-    enquiry = "They just sent us an enquiry"
-    if topic:
-        enquiry += f' about "{topic}"'
+    enquiry = f"They just sent us an enquiry{about}"
     if via:
         enquiry += f" through a {via}"
-    who = f"by their first name, {first_name}" if first_name else "warmly"
     return (
         f"{enquiry}, which is why you are calling. In {language_name}, in one short natural line: "
         f"greet them {who}, say who you are and that you are calling about that enquiry, and ask "
-        "whether now is a good time to talk. Mention only facts from what we already know "
-        "about this contact; never add a price, offer or detail that is not there."
+        f"whether now is a good time to talk. {tail}"
     )

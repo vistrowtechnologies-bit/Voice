@@ -32,6 +32,7 @@ import urllib.request
 
 import calls_db
 import campaign_window
+import integrations_dispatch
 import plan_policy
 
 logger = logging.getLogger("vistrow-dialer")
@@ -380,6 +381,23 @@ def _dial_one(campaign: dict) -> None:
         logger.info("campaign %s completed", cid)
 
 
+def _report_exhausted_contacts() -> None:
+    """Tell ArthaLeads about leads whose auto-call attempts ran out, once
+    each. The agent and the server both resolve a contact's final attempt,
+    so this is done from the dialer's tick (DB rows, survives restarts)
+    rather than at either write site."""
+    for contact in calls_db.exhausted_arthaleads_contacts():
+        try:
+            ok, detail = integrations_dispatch.report_contact_not_reachable(contact["account_id"], contact)
+            if not ok:
+                logger.warning("not-reachable report for contact %s failed: %s", contact["id"], detail)
+        except Exception:
+            logger.exception("not-reachable report for contact %s failed", contact["id"])
+        # Stamped either way: a report that keeps failing must not be
+        # retried every 15 s forever.
+        calls_db.mark_contact_crm_notified(contact["id"])
+
+
 def _loop() -> None:
     logger.info("campaign dialer started (tick=%ss)", _TICK_SECONDS)
     while True:
@@ -387,6 +405,7 @@ def _loop() -> None:
             promoted = calls_db.promote_due_scheduled_campaigns()
             if promoted:
                 logger.info("promoted %s scheduled campaign(s) to running", promoted)
+            _report_exhausted_contacts()
             campaigns = calls_db.running_campaigns()
             # Stable sort: instant-lead campaigns first, the rest unchanged.
             campaigns.sort(key=lambda c: c.get("name") not in _INSTANT_CAMPAIGN_NAMES)

@@ -1410,6 +1410,10 @@ def init_tables() -> None:
                 # one wasn't supplied, instead of the prompt reading a
                 # literal blank or "{{enquiry_bhk}}" left unsubstituted.
                 ("variables", "TEXT DEFAULT '[]'"),
+                # Per-agent follow-up rules (retry gaps by outcome, max
+                # tries, auto call-back / visit reminder / nurture call) -
+                # retry_rules.follow_up_policy reads it, blank = defaults.
+                ("follow_up_policy", "TEXT DEFAULT ''"),
             ):
                 conn.execute(f"ALTER TABLE agents ADD COLUMN IF NOT EXISTS {column} {coltype}")
             # Public Agent ID: a random 10-digit number customers copy into
@@ -1657,6 +1661,9 @@ def init_tables() -> None:
             # whose agent job never ran or crashed before reconciling it.
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS room_name TEXT")
             conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS consent_basis TEXT DEFAULT ''")
+            # When the CRM was told this contact ran out of attempts (the
+            # dialer's "Not Reachable" report to ArthaLeads), so it is sent once.
+            conn.execute("ALTER TABLE campaign_contacts ADD COLUMN IF NOT EXISTS crm_notified_at TEXT")
             # Curated avatar color + custom greeting bubble, added after the
             # widget shipped with a hardcoded orb video and greeting line.
             conn.execute("ALTER TABLE sites ADD COLUMN IF NOT EXISTS widget_avatar TEXT DEFAULT 'default'")
@@ -3822,7 +3829,7 @@ _AGENT_FIELDS = (
     "custom_functions", "post_call_fields", "webhook_url", "memory_enabled",
     "emotion_intensity", "ambient_noise", "ambient_volume", "business_name", "public_demo_slug",
     "emergency_fallback_number", "crm_integration_keys",
-    "live_catalog_enabled", "variables",
+    "live_catalog_enabled", "variables", "follow_up_policy",
 )
 # INTEGER columns fed from a JSON bool (Postgres has no bool->int cast).
 _AGENT_BOOL_FIELDS = frozenset({"is_platform_demo", "memory_enabled", "live_catalog_enabled"})
@@ -3858,6 +3865,7 @@ _AGENT_CAMEL_TO_SNAKE = {
     "emergencyFallbackNumber": "emergency_fallback_number",
     "crmIntegrationKeys": "crm_integration_keys",
     "liveCatalogEnabled": "live_catalog_enabled",
+    "followUpPolicy": "follow_up_policy",
 }
 
 
@@ -3922,6 +3930,8 @@ def _agent_dict(row: dict) -> dict:
         "emergencyFallbackNumber": _row_get(row, "emergency_fallback_number") or "",
         "crmIntegrationKeys": _load_json_field(_row_get(row, "crm_integration_keys"), []),
         "variables": _load_json_field(_row_get(row, "variables"), []),
+        # Always complete: defaults fill whatever the row never stored.
+        "followUpPolicy": retry_rules.follow_up_policy(_row_get(row, "follow_up_policy")),
         "customFunctions": _load_json_field(row["custom_functions"], []),
         "postCallFields": _load_json_field(row["post_call_fields"], []),
         "webhookUrl": row["webhook_url"] or "",
@@ -4135,6 +4145,10 @@ def update_agent(agent_id: int, data: dict, account_id: int) -> dict | None:
                 # (already-a-string values pass through untouched).
                 if not isinstance(value, str):
                     value = json.dumps(value or [])
+            elif column == "follow_up_policy":
+                # Stored validated: out-of-range or malformed values become
+                # the defaults, so the runtime never reads a bad gap.
+                value = json.dumps(retry_rules.follow_up_policy(value))
             sets.append(f"{column} = ?")
             params.append(value)
         if not sets:
@@ -7068,6 +7082,8 @@ def campaign_inflight_all() -> int:
 def claim_next_campaign_contact(campaign_id: int) -> dict | None:
     """Atomically pick and lock the next dialable contact for a campaign:
     a pending one, or a no_answer/failed one whose next_attempt_at is due.
+    A pending contact with a next_attempt_at is a scheduled follow-up call
+    (agent/db.py schedule_follow_up_call) and waits for that moment too.
     Flips it to 'calling' in the same transaction so two dialer ticks can't
     grab the same row. Returns the contact, or None if nothing is due."""
     conn = _connect()
@@ -7077,7 +7093,7 @@ def claim_next_campaign_contact(campaign_id: int) -> dict | None:
                 f"""
                 SELECT * FROM campaign_contacts
                 WHERE campaign_id = ?
-                  AND (status = 'pending'
+                  AND ((status = 'pending' AND (next_attempt_at IS NULL OR next_attempt_at <= {_NOW}))
                        OR (status IN ('no_answer', 'failed', 'voicemail') AND next_attempt_at IS NOT NULL
                            AND next_attempt_at <= {_NOW}))
                 ORDER BY (status = 'pending') DESC, id
@@ -7132,7 +7148,9 @@ def record_campaign_dial_result(
     try:
         with conn:
             camp = conn.execute(
-                "SELECT max_attempts, retry_minutes, retry_policy FROM campaigns WHERE id = ?",
+                "SELECT c.max_attempts, c.retry_minutes, c.retry_policy, c.name, "
+                "a.follow_up_policy FROM campaigns c LEFT JOIN agents a ON a.id = c.agent_id "
+                "WHERE c.id = ?",
                 (campaign_id,),
             ).fetchone()
             # `or` guards: a NULL retry_minutes crashed timedelta() below and
@@ -7140,7 +7158,11 @@ def record_campaign_dial_result(
             max_attempts = (camp["max_attempts"] if camp else 1) or 1
             retry_minutes = (camp["retry_minutes"] if camp else 60) or 60
             # _row_get: the column may not exist yet on the boot that adds it.
-            policy = _row_get(camp, "retry_policy", "") if camp else ""
+            # An instant/follow-up campaign follows its agent's follow-up
+            # rules instead of its own row (retry_rules.effective_policy).
+            policy = retry_rules.effective_policy(
+                _row_get(camp, "name", ""), _row_get(camp, "retry_policy", ""), _row_get(camp, "follow_up_policy", ""),
+            ) if camp else ""
             contact = conn.execute(
                 "SELECT attempts FROM campaign_contacts WHERE id = ?", (contact_id,)
             ).fetchone()
@@ -7243,6 +7265,55 @@ def campaign_has_open_work(campaign_id: int) -> bool:
             (campaign_id,),
         ).fetchone()
         return row["c"] > 0
+    finally:
+        conn.close()
+
+
+def exhausted_arthaleads_contacts() -> list[dict]:
+    """ArthaLeads leads in an instant/follow-up campaign whose attempts are
+    all spent and whose CRM has not been told yet. The dialer reports each
+    one as "Not Reachable" (integrations_dispatch.report_contact_not_reachable)
+    and stamps crm_notified_at, so a lead is reported once.
+
+    Only contacts dialled in the last day: rows that went terminal before
+    this report existed must not all be sent on the first tick after deploy.
+    last_call_id is the call row of the contact's latest dial (its room) if
+    that dial got far enough to save one, else the first call it was ever
+    linked to (campaign_contacts.call_id), else None."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT cc.id, cc.account_id, cc.name, cc.phone, cc.attempts, cc.outcome, cc.custom_fields, "
+            "c.agent_id, "
+            "COALESCE((SELECT MAX(id) FROM calls WHERE cc.room_name IS NOT NULL AND room_name = cc.room_name), "
+            "cc.call_id) AS last_call_id "
+            "FROM campaign_contacts cc JOIN campaigns c ON c.id = cc.campaign_id "
+            "WHERE cc.status IN ('no_answer', 'failed', 'voicemail') AND cc.next_attempt_at IS NULL "
+            "AND cc.crm_notified_at IS NULL AND c.name = ANY(?) "
+            # Cheap prefilter (json.dumps spacing); the real check is below.
+            "AND cc.custom_fields LIKE ? "
+            "AND cc.last_attempt_at >= to_char(now() AT TIME ZONE 'UTC' - interval '1 day', 'YYYY-MM-DD HH24:MI:SS') "
+            "ORDER BY cc.id LIMIT 50",
+            (list(retry_rules.AGENT_POLICY_CAMPAIGNS), '%"source": "arthaleads"%'),
+        ).fetchall()
+    finally:
+        conn.close()
+    out = []
+    for r in rows:
+        fields = _load_json_field(r["custom_fields"], {})
+        if not isinstance(fields, dict) or fields.get("source") != "arthaleads":
+            continue
+        out.append({**dict(r), "custom_fields": fields})
+    return out
+
+
+def mark_contact_crm_notified(contact_id: int) -> None:
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE campaign_contacts SET crm_notified_at = {_NOW} WHERE id = ?", (contact_id,)
+            )
     finally:
         conn.close()
 

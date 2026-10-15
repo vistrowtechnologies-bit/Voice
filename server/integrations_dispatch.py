@@ -519,14 +519,39 @@ def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
     call = calls_db.get_call(call_id, account_id)
     if call is None:
         return False, "Call not found"
-    integ = next((i for i in calls_db.list_integrations(account_id) if i["key"] == "arthaleads"), None)
-    if integ is None or integ.get("status") != "connected":
-        return False, "ArthaLeads isn't connected"
-    token = (integ.get("config") or {}).get("token", "").strip()
+    token, why = _arthaleads_token(account_id)
     if not token:
-        return False, "No ArthaLeads token saved"
+        return False, why
     if not (call.get("name") and call.get("phone")):
         return False, "This call has no name or phone number to send"
+    body = _arthaleads_call_body(account_id, call_id, call, token)
+    ok, detail = _post_json(_ARTHALEADS_URL, body)
+    try:
+        if ok:
+            calls_db.touch_integration_sync(account_id, "arthaleads")
+            calls_db.set_call_arthaleads_status(call_id, account_id, "sent")
+        else:
+            calls_db.mark_integration_error(account_id, "arthaleads", detail)
+            calls_db.set_call_arthaleads_status(call_id, account_id, "failed", detail)
+    except Exception:
+        pass
+    return ok, detail
+
+
+def _arthaleads_token(account_id: int) -> tuple[str, str]:
+    """(token, '') when ArthaLeads is connected with a token, else ('', why)."""
+    integ = next((i for i in calls_db.list_integrations(account_id) if i["key"] == "arthaleads"), None)
+    if integ is None or integ.get("status") != "connected":
+        return "", "ArthaLeads isn't connected"
+    token = (integ.get("config") or {}).get("token", "").strip()
+    if not token:
+        return "", "No ArthaLeads token saved"
+    return token, ""
+
+
+def _arthaleads_call_body(account_id: int, call_id: int, call: dict, token: str) -> dict:
+    """The /webhook/lead body for one saved call - the same shape the agent
+    sends at call end (agent/tools.py _integration_body)."""
     transcript = call.get("transcript") or []
     share_token = calls_db.ensure_call_recording_share_token(call_id, account_id)
     public_base = calls_db.public_base_url() or "https://api.vistrowvoice.com"
@@ -534,7 +559,7 @@ def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
         f"{public_base}/public/calls/{call_id}/recording?token={share_token}"
         if share_token and call.get("hasRecording") else ""
     )
-    body = {
+    return {
         "token": token,
         "name": call.get("name") or "Unknown caller",
         "phone": call.get("phone", ""),
@@ -560,14 +585,47 @@ def push_call_to_arthaleads(account_id: int, call_id: int) -> tuple[bool, str]:
         "direction": call.get("direction") or "",
         "crm_outcome": _saved_call_outcome(call),
     }
+
+
+def report_contact_not_reachable(account_id: int, contact: dict) -> tuple[bool, str]:
+    """Tell ArthaLeads a lead's auto-call attempts are spent (the dialer calls
+    this for calls_db.exhausted_arthaleads_contacts). Sent on the lead's last
+    saved call when a dial got far enough to leave one, else as a minimal
+    entry for the lead itself - a busy/switched-off dial saves no call row,
+    and the CRM still needs to hear that nobody was reached."""
+    token, why = _arthaleads_token(account_id)
+    if not token:
+        return False, why
+    attempts = int(contact.get("attempts") or 0)
+    outcome = {"booking": "Not Reachable", "attempts": attempts}
+    call_id = contact.get("last_call_id")
+    call = calls_db.get_call(int(call_id), account_id) if call_id else None
+    if call and call.get("phone"):
+        body = {**_arthaleads_call_body(account_id, int(call_id), call, token), "crm_outcome": outcome}
+    else:
+        fields = contact.get("custom_fields") or {}
+        agent = calls_db.get_agent_by_id_unscoped(int(contact["agent_id"])) if contact.get("agent_id") else None
+        body = {
+            "token": token,
+            "name": contact.get("name") or "Unknown caller",
+            "phone": contact.get("phone") or "",
+            "email": str(fields.get("email") or ""),
+            "message": f"Not reachable after {attempts} call attempt(s) ({contact.get('outcome') or 'no answer'}).",
+            "transcript": [],
+            "channel": "phone",
+            "agent_name": (agent or {}).get("name") or "",
+            "agent_id": calls_db.agent_public_id(contact.get("agent_id")),
+            "call_id": None,
+            "arthaleads_lead_id": str(fields.get("arthaleads_lead_id") or ""),
+            "direction": "outbound",
+            "crm_outcome": outcome,
+        }
     ok, detail = _post_json(_ARTHALEADS_URL, body)
     try:
         if ok:
             calls_db.touch_integration_sync(account_id, "arthaleads")
-            calls_db.set_call_arthaleads_status(call_id, account_id, "sent")
         else:
             calls_db.mark_integration_error(account_id, "arthaleads", detail)
-            calls_db.set_call_arthaleads_status(call_id, account_id, "failed", detail)
     except Exception:
         pass
     return ok, detail

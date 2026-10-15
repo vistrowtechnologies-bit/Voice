@@ -281,6 +281,40 @@ export interface PostCallField {
   description: string
 }
 
+/** Per-agent follow-up rules (agents.follow_up_policy) - the "Follow-ups"
+ * panel. Retries by outcome and max tries drive the instant ArthaLeads
+ * campaign and the agent's scheduled follow-up calls (bulk campaigns keep
+ * their own retry settings); the three toggles schedule a call after a
+ * callback request, a site-visit booking, or an interested call. The server
+ * fills every key with its default when the row has none
+ * (server/retry_rules.py follow_up_policy). */
+export interface FollowUpPolicy {
+  maxAttempts: number
+  busyMinutes: number
+  switchedOffMinutes: number
+  noAnswerMinutes: number
+  voicemailMinutes: number
+  callbackEnabled: boolean
+  visitReminderEnabled: boolean
+  /** 'HH:MM' account time, the day before the visit. */
+  visitReminderTime: string
+  nurtureEnabled: boolean
+  nurtureDays: number
+}
+
+export const FOLLOW_UP_DEFAULTS: FollowUpPolicy = {
+  maxAttempts: 3,
+  busyMinutes: 10,
+  switchedOffMinutes: 120,
+  noAnswerMinutes: 30,
+  voicemailMinutes: 120,
+  callbackEnabled: true,
+  visitReminderEnabled: true,
+  visitReminderTime: '11:00',
+  nurtureEnabled: true,
+  nurtureDays: 3,
+}
+
 export interface AgentVariable {
   /** The exact text between {{ and }} - "enquiry_bhk", or an operator's
    * own choice of "custom.enquiry_bhk" to also match a CSV column of that
@@ -342,6 +376,9 @@ export interface AgentConfig {
   // Connected integration keys this agent fans out to (empty = all connected)
   crmIntegrationKeys: string[]
   variables: AgentVariable[]
+  // Optional only so partially-built agent objects elsewhere still type-check;
+  // the API always returns it complete.
+  followUpPolicy?: FollowUpPolicy
   memoryEnabled: boolean
   liveCatalogEnabled: boolean
   createdAt: string
