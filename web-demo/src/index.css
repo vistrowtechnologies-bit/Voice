@@ -1132,3 +1132,53 @@ html[data-focus-moment] #vistrow-voice-widget-host { display: none !important; }
   .vs-orb.is-playing::after, .vs-chip.is-switched { animation: none; }
   .vs-line.is-hidden { transform: none; }
 }
+
+/* ---- Marketing header (MarketingLayout.tsx) ---- */
+/* Header icon sizes: the unlayered .material-symbols-outlined rule above
+   (font-size 20px) beats Tailwind's text-[..px] utilities, so these come
+   after it with one more class of specificity. */
+.material-symbols-outlined.mh-icon-16 { font-size: 16px; }
+.material-symbols-outlined.mh-icon-18 { font-size: 18px; }
+.material-symbols-outlined.mh-icon-22 { font-size: 22px; }
+.material-symbols-outlined.mh-icon-24 { font-size: 24px; }
+
+/* "Hear a live call" mini waveform. */
+.mh-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+}
+.mh-wave i {
+  display: block;
+  width: 2px;
+  height: 4px;
+  border-radius: 2px;
+  background: currentColor;
+  animation: mh-wave 1s ease-in-out infinite;
+}
+.mh-wave i:nth-child(2) { animation-delay: 0.15s; }
+.mh-wave i:nth-child(3) { animation-delay: 0.3s; }
+.mh-wave i:nth-child(4) { animation-delay: 0.45s; }
+@keyframes mh-wave {
+  0%, 100% { height: 4px; }
+  50% { height: 14px; }
+}
+
+/* "Book a demo": brand purple into magenta. */
+.mh-cta {
+  background: linear-gradient(135deg, var(--color-primary-dark), #c026d3);
+  box-shadow: 0 8px 22px -10px var(--color-primary);
+  transition: opacity 150ms ease;
+}
+.mh-cta:hover { opacity: 0.92; }
+
+/* Language strip: scrolls sideways on a narrow desktop, no visible bar. */
+.mh-scroll { scrollbar-width: none; }
+.mh-scroll::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mh-wave i { animation: none; }
+  .mh-wave i:nth-child(odd) { height: 10px; }
+  .mh-wave i:nth-child(even) { height: 6px; }
+}

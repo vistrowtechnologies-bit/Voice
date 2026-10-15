@@ -982,6 +982,8 @@ export const NAV: NavGroup[] = [
       { label: 'AI voice bot', to: '/voice-bot', icon: 'record_voice_over', desc: 'What a voice bot is and how a call works.' },
       { label: 'AI telecaller', to: '/ai-telecaller', icon: 'phone_callback', desc: 'Lead calls, follow-ups and callbacks.' },
       { label: 'AI calling agent', to: '/ai-calling-agent', icon: 'call', desc: 'Inbound and outbound calls on one agent.' },
+      { label: 'AI receptionist', to: '/ai-receptionist', icon: 'support_agent', desc: 'Answer, book and transfer calls at any hour.' },
+      { label: 'AI IVR', to: '/ai-ivr', icon: 'dialpad', desc: 'Replace a press-1 menu with a spoken conversation.' },
     ],
   },
   {
@@ -1004,8 +1006,6 @@ export const NAV: NavGroup[] = [
       { label: 'Vistrow vs Sarvam AI', to: '/compare/sarvam-ai', icon: 'compare_arrows', desc: 'Build-vs-buy comparison for voice agents.' },
       { label: 'Demo call examples', to: '/demo-calls/hindi-real-estate-lead-qualification', icon: 'record_voice_over', desc: 'Transcript and CRM-ready output examples.' },
       { label: 'Changelog', to: '/changelog', icon: 'history', desc: 'What shipped, and when.' },
-      { label: 'AI IVR', to: '/ai-ivr', icon: 'dialpad', desc: 'Replace a press-1 menu with a spoken conversation.' },
-      { label: 'AI receptionist', to: '/ai-receptionist', icon: 'support_agent', desc: 'Answer, book and transfer calls at any hour.' },
       { label: 'vs. traditional IVR', to: '/vs-ivr', icon: 'compare_arrows', desc: 'How this differs from a phone menu.' },
       { label: 'Blog', to: '/resources/blog', icon: 'article', desc: 'Product news and guides.' },
     ],
