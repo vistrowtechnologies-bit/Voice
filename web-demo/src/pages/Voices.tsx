@@ -611,8 +611,18 @@ export function Voices() {
   }, [data])
 
   const query = search.trim().toLowerCase()
-  const matches = (voice: VoiceEntry) =>
-    [voice.name, voice.note, voice.tierLabel, ...voice.languageLabels].filter(Boolean).some((value) => value.toLowerCase().includes(query))
+  // Search relevance: the voice's name, then voices native to the searched
+  // language, then single-language voices for it, then style/tier words, then
+  // any voice that can also speak it. 0 = no match.
+  const searchScore = (voice: VoiceEntry): number => {
+    const has = (v?: string) => !!v && v.toLowerCase().includes(query)
+    if (has(voice.name)) return 5
+    if (has(voice.nativeLanguage)) return 4
+    if (!voice.canSwitchLanguage && voice.languageLabels.some(has)) return 4
+    if (has(voice.note) || has(voice.tierLabel)) return 2
+    if (voice.languageLabels.some(has)) return 1
+    return 0
+  }
   const passesFilter = (voice: VoiceEntry) =>
     filter === 'all' || (filter === 'added' ? !!voice.selected : voice.gender === filter)
 
@@ -624,7 +634,11 @@ export function Voices() {
   const base = realtimeActive
     ? realtimeVoices
     : query
-      ? everyVoice.filter(matches)
+      ? everyVoice
+          .map((v, i) => ({ v, i, score: searchScore(v) }))
+          .filter((x) => x.score > 0)
+          .sort((a, b) => b.score - a.score || a.i - b.i)
+          .map((x) => x.v)
       : filter === 'added'
         ? everyVoice
         : (activeTab?.voices ?? [])
