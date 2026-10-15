@@ -432,6 +432,7 @@ Click **Save rules** after changing anything.""",
                 "summary": "Spoken consent, call recording and how long data is kept.",
                 "body": """- **Require spoken consent** — the agent's first reply asks the caller whether it's okay that the call is recorded (if recording is on) and their details are used to follow up. The answer is saved on the call. If they decline, or leave before answering, the recording is discarded and the agent does not collect personal details.
 - **Record calls** — store call audio alongside transcripts.
+- **Announce recording and AI** — on by default. While recording is on, the agent's opening line says the call is recorded and that the caller is speaking with an AI assistant, in Hindi for Hindi agents and in English for every other language. You can write your own wording (one short sentence) or turn it off. If your welcome message already mentions recording, nothing is added.
 - **Data retention (days)** — transcripts and recordings older than this are deleted automatically each day. 0 keeps them indefinitely.""",
             },
         ],

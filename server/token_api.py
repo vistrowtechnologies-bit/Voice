@@ -814,6 +814,10 @@ class SignupRequest(BaseModel):
     password: str
     referral_source: str = ""
     phone: str = ""
+    # Both checkboxes on the signup form. Enforced here, not only in the
+    # browser, so a direct POST cannot create an account without them.
+    accepted_terms: bool = False
+    confirmed_age: bool = False
     # First-touch marketing tags captured in the browser (utm_*, gclid, ...).
     attribution: dict = {}
 
@@ -1676,6 +1680,10 @@ def auth_signup(req: SignupRequest, request: Request) -> dict:
         raise HTTPException(400, "Password must be at least 8 characters")
     if not req.name.strip() or not req.company.strip():
         raise HTTPException(400, "Name and company are required")
+    if not req.accepted_terms:
+        raise HTTPException(400, "Please agree to the Terms of Service and Privacy Policy")
+    if not req.confirmed_age:
+        raise HTTPException(400, "Please confirm you are 18 or older and authorised to act for this business")
     if disposable_email.is_disposable(email):
         raise HTTPException(400, "Please use a permanent email address — temporary email providers are not supported")
     if not email_sender.is_configured():
@@ -1689,6 +1697,14 @@ def auth_signup(req: SignupRequest, request: Request) -> dict:
         auth.hash_password(req.password),
         req.referral_source.strip(),
         req.phone.strip(),
+    )
+    # Recorded at signup, server-side, with where it came from. Before
+    # 2026-10-14 the checkbox was client-only and acceptance was written
+    # later from the onboarding modal, without IP or user agent.
+    calls_db.record_consent(
+        created["account_id"], created["user_id"],
+        ip=_client_ip(request), user_agent=request.headers.get("user-agent", ""),
+        source="signup", age_confirmed=True,
     )
     calls_db.save_signup_attribution(created["account_id"], onboarding_profile.clean_attribution(req.attribution))
     code, _ = calls_db.create_email_verification(created["user_id"])
@@ -2710,7 +2726,7 @@ def cancel_account_deletion_request(request_id: int, user: dict = Depends(curren
 
 
 @app.post("/onboarding/consent")
-def accept_consent(data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
+def accept_consent(request: Request, data: dict = Body(...), user: dict = Depends(current_user)) -> dict:
     """One combined Terms/Privacy acceptance shown at signup, before the rest
     of onboarding — matches how consumer products actually do this (nobody
     reads five separate consent boxes), but the frontend must send back the
@@ -2719,7 +2735,15 @@ def accept_consent(data: dict = Body(...), user: dict = Depends(current_user)) -
     version = str((data or {}).get("version") or "")
     if version != calls_db.CONSENT_VERSION:
         raise HTTPException(409, "This consent version is out of date - please refresh and try again.")
-    calls_db.record_consent(user["account_id"], user["user_id"])
+    # Google/GitHub sign-ups never see the signup form, so this step carries
+    # the same age/authority confirmation the form does.
+    if (data or {}).get("ageConfirmed") is not True:
+        raise HTTPException(400, "Please confirm you are 18 or older and authorised to act for this business.")
+    calls_db.record_consent(
+        user["account_id"], user["user_id"],
+        ip=_client_ip(request), user_agent=request.headers.get("user-agent", ""),
+        source="onboarding", age_confirmed=True,
+    )
     return {"user": _me_payload(user["user_id"])}
 
 
@@ -6940,6 +6964,10 @@ def widget_site_config(siteKey: str, path: str = "") -> dict:
         "requireEmail": site["widgetRequireEmail"],
         "platformConversationCount": _platform_conversation_count_cached(days=7),
         "platformConversationWindowDays": 7,
+        # The widget's notice and consent dialog say "recorded" only when
+        # this is true; the account's Compliance "Record calls" decides
+        # whether the agent records (agent/main.py reads the same setting).
+        "recorded": bool(calls_db.get_compliance(site["accountId"]).get("record_calls")),
     }
 
 

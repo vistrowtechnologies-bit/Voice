@@ -401,6 +401,10 @@ export interface ComplianceSettings {
   honor_dnc: boolean
   require_consent: boolean
   record_calls: boolean
+  /** While recording is on, the agent's opening says the call is recorded and is with an AI. */
+  announce_recording: boolean
+  /** Owner's own announcement wording; '' = the built-in Hindi/English line. */
+  recording_notice: string
   retention_days: number
   /** Days a recording link in Sheets/CRMs keeps playing after the call; 0 = never. */
   recording_link_expiry_days: number

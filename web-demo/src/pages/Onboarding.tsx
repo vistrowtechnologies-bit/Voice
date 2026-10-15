@@ -296,6 +296,9 @@ export function Onboarding() {
   })
   const [moreOpen, setMoreOpen] = useState(false)
   const [consent, setConsent] = useState(false)
+  // Google/GitHub sign-ups never see the signup form, so the 18+/authority
+  // confirmation it asks for is asked here too; /onboarding/consent requires it.
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [showErrors, setShowErrors] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -339,7 +342,7 @@ export function Onboarding() {
       a.languages.length === 0 && 'languages',
       !a.callVolume && 'volume',
     ].filter(Boolean) as string[],
-    finish: [needsConsent && !consent && 'consent'].filter(Boolean) as string[],
+    finish: [needsConsent && !consent && 'consent', needsConsent && !ageConfirmed && 'age'].filter(Boolean) as string[],
   }
   const err = (key: string) => showErrors && missing[step].includes(key)
   const index = STEPS.findIndex((s) => s.id === step)
@@ -638,6 +641,16 @@ export function Onboarding() {
                     <Link to="/privacy" target="_blank" className="font-semibold text-primary hover:underline">Privacy Policy</Link>, including that
                     calls may be transcribed and recorded to provide the service.
                   </span>
+                </label>
+              )}
+              {needsConsent && (
+                <label
+                  className={`flex items-start gap-3 rounded-2xl border p-4 text-sm text-text-muted ${
+                    err('age') ? 'border-destructive/50 bg-destructive/5' : 'border-border bg-surface'
+                  }`}
+                >
+                  <input type="checkbox" checked={ageConfirmed} onChange={(e) => setAgeConfirmed(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--color-primary)]" />
+                  <span>I confirm I am 18 or older and authorised to act for this business.</span>
                 </label>
               )}
             </>

@@ -52,6 +52,13 @@ def run_purge_now() -> int:
         if deleted:
             logger.info("retention: purged %s call(s) for account %s", deleted, account_id)
             total += deleted
+    try:
+        events = calls_db.purge_old_error_events()
+        if events:
+            logger.info("retention: purged %s error event(s) older than %s days",
+                        events, calls_db.ERROR_EVENT_RETENTION_DAYS)
+    except Exception:
+        logger.exception("error_events purge failed")
     return total
 
 

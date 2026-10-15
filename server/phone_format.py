@@ -17,6 +17,8 @@ the agent writes DNC rows and call phones that the server's dialer then
 matches against. test_phone_format.py enforces it.
 """
 
+import re
+
 import phonenumbers
 
 DEFAULT_COUNTRY = "IN"
@@ -76,3 +78,28 @@ def match_key(raw: str | None, country: str | None = DEFAULT_COUNTRY) -> str:
 def dial_code(country: str | None) -> str:
     """"+91" for "IN" — the prefix the dashboard pre-selects."""
     return "+" + str(phonenumbers.country_code_for_region(normalize_country(country)))
+
+
+_EMAIL_IN_TEXT = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+# What the matcher cannot see: a bare run of 10-15 digits, as in a
+# URL-encoded query string ("phone=%2B919876543210") or a JSON blob.
+_DIGIT_RUN = re.compile(r"(?:\+|%2B)?(?<!\d)\d{10,15}(?!\d)", re.IGNORECASE)
+
+
+def redact_contact_details(text: str | None, country: str | None = DEFAULT_COUNTRY) -> str:
+    """Free text with phone numbers and email addresses replaced by
+    "[phone]" / "[email]". For diagnostic sinks (error_events) that should
+    never hold a caller's contact details. libphonenumber's matcher finds
+    valid numbers however they are written and leaves dates, times and short
+    ids alone."""
+    text = str(text or "")
+    if not text:
+        return text
+    text = _EMAIL_IN_TEXT.sub("[email]", text)
+    spans = [
+        (m.start, m.end)
+        for m in phonenumbers.PhoneNumberMatcher(text, normalize_country(country), phonenumbers.Leniency.VALID)
+    ]
+    for start, end in reversed(spans):
+        text = text[:start] + "[phone]" + text[end:]
+    return _DIGIT_RUN.sub("[phone]", text)

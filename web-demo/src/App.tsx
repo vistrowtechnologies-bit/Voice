@@ -50,6 +50,7 @@ import { useEffect } from 'react'
 import { StagingBadge } from './components/StagingBadge'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { initClarity, trackPageView } from './lib/analytics'
+import { AnalyticsConsentBanner } from './components/AnalyticsConsentBanner'
 
 // Dashboard and admin screens load on demand: the marketing pages must not ship them.
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard })))
@@ -158,6 +159,7 @@ function App() {
   return (
     <AuthProvider>
       <AnalyticsListener />
+      <AnalyticsConsentBanner />
       <StagingBadge />
       <Suspense fallback={<AppLoadingScreen />}>
       <Routes location={backgroundLocation ?? location}>

@@ -11,6 +11,7 @@ import { BRAND } from '../lib/brand'
 import { adminExitImpersonation, takeSupportReturn } from '../lib/adminApi'
 import { openCommandMenu } from '../lib/commandMenu'
 import { initClarity, stopClarityForStaff, tagClarityAccount } from '../lib/analytics'
+import { useAnalyticsConsent } from '../lib/analyticsConsent'
 import { useAuth, hasRole, type AuthUser } from '../lib/auth'
 import { applyTheme, getStoredTheme, useTheme } from '../lib/theme'
 import { DashboardTour } from './DashboardTour'
@@ -701,6 +702,9 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
     return () => document.documentElement.removeAttribute('data-theme')
   }, [])
 
+  // Re-runs when the visitor accepts analytics from the banner, so Clarity
+  // starts without a reload (initClarity is a no-op until then).
+  const analyticsChoice = useAnalyticsConsent()
   useEffect(() => {
     if (!user) return
     if (user.isPlatformOwner || user.impersonating) {
@@ -709,7 +713,7 @@ function FullDashboardLayout({ children }: { children: ReactNode }) {
       initClarity(window.location.pathname, true)
       tagClarityAccount(user.accountId, user.plan)
     }
-  }, [user])
+  }, [user, analyticsChoice])
 
   return (
     <div data-dashboard-root className="min-h-screen bg-bg text-text">

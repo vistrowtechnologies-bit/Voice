@@ -55,11 +55,13 @@ export function Signup() {
   // No workspace yet, so no workspace country: start from the browser's region.
   const [phoneCountry, setPhoneCountry] = useState(() => guessCountry())
   const [agreed, setAgreed] = useState(false)
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [referralError, setReferralError] = useState(false)
   // Its own flag, so an unticked box does not paint every field red.
   const [termsError, setTermsError] = useState(false)
+  const [ageError, setAgeError] = useState(false)
   const [busy, setBusy] = useState(false)
   const shake = useShake(error)
 
@@ -73,6 +75,7 @@ export function Signup() {
     setError(null)
     setReferralError(false)
     setTermsError(false)
+    setAgeError(false)
     if (form.password.length < 8) {
       setError('Password must be at least 8 characters.')
       return
@@ -89,6 +92,10 @@ export function Signup() {
       setTermsError(true)
       return
     }
+    if (!ageConfirmed) {
+      setAgeError(true)
+      return
+    }
     setBusy(true)
     try {
       const { phoneNumber, ...rest } = form
@@ -96,6 +103,8 @@ export function Signup() {
         ...rest,
         phone: phoneNumber ? `${dialCodeFor(phoneCountry)} ${phoneNumber}` : '',
         attribution: getAttribution(),
+        accepted_terms: agreed,
+        confirmed_age: ageConfirmed,
       })
       trackQualifyLead('signup')
       navigate(`/verify-email?email=${encodeURIComponent(result.email)}&sent=${result.emailSent ? '1' : '0'}`, { replace: true })
@@ -210,6 +219,23 @@ export function Signup() {
           </span>
         </label>
         {termsError && <span className="-mt-2 text-xs text-destructive">Please agree to the Terms of Service and Privacy Policy.</span>}
+        <label className="flex items-start gap-2 text-xs text-text-muted">
+          <input
+            type="checkbox"
+            checked={ageConfirmed}
+            onChange={(e) => {
+              setAgeConfirmed(e.target.checked)
+              setAgeError(false)
+            }}
+            className="mt-0.5"
+          />
+          <span>I confirm I am 18 or older and authorised to act for this business.</span>
+        </label>
+        {ageError && (
+          <span className="-mt-2 text-xs text-destructive">
+            Please confirm you are 18 or older and authorised to act for this business.
+          </span>
+        )}
         <button
           type="submit"
           disabled={busy}

@@ -302,6 +302,36 @@ export function Compliance() {
               <Row label="Record calls" hint="Store call audio alongside transcripts">
                 <Toggle label="Record calls" on={cfg.record_calls} onChange={(v) => patch({ record_calls: v })} disabled={!canManage} />
               </Row>
+              <Row
+                label="Announce recording and AI"
+                hint="While recording is on, the agent's opening line tells callers the call is recorded and that they are speaking with an AI assistant"
+              >
+                <Toggle
+                  label="Announce recording and AI"
+                  on={cfg.announce_recording ?? true}
+                  onChange={(v) => patch({ announce_recording: v })}
+                  disabled={!canManage || !cfg.record_calls}
+                />
+              </Row>
+              {cfg.record_calls && (cfg.announce_recording ?? true) && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-text-muted">Announcement wording (optional)</span>
+                  <input
+                    type="text"
+                    maxLength={160}
+                    value={cfg.recording_notice ?? ''}
+                    disabled={!canManage}
+                    placeholder="यह कॉल रिकॉर्ड हो रही है और आप AI असिस्टेंट से बात कर रहे हैं।"
+                    onChange={(e) => patch({ recording_notice: e.target.value })}
+                    className="rounded-lg border border-border bg-surface-high px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-50"
+                  />
+                  <span className="text-xs text-text-muted">
+                    Leave blank to use our short line: Hindi for Hindi agents, English for every other language. Keep it to one short
+                    sentence: it is spoken before the caller can reply. If your agent's welcome message already mentions
+                    recording, nothing is added.
+                  </span>
+                </label>
+              )}
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold text-text-muted">Data retention (days)</span>
                 <input

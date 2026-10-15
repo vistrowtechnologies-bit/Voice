@@ -48,6 +48,30 @@ const privacyUrl = scriptEl?.dataset.privacyUrl || ''
 // wording - do it whenever the consent text below materially changes. Kept
 // in lockstep with web-demo/src/components/DemoOrbCard.tsx.
 const CONSENT_VERSION = '2026-09-14'
+
+// What the notice and consent dialog say about recording. `recorded` is the
+// tenant's Compliance "Record calls" (from site-config); null = not known yet,
+// so the wording is hedged rather than claiming a recording that may not exist.
+function recordingNoticeText(recorded: boolean | null): string {
+  const what =
+    recorded === true
+      ? 'is recorded and transcribed'
+      : recorded === false
+        ? 'is transcribed'
+        : 'is transcribed, and may be recorded,'
+  return `This conversation ${what} to provide and improve this service. Do not share passwords or payment details.`
+}
+
+function consentWhatText(recorded: boolean | null): string {
+  const follow = `so ${agentName} can respond and so this business can follow up with you.`
+  if (recorded === true) {
+    return `This voice conversation is recorded and transcribed ${follow} The recording, transcript and any details you share are stored and processed by third-party service providers on its behalf.`
+  }
+  if (recorded === false) {
+    return `This voice conversation is transcribed ${follow} It is not recorded. The transcript and any details you share are stored and processed by third-party service providers on its behalf.`
+  }
+  return `This voice conversation is transcribed, and may be recorded, ${follow} The transcript, any recording and any details you share are stored and processed by third-party service providers on its behalf.`
+}
 const CONSENT_STORAGE_KEY = `__vistrowConsent:${CONSENT_VERSION}`
 // 'default' (or the attribute missing entirely) keeps today's animated
 // orb video exactly as-is - every other catalog key is a static color
@@ -506,18 +530,13 @@ function widgetHtml(label: string): string {
             <button id="av-choose-chat" class="av-secondary">${CHAT_ICON} Chat instead</button>
           </div>
           <span class="av-trust">🔒 Secure connection</span>
-          <!-- Recording/processing notice. Shown before the conversation starts,
-               deliberately as small on-screen text rather than something the
-               agent speaks. Wording covers both cases on purpose: transcripts
-               are always stored, audio recording depends on the tenant's
-               record_calls setting, so "recorded" is hedged and "transcribed"
-               is not. The previous copy here claimed the conversation was
-               "private", which sat badly next to storing a transcript (and,
-               when enabled, an audio recording) of it. -->
-          <span class="av-notice">
-            This conversation is transcribed, and may be recorded, to provide and
-            improve this service. Do not share passwords or payment details.
-          </span>
+          <!-- Recording/processing notice. Shown before the conversation starts.
+               Transcripts are always stored; audio recording depends on the
+               tenant's Compliance "Record calls" setting, which site-config
+               reports as "recorded" (see applyRecordingNotice). Until that
+               answer arrives the wording is hedged ("may be recorded"); after
+               it, "recorded" appears only when recording is actually on. -->
+          <span class="av-notice" id="av-notice">${recordingNoticeText(null)}</span>
         </div>
 
         <!-- DPDP consent gate. Shown before the microphone is ever requested,
@@ -526,12 +545,7 @@ function widgetHtml(label: string): string {
              are only sent with /widget/token, which runs after this. -->
         <div id="av-consent" class="av-consent" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="av-consent-title">
           <h2 id="av-consent-title">Before we talk</h2>
-          <p>
-            This voice conversation is recorded and transcribed so ${agentName} can
-            respond and so this business can follow up with you. The recording,
-            transcript and any details you share are stored and processed by
-            third-party service providers on its behalf.
-          </p>
+          <p id="av-consent-what">${consentWhatText(null)}</p>
           <p>
             Please don’t share passwords, card numbers or other sensitive details.
             You can stop at any time by ending the call. Read the
@@ -740,6 +754,12 @@ function init(): void {
   const consentAcceptBtn = shadow.getElementById('av-consent-accept') as HTMLButtonElement
   const consentCancelBtn = shadow.getElementById('av-consent-cancel') as HTMLButtonElement
   const consentPrivacyLink = shadow.getElementById('av-consent-privacy') as HTMLAnchorElement
+  const noticeEl = shadow.getElementById('av-notice') as HTMLSpanElement
+  const consentWhatEl = shadow.getElementById('av-consent-what') as HTMLParagraphElement
+  function applyRecordingNotice(recorded: boolean): void {
+    noticeEl.textContent = recordingNoticeText(recorded)
+    consentWhatEl.textContent = consentWhatText(recorded)
+  }
   // Assigned as a property, never interpolated into the markup, and only an
   // http(s) URL is accepted - a data-attribute value must not become markup
   // or a javascript: link.
@@ -856,9 +876,11 @@ function init(): void {
           askEmail?: boolean
           requireEmail?: boolean
           platformConversationCount?: number
+          recorded?: boolean
         } | null,
       ) => {
         if (!data) return
+        if (typeof data.recorded === 'boolean') applyRecordingNotice(data.recorded)
         if (data.avatar && data.avatar !== avatarKey) {
           avatarKey = data.avatar
           button.innerHTML = avatarTag()
@@ -1749,15 +1771,20 @@ function init(): void {
     }
   }
 
+  // Same event name as before, so existing GTM triggers (e.g. a Google Ads
+  // conversion) keep firing, but no personal fields: until 2026-10-14 this
+  // pushed the visitor's name, phone and email into the host page's
+  // dataLayer, where every tag on that site could read them. Only whether
+  // each field was filled in is shared now.
   function pushLeadEvent(name: string, phone: string, email: string): void {
     try {
       const w = window as unknown as { dataLayer?: unknown[] }
       w.dataLayer = w.dataLayer || []
       w.dataLayer.push({
         event: 'vistrow_widget_lead_submit',
-        vistrow_lead_name: name,
-        vistrow_lead_phone: phone,
-        vistrow_lead_email: email,
+        vistrow_lead_has_name: Boolean(name),
+        vistrow_lead_has_phone: Boolean(phone),
+        vistrow_lead_has_email: Boolean(email),
       })
     } catch (err) {
       console.warn('[Vistrow Voice widget] lead event push failed:', err)
