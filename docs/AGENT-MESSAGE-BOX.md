@@ -670,3 +670,27 @@ Branch `claude/fullpage-onboarding` (PR #107), owner feedback:
 - **Copy:** dropped claims the product doesn't do yet ("tailor your agent and its sample scripts").
 
 Verified in the local app at 1440 px and 375 px (no horizontal scroll); `npm run build` passes.
+
+### Claude — 2026-10-15 — Phone input: flags, searchable countries, digit limits; AI referral option
+
+Branch `claude/fullpage-onboarding` (PR #107).
+
+New `web-demo/src/components/PhoneInput.tsx`, used on signup and onboarding:
+- **Picker:** emoji flag plus calling code, with a searchable list of every country.
+  - Typing a letter on the closed picker opens it already filtered.
+  - Name, ISO code, aliases (uk, usa, uae, ksa…) and dial digits all match; popular countries (IN, US, GB, AE…) rank first among equal matches.
+  - Arrow keys and Enter work; Enter does not advance the onboarding step (`defaultPrevented` check).
+  - The search clears whenever the picker closes.
+- **Number field:** digits only, capped per country (IN/US/GB 10, AE/SA 9, SG/QA 8; others 6..15 minus code digits). `isValidPhone` also requires IN numbers to start 6–9.
+- Onboarding stores `phoneCountry` (ISO) and sets the account country from it.
+
+"How did you hear about us?" gains "AI assistant (ChatGPT, Gemini, Claude…)" on both pages; signup also gains "Google search".
+
+Verified in the local app:
+- "12345abc678…" becomes "9876543210"-style 10 digits;
+- "u" lists US, UK, UAE first; "uk" → United Kingdom; "uae" and "971" → UAE;
+- Enter picks a country without changing step;
+- the signup field matches the other inputs;
+- build passes.
+
+Note: Windows shows the two-letter code instead of a flag emoji.

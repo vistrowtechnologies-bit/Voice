@@ -6,7 +6,8 @@ import { fetchAgents } from '../lib/api'
 import { getAttribution } from '../lib/attribution'
 import { apiAcceptConsent, apiCompleteOnboarding, apiUpdateAccount, useAuth } from '../lib/auth'
 import { BRAND } from '../lib/brand'
-import { COMMON_DIAL_CODES, countryForDialCode, dialCodeFor, guessCountry } from '../lib/phone'
+import { PhoneInput, isValidPhone } from '../components/PhoneInput'
+import { countryForDialCode, dialCodeFor, guessCountry } from '../lib/phone'
 import type { AgentConfig } from '../lib/types'
 import vistrowMark from '../assets/vistrow-mark.png'
 
@@ -60,7 +61,7 @@ const USE_CASES: Option[] = [
   { label: 'Website voice assistant', icon: 'widgets' },
   { label: 'Something else', icon: 'more_horiz' },
 ]
-const REFERRAL_SOURCES = ['Google search', 'Google Ad', 'Facebook / Instagram', 'LinkedIn', 'YouTube', 'Friend / Colleague', 'Blog / Article', 'Twitter / X', 'Other']
+const REFERRAL_SOURCES = ['Google search', 'Google Ad', 'AI assistant (ChatGPT, Gemini, Claude…)', 'Facebook / Instagram', 'LinkedIn', 'YouTube', 'Friend / Colleague', 'Blog / Article', 'Twitter / X', 'Other']
 const COMPANY_SIZES = ['Just me', '2–10', '11–50', '51–200', '201–1,000', '1,000+']
 const LANGUAGES = ['Hindi', 'English', 'Marathi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam', 'Gujarati', 'Bengali', 'Punjabi', 'Odia', 'Other']
 const CALL_VOLUMES = ['Under 500', '500–2K', '2K–10K', '10K–50K', '50K+', 'Not sure']
@@ -71,7 +72,7 @@ const TIMELINES = ['This week', 'This month', 'In 1–3 months', 'Just exploring
 interface Answers {
   role: string
   roleOther: string
-  dialCode: string
+  phoneCountry: string
   phoneNumber: string
   referralSource: string
   company: string
@@ -100,6 +101,7 @@ function OptionCard({ option, selected, onClick, check }: { option: Option; sele
     <button
       type="button"
       aria-pressed={selected}
+      aria-label={option.label}
       onClick={onClick}
       className={`group flex items-center gap-2.5 rounded-2xl border p-2.5 text-left transition-all duration-150 sm:gap-3 sm:p-3.5 ${
         selected
@@ -263,7 +265,7 @@ export function Onboarding() {
     const fromPhone = user?.phone?.match(/^\+\d+/)?.[0]
     const base: Answers = {
       role: '', roleOther: '',
-      dialCode: dialCodeFor(guessCountry()), phoneNumber: '',
+      phoneCountry: guessCountry(), phoneNumber: '',
       referralSource: '',
       // Google and GitHub sign-ups get an automatic "Priya's Workspace" name;
       // that is not their business, so ask instead of pre-filling it.
@@ -324,7 +326,7 @@ export function Onboarding() {
   const missing: Record<StepId, string[]> = {
     you: [
       (!a.role || (a.role === 'Other' && !a.roleOther.trim())) && 'role',
-      needsPhone && phoneDigits.length < 6 && 'phone',
+      needsPhone && !isValidPhone(a.phoneCountry, phoneDigits) && 'phone',
       needsReferral && !a.referralSource && 'referral',
     ].filter(Boolean) as string[],
     business: [
@@ -368,7 +370,7 @@ export function Onboarding() {
     try {
       if (needsConsent) setUser((await apiAcceptConsent(user.consent.currentVersion)).user)
       // No separate country question: the phone's calling code already says it.
-      const country = (needsPhone ? countryForDialCode(a.dialCode) : undefined) || a.country
+      const country = needsPhone ? a.phoneCountry : a.country
       const accountChanges = {
         ...(a.company.trim() !== user.accountName ? { name: a.company.trim() } : {}),
         ...(country !== user.accountCountry ? { country } : {}),
@@ -378,7 +380,7 @@ export function Onboarding() {
         profile: {
           role: a.role,
           roleOther: a.role === 'Other' ? a.roleOther.trim() : '',
-          phone: needsPhone && phoneDigits ? `${a.dialCode} ${a.phoneNumber.trim()}` : '',
+          phone: needsPhone && phoneDigits ? `${dialCodeFor(a.phoneCountry)} ${phoneDigits}` : '',
           referralSource: needsReferral ? a.referralSource : '',
           website: a.website.trim(),
           industry: a.industry,
@@ -412,7 +414,8 @@ export function Onboarding() {
   // Enter moves forward, like most premium onboarding flows.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Enter' || e.shiftKey || testing || saving) return
+      // defaultPrevented: Enter already used by a control (e.g. picking a country).
+      if (e.key !== 'Enter' || e.shiftKey || e.defaultPrevented || testing || saving) return
       if ((e.target as HTMLElement)?.tagName === 'BUTTON') return
       e.preventDefault()
       if (step === 'finish') void finish()
@@ -487,27 +490,18 @@ export function Onboarding() {
                 )}
               </Question>
               {needsPhone && (
-                <Question label="Phone number" hint="For setup help and account alerts" error={err('phone')}>
-                  <div className="flex gap-2">
-                    <select
-                      value={a.dialCode}
-                      onChange={(e) => set('dialCode', e.target.value)}
-                      aria-label="Country code"
-                      className="rounded-xl border border-border bg-surface px-3 text-[15px] outline-none focus:border-primary"
-                    >
-                      {COMMON_DIAL_CODES.map((c) => (
-                        <option key={c.dial} value={c.dial}>{c.code} {c.dial}</option>
-                      ))}
-                    </select>
-                    <input
-                      className={inputCls}
-                      type="tel"
-                      inputMode="numeric"
-                      placeholder="98765 43210"
-                      value={a.phoneNumber}
-                      onChange={(e) => set('phoneNumber', e.target.value)}
-                    />
-                  </div>
+                <Question
+                  label="Phone number"
+                  hint={err('phone') ? 'Enter a valid number for this country' : 'For setup help and account alerts'}
+                  error={err('phone')}
+                >
+                  <PhoneInput
+                    country={a.phoneCountry}
+                    number={a.phoneNumber}
+                    onCountryChange={(c) => set('phoneCountry', c)}
+                    onNumberChange={(n) => set('phoneNumber', n)}
+                    invalid={err('phone')}
+                  />
                 </Question>
               )}
               {needsReferral && (
