@@ -35,12 +35,13 @@ _FREE_PLANS = {"free", "trial", ""}
 
 
 def _internal_account_ids() -> tuple[int, ...]:
-    raw = os.environ.get("INTERNAL_ACCOUNT_IDS", "1,2")
+    raw = os.environ.get("INTERNAL_ACCOUNT_IDS", "1,2,3,4,5,6,8")
     return tuple(int(x) for x in raw.replace(" ", "").split(",") if x.isdigit())
 
 
 # Vistrow's own workspaces (1 = the platform owner / demo, 2 = the test
-# account). They are listed and searchable like any account, but every
+# account, 3-6 and 8 = owner/QA/staging workspaces; owner confirmed
+# 2026-10-15). They are listed and searchable like any account, but every
 # customer count, funnel, revenue and alert leaves them out (admin audit
 # 2026-10-15: all 391 calls in the last 30 days were internal).
 INTERNAL_ACCOUNT_IDS = _internal_account_ids()

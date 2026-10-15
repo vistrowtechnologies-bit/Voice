@@ -176,7 +176,9 @@ class DbTests(unittest.TestCase):
     def test_internal_accounts_are_not_customers(self):
         from unittest import mock
 
-        self.assertEqual(self.admin._internal_account_ids(), (1, 2))
+        with mock.patch.dict(os.environ):
+            os.environ.pop("INTERNAL_ACCOUNT_IDS", None)
+            self.assertEqual(self.admin._internal_account_ids(), (1, 2, 3, 4, 5, 6, 8), "production default")
         internal, customer = self.account(), self.account()
         with mock.patch.object(self.admin, "INTERNAL_ACCOUNT_IDS", (internal,)):
             self.assertIn(f"NOT IN ({internal})", self.admin._external("a.id"))
@@ -212,8 +214,7 @@ class DbTests(unittest.TestCase):
         self.assertNotIn(trial, low_ids)
         positions = {p["accountId"]: p for p in self.admin.credit_positions()}
         self.assertTrue(positions[trial]["onTrial"])
-        self.assertNotIn(1, positions)
-        self.assertNotIn(2, positions)
+        self.assertFalse(set(positions) & set(self.admin.INTERNAL_ACCOUNT_IDS))
         detail = self.admin.account_detail(trial)["account"]
         self.assertEqual(detail["effective_plan"], "trial")
         self.assertNotIn("consent_ip", detail)
